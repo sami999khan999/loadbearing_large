@@ -1,0 +1,19 @@
+# Build outputs — mirrors .gitignore
+node_modules/
+dist/
+.output/
+.nitro/
+.tanstack/
+coverage/
+out/
+release/
+
+# Generated. Marked linguist-generated in .gitattributes; never hand-format.
+pnpm-lock.yaml
+
+# Tool-managed, not authored.
+.claude/
+
+# Authored prose. Hand-wrapped tables and prose that Prettier's markdown
+# printer would reflow. Remove this line if you want docs format-managed.
+docs/

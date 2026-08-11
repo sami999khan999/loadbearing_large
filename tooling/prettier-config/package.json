@@ -7,7 +7,7 @@
   "dependencies": {
     "prettier-plugin-organize-imports": "catalog:"
   },
-  "devDependencies": {
+  "peerDependencies": {
     "prettier": "catalog:"
   }
 }

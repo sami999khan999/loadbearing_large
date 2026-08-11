@@ -1,4 +1,4 @@
-import * as organizeImports from "prettier-plugin-organize-imports";
+import organizeImports from "prettier-plugin-organize-imports";
 
 /** @type {import("prettier").Config} */
 export default {
@@ -9,4 +9,3 @@ export default {
   endOfLine: "lf",
   plugins: [organizeImports],
 };
-

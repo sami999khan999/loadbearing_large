@@ -1,10 +1,9 @@
-# ratchet
+# loadbearing
 
 pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis · S3
 
 ## Getting started
 
-    corepack enable
     pnpm install
     node -e "require('fs').copyFileSync('.env.example', '.env')"
     pnpm infra:up

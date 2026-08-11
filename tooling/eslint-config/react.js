@@ -11,19 +11,19 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                "@ratchet/db",
-                "@ratchet/db/*",
-                "@ratchet/infrastructure",
-                "@ratchet/infrastructure/*",
-                "@ratchet/auth",
-                "@ratchet/auth/*",
-                "@ratchet/composition",
-                "@ratchet/composition/*",
-                "@ratchet/application",
-                "@ratchet/application/*",
+                "@loadbearing/db",
+                "@loadbearing/db/*",
+                "@loadbearing/infrastructure",
+                "@loadbearing/infrastructure/*",
+                "@loadbearing/auth",
+                "@loadbearing/auth/*",
+                "@loadbearing/composition",
+                "@loadbearing/composition/*",
+                "@loadbearing/application",
+                "@loadbearing/application/*",
               ],
               message:
-                "Server-only. Reachable from src/server/**, src/route/api/**, and *.server.ts only. Cross the boundary via @ratchet/contracts.",
+                "Server-only. Reachable from src/server/**, src/route/api/**, and *.server.ts only. Cross the boundary via @loadbearing/contracts.",
             },
             {
               group: ["drizzle-orm", "drizzle-orm/*", "pg", "ioredis", "bullmq", "better-auth"],

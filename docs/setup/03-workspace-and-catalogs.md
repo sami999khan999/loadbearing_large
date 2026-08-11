@@ -1,0 +1,229 @@
+# 03 · Workspace & Catalogs
+
+> `pnpm-workspace.yaml`, version catalogs, and the script topology that replaces Turborepo.
+
+**Delivers:** An installable empty monorepo with topological build ordering that nothing has to declare.
+
+**Prerequisite:** [02 · Repository Skeleton](02-repo-skeleton.md)
+
+---
+
+## Step 3.1 — `pnpm-workspace.yaml`
+
+Create it at the root.
+
+```yaml
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tooling/*"
+
+catalog:
+  # ── language & build ──
+  typescript: ^5.8.3
+  tsup: ^8.5.0
+  tsx: ^4.19.0
+  rimraf: ^6.0.1
+  vitest: ^3.1.4
+  "@types/node": ^24.3.0
+
+  # ── lint & format ──
+  eslint: ^9.27.0
+  typescript-eslint: ^8.32.1
+  "@eslint/js": ^9.27.0
+  prettier: ^3.5.3
+
+  # ── contracts ──
+  zod: ^4.0.14
+
+  # ── oRPC — pin all four together ──
+  "@orpc/contract": ^1.13.7
+  "@orpc/server": ^1.13.7
+  "@orpc/client": ^1.13.7
+  "@orpc/tanstack-query": ^1.13.7
+
+  # ── data & infrastructure ──
+  "drizzle-orm": ^0.44.0
+  "drizzle-kit": ^0.31.0
+  pg: ^8.13.0
+  "@types/pg": ^8.11.10
+  ioredis: ^5.4.2
+  bullmq: ^5.34.0
+  "@aws-sdk/client-s3": ^3.700.0
+  "@aws-sdk/s3-request-presigner": ^3.700.0
+
+  # ── auth ──
+  "better-auth": ^1.3.26
+
+catalogs:
+  react:
+    react: ^19.1.0
+    react-dom: ^19.1.0
+    "@types/react": ^19.1.4
+    "@types/react-dom": ^19.1.5
+```
+
+### Settings live here now
+
+Append to the same file:
+
+```yaml
+# ── resolution & safety ──
+engineStrict: true
+linkWorkspacePackages: deep
+preferWorkspacePackages: true
+saveWorkspaceProtocol: rolling
+strictPeerDependencies: false
+
+# ── which dependencies may run install scripts ──
+allowBuilds:
+  esbuild: true
+  sharp: true
+```
+
+**In pnpm 11 this is the only place these can go.** `.npmrc` is auth and registry only, and the `pnpm` field in `package.json` is no longer read at all. If you are porting settings from an older repo, run the `pnpm-v10-to-v11` codemod rather than moving them by hand.
+
+**`engineStrict`** refuses to install on the wrong Node version rather than failing mysteriously three steps later.
+
+**The two `workspace` lines** guarantee `@ratchet/contracts` always resolves to your local source and never to a registry package that happens to share the name — a real supply-chain concern with an unscoped-looking prefix.
+
+**`strictPeerDependencies: false`** because React 19 peers are still catching up across the ecosystem; revisit it in a year.
+
+**`allowBuilds`** replaces pnpm 10's `onlyBuiltDependencies`. Install scripts are blocked by default; these two legitimately need them. It is a map rather than a list because it also expresses denial — `core-js: false` silences a package you have decided will never build.
+
+The list is short on purpose, and the Tauri decision ([29](29-desktop-app.md)) is why it stays short: a Tauri desktop app adds no native Node modules, because its native half is a Rust crate that Cargo builds. `@tauri-apps/cli` ships prebuilt platform binaries as optional dependencies and runs no install script.
+
+### Three defaults you inherit without asking
+
+pnpm 11 turned several protections on by default. Two of them will surprise you at some point, so know about them now rather than at 6pm on a release day.
+
+| Setting | Default | What it does to you |
+|---|---|---|
+| `minimumReleaseAge` | `1440` (24h) | A version published less than a day ago **will not resolve**. Bumping a catalog entry to a release that landed this morning fails until tomorrow. |
+| `blockExoticSubdeps` | `true` | A transitive dependency pointing at a Git URL or tarball is rejected. |
+| `verifyDepsBeforeRun` | `install` | `pnpm dev` installs first if `node_modules` is stale, instead of running against the wrong tree. |
+
+**Do not set `minimumReleaseAge: 0` to make an upgrade go through today.** The 24-hour window is the single cheapest defence against the compromised-release attacks that have hit npm repeatedly — a malicious version is usually yanked within hours, and you simply never see it. When you genuinely need a fresh release now (a security patch, most often), add that one version to `minimumReleaseAgeExclude` rather than disabling the rule globally. `pnpm audit --fix` does this for you.
+
+> **`strictDepBuilds` now defaults to `true`.** A dependency that wants to build and isn't in `allowBuilds` **fails the install** instead of printing a warning you scroll past. That is a real improvement — in pnpm 10, ignoring the warning left native modules as inert stubs and produced build errors pointing nowhere near the cause. Now you get told at install time, with the package name.
+
+---
+
+`packages:` tells pnpm which directories are workspace members. `catalog:` is a single source of truth for versions — a package writes `"zod": "catalog:"` rather than a range, so all fourteen upgrade together and cannot drift.
+
+Three entries deserve a note:
+
+**Pin all four `@orpc/*` packages to one version line.** They share internal types. A skew between `@orpc/contract` and `@orpc/server` produces type errors that read like your contract is malformed when it isn't, and the error text points at your code rather than at the version mismatch.
+
+**`better-auth` is floored at 1.3.26 deliberately.** The API-key plugin had an authentication flaw (CVE-2025-61928) patched in that release. You aren't going to use that plugin ([15](15-auth-package.md) explains why), but a floor below a known auth CVE is not a floor worth having.
+
+**React lives in a named catalog, not the default one.** Only four packages consume it, and it moves on a different cadence from everything else. `catalog:react` in a `package.json` reads as a deliberate statement that this package is a React package.
+
+---
+
+## Step 3.2 — Root `package.json`
+
+```json
+{
+  "name": "ratchet",
+  "private": true,
+  "type": "module",
+  "devEngines": {
+    "packageManager": { "name": "pnpm", "version": "^11.21.0", "onFail": "download" }
+  },
+  "engines": { "node": ">=24.0.0", "pnpm": ">=11.21.0" },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "build:changed": "pnpm -r --filter \"...[origin/main]\" run build",
+
+    "dev": "pnpm build:packages && pnpm -r --parallel run dev",
+    "dev:web": "pnpm build:packages && pnpm --filter @ratchet/web run dev",
+    "dev:worker": "pnpm build:packages && pnpm --filter @ratchet/worker run dev",
+
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r --parallel run lint",
+    "test": "pnpm -r --parallel run test",
+    "clean": "pnpm -r --parallel run clean",
+
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
+
+    "db:generate": "pnpm --filter @ratchet/db run db:generate",
+    "db:migrate": "pnpm --filter @ratchet/db run db:migrate",
+    "db:seed": "pnpm --filter @ratchet/db run db:seed",
+    "db:studio": "pnpm --filter @ratchet/db run db:studio",
+
+    "auth:generate": "pnpm --filter @ratchet/auth run auth:generate"
+  },
+  "devDependencies": {}
+}
+```
+
+### What the flags actually do
+
+**`pnpm -r run build`** runs the script in every workspace package **in topological order**, derived from the dependency graph. That is the entire Turborepo replacement. You never declare that `contracts` builds after `core`; pnpm reads the `workspace:*` links and works it out.
+
+**`--parallel` is on `dev`, `lint`, and `test`, and off `build`.** Parallel ignores ordering, which is correct for watchers and linters and catastrophically wrong for builds. `dev` therefore builds packages serially first, then starts watchers in parallel.
+
+**`clean` does not `rm -rf node_modules`.** Package-level `clean` scripts use `rimraf`, which works on every platform. If you genuinely need to nuke the store, that is a deliberate manual act, not something a script does when someone fat-fingers a tab-complete.
+
+**`build:changed`** uses pnpm's `...[origin/main]` selector to build only packages whose sources changed plus everything downstream of them. It needs full Git history — see the `fetch-depth: 0` note in [25](25-hygiene-and-ci.md).
+
+**`devEngines.packageManager` replaces `packageManager`.** pnpm 11 removed the settings that governed the legacy field (`managePackageManagerVersions`, `packageManagerStrict`, `packageManagerStrictVersion`) in favour of an `onFail` value declared inline. `"onFail": "download"` means a developer with the wrong pnpm on `PATH` gets the right one fetched automatically rather than an error. The field accepts a **range**, and the exact resolved version is written to `pnpm-lock.yaml` — so you get a floor you can widen without a commit, plus reproducibility.
+
+**There is no `pnpm` field.** pnpm 11 does not read `package.json` for its own configuration. Everything that used to live there is in `pnpm-workspace.yaml`.
+
+---
+
+## Step 3.3 — Install
+
+```bash
+pnpm add -Dw typescript@catalog: prettier@catalog: rimraf@catalog:
+```
+> `-D` devDependency, `-w` at the workspace root. `@catalog:` pulls the version from `pnpm-workspace.yaml` rather than pinning a second copy here.
+
+```bash
+pnpm install
+```
+
+If the install **fails** naming a package whose build was blocked, add it to `allowBuilds` in `pnpm-workspace.yaml` and reinstall — or run `pnpm approve-builds <name>` to have pnpm write the entry for you. Prefix a name with `!` to deny it explicitly.
+
+---
+
+## Optional — repo consistency checks
+
+Two small tools that pay for themselves once there are fourteen packages:
+
+```bash
+pnpm add -Dw syncpack sherif
+```
+
+Then add to root scripts:
+
+```json
+"deps:check": "syncpack list-mismatches",
+"repo:check": "sherif"
+```
+
+`syncpack` catches a package that pinned `zod` directly instead of writing `catalog:`. `sherif` catches missing `workspace:*` protocols, unused dependencies, and packages that dual-declare a dependency and a devDependency. Both run in CI in [25](25-hygiene-and-ci.md). Neither is required for the kit to work.
+
+---
+
+## ✅ Gate
+
+```bash
+pnpm install
+```
+
+Succeeds. `node_modules/` exists at the root. `pnpm -v` reports 11.x — if you had a different version on `PATH`, `devEngines` fetched the pinned one. `git status` shows `pnpm-lock.yaml` as a new file — commit it.
+
+Do not proceed until this passes.
+
+---
+
+[← Repository Skeleton](02-repo-skeleton.md) · [TypeScript Configs →](04-typescript-configs.md)

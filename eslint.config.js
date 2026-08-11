@@ -1,1 +1,1 @@
-export { default } from "@ratchet/eslint-config/base";
+export { default } from "@loadbearing/eslint-config/base";

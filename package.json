@@ -24,8 +24,10 @@
     "lint": "pnpm -r --parallel run lint",
     "test": "pnpm -r --parallel run test",
     "clean": "pnpm -r --parallel run clean",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}\"",
+    "deps:check": "syncpack lint",
+    "repo:check": "sherif",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
@@ -36,14 +38,14 @@
     "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate"
   },
   "devDependencies": {
-    "@loadbearing/prettier-config": "workspace:*",
     "@loadbearing/eslint-config": "workspace:*",
+    "@loadbearing/prettier-config": "workspace:*",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "prettier-plugin-organize-imports": "catalog:",
-    "typescript": "catalog:",
+
     "rimraf": "catalog:",
     "sherif": "catalog:",
-    "syncpack": "catalog:"
+    "syncpack": "catalog:",
+    "typescript": "catalog:"
   }
 }

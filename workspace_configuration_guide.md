@@ -34,20 +34,20 @@ The PNPM workspace configuration file. It specifies:
 | Script Name                    | Command                                                            | Description                                                                            |
 | :----------------------------- | :----------------------------------------------------------------- | :------------------------------------------------------------------------------------- |
 | **Build Scripts**              |                                                                    |                                                                                        |
-| `build`                        | `pnpm -r --if-present run build`                                   | Recursively builds all packages and apps across the entire monorepo.                   |
-| `build:packages`               | `pnpm --filter "./packages/*" --if-present run build`              | Builds only the shared packages located in `packages/*`.                               |
-| `build:changed`                | `pnpm -r --filter "...[origin/main]" --if-present run build`       | Builds only packages modified relative to `origin/main` (and their dependents).        |
+| `build`                        | `pnpm -r run build`                                                | Recursively builds all packages and apps across the entire monorepo.                   |
+| `build:packages`               | `pnpm --filter "./packages/*" run build`                           | Builds only the shared packages located in `packages/*`.                               |
+| `build:changed`                | `pnpm -r --filter "...[origin/main]" run build`                    | Builds only packages modified relative to `origin/main` (and their dependents).        |
 | **Development Scripts**        |                                                                    |                                                                                        |
-| `dev`                          | `pnpm build:packages && pnpm -r --parallel --if-present run dev`   | Builds shared packages, then runs dev servers in parallel across all apps.             |
+| `dev`                          | `pnpm build:packages && pnpm -r --parallel run dev`                | Builds shared packages, then runs dev servers in parallel across all apps.             |
 | `dev:web`                      | `pnpm build:packages && pnpm --filter @loadbearing/web run dev`    | Builds shared packages, then starts the web frontend (`@loadbearing/web`).             |
 | `dev:worker`                   | `pnpm build:packages && pnpm --filter @loadbearing/worker run dev` | Builds shared packages, then starts the background worker app (`@loadbearing/worker`). |
 | **Code Quality & Maintenance** |                                                                    |                                                                                        |
-| `typecheck`                    | `pnpm -r --if-present run typecheck`                               | Runs TypeScript type checking (`tsc --noEmit`) across all workspace packages.          |
-| `lint`                         | `pnpm -r --parallel --if-present run lint`                         | Runs ESLint in parallel across all packages.                                           |
-| `test`                         | `pnpm -r --parallel --if-present run test`                         | Executes unit/integration test suites (e.g. Vitest) in parallel across packages.       |
-| `clean`                        | `pnpm -r --parallel --if-present run clean`                        | Deletes build outputs (`dist`, `.cache`) across all packages.                          |
-| `format`                       | `prettier --write "**/*.{ts,tsx,md,json,yaml,yml}"`                | Formats code, markdown, and config files with Prettier.                                |
-| `format:check`                 | `prettier --check "**/*.{ts,tsx,md,json,yaml,yml}"`                | Verifies code formatting in CI without making edits.                                   |
+| `typecheck`                    | `pnpm -r run typecheck`                                            | Runs TypeScript type checking (`tsc --noEmit`) across all workspace packages.          |
+| `lint`                         | `pnpm -r --parallel run lint`                                      | Runs ESLint in parallel across all packages.                                           |
+| `test`                         | `pnpm -r --parallel run test`                                      | Executes unit/integration test suites (e.g. Vitest) in parallel across packages.       |
+| `clean`                        | `pnpm -r --parallel run clean`                                     | Deletes build outputs (`dist`, `.cache`) across all packages.                          |
+| `format`                       | `prettier --write "**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}"` | Formats code, markdown, and config files with Prettier. Honours `.prettierignore`.     |
+| `format:check`                 | `prettier --check "**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}"` | Verifies code formatting in CI without making edits.                                   |
 | **Infrastructure (Docker)**    |                                                                    |                                                                                        |
 | `infra:up`                     | `docker compose -f infra/docker-compose.yml up -d`                 | Launches infrastructure services (Postgres, Redis) in background daemon mode.          |
 | `infra:down`                   | `docker compose -f infra/docker-compose.yml down`                  | Stops running Docker infrastructure containers.                                        |
@@ -148,10 +148,13 @@ The PNPM workspace configuration file. It specifies:
 
 - **`format` & `format:check`**
   ```bash
-  prettier --write "**/*.{ts,tsx,md,json,yaml,yml}"
-  prettier --check "**/*.{ts,tsx,md,json,yaml,yml}"
+  prettier --write "**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}"
+  prettier --check "**/*.{ts,tsx,js,jsx,mjs,cjs,md,json,yaml,yml}"
   ```
   Uses Prettier to either auto-fix formatting (`format`) or check formatting in CI (`format:check`).
+  The `.js`/`.mjs`/`.cjs` extensions are included on purpose: without them the flat ESLint
+  configs, `prettier.config.js`, and everything in `tooling/*` are never format-checked.
+  Exclusions live in `.prettierignore` (generated files, `docs/`, `.claude/`).
 
 ---
 
