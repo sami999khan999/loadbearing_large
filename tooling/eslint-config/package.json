@@ -1,0 +1,16 @@
+{
+  "name": "@loadbearing/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.js",
+    "./oop": "./oop.js",
+    "./react": "./react.js"
+  },
+  "dependencies": {
+    "@eslint/js": "catalog:",
+    "eslint": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}

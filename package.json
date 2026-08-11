@@ -33,15 +33,17 @@
     "db:migrate": "pnpm --filter @loadbearing/db run db:migrate",
     "db:seed": "pnpm --filter @loadbearing/db run db:seed",
     "db:studio": "pnpm --filter @loadbearing/db run db:studio",
-    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate",
-    "deps:check": "syncpack list-mismatches",
-    "repo:check": "sherif"
+    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate"
   },
   "devDependencies": {
+    "@loadbearing/prettier-config": "workspace:*",
+    "@loadbearing/eslint-config": "workspace:*",
+    "eslint": "catalog:",
     "prettier": "catalog:",
+    "prettier-plugin-organize-imports": "catalog:",
+    "typescript": "catalog:",
     "rimraf": "catalog:",
-    "sherif": "^1.13.0",
-    "syncpack": "^15.3.2",
-    "typescript": "catalog:"
+    "sherif": "catalog:",
+    "syncpack": "catalog:"
   }
 }
