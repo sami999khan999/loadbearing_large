@@ -26,7 +26,7 @@ Four directories, and the split between them is the architecture:
 |---|---|---|
 | `apps/` | Framework code — TanStack Start, the worker's Node entrypoint, a Tauri desktop shell later | The only place `process.env` is read. The only place `@tanstack/react-router` appears. Deliberately thin enough to delete and rewrite in a week. |
 | `packages/` | Everything that matters — primitives, permissions, contracts, use-cases, adapters, React components | Knows nothing about which web framework you use. Never reads its own configuration. |
-| `tooling/` | Shared `tsconfig`, ESLint, and Prettier configs, published as workspace packages | Changed rarely, by whoever owns the platform. |
+| `tooling/` | Shared `tsconfig`, Biome, and ESLint configs, published as workspace packages | Changed rarely, by whoever owns the platform. |
 | `infra/` | `docker-compose.yml` and anything else that describes running services | No application code. |
 
 `packages/` gets subdirectories in [06](06-package-anatomy.md) — leave it empty for now.
@@ -57,7 +57,7 @@ Create these six in your editor.
 *.svg text eol=lf
 pnpm-lock.yaml linguist-generated=true -diff
 ```
-> **Do not skip this on a mixed-OS team.** It forces LF in the repository regardless of any developer's local setting — the other half of `core.autocrlf input`. The binary declarations stop Git attempting line-ending translation on `@ratchet/asset`'s images and fonts, which corrupts them silently. `svg` is text on purpose: the icon sprite is generated and should diff readably. The lockfile line collapses a 4,000-line diff in every dependency PR.
+> **Do not skip this on a mixed-OS team.** It forces LF in the repository regardless of any developer's local setting — the other half of `core.autocrlf input`. The binary declarations stop Git attempting line-ending translation on `@loadbearing/asset`'s images and fonts, which corrupts them silently. `svg` is text on purpose: the icon sprite is generated and should diff readably. The lockfile line collapses a 4,000-line diff in every dependency PR.
 
 ### No `.npmrc`
 
@@ -146,7 +146,7 @@ trim_trailing_whitespace = false
 ### `README.md`
 
 ```markdown
-# ratchet
+# loadbearing
 
 pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis · S3
 

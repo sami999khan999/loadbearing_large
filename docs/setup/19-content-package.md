@@ -1,10 +1,10 @@
-# 19 · `@ratchet/content`
+# 19 · `@loadbearing/content`
 
 > Every user-visible string, document, and structured record — plus the `ContentSource` seam a CMS will slot into later. React-free.
 
 **Delivers:** `Translator`, `StaticContentSource`, the four content shapes, and a navigation model a content editor can safely change.
 
-**Prerequisite:** [18 · `@ratchet/asset`](18-asset-package.md)
+**Prerequisite:** [18 · `@loadbearing/asset`](18-asset-package.md)
 
 ---
 
@@ -43,11 +43,6 @@ packages/content/src/
     └── nav/
         ├── nav.schema.ts         → NavContract
         └── nav.data.ts           → navItems
-```
-
-```js
-// packages/content/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
 ```
 
 ---
@@ -161,7 +156,7 @@ export class Translator {
 **`packages/content/src/media/media-ref.ts`**
 
 ```ts
-import type { ImageKey } from "@ratchet/asset";
+import type { ImageKey } from "@loadbearing/asset";
 
 export interface ResolvedMedia {
   readonly src: string;
@@ -178,7 +173,7 @@ export abstract class MediaResolver {
 **`packages/content/src/media/static.media-resolver.ts`**
 
 ```ts
-import { ImageManifest, type ImageKey } from "@ratchet/asset";
+import { ImageManifest, type ImageKey } from "@loadbearing/asset";
 import { MediaResolver, type ResolvedMedia } from "./media-ref.js";
 
 export class StaticMediaResolver extends MediaResolver {
@@ -205,7 +200,7 @@ export class NavContract {
   private constructor() {}
 
   public static readonly item = z.object({
-    /** A ModuleKey from @ratchet/permissions. NEVER a PermissionKey. */
+    /** A ModuleKey from @loadbearing/permissions. NEVER a PermissionKey. */
     module: z.string(),
     labelKey: z.string(),
     icon: z.string(),
@@ -237,21 +232,19 @@ export const navItems: readonly NavItem[] = NavContract.collection.parse([
 
 An editor can reorder the menu, rename items, and change icons. An editor **cannot** change what gates a module or point a label at a different route. If `permission` were a content field, a CMS edit would be a privilege escalation — and that is exactly the kind of vulnerability that gets found by accident, years later.
 
-Mechanically: **`content` must never import `PermissionKey`.** Add it to the package's own ESLint config:
+Mechanically: **`content` must never import `PermissionKey`.** Biome's `noRestrictedImports` bans whole modules rather than named exports, and `content` legitimately imports `ModuleKey` from `@loadbearing/permissions` — so this one ban goes in the root ESLint config, which can express it:
 
 ```js
-// packages/content/eslint.config.js
-import oop from "@ratchet/eslint-config/oop";
-import tseslint from "typescript-eslint";
-
-export default tseslint.config(...oop, {
+// tooling/eslint-config/src/index.js — one block among several
+{
+  files: ["packages/content/src/**/*.ts"],
   rules: {
     "no-restricted-imports": [
       "error",
       {
         paths: [
           {
-            name: "@ratchet/permissions",
+            name: "@loadbearing/permissions",
             importNames: ["PermissionKey", "PermissionRegistry"],
             message:
               "Content names a module. ModuleRegistry owns which permission gates it. Import ModuleKey as a type instead.",
@@ -272,7 +265,7 @@ export default tseslint.config(...oop, {
 **`packages/content/src/content-source.ts`**
 
 ```ts
-import type { ImageKey } from "@ratchet/asset";
+import type { ImageKey } from "@loadbearing/asset";
 import type { ResolvedMedia } from "./media/media-ref.js";
 import type { MessageKey } from "./message/en/index.js";
 import type { NavItem } from "./collection/nav/nav.schema.js";
@@ -293,7 +286,7 @@ export abstract class ContentSource {
 **`packages/content/src/static.content-source.ts`**
 
 ```ts
-import type { ImageKey } from "@ratchet/asset";
+import type { ImageKey } from "@loadbearing/asset";
 import { navItems } from "./collection/nav/nav.data.js";
 import { ContentSource, type Locale } from "./content-source.js";
 import { StaticMediaResolver } from "./media/static.media-resolver.js";
@@ -364,10 +357,10 @@ export * from "./translator.js";
 - `new Translator(en).t("error.field.required", { field: "Email" })` returns `"Email is required."`
 - A misspelled `MessageKey` is a compile error.
 - `grep -rn "PermissionKey" packages/content/src` returns nothing.
-- `pnpm --filter @ratchet/content build` succeeds with no React in the output.
+- `pnpm --filter @loadbearing/content build` succeeds with no React in the output.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/asset`](18-asset-package.md) · [`@ratchet/query` →](20-query-package.md)
+[← `@loadbearing/asset`](18-asset-package.md) · [`@loadbearing/query` →](20-query-package.md)

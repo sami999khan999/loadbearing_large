@@ -1,158 +1,405 @@
 # 05 · Lint & Format
 
-> Prettier, plus the ESLint rules that mechanically enforce the OOP conventions and the server-only boundary. These are not style preferences — they are the architecture, expressed as errors.
+> Biome does the formatting and the bulk of the linting. ESLint stays for six rules that nothing else can express — the ones that _are_ the architecture.
 
-**Delivers:** `@ratchet/prettier-config` and `@ratchet/eslint-config` with `base`, `oop`, and `react` entrypoints.
+**Delivers:** `@loadbearing/biome-config` and `@loadbearing/eslint-config`, reached from two thin root files. No per-package lint config anywhere.
+
+> Every rule and exemption in this document was verified against Biome 2.5.7 and ESLint 9.39.5 — including the two failure modes called out in Step 5.2.
+
+> This replaces Prettier entirely and reduces ESLint to six rules. If you would rather stay on ESLint + Prettier, everything else in the kit works unchanged — the boundary rules just live in an ESLint config instead of `biome.json`.
 
 **Prerequisite:** [04 · TypeScript Configs](04-typescript-configs.md)
 
 ---
 
-## Step 5.1 — Prettier
+## Why two tools
+
+Biome is one Rust binary that formats, organises imports, and lints roughly ten times faster than ESLint and Prettier together. For almost everything here it is a straight replacement, and it deletes a config package, a plugin, and an entire category of Prettier-versus-ESLint conflict.
+
+It cannot express two things this repository depends on:
+
+- **"Constructors must use parameter properties."** Biome has `noParameterProperties`, which bans them — the opposite direction. There is no rule requiring the form, and every class in this codebase is `constructor(private readonly clock: Clock) {}`.
+- **"No exported free functions, no exported arrow functions, no static mutable state."** These are AST-shape assertions. ESLint expresses them with `no-restricted-syntax` selectors; Biome has no equivalent rule. GritQL plugins could match them, but you would be writing and maintaining three custom matchers to replace nine lines of config.
+
+So: **Biome for speed and breadth, ESLint for the six rules that hold the architecture up.** The split is not a compromise you tolerate, it is a division of labour — the fast tool runs on every save and every commit, the slow one runs before push and in CI.
+
+> Check Biome's current rule list against your pinned version before writing this config. The gap above is real today; Biome is closing it steadily, and the day `noRestrictedSyntax` or a parameter-property rule lands, Step 5.3 gets shorter. Nothing else in the kit changes when that happens.
+
+---
+
+## Step 5.1 — Biome
 
 ```bash
-node -e "require('fs').mkdirSync('tooling/prettier-config', { recursive: true })"
+pnpm add -Dw @biomejs/biome@catalog:
 ```
 
-**`tooling/prettier-config/package.json`**
+The configuration lives in a `tooling/*` package alongside the other two, so it keeps its own
+`docs/` folder. The root file is a two-line pointer.
+
+**`biome.json`** at the root:
 
 ```json
 {
-  "name": "@ratchet/prettier-config",
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "extends": ["./tooling/biome-config/src/base.json"]
+}
+```
+
+**`tooling/biome-config/package.json`**
+
+```json
+{
+  "name": "@loadbearing/biome-config",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "main": "./index.js",
-  "dependencies": {
-    "prettier-plugin-organize-imports": "^4.1.0"
+  "files": ["src"]
+}
+```
+
+> [!IMPORTANT]
+> **The link is a relative path, not a package specifier.** `extends: ["@loadbearing/biome-config/src/base.json"]` does **not** resolve — verified against 2.5.7, and it still fails with an `exports` map declaring the file. Biome's config resolver is not Node's.
+>
+> So this is a workspace member for organisational reasons — config and docs beside the other `tooling/*` packages — not because anything resolves it by name. It has no dependencies, nothing importable, and the root does **not** declare it in `devDependencies`: there is no symlink to create.
+>
+> Two path questions were verified before splitting the config out of the root, because both would have failed silently: `overrides.includes` globs resolve against the **root** config rather than this file, and `vcs.useIgnoreFile` still finds the root `.gitignore`. Re-check both if you ever move the file.
+
+**`tooling/biome-config/src/base.json`**
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["**", "!**/dist", "!**/.output", "!**/migrations"] },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
   },
-  "peerDependencies": {
-    "prettier": "catalog:"
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": { "source": { "organizeImports": "on" } }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useConsistentMemberAccessibility": {
+          "level": "error",
+          "options": { "accessibility": "explicit" }
+        },
+        "useImportType": "error",
+        "noProcessEnv": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "node:process": "Config is read once in apps/*/src/env.ts and passed down."
+            }
+          }
+        }
+      },
+      "suspicious": { "noExplicitAny": "error" },
+      "complexity": { "noStaticOnlyClass": "off" }
+    }
   }
 }
 ```
 
-**`tooling/prettier-config/index.js`**
+**`lineWidth: 100`, not 80.** Constructor parameter properties on `Authorizer`, `PrincipalBuilder`, and every use-case are long by nature; 80 columns wraps every one of them into six lines.
 
-```js
-/** @type {import("prettier").Config} */
-export default {
-  semi: true,
-  singleQuote: false,
-  trailingComma: "all",
-  printWidth: 100,
-  endOfLine: "lf",
-  plugins: ["prettier-plugin-organize-imports"],
-};
-```
+**`lineEnding: "lf"`** is the third leg of the line-ending fix — Git normalises on commit ([02](02-repo-skeleton.md)), `.editorconfig` normalises in the editor, Biome normalises on format. All three, or a Windows machine and a Linux machine produce byte-different files.
 
-**`prettier.config.js`** at the root:
+**`organizeImports` is an assist action, not a lint rule**, and it replaces `prettier-plugin-organize-imports` with no plugin to install.
 
-```js
-export { default } from "@ratchet/prettier-config";
-```
+**`useImportType`** pairs with `verbatimModuleSyntax` ([04](04-typescript-configs.md)). It is what keeps `@loadbearing/ui`'s import of `PermissionKey` type-only, which is the whole reason `ui` can reference the permission vocabulary without depending on `permissions` at runtime.
 
-```bash
-pnpm add -Dw @ratchet/prettier-config@workspace:*
-```
+**`useConsistentMemberAccessibility` with `"explicit"`** makes every method read `public` or `private`. In an OOP codebase the public surface of a class _is_ its contract, and making it explicit means a reviewer sees the contract without inferring it from what's exported.
 
-**The plugin belongs to the config package, not the root.** Prettier resolves `plugins:` entries relative to the file that declares them, so `prettier-plugin-organize-imports` is a dependency of `@ratchet/prettier-config` (above) rather than a root devDependency. `prettier` itself is a peer: the config describes how to format, the root decides which Prettier runs it.
+**`noStaticOnlyClass` is off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
 
-**The root declares `@ratchet/prettier-config` because the root genuinely imports it.** `prettier.config.js` at the root does `export { default } from "@ratchet/prettier-config"` — that is a real module resolution, so the symlink has to exist, so the dependency has to be declared. Same reasoning for `@ratchet/eslint-config` and the root `eslint.config.js`.
+**`noProcessEnv` plus the `node:process` import ban.** The rule catches `process.env.FOO` but not `import { env } from "node:process"`, so both entries are needed to close the door. The exemption for the two `env.ts` files comes in Step 5.2.
 
-This is not an exception to the rule that the root declares no workspace packages; it is the rule. **Declare what you import.** The root imports the two `tooling/*` configs and nothing else. It must never declare `@ratchet/core`, `@ratchet/db`, or any other `packages/*` member, because the root imports none of them — and a root declaration hoists the package into the root `node_modules`, where every package in the repo can reach it regardless of what it declared.
-
-The distinction that matters is what a leaked import could cost. A formatting config reaching a package that didn't ask for it is harmless. `@ratchet/db` reaching `@ratchet/application` that way would silently dissolve the dependency inversion.
-
-`endOfLine: "lf"` is the third leg of the line-ending fix — Git normalises on commit, `.editorconfig` normalises in the editor, Prettier normalises on format. All three, or a Windows machine and a Linux machine produce byte-different files.
-
-`prettier-plugin-organize-imports` runs TypeScript's own organiser, which drops unused imports and sorts the rest. With `verbatimModuleSyntax` on, this also keeps `import type` statements grouped and visible, which matters when the difference between a type import and a value import is a package boundary.
-
-`printWidth: 100` rather than 80: constructor parameter properties on `Authorizer`, `PrincipalBuilder`, and every use-case are long by nature, and 80 columns wraps every one of them into six lines.
+**`migrations` is excluded** because Drizzle generates that SQL and reformatting it produces diffs on every generate.
 
 ---
 
-## Step 5.2 — ESLint: the base
+## Step 5.2 — The server-only boundary, in Biome
+
+This is the rule that keeps database code out of the browser, and it lives entirely in `overrides`. Append to `biome.json`:
+
+```json
+"overrides": [
+  {
+    "includes": ["packages/ui/**", "packages/feature/**", "packages/query/**", "apps/web/src/**"],
+    "linter": {
+      "rules": {
+        "style": {
+          "noRestrictedImports": {
+            "level": "error",
+            "options": {
+              "paths": {
+                "@loadbearing/db": "Server-only. Cross the boundary via @loadbearing/contracts.",
+                "@loadbearing/infrastructure": "Server-only. Cross the boundary via @loadbearing/contracts.",
+                "@loadbearing/auth": "Server-only. Cross the boundary via @loadbearing/contracts.",
+                "@loadbearing/composition": "Server-only. Cross the boundary via @loadbearing/contracts.",
+                "@loadbearing/application": "Server-only. Cross the boundary via @loadbearing/contracts.",
+                "drizzle-orm": "Server-only dependency. It must never appear in a client bundle.",
+                "pg": "Server-only dependency. It must never appear in a client bundle.",
+                "ioredis": "Server-only dependency. It must never appear in a client bundle.",
+                "bullmq": "Server-only dependency. It must never appear in a client bundle.",
+                "better-auth": "Server-only dependency. It must never appear in a client bundle."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "includes": ["apps/web/src/server/**", "apps/web/src/route/api/**", "**/*.server.ts"],
+    "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+  },
+  {
+    "includes": ["apps/*/src/env.ts"],
+    "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+  }
+]
+```
+
+**Biome's `noRestrictedImports` takes exact paths, not glob patterns** — which is fine here, because every banned import is an exact package name. If you ever need to ban a subpath family, that rule cannot do it and the ban moves to ESLint.
+
+**Order matters: later overrides win.** The escape hatch must come after the ban, or it does nothing.
+
+> [!CAUTION]
+> **Biome replaces rule options across overrides; it does not merge them.** If two `overrides` blocks both match a file and both set `noRestrictedImports`, only the last one's `paths` apply — the earlier map is discarded.
+>
+> Verified directly: adding a second `packages/feature/**` override that lists only that package's own bans makes `import { Database } from "@loadbearing/db"` **pass** inside `feature`, with a green lint run. Any override you add for a package already covered above must restate every path it still needs.
+>
+> This kit sidesteps the problem: there is exactly one `noRestrictedImports` override, and `feature`'s two extra bans live in ESLint instead (Step 5.3) — which they have to, for the reason below.
+
+> [!IMPORTANT]
+> **Biome's `noRestrictedImports` flags `import type` exactly like a value import**, and has no type-import exemption. That is why `feature`'s `@loadbearing/api-client` ban cannot live here: `SignInForm` legitimately needs `import type { AuthClient }` ([22](22-feature-package.md)), a type-only import that emits nothing and creates no runtime dependency. Verified against 2.5.7.
+>
+> Both `feature` bans therefore sit in the ESLint config, where `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`. **Biome handles bans that are "this whole module, no exceptions"; ESLint handles the ones needing named-export or type-import nuance** — the same division as `content`'s `PermissionKey` ban ([19](19-content-package.md)).
+
+**The escape hatch is exactly two directories and one filename suffix.** Server-only packages are importable from `apps/web/src/server/**`, `apps/web/src/route/api/**`, and any `*.server.ts`, and nowhere else. Everything else crosses the boundary through `@loadbearing/contracts`, which is isomorphic by construction.
+
+**The last override is the `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
+
+### This is defence one of three
+
+- **`ServerOnly.assert()`** at the top of every server-only barrel ([07](07-core-package.md)) — a runtime tripwire that throws if the module somehow loads in a browser.
+- **The CI bundle grep** ([25](25-hygiene-and-ci.md)) — asserts a known Drizzle export string is absent from the built client output.
+
+Three defences sounds excessive until you remember what a leak costs. In a fullstack app, a Drizzle import reaching the client is a security event — connection strings and full table shapes in a public bundle — not a bundle-size regression.
+
+---
+
+## Step 5.3 — ESLint, reduced
 
 ```bash
-node -e "require('fs').mkdirSync('tooling/eslint-config', { recursive: true })"
+node -e "require('fs').mkdirSync('tooling/eslint-config/src', { recursive: true })"
 ```
 
 **`tooling/eslint-config/package.json`**
 
 ```json
 {
-  "name": "@ratchet/eslint-config",
+  "name": "@loadbearing/eslint-config",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    "./base": "./base.js",
-    "./oop": "./oop.js",
-    "./react": "./react.js"
-  }
+  "main": "./src/index.js",
+  "types": "./src/types/index.d.ts",
+  "files": ["src"]
 }
 ```
 
 ```bash
-pnpm add --filter @ratchet/eslint-config -D eslint@catalog: typescript-eslint@catalog: @eslint/js@catalog:
+pnpm add --filter @loadbearing/eslint-config typescript-eslint@catalog:
+pnpm add --filter @loadbearing/eslint-config -D eslint@catalog:
 ```
-> The linter is installed into the config package, so consuming packages inherit it through one `workspace:*` dependency instead of each declaring ESLint.
 
-**`tooling/eslint-config/base.js`**
+> `typescript-eslint` is imported at runtime by `src/index.js`, so it is a real `dependency`. **`eslint` is not imported by the config** — it is the host that loads it — so it is a devDependency, present for type resolution in `src/types/index.d.ts` and to satisfy `typescript-eslint`'s peer deterministically.
+
+> [!CAUTION]
+> **This package does not supply the `eslint` binary to anyone.** pnpm links executables only from a package's _direct_ dependencies, and this package has no `bin` field. The root `eslint` devDependency is what puts `eslint` on `PATH` — pnpm adds the workspace-root `.bin` to every script it runs. Do not remove it on the assumption this package covers it.
+
+**`tooling/eslint-config/src/index.js`**
 
 ```js
-import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
-export const base = tseslint.config(
-  js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+const OOP_PACKAGES = [
+  "packages/{core,permissions,contracts,application,db,infrastructure,auth,composition,api-client,asset,content}/src/**/*.ts",
+];
+
+export default tseslint.config(
   {
+    ignores: [
+      "**/dist/**",
+      "**/.output/**",
+      "**/migrations/**",
+      // Not inside any package's tsconfig `include`, so projectService cannot
+      // resolve them and a type-aware rule fails with a parsing error.
+      // Deliberately NOT "*.config.*" — that also matches eslint.config.js
+      // itself, which makes editors warn on every open config file.
+      "**/*.config.ts",
+      "**/*.config.mts",
+      "**/*.d.ts",
+    ],
+  },
+
+  // ── Everything: the typed rules Biome cannot run ──
+  {
+    files: ["packages/*/src/**/*.{ts,tsx}", "apps/*/src/**/*.{ts,tsx}"],
+    extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: { parserOptions: { projectService: true } },
     rules: {
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { prefer: "type-imports", fixStyle: "inline-type-imports" },
-      ],
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
       "@typescript-eslint/no-floating-promises": "error",
-      "@typescript-eslint/explicit-member-accessibility": [
-        "error",
-        { accessibility: "explicit", overrides: { constructors: "no-public" } },
-      ],
-      "@typescript-eslint/parameter-properties": ["error", { prefer: "parameter-property" }],
-      "@typescript-eslint/prefer-readonly": "error",
+      "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/require-await": "error",
-      "no-restricted-properties": [
+      "@typescript-eslint/prefer-readonly": "error",
+      "@typescript-eslint/parameter-properties": ["error", { prefer: "parameter-property" }],
+      // Biome owns these; don't double-report.
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/consistent-type-imports": "off",
+    },
+  },
+
+  // ── Non-React packages only: the OOP shape rules ──
+  {
+    files: OOP_PACKAGES,
+    rules: {
+      "no-restricted-syntax": [
         "error",
         {
-          object: "process",
-          property: "env",
-          message:
-            "No package reads its own configuration. Config is read once in apps/*/src/env.ts and passed down as constructor arguments.",
+          selector: "ExportNamedDeclaration > FunctionDeclaration",
+          message: "No exported free functions. Put behaviour on a class (static if stateless).",
+        },
+        {
+          selector:
+            "ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression",
+          message: "No exported arrow functions. Put behaviour on a class (static if stateless).",
+        },
+        {
+          selector: "ExportDefaultDeclaration > FunctionDeclaration",
+          message: "No exported free functions. Put behaviour on a class (static if stateless).",
+        },
+        {
+          selector: "ClassBody > PropertyDefinition[static=true][readonly!=true]",
+          message: "Static mutable state is banned — it leaks across requests and tests.",
         },
       ],
     },
   },
-  { ignores: ["dist/**", ".output/**", "*.config.*"] },
-);
 
-export default base;
+  // ── feature: bans that need a type-import exemption, which Biome cannot express ──
+  {
+    files: ["packages/feature/src/**/*.{ts,tsx}"],
+    rules: {
+      // Off, so the @typescript-eslint variant below owns this rule entirely.
+      "no-restricted-imports": "off",
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@loadbearing/api-client",
+              allowTypeImports: true,
+              message:
+                "Every read goes through a defined query in @loadbearing/query. A raw client call inside a component is an uncached read that no invalidation touches.",
+            },
+            {
+              name: "@tanstack/react-router",
+              allowTypeImports: true,
+              message:
+                "Routing lives in apps/web. Pass navigation in as an onNavigate prop or an href string.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ── content may name a module, never a permission (see docs/setup/19) ──
+  {
+    files: ["packages/content/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@loadbearing/permissions",
+              importNames: ["PermissionKey", "PermissionRegistry"],
+              message:
+                "Content names a module. ModuleRegistry owns which permission gates it. Import ModuleKey as a type instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+);
 ```
 
-### Why each rule is here
+**`tooling/eslint-config/src/types/index.d.ts`** — hand-written, because there is no build step to emit one:
 
-**`recommendedTypeChecked`, not `recommended`.** Type-aware linting is slower and it is the only way `no-floating-promises` and `no-misused-promises` work. In a codebase where every use-case is `async` and every repository call returns a promise, a forgotten `await` in a `.save()` is a data-loss bug that no unit test catches.
+```ts
+import type { Linter } from "eslint";
 
-**`consistent-type-imports`** pairs with `verbatimModuleSyntax`. It is what keeps `@ratchet/ui`'s import of `PermissionKey` type-only, which is the whole reason `ui` can reference the permission vocabulary without depending on `permissions` at runtime.
+/**
+ * The six rules Biome cannot express, plus the typed rules that need a whole
+ * TypeScript program. Hand-written because this package has no build step.
+ */
+declare const config: Linter.Config[];
 
-**`explicit-member-accessibility`** with `constructors: "no-public"`. Every method reads `public` or `private`. In an OOP codebase the public surface of a class *is* its contract, and making it explicit means a reviewer can see the contract without inferring it from what's exported.
+export default config;
+```
 
-**`parameter-properties`** forces the constructor-injection style the whole system uses:
+**`eslint.config.js`** at the root:
+
+```js
+export { default } from "@loadbearing/eslint-config";
+```
+
+```bash
+pnpm add -Dw @loadbearing/eslint-config@workspace:*
+```
+
+**The root declares `@loadbearing/eslint-config` because the root genuinely imports it.** That one-line re-export is a real module resolution, so the symlink has to exist. This is not an exception to "the root declares no workspace packages" — it is the rule, which is **declare what you import**. The root imports this config and nothing else. It must never declare `@loadbearing/core` or `@loadbearing/db`, because a root declaration hoists a package into the root `node_modules` where every package can reach it regardless of what it declared, which silently dissolves the boundary in Step 5.2.
+
+> [!NOTE]
+> ESLint 9 resolves flat config from the **working directory**, not per file — a nearer config is ignored. That is a problem in a per-package setup and a non-issue here: there is exactly one config, at the root, and both `eslint .` and the pre-push hook run from there.
+
+### Why each surviving rule is here
+
+**`recommendedTypeChecked`, not `recommended`.** Type-aware linting is the only way `no-floating-promises` and `no-misused-promises` work. In a codebase where every use-case is `async` and every repository call returns a promise, a forgotten `await` in a `.save()` is a data-loss bug no unit test catches.
+
+> [!IMPORTANT]
+> **Biome does ship type-aware `noFloatingPromises` and `noMisusedPromises` — and they do not cover this codebase.** Checked against 2.5.7:
+>
+> | Shape the promise comes from | Biome |
+> | --- | --- |
+> | concrete class method, across a file boundary | flagged |
+> | `interface` member, across a file boundary | flagged |
+> | **`abstract` class member** | **missed** |
+>
+> Isolated with one class holding both an abstract and a concrete `async` method: the concrete call was flagged, the abstract one was not. So the limit is not file boundaries — Biome resolves those fine — it is the `abstract` modifier.
+>
+> Every port in this architecture is an abstract class rather than an interface, deliberately ([11](11-application-package.md)). So the entire port surface — and `this.tasks.save(task)`, the canonical missing-`await` bug — is invisible to Biome and visible to ESLint. **Keep the ESLint rules and the `recommendedTypeChecked` extend.**
+>
+> Both Biome rules are `nursery` in 2.5.7 and this config does not enable nursery, so they are inert. If you ever turn them on, expect double-reporting on concrete methods while abstract members stay ESLint-only — which is worse than leaving them off.
+
+**`parameter-properties`** forces the constructor-injection style the whole system uses, and is the single rule with no Biome equivalent in either direction:
 
 ```ts
 // ✗ rejected
@@ -169,50 +416,11 @@ class ReactivateTaskUseCase {
 }
 ```
 
-**`no-restricted-properties` on `process.env`** is the mechanical version of "a package never reads its own configuration." It is overridden in `apps/*/src/env.ts` and nowhere else — see Step 5.5.
+This rule is also why `tsx` cannot be replaced by Node's native type stripping ([24](24-worker-app.md)) — parameter properties emit runtime code, so stripping rejects them.
 
----
+**The three "off" entries are not optional.** Two linters reporting the same violation produces duplicate diagnostics in the editor and teaches people to ignore both. Whenever a rule exists in both tools, Biome owns it — it is faster and it runs on save.
 
-## Step 5.3 — ESLint: the OOP rules
-
-For `packages/{core,permissions,contracts,application,db,infrastructure,auth,composition,api-client,asset,content}` — every non-React package.
-
-**`tooling/eslint-config/oop.js`**
-
-```js
-import tseslint from "typescript-eslint";
-import { base } from "./base.js";
-
-export default tseslint.config(...base, {
-  rules: {
-    "no-restricted-syntax": [
-      "error",
-      {
-        selector: "ExportNamedDeclaration > FunctionDeclaration",
-        message: "No exported free functions. Put behaviour on a class (static if stateless).",
-      },
-      {
-        selector:
-          "ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression",
-        message: "No exported arrow functions. Put behaviour on a class (static if stateless).",
-      },
-      {
-        selector: "ExportDefaultDeclaration > FunctionDeclaration",
-        message: "No exported free functions. Put behaviour on a class (static if stateless).",
-      },
-      {
-        selector: "ClassBody > PropertyDefinition[static=true][readonly!=true]",
-        message: "Static mutable state is banned — it leaks across requests and tests.",
-      },
-    ],
-    "@typescript-eslint/no-extraneous-class": "off",
-  },
-});
-```
-
-### What this buys
-
-The rule the architecture actually depends on:
+**The OOP selectors** catch the thing the architecture actually depends on:
 
 ```ts
 // ✗ wrong — behaviour floating free of the data it operates on
@@ -226,169 +434,58 @@ class CapabilitySet {
 
 Free functions are how a codebase loses its shape. `canReactivate` in a utils file gets copied, then diverges, and now there are two answers to the same permission question. A method on `CapabilitySet` cannot be copied without copying the class.
 
-**`no-extraneous-class` is turned off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
+**The static-mutable-state ban** catches a real production bug. A `static cache = new Map()` on a repository looks fine locally and serves user A's rows to user B under concurrency. `static readonly` is fine; `static` alone is not.
 
-**The static-mutable-state ban** is the one that catches a real production bug. A `static cache = new Map()` on a repository looks fine locally and serves user A's rows to user B under concurrency. `static readonly` is fine; `static` alone is not.
+**Zod schemas and Drizzle tables don't trip these.** They are _data shapes_, not behaviour — declared as `static readonly` class members (Zod) or module-level `pgTable` consts (Drizzle). Neither matches a selector above.
 
-**Two exemptions the rules already handle:** Zod schemas and Drizzle tables are *data shapes*, not behaviour, and are declared as `static readonly` class members (Zod) or module-level `pgTable` consts (Drizzle). Neither trips the selectors above.
+**`packages/{ui,feature,query}` and `apps/*` are excluded from the OOP block** — React components and hooks are functions by contract with the framework. That exclusion is the `OOP_PACKAGES` glob, and it is the only place in the repo where the React/non-React split is written down.
 
----
-
-## Step 5.4 — ESLint: React and the server-only boundary
-
-For `packages/{ui,feature,query}` and `apps/web`. Extends `base`, **not** `oop` — React components and hooks are functions by contract with the framework.
-
-**`tooling/eslint-config/react.js`**
-
-```js
-import tseslint from "typescript-eslint";
-import { base } from "./base.js";
-
-export default tseslint.config(
-  ...base,
-  {
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: [
-                "@ratchet/db",
-                "@ratchet/db/*",
-                "@ratchet/infrastructure",
-                "@ratchet/infrastructure/*",
-                "@ratchet/auth",
-                "@ratchet/auth/*",
-                "@ratchet/composition",
-                "@ratchet/composition/*",
-                "@ratchet/application",
-                "@ratchet/application/*",
-              ],
-              message:
-                "Server-only. Reachable from src/server/**, src/route/api/**, and *.server.ts only. Cross the boundary via @ratchet/contracts.",
-            },
-            {
-              group: ["drizzle-orm", "drizzle-orm/*", "pg", "ioredis", "bullmq", "better-auth"],
-              message: "Server-only dependency. It must never appear in a client bundle.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    // The server-only escape hatch — exactly two directories and one filename suffix.
-    files: ["src/server/**", "src/route/api/**", "**/*.server.ts"],
-    rules: {
-      "no-restricted-imports": "off",
-      "no-restricted-properties": "off",
-    },
-  },
-);
-```
-
-That override block is the whole design: server-only packages are importable from **exactly two directories and one filename suffix**, and nowhere else in the web app. Everything else crosses the boundary through `@ratchet/contracts`, which is isomorphic by construction.
-
-This is defence number one of three. The other two:
-
-- **`ServerOnly.assert()`** at the top of every server-only barrel ([07](07-core-package.md)) — a runtime tripwire that throws if the module somehow loads in a browser.
-- **The CI bundle grep** ([25](25-hygiene-and-ci.md)) — asserts a known Drizzle export string is absent from the built client output.
-
-Three defences sounds excessive until you remember what a leak costs here. In a fullstack app, a Drizzle import reaching the client is a security event — connection strings and full table shapes in a public bundle — not a bundle-size regression.
-
-### Two more restrictions for `packages/feature`
-
-Add these in `packages/feature/eslint.config.js` specifically, on top of `react`:
-
-```js
-import react from "@ratchet/eslint-config/react";
-import tseslint from "typescript-eslint";
-
-export default tseslint.config(...react, {
-  rules: {
-    "no-restricted-imports": [
-      "error",
-      {
-        patterns: [
-          {
-            group: ["@ratchet/api-client", "@ratchet/api-client/*"],
-            message:
-              "Every read goes through a defined query in @ratchet/query. A raw client call inside a component is an uncached read that no invalidation touches.",
-          },
-          {
-            group: ["@tanstack/react-router", "@tanstack/react-router/*"],
-            message:
-              "Routing lives in apps/web. Pass navigation in as an onNavigate prop or an href string.",
-          },
-        ],
-      },
-    ],
-  },
-});
-```
-
-Both bans are load-bearing. The first stops `await client.task.list()` appearing inside a component during a deadline — it works fine and becomes a read that no invalidation will ever touch. The second is what lets the Tauri webview mount `@ratchet/feature` under a different routing shell without changing a line.
+**The `ignores` list covers what `projectService` cannot resolve.** TS config files and hand-written `.d.ts` sit outside every package's tsconfig `include`, so a type-aware rule fails on them with a parsing error rather than a lint finding. Deliberately `**/*.config.ts` rather than `*.config.*` — the wider glob also matches `eslint.config.js` itself, which makes editors report *"File ignored because of a matching ignore pattern"* on every config file you open.
 
 ---
 
-## Step 5.5 — The `env.ts` exemption
+## Step 5.4 — Root scripts
 
-`apps/web/eslint.config.js` and `apps/worker/eslint.config.js` each add:
-
-```js
+```json
 {
-  files: ["src/env.ts"],
-  rules: { "no-restricted-properties": "off" },
+  "scripts": {
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "lint": "biome check . && eslint .",
+    "lint:fast": "biome check ."
+  }
 }
 ```
 
-Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
+**`biome check` is lint plus format plus import organisation in one pass**, which is why `lint` runs it rather than `biome lint`.
+
+**`lint:fast` exists for the pre-commit hook.** The hook runs Biome only; ESLint runs on pre-push and in CI ([25](25-hygiene-and-ci.md)). A hook that takes ten seconds gets disabled; one that takes half a second stays on, and a check that runs is worth more than a thorough check that doesn't.
+
+**No `-r --parallel`.** Both tools take the whole repo in one invocation, which is faster than fifteen processes and means no package needs a lint config of its own.
 
 ---
 
-## Step 5.6 — Root config
+## What this removed
 
-**`eslint.config.js`** at the root:
-
-```js
-export { default } from "@ratchet/eslint-config/base";
-```
-
-Each package then has its own four-line `eslint.config.js` selecting the right variant:
-
-```js
-// packages/application/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
-
-```js
-// packages/ui/eslint.config.js
-export { default } from "@ratchet/eslint-config/react";
-```
-
-And declares the dependency:
-
-```json
-"devDependencies": { "@ratchet/eslint-config": "workspace:*" }
-```
-
----
-
-## A note on turning these on
-
-**Do not enable `oop.js` and `react.js` before there is real code.** During [06](06-package-anatomy.md) the packages hold placeholder classes and nothing else; the rules would only fight scaffolding. Scaffold with `base` everywhere, then switch each package to `oop` or `react` as you write its first real file — which is what the per-package `eslint.config.js` makes cheap.
+- `tooling/prettier-config/` — the package, its config, and its plugin dependency.
+- `prettier.config.js` at the root.
+- `tooling/eslint-config/src/{base,oop,react}.js` — three entrypoints collapsed to one config with file globs.
+- **`eslint.config.js` in every package.** Packages now have **three** config files at their root, not four ([06](06-package-anatomy.md)).
+- The `@loadbearing/eslint-config` devDependency in every package — only the root declares it now.
+- The `lint` script in every package.
+- The advice about scaffolding with `base` and switching later. With one root config keyed on globs, there is nothing to switch.
 
 ---
 
 ## ✅ Gate
 
 ```bash
+pnpm exec biome --version
 pnpm exec eslint --version
-pnpm format:check
+pnpm check
 ```
 
-Both run without crashing. There is nothing to lint yet; the real check arrives in [07](07-core-package.md).
+All three run without crashing. There is nothing to lint yet; the real check arrives in [07](07-core-package.md).
 
 Do not proceed until this passes.
 

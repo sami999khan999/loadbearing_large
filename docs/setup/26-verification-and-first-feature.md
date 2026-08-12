@@ -39,9 +39,9 @@ Anything that needed a manual fix is a bug in one of these documents. Fix the do
 These are the checks a green build does not give you. Run them by hand once now, and again whenever the repo feels like it is drifting.
 
 - [ ] **Topological build.** `pnpm build` from clean builds `core → permissions → contracts → application → db → infrastructure → auth → composition → …` in dependency order, with no config anywhere declaring that order. pnpm derives it from `workspace:*`.
-- [ ] **Server-only boundary.** Importing `@ratchet/db` from a React component is an ESLint error; importing it from `apps/web/src/server/**` is fine.
+- [ ] **Server-only boundary.** Importing `@loadbearing/db` from a React component is a Biome error; importing it from `apps/web/src/server/**` is fine.
 - [ ] **Framework-free domain.** `grep -r "@orpc\|@tanstack\|drizzle-orm\|ioredis" packages/application/src` returns nothing.
-- [ ] **OOP rule.** An exported free function in `packages/contracts/src` is an ESLint error.
+- [ ] **OOP rule.** An exported free function in `packages/contracts/src` is an ESLint error (the `no-restricted-syntax` selectors, which Biome cannot express).
 - [ ] **Typed permissions.** A misspelled `PermissionKey` is a compile error in *both* the oRPC router and the React component.
 - [ ] **Coverage.** Every contract procedure has a `ProcedurePermissions` entry — the unit test from [09](09-contracts-package.md) fails if one is missing, and `principalMiddleware` denies it at runtime if the test is skipped.
 - [ ] **One decision, four surfaces.** Removing a permission from a role removes the nav item **and** returns `FORBIDDEN` from the API — without touching the frontend.
@@ -122,9 +122,9 @@ This is the payoff. Every feature you ever add touches the same eleven places, i
 
 ## Step 26.5 — Renaming the scope
 
-The kit ships as `@ratchet/*`. Before real work starts:
+The kit ships as `@loadbearing/*`. Before real work starts:
 
-1. Find and replace `@ratchet/` with `@yourscope/` across the repo.
+1. Find and replace `@loadbearing/` with `@yourscope/` across the repo.
 2. Rename the directory names only if you want to — package names and folder names are independent.
 3. Update `scope-enum` in `commitlint.config.js` if you renamed packages too.
 4. `rm -rf node_modules pnpm-lock.yaml && pnpm install`.

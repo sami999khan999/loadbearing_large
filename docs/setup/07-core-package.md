@@ -1,4 +1,4 @@
-# 07 · `@ratchet/core`
+# 07 · `@loadbearing/core`
 
 > The smallest package, written first to prove the build pipeline end to end. Four primitives and nothing else.
 
@@ -19,13 +19,6 @@ packages/core/src/
 ├── result.ts         → Result, Ok, Err
 ├── uuid.ts           → Uuid
 └── server-only.ts    → ServerOnly
-```
-
-Switch the lint config first:
-
-```js
-// packages/core/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
 ```
 
 ---
@@ -219,8 +212,8 @@ Four packages call this on their first line: `db`, `infrastructure`, `auth`, `co
 
 ```ts
 // packages/db/src/index.ts
-import { ServerOnly } from "@ratchet/core";
-ServerOnly.assert("@ratchet/db");
+import { ServerOnly } from "@loadbearing/core";
+ServerOnly.assert("@loadbearing/db");
 ```
 
 Note `typeof window !== "undefined"` rather than a direct reference. `library.json` sets `lib: ["ES2024"]` with no DOM, so `window` is not a known identifier — the `typeof` guard is what lets this compile in a package that has never heard of a browser.
@@ -289,13 +282,13 @@ export default defineConfig({
 ## ✅ Gate
 
 ```bash
-pnpm --filter @ratchet/core build
-pnpm --filter @ratchet/core test
-pnpm --filter @ratchet/core lint
+pnpm --filter @loadbearing/core build
+pnpm --filter @loadbearing/core test
+pnpm --filter @loadbearing/core lint
 ```
 
 `packages/core/dist/` contains `index.js` and `index.d.ts`. **Do not proceed if it does not** — every later package copies this exact shape, and a problem here multiplies by fourteen.
 
 ---
 
-[← Package Anatomy](06-package-anatomy.md) · [`@ratchet/permissions` →](08-permissions-package.md)
+[← Package Anatomy](06-package-anatomy.md) · [`@loadbearing/permissions` →](08-permissions-package.md)

@@ -105,10 +105,72 @@ Also:
 
 ## Step 1.5 — Editor
 
-Two extensions carry real weight here and are worth mandating in `.vscode/extensions.json` later:
+Whatever editor you use, two things need wiring: **Biome as the formatter** and **ESLint for
+the architecture rules**. Nothing formats on save until you do this, and nothing formats on
+commit until the hooks in [25](25-hygiene-and-ci.md) — until then `pnpm check` is a manual step.
 
-- **ESLint** — the OOP rules in [05](05-lint-and-format.md) are the architecture. Seeing them inline is the difference between enforcement and a CI surprise.
-- **Prettier** — with *format on save*, so the `endOfLine` normalisation happens continuously rather than in one enormous diff.
+**Do not install a Prettier plugin.** Prettier is not in this stack. Having it installed means
+whichever plugin wins the "default formatter" slot decides your formatting, which is exactly the
+conflict Biome removed.
+
+### Zed
+
+Commit **`.zed/settings.json`** so the whole team gets the same behaviour:
+
+```json
+{
+  "format_on_save": "on",
+  "formatter": { "language_server": { "name": "biome" } },
+  "code_actions_on_format": {
+    "source.fixAll.biome": true,
+    "source.organizeImports.biome": true
+  },
+  "languages": {
+    "Markdown": { "format_on_save": "off" },
+    "YAML": { "format_on_save": "off" }
+  }
+}
+```
+
+Install Zed's **Biome** extension first — that is what provides the `biome` language server. It
+runs `biome lsp-proxy` against the repo's pinned binary, so the editor and `pnpm check` cannot
+disagree.
+
+> [!TIP]
+> If you would rather not depend on the extension, Zed can shell out to the CLI instead:
+>
+> ```json
+> "formatter": { "external": {
+>   "command": "./node_modules/.bin/biome",
+>   "arguments": ["format", "--stdin-file-path", "{buffer_path}"]
+> } }
+> ```
+>
+> Verified: stdin formatting honours the project config — it rewrites quotes and wraps at
+> `lineWidth: 100`. You lose inline lint diagnostics, which is the main reason to prefer the
+> language-server route.
+
+**Markdown and YAML are `format_on_save: "off"` deliberately.** Biome does not support either —
+`biome format` on a `.md` file reports `Checked 0 files`. Leaving format-on-save enabled for them
+would silently do nothing, or hand them to another plugin that reflows your hand-wrapped prose.
+
+### VS Code
+
+The equivalent, in `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.codeActionsOnSave": { "source.fixAll.biome": "explicit" },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "eslint.useFlatConfig": true
+}
+```
+
+Set a per-language `editor.defaultFormatter` for `json`, `jsonc`, and `css` as well, or another
+extension can claim them. List `esbenp.prettier-vscode` under `unwantedRecommendations` in
+`.vscode/extensions.json`.
 
 Set the workspace TypeScript version to the repo's rather than the editor's bundled copy. VS Code: `TypeScript: Select TypeScript Version` → *Use Workspace Version*. Otherwise `verbatimModuleSyntax` and `noUncheckedIndexedAccess` behave differently in the editor than in `pnpm typecheck`.
 

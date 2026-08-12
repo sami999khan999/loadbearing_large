@@ -4,7 +4,7 @@
 
 **Delivers:** A running fullstack app where every handler is three lines, auth is mounted, and all four enforcement surfaces share one `can()`.
 
-**Prerequisite:** [22 · `@ratchet/feature`](22-feature-package.md)
+**Prerequisite:** [22 · `@loadbearing/feature`](22-feature-package.md)
 
 ---
 
@@ -14,7 +14,6 @@
 apps/web/
 ├── vite.config.ts
 ├── tsconfig.json
-├── eslint.config.js
 └── src/
     ├── env.ts                      → Env  (one of two process.env readers in the repo)
     ├── router.tsx
@@ -51,23 +50,23 @@ cd ../..
 ```
 > Take the defaults; most of it gets replaced. `rmSync` is the cross-platform `rm -rf` and removes the nested Git repo the scaffolder creates.
 
-Set `"name": "@ratchet/web"` in `apps/web/package.json`, then:
+Set `"name": "@loadbearing/web"` in `apps/web/package.json`, then:
 
 ```bash
-pnpm add --filter @ratchet/web \
-  @ratchet/contracts@workspace:* @ratchet/permissions@workspace:* \
-  @ratchet/api-client@workspace:* @ratchet/query@workspace:* \
-  @ratchet/content@workspace:* @ratchet/ui@workspace:* @ratchet/feature@workspace:* \
-  @ratchet/composition@workspace:* @ratchet/application@workspace:* @ratchet/auth@workspace:* \
-  @orpc/server@catalog: @orpc/client@catalog: @tanstack/react-query zod@catalog:
+pnpm add --filter @loadbearing/web \
+  @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* \
+  @loadbearing/api-client@workspace:* @loadbearing/query@workspace:* \
+  @loadbearing/content@workspace:* @loadbearing/ui@workspace:* @loadbearing/feature@workspace:* \
+  @loadbearing/composition@workspace:* @loadbearing/application@workspace:* @loadbearing/auth@workspace:* \
+  @orpc/server@catalog: @orpc/client@catalog: @tanstack/react-query@catalog: zod@catalog:
 ```
-> `@orpc/server` is here because the oRPC handler lives in `apps/web/src/server/` — this is the fullstack app, so it holds both sides. `composition`, `application`, and `auth` are server-only; the ESLint boundary from [05](05-lint-and-format.md) restricts them to `src/server/**` and `src/route/api/**`.
+> `@orpc/server` is here because the oRPC handler lives in `apps/web/src/server/` — this is the fullstack app, so it holds both sides. `composition`, `application`, and `auth` are server-only; the Biome boundary from [05](05-lint-and-format.md) restricts them to `src/server/**` and `src/route/api/**`.
 
 **`apps/web/tsconfig.json`** — replace the generated one:
 
 ```json
 {
-  "extends": "@ratchet/tsconfig/react.json",
+  "extends": "@loadbearing/tsconfig/react.json",
   "compilerOptions": {
     "types": ["vite/client"],
     "paths": { "~/*": ["./src/*"] }
@@ -88,7 +87,7 @@ export default defineConfig({
   resolve: { conditions: ["development"] },
   ssr: {
     resolve: { conditions: ["development"], externalConditions: ["development"] },
-    noExternal: [/^@ratchet\//],
+    noExternal: [/^@loadbearing\//],
   },
 });
 ```
@@ -96,17 +95,8 @@ export default defineConfig({
 >
 > If resolution misbehaves, delete both blocks. You fall back to consuming `dist/`, which still works with a rebuild between edit and reload.
 
-**`apps/web/eslint.config.js`**
-
-```js
-import react from "@ratchet/eslint-config/react";
-import tseslint from "typescript-eslint";
-
-export default tseslint.config(...react, {
-  files: ["src/env.ts"],
-  rules: { "no-restricted-properties": "off" },
-});
-```
+> [!NOTE]
+> **No lint config in the app.** The server-only boundary and the `env.ts` exemption are both `overrides` blocks in the root `biome.json` ([05](05-lint-and-format.md)), keyed on `apps/web/src/server/**`, `apps/web/src/route/api/**`, and `apps/*/src/env.ts`. Adding a config here would let the app opt itself out of the rules that exist to constrain it.
 
 ---
 
@@ -200,7 +190,7 @@ export class Env {
 **`apps/web/src/server/container.ts`**
 
 ```ts
-import { Container } from "@ratchet/composition";
+import { Container } from "@loadbearing/composition";
 import { Env } from "~/env.js";
 
 /** One per process, at module scope. Never per request. */
@@ -217,9 +207,9 @@ Module scope means one connection pool, one Redis connection, one Better Auth in
 
 ```ts
 import { ORPCError, os } from "@orpc/server";
-import type { Principal } from "@ratchet/application";
-import type { Container } from "@ratchet/composition";
-import { ProcedurePermissions } from "@ratchet/contracts";
+import type { Principal } from "@loadbearing/application";
+import type { Container } from "@loadbearing/composition";
+import { ProcedurePermissions } from "@loadbearing/contracts";
 
 /** Initial context: environment-shaped, injected once by the adapter. */
 export const base = os.$context<{ container: Container; headers: Headers }>();
@@ -260,7 +250,7 @@ export const authed = base.use(principalMiddleware);
 
 ```ts
 import { ORPCError } from "@orpc/server";
-import { DomainError } from "@ratchet/application";
+import { DomainError } from "@loadbearing/application";
 
 const CODE_MAP: Readonly<Record<string, string>> = {
   FORBIDDEN: "FORBIDDEN",
@@ -294,7 +284,7 @@ One file, and the domain layer stays HTTP-free. `ForbiddenError` → `ORPCError(
 
 ```ts
 import { implement } from "@orpc/server";
-import { contract } from "@ratchet/contracts";
+import { contract } from "@loadbearing/contracts";
 import { authed } from "./base.js";
 
 export class TaskRouter {
@@ -388,7 +378,7 @@ export function createServerRpcClient(request: Request) {
 
 ```ts
 import { redirect } from "@tanstack/react-router";
-import type { CapabilitySet, PermissionKey } from "@ratchet/permissions";
+import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 
 export class RouteGuard {
   private constructor() {}
@@ -419,7 +409,7 @@ Used in a route's `beforeLoad`. Same `CapabilitySet.can()` the server calls — 
 
 `__root.tsx` is where everything composes. In order:
 
-1. Import `@ratchet/ui/token.css` and `@ratchet/ui/theme.css`.
+1. Import `@loadbearing/ui/token.css` and `@loadbearing/ui/theme.css`.
 2. An inline script in `<head>` applying the stored theme **before** hydration, or dark-mode users get a white flash on every load.
 3. `ApiClientProvider` with the environment-appropriate client.
 4. `QueryClientProvider` with the per-request or singleton `QueryClient`.
@@ -435,7 +425,7 @@ That last one matters: resolving capabilities on the server and serialising the 
 Add to the root route component, temporarily:
 
 ```tsx
-import { CorePackage } from "@ratchet/core";
+import { CorePackage } from "@loadbearing/core";
 // render {CorePackage.id} somewhere visible
 ```
 
@@ -467,14 +457,14 @@ Server functions are fine for genuinely framework-local concerns — setting a c
 
 ## ✅ Gate
 
-- `http://localhost:3000` renders and shows `@ratchet/core`.
+- `http://localhost:3000` renders and shows `@loadbearing/core`.
 - Sign-in works against `/api/auth` and sets an httpOnly cookie.
 - An SSR page load produces **zero** requests to your own `/api/rpc` — check the server access log; it should be silent during SSR.
 - Removing a permission from a role removes the nav item **and** the call returns `FORBIDDEN`.
-- Importing `@ratchet/db` from a component is an ESLint error; importing it from `src/server/**` is fine.
+- Importing `@loadbearing/db` from a component is a Biome error; importing it from `src/server/**` is fine.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/feature`](22-feature-package.md) · [`apps/worker` →](24-worker-app.md)
+[← `@loadbearing/feature`](22-feature-package.md) · [`apps/worker` →](24-worker-app.md)

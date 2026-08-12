@@ -31,12 +31,38 @@ pnpm exec commitlint --edit "$1"
 
 ```json
 {
-  "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-  "*.{json,md,css,yml,yaml}": ["prettier --write"]
+  "*.{js,jsx,ts,tsx,json,jsonc,css}": ["biome check --write --no-errors-on-unmatched"]
 }
 ```
 
+> [!CAUTION]
+> **Do not add a `*.{md,yml,yaml}` entry for Biome.** Biome does not format Markdown or YAML —
+> verified on 2.5.7, where `biome format` on a `.md` or `.yaml` file reports
+> `Checked 0 files`. Combined with `--no-errors-on-unmatched`, such an entry is a **silent
+> no-op**: the hook reports success and formats nothing.
+>
+> Dropping Prettier therefore left Markdown and YAML formatted by no tool at all. That is fine
+> for hand-wrapped prose — it is why `docs/` was excluded from Prettier in the first place — but
+> know that it is the situation rather than discovering it from an inconsistent diff. If you
+> want them formatted, add a dedicated formatter (`prettier --write "**/*.{md,yml,yaml}"` as a
+> separate devDependency scoped to those extensions only) and give it its own lint-staged entry.
+
 **`lint-staged` runs on staged files only**, so a commit touching two files takes a second rather than linting 14 packages. Do not add `tsc --noEmit` here — type checking is inherently whole-project and would make every commit take a minute. That belongs in CI.
+
+**Biome only in the hook — no ESLint.** Biome finishes in milliseconds; ESLint's typed rules need a whole program and would put ten seconds on every commit. A hook that slow gets disabled, and a check that runs is worth more than a thorough check that doesn't.
+
+**`--no-errors-on-unmatched`** stops the hook failing when a staged file is one Biome does not handle.
+
+**`.husky/pre-push`** is where the slow pass goes:
+
+```sh
+pnpm exec eslint .
+```
+
+ESLint's six architecture rules still block a merge — they run here and in CI, not on every commit.
+
+> [!NOTE]
+> ESLint 9 resolves flat config from the **working directory** rather than per file. With a single root config ([05](05-lint-and-format.md)) that is a non-issue: both this hook and CI run `eslint .` from the repo root, so there is exactly one config and one rule set.
 
 ---
 
@@ -125,8 +151,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - run: pnpm --filter @loadbearing/web build # required by check:architecture rule 3
       - run: pnpm check:architecture
 ```
+
+> [!CAUTION]
+> **That web build is not optional.** `check:architecture`'s third assertion greps the built *client* output for server-only fingerprints. `build:packages` filters to `./packages/*` and never builds `apps/web`, so without this step the grep runs over a directory that does not exist — it passes silently and gives you permanent false confidence that no server code is reaching the browser.
+>
+> This is exactly the failure the note in Step 25.4 warns about, and the pipeline is where it actually bites. Make the script fail when it finds zero asset files, so a missing build is loud rather than green.
 
 **Services, not Docker Compose.** GitHub's `services` block gives health-checked containers on localhost with no compose file to keep in sync. The `pgvector` image is required — the vector migration will not apply on stock `postgres:17`.
 
@@ -170,7 +202,7 @@ Every other `process.env` read is an unvalidated string that becomes `undefined`
 ### 3 — No server code in the client bundle
 
 ```bash
-pnpm --filter @ratchet/web build
+pnpm --filter @loadbearing/web build
 # then grep the client output for server-only fingerprints
 ```
 

@@ -1,10 +1,10 @@
-# 18 · `@ratchet/asset`
+# 18 · `@loadbearing/asset`
 
 > Every binary the product ships: images, the icon sprite, and font files. No React anywhere.
 
 **Delivers:** `ImageManifest`, `IconRegistry`, a build-time SVG sprite, and the one CSS file that declares every `@font-face`.
 
-**Prerequisite:** [17 · `@ratchet/api-client`](17-api-client-package.md)
+**Prerequisite:** [17 · `@loadbearing/api-client`](17-api-client-package.md)
 
 ---
 
@@ -40,11 +40,6 @@ packages/asset/
         └── inter-variable.woff2
 ```
 
-```js
-// packages/asset/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
-
 ---
 
 ## Step 18.1 — Package exports
@@ -69,7 +64,7 @@ CSS and SVG cannot live in a JavaScript barrel, so this package has three entryp
   "dev": "node build-sprite.mjs && tsup --watch",
   "typecheck": "tsc --noEmit",
   "lint": "eslint src",
-  "clean": "rimraf dist src/icon/sprite.svg *.tsbuildinfo"
+  "clean": "rimraf dist src/icon/sprite.svg"
 }
 ```
 
@@ -294,7 +289,7 @@ Nothing above this package. `ContentSource.media(key)` currently reads `ImageMan
 ## ✅ Gate
 
 ```bash
-pnpm --filter @ratchet/asset build
+pnpm --filter @loadbearing/asset build
 ```
 
 - `src/icon/sprite.svg` exists with one `<symbol>` per file in `svg/`.
@@ -305,4 +300,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/api-client`](17-api-client-package.md) · [`@ratchet/content` →](19-content-package.md)
+[← `@loadbearing/api-client`](17-api-client-package.md) · [`@loadbearing/content` →](19-content-package.md)

@@ -1,10 +1,10 @@
-# 20 · `@ratchet/query`
+# 20 · `@loadbearing/query`
 
 > The single TanStack owner. Query keys, query and mutation options, the provider, and the client factory.
 
 **Delivers:** `QueryKeys`, `createQueryClient()`, `ApiClientProvider`, `useAppMutation`, and session state living in the same cache as everything else.
 
-**Prerequisite:** [19 · `@ratchet/content`](19-content-package.md)
+**Prerequisite:** [19 · `@loadbearing/content`](19-content-package.md)
 
 ---
 
@@ -24,13 +24,6 @@ packages/query/src/
     ├── session.queries.ts      → SessionQueries
     └── session.mutations.ts    → SessionMutations
 ```
-
-```js
-// packages/query/eslint.config.js
-export { default } from "@ratchet/eslint-config/react";
-```
-
-> `react`, not `oop` — this package exports hooks and a provider component, which are functions by contract with React.
 
 ---
 
@@ -74,7 +67,7 @@ export class QueryKeys {
 
 ```ts
 import { QueryClient } from "@tanstack/react-query";
-import type { ApiClient } from "@ratchet/api-client";
+import type { ApiClient } from "@loadbearing/api-client";
 
 export interface QueryClientOptions {
   readonly transport: ApiClient;
@@ -152,7 +145,7 @@ const { queryClient, apiClient } = createQueryClient({
 
 ```tsx
 import { createContext, useContext, type ReactNode } from "react";
-import type { ApiClient } from "@ratchet/api-client";
+import type { ApiClient } from "@loadbearing/api-client";
 
 const ApiClientContext = createContext<ApiClient | null>(null);
 
@@ -224,7 +217,7 @@ Session is the piece of state that gates everything else, so it lives in the sam
 
 ```ts
 import { queryOptions } from "@tanstack/react-query";
-import type { AuthClient } from "@ratchet/api-client";
+import type { AuthClient } from "@loadbearing/api-client";
 import { QueryKeys } from "../query-key.js";
 
 export class SessionQueries {
@@ -244,7 +237,7 @@ export class SessionQueries {
 **`packages/query/src/session/session.mutations.ts`**
 
 ```ts
-import type { AuthClient } from "@ratchet/api-client";
+import type { AuthClient } from "@loadbearing/api-client";
 import { QueryKeys } from "../query-key.js";
 import { useAppMutation } from "../use-app-mutation.js";
 
@@ -289,7 +282,7 @@ For each contract namespace, two files:
 ```ts
 // packages/query/src/task/task.queries.ts
 import { queryOptions } from "@tanstack/react-query";
-import type { ApiClient } from "@ratchet/api-client";
+import type { ApiClient } from "@loadbearing/api-client";
 import { QueryKeys } from "../query-key.js";
 
 export class TaskQueries {
@@ -374,4 +367,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/content`](19-content-package.md) · [`@ratchet/ui` →](21-ui-package.md)
+[← `@loadbearing/content`](19-content-package.md) · [`@loadbearing/ui` →](21-ui-package.md)

@@ -21,7 +21,7 @@ Every "the desktop app will…" note scattered through the earlier documents ass
 | Secret storage | whatever you build | OS keychain via a plugin |
 | `process.env` at runtime | available | **does not exist** |
 
-**The single-runtime difference is the one with architectural consequences.** Under Electron there was a Node process where `@ratchet/api-client` could run headless — an offline sync queue, a background poller. Under Tauri there is no such place: JavaScript runs in the webview and nowhere else. Anything genuinely background-and-native is Rust, not TypeScript.
+**The single-runtime difference is the one with architectural consequences.** Under Electron there was a Node process where `@loadbearing/api-client` could run headless — an offline sync queue, a background poller. Under Tauri there is no such place: JavaScript runs in the webview and nowhere else. Anything genuinely background-and-native is Rust, not TypeScript.
 
 That is why the "must load in Electron's main process" justification for keeping `api-client` React-free has been rewritten throughout. The rule survives — scripts, tests, and CLIs still need it — but the desktop app is no longer the reason for it.
 
@@ -33,7 +33,7 @@ That is why the "must load in Electron's main process" justification for keeping
 
 ---
 
-## Step 27.1 — Prerequisites
+## Step 29.1 — Prerequisites
 
 Only needed by whoever builds the desktop app; the web and worker developers need none of this.
 
@@ -54,7 +54,7 @@ Platform toolchains on top:
 
 ---
 
-## Step 27.2 — Scaffold
+## Step 29.2 — Scaffold
 
 ```bash
 cd apps
@@ -64,16 +64,16 @@ node -e "require('fs').rmSync('.git', { recursive: true, force: true })"
 cd ../..
 ```
 
-Set `"name": "@ratchet/desktop"`, then:
+Set `"name": "@loadbearing/desktop"`, then:
 
 ```bash
-pnpm add --filter @ratchet/desktop \
-  @ratchet/contracts@workspace:* @ratchet/permissions@workspace:* \
-  @ratchet/api-client@workspace:* @ratchet/query@workspace:* \
-  @ratchet/content@workspace:* @ratchet/ui@workspace:* \
-  @ratchet/feature@workspace:* @ratchet/asset@workspace:* \
-  @tauri-apps/api @tanstack/react-router @tanstack/react-query
-pnpm add --filter @ratchet/desktop -D @tauri-apps/cli vite @vitejs/plugin-react
+pnpm add --filter @loadbearing/desktop \
+  @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* \
+  @loadbearing/api-client@workspace:* @loadbearing/query@workspace:* \
+  @loadbearing/content@workspace:* @loadbearing/ui@workspace:* \
+  @loadbearing/feature@workspace:* @loadbearing/asset@workspace:* \
+  @tauri-apps/api @tanstack/react-router @tanstack/react-query@catalog:
+pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli vite @vitejs/plugin-react
 ```
 
 **Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The ESLint server-only boundary from [05](05-lint-and-format.md) applies here with no escape hatch at all, because unlike `apps/web` there is no `src/server/**` to exempt.
@@ -98,7 +98,7 @@ apps/desktop/
 
 ---
 
-## Step 27.3 — Configuration without `process.env`
+## Step 29.3 — Configuration without `process.env`
 
 There is no Node runtime in the webview, so `process.env` does not exist. This is a feature: the "exactly two `process.env` readers" assertion in [25](25-hygiene-and-ci.md) needs no new exemption, and the desktop app cannot accidentally read a server secret because it has no mechanism to.
 
@@ -119,31 +119,34 @@ export class Config {
 
 ---
 
-## Step 27.4 — The token provider
+## Step 29.4 — The token provider
 
 This is the whole integration, and `TokenProvider` from [17](17-api-client-package.md) was made abstract for exactly this.
 
 ```ts
 // apps/desktop/src/token-provider.ts
 import { invoke } from "@tauri-apps/api/core";
-import { TokenProvider } from "@ratchet/api-client";
+import { TokenProvider } from "@loadbearing/api-client";
 
 export class TauriTokenProvider extends TokenProvider {
-  public override async token(): Promise<string | null> {
+  public override async get(): Promise<string | null> {
     return invoke<string | null>("get_session_token");
   }
 
-  public override async store(token: string): Promise<void> {
+  public override async set(token: string | null): Promise<void> {
+    if (token === null) {
+      await invoke("clear_session_token");
+      return;
+    }
     await invoke("set_session_token", { token });
-  }
-
-  public override async clear(): Promise<void> {
-    await invoke("clear_session_token");
   }
 }
 ```
 
 The Rust side implements those three commands against the OS keychain (`keyring` crate, or `tauri-plugin-stronghold` if you want an encrypted vault rather than the system store).
+
+> [!NOTE]
+> The method names must match the abstract class in [17](17-api-client-package.md) exactly — `get()` and `set(token: string | null)`, two methods, not three. `set(null)` is the clear path, which is why the Rust side still needs all three commands. `noImplicitOverride` turns any mismatch into a compile error, so a stale `token()` / `store()` / `clear()` triple fails the build rather than silently leaving the abstract methods unimplemented.
 
 **The token never touches `localStorage` and never sits in a JS variable longer than one request.** A webview is still a browser: anything reachable from JavaScript is reachable by injected JavaScript. Keeping the token behind an `invoke` boundary means an XSS in a rendered field cannot enumerate it — it can only ask for it once, which is a smaller blast radius and a loggable event.
 
@@ -160,7 +163,7 @@ That is the entire difference between the desktop client and the browser client.
 
 ---
 
-## Step 27.5 — Server-side changes
+## Step 29.5 — Server-side changes
 
 Two, both in `apps/web`'s environment rather than in any package:
 
@@ -170,7 +173,7 @@ Two, both in `apps/web`'s environment rather than in any package:
 
 ---
 
-## Step 27.6 — Routing and the CSP
+## Step 29.6 — Routing and the CSP
 
 **Use memory or hash history, not browser history.** The webview serves from a custom protocol with no server behind it, so a path-based route on a cold start has nothing to resolve. This is the "routing is the one thing the desktop shell replaces" note from [20](20-query-package.md) becoming concrete: `apps/desktop` owns its own `@tanstack/react-router` instance and its own route tree, and mounts the same `feature` components underneath.
 
@@ -178,7 +181,7 @@ Two, both in `apps/web`'s environment rather than in any package:
 
 ---
 
-## Step 27.7 — CI
+## Step 29.7 — CI
 
 Desktop builds do **not** belong in the `verify` job — they need three runners and several minutes each. Give them a separate workflow, triggered on tags:
 
@@ -204,7 +207,7 @@ That is the return on every "no `@tanstack/react-router` here" and "navigation a
 
 ## ✅ Gate
 
-- `pnpm --filter @ratchet/desktop tauri dev` opens a window rendering the same sign-in screen as the web app.
+- `pnpm --filter @loadbearing/desktop tauri dev` opens a window rendering the same sign-in screen as the web app.
 - Signing in stores a token in the OS keychain and **not** in `localStorage` (check devtools).
 - A gated feature is hidden in the desktop UI and returns `FORBIDDEN` from the API, from the same role change — no desktop-specific permission code.
 - The built bundle contains no Drizzle, no ioredis, no AWS SDK.

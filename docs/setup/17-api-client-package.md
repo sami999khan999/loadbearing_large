@@ -1,10 +1,10 @@
-# 17 · `@ratchet/api-client`
+# 17 · `@loadbearing/api-client`
 
 > The typed oRPC client, the auth-strategy hierarchy, and the transport seam that lets SSR skip the network entirely. React-free.
 
 **Delivers:** One client serving browser cookies, in-process SSR calls, and desktop bearer tokens — with no call-site changes between them.
 
-**Prerequisite:** [16 · `@ratchet/composition`](16-composition-container.md)
+**Prerequisite:** [16 · `@loadbearing/composition`](16-composition-container.md)
 
 ---
 
@@ -25,11 +25,6 @@ packages/api-client/src/
     ├── cookie-auth.strategy.ts      → CookieAuthStrategy
     ├── bearer-auth.strategy.ts      → BearerAuthStrategy
     └── token.provider.ts            → TokenProvider (abstract)
-```
-
-```js
-// packages/api-client/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
 ```
 
 ---
@@ -94,7 +89,9 @@ export class BearerAuthStrategy extends AuthStrategy {
 
 A Tauri webview runs on a `tauri://` origin, so a cookie set by your API is never sent with its requests. That is the entire reason this seam exists. Web constructs one strategy, desktop constructs another, and nothing above changes — not `query`, not `feature`, not a single component.
 
-`TokenProvider` is abstract because *where* the token lives differs by host: the OS keychain reached through a Tauri command, a mobile keychain, an in-memory value in a test. None of those belong in this package — and note that all three are asynchronous, which is why `token()` returns a promise.
+`TokenProvider` is abstract because *where* the token lives differs by host: the OS keychain reached through a Tauri command, a mobile keychain, an in-memory value in a test. None of those belong in this package — and note that all three are asynchronous, which is why `get()` returns a promise.
+
+`set(null)` is the clear path, so two methods cover storing, reading, and signing out. See [29](29-desktop-app.md) for the Tauri implementation.
 
 ---
 
@@ -110,7 +107,7 @@ So the constructor is private and there are two factories.
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
-import type { AppContract } from "@ratchet/contracts";
+import type { AppContract } from "@loadbearing/contracts";
 import type { AuthStrategy } from "./auth/auth.strategy.js";
 
 export type AppClient = ContractRouterClient<AppContract>;
@@ -271,4 +268,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/composition`](16-composition-container.md) · [`@ratchet/asset` →](18-asset-package.md)
+[← `@loadbearing/composition`](16-composition-container.md) · [`@loadbearing/asset` →](18-asset-package.md)

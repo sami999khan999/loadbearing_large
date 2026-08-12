@@ -1,10 +1,10 @@
-# 21 · `@ratchet/ui`
+# 21 · `@loadbearing/ui`
 
 > The design system. Tokens, themes, primitives, `<Icon>`, and `<Can>`. No domain nouns anywhere.
 
 **Delivers:** A component library with no knowledge of contracts, queries, or the router — testable with props alone and reusable under any routing shell.
 
-**Prerequisite:** [20 · `@ratchet/query`](20-query-package.md)
+**Prerequisite:** [20 · `@loadbearing/query`](20-query-package.md)
 
 ---
 
@@ -14,10 +14,10 @@
 
 **If a component imports `@tanstack/react-router`, it belongs in `apps/web`.** Navigation arrives as an `onNavigate` prop or an `href` string. This is what lets the Tauri webview mount the same components under a different routing shell.
 
-|  | `@ratchet/ui` | `@ratchet/feature` |
+|  | `@loadbearing/ui` | `@loadbearing/feature` |
 |---|---|---|
-| May import | React, headless primitives, `@ratchet/asset` | `ui`, `query`, `content`, `contracts`, `permissions` |
-| May **not** import | `@tanstack/*`, `@ratchet/query`, `@ratchet/contracts` at runtime | `@ratchet/api-client`, `@tanstack/react-router`, `db`, `application` |
+| May import | React, headless primitives, `@loadbearing/asset` | `ui`, `query`, `content`, `contracts`, `permissions` |
+| May **not** import | `@tanstack/*`, `@loadbearing/query`, `@loadbearing/contracts` at runtime | `@loadbearing/api-client`, `@tanstack/react-router`, `db`, `application` |
 | Example | `DataTable`, `Dialog`, `StatusBadge`, `EmptyState` | `TaskBoard`, `ReactivateTaskDialog`, `PermissionMatrix` |
 | Test with | Storybook / props | Fake `ApiClient` + `CapabilitySet` fixtures |
 
@@ -26,7 +26,7 @@ packages/ui/src/
 ├── index.ts
 ├── token/
 │   ├── index.ts
-│   └── token.css              ← imports @ratchet/asset/font.css
+│   └── token.css              ← imports @loadbearing/asset/font.css
 ├── theme/
 │   ├── index.ts
 │   ├── theme-registry.ts      → ThemeRegistry, ThemeKey
@@ -47,11 +47,6 @@ packages/ui/src/
 └── status-badge/ …
 ```
 
-```js
-// packages/ui/eslint.config.js
-export { default } from "@ratchet/eslint-config/react";
-```
-
 ---
 
 ## Step 21.1 — Tokens
@@ -59,7 +54,7 @@ export { default } from "@ratchet/eslint-config/react";
 **`packages/ui/src/token/token.css`**
 
 ```css
-@import "@ratchet/asset/font.css";
+@import "@loadbearing/asset/font.css";
 
 :root {
   /* ── type ─────────────────────────────────────────── */
@@ -197,8 +192,8 @@ export class ThemeRegistry {
 **`packages/ui/src/icon/icon.tsx`**
 
 ```tsx
-import type { IconName } from "@ratchet/asset";
-import spriteUrl from "@ratchet/asset/sprite.svg";
+import type { IconName } from "@loadbearing/asset";
+import spriteUrl from "@loadbearing/asset/sprite.svg";
 
 export interface IconProps {
   readonly name: IconName;
@@ -242,7 +237,7 @@ The permission-gating component. It lives in `ui` rather than `feature` because 
 **`packages/ui/src/can/can.tsx`**
 
 ```tsx
-import type { CapabilitySet, PermissionKey } from "@ratchet/permissions";
+import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 import type { ReactNode } from "react";
 
 export interface CanProps {
@@ -273,7 +268,7 @@ The starter kit ships a small set. Each follows the same rules.
 **`packages/ui/src/empty-state/empty-state.tsx`**
 
 ```tsx
-import type { IconName } from "@ratchet/asset";
+import type { IconName } from "@loadbearing/asset";
 import type { ReactNode } from "react";
 import { Icon } from "../icon/icon.js";
 
@@ -296,7 +291,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
 }
 ```
 
-**Every string arrives as a prop.** No literals in `ui`. Copy lives in `@ratchet/content` and reaches these components through `feature`, which is what keeps the design system translatable and testable.
+**Every string arrives as a prop.** No literals in `ui`. Copy lives in `@loadbearing/content` and reaches these components through `feature`, which is what keeps the design system translatable and testable.
 
 That constraint has a design consequence worth stating: an empty state is an invitation to act, so the `action` slot is part of the component rather than something a caller composes around it. `title` and `description` are the caller's job, and `content`'s message catalog is where they should be written — plainly, in active voice, naming what the person can do rather than apologising for the absence of data.
 
@@ -337,8 +332,8 @@ CSS is imported by the app, not re-exported here:
 
 ```ts
 // apps/web/src/route/__root.tsx
-import "@ratchet/ui/token.css";
-import "@ratchet/ui/theme.css";
+import "@loadbearing/ui/token.css";
+import "@loadbearing/ui/theme.css";
 ```
 
 Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does ([18](18-asset-package.md)).
@@ -354,16 +349,16 @@ grep -rniE "task|goal|invoice|lead" packages/ui/src --include=*.tsx --include=*.
 Returns nothing. No domain nouns in the design system.
 
 ```bash
-grep -rn "@tanstack\|@ratchet/query\|@ratchet/contracts" packages/ui/src
+grep -rn "@tanstack\|@loadbearing/query\|@loadbearing/contracts" packages/ui/src
 ```
 
 Returns nothing.
 
-- `packages/ui/package.json` lists exactly one runtime workspace dependency: `@ratchet/asset`.
-- Every `@ratchet/permissions` import in `ui` is `import type`.
+- `packages/ui/package.json` lists exactly one runtime workspace dependency: `@loadbearing/asset`.
+- Every `@loadbearing/permissions` import in `ui` is `import type`.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/query`](20-query-package.md) · [`@ratchet/feature` →](22-feature-package.md)
+[← `@loadbearing/query`](20-query-package.md) · [`@loadbearing/feature` →](22-feature-package.md)

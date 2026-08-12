@@ -1,4 +1,4 @@
-# 14 · `@ratchet/infrastructure`
+# 14 · `@loadbearing/infrastructure`
 
 > The non-Postgres adapters: Redis caching, S3 file storage, and the BullMQ queue publisher. Server-only.
 
@@ -41,17 +41,12 @@ packages/infrastructure/src/
     └── openai.embedding-provider.ts  → OpenAiEmbeddingProvider
 ```
 
-```js
-// packages/infrastructure/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
-
 **`packages/infrastructure/src/index.ts`**
 
 ```ts
-import { ServerOnly } from "@ratchet/core";
+import { ServerOnly } from "@loadbearing/core";
 
-ServerOnly.assert("@ratchet/infrastructure");
+ServerOnly.assert("@loadbearing/infrastructure");
 
 export * from "./cache/index.js";
 export * from "./embedding/index.js";
@@ -128,7 +123,7 @@ export class RedisConnection {
 
 ```ts
 import type { Redis } from "ioredis";
-import { CacheStore } from "@ratchet/application";
+import { CacheStore } from "@loadbearing/application";
 
 export class RedisCacheStore extends CacheStore {
   constructor(private readonly redis: Redis) {
@@ -192,7 +187,7 @@ export class RedisCacheStore extends CacheStore {
 **`packages/infrastructure/src/storage/storage-key.ts`**
 
 ```ts
-import { Uuid } from "@ratchet/core";
+import { Uuid } from "@loadbearing/core";
 
 export class StorageKey {
   private constructor() {}
@@ -227,7 +222,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { StorageGateway, type StoredObject } from "@ratchet/application";
+import { StorageGateway, type StoredObject } from "@loadbearing/application";
 
 export interface S3Config {
   readonly endpoint: string;
@@ -363,7 +358,7 @@ export class QueueName {
 ```ts
 import { Queue } from "bullmq";
 import type { Redis } from "ioredis";
-import { QueuePublisher, type JobOptions } from "@ratchet/application";
+import { QueuePublisher, type JobOptions } from "@loadbearing/application";
 
 export class BullMqQueuePublisher extends QueuePublisher {
   private readonly queues = new Map<string, Queue>();
@@ -487,8 +482,8 @@ await redis.close();
 ```
 
 ```bash
-pnpm add --filter @ratchet/infrastructure -D dotenv tsx@catalog:
-pnpm --filter @ratchet/infrastructure exec tsx src/smoke.ts
+pnpm add --filter @loadbearing/infrastructure -D dotenv tsx@catalog:
+pnpm --filter @loadbearing/infrastructure exec tsx src/smoke.ts
 ```
 
 Delete `smoke.ts` once it has passed, or move it under a `scripts/` folder excluded from the build. It is a wiring check, not a test suite.
@@ -509,4 +504,4 @@ Do not proceed until this passes.
 
 ---
 
-[← Vector Storage](13-vector-store.md) · [`@ratchet/auth` →](15-auth-package.md)
+[← Vector Storage](13-vector-store.md) · [`@loadbearing/auth` →](15-auth-package.md)

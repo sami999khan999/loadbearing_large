@@ -24,7 +24,6 @@ Running BullMQ inside the web process also breaks the moment you run two web ins
 apps/worker/
 ├── package.json
 ├── tsconfig.json
-├── eslint.config.js
 └── src/
     ├── env.ts                        → Env  (the second and last process.env reader)
     ├── main.ts                       ← entrypoint
@@ -44,7 +43,7 @@ apps/worker/
 
 ```json
 {
-  "name": "@ratchet/worker",
+  "name": "@loadbearing/worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -52,8 +51,7 @@ apps/worker/
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }
 ```
@@ -73,25 +71,28 @@ That form is not merely used, it is *mandated* by the `parameter-properties` ESL
 Revisit this only if you ever set `erasableSyntaxOnly: true` and rewrite every constructor to explicit field assignment. That is a large change to remove one dev dependency, and it costs you the rule that keeps constructors declarative.
 
 ```bash
-pnpm add --filter @ratchet/worker \
-  @ratchet/composition@workspace:* @ratchet/application@workspace:* \
-  @ratchet/permissions@workspace:* @ratchet/core@workspace:* \
-  bullmq@catalog: zod@catalog:
-pnpm add --filter @ratchet/worker -D tsx typescript@catalog:
+pnpm add --filter @loadbearing/worker \
+  @loadbearing/composition@workspace:* @loadbearing/application@workspace:* \
+  @loadbearing/infrastructure@workspace:* @loadbearing/permissions@workspace:* \
+  @loadbearing/core@workspace:* \
+  bullmq@catalog: ioredis@catalog: zod@catalog:
+pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 ```
 > No `contracts`, no `api-client`, no `ui`. The worker never speaks HTTP and never renders. It reaches use-cases through the container.
+>
+> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary only applies to React packages and `apps/web`.
 
 **`apps/worker/tsconfig.json`**
 
 ```json
 {
-  "extends": "@ratchet/tsconfig/node-esm.json",
+  "extends": "@loadbearing/tsconfig/node-esm.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src" },
   "include": ["src/**/*.ts"]
 }
 ```
 
-**`apps/worker/eslint.config.js`** extends `base` (not `react`) and exempts `src/env.ts` from the `process.env` rule, exactly as the web app does.
+**No lint config here either.** The `apps/*/src/env.ts` exemption in the root `biome.json` covers this app's `env.ts` by the same glob that covers the web app's.
 
 ---
 
@@ -114,31 +115,53 @@ Jobs have no user. They still need a principal, because `Authorizer.assert()` is
 **`apps/worker/src/system-principal.ts`**
 
 ```ts
-import { Principal } from "@ratchet/application";
-import { CapabilitySet, PermissionRegistry } from "@ratchet/permissions";
+import { Principal } from "@loadbearing/application";
+import type { UserId } from "@loadbearing/contracts";
+import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 
 export class SystemPrincipal {
   private constructor() {}
 
-  /** Narrow, explicit, and reviewed. Never PermissionRegistry.all(). */
-  private static readonly GRANTS = [
+  /**
+   * Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all().
+   * Typed as string[] so isKnown() can narrow each entry to a PermissionKey.
+   */
+  private static readonly GRANTS: readonly string[] = [
     "ai.embedding.write",
     "ai.embedding.read",
     "core.activity.write",
-  ] as const;
+  ];
 
   public static forOrganisation(organisationId: string): Principal {
-    const grants = SystemPrincipal.GRANTS.map((key) => {
-      if (!PermissionRegistry.isKnown(key)) {
+    const registry = PermissionRegistry.instance;
+
+    const grants: PermissionKey[] = SystemPrincipal.GRANTS.map((key) => {
+      if (!registry.isKnown(key)) {
         throw new Error(`System principal references unknown permission: ${key}`);
       }
-      return { permission: key, goalId: null };
+      return key;
     });
 
-    return Principal.system(organisationId, new CapabilitySet(grants));
+    return Principal.system(
+      organisationId as UserId,
+      CapabilitySet.from({
+        wildcard: false,
+        org: { grants, denies: [] },
+        goals: {},
+      }),
+    );
   }
 }
 ```
+
+> [!IMPORTANT]
+> Three things here are easy to get wrong, and all three are compile or boot failures rather than silent bugs:
+>
+> - **`CapabilitySet.from(dto)`, never `new CapabilitySet(...)`** — the constructor is private ([08](08-permissions-package.md)), and the argument is a `CapabilitySetDto`, not a list of `{ permission, goalId }` pairs.
+> - **`PermissionRegistry.instance.isKnown(...)`** — `isKnown` is an instance method on the singleton, not a static.
+> - **`GRANTS` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+>
+> The three keys above are **illustrative** — the starter kit ships only the `rbac` catalog fragment, so as written this throws at boot. Add the real keys to `packages/permissions/src/catalog/` first. That boot-time failure is the rule working: a system principal naming a permission that does not exist should never start.
 
 **A wildcard here would erase every authorization guarantee in the codebase.** The moment `SystemPrincipal` carries `PermissionRegistry.all()`, any bug that lets user input reach a job path becomes a full privilege escalation. Three named permissions, added deliberately, reviewed like any other grant.
 
@@ -154,8 +177,9 @@ export class SystemPrincipal {
 
 ```ts
 import { Worker, type Job } from "bullmq";
-import type { Container } from "@ratchet/composition";
-import { QueueName } from "@ratchet/infrastructure";
+import type { Redis } from "ioredis";
+import type { Container } from "@loadbearing/composition";
+import { QueueName } from "@loadbearing/infrastructure";
 import { SystemPrincipal } from "../system-principal.js";
 
 interface EmbeddingJobData {
@@ -167,12 +191,12 @@ interface EmbeddingJobData {
 export class EmbeddingConsumer {
   public constructor(
     private readonly container: Container,
-    private readonly connection: { host: string; port: number },
+    private readonly connection: Redis,
   ) {}
 
   public start(): Worker {
     return new Worker<EmbeddingJobData>(
-      QueueName.Embedding,
+      QueueName.EMBEDDING,
       async (job: Job<EmbeddingJobData>) => this.handle(job),
       { connection: this.connection, concurrency: 4 },
     );
@@ -233,30 +257,41 @@ await queue.add(
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
 
-  public constructor(private readonly container: Container, private readonly redis: { host: string; port: number }) {}
+  public constructor(
+    private readonly container: Container,
+    private readonly redis: RedisConnection,
+  ) {}
 
   public async start(): Promise<void> {
-    this.workers.push(new EmbeddingConsumer(this.container, this.redis).start());
-    await new CleanupSchedule(this.container, this.redis).register();
+    this.workers.push(new EmbeddingConsumer(this.container, this.redis.queueClient()).start());
+    await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     console.log(`worker started: ${this.workers.length} consumer(s)`);
   }
 
   public async stop(): Promise<void> {
     await Promise.all(this.workers.map((w) => w.close()));
+    await this.redis.close();
     await this.container.dispose();
   }
 }
 ```
 
+> [!IMPORTANT]
+> **Use `RedisConnection` from [14](14-infrastructure-package.md), not a bare `{ host, port }`.** BullMQ accepts either, but `queueClient()` is what applies `maxRetriesPerRequest: null` and omits the cache key prefix — the two settings BullMQ requires. A plain `{ host, port }` gets ioredis defaults, and the symptom is workers that stop consuming after a few minutes with no error.
+>
+> The worker builds **its own** `RedisConnection` rather than reaching into the container's, which keeps `Container.redis` private and gives consuming and publishing independent connections. Close it in `stop()`, before disposing the container.
+
 **`apps/worker/src/main.ts`**
 
 ```ts
-import { Container } from "@ratchet/composition";
+import { Container } from "@loadbearing/composition";
+import { RedisConnection } from "@loadbearing/infrastructure";
 import { Env } from "./env.js";
 import { WorkerBootstrap } from "./worker-bootstrap.js";
 
-const container = new Container(Env.containerConfig());
-const bootstrap = new WorkerBootstrap(container, Env.redisConnection());
+const config = Env.containerConfig();
+const container = new Container(config);
+const bootstrap = new WorkerBootstrap(container, new RedisConnection({ url: config.redis.url }));
 
 await bootstrap.start();
 

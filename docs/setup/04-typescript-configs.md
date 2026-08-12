@@ -2,7 +2,7 @@
 
 > One base and three variants, published as a workspace package so every `tsconfig.json` in the repo is four lines long.
 
-**Delivers:** `@ratchet/tsconfig` with `base`, `library`, `node-esm`, and `react`.
+**Delivers:** `@loadbearing/tsconfig` with `base`, `library`, `node-esm`, and `react`.
 
 **Prerequisite:** [03 · Workspace & Catalogs](03-workspace-and-catalogs.md)
 
@@ -11,26 +11,39 @@
 ## Step 4.1 — The package
 
 ```bash
-node -e "require('fs').mkdirSync('tooling/tsconfig', { recursive: true })"
+node -e "require('fs').mkdirSync('tooling/tsconfig/src', { recursive: true })"
 ```
 
 **`tooling/tsconfig/package.json`**
 
 ```json
 {
-  "name": "@ratchet/tsconfig",
+  "name": "@loadbearing/tsconfig",
   "version": "0.0.0",
   "private": true,
-  "files": ["base.json", "library.json", "node-esm.json", "react.json"]
+  "exports": {
+    "./base.json": "./src/base.json",
+    "./library.json": "./src/library.json",
+    "./node-esm.json": "./src/node-esm.json",
+    "./react.json": "./src/react.json"
+  },
+  "files": ["src"]
 }
 ```
-> No `type`, no `exports`, no build. TypeScript resolves `"extends": "@ratchet/tsconfig/react.json"` through plain Node module resolution against `files`.
+> No `type` and no build — this is JSON that no JavaScript ever imports.
+
+**The `exports` map is what keeps the consumer-facing specifier short.** The four presets live in `src/`, but every `tsconfig.json` in the repository still writes `"extends": "@loadbearing/tsconfig/react.json"` rather than leaking `src/` into fifteen files. TypeScript honours `exports` for `extends` resolution, so the mapping is invisible to consumers.
+
+> [!IMPORTANT]
+> An `exports` map is an **allowlist**. All four presets must be listed — add a fifth file and forget to register it, and `extends` fails with `TS6053: File not found`, which reads like a missing file rather than a missing map entry.
+
+Inside `src/`, the three presets extend the base by relative path (`"extends": "./base.json"`), so they resolve as ordinary siblings and never go through the map.
 
 ---
 
 ## Step 4.2 — `base.json`
 
-**`tooling/tsconfig/base.json`**
+**`tooling/tsconfig/src/base.json`**
 
 ```json
 {
@@ -55,8 +68,7 @@ node -e "require('fs').mkdirSync('tooling/tsconfig', { recursive: true })"
 
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
-    "incremental": true
+    "sourceMap": true
   },
   "exclude": ["node_modules", "dist"]
 }
@@ -68,7 +80,7 @@ node -e "require('fs').mkdirSync('tooling/tsconfig', { recursive: true })"
 
 **`forceConsistentCasingInFileNames`** matters more than usual with kebab-case files. Windows filesystems are case-insensitive, Linux CI is not. Without it, `import './TaskEntity.js'` for a file named `task.entity.ts` compiles on a developer's machine and fails in CI with an error that reads like a missing file.
 
-**`verbatimModuleSyntax`** requires `import type` for type-only imports and emits imports exactly as written. This is what makes the "type-only import" exemptions in the architecture real: `@ratchet/ui` may import `PermissionKey` as a type from `@ratchet/permissions` without creating a runtime dependency, and the compiler enforces that the emitted JS contains no import at all.
+**`verbatimModuleSyntax`** requires `import type` for type-only imports and emits imports exactly as written. This is what makes the "type-only import" exemptions in the architecture real: `@loadbearing/ui` may import `PermissionKey` as a type from `@loadbearing/permissions` without creating a runtime dependency, and the compiler enforces that the emitted JS contains no import at all.
 
 **`noUncheckedIndexedAccess`** makes `record[key]` return `T | undefined`. It is annoying for about a week and then it is the reason `ProcedurePermissions.required(path)` has an honest `PermissionKey | undefined` return type instead of lying about a lookup that can miss.
 
@@ -84,7 +96,7 @@ node -e "require('fs').mkdirSync('tooling/tsconfig', { recursive: true })"
 
 For all fourteen `packages/*`.
 
-**`tooling/tsconfig/library.json`**
+**`tooling/tsconfig/src/library.json`**
 
 ```json
 {
@@ -104,7 +116,7 @@ For all fourteen `packages/*`.
 
 For `apps/worker`, and for any script run directly by Node.
 
-**`tooling/tsconfig/node-esm.json`**
+**`tooling/tsconfig/src/node-esm.json`**
 
 ```json
 {
@@ -126,7 +138,7 @@ There is no `node-cjs.json`. Nothing in this stack is CommonJS.
 
 For `apps/web`, `packages/ui`, `packages/feature`, and `packages/query`.
 
-**`tooling/tsconfig/react.json`**
+**`tooling/tsconfig/src/react.json`**
 
 ```json
 {
@@ -136,14 +148,21 @@ For `apps/web`, `packages/ui`, `packages/feature`, and `packages/query`.
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "noEmit": true,
-    "types": ["vite/client"]
+    "noEmit": true
   }
 }
 ```
-> `jsx: "react-jsx"` is the automatic runtime — no `import React` at the top of every file. `types: ["vite/client"]` gives `import.meta.env` and asset-import types.
+> `jsx: "react-jsx"` is the automatic runtime — no `import React` at the top of every file.
 
-**Note the `lib` split.** `base.json` sets `lib: ["ES2024"]` with no DOM. That is not an oversight: it is what makes a `document.querySelector` inside `@ratchet/application` a compile error rather than a runtime crash in the worker. Only the React variant adds DOM.
+> [!CAUTION]
+> **Do not put `types: ["vite/client"]` here.** It looks right — it provides `import.meta.env` and asset-import types — but `packages/{ui,feature,query}` extend this preset and do **not** depend on Vite, so `tsc` fails them with `TS2688: Cannot find type definition file for 'vite/client'`. Vite only arrives with `apps/web` at [23](23-web-app.md), whose own `tsconfig.json` declares that `types` array itself. Only the app needs it.
+
+> [!CAUTION]
+> **`incremental` is deliberately absent from `base.json`.** With it, tsup's declaration build fails on every package with `TS5074: Option '--incremental' can only be specified using tsconfig, emitting to single file or when option '--tsBuildInfoFile' is specified.`
+>
+> Adding `tsBuildInfoFile` to `base.json` does not fix it: a relative path there resolves against `tooling/tsconfig/src/`, so all fourteen packages would collide on one build-info file. Since `tsc` here only ever runs as `--noEmit` typecheck, the caching was worth little; dropping the flag is the cheaper trade.
+
+**Note the `lib` split.** `base.json` sets `lib: ["ES2024"]` with no DOM. That is not an oversight: it is what makes a `document.querySelector` inside `@loadbearing/application` a compile error rather than a runtime crash in the worker. Only the React variant adds DOM.
 
 This is also why `ServerOnly.assert()` in [07](07-core-package.md) checks `typeof window !== "undefined"` rather than referencing `window` directly — `window` is not a known identifier in a `library.json` package.
 
@@ -155,7 +174,7 @@ Every package's `tsconfig.json` is then four lines. This is the shape [06](06-pa
 
 ```json
 {
-  "extends": "@ratchet/tsconfig/library.json",
+  "extends": "@loadbearing/tsconfig/library.json",
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
 ```
@@ -163,14 +182,16 @@ Every package's `tsconfig.json` is then four lines. This is the shape [06](06-pa
 And every consumer declares the dependency:
 
 ```json
-"devDependencies": { "@ratchet/tsconfig": "workspace:*" }
+"devDependencies": { "@loadbearing/tsconfig": "workspace:*" }
 ```
 
 ---
 
 ## ✅ Gate
 
-`tooling/tsconfig/` contains five files. Nothing to run yet — the first real check is in [07](07-core-package.md) when `packages/core` extends `library.json` and `tsc --noEmit` succeeds.
+`tooling/tsconfig/` contains `package.json` plus `src/` with the four presets. Nothing to run yet — the first real check is in [07](07-core-package.md) when `packages/core` extends `library.json` and `tsc --noEmit` succeeds.
+
+If you want to verify the `exports` mapping now rather than at step 07, `tsc --showConfig` in any package that extends it prints the fully resolved options; seeing `noUncheckedIndexedAccess` and `verbatimModuleSyntax` in the output proves the map and the relative `./base.json` chain both resolved.
 
 ---
 

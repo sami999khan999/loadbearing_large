@@ -78,11 +78,11 @@ packages/contracts/src/task/
 
 **Every package has exactly one public entrypoint: `src/index.ts`.** It re-exports and contains no logic. The `exports` map points at it and nothing else — no deep subpaths, so no consumer can reach into a package's internals and break when you move a file.
 
-The only permitted extra exports are non-JS side-effect files that physically cannot live in a barrel: `@ratchet/asset` ships `./font.css` and `./sprite.svg`; `@ratchet/ui` ships `./token.css` and `./theme.css`. **A package wanting extra JavaScript subpaths is a signal it should be two packages.**
+The only permitted extra exports are non-JS side-effect files that physically cannot live in a barrel: `@loadbearing/asset` ships `./font.css` and `./sprite.svg`; `@loadbearing/ui` ships `./token.css` and `./theme.css`. **A package wanting extra JavaScript subpaths is a signal it should be two packages.**
 
 **Import rules, in priority order:**
 
-1. **Across packages** — always the package name: `import { TaskEntity } from "@ratchet/contracts"`.
+1. **Across packages** — always the package name: `import { TaskEntity } from "@loadbearing/contracts"`.
 2. **Across folders inside a package** — the folder barrel: `import { Identifiers } from "../primitive/index.js"`.
 3. **Within one folder** — the direct file: `import { TaskContract } from "./task.contract.js"`.
 
@@ -178,13 +178,13 @@ Derived types follow the schema name: `TaskDto` from `entity`, `CreateTaskInput`
 
 ## 1.9 Packages, env, React
 
-- **Packages:** `@ratchet/<single-lowercase-word>`. Scope by layer, never by feature — no `@ratchet/task-contracts`.
+- **Packages:** `@loadbearing/<single-lowercase-word>`. Scope by layer, never by feature — no `@loadbearing/task-contracts`.
 - **Env vars:** `SCREAMING_SNAKE_CASE`, prefixed by subsystem: `DATABASE_URL`, `S3_BUCKET`. Client-exposed vars carry the framework's public prefix and nothing else does.
 - **React components:** `PascalCase` export in a kebab-case file — `task-card.tsx` exports `TaskCard`.
 - **Hooks:** `use<Noun>` — `useCapabilities`.
 - **Props type:** `<Component>Props`, same file.
 - **Handler props:** `on<Event>`; the implementations filling them: `handle<Event>`.
-- **Query factories:** `<Subject>Queries` / `<Subject>Mutations` in `@ratchet/query`, never in `api-client`.
+- **Query factories:** `<Subject>Queries` / `<Subject>Mutations` in `@loadbearing/query`, never in `api-client`.
 - **Query keys** mirror the procedure path, params last: `["task", "list", { goalId }]`. Never hand-written at a call site.
 
 ---
@@ -215,7 +215,8 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 
 ### `tooling/`
 
-- **Holds three workspace packages** that configure the build: `tsconfig`, `eslint-config`, `prettier-config`. Plus `scripts/`, which holds the architecture assertions.
+- **Holds three workspace packages** that configure the build: `tsconfig`, `biome-config`, and `eslint-config`. Plus `scripts/`, which holds the architecture assertions.
+- **`biome-config` is the odd one out**: it is a workspace member for organisation only. The root `biome.json` reaches it by *relative path*, because Biome's `extends` cannot resolve a package specifier — so unlike the other two, the root does not declare it as a dependency.
 - **Is consumed by every other package** but imported at runtime by none. These are `devDependencies` and config `extends` targets only.
 - **Is platform-owned.** Changes here affect all fourteen packages, so they go through whoever owns the repo rather than whoever is shipping a feature.
 - **Never holds** runtime code, shared utilities, or "helpers that everything needs." Those want a real package.
@@ -238,28 +239,32 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 - **`.env.example`** — the complete variable list. It is documentation as much as a template: the two `env.ts` schemas are the enforcement, this is the discoverable copy.
 - **`.gitattributes`** — line-ending normalisation. One of three defences, alongside `.editorconfig` and Prettier's `endOfLine`.
 - **`commitlint.config.js`** — the closed scope list. Adding a package means adding a scope; a rejected commit is the reminder.
-- **`prettier.config.js` / `eslint.config.js`** — one-line re-exports of the `tooling/` packages. They exist because both tools look for a config at the root.
-- **`.husky/`** — two hooks. `pre-commit` runs lint-staged on staged files only; `commit-msg` runs commitlint. Nothing slow goes here — typechecking is whole-project and belongs in CI.
+- **`biome.json`** — two lines, extending `tooling/biome-config/src/base.json`, which holds formatting, import organisation, the fast lint rules, the server-only import boundary, and the `env.ts` exemption.
+- **`eslint.config.js`** — a one-line re-export of `@loadbearing/eslint-config`, which holds the six rules Biome cannot express.
+- **`.husky/`** — three hooks. `pre-commit` runs Biome on staged files only; `pre-push` runs the slow ESLint pass; `commit-msg` runs commitlint. Nothing whole-project goes in `pre-commit` — a hook that takes ten seconds gets disabled.
 - **`.github/workflows/`** — the `verify` job. Services, install, build, typecheck, lint, test, architecture greps.
 
 ---
 
-## 2.3 The five files every package has
+## 2.3 The shape every package has
 
 - **`package.json`** — name, `exports` map, scripts. The `exports` map points at `src/index.ts` and nothing else, which is what stops consumers reaching into internals. It carries the `development` condition so Vite can resolve to source in dev.
 - **`tsconfig.json`** — four lines, extending one of the `tooling/tsconfig` bases.
 - **`tsup.config.ts`** — entry, `dts: true`, ESM only, `target: es2024`.
-- **`eslint.config.js`** — four lines, selecting `base`, `oop`, or `react`. This is where a package adds its own bans (`feature` blocking `api-client`, `content` blocking `PermissionKey`).
+- **No lint config.** Both linters run once from the root, keyed on globs. A package's specific bans — `feature` blocking `api-client`, the OOP rules applying only to non-React packages — are `overrides` blocks in `biome.json` and `files` blocks in `eslint.config.js`. Keeping them central means a package cannot opt itself out of a rule that exists to constrain it.
 - **`src/index.ts`** — the public surface. Re-exports only, never logic. Server-only packages call `ServerOnly.assert()` on line two.
+- **`docs/`** — reference documentation for the package. Exactly two files at its root: `meta.json` (sidebar title, description, page order) and `index.md` (the overview). **Every other page lives in `docs/reference/`**, which carries its own `meta.json` for the group label and ordering. Plain Markdown with YAML frontmatter, **never MDX**, so it renders on GitHub and can be picked up by a documentation site later without rewriting content. Callouts use GitHub alert syntax. Not in `files`, so it never ships.
 
 **Every subfolder inside `src/` also has an `index.ts`.** That is what lets you move a file within a folder without touching a single import elsewhere.
+
+**`docs/` is reference, `docs/setup/` at the root is build order.** Different audiences and different shapes: the root sequence is walked once, a package's docs are consulted continually. Keep them apart.
 
 ---
 
 ## 2.4 Inside `packages/core`
 
 - **`src/`** is flat — no subfolders. Four primitives and their specs. If `core` ever needs a subfolder, it has grown past its job.
-- **Holds** things with no dependencies at all, not even on other `@ratchet/*` packages: `Clock`, `Result`, `Uuid`, `ServerOnly`.
+- **Holds** things with no dependencies at all, not even on other `@loadbearing/*` packages: `Clock`, `Result`, `Uuid`, `ServerOnly`.
 - **Never holds** a domain noun. `TaskId` is a `contracts` concern, not a primitive.
 - **Smell:** an import statement in any file here.
 
@@ -373,7 +378,7 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 
 - **`message/`** — short keyed strings, one file per namespace, `en/` complete and every other locale `Partial<>` with fallback. `MessageKey` is a closed union, so a typo in a component is a compile error.
 - **`document/`** — long-form editorial content with a schema and an entity.
-- **`collection/`** — repeating records, including `nav/`. Nav items carry a **module**, never a permission — a package-local ESLint rule bans importing `PermissionKey` here, because content authors should not be making authorization decisions.
+- **`collection/`** — repeating records, including `nav/`. Nav items carry a **module**, never a permission — a `files`-scoped block in the root ESLint config bans importing `PermissionKey` here, because content authors should not be making authorization decisions.
 - **`media/`** — `MediaRef` and the resolver that turns one into a URL.
 - **`content-source.ts`** — abstract, with **every method async even though the static implementation is synchronous**. That is deliberate: it means moving to a CMS later changes no call site.
 - **Smell:** a permission key, or a synchronous read method.

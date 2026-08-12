@@ -1,10 +1,10 @@
-# 15 · `@ratchet/auth`
+# 15 · `@loadbearing/auth`
 
 > Better Auth, self-hosted, in its own server-only package. Authentication only — every authorization decision stays in `CapabilitySet`.
 
 **Delivers:** One identity layer serving the web app, the desktop app, a client portal, and API-key integrations, all collapsing into the single `Principal` the rest of the system already understands.
 
-**Prerequisite:** [14 · `@ratchet/infrastructure`](14-infrastructure-package.md)
+**Prerequisite:** [14 · `@loadbearing/infrastructure`](14-infrastructure-package.md)
 
 ---
 
@@ -19,7 +19,7 @@
 | Session transport | Cookie (web) **and** bearer token (desktop) from day one |
 | API keys | Your own implementation, not the plugin's session mocking |
 | Session storage | Postgres, with Redis as secondary storage |
-| Client-side session | Through `@ratchet/query`, not Better Auth's React hooks |
+| Client-side session | Through `@loadbearing/query`, not Better Auth's React hooks |
 
 ---
 
@@ -58,12 +58,7 @@ packages/auth/src/
 **Depends on** `core`, `contracts`, `permissions`, `application`, `db`, `infrastructure`.
 **Used by** `composition` only. Never by `apps/web`'s component tree.
 
-The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@ratchet/api-client` is the package whose entire job is "how to reach the server." See [17](17-api-client-package.md).
-
-```js
-// packages/auth/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
+The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@loadbearing/api-client` is the package whose entire job is "how to reach the server." See [17](17-api-client-package.md).
 
 ---
 
@@ -132,8 +127,8 @@ export interface AuthConfig {
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer, twoFactor } from "better-auth/plugins";
-import type { Database } from "@ratchet/db";
-import type { CacheStore } from "@ratchet/application";
+import type { Database } from "@loadbearing/db";
+import type { CacheStore } from "@loadbearing/application";
 import type { AuthConfig } from "./auth.config.js";
 
 export type AuthInstance = ReturnType<typeof betterAuth>;
@@ -212,8 +207,8 @@ export class AuthFactory {
 **`packages/auth/src/session/better-auth.session-resolver.ts`**
 
 ```ts
-import type { UserId } from "@ratchet/contracts";
-import { SessionResolver, type ResolvedSession } from "@ratchet/application";
+import type { UserId } from "@loadbearing/contracts";
+import { SessionResolver, type ResolvedSession } from "@loadbearing/application";
 import type { AuthInstance } from "../auth.factory.js";
 
 export class BetterAuthSessionResolver extends SessionResolver {
@@ -247,9 +242,9 @@ export class BetterAuthSessionResolver extends SessionResolver {
 **`packages/auth/src/principal/capability.cache.ts`**
 
 ```ts
-import type { CacheStore } from "@ratchet/application";
-import type { CapabilityRepository } from "@ratchet/application";
-import { CapabilitySet, type CapabilitySetDto } from "@ratchet/permissions";
+import type { CacheStore } from "@loadbearing/application";
+import type { CapabilityRepository } from "@loadbearing/application";
+import { CapabilitySet, type CapabilitySetDto } from "@loadbearing/permissions";
 
 export class CapabilityCache {
   private static readonly PREFIX = "capability:user:";
@@ -321,8 +316,8 @@ request
 **`packages/auth/src/principal/principal.builder.ts`**
 
 ```ts
-import { Principal, type SessionResolver } from "@ratchet/application";
-import type { UserId } from "@ratchet/contracts";
+import { Principal, type SessionResolver } from "@loadbearing/application";
+import type { UserId } from "@loadbearing/contracts";
 import type { ApiKeyResolver } from "../apikey/api-key.resolver.js";
 import type { CapabilityCache } from "./capability.cache.js";
 
@@ -386,7 +381,7 @@ export const apiKeys = pgTable(
 **`packages/auth/src/apikey/api-key.hasher.ts`**
 
 ```ts
-import { Uuid } from "@ratchet/core";
+import { Uuid } from "@loadbearing/core";
 
 export interface GeneratedApiKey {
   /** Shown to the user exactly once, at creation. Never stored. */
@@ -431,9 +426,9 @@ export class ApiKeyHasher {
 **`packages/auth/src/apikey/api-key.resolver.ts`**
 
 ```ts
-import { Principal } from "@ratchet/application";
-import type { UserId } from "@ratchet/contracts";
-import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@ratchet/permissions";
+import { Principal } from "@loadbearing/application";
+import type { UserId } from "@loadbearing/contracts";
+import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 import type { CapabilityCache } from "../principal/capability.cache.js";
 import { ApiKeyHasher } from "./api-key.hasher.js";
 
@@ -539,9 +534,9 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 **`packages/auth/src/index.ts`**
 
 ```ts
-import { ServerOnly } from "@ratchet/core";
+import { ServerOnly } from "@loadbearing/core";
 
-ServerOnly.assert("@ratchet/auth");
+ServerOnly.assert("@loadbearing/auth");
 
 export * from "./apikey/index.js";
 export * from "./auth.config.js";
@@ -563,4 +558,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/infrastructure`](14-infrastructure-package.md) · [`@ratchet/composition` →](16-composition-container.md)
+[← `@loadbearing/infrastructure`](14-infrastructure-package.md) · [`@loadbearing/composition` →](16-composition-container.md)

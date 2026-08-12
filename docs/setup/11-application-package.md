@@ -1,4 +1,4 @@
-# 11 · `@ratchet/application`
+# 11 · `@loadbearing/application`
 
 > **The package that makes the plan reversible.** `Principal`, `Authorizer`, domain errors, and every abstract port. Zero framework imports, zero third-party runtime dependencies.
 
@@ -41,11 +41,6 @@ packages/application/src/
     └── vector.store.ts       → VectorStore
 ```
 
-```js
-// packages/application/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
-
 ---
 
 ## Step 11.1 — `Principal`
@@ -53,8 +48,8 @@ export { default } from "@ratchet/eslint-config/oop";
 **`packages/application/src/principal.ts`**
 
 ```ts
-import type { UserId } from "@ratchet/contracts";
-import type { CapabilitySet, PermissionKey } from "@ratchet/permissions";
+import type { UserId } from "@loadbearing/contracts";
+import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 
 export type PrincipalKind = "user" | "api_key" | "system";
 
@@ -96,7 +91,7 @@ Four credential types — a browser cookie, a desktop bearer token, an integrati
 **`packages/application/src/authorizer.ts`**
 
 ```ts
-import type { PermissionKey } from "@ratchet/permissions";
+import type { PermissionKey } from "@loadbearing/permissions";
 import { ForbiddenError } from "./error/forbidden.error.js";
 import type { Principal } from "./principal.js";
 
@@ -191,7 +186,7 @@ export class NotFoundError extends DomainError {
 
 Add `ConflictError` (`code = "CONFLICT"`, for optimistic-concurrency and uniqueness failures) and `ValidationError` (`code = "BAD_REQUEST"`, carrying a field map) on the same pattern.
 
-**No `@ratchet/application` code ever knows about status codes.** `ForbiddenError` is a domain concept; `403` is a transport concept. The oRPC interceptor in [23](23-web-app.md) maps one to the other, and a NestJS exception filter would map it to `ForbiddenException`. That single discipline is most of what keeps the transport swappable — and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
+**No `@loadbearing/application` code ever knows about status codes.** `ForbiddenError` is a domain concept; `403` is a transport concept. The oRPC interceptor in [23](23-web-app.md) maps one to the other, and a NestJS exception filter would map it to `ForbiddenException`. That single discipline is most of what keeps the transport swappable — and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
 
 The `code` string is what the adapter switches on. It is a closed vocabulary rather than a class check because `instanceof` across a bundler boundary is a source of subtle failure.
 
@@ -294,7 +289,7 @@ export abstract class QueuePublisher {
 
 ```ts
 // packages/application/src/port/session.resolver.ts
-import type { UserId } from "@ratchet/contracts";
+import type { UserId } from "@loadbearing/contracts";
 
 export interface ResolvedSession {
   readonly userId: UserId;
@@ -419,7 +414,7 @@ The starter kit ships none, but the shape is fixed. When feature 01 arrives:
 
 ```ts
 // packages/application/src/task/task.repository.ts
-import type { TaskEntity, TaskId } from "@ratchet/contracts";
+import type { TaskEntity, TaskId } from "@loadbearing/contracts";
 
 export abstract class TaskRepository {
   public abstract findById(id: TaskId): Promise<TaskEntity | null>;
@@ -458,10 +453,10 @@ Returns **nothing**.
 cat packages/application/package.json
 ```
 
-Lists exactly three `dependencies`: `@ratchet/core`, `@ratchet/contracts`, `@ratchet/permissions`.
+Lists exactly three `dependencies`: `@loadbearing/core`, `@loadbearing/contracts`, `@loadbearing/permissions`.
 
 ```bash
-pnpm --filter @ratchet/application build && pnpm --filter @ratchet/application lint
+pnpm --filter @loadbearing/application build && pnpm --filter @loadbearing/application lint
 ```
 
 Both pass. Put the grep in CI ([25](25-hygiene-and-ci.md)) — this is the check that quietly rots first if unenforced.
@@ -470,4 +465,4 @@ Do not proceed until this passes.
 
 ---
 
-[← Local Infrastructure](10-local-infrastructure.md) · [`@ratchet/db` →](12-db-package.md)
+[← Local Infrastructure](10-local-infrastructure.md) · [`@loadbearing/db` →](12-db-package.md)

@@ -28,10 +28,11 @@ catalog:
   "@types/node": ^24.3.0
 
   # ── lint & format ──
+  "@biomejs/biome": ^2.4.15
   eslint: ^9.27.0
   typescript-eslint: ^8.32.1
-  "@eslint/js": ^9.27.0
-  prettier: ^3.5.3
+  sherif: ^1.13.0
+  syncpack: ^15.3.2
 
   # ── contracts ──
   zod: ^4.0.14
@@ -41,6 +42,9 @@ catalog:
   "@orpc/server": ^1.13.7
   "@orpc/client": ^1.13.7
   "@orpc/tanstack-query": ^1.13.7
+
+  # ── TanStack Query — peer of @orpc/tanstack-query, which needs query-core >=5.80.2 ──
+  "@tanstack/react-query": ^5.101.0
 
   # ── data & infrastructure ──
   "drizzle-orm": ^0.44.0
@@ -85,7 +89,7 @@ allowBuilds:
 
 **`engineStrict`** refuses to install on the wrong Node version rather than failing mysteriously three steps later.
 
-**The two `workspace` lines** guarantee `@ratchet/contracts` always resolves to your local source and never to a registry package that happens to share the name — a real supply-chain concern with an unscoped-looking prefix.
+**The two `workspace` lines** guarantee `@loadbearing/contracts` always resolves to your local source and never to a registry package that happens to share the name — a real supply-chain concern with an unscoped-looking prefix.
 
 **`strictPeerDependencies: false`** because React 19 peers are still catching up across the ecosystem; revisit it in a year.
 
@@ -125,11 +129,11 @@ Three entries deserve a note:
 
 ```json
 {
-  "name": "ratchet",
+  "name": "loadbearing",
   "private": true,
   "type": "module",
   "devEngines": {
-    "packageManager": { "name": "pnpm", "version": "^11.21.0", "onFail": "download" }
+    "packageManager": { "name": "pnpm", "version": "11.21.0", "onFail": "download" }
   },
   "engines": { "node": ">=24.0.0", "pnpm": ">=11.21.0" },
   "scripts": {
@@ -138,27 +142,28 @@ Three entries deserve a note:
     "build:changed": "pnpm -r --filter \"...[origin/main]\" run build",
 
     "dev": "pnpm build:packages && pnpm -r --parallel run dev",
-    "dev:web": "pnpm build:packages && pnpm --filter @ratchet/web run dev",
-    "dev:worker": "pnpm build:packages && pnpm --filter @ratchet/worker run dev",
+    "dev:web": "pnpm build:packages && pnpm --filter @loadbearing/web run dev",
+    "dev:worker": "pnpm build:packages && pnpm --filter @loadbearing/worker run dev",
 
     "typecheck": "pnpm -r run typecheck",
-    "lint": "pnpm -r --parallel run lint",
+    "lint": "biome check . && eslint .",
+    "lint:fast": "biome check .",
     "test": "pnpm -r --parallel run test",
     "clean": "pnpm -r --parallel run clean",
 
-    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
 
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
 
-    "db:generate": "pnpm --filter @ratchet/db run db:generate",
-    "db:migrate": "pnpm --filter @ratchet/db run db:migrate",
-    "db:seed": "pnpm --filter @ratchet/db run db:seed",
-    "db:studio": "pnpm --filter @ratchet/db run db:studio",
+    "db:generate": "pnpm --filter @loadbearing/db run db:generate",
+    "db:migrate": "pnpm --filter @loadbearing/db run db:migrate",
+    "db:seed": "pnpm --filter @loadbearing/db run db:seed",
+    "db:studio": "pnpm --filter @loadbearing/db run db:studio",
 
-    "auth:generate": "pnpm --filter @ratchet/auth run auth:generate"
+    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate"
   },
   "devDependencies": {}
 }
@@ -168,13 +173,20 @@ Three entries deserve a note:
 
 **`pnpm -r run build`** runs the script in every workspace package **in topological order**, derived from the dependency graph. That is the entire Turborepo replacement. You never declare that `contracts` builds after `core`; pnpm reads the `workspace:*` links and works it out.
 
-**`--parallel` is on `dev`, `lint`, and `test`, and off `build`.** Parallel ignores ordering, which is correct for watchers and linters and catastrophically wrong for builds. `dev` therefore builds packages serially first, then starts watchers in parallel.
+**`--parallel` is on `dev` and `test`, and off `build`.** Parallel ignores ordering, which is correct for watchers and test runners and catastrophically wrong for builds. `dev` therefore builds packages serially first, then starts watchers in parallel.
+
+**`lint` is not recursive at all.** Biome and ESLint each take the whole repo in one invocation, which is faster than fifteen processes and means no package needs a lint config of its own ([05](05-lint-and-format.md)).
 
 **`clean` does not `rm -rf node_modules`.** Package-level `clean` scripts use `rimraf`, which works on every platform. If you genuinely need to nuke the store, that is a deliberate manual act, not something a script does when someone fat-fingers a tab-complete.
 
 **`build:changed`** uses pnpm's `...[origin/main]` selector to build only packages whose sources changed plus everything downstream of them. It needs full Git history — see the `fetch-depth: 0` note in [25](25-hygiene-and-ci.md).
 
-**`devEngines.packageManager` replaces `packageManager`.** pnpm 11 removed the settings that governed the legacy field (`managePackageManagerVersions`, `packageManagerStrict`, `packageManagerStrictVersion`) in favour of an `onFail` value declared inline. `"onFail": "download"` means a developer with the wrong pnpm on `PATH` gets the right one fetched automatically rather than an error. The field accepts a **range**, and the exact resolved version is written to `pnpm-lock.yaml` — so you get a floor you can widen without a commit, plus reproducibility.
+**`devEngines.packageManager` replaces `packageManager`.** pnpm 11 removed the settings that governed the legacy field (`managePackageManagerVersions`, `packageManagerStrict`, `packageManagerStrictVersion`) in favour of an `onFail` value declared inline. `"onFail": "download"` means a developer with the wrong pnpm on `PATH` gets the right one fetched automatically rather than an error.
+
+> [!IMPORTANT]
+> **The version must be exact — a range does not work.** `"version": "^11.21.0"` fails on every pnpm invocation with `Invalid package manager specification in package.json (pnpm@^11.21.0); expected a semver version`, verified on 11.21.0. Bumping pnpm is therefore a deliberate one-line commit, which is arguably the point.
+>
+> Reproducibility comes from the lockfile regardless: it records `packageManagerDependencies` with the resolved `@pnpm/exe@11.21.0`, so every developer and CI runner gets the same binary.
 
 **There is no `pnpm` field.** pnpm 11 does not read `package.json` for its own configuration. Everything that used to live there is in `pnpm-workspace.yaml`.
 
@@ -183,7 +195,7 @@ Three entries deserve a note:
 ## Step 3.3 — Install
 
 ```bash
-pnpm add -Dw typescript@catalog: prettier@catalog: rimraf@catalog:
+pnpm add -Dw typescript@catalog: @biomejs/biome@catalog: rimraf@catalog:
 ```
 > `-D` devDependency, `-w` at the workspace root. `@catalog:` pulls the version from `pnpm-workspace.yaml` rather than pinning a second copy here.
 
@@ -200,17 +212,17 @@ If the install **fails** naming a package whose build was blocked, add it to `al
 Two small tools that pay for themselves once there are fourteen packages:
 
 ```bash
-pnpm add -Dw syncpack sherif
+pnpm add -Dw syncpack@catalog: sherif@catalog:
 ```
 
 Then add to root scripts:
 
 ```json
-"deps:check": "syncpack list-mismatches",
-"repo:check": "sherif"
+"deps:check": "syncpack lint",
+"repo:check": "sherif -r unordered-dependencies"
 ```
 
-`syncpack` catches a package that pinned `zod` directly instead of writing `catalog:`. `sherif` catches missing `workspace:*` protocols, unused dependencies, and packages that dual-declare a dependency and a devDependency. Both run in CI in [25](25-hygiene-and-ci.md). Neither is required for the kit to work.
+`syncpack lint` catches a package that pinned `zod` directly instead of writing `catalog:`. (The older `list-mismatches` subcommand is deprecated in syncpack 15.) `sherif` catches missing `workspace:*` protocols, unused dependencies, and packages that dual-declare a dependency and a devDependency. Its `unordered-dependencies` rule is disabled because it forbids grouping a `workspace:*` entry apart from the catalogued ones; drop the `-r` flag if you would rather have strict alphabetical order everywhere. Both run in CI in [25](25-hygiene-and-ci.md). Neither is required for the kit to work.
 
 ---
 

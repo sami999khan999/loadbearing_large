@@ -38,32 +38,32 @@ Nothing here creates a feature. When you finish [26](26-verification-and-first-f
 
 | # | File | Delivers |
 |---|---|---|
-| 07 | [`@ratchet/core`](07-core-package.md) | `Result`, `Clock`, `Uuid`, `ServerOnly` |
-| 08 | [`@ratchet/permissions`](08-permissions-package.md) | `PermissionRegistry`, `ModuleRegistry`, `CapabilitySet` |
-| 09 | [`@ratchet/contracts`](09-contracts-package.md) | Zod contract classes, entities, oRPC contract router, `ProcedurePermissions` |
+| 07 | [`@loadbearing/core`](07-core-package.md) | `Result`, `Clock`, `Uuid`, `ServerOnly` |
+| 08 | [`@loadbearing/permissions`](08-permissions-package.md) | `PermissionRegistry`, `ModuleRegistry`, `CapabilitySet` |
+| 09 | [`@loadbearing/contracts`](09-contracts-package.md) | Zod contract classes, entities, oRPC contract router, `ProcedurePermissions` |
 
 ### Phase C — the server side
 
 | # | File | Delivers |
 |---|---|---|
 | 10 | [Local Infrastructure](10-local-infrastructure.md) | Postgres + pgvector, Redis, MinIO, and the bucket |
-| 11 | [`@ratchet/application`](11-application-package.md) | `Principal`, `Authorizer`, domain errors, **every port** — zero framework imports |
-| 12 | [`@ratchet/db`](12-db-package.md) | Drizzle, migrations, repositories, seeds |
+| 11 | [`@loadbearing/application`](11-application-package.md) | `Principal`, `Authorizer`, domain errors, **every port** — zero framework imports |
+| 12 | [`@loadbearing/db`](12-db-package.md) | Drizzle, migrations, repositories, seeds |
 | 13 | [Vector Storage](13-vector-store.md) | `VectorStore` port + `PgVectorStore`, sized so Qdrant is a one-line swap |
-| 14 | [`@ratchet/infrastructure`](14-infrastructure-package.md) | Redis cache, S3 storage gateway, BullMQ queue publisher |
-| 15 | [`@ratchet/auth`](15-auth-package.md) | Better Auth, `PrincipalBuilder`, capability cache, API keys |
-| 16 | [`@ratchet/composition`](16-composition-container.md) | The `Container` DI root |
+| 14 | [`@loadbearing/infrastructure`](14-infrastructure-package.md) | Redis cache, S3 storage gateway, BullMQ queue publisher |
+| 15 | [`@loadbearing/auth`](15-auth-package.md) | Better Auth, `PrincipalBuilder`, capability cache, API keys |
+| 16 | [`@loadbearing/composition`](16-composition-container.md) | The `Container` DI root |
 
 ### Phase D — the client side
 
 | # | File | Delivers |
 |---|---|---|
-| 17 | [`@ratchet/api-client`](17-api-client-package.md) | oRPC client + `AuthStrategy` — React-free |
-| 18 | [`@ratchet/asset`](18-asset-package.md) | Every binary: images, icon sprite, fonts |
-| 19 | [`@ratchet/content`](19-content-package.md) | Messages, documents, collections, `ContentSource` |
-| 20 | [`@ratchet/query`](20-query-package.md) | The single TanStack owner: keys, options, client factory |
-| 21 | [`@ratchet/ui`](21-ui-package.md) | Design system with no domain nouns |
-| 22 | [`@ratchet/feature`](22-feature-package.md) | Components that fetch and mutate |
+| 17 | [`@loadbearing/api-client`](17-api-client-package.md) | oRPC client + `AuthStrategy` — React-free |
+| 18 | [`@loadbearing/asset`](18-asset-package.md) | Every binary: images, icon sprite, fonts |
+| 19 | [`@loadbearing/content`](19-content-package.md) | Messages, documents, collections, `ContentSource` |
+| 20 | [`@loadbearing/query`](20-query-package.md) | The single TanStack owner: keys, options, client factory |
+| 21 | [`@loadbearing/ui`](21-ui-package.md) | Design system with no domain nouns |
+| 22 | [`@loadbearing/feature`](22-feature-package.md) | Components that fetch and mutate |
 
 ### Phase E — the apps and the seal
 
@@ -104,21 +104,21 @@ Both are called out again where they happen. Read them now so they aren't a surp
 
 1. **Everything that matters lives in `packages/`.** `apps/` holds framework code and nothing else.
 2. **Authorization lives in the use-case**, not in transport middleware. Middleware is bypassed by the worker and by SSR direct calls; `Authorizer.assert()` isn't.
-3. **Domain errors, never HTTP errors, in `@ratchet/application`.** `ForbiddenError` maps to `ORPCError('FORBIDDEN')` at the adapter.
+3. **Domain errors, never HTTP errors, in `@loadbearing/application`.** `ForbiddenError` maps to `ORPCError('FORBIDDEN')` at the adapter.
 4. **No package reads `process.env`.** Config is read once in an app and handed down as constructor arguments.
 5. **Exactly one package imports `@tanstack/*`** — `query`. `api-client` stays React-free; `feature` may not import `api-client`.
-6. **Server-only packages have three defences** — the ESLint boundary, the `ServerOnly.assert()` tripwire, and the CI bundle check.
+6. **Server-only packages have three defences** — the Biome import boundary, the `ServerOnly.assert()` tripwire, and the CI bundle check.
 
 ---
 
 ## Renaming the scope
 
-Every package is `@ratchet/*` so these documents line up with the architecture docs you already have. To rebrand the kit for a new project, change:
+Every package is `@loadbearing/*` so these documents line up with the architecture docs you already have. To rebrand the kit for a new project, change:
 
 - the `name` field in each `packages/*/package.json` and `apps/*/package.json`
-- the `@ratchet/` prefix in every import (one editor-wide find and replace)
-- `noExternal: [/^@ratchet\//]` in `apps/web/vite.config.ts`
-- the `group:` array in `tooling/eslint-config/react.js`
+- the `@loadbearing/` prefix in every import (one editor-wide find and replace)
+- `noExternal: [/^@loadbearing\//]` in `apps/web/vite.config.ts`
+- the `group:` array in `tooling/eslint-config/src/react.js`
 - `name: ratchet` and the credentials in `infra/docker-compose.yml`
 
 Nothing else. Do it before the first commit, not after.

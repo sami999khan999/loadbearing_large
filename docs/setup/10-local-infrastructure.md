@@ -4,7 +4,7 @@
 
 **Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to.
 
-**Prerequisite:** [09 · `@ratchet/contracts`](09-contracts-package.md)
+**Prerequisite:** [09 · `@loadbearing/contracts`](09-contracts-package.md)
 
 ---
 
@@ -191,4 +191,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/contracts`](09-contracts-package.md) · [`@ratchet/application` →](11-application-package.md)
+[← `@loadbearing/contracts`](09-contracts-package.md) · [`@loadbearing/application` →](11-application-package.md)

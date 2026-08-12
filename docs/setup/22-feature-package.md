@@ -1,20 +1,20 @@
-# 22 · `@ratchet/feature`
+# 22 · `@loadbearing/feature`
 
 > Components that fetch and mutate. The auth screens, the message provider, the session guard — and every feature screen that follows.
 
 **Delivers:** Sign-in, two-factor, session gating, and i18n binding, all mountable under any routing shell.
 
-**Prerequisite:** [21 · `@ratchet/ui`](21-ui-package.md)
+**Prerequisite:** [21 · `@loadbearing/ui`](21-ui-package.md)
 
 ---
 
 ## The two bans that make this package work
 
-**`feature` may not import `@ratchet/api-client`.** Every read goes through a defined query in `@ratchet/query`. Without this rule, someone under deadline pressure writes `await client.task.list()` directly inside a component; it works fine, and now there is an uncached read that no invalidation will ever touch. Banning the import at the lint level makes it unwriteable rather than discouraged.
+**`feature` may not import `@loadbearing/api-client`.** Every read goes through a defined query in `@loadbearing/query`. Without this rule, someone under deadline pressure writes `await client.task.list()` directly inside a component; it works fine, and now there is an uncached read that no invalidation will ever touch. Banning the import at the lint level makes it unwriteable rather than discouraged.
 
 **`feature` may not import `@tanstack/react-router`.** Navigation arrives as an `onNavigate` prop or an `href`. That is what lets the Tauri app mount these components under a different routing shell.
 
-Both are enforced by the per-package ESLint config from [05](05-lint-and-format.md).
+Both are enforced by a `files`-scoped block in the root ESLint config ([05](05-lint-and-format.md), Step 5.3) — **not** by Biome. There is no config file in this package.
 
 ```
 packages/feature/src/
@@ -34,20 +34,16 @@ packages/feature/src/
     └── effective-permissions.inspector.tsx
 ```
 
-```js
-// packages/feature/eslint.config.js — see 05, Step 5.4
-```
-
 ---
 
 ## Step 22.1 — The message provider
 
-The React binding for `@ratchet/content`'s `Translator`. It lives here, not in `content`, because `content` must stay React-free for the worker.
+The React binding for `@loadbearing/content`'s `Translator`. It lives here, not in `content`, because `content` must stay React-free for the worker.
 
 **`packages/feature/src/i18n/message.context.tsx`**
 
 ```tsx
-import type { MessageKey, Translator } from "@ratchet/content";
+import type { MessageKey, Translator } from "@loadbearing/content";
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 
 const MessageContext = createContext<Translator | null>(null);
@@ -87,7 +83,7 @@ Session and capabilities are needed by nearly every component, and threading the
 **`packages/feature/src/auth/session.context.tsx`**
 
 ```tsx
-import { CapabilitySet, type CapabilitySetDto } from "@ratchet/permissions";
+import { CapabilitySet, type CapabilitySetDto } from "@loadbearing/permissions";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 export interface SessionUser {
@@ -144,7 +140,7 @@ export function useCapabilities(): CapabilitySet {
 **`packages/feature/src/auth/session.guard.tsx`**
 
 ```tsx
-import type { PermissionKey } from "@ratchet/permissions";
+import type { PermissionKey } from "@loadbearing/permissions";
 import type { ReactNode } from "react";
 import { useSession } from "./session.context.js";
 
@@ -197,9 +193,9 @@ Removing a permission from a role must remove the nav item **and** return `FORBI
 **`packages/feature/src/auth/sign-in.form.tsx`**
 
 ```tsx
-import type { AuthClient } from "@ratchet/api-client";
-import { SessionMutations } from "@ratchet/query";
-import { Button, Field, Input } from "@ratchet/ui";
+import type { AuthClient } from "@loadbearing/api-client";
+import { SessionMutations } from "@loadbearing/query";
+import { Button, Field, Input } from "@loadbearing/ui";
 import { useState, type FormEvent } from "react";
 import { useMessages } from "../i18n/message.context.js";
 
@@ -285,9 +281,9 @@ The shape every feature module follows:
 
 ```tsx
 // packages/feature/src/task/task-board.tsx
-import { TaskQueries } from "@ratchet/query";
-import { useApiClient } from "@ratchet/query";
-import { Can, DataTable, EmptyState } from "@ratchet/ui";
+import { TaskQueries } from "@loadbearing/query";
+import { useApiClient } from "@loadbearing/query";
+import { Can, DataTable, EmptyState } from "@loadbearing/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useCapabilities } from "../auth/session.context.js";
 import { useMessages } from "../i18n/message.context.js";
@@ -367,10 +363,13 @@ export * from "./rbac/index.js";
 ## ✅ Gate
 
 ```bash
-grep -rn "@ratchet/api-client" packages/feature/src
+grep -rn "@loadbearing/api-client" packages/feature/src
 ```
 
 Returns nothing **except** `import type { AuthClient }` — a type-only import is permitted, since it creates no runtime dependency.
+
+> [!IMPORTANT]
+> **This is why the ban lives in ESLint rather than Biome.** Biome's `noRestrictedImports` flags `import type` exactly like a value import and has no type-import exemption — verified against 2.5.7 — so a Biome-side ban would error on `SignInForm`'s own import. `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`, and the core rule must be `"off"` alongside it, since it has no such option. See [05](05-lint-and-format.md) Step 5.3.
 
 ```bash
 grep -rn "@tanstack/react-router" packages/feature/src
@@ -379,10 +378,11 @@ grep -rn "@tanstack/react-router" packages/feature/src
 Returns nothing.
 
 - No string literal appears in rendered output — every user-visible string comes from `useMessages`.
-- The lint config from [05](05-lint-and-format.md) Step 5.4 is in place and errors on both imports.
+- The `packages/feature/src/**` block from [05](05-lint-and-format.md) Step 5.3 is in place and errors on a **value** import of either package, while allowing `import type`.
+- **Adding `import { Database } from "@loadbearing/db"` to a component in this package is a Biome error**, from the single server-only override. If it is not, some later `overrides` block has replaced that rule's `paths` instead of restating them — see the caution in [05](05-lint-and-format.md) Step 5.2.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/ui`](21-ui-package.md) · [`apps/web` →](23-web-app.md)
+[← `@loadbearing/ui`](21-ui-package.md) · [`apps/web` →](23-web-app.md)

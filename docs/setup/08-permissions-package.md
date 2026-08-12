@@ -1,10 +1,10 @@
-# 08 · `@ratchet/permissions`
+# 08 · `@loadbearing/permissions`
 
 > The shared kernel, half one. The permission registry, the module registry, and the capability resolver every runtime consults.
 
 **Delivers:** `PermissionRegistry`, `ModuleRegistry`, `CapabilitySet` — deny-by-default resolution running identically on server, client, worker, and desktop.
 
-**Prerequisite:** [07 · `@ratchet/core`](07-core-package.md)
+**Prerequisite:** [07 · `@loadbearing/core`](07-core-package.md)
 
 ---
 
@@ -26,11 +26,6 @@ packages/permissions/src/
 └── gate/                    ← same pattern for nav gates
     ├── index.ts
     └── rbac.gate.ts
-```
-
-```js
-// packages/permissions/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
 ```
 
 ---
@@ -193,7 +188,7 @@ export class ModuleRegistry {
 }
 ```
 
-**Why this is a separate registry.** `@ratchet/content` owns the navigation menu — its labels, order, and icons — and a content editor may change all three. What an editor must *not* be able to change is which permission gates a module or where its route points. So `nav.data.ts` in `content` carries `module: "finance"`, never `permission: "finance.read.global"`, and `ModuleRegistry` maps that key to its gate. `content` may import `ModuleKey` as a type and must never reference `PermissionKey` at all — a rule the ESLint config in `content` should enforce explicitly.
+**Why this is a separate registry.** `@loadbearing/content` owns the navigation menu — its labels, order, and icons — and a content editor may change all three. What an editor must *not* be able to change is which permission gates a module or where its route points. So `nav.data.ts` in `content` carries `module: "finance"`, never `permission: "finance.read.global"`, and `ModuleRegistry` maps that key to its gate. `content` may import `ModuleKey` as a type and must never reference `PermissionKey` at all — a rule the root ESLint config enforces explicitly for that package ([19](19-content-package.md)).
 
 ---
 
@@ -398,10 +393,10 @@ export * from "./permission-registry.js";
 
 - A misspelled `PermissionKey` is a **compile error**, not a runtime `false`.
 - `CapabilitySet.from(caps.toJSON())` round-trips.
-- `pnpm --filter @ratchet/permissions test` passes.
+- `pnpm --filter @loadbearing/permissions test` passes.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/core`](07-core-package.md) · [`@ratchet/contracts` →](09-contracts-package.md)
+[← `@loadbearing/core`](07-core-package.md) · [`@loadbearing/contracts` →](09-contracts-package.md)

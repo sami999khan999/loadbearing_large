@@ -31,13 +31,14 @@ ratchet/
 ├── package.json                               ← devEngines.packageManager, scripts, devDeps only
 ├── pnpm-workspace.yaml                        ← members, catalog, allowBuilds, settings
 ├── pnpm-lock.yaml
-├── prettier.config.js                         ← re-exports @ratchet/prettier-config
-├── eslint.config.js                           ← re-exports @ratchet/eslint-config/base
+├── biome.json                                 ← two lines; extends tooling/biome-config
+├── eslint.config.js                           ← re-exports @loadbearing/eslint-config
 ├── commitlint.config.js                       ← closed scope-enum
 ├── .lintstagedrc.json
 │
 ├── .husky/
-│   ├── pre-commit                             ← pnpm exec lint-staged
+│   ├── pre-commit                             ← pnpm exec lint-staged (biome only)
+│   ├── pre-push                               ← pnpm exec eslint .
 │   └── commit-msg                             ← pnpm exec commitlint
 │
 ├── .github/
@@ -52,19 +53,24 @@ ratchet/
 │
 ├── tooling/                                   ← 3 workspace packages, changed rarely
 │   ├── tsconfig/
-│   │   ├── package.json                       ← @ratchet/tsconfig
-│   │   ├── base.json                          ← ES2024, no DOM
-│   │   ├── library.json                       ← for packages/*
-│   │   ├── node-esm.json                      ← for apps/worker
-│   │   └── react.json                         ← adds DOM + jsx
-│   ├── prettier-config/
-│   │   ├── package.json                       ← @ratchet/prettier-config
-│   │   └── index.js
+│   │   ├── package.json                       ← @loadbearing/tsconfig, exports map
+│   │   ├── docs/
+│   │   └── src/
+│   │       ├── base.json                      ← ES2024, no DOM
+│   │       ├── library.json                   ← for packages/*
+│   │       ├── node-esm.json                  ← for apps/worker
+│   │       └── react.json                     ← adds DOM + jsx
+│   ├── biome-config/
+│   │   ├── package.json                       ← @loadbearing/biome-config
+│   │   ├── docs/
+│   │   └── src/
+│   │       └── base.json                      ← format, import order, lint, boundaries
 │   ├── eslint-config/
-│   │   ├── package.json                       ← @ratchet/eslint-config
-│   │   ├── base.js                            ← typed rules, process.env ban
-│   │   ├── oop.js                             ← no exported free functions
-│   │   └── react.js                           ← server-only import boundary
+│   │   ├── package.json                       ← @loadbearing/eslint-config
+│   │   ├── docs/
+│   │   └── src/
+│   │       ├── index.js                       ← typed rules + OOP shape rules
+│   │       └── types/index.d.ts               ← hand-written; no build to emit it
 │   └── scripts/
 │       └── check-architecture.mjs             ← the three CI greps
 │
@@ -93,16 +99,22 @@ Expanded below, in build order.
 
 ---
 
-## Every package has the same five files
+## Every package has the same shape
+
+**No lint config per package.** Biome and ESLint both run once from the root, keyed on file globs — so no package can quietly opt itself out of a rule.
 
 ```
 packages/<name>/
 ├── package.json          ← name, exports (with the "development" condition), scripts
-├── tsconfig.json         ← extends @ratchet/tsconfig/library.json
+├── tsconfig.json         ← extends @loadbearing/tsconfig/library.json
 ├── tsup.config.ts        ← entry, dts, format: esm, target: es2024
-├── eslint.config.js      ← four lines, selects base | oop | react
-└── src/
-    └── index.ts          ← the public surface; nothing outside it is importable
+├── src/
+│   └── index.ts          ← the public surface; nothing outside it is importable
+└── docs/
+    ├── meta.json         ← sidebar title, description, page order
+    ├── index.md          ← the overview; plain Markdown, never MDX
+    └── reference/        ← every page beyond the overview
+        └── meta.json     ← group label and page order
 ```
 
 Only deviations are noted from here on.
@@ -125,7 +137,7 @@ packages/core/src/
 └── server-only.ts           → ServerOnly
 ```
 
-Zero dependencies, including on other `@ratchet/*` packages. It is the root of the graph.
+Zero dependencies, including on other `@loadbearing/*` packages. It is the root of the graph.
 
 ### `packages/permissions`
 
@@ -334,7 +346,7 @@ packages/api-client/src/
     └── token.provider.ts            → TokenProvider  (abstract)
 ```
 
-**No `react`, no `@tanstack/*`.** Enforced by the package's own ESLint config.
+**No `react`, no `@tanstack/*`.** Enforced by `check:architecture` and by review — this package is not in the React glob, so the OOP rules apply to it.
 
 ### `packages/asset`
 
@@ -427,7 +439,7 @@ packages/ui/src/
 ├── index.ts
 ├── token/
 │   ├── index.ts
-│   └── token.css                  ← spacing, radii, motion; imports @ratchet/asset/font.css
+│   └── token.css                  ← spacing, radii, motion; imports @loadbearing/asset/font.css
 ├── theme/
 │   ├── index.ts
 │   ├── theme-registry.ts          → ThemeRegistry, ThemeKey
@@ -476,7 +488,7 @@ packages/feature/src/
     └── <slice>-board.spec.tsx
 ```
 
-**May not import `api-client` and may not import `@tanstack/react-router`.** Both are ESLint errors in this package specifically.
+**May not import `api-client` and may not import `@tanstack/react-router`.** Both are Biome errors, from the `packages/feature/**` override in `biome.json` ([05](05-lint-and-format.md)).
 
 ---
 
@@ -489,7 +501,6 @@ apps/web/
 ├── package.json
 ├── tsconfig.json                       ← extends react.json
 ├── vite.config.ts                      ← development condition, ssr.noExternal
-├── eslint.config.js                    ← react + env.ts exemption
 └── src/
     ├── env.ts                          → Env   ★ one of two process.env readers
     ├── router.tsx
@@ -524,7 +535,6 @@ apps/web/
 apps/worker/
 ├── package.json                        ← tsx watch; no bundler
 ├── tsconfig.json                       ← extends node-esm.json
-├── eslint.config.js                    ← base + env.ts exemption
 └── src/
     ├── env.ts                          → Env   ★ the second and last process.env reader
     ├── main.ts                         ← top-level await, SIGTERM handling
@@ -547,7 +557,7 @@ apps/worker/
 
 **Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The eleven-step checklist in [26](26-verification-and-first-feature.md) is just this list, walked in dependency order.
 
-**Notice the three `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, plus `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the ESLint boundary, that runtime assertion, and the CI bundle grep.
+**Notice the three `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, plus `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
 
 ---
 

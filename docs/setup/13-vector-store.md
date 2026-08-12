@@ -4,7 +4,7 @@
 
 **Delivers:** `PgVectorStore` implementing the `VectorStore` port, an `EmbeddingProvider`, and a migration path to Qdrant or Pinecone that touches one line of `Container`.
 
-**Prerequisite:** [12 · `@ratchet/db`](12-db-package.md)
+**Prerequisite:** [12 · `@loadbearing/db`](12-db-package.md)
 
 ---
 
@@ -95,7 +95,7 @@ import {
   VectorStore,
   type DocumentChunk,
   type SearchHit,
-} from "@ratchet/application";
+} from "@loadbearing/application";
 import { BaseRepository } from "../base.repository.js";
 import { documentChunks } from "./vector.schema.js";
 
@@ -183,7 +183,7 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
 **`packages/infrastructure/src/embedding/openai.embedding-provider.ts`**
 
 ```ts
-import { EmbeddingProvider } from "@ratchet/application";
+import { EmbeddingProvider } from "@loadbearing/application";
 
 export interface OpenAiEmbeddingConfig {
   readonly apiKey: string;
@@ -301,4 +301,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/db`](12-db-package.md) · [`@ratchet/infrastructure` →](14-infrastructure-package.md)
+[← `@loadbearing/db`](12-db-package.md) · [`@loadbearing/infrastructure` →](14-infrastructure-package.md)

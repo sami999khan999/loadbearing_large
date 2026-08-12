@@ -1,10 +1,10 @@
-# 12 · `@ratchet/db`
+# 12 · `@loadbearing/db`
 
 > Drizzle schema, the connection class, repository implementations, migrations, and seeds. Server-only.
 
 **Delivers:** RBAC tables, `CapabilityRepository`, a working migration pipeline, and the four system roles.
 
-**Prerequisite:** [11 · `@ratchet/application`](11-application-package.md)
+**Prerequisite:** [11 · `@loadbearing/application`](11-application-package.md)
 
 ---
 
@@ -41,11 +41,6 @@ packages/db/
         └── system-role.seed.ts
 ```
 
-```js
-// packages/db/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
-```
-
 ---
 
 ## Step 12.1 — The tripwire and the barrel
@@ -53,9 +48,9 @@ export { default } from "@ratchet/eslint-config/oop";
 **`packages/db/src/index.ts`**
 
 ```ts
-import { ServerOnly } from "@ratchet/core";
+import { ServerOnly } from "@loadbearing/core";
 
-ServerOnly.assert("@ratchet/db");
+ServerOnly.assert("@loadbearing/db");
 
 export * from "./activity/index.js";
 export * from "./base.repository.js";
@@ -262,7 +257,7 @@ export default defineConfig({
 });
 ```
 
-> This file reads `process.env` and that is fine — it is a build-time tool config, not package runtime code. Add it to the `ignores` in `packages/db/eslint.config.js`, which the base config already does via `"*.config.*"`.
+> This file reads `process.env` and that is fine — it is a build-time tool config, not package runtime code. No extra ignore is needed: the base config's `"**/*.config.ts"` pattern already covers it.
 
 Add to **`packages/db/package.json`**:
 
@@ -294,7 +289,7 @@ console.log("migrations applied");
 ```
 
 ```bash
-pnpm add --filter @ratchet/db -D dotenv
+pnpm add --filter @loadbearing/db -D dotenv
 ```
 
 ### Generate, never push
@@ -353,14 +348,14 @@ export abstract class BaseRepository {
 
 ```ts
 import { and, eq, isNull, or } from "drizzle-orm";
-import type { CapabilityRepository } from "@ratchet/application";
+import type { CapabilityRepository } from "@loadbearing/application";
 import {
   CapabilitySet,
   PermissionRegistry,
   type CapabilitySetDto,
   type PermissionKey,
   type ScopedSetDto,
-} from "@ratchet/permissions";
+} from "@loadbearing/permissions";
 import { BaseRepository } from "../base.repository.js";
 import { goalMembers, memberships, permissionOverrides, rolePermissions } from "./rbac.schema.js";
 
@@ -455,8 +450,8 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
 
 ```ts
 import { eq } from "drizzle-orm";
-import { Uuid } from "@ratchet/core";
-import { PermissionRegistry, type PermissionKey } from "@ratchet/permissions";
+import { Uuid } from "@loadbearing/core";
+import { PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 import { BaseRepository } from "../base.repository.js";
 import { rolePermissions, roles } from "../rbac/rbac.schema.js";
 
@@ -555,7 +550,7 @@ This is also the staged-rollout mechanism: until the migration that grants a mod
 **`packages/db/src/unit-of-work.ts`**
 
 ```ts
-import { UnitOfWork } from "@ratchet/application";
+import { UnitOfWork } from "@loadbearing/application";
 import type { Database } from "./database.js";
 
 export class PgUnitOfWork extends UnitOfWork {
@@ -588,4 +583,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/application`](11-application-package.md) · [Vector Storage →](13-vector-store.md)
+[← `@loadbearing/application`](11-application-package.md) · [Vector Storage →](13-vector-store.md)

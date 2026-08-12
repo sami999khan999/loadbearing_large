@@ -1,0 +1,43 @@
+{
+  "name": "@loadbearing/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "@loadbearing/tsconfig": "workspace:*",
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@loadbearing/application": "workspace:*",
+    "@loadbearing/contracts": "workspace:*",
+    "@loadbearing/core": "workspace:*",
+    "@loadbearing/permissions": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  }
+}

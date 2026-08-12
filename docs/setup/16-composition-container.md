@@ -1,10 +1,10 @@
-# 16 · `@ratchet/composition`
+# 16 · `@loadbearing/composition`
 
 > The hand-written DI root that replaces a framework container. Roughly a hundred lines, no decorators, no reflection, no module graph.
 
 **Delivers:** One `Container` class constructed identically by the web app and the worker.
 
-**Prerequisite:** [15 · `@ratchet/auth`](15-auth-package.md)
+**Prerequisite:** [15 · `@loadbearing/auth`](15-auth-package.md)
 
 ---
 
@@ -19,11 +19,6 @@ packages/composition/src/
 ├── index.ts                ← ServerOnly.assert()
 ├── container.config.ts     → ContainerConfig
 └── container.ts            → Container
-```
-
-```js
-// packages/composition/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
 ```
 
 ---
@@ -77,7 +72,7 @@ That is what lets you construct the entire system in a test with a fake database
 **`packages/composition/src/container.ts`**
 
 ```ts
-import { ServerOnly, SystemClock, type Clock } from "@ratchet/core";
+import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
 import {
   Authorizer,
   type CacheStore,
@@ -87,15 +82,16 @@ import {
   type StorageGateway,
   type UnitOfWork,
   type VectorStore,
-} from "@ratchet/application";
+} from "@loadbearing/application";
 import {
+  ApiKeyResolver,
   AuthFactory,
   BetterAuthSessionResolver,
   CapabilityCache,
   PrincipalBuilder,
   type AuthInstance,
-} from "@ratchet/auth";
-import { ContentSource, StaticContentSource } from "@ratchet/content";
+} from "@loadbearing/auth";
+import { ContentSource, StaticContentSource } from "@loadbearing/content";
 import {
   Database,
   PgActivityLogger,
@@ -103,17 +99,17 @@ import {
   PgCapabilityRepository,
   PgUnitOfWork,
   PgVectorStore,
-} from "@ratchet/db";
+} from "@loadbearing/db";
 import {
   BullMqQueuePublisher,
   OpenAiEmbeddingProvider,
   RedisCacheStore,
   RedisConnection,
   S3StorageGateway,
-} from "@ratchet/infrastructure";
+} from "@loadbearing/infrastructure";
 import type { ContainerConfig } from "./container.config.js";
 
-ServerOnly.assert("@ratchet/composition");
+ServerOnly.assert("@loadbearing/composition");
 
 export class Container {
   // ── infrastructure, private ───────────────────────────────
@@ -204,7 +200,7 @@ export class Container {
 
 **2. Never build request-scoped state into the container.** The `Principal` is passed as an argument to `execute()`, never held here. One container per **process**, not per request. Letting per-request state into the DI root couples you to a lifecycle model, and both the worker and any future NestJS migration become expensive.
 
-**3. Config arrives as a constructor argument.** No `process.env` in this file or in any package. The two `env.ts` files are the boundary, and the ESLint rule from [05](05-lint-and-format.md) is what keeps it true.
+**3. Config arrives as a constructor argument.** No `process.env` in this file or in any package. The two `env.ts` files are the boundary, and Biome's `noProcessEnv` rule from [05](05-lint-and-format.md) is what keeps it true.
 
 **4. `dispose()` closes in reverse construction order.** Queues before Redis before Postgres. Closing Redis while BullMQ still holds blocking connections produces a hang on shutdown that looks like a deadlock, because it is one.
 
@@ -277,7 +273,7 @@ export * from "./container.js";
 ## ✅ Gate
 
 ```bash
-pnpm --filter @ratchet/composition build
+pnpm --filter @loadbearing/composition build
 ```
 
 ```bash
@@ -292,4 +288,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/auth`](15-auth-package.md) · [`@ratchet/api-client` →](17-api-client-package.md)
+[← `@loadbearing/auth`](15-auth-package.md) · [`@loadbearing/api-client` →](17-api-client-package.md)

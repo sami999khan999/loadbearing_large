@@ -1,10 +1,10 @@
-# 09 · `@ratchet/contracts`
+# 09 · `@loadbearing/contracts`
 
 > The shared kernel, half two. Zod contract classes, domain entities, the oRPC contract router, and the procedure→permission map.
 
 **Delivers:** One schema per boundary, entities that carry their own rules, and a contract implementable by oRPC today or NestJS later.
 
-**Prerequisite:** [08 · `@ratchet/permissions`](08-permissions-package.md)
+**Prerequisite:** [08 · `@loadbearing/permissions`](08-permissions-package.md)
 
 ---
 
@@ -17,7 +17,7 @@ Every feature slice in this package has the same four files, and each answers a 
 | `<subject>.contract.ts` | `TaskContract` | What shape is this data? (Zod schemas, static readonly members) |
 | `<subject>.entity.ts` | `TaskEntity` | What does this data know about itself? (behaviour, no I/O) |
 | `<subject>.procedures.ts` | `TaskProcedures` | What operations exist, at what path? (oRPC contract) |
-| `<subject>.permissions.ts` | — | Which permission gates each procedure path? (fragment) |
+| `<subject>.permissions.ts` | — | Which permission gates each procedure path? (fragment — lives in `permission/`, not the subject folder) |
 
 ```
 packages/contracts/src/
@@ -34,13 +34,13 @@ packages/contracts/src/
     ├── <subject>.contract.ts
     ├── <subject>.entity.ts
     ├── <subject>.procedures.ts
-    ├── <subject>.permissions.ts
     └── <subject>.entity.spec.ts
 ```
 
-```js
-// packages/contracts/eslint.config.js
-export { default } from "@ratchet/eslint-config/oop";
+```
+packages/contracts/src/permission/
+├── index.ts
+└── <subject>.permissions.ts   ← procedure path → PermissionKey
 ```
 
 ---
@@ -202,8 +202,8 @@ export type TaskStatus = z.infer<typeof TaskContract.status>;
 **`packages/contracts/src/task/task.entity.ts`**
 
 ```ts
-import type { Clock } from "@ratchet/core";
-import type { CapabilitySet } from "@ratchet/permissions";
+import type { Clock } from "@loadbearing/core";
+import type { CapabilitySet } from "@loadbearing/permissions";
 import type { GoalId, TaskId, UserId } from "../primitive/identifiers.js";
 import { TaskContract, type TaskDto, type TaskStatus } from "./task.contract.js";
 
@@ -314,10 +314,13 @@ The router object is the one place a plain `export const` appears in this packag
 
 ## Step 9.6 — `ProcedurePermissions`
 
-**`packages/contracts/src/task/task.permissions.ts`** — the slice's fragment:
+**`packages/contracts/src/permission/task.permissions.ts`** — the slice's fragment.
+
+> [!NOTE]
+> This one file lives in `permission/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition, and the coverage test walks this folder specifically. See [28](28-naming-and-boundaries.md) §2.6.
 
 ```ts
-import type { PermissionKey } from "@ratchet/permissions";
+import type { PermissionKey } from "@loadbearing/permissions";
 
 export const taskProcedurePermissions = {
   "task.list": "task.read",
@@ -329,8 +332,8 @@ export const taskProcedurePermissions = {
 **`packages/contracts/src/procedure-permissions.ts`**
 
 ```ts
-import type { PermissionKey } from "@ratchet/permissions";
-import { taskProcedurePermissions } from "./task/task.permissions.js";
+import type { PermissionKey } from "@loadbearing/permissions";
+import { taskProcedurePermissions } from "./permission/task.permissions.js";
 
 /**
  * Every procedure path must appear here. The oRPC base middleware fails closed
@@ -412,8 +415,8 @@ export * from "./task/index.js";
 ## ✅ Gate
 
 ```bash
-pnpm --filter @ratchet/contracts build
-pnpm --filter @ratchet/contracts test
+pnpm --filter @loadbearing/contracts build
+pnpm --filter @loadbearing/contracts test
 ```
 
 - The build succeeds and `dist/index.d.ts` exists.
@@ -424,4 +427,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@ratchet/permissions`](08-permissions-package.md) · [Local Infrastructure →](10-local-infrastructure.md)
+[← `@loadbearing/permissions`](08-permissions-package.md) · [Local Infrastructure →](10-local-infrastructure.md)
