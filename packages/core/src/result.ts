@@ -1,9 +1,3 @@
-/**
- * The shared behaviour of both cases. Not exported — `Result` is the union below,
- * and that is what call sites annotate with. Only the union narrows in every
- * position; an abstract base class narrows a positive `instanceof` and nothing else,
- * because TypeScript can subtract a member from a union but not from a class.
- */
 abstract class ResultBase<T, E> {
   public abstract unwrapOr(fallback: T): T;
   public abstract mapOk<U>(fn: (value: T) => U): Result<U, E>;
@@ -52,10 +46,6 @@ export class Err<T, E> extends ResultBase<T, E> {
 
 export type Result<T, E> = Ok<T, E> | Err<T, E>;
 
-/**
- * Factories. A type alias cannot carry statics, so these live on their own class
- * rather than on `Result` — the one cost of making `Result` a union.
- */
 export class Results {
   private constructor() {}
 

@@ -1,0 +1,140 @@
+---
+title: permission-registry
+description: PermissionRegistry — the permission vocabulary, the fragmented catalog behind it, and why isKnown() uses Object.hasOwn rather than the `in` operator.
+---
+
+# `PermissionRegistry`
+
+The vocabulary. A frozen catalog of keys, each carrying its scope, module, and label.
+
+```ts
+export type PermissionScope = "org" | "goal";
+
+export interface PermissionMeta {
+  readonly scope: PermissionScope;
+  readonly module: string;
+  readonly label: string;
+}
+
+export type PermissionKey = keyof typeof CATALOG;
+
+export class PermissionRegistry {
+  public static readonly instance: PermissionRegistry;
+
+  public all(): readonly PermissionKey[];
+  public meta(key: PermissionKey): PermissionMeta;
+  public scopeOf(key: PermissionKey): PermissionScope;
+  public byModule(module: string): readonly PermissionKey[];
+  public isKnown(value: string): value is PermissionKey;
+  public modules(): readonly string[];
+}
+```
+
+`instance` is `static readonly`, which satisfies the static-mutable-state ban in
+[05](../../../../docs/setup/05-lint-and-format.md). It holds no state; the singleton exists so call
+sites read `PermissionRegistry.instance.isKnown(x)` rather than constructing one each time.
+
+---
+
+## Why `Object.hasOwn` and not `in`
+
+`isKnown()` is the boundary between untrusted text and the typed vocabulary. Role grants, per-user
+overrides, and API-key scopes all arrive from the database as raw strings, and a stale row must never
+grant something the registry no longer defines. Written the obvious way, it does:
+
+```ts
+public isKnown(value: string): value is PermissionKey {
+  return value in CATALOG;   // ← accepts "toString", "constructor", "valueOf", "hasOwnProperty"
+}
+```
+
+> [!CAUTION]
+> **`in` walks the prototype chain.** `CATALOG` is an object literal, so it inherits from
+> `Object.prototype`, and `"constructor" in CATALOG` is `true`. Verified by a failing test.
+
+Follow the consequence through and it is not merely cosmetic. A `role_permissions` row reading
+`constructor` passes `isKnown()`, is narrowed to `PermissionKey`, and lands in a `CapabilitySet`'s
+grant set. Then:
+
+1. `scopeOf("constructor")` reads `CATALOG["constructor"].scope` — the `Object` constructor has no
+   `scope`, so this is `undefined`.
+2. `undefined === "goal"` is false, so `can()` takes the org branch.
+3. The org branch finds `"constructor"` in the grants set and returns **`true`**.
+
+A permission that does not exist is granted. `Object.hasOwn` checks own properties only and closes
+it:
+
+```ts
+return Object.hasOwn(CATALOG, value);
+```
+
+Reachable only if that string reaches the table — which is precisely the input this method exists to
+filter. `all()`, `byModule()`, and `modules()` were never affected: they go through `Object.keys`,
+which is own-properties-only already.
+
+---
+
+## The catalog is fragmented
+
+One `CATALOG` object works until three teams edit it in the same sprint and every pull request
+conflicts. So keys live in team-owned fragments and a platform-owned barrel merges them:
+
+```ts
+// src/catalog/rbac.permissions.ts — the only fragment the starter kit ships
+export const rbacPermissions = {
+  "rbac.role.read": { scope: "org", module: "rbac", label: "View roles" },
+  // ...
+} as const satisfies Record<string, PermissionMeta>;
+
+// src/catalog/index.ts — changes only when a module is added
+export const CATALOG = {
+  ...rbacPermissions,
+  // ...taskPermissions,
+} as const;
+```
+
+`as const satisfies Record<string, PermissionMeta>` does two jobs at once: `satisfies` checks each
+entry against `PermissionMeta` without widening it, and `as const` keeps the keys as literals so
+`keyof typeof CATALOG` is a union of exactly ten strings. Both survive the spread:
+
+```ts
+caps.can("rbac.role.reed");
+// TS2820: Type '"rbac.role.reed"' is not assignable to ...
+//         Did you mean '"rbac.role.read"'?
+```
+
+Each team owns one file. Two teams adding permissions in the same week never conflict.
+
+The fragment imports `PermissionMeta` from `../permission-registry.js` while the registry imports
+`CATALOG` from `./catalog/index.js`. That is a cycle on paper and not at runtime — the fragment's
+import is `import type`, which `verbatimModuleSyntax` erases entirely.
+
+---
+
+## Scope is a property of the permission, not of the check
+
+`goal.create` is org-scoped because you create a goal before it exists. `goal.update` is goal-scoped
+because it operates on one. Getting this backwards is the most common modelling error here, and the
+symptom is `can()` returning `false` for someone who should obviously have access — because a
+goal-scoped permission was asked without a `goalId` and rule 3 failed it closed.
+
+Every key the shipped catalog defines is org-scoped, which is why
+[`capability-set.spec.ts`](capability-set.md) stubs `scopeOf` to test the goal branch at all.
+
+---
+
+## Never delete a key
+
+> [!IMPORTANT]
+> A permission key is never deleted, only stopped being granted. Deleting one makes `isKnown()` start
+> rejecting rows that already exist in `role_permissions` — correct behaviour, and a confusing way to
+> discover the change. Remove the grants in a migration first, the key in a later release.
+
+---
+
+## See also
+
+- [`@loadbearing/permissions`](../index.md)
+- [CapabilitySet](capability-set.md) — the only caller of `scopeOf()`
+- [ModuleRegistry](module-registry.md) — the same fragment pattern for nav gates
+- [`@loadbearing/tsconfig` · base](../../../../tooling/tsconfig/docs/reference/base.md) — where `verbatimModuleSyntax` comes from

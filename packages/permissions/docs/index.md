@@ -1,15 +1,161 @@
 ---
 title: "@loadbearing/permissions"
-description: TODO — one sentence on what this package is for.
+description: The shared authorization kernel — one permission vocabulary, one resolution algorithm, one nav-gate map, running identically on server, browser, worker, and desktop.
 ---
 
 # `@loadbearing/permissions`
 
-> TODO — written when the package gets its first real file.
+The architecture's strongest claim is that there is no hardcoded role check anywhere and no second
+security model to keep in sync. That claim survives contact with reality only if the vocabulary,
+the resolution algorithm, and the scope rules are **one artifact** every runtime loads — the oRPC
+handler, React route guards, the `<Can>` component, the worker, and the Tauri shell.
+
+So this package has no database, no HTTP, no React, and no Node built-ins. It is pure data plus one
+algorithm, and it loads anywhere.
 
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/permissions` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | — |
-| **Used by** | — |
+| **Depends on** | — nothing at runtime |
+| **Used by** | `contracts`, `application`, `db`, `auth`, `api-client`, `query`, `ui`, `feature`, `content` (type-only), `apps/*` |
+| **Environment** | isomorphic — server, browser, worker, and Tauri webview |
+| **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
+
+```
+packages/permissions/
+├── vitest.config.ts
+└── src/
+    ├── index.ts                 ← barrel
+    ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+    ├── permission-registry.spec.ts
+    ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+    ├── module-registry.spec.ts
+    ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+    ├── capability-set.spec.ts
+    ├── catalog/                 ← one fragment per slice, team-owned
+    │   ├── index.ts             ←   merges fragments (platform-owned)
+    │   └── rbac.permissions.ts
+    └── gate/                    ← same pattern for nav gates
+        ├── index.ts
+        └── rbac.gate.ts
+```
+
+---
+
+## The three exports
+
+### [`PermissionRegistry`](reference/permission-registry.md) — the vocabulary
+
+```ts
+PermissionRegistry.instance.isKnown(rowFromDatabase); // type predicate
+PermissionRegistry.instance.scopeOf("member.read");   // "org" | "goal"
+```
+
+A frozen catalog of keys, each carrying its scope, module, and label. `isKnown()` is the boundary
+between untrusted text and the typed vocabulary — every role grant, per-user override, and API-key
+scope arrives from the database as a raw string and must pass it first.
+
+### [`CapabilitySet`](reference/capability-set.md) — the algorithm
+
+```ts
+caps.can("member.deactivate");           // org-scoped
+caps.can("task.update", goalId);         // goal-scoped
+caps.goalsWith("task.update");           // which goals, resolved by permission
+caps.intersect(issuerCaps);              // an API key can never exceed its issuer
+CapabilitySet.from(caps.toJSON());       // server → SSR payload → browser, same class
+```
+
+Deny by default, explicit deny beats every grant including the wildcard, and a goal-scoped
+permission asked without a `goalId` is `false` rather than a throw. Four rules, one implementation,
+four runtimes.
+
+### [`ModuleRegistry`](reference/module-registry.md) — the nav gates
+
+```ts
+ModuleRegistry.instance.visibleModules(caps); // readonly ModuleKey[]
+```
+
+"May this actor do X" and "should this actor see the finance section at all" are different
+questions with different owners. `@loadbearing/content` owns the menu's labels, order, and icons —
+and must never be able to change which permission gates a module. That separation is why this is a
+second registry rather than a field on the first.
+
+---
+
+## Fragmented from day one
+
+One `CATALOG` object works until three teams edit it in the same sprint and every pull request
+conflicts. Both registries merge team-owned fragments in a platform-owned barrel:
+
+```ts
+// src/catalog/index.ts — changes only when a module is added
+export const CATALOG = {
+  ...rbacPermissions,
+  // ...taskPermissions,
+} as const;
+```
+
+The literal-union type survives the spread, so typo-safety is unaffected — verified:
+
+```ts
+caps.can("rbac.role.reed");
+// TS2820: Did you mean '"rbac.role.read"'?
+```
+
+> [!IMPORTANT]
+> **A permission key is never deleted, only stopped being granted.** Deleting a key makes
+> `isKnown()` start rejecting rows that already exist in `role_permissions` — correct behaviour, and
+> a confusing way to discover the change. Remove the grants in a migration first, the key in a later
+> release.
+
+### The key format
+
+```
+<module>.<subject>.<action>[.<qualifier>]
+```
+
+Lowercase, dot-separated, no plurals. The `.self` qualifier means "the same action, but only on rows
+you own" — the entity decides what "own" means, so `task.update` and `task.update.self` are two
+keys, not one key with a flag.
+
+---
+
+## Five places the doc's listing was wrong
+
+Every one of these is proven by a failing test in this package rather than argued from reading. See
+the reference pages for the mechanism in each case.
+
+| # | Defect | Where |
+| --- | --- | --- |
+| 1 | `isKnown` used `value in CATALOG`, so `"toString"` and `"constructor"` passed the untrusted-input boundary | [permission-registry](reference/permission-registry.md#why-objecthasown-and-not-in) |
+| 2 | `intersect()` kept only `this`'s denies, so two wildcard sets granted what one explicitly refused | [capability-set](reference/capability-set.md#intersect-is-a-security-boundary) |
+| 3 | `intersect()` iterated only `this`'s goals, discarding a deny inside a goal it had not heard of | [capability-set](reference/capability-set.md#intersect-is-a-security-boundary) |
+| 4 | `intersect()` filtered org grants through `can()`, dropping org-level grants of goal-scoped keys | [capability-set](reference/capability-set.md#intersect-is-a-security-boundary) |
+| 5 | `intersect()` filtered only `this`'s grants, so a wildcard set intersected down to nothing | [capability-set](reference/capability-set.md#intersect-is-a-security-boundary) |
+
+`src/gate/index.ts` was also missing from the listing entirely, though `module-registry.ts` imports
+`GATES` from it.
+
+---
+
+## Testing
+
+Tests are colocated and named `<subject>.spec.ts`. `vitest.config.ts` narrows `include` to
+`src/**/*.spec.ts` so the runner never picks up compiled output from `dist/`.
+
+```bash
+pnpm --filter @loadbearing/permissions test
+```
+
+Every key the shipped catalog defines is org-scoped, so the goal-scoped branch of `can()` is
+unreachable through it. `capability-set.spec.ts` stubs `PermissionRegistry.instance.scopeOf` to
+reach that branch rather than leaving rule 3 unverified until a slice adds a goal-scoped key.
+
+---
+
+## See also
+
+- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [ModuleRegistry](reference/module-registry.md)
+- [Build order · 08 · permissions](../../../docs/setup/08-permissions-package.md)
+- [`@loadbearing/core`](../../core/docs/index.md) — the layer below

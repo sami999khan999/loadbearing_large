@@ -1,4 +1,5 @@
-/** Placeholder so the package has a real export. Replaced in the feature steps. */
-export class PermissionsPackage {
-  public static readonly id = "@loadbearing/permissions";
-}
+export * from "./capability-set.js";
+export * from "./catalog/index.js";
+export * from "./gate/index.js";
+export * from "./module-registry.js";
+export * from "./permission-registry.js";

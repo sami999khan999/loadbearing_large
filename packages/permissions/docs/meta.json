@@ -1,5 +1,5 @@
 {
   "title": "permissions",
-  "description": "",
+  "description": "PermissionRegistry, CapabilitySet, ModuleRegistry — one authorization kernel shared by every runtime",
   "pages": ["index", "reference"]
 }

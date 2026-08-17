@@ -15,17 +15,22 @@ The strongest claim the architecture makes is that there is no hardcoded role ch
 So this package has no database, no HTTP, no React, and no Node built-ins. It is pure data plus one resolution algorithm, and it loads anywhere.
 
 ```
-packages/permissions/src/
-├── index.ts
-├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta
-├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
-├── capability-set.ts        → CapabilitySet, CapabilitySetDto
-├── catalog/                 ← one fragment per slice, team-owned
-│   ├── index.ts             ←   merges fragments (platform-owned)
-│   └── rbac.permissions.ts
-└── gate/                    ← same pattern for nav gates
+packages/permissions/
+├── vitest.config.ts
+└── src/
     ├── index.ts
-    └── rbac.gate.ts
+    ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+    ├── permission-registry.spec.ts
+    ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+    ├── module-registry.spec.ts
+    ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+    ├── capability-set.spec.ts
+    ├── catalog/                 ← one fragment per slice, team-owned
+    │   ├── index.ts             ←   merges fragments (platform-owned)
+    │   └── rbac.permissions.ts
+    └── gate/                    ← same pattern for nav gates
+        ├── index.ts
+        └── rbac.gate.ts
 ```
 
 ---
@@ -121,9 +126,16 @@ export class PermissionRegistry {
     return this.all().filter((k) => CATALOG[k].module === module);
   }
 
-  /** Permission strings from the database must pass this before they are trusted. */
+  /**
+   * Permission strings from the database must pass this before they are trusted.
+   *
+   * `Object.hasOwn`, not `value in CATALOG`: `in` walks the prototype chain, so a
+   * stored row reading `constructor` or `toString` would pass and then resolve to
+   * a `PermissionMeta` of `undefined`, whose `scope` check falls through to the
+   * org branch and grants a permission that does not exist.
+   */
   public isKnown(value: string): value is PermissionKey {
-    return value in CATALOG;
+    return Object.hasOwn(CATALOG, value);
   }
 
   public modules(): readonly string[] {
@@ -133,6 +145,9 @@ export class PermissionRegistry {
 ```
 
 **`isKnown()` earns its place immediately.** Role grants, per-user overrides, and API-key scopes all arrive from the database as raw strings. A stale row must never grant something the registry no longer defines. Every one of those paths filters through `isKnown()` before the string becomes a `PermissionKey` — that type predicate is the boundary between untrusted text and the typed vocabulary.
+
+> [!CAUTION]
+> **`value in CATALOG` does not hold that boundary** — verified by a failing test. `CATALOG` is an object literal, so it inherits from `Object.prototype` and `"constructor" in CATALOG` is `true`. A `role_permissions` row reading `constructor` then passes `isKnown()`, narrows to `PermissionKey`, and lands in a grant set; `scopeOf` reads `undefined`, `undefined === "goal"` is false, the org branch finds the string in the grants set, and `can()` returns **`true`** for a permission that does not exist. `Object.hasOwn` checks own properties only. `all()`, `byModule()`, and `modules()` were never affected — they go through `Object.keys`.
 
 **`PermissionRegistry.instance` is `static readonly`**, which satisfies the static-mutable-state ban in [05](05-lint-and-format.md). It holds no state; the singleton exists so call sites read `PermissionRegistry.instance.isKnown(x)` rather than constructing one each time.
 
@@ -155,12 +170,24 @@ export const rbacGates = {
 } as const satisfies Record<string, ModuleGate>;
 ```
 
+**`packages/permissions/src/gate/index.ts`** — platform-owned, mirrors the catalog barrel:
+
+```ts
+import { rbacGates } from "./rbac.gate.js";
+
+export const GATES = {
+  ...rbacGates,
+  // ...taskGates,
+  // ...financeGates,
+} as const;
+```
+
 **`packages/permissions/src/module-registry.ts`**
 
 ```ts
 import type { CapabilitySet } from "./capability-set.js";
-import type { PermissionKey } from "./permission-registry.js";
 import { GATES } from "./gate/index.js";
+import type { PermissionKey } from "./permission-registry.js";
 
 export interface ModuleGate {
   readonly permission: PermissionKey;
@@ -197,7 +224,7 @@ export class ModuleRegistry {
 **`packages/permissions/src/capability-set.ts`**
 
 ```ts
-import { PermissionRegistry, type PermissionKey } from "./permission-registry.js";
+import { type PermissionKey, PermissionRegistry } from "./permission-registry.js";
 
 export interface ScopedSetDto {
   readonly grants: readonly PermissionKey[];
@@ -214,7 +241,7 @@ class ScopedSet {
   private readonly grants: ReadonlySet<PermissionKey>;
   private readonly denies: ReadonlySet<PermissionKey>;
 
-  constructor(dto: ScopedSetDto) {
+  public constructor(dto: ScopedSetDto) {
     this.grants = new Set(dto.grants);
     this.denies = new Set(dto.denies);
   }
@@ -235,7 +262,9 @@ export class CapabilitySet {
 
   private constructor(private readonly dto: CapabilitySetDto) {
     this.orgSet = new ScopedSet(dto.org);
-    this.goalSets = new Map(Object.entries(dto.goals).map(([id, s]) => [id, new ScopedSet(s)]));
+    this.goalSets = new Map(
+      Object.entries(dto.goals).map(([id, s]): [string, ScopedSet] => [id, new ScopedSet(s)]),
+    );
   }
 
   public static from(dto: CapabilitySetDto): CapabilitySet {
@@ -244,6 +273,10 @@ export class CapabilitySet {
 
   public static empty(): CapabilitySet {
     return new CapabilitySet({ wildcard: false, org: { grants: [], denies: [] }, goals: {} });
+  }
+
+  private static union(a: readonly PermissionKey[], b: readonly PermissionKey[]): PermissionKey[] {
+    return [...new Set([...a, ...b])];
   }
 
   /** Deny by default. An explicit deny beats every grant, including the wildcard. */
@@ -259,9 +292,7 @@ export class CapabilitySet {
       );
     }
 
-    if (this.orgSet.deniesPermission(permission)) return false;
-    if (this.dto.wildcard) return true;
-    return this.orgSet.grantsPermission(permission);
+    return this.allowsAtOrg(permission);
   }
 
   public canAll(permissions: readonly PermissionKey[], goalId?: string): boolean {
@@ -280,25 +311,49 @@ export class CapabilitySet {
   /**
    * Narrow this set to the intersection with another. Used when an API key's
    * scopes are re-intersected with its issuer's live capabilities at resolution.
+   *
+   * Denies union, grants intersect, goal keys union, and both sides' grants are
+   * candidates. See the four notes below — each one is a way this method leaked
+   * or over-narrowed before.
    */
   public intersect(other: CapabilitySet): CapabilitySet {
-    const keep = (perms: readonly PermissionKey[], goalId?: string): PermissionKey[] =>
-      perms.filter((p) => other.can(p, goalId));
+    const goalIds = new Set([...Object.keys(this.dto.goals), ...Object.keys(other.dto.goals)]);
+    const orgCandidates = CapabilitySet.union(this.dto.org.grants, other.dto.org.grants);
 
     return CapabilitySet.from({
       wildcard: this.dto.wildcard && other.dto.wildcard,
-      org: { grants: keep(this.dto.org.grants), denies: this.dto.org.denies },
+      org: {
+        grants: orgCandidates.filter((p) => this.allowsAtOrg(p) && other.allowsAtOrg(p)),
+        denies: CapabilitySet.union(this.dto.org.denies, other.dto.org.denies),
+      },
       goals: Object.fromEntries(
-        Object.entries(this.dto.goals).map(([goalId, scoped]) => [
-          goalId,
-          { grants: keep(scoped.grants, goalId), denies: scoped.denies },
-        ]),
+        [...goalIds].map((goalId): [string, ScopedSetDto] => {
+          const mine = this.dto.goals[goalId];
+          const theirs = other.dto.goals[goalId];
+
+          return [
+            goalId,
+            {
+              grants: CapabilitySet.union(mine?.grants ?? [], theirs?.grants ?? []).filter(
+                (p) => this.can(p, goalId) && other.can(p, goalId),
+              ),
+              denies: CapabilitySet.union(mine?.denies ?? [], theirs?.denies ?? []),
+            },
+          ];
+        }),
       ),
     });
   }
 
   public toJSON(): CapabilitySetDto {
     return this.dto;
+  }
+
+  /** `can()` for an org-scoped permission — and the org half of a goal-scoped one. */
+  private allowsAtOrg(permission: PermissionKey): boolean {
+    if (this.orgSet.deniesPermission(permission)) return false;
+    if (this.dto.wildcard) return true;
+    return this.orgSet.grantsPermission(permission);
   }
 }
 ```
@@ -318,6 +373,17 @@ Escalation that resolves targets *by permission rather than by role* is this met
 
 An API key is a principal whose capability set cannot exceed its issuer's. Intersecting at creation is the obvious half. Re-intersecting **at resolution** is the half that matters: when the issuer's permission is revoked, every key they created narrows on the next request rather than at the next key rotation. That closes the most common way an RBAC model gets quietly defeated. See [15](15-auth-package.md).
 
+Which makes this the one method in the package that is a security boundary rather than a convenience, and it has to be correct in four ways the obvious implementation is not. All four are proven by tests in `capability-set.spec.ts` — write the naive body and exactly those tests go red.
+
+| Rule | Naive version | What breaks |
+| --- | --- | --- |
+| **Denies union** | keeps only `this.dto.org.denies` | two wildcard sets produce one that grants what the other explicitly refused — a privilege escalation, not a rounding error |
+| **Goal keys union** | iterates `Object.entries(this.dto.goals)` | a deny inside a goal `this` has never heard of is discarded entirely |
+| **Org candidates via `allowsAtOrg`** | filters org grants through `other.can(p)` | rule 3 makes that `false` for every goal-scoped key, so an org-level grant of one is dropped and `intersect` is not even idempotent |
+| **Both sides' grants are candidates** | filters only `this.dto.org.grants` | a wildcard set lists nothing, so it intersects down to nothing — an issuer who has lost superuser leaves their keys dead instead of narrowed |
+
+The last one is the realistic case rather than a contrived one: an issuer who *was* a superuser created a wildcard key and has since lost superuser. The key must narrow to the issuer's current explicit grants — not to nothing, and certainly not stay wildcard. Taking the union of both sides' grants as the candidate set and keeping each key only where both sides allow it makes this a real set intersection, and makes it answer the same whichever side is narrowed.
+
 ### `toJSON()` / `from()` is why one class serves four runtimes
 
 The DTO is plain JSON. The server resolves a `CapabilitySet` from the database, serialises it into the SSR payload, and the browser reconstructs the identical class. The `<Can>` component and the oRPC handler then run the *same* `can()` — not two implementations that agree today. The worker and the desktop app do the same. That identity is the entire point of the package.
@@ -326,27 +392,55 @@ The DTO is plain JSON. The server resolves a `CapabilitySet` from the database, 
 
 ## Step 8.5 — Tests
 
-**`packages/permissions/src/capability-set.spec.ts`**
+The package needs its own runner config first — without it vitest's default `include` also walks `dist/`:
+
+**`packages/permissions/vitest.config.ts`**
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: { include: ["src/**/*.spec.ts"] },
+});
+```
+
+**`packages/permissions/src/capability-set.spec.ts`** — the shape; the shipped file carries fourteen cases, including one per `intersect` rule above.
+
+```ts
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CapabilitySet } from "./capability-set.js";
+import { PermissionRegistry } from "./permission-registry.js";
 
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 
+/**
+ * Every key the shipped catalog defines is org-scoped, so the goal-scoped branch
+ * of `can()` is unreachable through it. Stubbing `scopeOf` tests that branch now
+ * instead of leaving rule 3 unverified until a slice adds a goal-scoped key.
+ */
+const treatEveryKeyAsGoalScoped = (): void => {
+  vi.spyOn(PermissionRegistry.instance, "scopeOf").mockReturnValue("goal");
+};
+
 describe("CapabilitySet", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("denies by default", () => {
     expect(CapabilitySet.empty().can("rbac.role.read")).toBe(false);
   });
 
   it("denies a goal-scoped permission asked without a goalId", () => {
+    treatEveryKeyAsGoalScoped();
     const caps = CapabilitySet.from({
       wildcard: true,
-      org: { grants: [], denies: [] },
-      goals: {},
+      org: { grants: ["rbac.role.read"], denies: [] },
+      goals: { [GOAL]: { grants: ["rbac.role.read"], denies: [] } },
     });
-    // Substitute a goal-scoped key from your own catalog once one exists.
-    expect(caps.can("rbac.role.read")).toBe(true);
+
+    expect(caps.can("rbac.role.read")).toBe(false);
+    expect(caps.can("rbac.role.read", GOAL)).toBe(true);
   });
 
   it("lets an explicit deny beat the wildcard", () => {
@@ -355,6 +449,7 @@ describe("CapabilitySet", () => {
       org: { grants: [], denies: ["rbac.role.manage"] },
       goals: {},
     });
+
     expect(caps.can("rbac.role.manage")).toBe(false);
     expect(caps.can("rbac.role.read")).toBe(true);
   });
@@ -365,13 +460,23 @@ describe("CapabilitySet", () => {
       org: { grants: ["member.read"], denies: [] },
       goals: { [GOAL]: { grants: [], denies: [] } },
     });
-    const revived = CapabilitySet.from(JSON.parse(JSON.stringify(caps.toJSON())));
+    const revived = CapabilitySet.from(
+      JSON.parse(JSON.stringify(caps.toJSON())) as ReturnType<typeof caps.toJSON>,
+    );
+
     expect(revived.can("member.read")).toBe(true);
   });
 });
 ```
 
 The round-trip test is the one that protects the architecture. If it ever fails, the server and the browser have stopped agreeing about permissions.
+
+Two details in that listing are not stylistic:
+
+- **The cast on `JSON.parse` is required.** It returns `any`, and `@typescript-eslint/no-unsafe-argument` — on via `recommendedTypeChecked` in [05](05-lint-and-format.md) — rejects passing it straight into `from()`.
+- **`treatEveryKeyAsGoalScoped` exists because rule 3 is otherwise untestable.** Every key in the shipped catalog is org-scoped, so the original listing's "denies a goal-scoped permission asked without a goalId" asserted `can("rbac.role.read") === true` on an org-scoped key — it tested the opposite of its name and left the fail-closed branch unverified. Stubbing the one method `can()` consults reaches the real branch without inventing catalog keys that belong to [12](12-db-package.md).
+
+`permission-registry.spec.ts` and `module-registry.spec.ts` are worth the same treatment — `isKnown()` is a security boundary and `visibleModules()` is what the whole navigation renders from. Twenty-three tests total.
 
 ---
 
@@ -391,9 +496,11 @@ export * from "./permission-registry.js";
 
 ## ✅ Gate
 
-- A misspelled `PermissionKey` is a **compile error**, not a runtime `false`.
+- A misspelled `PermissionKey` is a **compile error**, not a runtime `false`. Verified — `caps.can("rbac.role.reed")` gives `TS2820: Did you mean '"rbac.role.read"'?`, and `ModuleRegistry.instance.gate("finance")` gives `TS2345: not assignable to parameter of type '"rbac" | "member"'`. The literal unions survive both barrels' spreads.
 - `CapabilitySet.from(caps.toJSON())` round-trips.
-- `pnpm --filter @loadbearing/permissions test` passes.
+- `pnpm --filter @loadbearing/permissions typecheck` is clean and `test` passes — 23 tests.
+- `pnpm exec biome check packages/permissions` and `pnpm exec eslint packages/permissions/src` are both clean. There is no per-package `lint` script; that gate is root-only.
+- `pnpm --filter @loadbearing/permissions build` emits `dist/index.d.ts` exporting all of `CATALOG`, `CapabilitySet`, `CapabilitySetDto`, `GATES`, `ModuleGate`, `ModuleKey`, `ModuleRegistry`, `PermissionKey`, `PermissionMeta`, `PermissionRegistry`, `PermissionScope`, `ScopedSetDto`.
 
 Do not proceed until this passes.
 

@@ -1,0 +1,131 @@
+---
+title: module-registry
+description: ModuleRegistry — nav gates as a second registry, why content may name a module but never a permission, and the gate barrel missing from the build doc.
+---
+
+# `ModuleRegistry`
+
+The permission catalog answers "may this actor do X." The module registry answers "should this actor
+see the finance section at all," which is a different question with a different owner.
+
+```ts
+export interface ModuleGate {
+  readonly permission: PermissionKey;
+  readonly route: string;
+}
+
+export type ModuleKey = keyof typeof GATES;
+
+export class ModuleRegistry {
+  public static readonly instance: ModuleRegistry;
+
+  public gate(module: ModuleKey): ModuleGate;
+  public isVisible(module: ModuleKey, caps: CapabilitySet): boolean;
+  public visibleModules(caps: CapabilitySet): readonly ModuleKey[];
+}
+```
+
+```ts
+ModuleRegistry.instance.visibleModules(caps);        // ["member"]
+ModuleRegistry.instance.gate("rbac").route;          // "/settings/roles"
+```
+
+---
+
+## Why this is a separate registry
+
+`@loadbearing/content` owns the navigation menu — its labels, order, and icons — and a content editor
+may change all three. What an editor must **not** be able to change is which permission gates a
+module, or where its route points.
+
+So `nav.data.ts` in `content` carries `module: "finance"`, never
+`permission: "finance.read.global"`, and `ModuleRegistry` maps that key to its gate. `content` may
+import `ModuleKey` as a type and must never reference `PermissionKey` at all.
+
+That rule is enforced, not merely documented — `tooling/eslint-config/src/index.js` bans the two
+identifiers by name for that package alone:
+
+```js
+{
+  files: ["packages/content/src/**/*.ts"],
+  rules: {
+    "no-restricted-imports": ["error", {
+      paths: [{
+        name: "@loadbearing/permissions",
+        importNames: ["PermissionKey", "PermissionRegistry"],
+        message: "Content names a module. ModuleRegistry owns which permission gates it.",
+      }],
+    }],
+  },
+}
+```
+
+> [!WARNING]
+> That rule is the **core** `no-restricted-imports`, which has no `allowTypeImports` option and
+> therefore flags `import type` as well. Since `content` is only ever meant to import `ModuleKey`,
+> that is not currently a problem — but it will be the moment anyone reaches for a type-only
+> exception. See [19](../../../../docs/setup/19-content-package.md).
+
+Folding the gate onto `PermissionMeta` would collapse the two registries into one and put the
+gating decision inside the file a content editor edits. The separation is the whole point.
+
+---
+
+## `src/gate/index.ts` was missing from the build doc
+
+[08](../../../../docs/setup/08-permissions-package.md) shows the file in its tree listing and
+`module-registry.ts` imports `GATES` from it, but the doc never writes it out. It mirrors the catalog
+barrel exactly:
+
+```ts
+import { rbacGates } from "./rbac.gate.js";
+
+export const GATES = {
+  ...rbacGates,
+  // ...taskGates,
+} as const;
+```
+
+The same paper cycle applies as in the catalog: `gate/rbac.gate.ts` imports `ModuleGate` from
+`../module-registry.js` while `module-registry.ts` imports `GATES` from `./gate/index.js`. The
+fragment's import is `import type`, so nothing survives to run.
+
+And the same typo-safety follows from `as const satisfies Record<string, ModuleGate>` — verified:
+
+```ts
+ModuleRegistry.instance.gate("finance");
+// TS2345: Argument of type '"finance"' is not assignable to
+//         parameter of type '"rbac" | "member"'.
+```
+
+`satisfies ModuleGate` also type-checks each gate's `permission` against `PermissionKey`, so a gate
+pointing at a permission that does not exist fails to compile.
+
+---
+
+## `visibleModules()` is a filter, not a policy
+
+It delegates every decision to `CapabilitySet.can()`, so all four resolution rules apply unchanged —
+including a wildcard holder losing a module they have been explicitly denied:
+
+```ts
+const caps = CapabilitySet.from({
+  wildcard: true,
+  org: { grants: [], denies: ["rbac.role.read"] },
+  goals: {},
+});
+
+ModuleRegistry.instance.visibleModules(caps); // ["member"] — not both
+```
+
+Gates are asked without a `goalId`, so a module gated on a goal-scoped permission is never visible.
+Gate modules on org-scoped keys.
+
+---
+
+## See also
+
+- [`@loadbearing/permissions`](../index.md)
+- [CapabilitySet](capability-set.md) — every decision here delegates to `can()`
+- [PermissionRegistry](permission-registry.md) — the vocabulary a gate points into
+- [19 · content](../../../../docs/setup/19-content-package.md) — the package this registry exists to constrain
