@@ -342,13 +342,15 @@ One line. That is the whole point of the seam.
 **`packages/content/src/index.ts`**
 
 ```ts
-export * from "./collection/nav/nav.schema.js";
-export * from "./content-source.js";
-export * from "./media/index.js";
-export * from "./message/en/index.js";
-export * from "./static.content-source.js";
-export * from "./translator.js";
+export { NavContract, type NavItem } from "./collection/nav/nav.schema.js";
+export { ContentSource, type Locale } from "./content-source.js";
+export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
+export { en, type MessageCatalog, type MessageKey } from "./message/en/index.js";
+export { StaticContentSource } from "./static.content-source.js";
+export { Translator } from "./translator.js";
 ```
+
+**`bn` is not on the list, and `navItems` is not either.** Both are data that `StaticContentSource` reads; nothing outside the package imports them by name. Under `export *` they were public and nobody had decided that.
 
 ---
 

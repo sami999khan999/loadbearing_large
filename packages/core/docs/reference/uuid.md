@@ -87,11 +87,15 @@ TypeScript declares the `crypto` global in `lib.dom.d.ts` and `lib.webworker.d.t
 [`library.json`](../../../../tooling/tsconfig/docs/reference/presets.md) sets `lib: ["ES2024"]` and loads
 neither, which is exactly what makes this package honestly isomorphic.
 
-So why did it typecheck? `src/clock.spec.ts` imports `vitest`; vitest's types pull in vite's; and
+So why did it typecheck? `tests/clock.spec.ts` imports `vitest`; vitest's types pull in vite's; and
 vite carries `/// <reference types="node" />`, which drops the whole `@types/node` global surface —
 `crypto` included — into `core`'s program. Delete the spec files and the package stops compiling
 with `TS2304: Cannot find name 'crypto'`. Verified by compiling `src/uuid.ts` alone against a bare
 ES2024 lib.
+
+Moving the specs from `src/` to `tests/` did not change this: `tsconfig.json` includes `tests/**`,
+so the spec files are still in the same program. Removing that glob reproduces the `TS2304` —
+also verified.
 
 The fix names the one method actually used and reaches it off `globalThis`:
 
@@ -141,7 +145,7 @@ version assertion, and the schema has to keep accepting identifiers minted befor
 
 ## Tests
 
-`src/uuid.spec.ts` pins the timestamp with `vi.setSystemTime` and asserts the leading 48 bits
+`tests/uuid.spec.ts` pins the timestamp with `vi.setSystemTime` and asserts the leading 48 bits
 round-trip, which is the claim the whole B-tree argument rests on:
 
 ```ts

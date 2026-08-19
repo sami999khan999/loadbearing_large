@@ -145,11 +145,15 @@ file.
 
 ## Testing
 
-Tests are **colocated** and named `<subject>.spec.ts` — not in `__tests__/`, not in a top-level
-`test/`. When a file moves its test moves with it, and a folder shows its own coverage at a glance.
+Tests live in this package's **`tests/`** directory, named `<subject>.spec.ts` and mirroring the
+`src/` tree — `src/clock.ts` is covered by `tests/clock.spec.ts`. Not colocated in `src/`, not in
+`__tests__/`, and not in one repo-wide `test/` folder. Keeping specs out of `src/` keeps `src/`
+equal to the shipped surface, since `tsup` builds from `src/index.ts` and the `development` export
+condition resolves into `src/`; the mirrored path is what replaces adjacency.
 
-`vitest.config.ts` narrows `include` to `src/**/*.spec.ts` so the runner never picks up compiled
-output from `dist/`.
+`vitest.config.ts` narrows `include` to `tests/**/*.spec.ts` so the runner never picks up compiled
+output from `dist/`. `tsconfig.json` includes `tests/**` alongside `src/**`, which is what keeps
+`pnpm typecheck` covering the specs.
 
 ```bash
 pnpm --filter @loadbearing/core test

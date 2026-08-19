@@ -105,7 +105,8 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
         }
       },
       "suspicious": { "noExplicitAny": "error" },
-      "complexity": { "noStaticOnlyClass": "off" }
+      "complexity": { "noStaticOnlyClass": "off" },
+      "performance": { "noReExportAll": "error" }
     }
   }
 }
@@ -122,6 +123,8 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
 **`useConsistentMemberAccessibility` with `"explicit"`** makes every method read `public` or `private`. In an OOP codebase the public surface of a class _is_ its contract, and making it explicit means a reviewer sees the contract without inferring it from what's exported.
 
 **`noStaticOnlyClass` is off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
+
+**`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([28](28-naming-and-boundaries.md#13-barrels-and-imports)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
 
 **`noProcessEnv` plus the `node:process` import ban.** The rule catches `process.env.FOO` but not `import { env } from "node:process"`, so both entries are needed to close the door. The exemption for the two `env.ts` files comes in Step 5.2.
 
@@ -168,6 +171,10 @@ This is the rule that keeps database code out of the browser, and it lives entir
   {
     "includes": ["apps/*/src/env.ts"],
     "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+  },
+  {
+    "includes": ["packages/db/src/schema.ts"],
+    "linter": { "rules": { "performance": { "noReExportAll": "off" } } }
   }
 ]
 ```
@@ -190,7 +197,9 @@ This is the rule that keeps database code out of the browser, and it lives entir
 
 **The escape hatch is exactly two directories and one filename suffix.** Server-only packages are importable from `apps/web/src/server/**`, `apps/web/src/route/api/**`, and any `*.server.ts`, and nowhere else. Everything else crosses the boundary through `@loadbearing/contracts`, which is isomorphic by construction.
 
-**The last override is the `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
+**The `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
+
+**The last override is the single `export *` exemption**, and it is one filename, not a glob: `packages/db/src/schema.ts` exists so `drizzle-kit` and `drizzle(pool, { schema })` see every table, relation, and enum in the package. It is not an entrypoint — `packages/db/src/index.ts` republishes it as one namespace — so naming each table there would buy no API-surface control and would reliably drift out of date ([12](12-db-package.md)). Every other barrel in the repository names its exports.
 
 ### This is defence one of three
 

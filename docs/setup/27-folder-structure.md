@@ -106,16 +106,28 @@ Expanded below, in build order.
 ```
 packages/<name>/
 ├── package.json          ← name, exports (with the "development" condition), scripts
-├── tsconfig.json         ← extends @loadbearing/tsconfig/library.json
+├── tsconfig.json         ← extends @loadbearing/tsconfig/library.json; includes src/** AND tests/**
 ├── tsup.config.ts        ← entry, dts, format: esm, target: es2024
+├── vitest.config.ts      ← include: ["tests/**/*.spec.ts"]  (only where the package has tests)
 ├── src/
 │   └── index.ts          ← the public surface; nothing outside it is importable
+├── tests/                ← every spec, mirroring the src/ tree it covers
 └── docs/
     ├── meta.json         ← sidebar title, description, page order
     ├── index.md          ← the overview; plain Markdown, never MDX
     └── reference/        ← every page beyond the overview
         └── meta.json     ← group label and page order
 ```
+
+**Tests are never in `src/`.** Every spec lives under its package's own `tests/`, at the path its
+subject has in `src/` — `src/<slice>/create-<slice>.use-case.ts` is covered by
+`tests/<slice>/create-<slice>.use-case.spec.ts`. That keeps `src/` equal to the shipped surface
+(`tsup` builds from `src/index.ts`, and the `development` export condition resolves into `src/`),
+while the mirrored path preserves the one thing colocation was good at — knowing where a subject's
+test is without looking. Full rationale in [07](07-core-package.md#step-76--a-first-test).
+
+The trees below are rooted at `src/`, so each package's specs appear in the `tests/` listing after
+its tree rather than inside it. `*.stories.tsx` is **not** a test and stays in `src/` — see [21](21-ui-package.md).
 
 Only deviations are noted from here on.
 
@@ -129,12 +141,14 @@ Only deviations are noted from here on.
 packages/core/src/
 ├── index.ts
 ├── clock.ts                 → Clock, SystemClock, FixedClock
-├── clock.spec.ts
 ├── result.ts                → Result, Ok, Err
-├── result.spec.ts
 ├── uuid.ts                  → Uuid
-├── uuid.spec.ts
 └── server-only.ts           → ServerOnly
+
+packages/core/tests/
+├── clock.spec.ts
+├── result.spec.ts
+└── uuid.spec.ts
 ```
 
 Zero dependencies, including on other `@loadbearing/*` packages. It is the root of the graph.
@@ -147,7 +161,6 @@ packages/permissions/src/
 ├── permission-registry.ts       → PermissionRegistry, PermissionKey, PermissionMeta
 ├── module-registry.ts           → ModuleRegistry, ModuleKey, ModuleGate
 ├── capability-set.ts            → CapabilitySet, CapabilitySetDto
-├── capability-set.spec.ts
 ├── catalog/                     ← one fragment per slice, team-owned
 │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   ├── rbac.permissions.ts
@@ -156,6 +169,11 @@ packages/permissions/src/
     ├── index.ts
     ├── rbac.gate.ts
     └── <slice>.gate.ts
+
+packages/permissions/tests/
+├── permission-registry.spec.ts
+├── module-registry.spec.ts
+└── capability-set.spec.ts
 ```
 
 **The fragment folders are the team-ownership seam.** One team, one file, no merge conflicts in a shared catalog.
@@ -166,7 +184,6 @@ packages/permissions/src/
 packages/contracts/src/
 ├── index.ts
 ├── contract-router.ts               → contract, AppContract   (merges fragments)
-├── contract-router.spec.ts          ← coverage + orphan tests, via ContractWalker
 ├── procedure-permissions.ts         → ProcedurePermissions    (merges fragments)
 ├── primitive/
 │   ├── index.ts
@@ -180,7 +197,12 @@ packages/contracts/src/
     ├── index.ts
     ├── <subject>.contract.ts        → <Subject>Contract   (zod shapes)
     ├── <subject>.entity.ts          → <Subject>Entity     (behaviour, no I/O)
-    ├── <subject>.procedures.ts      → <Subject>Procedures (oRPC, .route() mandatory)
+    └── <subject>.procedures.ts      → <Subject>Procedures (oRPC, .route() mandatory)
+
+packages/contracts/tests/
+├── contract-router.spec.ts          ← coverage + orphan tests, via ContractWalker
+├── procedure-permissions.spec.ts
+└── <subject>/
     └── <subject>.entity.spec.ts
 ```
 
@@ -217,7 +239,10 @@ packages/application/src/
     ├── index.ts
     ├── <slice>.repository.ts     → <Slice>Repository  (port, lives WITH its slice)
     ├── create-<slice>.use-case.ts
-    ├── reactivate-<slice>.use-case.ts
+    └── reactivate-<slice>.use-case.ts
+
+packages/application/tests/
+└── <slice>/
     └── reactivate-<slice>.use-case.spec.ts
 ```
 
@@ -307,12 +332,15 @@ packages/auth/src/
 ├── principal/
 │   ├── index.ts
 │   ├── principal.builder.ts                 → PrincipalBuilder
-│   ├── capability.cache.ts                  → CapabilityCache
-│   └── capability.cache.spec.ts
+│   └── capability.cache.ts                  → CapabilityCache
 └── apikey/
     ├── index.ts
     ├── api-key.hasher.ts                    → ApiKeyHasher
     └── api-key.resolver.ts                  → ApiKeyResolver
+
+packages/auth/tests/
+└── principal/
+    └── capability.cache.spec.ts
 ```
 
 ### `packages/composition`
@@ -385,7 +413,6 @@ packages/content/src/
 ├── content-source.ts                → ContentSource  (abstract, all methods async)
 ├── static.content-source.ts         → StaticContentSource
 ├── translator.ts                    → Translator
-├── translator.spec.ts
 ├── media/
 │   ├── index.ts
 │   ├── media-ref.ts                 → MediaRef
@@ -409,6 +436,9 @@ packages/content/src/
     └── nav/
         ├── nav.schema.ts            → NavContract   (carries `module`, never `permission`)
         └── nav.data.ts              → navItems
+
+packages/content/tests/
+└── translator.spec.ts
 ```
 
 ### `packages/query`
@@ -484,7 +514,10 @@ packages/feature/src/
 │   └── effective-permissions.inspector.tsx
 └── <slice>/
     ├── index.ts
-    ├── <slice>-board.tsx              → <Slice>Board
+    └── <slice>-board.tsx              → <Slice>Board
+
+packages/feature/tests/
+└── <slice>/
     └── <slice>-board.spec.tsx
 ```
 
@@ -552,6 +585,8 @@ apps/worker/
 ## What the shape tells you
 
 **Count the `index.ts` files.** Every folder has one, and nothing outside a package's root `index.ts` is importable. That is why moving a file inside a package never breaks a consumer.
+
+**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [28](28-naming-and-boundaries.md#13-barrels-and-imports)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
 
 **Notice what `apps/` does not contain.** No business logic, no schema, no permission decision, no domain error. Two `env.ts` files, one transport directory, one bootstrap, and route files that compose. If either app directory grows past a few hundred lines of non-route code, something drifted downward that belongs in `packages/`.
 

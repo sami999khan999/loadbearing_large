@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Err, Ok, type Result, Results } from "./result.js";
+import { Err, Ok, type Result, Results } from "../src/result.js";
 
 describe("Results", () => {
   it("builds the ok case", () => {
@@ -43,8 +43,8 @@ describe("mapOk / mapErr", () => {
 /**
  * These pin the narrowing behaviour, which is the whole reason `Result` is a union
  * rather than an abstract class. They are compile-time assertions as much as runtime
- * ones: colocated specs are inside the package's tsconfig `include`, so if narrowing
- * regresses, `pnpm typecheck` fails here before any test runs.
+ * ones: `tests/` is inside the package's tsconfig `include`, so if narrowing regresses,
+ * `pnpm typecheck` fails here before any test runs.
  */
 describe("narrowing", () => {
   const widen = (r: Result<number, string>): Result<number, string> => r;

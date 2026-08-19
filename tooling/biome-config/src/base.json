@@ -57,6 +57,9 @@
       },
       "complexity": {
         "noStaticOnlyClass": "off"
+      },
+      "performance": {
+        "noReExportAll": "error"
       }
     }
   },
@@ -103,6 +106,16 @@
         "rules": {
           "style": {
             "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/db/src/schema.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noReExportAll": "off"
           }
         }
       }

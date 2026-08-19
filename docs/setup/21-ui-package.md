@@ -319,14 +319,22 @@ Pick one deliberately. The failure mode is picking neither and reviewing compone
 **`packages/ui/src/index.ts`**
 
 ```ts
-export * from "./can/index.js";
-export * from "./data-table/index.js";
-export * from "./dialog/index.js";
-export * from "./empty-state/index.js";
-export * from "./icon/index.js";
-export * from "./status-badge/index.js";
-export * from "./theme/index.js";
+export { Can, type CanProps } from "./can/index.js";
+export { DataTable } from "./data-table/index.js";
+export { Dialog } from "./dialog/index.js";
+export { EmptyState, type EmptyStateProps } from "./empty-state/index.js";
+export { Icon, type IconProps } from "./icon/index.js";
+export { StatusBadge } from "./status-badge/index.js";
+export {
+  type FontKey,
+  FontRegistry,
+  type ThemeKey,
+  type ThemeMeta,
+  ThemeRegistry,
+} from "./theme/index.js";
 ```
+
+**`token/` is absent on purpose** — it ships CSS, not JavaScript, and reaches the app through the `./token.css` export below rather than through this file.
 
 CSS is imported by the app, not re-exported here:
 

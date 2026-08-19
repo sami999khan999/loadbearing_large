@@ -538,12 +538,20 @@ import { ServerOnly } from "@loadbearing/core";
 
 ServerOnly.assert("@loadbearing/auth");
 
-export * from "./apikey/index.js";
-export * from "./auth.config.js";
-export * from "./auth.factory.js";
-export * from "./principal/index.js";
-export * from "./session/index.js";
+export {
+  ApiKeyHasher,
+  type ApiKeyRecord,
+  ApiKeyRepository,
+  ApiKeyResolver,
+  type GeneratedApiKey,
+} from "./apikey/index.js";
+export type { AuthConfig } from "./auth.config.js";
+export { AuthFactory, type AuthInstance } from "./auth.factory.js";
+export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
+export { BetterAuthSessionResolver } from "./session/index.js";
 ```
+
+**`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
 
 ---
 

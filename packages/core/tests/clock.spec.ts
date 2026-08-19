@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FixedClock } from "./clock.js";
+import { FixedClock } from "../src/clock.js";
 
 describe("FixedClock", () => {
   it("returns the fixed instant", () => {

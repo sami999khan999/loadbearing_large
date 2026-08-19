@@ -264,9 +264,11 @@ No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test build
 **`packages/composition/src/index.ts`**
 
 ```ts
-export * from "./container.config.js";
-export * from "./container.js";
+export type { ContainerConfig } from "./container.config.js";
+export { Container } from "./container.js";
 ```
+
+**`TestContainer` is not exported.** It exists for specs inside packages that already depend on `composition`, and leaving it off the barrel is the difference between "test helper" and "public API" — a distinction `export *` could not have made.
 
 ---
 

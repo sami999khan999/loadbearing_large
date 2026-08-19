@@ -33,9 +33,11 @@ packages/contracts/src/
     ├── index.ts
     ├── <subject>.contract.ts
     ├── <subject>.entity.ts
-    ├── <subject>.procedures.ts
-    └── <subject>.entity.spec.ts
+    └── <subject>.procedures.ts
 ```
+
+Specs sit in `packages/contracts/tests/`, mirroring the tree above — so `src/<subject>/<subject>.entity.ts`
+is covered by `tests/<subject>/<subject>.entity.spec.ts`. See [07](07-core-package.md#step-76--a-first-test).
 
 ```
 packages/contracts/src/permission/
@@ -361,12 +363,12 @@ Fragment it the same way as the permission catalog. Each slice declares its own 
 
 ### The coverage test
 
-**`packages/contracts/src/procedure-permissions.spec.ts`**
+**`packages/contracts/tests/procedure-permissions.spec.ts`**
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { contract } from "./contract-router.js";
-import { ProcedurePermissions } from "./procedure-permissions.js";
+import { contract } from "../src/contract-router.js";
+import { ProcedurePermissions } from "../src/procedure-permissions.js";
 
 class ContractWalker {
   public static paths(node: unknown, prefix: readonly string[] = []): string[] {
@@ -404,11 +406,33 @@ This is a **transport-layer guarantee that no procedure ships ungated**, and the
 **`packages/contracts/src/index.ts`**
 
 ```ts
-export * from "./contract-router.js";
-export * from "./primitive/index.js";
-export * from "./procedure-permissions.js";
-export * from "./task/index.js";
+export { type AppContract, contract } from "./contract-router.js";
+export {
+  type ApiKeyId,
+  Envelope,
+  type GoalId,
+  Identifiers,
+  Pagination,
+  type PaginationQuery,
+  type RoleId,
+  type TaskId,
+  type UserId,
+} from "./primitive/index.js";
+export { ProcedurePermissions } from "./procedure-permissions.js";
+export {
+  type CreateTaskInput,
+  type ReactivateTaskInput,
+  TaskContract,
+  type TaskDto,
+  TaskEntity,
+  TaskProcedures,
+  type TaskStatus,
+} from "./task/index.js";
 ```
+
+**The `permission/` folder is not re-exported.** Its fragments are inputs to `ProcedurePermissions`, and the coverage test walks the folder directly. Under `export *` the distinction would have been impossible to express; here it is one line you did not write.
+
+Adding a subject means three edits, not two: `contract-router.ts`, `procedure-permissions.ts`, and this barrel. The third is the one that makes the new surface show up in review.
 
 ---
 

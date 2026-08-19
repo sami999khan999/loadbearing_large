@@ -1,5 +1,10 @@
-export * from "./capability-set.js";
-export * from "./catalog/index.js";
-export * from "./gate/index.js";
-export * from "./module-registry.js";
-export * from "./permission-registry.js";
+export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability-set.js";
+export { CATALOG } from "./catalog/index.js";
+export { GATES } from "./gate/index.js";
+export { type ModuleGate, type ModuleKey, ModuleRegistry } from "./module-registry.js";
+export {
+  type PermissionKey,
+  type PermissionMeta,
+  PermissionRegistry,
+  type PermissionScope,
+} from "./permission-registry.js";

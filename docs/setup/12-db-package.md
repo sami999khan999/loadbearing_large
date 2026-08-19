@@ -49,19 +49,22 @@ packages/db/
 
 ```ts
 import { ServerOnly } from "@loadbearing/core";
+import * as schema from "./schema.js";
 
 ServerOnly.assert("@loadbearing/db");
 
-export * from "./activity/index.js";
-export * from "./base.repository.js";
-export * from "./database.js";
-export * from "./rbac/index.js";
-export * from "./unit-of-work.js";
-export * from "./vector/index.js";
-export * as schema from "./schema.js";
+export { PgActivityLogger } from "./activity/index.js";
+export { BaseRepository } from "./base.repository.js";
+export { Database, type DatabaseConfig } from "./database.js";
+export { PgCapabilityRepository } from "./rbac/index.js";
+export { PgUnitOfWork } from "./unit-of-work.js";
+export { PgVectorStore } from "./vector/index.js";
+export { schema };
 ```
 
-The assert is the second line, before any other export, so it runs the moment the module is evaluated in a browser rather than after a Drizzle import has already been pulled in.
+The assert sits above every export, so it runs the moment the module is evaluated in a browser rather than after a Drizzle import has already been pulled in. The two `import` lines above it are hoisted regardless of where the statement sits, so putting the assert first among the *statements* is what matters, not first in the file.
+
+**The schema namespace is two statements, not `export * as schema from`.** That form is a star export and `noReExportAll` rejects it ([05](05-lint-and-format.md)) — `import * as` followed by a named `export` is the same thing to the module graph and passes. It also publishes exactly one name, `schema`, which is the property that made a namespace right here in the first place.
 
 ---
 
@@ -237,6 +240,9 @@ export * from "./vector/vector.schema.js";
 ```
 
 One file that drizzle-kit points at, and one file to edit when a slice adds tables. Forgetting to add a slice here is the most common reason a new table does not appear in a generated migration.
+
+> [!NOTE]
+> **This is the only `export *` in the repository**, and it has its own `noReExportAll: "off"` override keyed on this exact path ([05](05-lint-and-format.md)). The rule elsewhere exists to keep a package's public surface deliberate; this file is not a public surface. `drizzle-kit` and `drizzle(pool, { schema })` need every table, relation, and enum the package defines, `index.ts` republishes the whole thing as one namespace, and hand-listing several dozen table objects would drift out of date on the first migration nobody double-checked.
 
 ---
 

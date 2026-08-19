@@ -123,7 +123,7 @@ undone the abstraction.
 
 ## Tests
 
-`src/clock.spec.ts` asserts the two properties that matter — that `now()` is fixed, and that
+`tests/clock.spec.ts` asserts the two properties that matter — that `now()` is fixed, and that
 `advance()` does not mutate:
 
 ```ts

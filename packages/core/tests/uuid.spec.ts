@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Uuid } from "./uuid.js";
+import { Uuid } from "../src/uuid.js";
 
 describe("Uuid", () => {
   afterEach(() => {

@@ -141,8 +141,10 @@ the reference pages for the mechanism in each case.
 
 ## Testing
 
-Tests are colocated and named `<subject>.spec.ts`. `vitest.config.ts` narrows `include` to
-`src/**/*.spec.ts` so the runner never picks up compiled output from `dist/`.
+Tests live in this package's `tests/` directory, named `<subject>.spec.ts` and mirroring the `src/`
+tree — `src/capability-set.ts` is covered by `tests/capability-set.spec.ts`. `vitest.config.ts`
+narrows `include` to `tests/**/*.spec.ts` so the runner never picks up compiled output from
+`dist/`, and `tsconfig.json` includes `tests/**` so `pnpm typecheck` still covers the specs.
 
 ```bash
 pnpm --filter @loadbearing/permissions test

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CapabilitySet } from "./capability-set.js";
-import { PermissionRegistry } from "./permission-registry.js";
+import { CapabilitySet } from "../src/capability-set.js";
+import { PermissionRegistry } from "../src/permission-registry.js";
 
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 const OTHER_GOAL = "018f8c00-0000-7000-8000-000000000002";

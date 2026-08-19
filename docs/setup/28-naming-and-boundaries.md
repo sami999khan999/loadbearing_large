@@ -44,7 +44,7 @@ Files carrying a recognised architectural role take a **dot-suffix**: `<subject>
 | `.error.ts` | `forbidden.error.ts` | `ForbiddenError` |
 | `.schema.ts` | `rbac.schema.ts` | Drizzle tables |
 | `.permissions.ts` | `task.permissions.ts` | a catalog fragment |
-| `.spec.ts` | `reactivate-task.use-case.spec.ts` | tests, colocated |
+| `.spec.ts` | `reactivate-task.use-case.spec.ts` | tests, in the package's `tests/` |
 
 **Files with no layer role stay plain kebab-case**: `permission-registry.ts`, `capability-set.ts`, `clock.ts`, `container.ts`. This is why `core` and `permissions` read differently from `application` — those classes are not *in* a layer, they are the vocabulary the layers use.
 
@@ -79,6 +79,39 @@ packages/contracts/src/task/
 **Every package has exactly one public entrypoint: `src/index.ts`.** It re-exports and contains no logic. The `exports` map points at it and nothing else — no deep subpaths, so no consumer can reach into a package's internals and break when you move a file.
 
 The only permitted extra exports are non-JS side-effect files that physically cannot live in a barrel: `@loadbearing/asset` ships `./font.css` and `./sprite.svg`; `@loadbearing/ui` ships `./token.css` and `./theme.css`. **A package wanting extra JavaScript subpaths is a signal it should be two packages.**
+
+### Barrels name every export. `export *` is banned.
+
+```ts
+// packages/core/src/index.ts
+export { Clock, FixedClock, SystemClock } from "./clock.js";
+export { Err, Ok, type Result, Results } from "./result.js";
+export { ServerOnly } from "./server-only.js";
+export { Uuid } from "./uuid.js";
+```
+
+Not `export * from "./clock.js"`. Enforced by Biome's `performance/noReExportAll`, set to `error` ([05](05-lint-and-format.md)).
+
+Four reasons, in the order they will bite you:
+
+**1. `export *` makes the public API an accident.** With a star, adding `export` to any symbol in any file silently publishes it to every consumer in the repository. The reviewer looking at the diff on `clock.ts` sees a new class; they do not see that the package's public surface just grew. With a named list, widening the API is a second, deliberate edit to `index.ts` — visible in the diff, reviewable on its own terms, and attributable. This is the same reason the `exports` map has no deep subpaths: **the surface is a decision, not a side effect.**
+
+**2. It gives you a private layer.** Rule 3 below has siblings importing each other by direct file path. Under `export *`, every symbol a sibling needs is automatically public. Under a named list, `capability-set.ts` can export a helper that `permission-registry.ts` imports directly while the barrel never mentions it — internal by default, public by choice.
+
+**3. Collisions fail silently.** Two starred files exporting the same name do not error. ESM resolves the ambiguity by excluding the name from the namespace entirely, so the export simply vanishes and the failure surfaces downstream as an import that resolves to `undefined`. A named list produces a duplicate-identifier error at the barrel, on the line that caused it.
+
+**4. `verbatimModuleSyntax` needs the distinction.** Named re-exports carry the inline `type` modifier — `export { Err, Ok, type Result, Results }` — so type-only symbols stay erased at compile time. A star export cannot say which of its names are types.
+
+**Ordering is not yours to choose.** `biome check --write` sorts the statements by module specifier and the specifiers inside each brace alphabetically, ignoring the `type` keyword. Write them in any order and let the formatter settle it.
+
+**One exemption: `packages/db/src/schema.ts`.** It exists so `drizzle-kit` and `drizzle(pool, { schema })` receive every table, relation, and enum in the package; hand-enumerating them would add no API-surface safety, because the file is not an entrypoint — `index.ts` republishes it as a single namespace. The Biome rule is switched off for that one path and nowhere else. The namespace re-export itself is written as two statements, because `export * as schema from` is a star export too:
+
+```ts
+// packages/db/src/index.ts
+import * as schema from "./schema.js";
+
+export { schema };
+```
 
 **Import rules, in priority order:**
 

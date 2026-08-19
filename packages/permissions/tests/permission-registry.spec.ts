@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PermissionRegistry } from "./permission-registry.js";
+import { PermissionRegistry } from "../src/permission-registry.js";
 
 const registry = PermissionRegistry.instance;
 

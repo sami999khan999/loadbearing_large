@@ -15,15 +15,16 @@ Only things that (a) every other package might need and (b) belong to no feature
 ```
 packages/core/
 ├── vitest.config.ts
-└── src/
-    ├── index.ts
-    ├── clock.ts          → Clock, SystemClock, FixedClock
+├── src/
+│   ├── index.ts
+│   ├── clock.ts          → Clock, SystemClock, FixedClock
+│   ├── result.ts         → Result, Ok, Err, Results
+│   ├── uuid.ts           → Uuid
+│   └── server-only.ts    → ServerOnly
+└── tests/
     ├── clock.spec.ts
-    ├── result.ts         → Result, Ok, Err, Results
     ├── result.spec.ts
-    ├── uuid.ts           → Uuid
-    ├── uuid.spec.ts
-    └── server-only.ts    → ServerOnly
+    └── uuid.spec.ts
 ```
 
 ---
@@ -207,11 +208,12 @@ This distinction matters, and getting it wrong produces either an exception-driv
  * The one Web Crypto method this package uses.
  *
  * `library.json` sets `lib: ["ES2024"]` with no DOM, so `crypto` is not a declared
- * identifier in this package. It happens to resolve today because `clock.spec.ts`
+ * identifier in this package. It happens to resolve today because `tests/clock.spec.ts`
  * imports vitest, which pulls vite's `/// <reference types="node" />` and with it
- * the `@types/node` globals into the program — so deleting the tests would stop
- * `Uuid` from compiling. Naming the method and reaching it off `globalThis` makes
- * the type independent of whatever else lands in the program.
+ * the `@types/node` globals into the program — so deleting the tests, or dropping
+ * `tests/**` from this package's tsconfig `include`, would stop `Uuid` from
+ * compiling. Naming the method and reaching it off `globalThis` makes the type
+ * independent of whatever else lands in the program.
  */
 type WebCrypto = {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
@@ -254,9 +256,13 @@ export class Uuid {
 > [!IMPORTANT]
 > **`crypto` is not a global this package can see.** TypeScript declares it only in
 > `lib.dom.d.ts` and `lib.webworker.d.ts`, and `library.json` loads neither. Written as a bare
-> `crypto.getRandomValues(...)` the file compiles *by accident*: `clock.spec.ts` imports vitest,
-> vitest's types pull in vite's, and vite carries `/// <reference types="node" />`. Delete the
-> spec file and `Uuid` stops compiling with `TS2304: Cannot find name 'crypto'` — verified.
+> `crypto.getRandomValues(...)` the file compiles *by accident*: `tests/clock.spec.ts` imports
+> vitest, vitest's types pull in vite's, and vite carries `/// <reference types="node" />`. Delete
+> the spec file and `Uuid` stops compiling with `TS2304: Cannot find name 'crypto'` — verified.
+>
+> This accident survives tests living in `tests/` rather than `src/` *only* because the tsconfig
+> `include` lists `tests/**` alongside `src/**`, keeping both in one program. Drop that glob and
+> the bare-`crypto` form fails again — also verified.
 >
 > Adding `@types/node` would fix it and cost more than it saves: `core` is the one package that
 > must typecheck as isomorphic, and `@types/node` would also make `process` and `Buffer`
@@ -323,10 +329,10 @@ Three feels like a lot for one mistake. It is calibrated to the cost: a Drizzle 
 **`packages/core/src/index.ts`**
 
 ```ts
-export * from "./clock.js";
-export * from "./result.js";
-export * from "./server-only.js";
-export * from "./uuid.js";
+export { Clock, FixedClock, SystemClock } from "./clock.js";
+export { Err, Ok, type Result, Results } from "./result.js";
+export { ServerOnly } from "./server-only.js";
+export { Uuid } from "./uuid.js";
 
 /**
  * Placeholder kept only until doc 23, where apps/web imports it once to prove the
@@ -337,17 +343,19 @@ export class CorePackage {
 }
 ```
 
+**Every export is named; `export *` is a lint error** ([28](28-naming-and-boundaries.md#13-barrels-and-imports)). `Result` is a type alias, so it carries the inline `type` modifier and stays erased under `verbatimModuleSyntax`. `ResultBase` never appears, which here costs nothing because it was never exported from `result.ts` either — but that is the point of the named list: once a sibling file legitimately needs a symbol and `export` goes on it, the barrel is what decides whether the rest of the repository sees it.
+
 The scaffold from [06](06-package-anatomy.md) wrote `CorePackage` as the whole of `index.ts`. Keep it — [23](23-web-app.md) imports it once to prove the workspace→bundler chain end to end, and it is deleted there, not here. It is the only class in the codebase that lives in a barrel rather than its own file, for exactly as long as it exists.
 
 ---
 
 ## Step 7.6 — A first test
 
-**`packages/core/src/clock.spec.ts`**
+**`packages/core/tests/clock.spec.ts`**
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { FixedClock } from "./clock.js";
+import { FixedClock } from "../src/clock.js";
 
 describe("FixedClock", () => {
   it("returns the fixed instant", () => {
@@ -365,11 +373,15 @@ describe("FixedClock", () => {
 });
 ```
 
-Tests are **colocated**, named `<subject>.spec.ts`. Not in a `__tests__/` directory, not in a top-level `test/`. When a file moves, its test moves with it, and a subject folder shows its own coverage at a glance.
+Tests live in a per-package **`tests/`** directory, named `<subject>.spec.ts`, mirroring the `src/` tree they cover. Not colocated in `src/`, not in a `__tests__/` directory, and not in one repo-wide `test/` folder.
+
+Per-package rather than repo-wide because each package owns its own `vitest.config.ts` and `test` script, and the root `pnpm -r --parallel run test` fans out to them — a single root config would have to be re-split the moment `ui` needs jsdom or `db` needs a live Postgres. Outside `src/` rather than beside it so `src/` is exactly the shipped surface: `tsup` builds from `src/index.ts` and the `development` export condition points into `src/`, and neither should be able to reach a spec file. The cost is that a subject and its test are no longer adjacent; the mirrored layout is what pays for it — `src/clock.ts` is tested by `tests/clock.spec.ts`, always.
+
+One consequence to keep in mind: `tests/**` has to stay in the package's tsconfig `include`, or `tsc --noEmit` silently stops typechecking the tests.
 
 Add one for `Uuid` too — it is the only primitive here whose behaviour is not obvious by reading it, and `vi.setSystemTime` makes the timestamp claim testable rather than assumed.
 
-**`packages/core/src/uuid.spec.ts`**
+**`packages/core/tests/uuid.spec.ts`**
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -418,7 +430,7 @@ describe("Uuid", () => {
 
 The last assertion is the one worth keeping: `isValid` checks the *variant* nibble, not the version, so a well-formed string with a zero variant is correctly rejected while `…-7000-…` in the version position is not what the regex is looking at.
 
-**`packages/core/src/result.spec.ts`** covers the factories and `mapOk`/`mapErr` the ordinary way, and then pins the narrowing:
+**`packages/core/tests/result.spec.ts`** covers the factories and `mapOk`/`mapErr` the ordinary way, and then pins the narrowing:
 
 ```ts
 describe("narrowing", () => {
@@ -439,13 +451,13 @@ describe("narrowing", () => {
 ```
 
 > [!TIP]
-> These are **compile-time assertions wearing a test's clothes**. Colocated specs sit inside the
-> package's tsconfig `include`, so if `Result` ever regresses to a shape that does not narrow,
+> These are **compile-time assertions wearing a test's clothes**. `tests/` is inside the package's
+> tsconfig `include`, so if `Result` ever regresses to a shape that does not narrow,
 > `pnpm typecheck` fails on this file before a single test runs. The `widen` helper matters —
 > without it `Results.ok(7)` infers as `Ok<number, string>`, which narrows trivially and would
 > prove nothing.
 
-Add a minimal Vitest config so `include` doesn't pick up `dist/`:
+Add a minimal Vitest config so `include` points at `tests/` and doesn't pick up `dist/`:
 
 **`packages/core/vitest.config.ts`**
 
@@ -453,7 +465,7 @@ Add a minimal Vitest config so `include` doesn't pick up `dist/`:
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { include: ["src/**/*.spec.ts"] },
+  test: { include: ["tests/**/*.spec.ts"] },
 });
 ```
 

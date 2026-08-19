@@ -48,12 +48,14 @@ import { ServerOnly } from "@loadbearing/core";
 
 ServerOnly.assert("@loadbearing/infrastructure");
 
-export * from "./cache/index.js";
-export * from "./embedding/index.js";
-export * from "./queue/index.js";
-export * from "./redis/index.js";
-export * from "./storage/index.js";
+export { RedisCacheStore } from "./cache/index.js";
+export { type OpenAiEmbeddingConfig, OpenAiEmbeddingProvider } from "./embedding/index.js";
+export { BullMqQueuePublisher, QueueName } from "./queue/index.js";
+export { type RedisConfig, RedisConnection } from "./redis/index.js";
+export { type S3Config, S3StorageGateway, StorageKey } from "./storage/index.js";
 ```
+
+Read that list against `container.ts` ([16](16-composition-container.md)) and every name lines up with one `port` binding. That is the whole public surface of the package — five adapters and their config types.
 
 ---
 
@@ -411,30 +413,35 @@ export class BullMqQueuePublisher extends QueuePublisher {
 
 ```ts
 // packages/infrastructure/src/cache/index.ts
-export * from "./redis.cache-store.js";
+export { RedisCacheStore } from "./redis.cache-store.js";
 ```
 
 ```ts
 // packages/infrastructure/src/storage/index.ts
-export * from "./s3-storage.gateway.js";
-export * from "./storage-key.js";
+export { type S3Config, S3StorageGateway } from "./s3-storage.gateway.js";
+export { StorageKey } from "./storage-key.js";
 ```
 
 ```ts
 // packages/infrastructure/src/queue/index.ts
-export * from "./bullmq.queue-publisher.js";
-export * from "./queue-name.js";
+export { BullMqQueuePublisher } from "./bullmq.queue-publisher.js";
+export { QueueName } from "./queue-name.js";
 ```
 
 ```ts
 // packages/infrastructure/src/redis/index.ts
-export * from "./redis.connection.js";
+export { type RedisConfig, RedisConnection } from "./redis.connection.js";
 ```
 
 ```ts
 // packages/infrastructure/src/embedding/index.ts
-export * from "./openai.embedding-provider.js";
+export {
+  type OpenAiEmbeddingConfig,
+  OpenAiEmbeddingProvider,
+} from "./openai.embedding-provider.js";
 ```
+
+Folder barrels name their exports for the same reason root barrels do — and here it buys something concrete: a vendor adapter can keep its private helpers exported for a sibling file without those helpers becoming part of `@loadbearing/infrastructure`.
 
 ---
 

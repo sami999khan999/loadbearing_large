@@ -133,15 +133,17 @@ One entry point per package. A package with multiple entrypoints is a package th
 
 Every package has exactly one public entrypoint. Consumers write `import { Clock } from "@loadbearing/core"` and never `from "@loadbearing/core/dist/clock.js"`. The barrel is what makes internal reorganisation free: moving `clock.ts` into `time/clock.ts` is a one-line edit in `index.ts` and nobody downstream notices.
 
-Subject folders get their own `index.ts` that the root barrel re-exports:
+Subject folders get their own `index.ts` that the root barrel re-exports — **naming every symbol, never `export *`** ([28](28-naming-and-boundaries.md#13-barrels-and-imports)):
 
 ```ts
 // packages/contracts/src/index.ts
-export * from "./primitive/index.js";
-export * from "./task/index.js";
-export * from "./contract-router.js";
-export * from "./procedure-permissions.js";
+export { type AppContract, contract } from "./contract-router.js";
+export { Envelope, Identifiers, Pagination, type TaskId } from "./primitive/index.js";
+export { ProcedurePermissions } from "./procedure-permissions.js";
+export { TaskContract, TaskEntity, TaskProcedures } from "./task/index.js";
 ```
+
+The named list is what makes the public surface a decision rather than a side effect: `export *` republishes anything a file exports, so widening the API becomes invisible in review. Biome's `noReExportAll` ([05](05-lint-and-format.md)) fails the build on a star, and `biome check --write` sorts the statements and the specifiers for you.
 
 Note the `.js` extensions on relative imports throughout. `moduleResolution: "Bundler"` doesn't require them, but `NodeNext` in `apps/worker` does, and writing them everywhere means code moves between the two without an edit.
 

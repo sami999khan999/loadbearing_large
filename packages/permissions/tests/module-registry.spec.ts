@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CapabilitySet } from "./capability-set.js";
-import { ModuleRegistry } from "./module-registry.js";
+import { CapabilitySet } from "../src/capability-set.js";
+import { ModuleRegistry } from "../src/module-registry.js";
 
 const registry = ModuleRegistry.instance;
 

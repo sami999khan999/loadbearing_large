@@ -353,10 +353,22 @@ The test worth writing first: **render the same component with two different `Ca
 **`packages/feature/src/index.ts`**
 
 ```ts
-export * from "./auth/index.js";
-export * from "./i18n/index.js";
-export * from "./rbac/index.js";
+export {
+  SessionGuard,
+  type SessionGuardProps,
+  SessionProvider,
+  type SessionUser,
+  SignInForm,
+  type SignInFormProps,
+  TwoFactorForm,
+  useCapabilities,
+  useSession,
+} from "./auth/index.js";
+export { MessageProvider, useMessages } from "./i18n/index.js";
+export { EffectivePermissionsInspector, PermissionMatrix } from "./rbac/index.js";
 ```
+
+**`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([28](28-naming-and-boundaries.md#13-barrels-and-imports)).
 
 ---
 

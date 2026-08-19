@@ -231,8 +231,15 @@ Wrapping the vanilla client here means session state lives in the same TanStack 
 **`packages/api-client/src/index.ts`**
 
 ```ts
-export * from "./api-client.js";
-export * from "./auth/index.js";
+export { ApiClient, type AppClient } from "./api-client.js";
+export {
+  AuthClient,
+  type AuthClientConfig,
+  AuthStrategy,
+  BearerAuthStrategy,
+  CookieAuthStrategy,
+  TokenProvider,
+} from "./auth/index.js";
 ```
 
 ---

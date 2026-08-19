@@ -135,13 +135,13 @@ signature mentions.
 
 ## Tests
 
-`src/result.spec.ts` covers the factories and the two `map` methods the ordinary way, then pins
+`tests/result.spec.ts` covers the factories and the two `map` methods the ordinary way, then pins
 every row of the narrowing table above.
 
 > [!TIP]
-> Those are **compile-time assertions wearing a test's clothes**. Colocated specs are inside the
-> package's tsconfig `include`, so a regression to a non-narrowing shape fails `pnpm typecheck` on
-> this file before any test executes.
+> Those are **compile-time assertions wearing a test's clothes**. `tests/` is inside the package's
+> tsconfig `include`, so a regression to a non-narrowing shape fails `pnpm typecheck` on this file
+> before any test executes.
 >
 > The `widen` helper in that block is load-bearing: without it `Results.ok(7)` infers as
 > `Ok<number, string>` rather than the union, which narrows trivially and would prove nothing.

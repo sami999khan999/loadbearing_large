@@ -393,15 +393,15 @@ export abstract class EventBus {
 
 ```ts
 // packages/application/src/port/index.ts
-export * from "./activity.logger.js";
-export * from "./cache.store.js";
-export * from "./embedding.provider.js";
-export * from "./event.bus.js";
-export * from "./queue.publisher.js";
-export * from "./session.resolver.js";
-export * from "./storage.gateway.js";
-export * from "./unit-of-work.js";
-export * from "./vector.store.js";
+export { ActivityLogger } from "./activity.logger.js";
+export { CacheStore } from "./cache.store.js";
+export { EmbeddingProvider } from "./embedding.provider.js";
+export { type DomainEvent, EventBus } from "./event.bus.js";
+export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
+export { type ResolvedSession, SessionResolver } from "./session.resolver.js";
+export { StorageGateway, type StoredObject } from "./storage.gateway.js";
+export { UnitOfWork } from "./unit-of-work.js";
+export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";
 ```
 
 Repository ports are **not** here — each lives in its feature slice, `application/src/task/task.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
@@ -433,11 +433,37 @@ export abstract class TaskRepository {
 **`packages/application/src/index.ts`**
 
 ```ts
-export * from "./authorizer.js";
-export * from "./error/index.js";
-export * from "./port/index.js";
-export * from "./principal.js";
+export { Authorizer } from "./authorizer.js";
+export {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "./error/index.js";
+export {
+  ActivityLogger,
+  CacheStore,
+  type DocumentChunk,
+  type DomainEvent,
+  EmbeddingProvider,
+  EventBus,
+  type JobOptions,
+  QueuePublisher,
+  type ResolvedSession,
+  type SearchHit,
+  SessionResolver,
+  StorageGateway,
+  type StoredObject,
+  UnitOfWork,
+  VectorStore,
+} from "./port/index.js";
+export { Principal, type PrincipalKind } from "./principal.js";
 ```
+
+**Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every port the composition root must supply an implementation for. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([16](16-composition-container.md)).
+
+**Repository ports are not on the list.** `TaskRepository` lives in its slice and is exported through the barrel only when a consumer outside the package genuinely needs the type — `Container` does, `apps/web` does not.
 
 ---
 

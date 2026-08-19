@@ -17,14 +17,15 @@ So this package has no database, no HTTP, no React, and no Node built-ins. It is
 ```
 packages/permissions/
 ├── vitest.config.ts
+├── tests/
+│   ├── permission-registry.spec.ts
+│   ├── module-registry.spec.ts
+│   └── capability-set.spec.ts
 └── src/
     ├── index.ts
     ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
-    ├── permission-registry.spec.ts
     ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
-    ├── module-registry.spec.ts
     ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
-    ├── capability-set.spec.ts
     ├── catalog/                 ← one fragment per slice, team-owned
     │   ├── index.ts             ←   merges fragments (platform-owned)
     │   └── rbac.permissions.ts
@@ -373,7 +374,7 @@ Escalation that resolves targets *by permission rather than by role* is this met
 
 An API key is a principal whose capability set cannot exceed its issuer's. Intersecting at creation is the obvious half. Re-intersecting **at resolution** is the half that matters: when the issuer's permission is revoked, every key they created narrows on the next request rather than at the next key rotation. That closes the most common way an RBAC model gets quietly defeated. See [15](15-auth-package.md).
 
-Which makes this the one method in the package that is a security boundary rather than a convenience, and it has to be correct in four ways the obvious implementation is not. All four are proven by tests in `capability-set.spec.ts` — write the naive body and exactly those tests go red.
+Which makes this the one method in the package that is a security boundary rather than a convenience, and it has to be correct in four ways the obvious implementation is not. All four are proven by tests in `tests/capability-set.spec.ts` — write the naive body and exactly those tests go red.
 
 | Rule | Naive version | What breaks |
 | --- | --- | --- |
@@ -392,7 +393,8 @@ The DTO is plain JSON. The server resolves a `CapabilitySet` from the database, 
 
 ## Step 8.5 — Tests
 
-The package needs its own runner config first — without it vitest's default `include` also walks `dist/`:
+The package needs its own runner config first — pointed at `tests/`, since without an explicit
+`include` vitest's default also walks `dist/`:
 
 **`packages/permissions/vitest.config.ts`**
 
@@ -400,16 +402,19 @@ The package needs its own runner config first — without it vitest's default `i
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { include: ["src/**/*.spec.ts"] },
+  test: { include: ["tests/**/*.spec.ts"] },
 });
 ```
 
-**`packages/permissions/src/capability-set.spec.ts`** — the shape; the shipped file carries fourteen cases, including one per `intersect` rule above.
+And `tests/**` belongs in this package's tsconfig `include` too, or `pnpm typecheck` skips the specs
+entirely — see [07](07-core-package.md#step-76--a-first-test) for the convention in full.
+
+**`packages/permissions/tests/capability-set.spec.ts`** — the shape; the shipped file carries fourteen cases, including one per `intersect` rule above.
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CapabilitySet } from "./capability-set.js";
-import { PermissionRegistry } from "./permission-registry.js";
+import { CapabilitySet } from "../src/capability-set.js";
+import { PermissionRegistry } from "../src/permission-registry.js";
 
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 
@@ -476,7 +481,7 @@ Two details in that listing are not stylistic:
 - **The cast on `JSON.parse` is required.** It returns `any`, and `@typescript-eslint/no-unsafe-argument` — on via `recommendedTypeChecked` in [05](05-lint-and-format.md) — rejects passing it straight into `from()`.
 - **`treatEveryKeyAsGoalScoped` exists because rule 3 is otherwise untestable.** Every key in the shipped catalog is org-scoped, so the original listing's "denies a goal-scoped permission asked without a goalId" asserted `can("rbac.role.read") === true` on an org-scoped key — it tested the opposite of its name and left the fail-closed branch unverified. Stubbing the one method `can()` consults reaches the real branch without inventing catalog keys that belong to [12](12-db-package.md).
 
-`permission-registry.spec.ts` and `module-registry.spec.ts` are worth the same treatment — `isKnown()` is a security boundary and `visibleModules()` is what the whole navigation renders from. Twenty-three tests total.
+`tests/permission-registry.spec.ts` and `tests/module-registry.spec.ts` are worth the same treatment — `isKnown()` is a security boundary and `visibleModules()` is what the whole navigation renders from. Twenty-three tests total.
 
 ---
 
@@ -485,12 +490,19 @@ Two details in that listing are not stylistic:
 **`packages/permissions/src/index.ts`**
 
 ```ts
-export * from "./capability-set.js";
-export * from "./catalog/index.js";
-export * from "./gate/index.js";
-export * from "./module-registry.js";
-export * from "./permission-registry.js";
+export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability-set.js";
+export { CATALOG } from "./catalog/index.js";
+export { GATES } from "./gate/index.js";
+export { type ModuleGate, type ModuleKey, ModuleRegistry } from "./module-registry.js";
+export {
+  type PermissionKey,
+  type PermissionMeta,
+  PermissionRegistry,
+  type PermissionScope,
+} from "./permission-registry.js";
 ```
+
+`CATALOG` and `GATES` are on the list deliberately — the seed script and the permission matrix UI both iterate them. Under `export *` they were public by accident, which is the difference the named list makes visible.
 
 ---
 

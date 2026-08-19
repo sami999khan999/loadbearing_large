@@ -320,12 +320,14 @@ export class TaskMutations {
 **`packages/query/src/index.ts`**
 
 ```ts
-export * from "./api-client.context.js";
-export * from "./query-client.js";
-export * from "./query-key.js";
-export * from "./session/index.js";
-export * from "./use-app-mutation.js";
+export { ApiClientProvider, useApiClient } from "./api-client.context.js";
+export { createQueryClient, type QueryClientOptions, type QueryRuntime } from "./query-client.js";
+export { QueryKeys } from "./query-key.js";
+export { SessionMutations, SessionQueries } from "./session/index.js";
+export { type AppMutationOptions, useAppMutation } from "./use-app-mutation.js";
 ```
+
+A new slice adds one line here — `export { TaskMutations, TaskQueries } from "./task/index.js";` — and that line is the eleventh step of the checklist in [26](26-verification-and-first-feature.md) being visible in a diff.
 
 ---
 
