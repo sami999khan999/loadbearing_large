@@ -1,16 +1,16 @@
-# 13 · Vector Storage
+# 14 · Vector Storage
 
 > pgvector today, a dedicated vector database later, with no rewrite in between. The seam, the schema, and the four rules that keep the swap cheap.
 
 **Delivers:** `PgVectorStore` implementing the `VectorStore` port, an `EmbeddingProvider`, and a migration path to Qdrant or Pinecone that touches one line of `Container`.
 
-**Prerequisite:** [12 · `@loadbearing/db`](12-db-package.md)
+**Prerequisite:** [13 · `@loadbearing/db`](13-db-package.md)
 
 ---
 
 ## The seam, restated
 
-`VectorStore` and `EmbeddingProvider` are abstract classes in `packages/application/src/port/` ([11](11-application-package.md)). Concrete implementations live in `db` (Postgres) or `infrastructure` (anything else). Use-cases depend only on the abstractions.
+`VectorStore` and `EmbeddingProvider` are abstract classes in `packages/application/src/port/` ([12](12-application-package.md)). Concrete implementations live in `db` (Postgres) or `infrastructure` (anything else). Use-cases depend only on the abstractions.
 
 ```
 VectorStore (abstract)                   packages/application/src/port/vector.store.ts
@@ -27,7 +27,7 @@ EmbeddingProvider (abstract)             packages/application/src/port/embedding
 
 ---
 
-## Step 13.1 — The schema
+## Step 14.1 — The schema
 
 **`packages/db/src/vector/vector.schema.ts`**
 
@@ -73,7 +73,7 @@ export const documentChunksGoalNullIdx = sql`
 
 ### Four decisions in that table
 
-**`goalId` is a real column, indexed, and part of every query.** Not metadata inside the JSONB blob. The permission filter runs as a `WHERE` clause on an indexed column, before the vector comparison, so the index can actually be used. Burying the scope in JSON means filtering after retrieval, which is the thing [11](11-application-package.md) exists to prevent.
+**`goalId` is a real column, indexed, and part of every query.** Not metadata inside the JSONB blob. The permission filter runs as a `WHERE` clause on an indexed column, before the vector comparison, so the index can actually be used. Burying the scope in JSON means filtering after retrieval, which is the thing [12](12-application-package.md) exists to prevent.
 
 **HNSW rather than IVFFlat.** IVFFlat needs training data to build a useful index, so it performs badly until the table is populated and needs rebuilding as the distribution shifts. HNSW builds incrementally, which matters when the table starts empty and grows continuously. It costs more memory and more insert time; both are the right trade here.
 
@@ -85,7 +85,7 @@ export const documentChunksGoalNullIdx = sql`
 
 ---
 
-## Step 13.2 — `PgVectorStore`
+## Step 14.2 — `PgVectorStore`
 
 **`packages/db/src/vector/pg-vector.store.ts`**
 
@@ -178,7 +178,7 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
 
 ---
 
-## Step 13.3 — The embedding provider
+## Step 14.3 — The embedding provider
 
 **`packages/infrastructure/src/embedding/openai.embedding-provider.ts`**
 
@@ -242,11 +242,11 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
 
 **`fetch` rather than the OpenAI SDK.** One dependency fewer, and the request shape is stable and documented. If you later want the SDK's retry behaviour, that is a change inside this one class.
 
-**Embedding happens in the worker, not in a request.** A hundred chunks is a hundred network calls' worth of latency; it belongs behind `QueuePublisher`. See [24](24-worker-app.md).
+**Embedding happens in the worker, not in a request.** A hundred chunks is a hundred network calls' worth of latency; it belongs behind `QueuePublisher`. See [25](25-worker-app.md).
 
 ---
 
-## Step 13.4 — Migration to a dedicated vector database
+## Step 14.4 — Migration to a dedicated vector database
 
 The whole design exists for this moment. When pgvector stops being enough — typically somewhere past a few million chunks, or when you want managed filtering and hybrid search — here is the complete change:
 
@@ -276,7 +276,7 @@ Nothing in `application`, `contracts`, `permissions`, or any use-case changes. N
 
 ### Hybrid search, when it comes
 
-Semantic search alone misses exact matches — invoice numbers, names, error codes. The eventual answer is hybrid: vector similarity plus full-text, fused by reciprocal rank. `pg_trgm` is already enabled from [10](10-local-infrastructure.md), so the Postgres version of this is a second query and a merge inside `PgVectorStore`.
+Semantic search alone misses exact matches — invoice numbers, names, error codes. The eventual answer is hybrid: vector similarity plus full-text, fused by reciprocal rank. `pg_trgm` is already enabled from [11](11-local-infrastructure.md), so the Postgres version of this is a second query and a merge inside `PgVectorStore`.
 
 Do it there, behind the existing `search()`, rather than adding a `searchHybrid()` to the port. The port describes *what the domain needs* — relevant chunks the actor may see — not which retrieval strategies exist.
 
@@ -301,4 +301,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/db`](12-db-package.md) · [`@loadbearing/infrastructure` →](14-infrastructure-package.md)
+[← `@loadbearing/db`](13-db-package.md) · [`@loadbearing/infrastructure` →](15-infrastructure-package.md)

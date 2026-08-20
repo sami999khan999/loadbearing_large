@@ -8,3 +8,4 @@ export {
   PermissionRegistry,
   type PermissionScope,
 } from "./permission-registry.js";
+export { type AppRoute, ROUTES, type RoutePath } from "./route/index.js";

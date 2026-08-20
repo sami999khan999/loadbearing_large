@@ -1,10 +1,10 @@
-# 09 · `@loadbearing/contracts`
+# 10 · `@loadbearing/contracts`
 
-> The shared kernel, half two. Zod contract classes, domain entities, the oRPC contract router, and the procedure→permission map.
+> The shared kernel, half four. Zod contract classes, domain entities, the oRPC contract router, and the procedure→permission map.
 
 **Delivers:** One schema per boundary, entities that carry their own rules, and a contract implementable by oRPC today or NestJS later.
 
-**Prerequisite:** [08 · `@loadbearing/permissions`](08-permissions-package.md)
+**Prerequisite:** [09 · `@loadbearing/errors`](09-errors-package.md)
 
 ---
 
@@ -47,7 +47,7 @@ packages/contracts/src/permission/
 
 ---
 
-## Step 9.1 — Branded identifiers
+## Step 10.1 — Branded identifiers
 
 **`packages/contracts/src/primitive/identifiers.ts`**
 
@@ -77,7 +77,7 @@ The cost: constructing a branded value requires parsing. `Identifiers.taskId.par
 
 ---
 
-## Step 9.2 — The response envelope
+## Step 10.2 — The response envelope
 
 **`packages/contracts/src/primitive/envelope.ts`**
 
@@ -125,7 +125,7 @@ Decide the list shape once, here, and every list procedure in the product inheri
 
 ---
 
-## Step 9.3 — A contract class
+## Step 10.3 — A contract class
 
 Contract classes are **static readonly Zod schemas on a class**. This is the data-shape exemption to the no-free-exports rule: a Zod schema is a value describing a shape, not behaviour, and it stays namespaced on the class the way a free `export const taskEntitySchema` would not.
 
@@ -193,13 +193,16 @@ export type TaskStatus = z.infer<typeof TaskContract.status>;
 
 `reason: z.string().min(10)` encodes a business requirement **once**. The server rejects a short reason, the web form shows the message, and the desktop app's offline queue rejects it before the mutation is ever enqueued. Writing that rule in a handler instead means writing it three more times.
 
+> [!IMPORTANT]
+> **No `{ message: … }` in a schema, ever.** Zod's default messages are built-in messages and are discarded; a *custom* string here would be user-facing text living outside `content`, which is the one thing that split exists to prevent. A failed rule becomes `{ field: "reason", rule: "tooShort", params: { min: 10 } }` and `content` renders `error.field.tooShort` ([09](09-errors-package.md), [20](20-content-package.md)). The rule is still declared exactly once — only the sentence lives elsewhere.
+
 **Derive, don't repeat.** `create` is `entity.pick(...)`, `listQuery` extends `Pagination.query`. When a field is added to the entity, the derived schemas move with it or fail to compile. Hand-written parallel schemas drift silently.
 
 **Timestamps are ISO strings in contracts, `Date` in entities.** The contract crosses a JSON boundary and JSON has no date type. `z.iso.datetime()` at the edge, `new Date(...)` in `fromDto`, and the conversion happens in exactly one place.
 
 ---
 
-## Step 9.4 — A domain entity
+## Step 10.4 — A domain entity
 
 **`packages/contracts/src/task/task.entity.ts`**
 
@@ -263,7 +266,7 @@ export class TaskEntity {
 
 ---
 
-## Step 9.5 — The oRPC contract
+## Step 10.5 — The oRPC contract
 
 **`packages/contracts/src/task/task.procedures.ts`**
 
@@ -314,12 +317,12 @@ The router object is the one place a plain `export const` appears in this packag
 
 ---
 
-## Step 9.6 — `ProcedurePermissions`
+## Step 10.6 — `ProcedurePermissions`
 
 **`packages/contracts/src/permission/task.permissions.ts`** — the slice's fragment.
 
 > [!NOTE]
-> This one file lives in `permission/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition, and the coverage test walks this folder specifically. See [28](28-naming-and-boundaries.md) §2.6.
+> This one file lives in `permission/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition, and the coverage test walks this folder specifically. See [29](29-naming-and-boundaries.md) §2.6.
 
 ```ts
 import type { PermissionKey } from "@loadbearing/permissions";
@@ -401,7 +404,7 @@ This is a **transport-layer guarantee that no procedure ships ungated**, and the
 
 ---
 
-## Step 9.7 — The barrel
+## Step 10.7 — The barrel
 
 **`packages/contracts/src/index.ts`**
 
@@ -451,4 +454,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/permissions`](08-permissions-package.md) · [Local Infrastructure →](10-local-infrastructure.md)
+[← `@loadbearing/errors`](09-errors-package.md) · [Local Infrastructure →](11-local-infrastructure.md)

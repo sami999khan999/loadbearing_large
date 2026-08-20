@@ -22,8 +22,8 @@ export class PermissionRegistry {
   public static readonly instance: PermissionRegistry;
 
   public all(): readonly PermissionKey[];
-  public meta(key: PermissionKey): PermissionMeta;
-  public scopeOf(key: PermissionKey): PermissionScope;
+  public meta(key: PermissionKey): PermissionMeta | undefined;
+  public scopeOf(key: PermissionKey): PermissionScope | undefined;
   public byModule(module: string): readonly PermissionKey[];
   public isKnown(value: string): value is PermissionKey;
   public modules(): readonly string[];
@@ -71,6 +71,35 @@ return Object.hasOwn(CATALOG, value);
 Reachable only if that string reaches the table — which is precisely the input this method exists to
 filter. `all()`, `byModule()`, and `modules()` were never affected: they go through `Object.keys`,
 which is own-properties-only already.
+
+### The same input crashed instead of granting
+
+Closing the *grant* path left the *crash* path open. Step 1 above reads `CATALOG[key].scope` blind,
+so a key the catalog does not define is a `TypeError` rather than `undefined` — verified:
+
+```
+can("task.archive") → TypeError: Cannot read properties of undefined (reading 'scope')
+```
+
+The trigger is a deploy, not an attack. Delete a permission from `CATALOG` and `CapabilityCache`
+still holds pre-deletion DTOs in Redis for up to its sixty-second TTL — so those users get **500s
+instead of 403s** for a minute, and `ModuleRegistry.visibleModules()` takes the whole navigation
+down with them.
+
+So `meta()` and `scopeOf()` return `| undefined`, and `can()` treats that as a denial. The type still
+says a `PermissionKey` is always defined, and at compile time it is; the optional return is about the
+runtime paths the type cannot see — a cast, or a DTO that outlived the key it names.
+
+### Derived views are computed once
+
+`CATALOG` is a compile-time constant, so `all()`, `modules()` and the `byModule()` grouping are built
+at module load and returned frozen — `registry.all() === registry.all()`. `visibleModules()` and an
+admin permission matrix both call into these per render, and rebuilding an array each time to answer a
+question whose answer cannot change is waste.
+
+They are module-level consts rather than `static readonly` members holding a `Map`: the ESLint
+architecture rules ban static mutable state, and a `static` field holding a mutable `Map` is the exact
+shape that ban exists to catch ([05](../../../../docs/setup/05-lint-and-format.md)).
 
 ---
 

@@ -1,10 +1,10 @@
-# 18 · `@loadbearing/asset`
+# 19 · `@loadbearing/asset`
 
 > Every binary the product ships: images, the icon sprite, and font files. No React anywhere.
 
 **Delivers:** `ImageManifest`, `IconRegistry`, a build-time SVG sprite, and the one CSS file that declares every `@font-face`.
 
-**Prerequisite:** [17 · `@loadbearing/api-client`](17-api-client-package.md)
+**Prerequisite:** [18 · `@loadbearing/api-client`](18-api-client-package.md)
 
 ---
 
@@ -42,7 +42,7 @@ packages/asset/
 
 ---
 
-## Step 18.1 — Package exports
+## Step 19.1 — Package exports
 
 CSS and SVG cannot live in a JavaScript barrel, so this package has three entrypoints instead of one — the only package that does.
 
@@ -77,7 +77,7 @@ packages/asset/src/icon/sprite.svg
 
 ---
 
-## Step 18.2 — The icon sprite
+## Step 19.2 — The icon sprite
 
 **`packages/asset/build-sprite.mjs`**
 
@@ -169,7 +169,7 @@ console.log(`sprite: ${names.length} icons`);
 
 ---
 
-## Step 18.3 — The image manifest
+## Step 19.3 — The image manifest
 
 **`packages/asset/src/image/image.manifest.ts`**
 
@@ -235,7 +235,7 @@ declare module "*.png" {
 
 ---
 
-## Step 18.4 — Fonts
+## Step 19.4 — Fonts
 
 **`packages/asset/src/font/font.css`**
 
@@ -263,11 +263,11 @@ declare module "*.png" {
 
 **Self-hosted, never Google Fonts.** Third-party font CDNs are a privacy exposure, a GDPR question, a third-party outage in your critical path, and no faster than your own CDN under HTTP/2.
 
-This file is imported exactly once, by `packages/ui/src/token/token.css` ([21](21-ui-package.md)).
+This file is imported exactly once, by `packages/ui/src/token/token.css` ([22](22-ui-package.md)).
 
 ---
 
-## Step 18.5 — The barrel
+## Step 19.5 — The barrel
 
 **`packages/asset/src/index.ts`**
 
@@ -284,7 +284,7 @@ export { type ImageAsset, type ImageKey, ImageManifest } from "./image/index.js"
 
 Nothing above this package. `ContentSource.media(key)` currently reads `ImageManifest`; a `DbContentSource` would return a CDN URL for the same key. Content records hold `"home.hero"`, never a path, so the swap is one resolver — and it incidentally makes your logo swappable per tenant, which is worth more than it sounds for anything running client-branded portals.
 
-**User uploads are not assets.** Receipts, avatars, resource-library files — those are domain data with permissions attached and they go through `StorageGateway` to S3 ([14](14-infrastructure-package.md)). This package holds only what the product ships with.
+**User uploads are not assets.** Receipts, avatars, resource-library files — those are domain data with permissions attached and they go through `StorageGateway` to S3 ([15](15-infrastructure-package.md)). This package holds only what the product ships with.
 
 ---
 
@@ -302,4 +302,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/api-client`](17-api-client-package.md) · [`@loadbearing/content` →](19-content-package.md)
+[← `@loadbearing/api-client`](18-api-client-package.md) · [`@loadbearing/content` →](20-content-package.md)

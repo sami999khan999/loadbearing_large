@@ -124,7 +124,7 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
 
 **`noStaticOnlyClass` is off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
 
-**`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([28](28-naming-and-boundaries.md#13-barrels-and-imports)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
+**`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([29](29-naming-and-boundaries.md#13-barrels-and-imports)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
 
 **`noProcessEnv` plus the `node:process` import ban.** The rule catches `process.env.FOO` but not `import { env } from "node:process"`, so both entries are needed to close the door. The exemption for the two `env.ts` files comes in Step 5.2.
 
@@ -191,20 +191,20 @@ This is the rule that keeps database code out of the browser, and it lives entir
 > This kit sidesteps the problem: there is exactly one `noRestrictedImports` override, and `feature`'s two extra bans live in ESLint instead (Step 5.3) — which they have to, for the reason below.
 
 > [!IMPORTANT]
-> **Biome's `noRestrictedImports` flags `import type` exactly like a value import**, and has no type-import exemption. That is why `feature`'s `@loadbearing/api-client` ban cannot live here: `SignInForm` legitimately needs `import type { AuthClient }` ([22](22-feature-package.md)), a type-only import that emits nothing and creates no runtime dependency. Verified against 2.5.7.
+> **Biome's `noRestrictedImports` flags `import type` exactly like a value import**, and has no type-import exemption. That is why `feature`'s `@loadbearing/api-client` ban cannot live here: `SignInForm` legitimately needs `import type { AuthClient }` ([23](23-feature-package.md)), a type-only import that emits nothing and creates no runtime dependency. Verified against 2.5.7.
 >
-> Both `feature` bans therefore sit in the ESLint config, where `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`. **Biome handles bans that are "this whole module, no exceptions"; ESLint handles the ones needing named-export or type-import nuance** — the same division as `content`'s `PermissionKey` ban ([19](19-content-package.md)).
+> Both `feature` bans therefore sit in the ESLint config, where `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`. **Biome handles bans that are "this whole module, no exceptions"; ESLint handles the ones needing named-export or type-import nuance** — the same division as `content`'s `PermissionKey` ban ([20](20-content-package.md)).
 
 **The escape hatch is exactly two directories and one filename suffix.** Server-only packages are importable from `apps/web/src/server/**`, `apps/web/src/route/api/**`, and any `*.server.ts`, and nowhere else. Everything else crosses the boundary through `@loadbearing/contracts`, which is isomorphic by construction.
 
 **The `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
 
-**The last override is the single `export *` exemption**, and it is one filename, not a glob: `packages/db/src/schema.ts` exists so `drizzle-kit` and `drizzle(pool, { schema })` see every table, relation, and enum in the package. It is not an entrypoint — `packages/db/src/index.ts` republishes it as one namespace — so naming each table there would buy no API-surface control and would reliably drift out of date ([12](12-db-package.md)). Every other barrel in the repository names its exports.
+**The last override is the single `export *` exemption**, and it is one filename, not a glob: `packages/db/src/schema.ts` exists so `drizzle-kit` and `drizzle(pool, { schema })` see every table, relation, and enum in the package. It is not an entrypoint — `packages/db/src/index.ts` republishes it as one namespace — so naming each table there would buy no API-surface control and would reliably drift out of date ([13](13-db-package.md)). Every other barrel in the repository names its exports.
 
 ### This is defence one of three
 
 - **`ServerOnly.assert()`** at the top of every server-only barrel ([07](07-core-package.md)) — a runtime tripwire that throws if the module somehow loads in a browser.
-- **The CI bundle grep** ([25](25-hygiene-and-ci.md)) — asserts a known Drizzle export string is absent from the built client output.
+- **The CI bundle grep** ([26](26-hygiene-and-ci.md)) — asserts a known Drizzle export string is absent from the built client output.
 
 Three defences sounds excessive until you remember what a leak costs. In a fullstack app, a Drizzle import reaching the client is a security event — connection strings and full table shapes in a public bundle — not a bundle-size regression.
 
@@ -404,7 +404,7 @@ pnpm add -Dw @loadbearing/eslint-config@workspace:*
 >
 > Isolated with one class holding both an abstract and a concrete `async` method: the concrete call was flagged, the abstract one was not. So the limit is not file boundaries — Biome resolves those fine — it is the `abstract` modifier.
 >
-> Every port in this architecture is an abstract class rather than an interface, deliberately ([11](11-application-package.md)). So the entire port surface — and `this.tasks.save(task)`, the canonical missing-`await` bug — is invisible to Biome and visible to ESLint. **Keep the ESLint rules and the `recommendedTypeChecked` extend.**
+> Every port in this architecture is an abstract class rather than an interface, deliberately ([12](12-application-package.md)). So the entire port surface — and `this.tasks.save(task)`, the canonical missing-`await` bug — is invisible to Biome and visible to ESLint. **Keep the ESLint rules and the `recommendedTypeChecked` extend.**
 >
 > Both Biome rules are `nursery` in 2.5.7 and this config does not enable nursery, so they are inert. If you ever turn them on, expect double-reporting on concrete methods while abstract members stay ESLint-only — which is worse than leaving them off.
 
@@ -425,7 +425,7 @@ class ReactivateTaskUseCase {
 }
 ```
 
-This rule is also why `tsx` cannot be replaced by Node's native type stripping ([24](24-worker-app.md)) — parameter properties emit runtime code, so stripping rejects them.
+This rule is also why `tsx` cannot be replaced by Node's native type stripping ([25](25-worker-app.md)) — parameter properties emit runtime code, so stripping rejects them.
 
 **The three "off" entries are not optional.** Two linters reporting the same violation produces duplicate diagnostics in the editor and teaches people to ignore both. Whenever a rule exists in both tools, Biome owns it — it is faster and it runs on save.
 
@@ -468,7 +468,7 @@ Free functions are how a codebase loses its shape. `canReactivate` in a utils fi
 
 **`biome check` is lint plus format plus import organisation in one pass**, which is why `lint` runs it rather than `biome lint`.
 
-**`lint:fast` exists for the pre-commit hook.** The hook runs Biome only; ESLint runs on pre-push and in CI ([25](25-hygiene-and-ci.md)). A hook that takes ten seconds gets disabled; one that takes half a second stays on, and a check that runs is worth more than a thorough check that doesn't.
+**`lint:fast` exists for the pre-commit hook.** The hook runs Biome only; ESLint runs on pre-push and in CI ([26](26-hygiene-and-ci.md)). A hook that takes ten seconds gets disabled; one that takes half a second stays on, and a check that runs is worth more than a thorough check that doesn't.
 
 **No `-r --parallel`.** Both tools take the whole repo in one invocation, which is faster than fifteen processes and means no package needs a lint config of its own.
 

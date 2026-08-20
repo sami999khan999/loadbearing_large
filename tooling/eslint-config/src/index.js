@@ -1,7 +1,7 @@
 import tseslint from "typescript-eslint";
 
 const OOP_PACKAGES = [
-  "packages/{core,permissions,contracts,application,db,infrastructure,auth,composition,api-client,asset,content}/src/**/*.ts",
+  "packages/{core,permissions,errors,contracts,application,db,infrastructure,auth,composition,api-client,asset,content}/src/**/*.ts",
 ];
 
 export default tseslint.config(
@@ -93,7 +93,27 @@ export default tseslint.config(
     },
   },
 
-  // ── content may name a module, never a permission (see docs/setup/19) ──
+  // ── application throws errors, never status codes (see docs/setup/09) ──
+  {
+    files: ["packages/application/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@loadbearing/errors",
+              importNames: ["HTTP_STATUS"],
+              message:
+                "A status code is a transport concern. Throw the error; the adapter maps it. That discipline is what keeps the transport swappable.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ── content may name a module, never a permission (see docs/setup/20) ──
   {
     files: ["packages/content/src/**/*.ts"],
     rules: {

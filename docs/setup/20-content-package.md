@@ -1,10 +1,10 @@
-# 19 · `@loadbearing/content`
+# 20 · `@loadbearing/content`
 
 > Every user-visible string, document, and structured record — plus the `ContentSource` seam a CMS will slot into later. React-free.
 
 **Delivers:** `Translator`, `StaticContentSource`, the four content shapes, and a navigation model a content editor can safely change.
 
-**Prerequisite:** [18 · `@loadbearing/asset`](18-asset-package.md)
+**Prerequisite:** [19 · `@loadbearing/asset`](19-asset-package.md)
 
 ---
 
@@ -12,7 +12,7 @@
 
 Two reasons, and the second is the one people miss.
 
-**It is React-free on purpose.** `apps/worker` needs copy for digest and escalation emails and cannot import `feature`. The plain `Translator` class works in Node; the React binding (`useMessages`) lives in `feature` ([22](22-feature-package.md)).
+**It is React-free on purpose.** `apps/worker` needs copy for digest and escalation emails and cannot import `feature`. The plain `Translator` class works in Node; the React binding (`useMessages`) lives in `feature` ([23](23-feature-package.md)).
 
 **It ships a `ContentSource` abstract class even though `StaticContentSource` is the only implementation today.** That seam is what makes adding a CMS a one-line change in `Container` rather than a rewrite of every component. If you skip the abstraction now because there is only one implementation, the CMS conversation becomes "we would have to touch every screen."
 
@@ -47,7 +47,7 @@ packages/content/src/
 
 ---
 
-## Step 19.1 — Messages
+## Step 20.1 — Messages
 
 **`packages/content/src/message/en/common.ts`**
 
@@ -67,13 +67,56 @@ export const common = {
 
 ```ts
 export const error = {
+  "error.unauthorized": "Please sign in to continue.",
   "error.forbidden": "You do not have permission to do that.",
   "error.notFound": "We could not find what you were looking for.",
   "error.conflict": "Someone else changed this first. Reload and try again.",
+  "error.rateLimited": "Too many attempts. Please wait a moment and try again.",
   "error.unexpected": "Something went wrong. Please try again.",
   "error.field.required": "{field} is required.",
   "error.field.tooShort": "{field} must be at least {min} characters.",
 } as const;
+```
+
+**All error copy lives here, and nothing else does.** `@loadbearing/errors` ([09](09-errors-package.md)) names failures; this package is the only place a sentence about one exists. `Error.message` is the code, so if a user is going to read words, they come from this catalog and they are translated.
+
+That leaves one thing to enforce: a code with no copy. `Record<ErrorCode, MessageKey>` makes it a compile error rather than a raw key rendered to a customer.
+
+**`packages/content/src/message/error-copy.ts`**
+
+```ts
+import type { ErrorCode } from "@loadbearing/errors";
+import type { MessageKey } from "./en/index.js";
+
+/** Total by construction — a new ErrorCode fails to compile until it has copy. */
+export const ERROR_COPY: Readonly<Record<ErrorCode, MessageKey>> = {
+  UNAUTHORIZED: "error.unauthorized",
+  FORBIDDEN: "error.forbidden",
+  NOT_FOUND: "error.notFound",
+  CONFLICT: "error.conflict",
+  BAD_REQUEST: "error.unexpected",
+  TWO_FACTOR_REQUIRED: "auth.twoFactorRequired",
+  RATE_LIMITED: "error.rateLimited",
+  UNAVAILABLE: "error.unexpected",
+  INTERNAL: "error.unexpected",
+};
+
+/** Field-level rules from a ValidationError. Not total: rules are open-ended. */
+export const FIELD_RULE_COPY: Readonly<Record<string, MessageKey>> = {
+  required: "error.field.required",
+  tooShort: "error.field.tooShort",
+};
+```
+
+**Several codes share one message on purpose.** `BAD_REQUEST`, `UNAVAILABLE` and `INTERNAL` all read "Something went wrong" — the distinction matters to an operator reading logs and not at all to the person looking at the screen. Mapping is not the same as duplicating.
+
+**`FIELD_RULE_COPY` is deliberately not total.** A rule name is whatever a schema produced, so this map cannot be closed the way `ERROR_COPY` is; an unknown rule falls back to `error.unexpected` and a test asserts every rule the contracts package can actually emit has an entry.
+
+The rendering call is then one line, and `{field}`/`{min}` interpolation is what `Translator` already does:
+
+```ts
+t(ERROR_COPY[error.code], error.context);
+t(FIELD_RULE_COPY[violation.rule] ?? "error.unexpected", violation.params);
 ```
 
 **`packages/content/src/message/en/index.ts`**
@@ -111,7 +154,7 @@ export const bn: Partial<Record<MessageKey, string>> = {
 
 ---
 
-## Step 19.2 — `Translator`
+## Step 20.2 — `Translator`
 
 **`packages/content/src/translator.ts`**
 
@@ -151,7 +194,7 @@ export class Translator {
 
 ---
 
-## Step 19.3 — Media references
+## Step 20.3 — Media references
 
 **`packages/content/src/media/media-ref.ts`**
 
@@ -189,7 +232,7 @@ Content records hold `"home.hero"`, never a path. Today that resolves through `I
 
 ---
 
-## Step 19.4 — Navigation, and the line content must not cross
+## Step 20.4 — Navigation, and the line content must not cross
 
 **`packages/content/src/collection/nav/nav.schema.ts`**
 
@@ -260,7 +303,7 @@ Mechanically: **`content` must never import `PermissionKey`.** Biome's `noRestri
 
 ---
 
-## Step 19.5 — `ContentSource`
+## Step 20.5 — `ContentSource`
 
 **`packages/content/src/content-source.ts`**
 
@@ -325,7 +368,7 @@ export class StaticContentSource extends ContentSource {
 
 **Every method is async even though nothing awaits.** That is deliberate: a `DbContentSource` will be async, and if the abstract signatures were synchronous, adding a CMS would change the return type of every method and every caller. The cost today is a handful of `await`s that resolve immediately.
 
-**`Container` constructs it** ([16](16-composition-container.md)):
+**`Container` constructs it** ([17](17-composition-container.md)):
 
 ```ts
 this.content = new StaticContentSource();
@@ -337,7 +380,7 @@ One line. That is the whole point of the seam.
 
 ---
 
-## Step 19.6 — The barrel
+## Step 20.6 — The barrel
 
 **`packages/content/src/index.ts`**
 
@@ -365,4 +408,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/asset`](18-asset-package.md) · [`@loadbearing/query` →](20-query-package.md)
+[← `@loadbearing/asset`](19-asset-package.md) · [`@loadbearing/query` →](21-query-package.md)

@@ -1,10 +1,10 @@
-# 27 · Folder structure
+# 28 · Folder structure
 
 > The complete tree after step 26, on one page. Use it to check what you built, and as the template for what you add next.
 
 **Delivers:** Nothing new. This is a reference.
 
-**Prerequisite:** [26 · Verification and first feature](26-verification-and-first-feature.md)
+**Prerequisite:** [27 · Verification and first feature](27-verification-and-first-feature.md)
 
 ---
 
@@ -127,7 +127,7 @@ while the mirrored path preserves the one thing colocation was good at — knowi
 test is without looking. Full rationale in [07](07-core-package.md#step-76--a-first-test).
 
 The trees below are rooted at `src/`, so each package's specs appear in the `tests/` listing after
-its tree rather than inside it. `*.stories.tsx` is **not** a test and stays in `src/` — see [21](21-ui-package.md).
+its tree rather than inside it. `*.stories.tsx` is **not** a test and stays in `src/` — see [22](22-ui-package.md).
 
 Only deviations are noted from here on.
 
@@ -153,6 +153,38 @@ packages/core/tests/
 
 Zero dependencies, including on other `@loadbearing/*` packages. It is the root of the graph.
 
+### `packages/errors`
+
+```
+packages/errors/src/
+├── index.ts
+├── app.error.ts                 → AppError, ErrorEnvelope, FieldViolation
+├── error-normalizer.ts          → ErrorNormalizer
+├── catalog/                     ← one fragment per slice, team-owned
+│   ├── index.ts                 ←   ERROR_CATALOG, ErrorCode, ErrorMeta
+│   └── core.errors.ts
+├── error/                       ← one class per code that carries context
+│   ├── index.ts
+│   ├── forbidden.error.ts       → ForbiddenError
+│   ├── not-found.error.ts       → NotFoundError
+│   ├── conflict.error.ts        → ConflictError
+│   ├── validation.error.ts      → ValidationError
+│   └── internal.error.ts        → InternalError
+└── transport/
+    └── http.ts                  → HTTP_STATUS   ★ adapters only, never the domain
+
+packages/errors/tests/
+├── app.error.spec.ts
+├── error-normalizer.spec.ts
+└── transport/http.spec.ts
+```
+
+**A leaf, like `core` and `permissions`.** Zero dependencies, because a failure has to be readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it — any dependency excludes one of those.
+
+**`transport/http.ts` is the one file in this package the domain layer may not import.** `HTTP_STATUS` is a transport concern; a lint rule bans the import name for `packages/application/**` ([09](09-errors-package.md)).
+
+**No message strings anywhere.** `Error.message` is the code; every word a user reads lives in `content` ([20](20-content-package.md)).
+
 ### `packages/permissions`
 
 ```
@@ -165,18 +197,26 @@ packages/permissions/src/
 │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   ├── rbac.permissions.ts
 │   └── <slice>.permissions.ts
-└── gate/                        ← same pattern for nav gates
-    ├── index.ts
-    ├── rbac.gate.ts
-    └── <slice>.gate.ts
+├── gate/                        ← same pattern for nav gates
+│   ├── index.ts
+│   ├── rbac.gate.ts
+│   └── <slice>.gate.ts
+└── route/                       ← same pattern for destinations
+    ├── index.ts                 ←   ROUTES, AppRoute, RoutePath
+    ├── shell.routes.ts          ←   platform-owned: home, sign-in, forbidden
+    ├── rbac.routes.ts
+    └── <slice>.routes.ts
 
 packages/permissions/tests/
 ├── permission-registry.spec.ts
 ├── module-registry.spec.ts
-└── capability-set.spec.ts
+├── capability-set.spec.ts
+└── route.spec.ts
 ```
 
-**The fragment folders are the team-ownership seam.** One team, one file, no merge conflicts in a shared catalog.
+**The fragment folders are the team-ownership seam.** One team, one file, no merge conflicts in a shared catalog. All three follow it: a slice adds `<slice>.permissions.ts`, `<slice>.gate.ts`, and `<slice>.routes.ts`, and each platform-owned `index.ts` gains one spread line.
+
+**`route/` holds every destination the product has**, hand-written and grouped by slice. It is here rather than in a shell because a router's generated route tree cannot be the shared source — a Nest process has none, and web, desktop, and Next each generate a different one ([08](08-permissions-package.md)).
 
 ### `packages/contracts`
 
@@ -582,15 +622,42 @@ apps/worker/
 
 ---
 
+### `apps/desktop`
+
+```
+apps/desktop/
+├── package.json                        ← @loadbearing/desktop
+├── tsconfig.json
+├── tauri.conf.json                     ← CSP: API origin in connect-src, nothing else
+├── src-tauri/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       └── token.rs                    ← keychain commands, the only secret store
+└── src/
+    ├── config.ts                       → Config   ★ import.meta.env, NOT process.env
+    ├── token-provider.ts               → TauriTokenProvider  (implements TokenProvider)
+    ├── api.ts                          → ApiClient + QueryClient singletons
+    ├── router.tsx                      ← memory or hash history, its own route tree
+    └── route/
+        └── -nav-routes.ts              ← asserts ROUTES exist in this tree
+```
+
+**No `env.ts`, and that is the interesting part.** There is no Node runtime in the webview, so `process.env` does not exist — configuration arrives through `import.meta.env` in `config.ts`. The "exactly two `process.env` readers" assertion in [26](26-hygiene-and-ci.md) therefore needs no new exemption for a third app ([30](30-desktop-app.md)).
+
+---
+
 ## What the shape tells you
 
 **Count the `index.ts` files.** Every folder has one, and nothing outside a package's root `index.ts` is importable. That is why moving a file inside a package never breaks a consumer.
 
-**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [28](28-naming-and-boundaries.md#13-barrels-and-imports)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
+**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [29](29-naming-and-boundaries.md#13-barrels-and-imports)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
 
-**Notice what `apps/` does not contain.** No business logic, no schema, no permission decision, no domain error. Two `env.ts` files, one transport directory, one bootstrap, and route files that compose. If either app directory grows past a few hundred lines of non-route code, something drifted downward that belongs in `packages/`.
+**Notice what `apps/` does not contain.** No business logic, no schema, no permission decision, no domain error. Across three shells: two `env.ts` files, one `config.ts`, one transport directory, one bootstrap, and route files that compose. If any app directory grows past a few hundred lines of non-route code, something drifted downward that belongs in `packages/`.
 
-**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The eleven-step checklist in [26](26-verification-and-first-feature.md) is just this list, walked in dependency order.
+**Three shells, still two `process.env` readers.** `web` and `worker` read the environment; `desktop` cannot, because a webview has no Node runtime. So the assertion in [26](26-hygiene-and-ci.md) holds at two without an exemption, and it holds for a reason rather than by convention.
+
+**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The eleven-step checklist in [27](27-verification-and-first-feature.md) is just this list, walked in dependency order.
 
 **Notice the three `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, plus `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
 
@@ -602,4 +669,4 @@ Your tree matches this one, allowing for slices you have and slices you don't.
 
 ---
 
-[← Verification & First Feature](26-verification-and-first-feature.md) · [Naming & Boundaries →](28-naming-and-boundaries.md)
+[← Verification & First Feature](27-verification-and-first-feature.md) · [Naming & Boundaries →](29-naming-and-boundaries.md)

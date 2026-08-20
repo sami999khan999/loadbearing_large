@@ -1,10 +1,10 @@
-# 21 · `@loadbearing/ui`
+# 22 · `@loadbearing/ui`
 
 > The design system. Tokens, themes, primitives, `<Icon>`, and `<Can>`. No domain nouns anywhere.
 
 **Delivers:** A component library with no knowledge of contracts, queries, or the router — testable with props alone and reusable under any routing shell.
 
-**Prerequisite:** [20 · `@loadbearing/query`](20-query-package.md)
+**Prerequisite:** [21 · `@loadbearing/query`](21-query-package.md)
 
 ---
 
@@ -49,7 +49,7 @@ packages/ui/src/
 
 ---
 
-## Step 21.1 — Tokens
+## Step 22.1 — Tokens
 
 **`packages/ui/src/token/token.css`**
 
@@ -105,7 +105,7 @@ packages/ui/src/
 
 ---
 
-## Step 21.2 — Themes
+## Step 22.2 — Themes
 
 **`packages/ui/src/theme/theme.css`**
 
@@ -181,13 +181,13 @@ export class ThemeRegistry {
 
 **`colorScheme` on the root element** is what makes native scrollbars, form controls, and the browser's own UI match. Without it, a dark theme has light scrollbars and light date pickers.
 
-**Because every icon uses `currentColor`** ([18](18-asset-package.md)), themes recolour the entire icon set with no per-theme variants.
+**Because every icon uses `currentColor`** ([19](19-asset-package.md)), themes recolour the entire icon set with no per-theme variants.
 
 **Apply the theme before hydration.** The standard fix is a tiny inline script in `<head>` that reads the stored preference and sets `data-theme` synchronously. Otherwise a dark-theme user gets a white flash on every page load.
 
 ---
 
-## Step 21.3 — `<Icon>`
+## Step 22.3 — `<Icon>`
 
 **`packages/ui/src/icon/icon.tsx`**
 
@@ -230,7 +230,7 @@ Four lines of real content, and it is the entire icon system.
 
 ---
 
-## Step 21.4 — `<Can>`
+## Step 22.4 — `<Can>`
 
 The permission-gating component. It lives in `ui` rather than `feature` because it is a pure conditional with no domain knowledge — it takes a `CapabilitySet` as a prop.
 
@@ -257,11 +257,11 @@ export function Can({ permission, capabilities, goalId, children, fallback = nul
 
 **`CapabilitySet` and `PermissionKey` are type-only imports.** The instance arrives as a prop, so `ui` has no runtime dependency on `permissions`. `verbatimModuleSyntax` ([04](04-typescript-configs.md)) guarantees the emitted JavaScript contains no import at all.
 
-**`<Can>` is a convenience, never the gate.** Hiding a button is a UX affordance. The real check is `Authorizer.assert()` in the use-case ([11](11-application-package.md)), and it runs whether or not the button was rendered.
+**`<Can>` is a convenience, never the gate.** Hiding a button is a UX affordance. The real check is `Authorizer.assert()` in the use-case ([12](12-application-package.md)), and it runs whether or not the button was rendered.
 
 ---
 
-## Step 21.5 — Primitives
+## Step 22.5 — Primitives
 
 The starter kit ships a small set. Each follows the same rules.
 
@@ -304,7 +304,7 @@ That constraint has a design consequence worth stating: an empty state is an inv
 
 ---
 
-## Step 21.6 — Storybook, or not
+## Step 22.6 — Storybook, or not
 
 Colocated `*.stories.tsx` files are in the layout above because a design system with no isolated rendering environment stops being reviewable — you end up checking a button by navigating to the one screen that uses it.
 
@@ -314,7 +314,7 @@ Pick one deliberately. The failure mode is picking neither and reviewing compone
 
 ---
 
-## Step 21.7 — The barrel
+## Step 22.7 — The barrel
 
 **`packages/ui/src/index.ts`**
 
@@ -344,7 +344,7 @@ import "@loadbearing/ui/token.css";
 import "@loadbearing/ui/theme.css";
 ```
 
-Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does ([18](18-asset-package.md)).
+Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does ([19](19-asset-package.md)).
 
 ---
 
@@ -369,4 +369,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/query`](20-query-package.md) · [`@loadbearing/feature` →](22-feature-package.md)
+[← `@loadbearing/query`](21-query-package.md) · [`@loadbearing/feature` →](23-feature-package.md)

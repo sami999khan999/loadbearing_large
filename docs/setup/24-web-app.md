@@ -1,10 +1,10 @@
-# 23 · `apps/web` — TanStack Start + oRPC
+# 24 · `apps/web` — TanStack Start + oRPC
 
 > The entire transport layer. Six files in `src/server/`, plus routes that compose rather than implement.
 
 **Delivers:** A running fullstack app where every handler is three lines, auth is mounted, and all four enforcement surfaces share one `can()`.
 
-**Prerequisite:** [22 · `@loadbearing/feature`](22-feature-package.md)
+**Prerequisite:** [23 · `@loadbearing/feature`](23-feature-package.md)
 
 ---
 
@@ -39,7 +39,7 @@ apps/web/
 
 ---
 
-## Step 23.1 — Scaffold
+## Step 24.1 — Scaffold
 
 ```bash
 cd apps
@@ -100,7 +100,7 @@ export default defineConfig({
 
 ---
 
-## Step 23.2 — `Env`
+## Step 24.2 — `Env`
 
 **`apps/web/src/env.ts`**
 
@@ -146,6 +146,11 @@ export class Env {
     return `${Env.parsed.AUTH_URL}/api/auth`;
   }
 
+  /** The one origin allowlist. Better Auth's CSRF check and CORS both read it. */
+  public static get trustedOrigins(): readonly string[] {
+    return Env.parsed.AUTH_TRUSTED_ORIGINS;
+  }
+
   public static containerConfig() {
     const e = Env.parsed;
     return {
@@ -181,11 +186,21 @@ export class Env {
 
 **`AUTH_SECRET` has a minimum length** because a short secret is a real weakness and the schema is the only place anyone will ever check.
 
+**`AUTH_TRUSTED_ORIGINS` carries the Tauri origins from the first deployment**, not from whenever the desktop app is built:
+
+```bash
+AUTH_TRUSTED_ORIGINS=http://localhost:3000,tauri://localhost,http://tauri.localhost
+```
+
+Both Tauri entries, because the webview's scheme differs by platform — `tauri://localhost` on macOS and Linux, `http://tauri.localhost` on Windows. Ship one and the desktop app works for half your team ([30](30-desktop-app.md)).
+
+`Env.trustedOrigins` exists so this list has exactly one reader-facing name. Better Auth's CSRF check consumes it through `containerConfig()` and the CORS layer in Step 24.7 consumes it directly — two consumers, one list. A second hardcoded copy is how one of them goes stale and someone spends an afternoon on a preflight failure.
+
 **This file and `apps/worker/src/env.ts` are the only two `process.env` readers in the repository.** The ESLint rule from [05](05-lint-and-format.md) enforces it, and this method is the boundary where environment becomes `ContainerConfig`.
 
 ---
 
-## Step 23.3 — The container
+## Step 24.3 — The container
 
 **`apps/web/src/server/container.ts`**
 
@@ -201,7 +216,7 @@ Module scope means one connection pool, one Redis connection, one Better Auth in
 
 ---
 
-## Step 23.4 — The oRPC base and principal middleware
+## Step 24.4 — The oRPC base and principal middleware
 
 **`apps/web/src/server/orpc/base.ts`**
 
@@ -238,47 +253,42 @@ export const authed = base.use(principalMiddleware);
 
 **Creating an `authed` base that already includes the middleware** means protected procedures cannot forget it. Anything built on `base` instead of `authed` is unauthenticated on purpose and should be obvious in review.
 
-**The `ProcedurePermissions` check fails closed.** A procedure with no mapping is denied, not allowed. Paired with the coverage test in [09](09-contracts-package.md), forgetting to map a new procedure is caught at test time and, failing that, at request time — never by shipping an ungated endpoint.
+**The `ProcedurePermissions` check fails closed.** A procedure with no mapping is denied, not allowed. Paired with the coverage test in [10](10-contracts-package.md), forgetting to map a new procedure is caught at test time and, failing that, at request time — never by shipping an ungated endpoint.
 
 **This is not the real gate.** `Authorizer.assert()` inside the use-case is. The worker bypasses this middleware entirely, and so does any SSR direct call that skipped the adapter. Two checks, and only one of them is on every path.
 
 ---
 
-## Step 23.5 — The error interceptor
+## Step 24.5 — The error interceptor
 
 **`apps/web/src/server/orpc/error.interceptor.ts`**
 
 ```ts
 import { ORPCError } from "@orpc/server";
-import { DomainError } from "@loadbearing/application";
-
-const CODE_MAP: Readonly<Record<string, string>> = {
-  FORBIDDEN: "FORBIDDEN",
-  NOT_FOUND: "NOT_FOUND",
-  CONFLICT: "CONFLICT",
-  BAD_REQUEST: "BAD_REQUEST",
-};
+import { ErrorNormalizer, HTTP_STATUS } from "@loadbearing/errors";
 
 export class ErrorInterceptor {
   private constructor() {}
 
-  public static toTransport(error: unknown): never {
-    if (error instanceof DomainError) {
-      const code = CODE_MAP[error.code] ?? "INTERNAL_SERVER_ERROR";
-      throw new ORPCError(code, { message: error.message });
-    }
-    throw error;
+  public static toTransport(thrown: unknown): never {
+    const error = ErrorNormalizer.normalize(thrown);
+    throw new ORPCError(error.code, {
+      status: HTTP_STATUS[error.code],
+      data: error.toJSON(),
+    });
   }
 }
 ```
 
-One file, and the domain layer stays HTTP-free. `ForbiddenError` → `ORPCError("FORBIDDEN")`; a NestJS exception filter would map the same `code` to `ForbiddenException`.
+**Three lines, and no `CODE_MAP`.** `normalize()` guarantees an `AppError` for anything thrown — a `ZodError`, a Postgres failure, a rejected string — so there is no fall-through branch to get wrong, and `HTTP_STATUS` is total over `ErrorCode` so a new code cannot ship without a status ([09](09-errors-package.md)).
 
-**Never leak an unmapped error's message to the client.** An unrecognised error becomes a generic 500 — a Postgres error string in a client response tells an attacker your table names.
+**The body is the envelope, not prose.** `error.toJSON()` sends `{ code, context, fields? }`, which the client reconstructs into the same class and renders through `content` in its own locale. The server has no opinion about the wording and never needs one.
+
+**Nothing unmapped can leak.** The old failure mode — a Postgres error string in a client response telling an attacker your table names — is closed at the normaliser rather than guarded against here: an unrecognised throw becomes `INTERNAL`, and the original is kept on a non-enumerable `cause` for the logger where `toJSON()` cannot reach it.
 
 ---
 
-## Step 23.6 — A router
+## Step 24.6 — A router
 
 **`apps/web/src/server/orpc/task.router.ts`** — illustrative; the kit ships none.
 
@@ -323,7 +333,7 @@ The shape mirrors `contract` exactly. A mismatch is a type error.
 
 ---
 
-## Step 23.7 — The HTTP entrypoints
+## Step 24.7 — The HTTP entrypoints
 
 **`apps/web/src/route/api/rpc.$.ts`** mounts an oRPC fetch handler at `/api/rpc`, passing the module-scope container and the request headers as initial context, with `ErrorInterceptor` wired in.
 
@@ -340,11 +350,68 @@ export const ServerRoute = createServerFileRoute().methods({
 
 Better Auth speaks the Fetch API, so it drops into any Fetch-based router. Two handlers, one server directory.
 
+### CORS, because the desktop client is cross-origin
+
+A Tauri webview is served from a custom protocol, so **every** call it makes to these two routes is cross-origin — there is no configuration that makes it same-origin. Both handlers need a CORS layer, and it reads the same allowlist as the CSRF check:
+
+**`apps/web/src/server/cors.ts`**
+
+```ts
+import { Env } from "~/env.js";
+
+export class Cors {
+  private constructor() {}
+
+  private static headersFor(origin: string | null): Headers {
+    const headers = new Headers();
+    if (!origin || !Env.trustedOrigins.includes(origin)) return headers;
+
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Access-Control-Allow-Headers", "content-type,authorization,x-api-key");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    headers.set("Vary", "Origin");
+    return headers;
+  }
+
+  /** Preflight. Returns null when the request is not one. */
+  public static preflight(request: Request): Response | null {
+    if (request.method !== "OPTIONS") return null;
+    return new Response(null, { status: 204, headers: Cors.headersFor(request.headers.get("origin")) });
+  }
+
+  public static apply(request: Request, response: Response): Response {
+    for (const [key, value] of Cors.headersFor(request.headers.get("origin"))) {
+      response.headers.set(key, value);
+    }
+    return response;
+  }
+}
+```
+
+Wire it into both entrypoints — answer the preflight first, then decorate the real response:
+
+```ts
+const preflight = Cors.preflight(request);
+if (preflight) return preflight;
+return Cors.apply(request, await container.auth.handler(request));
+```
+
+Four things that matter more than they look:
+
+**Echo the origin, never reflect it blindly.** `Access-Control-Allow-Origin` is set only for an origin already on the allowlist. Reflecting whatever arrived, with `Allow-Credentials: true`, is a hole large enough to drive a CSRF through — and the two headers are specified never to be combined with `*` for exactly that reason.
+
+**`Vary: Origin` is not optional.** Without it any cache in front of this — a CDN, a reverse proxy — can serve one origin's CORS response to another origin and the failure looks random.
+
+**`Allow-Credentials: true` and `Allow-Headers: authorization` are both required**, because the web client authenticates with a cookie and the desktop client with a bearer token, against the same two routes ([16](16-auth-package.md), [18](18-api-client-package.md)).
+
+**`x-api-key` is in the list** because `PrincipalBuilder` checks it first ([16](16-auth-package.md)); omitting it means integrations calling from a browser context fail preflight with a message that does not mention the header.
+
 > **Check the current oRPC fetch-adapter and TanStack Start server-route signatures when you write `rpc.$.ts`.** Both are version-sensitive, and this is the one file where copying a stale snippet costs an afternoon. The *contract* — mount a fetch handler, inject `{ container, headers }`, intercept errors — is stable; the API surface is not.
 
 ---
 
-## Step 23.8 — SSR without a network hop
+## Step 24.8 — SSR without a network hop
 
 During SSR the app must not call its own HTTP endpoint. `"/api/rpc"` resolves to your own server, so each loader would round-trip through the loopback interface — serialising and deserialising the same payload twice and competing with real user requests for the connection pool. Six loaders means six self-requests before a byte renders.
 
@@ -372,7 +439,7 @@ export function createServerRpcClient(request: Request) {
 
 ---
 
-## Step 23.9 — Route and UI gating
+## Step 24.9 — Route and UI gating
 
 **`apps/web/src/route/-guard.ts`**
 
@@ -405,7 +472,7 @@ Used in a route's `beforeLoad`. Same `CapabilitySet.can()` the server calls — 
 
 ---
 
-## Step 23.10 — The root route
+## Step 24.10 — The root route
 
 `__root.tsx` is where everything composes. In order:
 
@@ -420,7 +487,7 @@ That last one matters: resolving capabilities on the server and serialising the 
 
 ---
 
-## Step 23.11 — Prove the wiring
+## Step 24.11 — Prove the wiring
 
 Add to the root route component, temporarily:
 
@@ -467,4 +534,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/feature`](22-feature-package.md) · [`apps/worker` →](24-worker-app.md)
+[← `@loadbearing/feature`](23-feature-package.md) · [`apps/worker` →](25-worker-app.md)

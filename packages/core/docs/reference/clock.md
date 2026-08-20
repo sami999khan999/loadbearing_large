@@ -113,7 +113,7 @@ enforce the same shape across the packages that follow this pattern.
 
 | | Where it is constructed |
 | --- | --- |
-| `SystemClock` | once, in the composition root — see [16 · composition](../../../../docs/setup/16-composition-container.md) |
+| `SystemClock` | once, in the composition root — see [17 · composition](../../../../docs/setup/17-composition-container.md) |
 | `FixedClock` | in tests, per test |
 
 Nothing else constructs a clock. A use-case that reaches for `new SystemClock()` has just

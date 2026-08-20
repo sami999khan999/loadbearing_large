@@ -1,16 +1,16 @@
-# 14 · `@loadbearing/infrastructure`
+# 15 · `@loadbearing/infrastructure`
 
 > The non-Postgres adapters: Redis caching, S3 file storage, and the BullMQ queue publisher. Server-only.
 
-**Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, and the embedding provider from [13](13-vector-store.md).
+**Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, and the embedding provider from [14](14-vector-store.md).
 
-**Prerequisite:** [13 · Vector Storage](13-vector-store.md)
+**Prerequisite:** [14 · Vector Storage](14-vector-store.md)
 
 ---
 
 ## Why this package exists
 
-This is the fourteenth package and a departure from the architecture docs, flagged in [00](00-README.md). The docs place concrete adapters in `db` "or in the app that constructs them." Neither works here:
+This is a departure from the architecture docs, flagged in [00](00-README.md). The docs place concrete adapters in `db` "or in the app that constructs them." Neither works here:
 
 - **`db` means Postgres.** An S3 client and a Redis connection inside a package called `db` makes the name a lie, and the next person adds a Kafka producer there too.
 - **`apps/` means duplication.** `apps/web` and `apps/worker` both need S3 and Redis. Constructing them in each app means two copies of the retry policy, the key layout, and the presign expiry — which will drift.
@@ -55,11 +55,11 @@ export { type RedisConfig, RedisConnection } from "./redis/index.js";
 export { type S3Config, S3StorageGateway, StorageKey } from "./storage/index.js";
 ```
 
-Read that list against `container.ts` ([16](16-composition-container.md)) and every name lines up with one `port` binding. That is the whole public surface of the package — five adapters and their config types.
+Read that list against `container.ts` ([17](17-composition-container.md)) and every name lines up with one `port` binding. That is the whole public surface of the package — five adapters and their config types.
 
 ---
 
-## Step 14.1 — `RedisConnection`
+## Step 15.1 — `RedisConnection`
 
 Redis is doing three jobs — cache, session secondary store, and BullMQ backing store — and they have different connection requirements. One class owns that distinction.
 
@@ -115,11 +115,11 @@ export class RedisConnection {
 
 **`enableAutoPipelining: true`** batches commands issued in the same tick into one round trip. On the capability-cache path — several `get` calls while building a principal — that is a real latency saving for one line.
 
-**In production, run two Redis instances.** The cache one with `allkeys-lru` eviction; the queue one with `noeviction`. Locally they share a container ([10](10-local-infrastructure.md)) with `noeviction`, because losing queued jobs to eviction is a worse failure than a full cache. `RedisConnection` takes a URL, so splitting them later is two config values.
+**In production, run two Redis instances.** The cache one with `allkeys-lru` eviction; the queue one with `noeviction`. Locally they share a container ([11](11-local-infrastructure.md)) with `noeviction`, because losing queued jobs to eviction is a worse failure than a full cache. `RedisConnection` takes a URL, so splitting them later is two config values.
 
 ---
 
-## Step 14.2 — `RedisCacheStore`
+## Step 15.2 — `RedisCacheStore`
 
 **`packages/infrastructure/src/cache/redis.cache-store.ts`**
 
@@ -184,7 +184,7 @@ export class RedisCacheStore extends CacheStore {
 
 ---
 
-## Step 14.3 — `S3StorageGateway`
+## Step 15.3 — `S3StorageGateway`
 
 **`packages/infrastructure/src/storage/storage-key.ts`**
 
@@ -323,7 +323,7 @@ The gateway supports both, and which one a feature uses is a domain decision:
 
 **Through the server (for generated files).** A PDF the worker renders, an export the system builds. There is no browser involved and `put()` is the whole story.
 
-**Never return a permanent public URL.** `presignDownload` with a short expiry — five minutes is generous — and the bucket stays private (`mc anonymous set none` in [10](10-local-infrastructure.md)). A public URL is a permanent, unauthenticated, unrevocable grant, and it will end up in a support ticket, then a shared inbox, then a search index.
+**Never return a permanent public URL.** `presignDownload` with a short expiry — five minutes is generous — and the bucket stays private (`mc anonymous set none` in [11](11-local-infrastructure.md)). A public URL is a permanent, unauthenticated, unrevocable grant, and it will end up in a support ticket, then a shared inbox, then a search index.
 
 **Expiry belongs to the caller, not the gateway.** A download link embedded in an email needs longer than one rendered in a live UI. Making it a parameter means that is a use-case decision rather than a config value someone raises to seven days for one feature.
 
@@ -331,7 +331,7 @@ The gateway supports both, and which one a feature uses is a domain decision:
 
 ---
 
-## Step 14.4 — `BullMqQueuePublisher`
+## Step 15.4 — `BullMqQueuePublisher`
 
 **`packages/infrastructure/src/queue/queue-name.ts`**
 
@@ -405,11 +405,11 @@ export class BullMqQueuePublisher extends QueuePublisher {
 
 **Exponential backoff from the first attempt.** A downstream service that is down does not recover faster because you retried three times in two seconds.
 
-**Consumers live in `apps/worker`, not here.** This package publishes. See [24](24-worker-app.md).
+**Consumers live in `apps/worker`, not here.** This package publishes. See [25](25-worker-app.md).
 
 ---
 
-## Step 14.5 — Barrels
+## Step 15.5 — Barrels
 
 ```ts
 // packages/infrastructure/src/cache/index.ts
@@ -445,7 +445,7 @@ Folder barrels name their exports for the same reason root barrels do — and he
 
 ---
 
-## Step 14.6 — A smoke test
+## Step 15.6 — A smoke test
 
 Not a unit test — these classes are adapters and testing them against fakes tests nothing. Write one script that exercises all three against the running containers.
 
@@ -511,4 +511,4 @@ Do not proceed until this passes.
 
 ---
 
-[← Vector Storage](13-vector-store.md) · [`@loadbearing/auth` →](15-auth-package.md)
+[← Vector Storage](14-vector-store.md) · [`@loadbearing/auth` →](16-auth-package.md)

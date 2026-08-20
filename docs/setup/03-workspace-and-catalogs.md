@@ -95,7 +95,25 @@ allowBuilds:
 
 **`allowBuilds`** replaces pnpm 10's `onlyBuiltDependencies`. Install scripts are blocked by default; these two legitimately need them. It is a map rather than a list because it also expresses denial — `core-js: false` silences a package you have decided will never build.
 
-The list is short on purpose, and the Tauri decision ([29](29-desktop-app.md)) is why it stays short: a Tauri desktop app adds no native Node modules, because its native half is a Rust crate that Cargo builds. `@tauri-apps/cli` ships prebuilt platform binaries as optional dependencies and runs no install script.
+The list is short on purpose, and Tauri ([30](30-desktop-app.md)) is why it stays short: a Tauri desktop app adds no native Node modules, because its native half is a Rust crate that Cargo builds. `@tauri-apps/cli` ships prebuilt platform binaries as optional dependencies and runs no install script.
+
+### The desktop and router entries
+
+```yaml
+  # ── TanStack Router — apps/web gets it through Start, apps/desktop imports it
+  #    directly. Catalogued so the two shells cannot resolve different versions
+  #    while sharing the same `feature` components. ──
+  "@tanstack/react-router": ^1.135.0
+
+  # ── Tauri — the desktop shell. Verify against the current 2.x release when you
+  #    scaffold; the native half is a Rust crate and needs no allowBuilds entry. ──
+  "@tauri-apps/api": ^2.9.0
+  "@tauri-apps/cli": ^2.9.0
+```
+
+**`@tanstack/react-router` is the one worth explaining.** `apps/web` never installs it explicitly — TanStack Start brings it transitively — while `apps/desktop` imports it directly, because routing is the one thing the desktop shell replaces ([21](21-query-package.md)). Two shells resolving different router versions while rendering the same `feature` components is a bad afternoon, and one catalog line removes the possibility.
+
+Pin the Tauri versions against the current 2.x release when you scaffold rather than trusting the numbers above — same caveat as the prerequisites page in [30](30-desktop-app.md).
 
 ### Three defaults you inherit without asking
 
@@ -113,13 +131,13 @@ pnpm 11 turned several protections on by default. Two of them will surprise you 
 
 ---
 
-`packages:` tells pnpm which directories are workspace members. `catalog:` is a single source of truth for versions — a package writes `"zod": "catalog:"` rather than a range, so all fourteen upgrade together and cannot drift.
+`packages:` tells pnpm which directories are workspace members. `catalog:` is a single source of truth for versions — a package writes `"zod": "catalog:"` rather than a range, so all fifteen upgrade together and cannot drift.
 
 Three entries deserve a note:
 
 **Pin all four `@orpc/*` packages to one version line.** They share internal types. A skew between `@orpc/contract` and `@orpc/server` produces type errors that read like your contract is malformed when it isn't, and the error text points at your code rather than at the version mismatch.
 
-**`better-auth` is floored at 1.3.26 deliberately.** The API-key plugin had an authentication flaw (CVE-2025-61928) patched in that release. You aren't going to use that plugin ([15](15-auth-package.md) explains why), but a floor below a known auth CVE is not a floor worth having.
+**`better-auth` is floored at 1.3.26 deliberately.** The API-key plugin had an authentication flaw (CVE-2025-61928) patched in that release. You aren't going to use that plugin ([16](16-auth-package.md) explains why), but a floor below a known auth CVE is not a floor worth having.
 
 **React lives in a named catalog, not the default one.** Only four packages consume it, and it moves on a different cadence from everything else. `catalog:react` in a `package.json` reads as a deliberate statement that this package is a React package.
 
@@ -179,7 +197,7 @@ Three entries deserve a note:
 
 **`clean` does not `rm -rf node_modules`.** Package-level `clean` scripts use `rimraf`, which works on every platform. If you genuinely need to nuke the store, that is a deliberate manual act, not something a script does when someone fat-fingers a tab-complete.
 
-**`build:changed`** uses pnpm's `...[origin/main]` selector to build only packages whose sources changed plus everything downstream of them. It needs full Git history — see the `fetch-depth: 0` note in [25](25-hygiene-and-ci.md).
+**`build:changed`** uses pnpm's `...[origin/main]` selector to build only packages whose sources changed plus everything downstream of them. It needs full Git history — see the `fetch-depth: 0` note in [26](26-hygiene-and-ci.md).
 
 **`devEngines.packageManager` replaces `packageManager`.** pnpm 11 removed the settings that governed the legacy field (`managePackageManagerVersions`, `packageManagerStrict`, `packageManagerStrictVersion`) in favour of an `onFail` value declared inline. `"onFail": "download"` means a developer with the wrong pnpm on `PATH` gets the right one fetched automatically rather than an error.
 
@@ -209,7 +227,7 @@ If the install **fails** naming a package whose build was blocked, add it to `al
 
 ## Optional — repo consistency checks
 
-Two small tools that pay for themselves once there are fourteen packages:
+Two small tools that pay for themselves once there are fifteen packages:
 
 ```bash
 pnpm add -Dw syncpack@catalog: sherif@catalog:
@@ -222,7 +240,7 @@ Then add to root scripts:
 "repo:check": "sherif -r unordered-dependencies"
 ```
 
-`syncpack lint` catches a package that pinned `zod` directly instead of writing `catalog:`. (The older `list-mismatches` subcommand is deprecated in syncpack 15.) `sherif` catches missing `workspace:*` protocols, unused dependencies, and packages that dual-declare a dependency and a devDependency. Its `unordered-dependencies` rule is disabled because it forbids grouping a `workspace:*` entry apart from the catalogued ones; drop the `-r` flag if you would rather have strict alphabetical order everywhere. Both run in CI in [25](25-hygiene-and-ci.md). Neither is required for the kit to work.
+`syncpack lint` catches a package that pinned `zod` directly instead of writing `catalog:`. (The older `list-mismatches` subcommand is deprecated in syncpack 15.) `sherif` catches missing `workspace:*` protocols, unused dependencies, and packages that dual-declare a dependency and a devDependency. Its `unordered-dependencies` rule is disabled because it forbids grouping a `workspace:*` entry apart from the catalogued ones; drop the `-r` flag if you would rather have strict alphabetical order everywhere. Both run in CI in [26](26-hygiene-and-ci.md). Neither is required for the kit to work.
 
 ---
 

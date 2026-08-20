@@ -1,14 +1,14 @@
-# 10 · Local Infrastructure
+# 11 · Local Infrastructure
 
 > Postgres 17 with pgvector, Redis, and MinIO as the S3 stand-in. Three containers, one command.
 
 **Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to.
 
-**Prerequisite:** [09 · `@loadbearing/contracts`](09-contracts-package.md)
+**Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 
 ---
 
-## Step 10.1 — The compose file
+## Step 11.1 — The compose file
 
 **`infra/docker-compose.yml`**
 
@@ -93,7 +93,7 @@ volumes:
 
 ---
 
-## Step 10.2 — Enable pgvector
+## Step 11.2 — Enable pgvector
 
 The extension ships in the image but is not enabled in the database. Create an init script so a fresh volume enables it automatically.
 
@@ -105,13 +105,13 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 ```
 
-`vector` for embeddings ([13](13-vector-store.md)). `pg_trgm` for fuzzy text search, which every product ends up wanting and which is far cheaper to enable now than in a migration later. `uuid-ossp` is belt-and-braces — IDs are generated in application code by `Uuid.v7()`, but having the extension available means a data-repair SQL script does not need a round trip through Node.
+`vector` for embeddings ([14](14-vector-store.md)). `pg_trgm` for fuzzy text search, which every product ends up wanting and which is far cheaper to enable now than in a migration later. `uuid-ossp` is belt-and-braces — IDs are generated in application code by `Uuid.v7()`, but having the extension available means a data-repair SQL script does not need a round trip through Node.
 
-> **Scripts in `/docker-entrypoint-initdb.d` run only when the data directory is empty.** If your volume already exists, they will not run. Either `pnpm infra:reset` (destroys data) or run the statements manually — Step 10.3.
+> **Scripts in `/docker-entrypoint-initdb.d` run only when the data directory is empty.** If your volume already exists, they will not run. Either `pnpm infra:reset` (destroys data) or run the statements manually — Step 11.3.
 
 ---
 
-## Step 10.3 — Start it
+## Step 11.3 — Start it
 
 ```bash
 pnpm infra:up
@@ -131,7 +131,7 @@ docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratc
 
 ---
 
-## Step 10.4 — Verify each service
+## Step 11.4 — Verify each service
 
 ```bash
 docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratchet -c "SELECT extname FROM pg_extension;"
@@ -147,7 +147,7 @@ Open `http://localhost:9001` and sign in with `ratchet` / `ratchetsecret`. The `
 
 ---
 
-## Step 10.5 — Useful operations
+## Step 11.5 — Useful operations
 
 ```bash
 pnpm infra:down
@@ -191,4 +191,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/contracts`](09-contracts-package.md) · [`@loadbearing/application` →](11-application-package.md)
+[← `@loadbearing/contracts`](10-contracts-package.md) · [`@loadbearing/application` →](12-application-package.md)

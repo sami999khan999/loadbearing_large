@@ -1,10 +1,10 @@
-# 15 · `@loadbearing/auth`
+# 16 · `@loadbearing/auth`
 
 > Better Auth, self-hosted, in its own server-only package. Authentication only — every authorization decision stays in `CapabilitySet`.
 
 **Delivers:** One identity layer serving the web app, the desktop app, a client portal, and API-key integrations, all collapsing into the single `Principal` the rest of the system already understands.
 
-**Prerequisite:** [14 · `@loadbearing/infrastructure`](14-infrastructure-package.md)
+**Prerequisite:** [15 · `@loadbearing/infrastructure`](15-infrastructure-package.md)
 
 ---
 
@@ -29,9 +29,9 @@
 
 **It does not own authorization.** Better Auth ships an organization plugin with its own `createAccessControl` and role definitions. **Do not use it.** The architecture's strongest claim is that there is no second security model to keep in sync; adopting its roles gives you exactly that — one permission model in `PermissionRegistry`, another in the auth library, drifting apart the first time someone edits only one.
 
-**Skip the organization plugin entirely.** `memberships` and `goal_members` already exist ([12](12-db-package.md)) and point at your own `roles` table. The plugin would add a parallel `member.role` string column meaning something different, and reconciling the two is worse than not having it.
+**Skip the organization plugin entirely.** `memberships` and `goal_members` already exist ([13](13-db-package.md)) and point at your own `roles` table. The plugin would add a parallel `member.role` string column meaning something different, and reconciling the two is worse than not having it.
 
-**Do not use the API-key plugin's session mocking.** It mints a session for a key, which means a leaked key impersonates a full user with that user's live permissions. The model in Step 15.6 is strictly better: a key is a principal with its own capability set that cannot exceed its issuer's, re-intersected on every request.
+**Do not use the API-key plugin's session mocking.** It mints a session for a key, which means a leaked key impersonates a full user with that user's live permissions. The model in Step 16.6 is strictly better: a key is a principal with its own capability set that cannot exceed its issuer's, re-intersected on every request.
 
 ---
 
@@ -58,11 +58,11 @@ packages/auth/src/
 **Depends on** `core`, `contracts`, `permissions`, `application`, `db`, `infrastructure`.
 **Used by** `composition` only. Never by `apps/web`'s component tree.
 
-The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@loadbearing/api-client` is the package whose entire job is "how to reach the server." See [17](17-api-client-package.md).
+The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@loadbearing/api-client` is the package whose entire job is "how to reach the server." See [18](18-api-client-package.md).
 
 ---
 
-## Step 15.1 — Generate the auth schema
+## Step 16.1 — Generate the auth schema
 
 Better Auth's CLI writes the tables it needs. Run it, commit the output, and let your normal Drizzle migrations own it from then on.
 
@@ -84,7 +84,7 @@ It produces `user`, `session`, `account`, and `verification` tables (plus `twoFa
 pnpm db:generate && pnpm db:migrate
 ```
 
-**Now add the real foreign keys.** Your domain tables reference `user_id` as `text` from [12](12-db-package.md) precisely so this works. Write a hand-authored migration:
+**Now add the real foreign keys.** Your domain tables reference `user_id` as `text` from [13](13-db-package.md) precisely so this works. Write a hand-authored migration:
 
 ```sql
 ALTER TABLE memberships
@@ -106,7 +106,7 @@ Deleting a user now cascades their role assignments, which is what you want. It 
 
 ---
 
-## Step 15.2 — `AuthConfig` and `AuthFactory`
+## Step 16.2 — `AuthConfig` and `AuthFactory`
 
 **`packages/auth/src/auth.config.ts`**
 
@@ -194,15 +194,15 @@ export class AuthFactory {
 
 ### Three configuration decisions
 
-**Enable the bearer plugin now, not when the desktop app ships.** A Tauri webview runs on a custom `tauri://localhost` origin (`http://tauri.localhost` on Windows), so every call to your API is cross-origin and a session cookie is never sent. It needs a token. Retrofitting bearer auth into a cookie-only API means touching every endpoint, every guard, and every test. Enabling it today costs one array element.
+**The bearer plugin is not optional.** The desktop shell is Tauri ([30](30-desktop-app.md)), its webview runs on a custom `tauri://localhost` origin (`http://tauri.localhost` on Windows), and a session cookie is never sent cross-origin. So it needs a token, and enabling the plugin costs one array element here versus touching every endpoint, guard, and test later.
 
 **Cookie cache on, with a short TTL.** Better Auth can store signed session data in the cookie itself, so most requests skip the session lookup entirely. This is the single biggest performance win available here and it costs one config block. **Keep the TTL under five minutes** — revocation only takes effect when the cookie cache expires, and that window is the price you pay.
 
-**`trustedOrigins` is your CSRF defence**, and it must be explicit. Add the Tauri origins when the desktop app ships — `tauri://localhost` and `http://tauri.localhost`, both, because the scheme differs by platform. A wildcard here is not a shortcut; it is the vulnerability.
+**`trustedOrigins` is your CSRF defence**, and it must be explicit. It carries **both** Tauri origins from day one — `tauri://localhost` and `http://tauri.localhost` — because the scheme genuinely differs by platform, and shipping one produces an app that works for half your team. The value lives in `AUTH_TRUSTED_ORIGINS` and the same list drives the CORS allowlist ([24](24-web-app.md)); one origin list, two consumers. A wildcard here is not a shortcut; it is the vulnerability.
 
 ---
 
-## Step 15.3 — `BetterAuthSessionResolver`
+## Step 16.3 — `BetterAuthSessionResolver`
 
 **`packages/auth/src/session/better-auth.session-resolver.ts`**
 
@@ -235,7 +235,7 @@ export class BetterAuthSessionResolver extends SessionResolver {
 
 ---
 
-## Step 15.4 — `CapabilityCache`
+## Step 16.4 — `CapabilityCache`
 
 `PgCapabilityRepository.resolveFor()` is three queries across role permissions, goal memberships, and overrides. It runs on essentially every request. Fine at ten users, not at five hundred.
 
@@ -300,7 +300,7 @@ Every one of these must evict:
 
 ---
 
-## Step 15.5 — `PrincipalBuilder`
+## Step 16.5 — `PrincipalBuilder`
 
 Every request, regardless of surface, resolves to the same `Principal`. This is the class that makes four auth mechanisms collapse into one authorization model.
 
@@ -341,13 +341,13 @@ export class PrincipalBuilder {
 }
 ```
 
-**The oRPC middleware calls this, never Better Auth directly** ([23](23-web-app.md)). That is what keeps the transport layer ignorant of the auth library, and it is why moving to NestJS later means rewriting a guard rather than rewriting authentication.
+**The oRPC middleware calls this, never Better Auth directly** ([24](24-web-app.md)). That is what keeps the transport layer ignorant of the auth library, and it is why moving to NestJS later means rewriting a guard rather than rewriting authentication.
 
 **API key is checked first.** A request carrying both a session cookie and an `x-api-key` header is an integration calling through a browser context, and the key is the more specific credential. Checking the session first would silently upgrade a scoped key to full user permissions.
 
 ---
 
-## Step 15.6 — API keys
+## Step 16.6 — API keys
 
 **`packages/db/src/rbac/api-key.schema.ts`**
 
@@ -494,11 +494,11 @@ export class ApiKeyResolver {
 
 ---
 
-## Step 15.7 — The four surfaces
+## Step 16.7 — The four surfaces
 
 **Web** — httpOnly cookie, `sameSite: "lax"`, `secure` in production. JavaScript cannot read the token, so XSS cannot exfiltrate a session.
 
-**Desktop (Tauri)** — the bearer plugin. The token lives in the OS keychain on the Rust side; the webview asks for it through a Tauri command and passes it via `BearerAuthStrategy` ([17](17-api-client-package.md)). The token is never written to `localStorage`, where any injected script could read it.
+**Desktop (Tauri)** — the bearer plugin. The token lives in the OS keychain on the Rust side; the webview asks for it through a Tauri command and passes it via `BearerAuthStrategy` ([18](18-api-client-package.md)). The token is never written to `localStorage`, where any injected script could read it.
 
 **Client portal** — the same `user` table and the same login. A portal user is a user whose role resolves to a deliberately tiny capability set. There is no second auth system, which is why the portal cannot develop its own vulnerabilities.
 
@@ -508,12 +508,12 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 
 ---
 
-## Step 15.8 — Security checklist
+## Step 16.8 — Security checklist
 
 - **Email verification required** before a session grants anything beyond a stub. Otherwise anyone can create an account naming a colleague's address.
 - **2FA available, enforceable per role.** Enforce it for anyone holding `rbac.role.manage`; optional otherwise.
 - **Revoke all sessions on password change.** `revokeSessionsOnPasswordReset: true` above. This is the difference between "changed my password" and "actually locked them out."
-- **`trustedOrigins` explicit.** No wildcards. Add both Tauri origins when the desktop app ships.
+- **`trustedOrigins` explicit.** No wildcards, and **both** Tauri origins present — the scheme differs by platform, so one of them is half a deployment.
 - **Auth events go to the audit trail** — sign-in, sign-out, password change, 2FA enrolment, session revocation, API-key creation and revocation.
 - **Never log tokens, session IDs, or key material.** Redact at the logger, not at each call site — a rule enforced in one place holds.
 - **Invite-only registration** for internal roles. Open sign-up creates unaffiliated users the RBAC model has no place for.
@@ -521,15 +521,23 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 
 ---
 
-## Step 15.9 — Two things worth deciding now
+## Step 16.9 — Two things worth deciding now
 
 **Multi-organisation or single?** The RBAC model has an org scope but the schema assumes one organisation. If you will ever run multiple tenants on one deployment, add `organization_id` to `memberships`, `goal_members`, and every domain table **now**. Retrofitting a tenant column across two dozen feature modules is a genuinely large migration, and it is the kind of thing discovered when the first customer asks.
 
-**Session lifetime and refresh.** Pick a policy up front: how long a session lives, whether it slides on activity, and how long a desktop token lasts. Desktop tokens usually want to be longer-lived than web sessions, which means they also want independent revocation — a "sign out all devices" that actually reaches the desktop app.
+**Session lifetime and refresh.** Three values, and with the desktop shell settled they are answerable now rather than later. Record them here so the answer lives somewhere:
+
+| Value | Chosen | Note |
+| --- | --- | --- |
+| Web session lifetime | *decide* | |
+| Slides on activity? | *decide* | A sliding window and a short cookie-cache TTL interact — the cache delays revocation regardless |
+| Desktop token lifetime | *decide* | Usually longer than a web session |
+
+A longer-lived desktop token is the normal choice and it has a consequence: it needs **independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. Decide that mechanism at the same time, not when someone loses a laptop.
 
 ---
 
-## Step 15.10 — The barrel
+## Step 16.10 — The barrel
 
 **`packages/auth/src/index.ts`**
 
@@ -566,4 +574,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/infrastructure`](14-infrastructure-package.md) · [`@loadbearing/composition` →](16-composition-container.md)
+[← `@loadbearing/infrastructure`](15-infrastructure-package.md) · [`@loadbearing/composition` →](17-composition-container.md)

@@ -99,6 +99,7 @@ Also:
 
 - **Clone shallow in the filesystem.** `C:\dev\ratchet`, never under `Documents` or OneDrive. You are spending path budget before the first `node_modules`.
 - **Run Docker Desktop with the WSL2 backend** (Settings → General). The Hyper-V backend has slow bind mounts and Postgres healthchecks that flake.
+- **Building the Tauri desktop app additionally needs a Rust toolchain and platform WebView libraries** — see [30](30-desktop-app.md) Step 30.1. Deliberately not listed above: only whoever builds `apps/desktop` needs it, and requiring Rust of every web developer would be a tax for nothing.
 - **Run commands from PowerShell or Git Bash**, never `cmd.exe`. Husky hooks need the shell Git for Windows ships.
 
 ---
@@ -107,7 +108,7 @@ Also:
 
 Whatever editor you use, two things need wiring: **Biome as the formatter** and **ESLint for
 the architecture rules**. Nothing formats on save until you do this, and nothing formats on
-commit until the hooks in [25](25-hygiene-and-ci.md) — until then `pnpm check` is a manual step.
+commit until the hooks in [26](26-hygiene-and-ci.md) — until then `pnpm check` is a manual step.
 
 **Do not install a Prettier plugin.** Prettier is not in this stack. Having it installed means
 whichever plugin wins the "default formatter" slot decides your formatting, which is exactly the

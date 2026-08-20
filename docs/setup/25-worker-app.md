@@ -1,10 +1,10 @@
-# 24 · `apps/worker` — background jobs
+# 25 · `apps/worker` — background jobs
 
 > A standalone Node process that shares the container and shares nothing else. No HTTP server, no framework, no shortcuts around the domain.
 
 **Delivers:** A BullMQ worker that consumes queues and runs schedules, using the same use-cases the web app uses.
 
-**Prerequisite:** [23 · `apps/web`](23-web-app.md)
+**Prerequisite:** [24 · `apps/web`](24-web-app.md)
 
 ---
 
@@ -37,7 +37,7 @@ apps/worker/
 
 ---
 
-## Step 24.1 — Package files
+## Step 25.1 — Package files
 
 **`apps/worker/package.json`**
 
@@ -96,7 +96,7 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 
 ---
 
-## Step 24.2 — `Env`
+## Step 25.2 — `Env`
 
 `apps/worker/src/env.ts` is structurally identical to the web app's: a Zod schema parsed at module load, exposing `containerConfig()`.
 
@@ -108,7 +108,7 @@ Adapt `containerConfig()` to return the same shape minus `auth`, and make the `a
 
 ---
 
-## Step 24.3 — `SystemPrincipal`
+## Step 25.3 — `SystemPrincipal`
 
 Jobs have no user. They still need a principal, because `Authorizer.assert()` is not optional.
 
@@ -171,7 +171,7 @@ export class SystemPrincipal {
 
 ---
 
-## Step 24.4 — A consumer
+## Step 25.4 — A consumer
 
 **`apps/worker/src/consumer/embedding.consumer.ts`**
 
@@ -220,7 +220,7 @@ export class EmbeddingConsumer {
 
 ---
 
-## Step 24.5 — Schedules
+## Step 25.5 — Schedules
 
 **`apps/worker/src/schedule/cleanup.schedule.ts`** registers a BullMQ repeatable job:
 
@@ -249,7 +249,7 @@ await queue.add(
 
 ---
 
-## Step 24.6 — Bootstrap and entrypoint
+## Step 25.6 — Bootstrap and entrypoint
 
 **`apps/worker/src/worker-bootstrap.ts`**
 
@@ -277,7 +277,7 @@ export class WorkerBootstrap {
 ```
 
 > [!IMPORTANT]
-> **Use `RedisConnection` from [14](14-infrastructure-package.md), not a bare `{ host, port }`.** BullMQ accepts either, but `queueClient()` is what applies `maxRetriesPerRequest: null` and omits the cache key prefix — the two settings BullMQ requires. A plain `{ host, port }` gets ioredis defaults, and the symptom is workers that stop consuming after a few minutes with no error.
+> **Use `RedisConnection` from [15](15-infrastructure-package.md), not a bare `{ host, port }`.** BullMQ accepts either, but `queueClient()` is what applies `maxRetriesPerRequest: null` and omits the cache key prefix — the two settings BullMQ requires. A plain `{ host, port }` gets ioredis defaults, and the symptom is workers that stop consuming after a few minutes with no error.
 >
 > The worker builds **its own** `RedisConnection` rather than reaching into the container's, which keeps `Container.redis` private and gives consuming and publishing independent connections. Close it in `stop()`, before disposing the container.
 
@@ -308,7 +308,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 
 ---
 
-## Step 24.7 — Run it
+## Step 25.7 — Run it
 
 ```bash
 pnpm dev:worker
@@ -330,4 +330,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `apps/web`](23-web-app.md) · [Hygiene and CI →](25-hygiene-and-ci.md)
+[← `apps/web`](24-web-app.md) · [Hygiene and CI →](26-hygiene-and-ci.md)

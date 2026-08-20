@@ -1,5 +1,5 @@
 {
   "title": "Reference",
   "description": "One page per export",
-  "pages": ["permission-registry", "capability-set", "module-registry"]
+  "pages": ["permission-registry", "capability-set", "module-registry", "routes"]
 }

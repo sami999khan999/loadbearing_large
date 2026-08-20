@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CapabilitySet } from "../src/capability-set.js";
-import { PermissionRegistry } from "../src/permission-registry.js";
+import { type PermissionKey, PermissionRegistry } from "../src/permission-registry.js";
 
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 const OTHER_GOAL = "018f8c00-0000-7000-8000-000000000002";
@@ -56,6 +56,21 @@ describe("CapabilitySet", () => {
     expect(caps.can("rbac.role.read")).toBe(true);
   });
 
+  /**
+   * The likeliest real configuration: a role grants the permission and a per-user
+   * override denies it. Suspension has to work without unpicking role assignments.
+   */
+  it("denies a permission that is granted and denied at the same scope", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["member.read", "apikey.read"], denies: ["member.read"] },
+      goals: {},
+    });
+
+    expect(caps.can("member.read")).toBe(false);
+    expect(caps.can("apikey.read")).toBe(true);
+  });
+
   it("lets a goal-level deny beat an org-level grant", () => {
     treatEveryKeyAsGoalScoped();
     const caps = CapabilitySet.from({
@@ -90,7 +105,57 @@ describe("CapabilitySet", () => {
       },
     });
 
-    expect(caps.goalsWith("member.read")).toEqual([GOAL]);
+    expect(caps.goalsWith("member.read", [GOAL, OTHER_GOAL])).toEqual([GOAL]);
+  });
+
+  /**
+   * The two shapes that hold a goal-scoped permission in goals their own DTO never
+   * names. Both answered `[]` before the candidate set became a parameter, which
+   * fed an empty permitted scope into `VectorStore.search()` — org-wide chunks
+   * only, with no error.
+   */
+  it("resolves every candidate goal for a wildcard holder", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.goalsWith("member.read", [GOAL, OTHER_GOAL])).toEqual([GOAL, OTHER_GOAL]);
+  });
+
+  it("resolves every candidate goal for an org-level grant of a goal-scoped permission", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["member.read"], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.goalsWith("member.read", [GOAL, OTHER_GOAL])).toEqual([GOAL, OTHER_GOAL]);
+  });
+
+  it("excludes a goal the wildcard holder is denied inside", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: { [OTHER_GOAL]: { grants: [], denies: ["member.read"] } },
+    });
+
+    expect(caps.goalsWith("member.read", [GOAL, OTHER_GOAL])).toEqual([GOAL]);
+  });
+
+  it("does not repeat a goal the caller listed twice", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.goalsWith("member.read", [GOAL, GOAL])).toEqual([GOAL]);
   });
 
   it("round-trips through JSON", () => {
@@ -104,6 +169,67 @@ describe("CapabilitySet", () => {
     );
 
     expect(revived.can("member.read")).toBe(true);
+  });
+});
+
+/**
+ * A key the catalog does not define cannot arrive through the type system, but it
+ * can arrive at runtime: from a cast, or from a `CapabilitySetDto` that outlived
+ * the permission it names — a Redis entry written before the key was deleted and
+ * still inside its sixty-second TTL.
+ */
+describe("CapabilitySet and unrecognised permissions", () => {
+  const GONE = "task.archive" as PermissionKey;
+
+  it("denies an unrecognised permission rather than throwing", () => {
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+
+    expect(() => caps.can(GONE)).not.toThrow();
+    expect(caps.can(GONE)).toBe(false);
+  });
+
+  it("denies an unrecognised permission through canAll and canAny", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["member.read"], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.canAll(["member.read", GONE])).toBe(false);
+    expect(caps.canAny([GONE])).toBe(false);
+    expect(caps.canAny(["member.read", GONE])).toBe(true);
+  });
+
+  it("drops unrecognised keys from every set on the way in", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["member.read", GONE], denies: [GONE] },
+      goals: { [GOAL]: { grants: [GONE], denies: ["member.read", GONE] } },
+    });
+    const dto = caps.toJSON();
+
+    expect(dto.org.grants).toEqual(["member.read"]);
+    expect(dto.org.denies).toEqual([]);
+    expect(dto.goals[GOAL]?.grants).toEqual([]);
+    expect(dto.goals[GOAL]?.denies).toEqual(["member.read"]);
+  });
+
+  /**
+   * `toJSON()` hands back the stored DTO, so sanitising the copy rather than the
+   * stored object would write the dropped keys straight back out to the cache.
+   */
+  it("keeps the goal key when every permission inside it was dropped", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: { [GOAL]: { grants: [GONE], denies: [] } },
+    });
+
+    expect(Object.keys(caps.toJSON().goals)).toEqual([GOAL]);
   });
 });
 

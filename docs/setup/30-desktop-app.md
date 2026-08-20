@@ -1,10 +1,13 @@
-# 29 · `apps/desktop` — Tauri
+# 30 · `apps/desktop` — Tauri
 
-> Optional, and deliberately last. A Rust shell around a webview that mounts the same `feature` and `ui` packages the web app does, and reaches the server as a plain HTTP client.
+> Read last, because it depends on every package above it. A Rust shell around a webview that mounts the same `feature` and `ui` packages the web app does, and reaches the server as a plain HTTP client.
 
 **Delivers:** A desktop application that adds one app directory and zero packages.
 
-**Prerequisite:** [28 · Naming and boundaries](28-naming-and-boundaries.md)
+**Prerequisite:** [29 · Naming and boundaries](29-naming-and-boundaries.md)
+
+> [!NOTE]
+> **Tauri is the desktop shell — decided, not proposed.** Earlier documents are written on that basis rather than hedging against it: the bearer plugin and both Tauri origins are configured on day one in [16](16-auth-package.md) and [24](24-web-app.md), the shared route table in [08](08-permissions-package.md) exists partly so two shells cannot disagree about a path, and `apps/desktop` appears in the canonical tree in [28](28-folder-structure.md). Nothing in this document modifies work from an earlier one.
 
 ---
 
@@ -33,7 +36,7 @@ That is why the "must load in Electron's main process" justification for keeping
 
 ---
 
-## Step 29.1 — Prerequisites
+## Step 30.1 — Prerequisites
 
 Only needed by whoever builds the desktop app; the web and worker developers need none of this.
 
@@ -54,7 +57,7 @@ Platform toolchains on top:
 
 ---
 
-## Step 29.2 — Scaffold
+## Step 30.2 — Scaffold
 
 ```bash
 cd apps
@@ -72,9 +75,11 @@ pnpm add --filter @loadbearing/desktop \
   @loadbearing/api-client@workspace:* @loadbearing/query@workspace:* \
   @loadbearing/content@workspace:* @loadbearing/ui@workspace:* \
   @loadbearing/feature@workspace:* @loadbearing/asset@workspace:* \
-  @tauri-apps/api @tanstack/react-router @tanstack/react-query@catalog:
-pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli vite @vitejs/plugin-react
+  @tauri-apps/api@catalog: @tanstack/react-router@catalog: @tanstack/react-query@catalog:
+pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli@catalog: vite @vitejs/plugin-react
 ```
+
+`catalog:` for all three, same as everywhere else — `apps/desktop` is not an exception to the rule that one file owns every version ([03](03-workspace-and-catalogs.md)). `@tanstack/react-router` matters most: `apps/web` gets it transitively through TanStack Start, so without a catalog entry the two shells can resolve different router versions while sharing the same `feature` components.
 
 **Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The ESLint server-only boundary from [05](05-lint-and-format.md) applies here with no escape hatch at all, because unlike `apps/web` there is no `src/server/**` to exempt.
 
@@ -98,9 +103,9 @@ apps/desktop/
 
 ---
 
-## Step 29.3 — Configuration without `process.env`
+## Step 30.3 — Configuration without `process.env`
 
-There is no Node runtime in the webview, so `process.env` does not exist. This is a feature: the "exactly two `process.env` readers" assertion in [25](25-hygiene-and-ci.md) needs no new exemption, and the desktop app cannot accidentally read a server secret because it has no mechanism to.
+There is no Node runtime in the webview, so `process.env` does not exist. This is a feature: the "exactly two `process.env` readers" assertion in [26](26-hygiene-and-ci.md) needs no new exemption, and the desktop app cannot accidentally read a server secret because it has no mechanism to.
 
 ```ts
 // apps/desktop/src/config.ts
@@ -119,9 +124,9 @@ export class Config {
 
 ---
 
-## Step 29.4 — The token provider
+## Step 30.4 — The token provider
 
-This is the whole integration, and `TokenProvider` from [17](17-api-client-package.md) was made abstract for exactly this.
+This is the whole integration, and `TokenProvider` from [18](18-api-client-package.md) was made abstract for exactly this.
 
 ```ts
 // apps/desktop/src/token-provider.ts
@@ -146,7 +151,7 @@ export class TauriTokenProvider extends TokenProvider {
 The Rust side implements those three commands against the OS keychain (`keyring` crate, or `tauri-plugin-stronghold` if you want an encrypted vault rather than the system store).
 
 > [!NOTE]
-> The method names must match the abstract class in [17](17-api-client-package.md) exactly — `get()` and `set(token: string | null)`, two methods, not three. `set(null)` is the clear path, which is why the Rust side still needs all three commands. `noImplicitOverride` turns any mismatch into a compile error, so a stale `token()` / `store()` / `clear()` triple fails the build rather than silently leaving the abstract methods unimplemented.
+> The method names must match the abstract class in [18](18-api-client-package.md) exactly — `get()` and `set(token: string | null)`, two methods, not three. `set(null)` is the clear path, which is why the Rust side still needs all three commands. `noImplicitOverride` turns any mismatch into a compile error, so a stale `token()` / `store()` / `clear()` triple fails the build rather than silently leaving the abstract methods unimplemented.
 
 **The token never touches `localStorage` and never sits in a JS variable longer than one request.** A webview is still a browser: anything reachable from JavaScript is reachable by injected JavaScript. Keeping the token behind an `invoke` boundary means an XSS in a rendered field cannot enumerate it — it can only ask for it once, which is a smaller blast radius and a loggable event.
 
@@ -163,25 +168,57 @@ That is the entire difference between the desktop client and the browser client.
 
 ---
 
-## Step 29.5 — Server-side changes
+## Step 30.5 — Server-side: verify, do not change
 
-Two, both in `apps/web`'s environment rather than in any package:
+Nothing to build here. Because Tauri is settled rather than speculative, `apps/web` already ships what the desktop client needs — confirm all three and move on:
 
-**`AUTH_TRUSTED_ORIGINS` gains the Tauri origins.** The webview's origin is `tauri://localhost` on macOS and Linux, and `http://tauri.localhost` on Windows. Add **both** — the scheme genuinely differs by platform, and omitting one produces an app that works for half your team.
+| Check | Where it was built |
+| --- | --- |
+| `AUTH_TRUSTED_ORIGINS` contains `tauri://localhost` **and** `http://tauri.localhost` | [24](24-web-app.md) Step 24.2, and `.env.example` |
+| CORS allows those origins on `/api/rpc` and `/api/auth`, with `authorization` in `Allow-Headers` | [24](24-web-app.md) Step 24.7 |
+| The bearer plugin is enabled | [16](16-auth-package.md) Step 16.2 |
 
-**CORS must allow those origins for `/api/rpc` and `/api/auth`.** Same list, same reasoning. This is the point at which the bearer plugin from [15](15-auth-package.md) earns the "enable it on day one" advice: had the API been cookie-only, every endpoint would need revisiting now.
+```bash
+curl -i -X OPTIONS http://localhost:3000/api/rpc \
+  -H "Origin: tauri://localhost" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,authorization"
+```
+
+A `204` carrying `Access-Control-Allow-Origin: tauri://localhost` means the desktop client will connect. A `204` with no such header means the origin is missing from the allowlist — the request is not rejected outright, which is exactly why this fails as a silent browser-level block rather than a server error worth reading.
+
+**That this step builds nothing is the point.** Had the API been cookie-only and same-origin, arriving here would mean revisiting every endpoint, guard, and test.
 
 ---
 
-## Step 29.6 — Routing and the CSP
+## Step 30.6 — Routing and the CSP
 
-**Use memory or hash history, not browser history.** The webview serves from a custom protocol with no server behind it, so a path-based route on a cold start has nothing to resolve. This is the "routing is the one thing the desktop shell replaces" note from [20](20-query-package.md) becoming concrete: `apps/desktop` owns its own `@tanstack/react-router` instance and its own route tree, and mounts the same `feature` components underneath.
+**Use memory or hash history, not browser history.** The webview serves from a custom protocol with no server behind it, so a path-based route on a cold start has nothing to resolve. This is the "routing is the one thing the desktop shell replaces" note from [21](21-query-package.md) becoming concrete: `apps/desktop` owns its own `@tanstack/react-router` instance and its own route tree, and mounts the same `feature` components underneath.
+
+**Its own route tree, but not its own paths.** Destinations come from `ROUTES` in `@loadbearing/permissions` ([08](08-permissions-package.md)), the same table `apps/web` links against and `GATES` points into:
+
+```tsx
+import { ROUTES } from "@loadbearing/permissions";
+
+<Link to={ROUTES.rbac.members}>Members</Link>
+```
+
+**Keeping the path strings identical to web's is an invariant, not a coincidence.** History mode changes how a path is *serialised* — `#/settings/members` under hash history — never what it is *called*. Holding that invariant is what lets a `<Link>` inside a `feature` component be correct in both shells with no branching and no prop threading, which is most of what makes this document one directory long.
+
+The table is hand-written, so it can lie: rename a route file and the table still names the old path. One line, typed against this app's generated tree, closes that:
+
+```ts
+// apps/desktop/src/route/-nav-routes.ts — nobody reads this, it only has to compile
+const _routesExist: Readonly<Record<AppRoute, true>> = /* built from routeTree */;
+```
+
+If a screen genuinely has to live somewhere else here, override only the keys that differ rather than forking the table — and know the cost: an overridden screen can no longer name `ROUTES.x` inside `feature`, so its path has to arrive as a prop. That is the "navigation arrives as a prop" rule earning its keep, and a good reason to avoid diverging unless a screen truly must move. Full detail in [`routes.md`](../../packages/permissions/docs/reference/routes.md).
 
 **Tauri ships a restrictive CSP by default and you should keep it.** Add your API origin to `connect-src` in `tauri.conf.json` and nothing else. Widening it to `*` to make a fetch work discards the main security advantage of the platform.
 
 ---
 
-## Step 29.7 — CI
+## Step 30.7 — CI
 
 Desktop builds do **not** belong in the `verify` job — they need three runners and several minutes each. Give them a separate workflow, triggered on tags:
 
@@ -193,7 +230,7 @@ strategy:
 
 Use `tauri-apps/tauri-action` for the build and release, `Swatinem/rust-cache` for the Cargo cache, and pin `ubuntu-22.04` rather than `ubuntu-latest` — glibc in the build image sets the floor for which Linux distributions can run your binary, and `latest` silently raising it is a support ticket you will not enjoy.
 
-The `verify` job still covers everything that matters here: the desktop app's TypeScript is typechecked and linted by the same `pnpm typecheck` and `pnpm lint` as everything else.
+The `verify` job still covers everything that matters here: the desktop app's TypeScript is typechecked and linted by the same `pnpm typecheck` and `pnpm lint` as everything else ([26](26-hygiene-and-ci.md)). What it does **not** do is compile the Rust half or produce a bundle — a broken `main.rs` reaches you at tag time, not at merge time. That is the trade for keeping `verify` fast, and it is worth knowing rather than discovering.
 
 ---
 
@@ -215,4 +252,4 @@ That is the return on every "no `@tanstack/react-router` here" and "navigation a
 
 ---
 
-[← Naming & Boundaries](28-naming-and-boundaries.md) · [Back to the index](00-README.md)
+[← Naming & Boundaries](29-naming-and-boundaries.md) · [Back to the index](00-README.md)

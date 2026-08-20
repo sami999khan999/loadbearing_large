@@ -28,8 +28,5 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "dependencies": {
-    "@loadbearing/core": "workspace:*"
   }
 }

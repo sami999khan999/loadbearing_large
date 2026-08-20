@@ -1,10 +1,10 @@
-# 20 · `@loadbearing/query`
+# 21 · `@loadbearing/query`
 
 > The single TanStack owner. Query keys, query and mutation options, the provider, and the client factory.
 
 **Delivers:** `QueryKeys`, `createQueryClient()`, `ApiClientProvider`, `useAppMutation`, and session state living in the same cache as everything else.
 
-**Prerequisite:** [19 · `@loadbearing/content`](19-content-package.md)
+**Prerequisite:** [20 · `@loadbearing/content`](20-content-package.md)
 
 ---
 
@@ -27,7 +27,7 @@ packages/query/src/
 
 ---
 
-## Step 20.1 — `QueryKeys`
+## Step 21.1 — `QueryKeys`
 
 **`packages/query/src/query-key.ts`**
 
@@ -61,7 +61,7 @@ export class QueryKeys {
 
 ---
 
-## Step 20.2 — `createQueryClient()`
+## Step 21.2 — `createQueryClient()`
 
 **`packages/query/src/query-client.ts`**
 
@@ -86,11 +86,9 @@ export function createQueryClient(options: QueryClientOptions): QueryRuntime {
         staleTime: options.staleTimeMs ?? 30_000,
         gcTime: 5 * 60_000,
         retry: (failureCount, error) => {
-          const code = (error as { code?: string }).code;
-          // Never retry a permission or validation failure — the answer will not change.
-          if (code === "FORBIDDEN" || code === "UNAUTHORIZED" || code === "BAD_REQUEST") {
-            return false;
-          }
+          // Retryability is a fact about the code, declared once in the catalog.
+          const normalized = ErrorNormalizer.normalize(error);
+          if (!ERROR_CATALOG[normalized.code].retryable) return false;
           return failureCount < 2;
         },
         refetchOnWindowFocus: false,
@@ -139,7 +137,7 @@ const { queryClient, apiClient } = createQueryClient({
 
 ---
 
-## Step 20.3 — The provider
+## Step 21.3 — The provider
 
 **`packages/query/src/api-client.context.tsx`**
 
@@ -172,7 +170,7 @@ Context rather than a module singleton, for the same reason `createQueryClient` 
 
 ---
 
-## Step 20.4 — `useAppMutation`
+## Step 21.4 — `useAppMutation`
 
 **`packages/query/src/use-app-mutation.ts`**
 
@@ -209,9 +207,9 @@ export function useAppMutation<TData, TVariables>(
 
 ---
 
-## Step 20.5 — Session state
+## Step 21.5 — Session state
 
-Session is the piece of state that gates everything else, so it lives in the same cache as everything else. This is why [17](17-api-client-package.md) wraps Better Auth's *vanilla* client rather than using `better-auth/react`.
+Session is the piece of state that gates everything else, so it lives in the same cache as everything else. This is why [18](18-api-client-package.md) wraps Better Auth's *vanilla* client rather than using `better-auth/react`.
 
 **`packages/query/src/session/session.queries.ts`**
 
@@ -275,7 +273,7 @@ const signOut = SessionMutations.useSignOut(auth, () => {
 
 ---
 
-## Step 20.6 — What a feature slice looks like
+## Step 21.6 — What a feature slice looks like
 
 For each contract namespace, two files:
 
@@ -315,7 +313,7 @@ export class TaskMutations {
 
 ---
 
-## Step 20.7 — The barrel
+## Step 21.7 — The barrel
 
 **`packages/query/src/index.ts`**
 
@@ -327,7 +325,7 @@ export { SessionMutations, SessionQueries } from "./session/index.js";
 export { type AppMutationOptions, useAppMutation } from "./use-app-mutation.js";
 ```
 
-A new slice adds one line here — `export { TaskMutations, TaskQueries } from "./task/index.js";` — and that line is the eleventh step of the checklist in [26](26-verification-and-first-feature.md) being visible in a diff.
+A new slice adds one line here — `export { TaskMutations, TaskQueries } from "./task/index.js";` — and that line is the eleventh step of the checklist in [27](27-verification-and-first-feature.md) being visible in a diff.
 
 ---
 
@@ -369,4 +367,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/content`](19-content-package.md) · [`@loadbearing/ui` →](21-ui-package.md)
+[← `@loadbearing/content`](20-content-package.md) · [`@loadbearing/ui` →](22-ui-package.md)

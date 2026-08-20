@@ -1,10 +1,12 @@
 import type { CapabilitySet } from "./capability-set.js";
 import { GATES } from "./gate/index.js";
 import type { PermissionKey } from "./permission-registry.js";
+import type { AppRoute } from "./route/index.js";
 
 export interface ModuleGate {
   readonly permission: PermissionKey;
-  readonly route: string;
+  /** `AppRoute`, not `string` — a gate pointing at an undeclared path fails to compile. */
+  readonly route: AppRoute;
 }
 
 export type ModuleKey = keyof typeof GATES;

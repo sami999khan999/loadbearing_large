@@ -11,7 +11,7 @@ see the finance section at all," which is a different question with a different 
 ```ts
 export interface ModuleGate {
   readonly permission: PermissionKey;
-  readonly route: string;
+  readonly route: AppRoute;
 }
 
 export type ModuleKey = keyof typeof GATES;
@@ -64,7 +64,7 @@ identifiers by name for that package alone:
 > That rule is the **core** `no-restricted-imports`, which has no `allowTypeImports` option and
 > therefore flags `import type` as well. Since `content` is only ever meant to import `ModuleKey`,
 > that is not currently a problem — but it will be the moment anyone reaches for a type-only
-> exception. See [19](../../../../docs/setup/19-content-package.md).
+> exception. See [20](../../../../docs/setup/20-content-package.md).
 
 Folding the gate onto `PermissionMeta` would collapse the two registries into one and put the
 gating decision inside the file a content editor edits. The separation is the whole point.
@@ -99,7 +99,15 @@ ModuleRegistry.instance.gate("finance");
 ```
 
 `satisfies ModuleGate` also type-checks each gate's `permission` against `PermissionKey`, so a gate
-pointing at a permission that does not exist fails to compile.
+pointing at a permission that does not exist fails to compile — and since `route` is `AppRoute` from
+[the route table](routes.md) rather than `string`, the same holds for a gate pointing at a path that
+does not exist:
+
+```ts
+rbac: { permission: "rbac.role.read", route: "/settings/rolez" },
+// TS2820: Type '"/settings/rolez"' is not assignable to type 'AppRoute'.
+//         Did you mean '"/settings/roles"'?
+```
 
 ---
 
@@ -118,8 +126,20 @@ const caps = CapabilitySet.from({
 ModuleRegistry.instance.visibleModules(caps); // ["member"] — not both
 ```
 
-Gates are asked without a `goalId`, so a module gated on a goal-scoped permission is never visible.
-Gate modules on org-scoped keys.
+Gates are asked without a `goalId`, so a module gated on a goal-scoped permission is never visible —
+to anyone, ever, with nothing to indicate why. Gate modules on org-scoped keys, and note this is a
+**checked** claim rather than a documented one:
+
+```ts
+it("gates every module on an org-scoped permission", () => {
+  for (const [module, gate] of Object.entries(GATES)) {
+    expect(PermissionRegistry.instance.scopeOf(gate.permission), module).toBe("org");
+  }
+});
+```
+
+Same shape as the `ProcedurePermissions` coverage test in
+[10](../../../../docs/setup/10-contracts-package.md) — a cross-check the type system cannot express.
 
 ---
 
@@ -128,4 +148,5 @@ Gate modules on org-scoped keys.
 - [`@loadbearing/permissions`](../index.md)
 - [CapabilitySet](capability-set.md) — every decision here delegates to `can()`
 - [PermissionRegistry](permission-registry.md) — the vocabulary a gate points into
-- [19 · content](../../../../docs/setup/19-content-package.md) — the package this registry exists to constrain
+- [ROUTES](routes.md) — the destination table a gate's `route` points into
+- [20 · content](../../../../docs/setup/20-content-package.md) — the package this registry exists to constrain

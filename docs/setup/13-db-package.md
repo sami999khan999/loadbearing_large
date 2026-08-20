@@ -1,10 +1,10 @@
-# 12 · `@loadbearing/db`
+# 13 · `@loadbearing/db`
 
 > Drizzle schema, the connection class, repository implementations, migrations, and seeds. Server-only.
 
 **Delivers:** RBAC tables, `CapabilityRepository`, a working migration pipeline, and the four system roles.
 
-**Prerequisite:** [11 · `@loadbearing/application`](11-application-package.md)
+**Prerequisite:** [12 · `@loadbearing/application`](12-application-package.md)
 
 ---
 
@@ -43,7 +43,7 @@ packages/db/
 
 ---
 
-## Step 12.1 — The tripwire and the barrel
+## Step 13.1 — The tripwire and the barrel
 
 **`packages/db/src/index.ts`**
 
@@ -68,7 +68,7 @@ The assert sits above every export, so it runs the moment the module is evaluate
 
 ---
 
-## Step 12.2 — `Database`
+## Step 13.2 — `Database`
 
 **`packages/db/src/database.ts`**
 
@@ -120,7 +120,7 @@ export class Database {
 
 ---
 
-## Step 12.3 — The schema
+## Step 13.3 — The schema
 
 Drizzle tables stay **declarative** — the same data-shape exemption Zod schemas get. They are `pgTable` calls at module scope, not classes. **All access goes through repository classes**; nothing outside `packages/db/src` imports a table.
 
@@ -219,7 +219,7 @@ export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => 
 
 ### Three modelling notes
 
-**`user_id` is `text`, not `uuid`.** Better Auth owns the `user` table and generates its own identifier format. Matching its type is what lets you add a real foreign key in [15](15-auth-package.md) once `auth.schema.ts` exists. Fighting it — generating your own users table and syncing — is the mistake that produces two identity systems.
+**`user_id` is `text`, not `uuid`.** Better Auth owns the `user` table and generates its own identifier format. Matching its type is what lets you add a real foreign key in [16](16-auth-package.md) once `auth.schema.ts` exists. Fighting it — generating your own users table and syncing — is the mistake that produces two identity systems.
 
 **`permission` is `text`, not an enum.** A Postgres enum would need a migration every time a permission is added, and the vocabulary lives in `PermissionRegistry` where it belongs. The column is untrusted text and `isKnown()` is the gate. This is the same reason `role_permissions` has no foreign key to a permissions table: there is no permissions table.
 
@@ -227,7 +227,7 @@ export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => 
 
 ---
 
-## Step 12.4 — The schema barrel
+## Step 13.4 — The schema barrel
 
 **`packages/db/src/schema.ts`**
 
@@ -246,7 +246,7 @@ One file that drizzle-kit points at, and one file to edit when a slice adds tabl
 
 ---
 
-## Step 12.5 — Drizzle Kit
+## Step 13.5 — Drizzle Kit
 
 **`packages/db/drizzle.config.ts`**
 
@@ -310,7 +310,7 @@ Use `db:push` on a scratch database while iterating on a schema shape you have n
 
 ---
 
-## Step 12.6 — First migration
+## Step 13.6 — First migration
 
 ```bash
 cd packages/db
@@ -334,7 +334,7 @@ pnpm db:studio
 
 ---
 
-## Step 12.7 — Repositories
+## Step 13.7 — Repositories
 
 **`packages/db/src/base.repository.ts`**
 
@@ -442,7 +442,7 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
 
 **`isKnown()` filters every raw string on the way in.** This is the line that makes the deny-by-default model honest against a database that has outlived several refactors.
 
-**This method is cached in [15](15-auth-package.md)**, not here. The repository does the correct expensive thing; `CapabilityCache` decides how often it runs. Mixing the two means the cache cannot be tested independently and invalidation has nowhere clean to live.
+**This method is cached in [16](16-auth-package.md)**, not here. The repository does the correct expensive thing; `CapabilityCache` decides how often it runs. Mixing the two means the cache cannot be tested independently and invalidation has nowhere clean to live.
 
 ### The naming rule for implementations
 
@@ -450,7 +450,7 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
 
 ---
 
-## Step 12.8 — Seeds
+## Step 13.8 — Seeds
 
 **`packages/db/src/seed/system-role.seed.ts`**
 
@@ -551,7 +551,7 @@ This is also the staged-rollout mechanism: until the migration that grants a mod
 
 ---
 
-## Step 12.9 — `PgUnitOfWork`
+## Step 13.9 — `PgUnitOfWork`
 
 **`packages/db/src/unit-of-work.ts`**
 
@@ -589,4 +589,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/application`](11-application-package.md) · [Vector Storage →](13-vector-store.md)
+[← `@loadbearing/application`](12-application-package.md) · [Vector Storage →](14-vector-store.md)

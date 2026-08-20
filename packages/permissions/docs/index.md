@@ -25,25 +25,31 @@ algorithm, and it loads anywhere.
 ```
 packages/permissions/
 ├── vitest.config.ts
-└── src/
-    ├── index.ts                 ← barrel
-    ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+├── src/
+│   ├── index.ts                 ← barrel
+│   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+│   ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+│   ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+│   ├── catalog/                 ← one fragment per slice, team-owned
+│   │   ├── index.ts             ←   merges fragments (platform-owned)
+│   │   └── rbac.permissions.ts
+│   ├── gate/                    ← same pattern for nav gates
+│   │   ├── index.ts
+│   │   └── rbac.gate.ts
+│   └── route/                   ← same pattern for destinations
+│       ├── index.ts             → ROUTES, AppRoute, RoutePath
+│       ├── shell.routes.ts      ←   platform-owned: home, sign-in, forbidden
+│       └── rbac.routes.ts
+└── tests/
     ├── permission-registry.spec.ts
-    ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
     ├── module-registry.spec.ts
-    ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
     ├── capability-set.spec.ts
-    ├── catalog/                 ← one fragment per slice, team-owned
-    │   ├── index.ts             ←   merges fragments (platform-owned)
-    │   └── rbac.permissions.ts
-    └── gate/                    ← same pattern for nav gates
-        ├── index.ts
-        └── rbac.gate.ts
+    └── route.spec.ts
 ```
 
 ---
 
-## The three exports
+## The four exports
 
 ### [`PermissionRegistry`](reference/permission-registry.md) — the vocabulary
 
@@ -61,7 +67,7 @@ scope arrives from the database as a raw string and must pass it first.
 ```ts
 caps.can("member.deactivate");           // org-scoped
 caps.can("task.update", goalId);         // goal-scoped
-caps.goalsWith("task.update");           // which goals, resolved by permission
+caps.goalsWith("task.update", ids);      // which of `ids`, resolved by permission
 caps.intersect(issuerCaps);              // an API key can never exceed its issuer
 CapabilitySet.from(caps.toJSON());       // server → SSR payload → browser, same class
 ```
@@ -80,6 +86,18 @@ ModuleRegistry.instance.visibleModules(caps); // readonly ModuleKey[]
 questions with different owners. `@loadbearing/content` owns the menu's labels, order, and icons —
 and must never be able to change which permission gates a module. That separation is why this is a
 second registry rather than a field on the first.
+
+### [`ROUTES`](reference/routes.md) — the destinations
+
+```ts
+ROUTES.rbac.roles;                            // "/settings/roles"
+```
+
+One hand-written table of every destination the product has, which `GATES` points into and every
+shell links against. It lives here rather than in a shell because a router's generated route tree
+cannot be the source — a Nest process has none at all, and web, desktop, and Next each generate a
+different one. `ModuleGate.route` is typed `AppRoute`, so a gate naming an undeclared path fails to
+compile.
 
 ---
 
@@ -158,6 +176,6 @@ reach that branch rather than leaving rule 3 unverified until a slice adds a goa
 
 ## See also
 
-- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [ModuleRegistry](reference/module-registry.md)
+- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [ModuleRegistry](reference/module-registry.md) · [ROUTES](reference/routes.md)
 - [Build order · 08 · permissions](../../../docs/setup/08-permissions-package.md)
 - [`@loadbearing/core`](../../core/docs/index.md) — the layer below

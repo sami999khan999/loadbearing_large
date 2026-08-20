@@ -1,10 +1,10 @@
-# 16 · `@loadbearing/composition`
+# 17 · `@loadbearing/composition`
 
 > The hand-written DI root that replaces a framework container. Roughly a hundred lines, no decorators, no reflection, no module graph.
 
 **Delivers:** One `Container` class constructed identically by the web app and the worker.
 
-**Prerequisite:** [15 · `@loadbearing/auth`](15-auth-package.md)
+**Prerequisite:** [16 · `@loadbearing/auth`](16-auth-package.md)
 
 ---
 
@@ -23,7 +23,7 @@ packages/composition/src/
 
 ---
 
-## Step 16.1 — `ContainerConfig`
+## Step 17.1 — `ContainerConfig`
 
 **`packages/composition/src/container.config.ts`**
 
@@ -63,11 +63,11 @@ export interface ContainerConfig {
 
 **Every value the system needs, in one shape, and none of it read from the environment.** `apps/web/src/env.ts` and `apps/worker/src/env.ts` are the only two files in the repository that touch `process.env`; they parse it, validate it, and hand this object down.
 
-That is what lets you construct the entire system in a test with a fake database and a frozen clock — and it is what lets the same code run in a web server and a background worker without either fighting over environment variables. (The Tauri desktop app never constructs a `Container` at all — see [29](29-desktop-app.md).)
+That is what lets you construct the entire system in a test with a fake database and a frozen clock — and it is what lets the same code run in a web server and a background worker without either fighting over environment variables. (The Tauri desktop app never constructs a `Container` at all — see [30](30-desktop-app.md).)
 
 ---
 
-## Step 16.2 — `Container`
+## Step 17.2 — `Container`
 
 **`packages/composition/src/container.ts`**
 
@@ -206,7 +206,7 @@ export class Container {
 
 ---
 
-## Step 16.3 — Where use-cases go
+## Step 17.3 — Where use-cases go
 
 A container with fifty use-cases as fields is unwieldy but it is honest, and it is still simpler than a module graph. Two ways to keep it readable as features arrive:
 
@@ -233,7 +233,7 @@ The oRPC router then reads `context.container.task.reactivate.execute(...)`, whi
 
 ---
 
-## Step 16.4 — Testing with a container
+## Step 17.4 — Testing with a container
 
 The reason this class exists in this shape:
 
@@ -259,7 +259,7 @@ No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test build
 
 ---
 
-## Step 16.5 — The barrel
+## Step 17.5 — The barrel
 
 **`packages/composition/src/index.ts`**
 
@@ -290,4 +290,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/auth`](15-auth-package.md) · [`@loadbearing/api-client` →](17-api-client-package.md)
+[← `@loadbearing/auth`](16-auth-package.md) · [`@loadbearing/api-client` →](18-api-client-package.md)

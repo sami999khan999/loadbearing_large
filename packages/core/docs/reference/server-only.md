@@ -51,7 +51,7 @@ bypassed on its own.
 | --- | --- | --- | --- |
 | 1 | [`noRestrictedImports`](../../../../tooling/biome-config/docs/reference/boundary.md) in Biome, plus the ESLint boundary | authoring time | an `overrides` escape hatch, or a path nobody listed |
 | 2 | **`ServerOnly.assert`** | runtime, on first import | never being reached because the import is tree-shaken |
-| 3 | The CI bundle grep in [25](../../../../docs/setup/25-hygiene-and-ci.md) | build time | not building the app it greps |
+| 3 | The CI bundle grep in [26](../../../../docs/setup/26-hygiene-and-ci.md) | build time | not building the app it greps |
 
 > [!CAUTION]
 > Three feels like a lot for one mistake. It is calibrated to the cost, not the likelihood: a
@@ -103,8 +103,27 @@ console and needs to know immediately that the fix is architectural, not a bundl
 
 ---
 
+## The one error allowed to carry a message
+
+[`@loadbearing/errors`](../../../errors/docs/index.md) makes an error carry a code and structured
+context and **never prose** — user-visible words live in `content`, keyed and translated. This throw is
+the single exception in the repository, and it is a deliberate one:
+
+| Why it holds | |
+| --- | --- |
+| The reader is a developer | It fires at module load. No request, no locale, no `Translator`, no client. |
+| The prose is the payload | "This is a leak, not a bundle-size problem" is what stops someone reaching for a bundler setting. A code plus `{ packageName }` says less. |
+| It never crosses a wire | A build-time guard cannot reach a screen. |
+
+`core` also sits *below* `errors`, so `AppError` is not importable here — but that is a consequence of
+the ordering being right, not the justification. Don't invert the two packages to "fix" this, and don't
+read it as licence to put prose in errors that do reach a user.
+
+---
+
 ## See also
 
 - [`@loadbearing/core`](../index.md)
 - [Clock](clock.md) · [Result](result.md) · [Uuid](uuid.md)
 - [The server-only boundary](../../../../tooling/biome-config/docs/reference/boundary.md) — defence 1
+- [`@loadbearing/errors`](../../../errors/docs/index.md) — the rule this is the exception to

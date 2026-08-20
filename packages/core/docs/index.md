@@ -136,7 +136,7 @@ export class CorePackage {
 }
 ```
 
-It exists so [`23 · web app`](../../../docs/setup/23-web-app.md) can import one known value and
+It exists so [`23 · web app`](../../../docs/setup/24-web-app.md) can import one known value and
 prove the workspace → bundler chain end to end before any real code depends on it. **Delete it in
 23, not before.** It is the only class in the codebase that lives in a barrel instead of its own
 file.

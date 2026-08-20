@@ -1,4 +1,4 @@
-# 28 · Naming and boundaries
+# 29 · Naming and boundaries
 
 > The reference you will consult most often. Every rule for naming a thing, a folder-by-folder account of what each directory is for, and one small feature traced through all of it.
 
@@ -6,7 +6,7 @@
 
 Part 1 is naming: what to call a thing. Part 2 walks every folder in the repository and says what belongs in it, what does not, and the sign that something landed in the wrong place. Part 3 traces one small feature through all of it.
 
-**Prerequisite:** [27 · Folder structure](27-folder-structure.md)
+**Prerequisite:** [28 · Folder structure](28-folder-structure.md)
 
 ---
 
@@ -136,7 +136,7 @@ export { schema };
 | Contract | `<Noun>Contract` | `TaskContract` |
 | Error | `<Reason>Error` | `ForbiddenError` |
 
-The technology-prefix rule is what makes a seam visible at a glance. Seeing `PgVectorStore` in the `Container` and `VectorStore` everywhere else tells you exactly where the Qdrant swap happens ([13](13-vector-store.md)).
+The technology-prefix rule is what makes a seam visible at a glance. Seeing `PgVectorStore` in the `Container` and `VectorStore` everywhere else tells you exactly where the Qdrant swap happens ([14](14-vector-store.md)).
 
 **Banned suffixes:** `Manager`, `Helper`, `Util`, `Handler`, and bare `Service`. They describe nothing. If a class fits none of `UseCase`, `Repository`, `Gateway`, `Store`, `Policy`, `Strategy`, `Entity`, `Registry`, it probably wants splitting. `Policy` is the escape valve for a domain rule too broad for one entity.
 
@@ -175,7 +175,7 @@ Four vocabularies that look alike and mean different things.
 
 **The qualifier vocabulary is closed**: `.self`, `.goal`, `.global`, `.org`. Don't invent `.own` or `.mine` alongside `.self`.
 
-**Procedure paths mirror their permission where the mapping is 1:1**, and the `ProcedurePermissions` map stays explicit regardless. An identity-looking map is still the thing that fails closed when someone adds a procedure and forgets the entry ([09](09-contracts-package.md), [23](23-web-app.md)).
+**Procedure paths mirror their permission where the mapping is 1:1**, and the `ProcedurePermissions` map stays explicit regardless. An identity-looking map is still the thing that fails closed when someone adds a procedure and forgets the entry ([10](10-contracts-package.md), [24](24-web-app.md)).
 
 **REST paths** on `.route({ path })` are kebab-case, plural resources, braced params matching the contract field name: `/tasks/{taskId}/reactivate`.
 
@@ -224,7 +224,7 @@ Derived types follow the schema name: `TaskDto` from `entity`, `CreateTaskInput`
 
 # Part 2 — What every folder is for
 
-Walked top to bottom, in the order the tree in [27](27-folder-structure.md) lists them. For each folder: what belongs in it, what does not, and the sign that something landed in the wrong place.
+Walked top to bottom, in the order the tree in [28](28-folder-structure.md) lists them. For each folder: what belongs in it, what does not, and the sign that something landed in the wrong place.
 
 ---
 
@@ -232,16 +232,16 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 
 ### `apps/`
 
-- **Holds** the two deployable processes — `web` and `worker` — and later `desktop`. Each is a thin shell: read configuration, mount a transport, compose components that live elsewhere.
-- **Is the only place `process.env` is read.** Exactly two files repo-wide, and CI asserts it.
+- **Holds** the three deployable shells — `web`, `worker`, and `desktop`. Each one reads configuration, mounts a transport, and composes components that live elsewhere.
+- **Is the only place `process.env` is read.** Exactly two files repo-wide — `web` and `worker` — and CI asserts it. `desktop` is not a third: a webview has no Node runtime, so it reads `import.meta.env` and could not reach a server secret if it tried ([30](30-desktop-app.md)).
 - **Is the only place `@tanstack/react-router` appears.** Routing is app-shaped, not product-shaped.
 - **Never holds** business logic, database schema, permission decisions, or domain errors.
 - **Should be deletable.** The test: if you threw away `apps/` entirely, could you rebuild it in a week against the same `packages/`? If not, something drifted upward that belongs below.
-- **Smell:** either app directory growing past a few hundred lines of non-route code.
+- **Smell:** any app directory growing past a few hundred lines of non-route code.
 
 ### `packages/`
 
-- **Holds everything that matters** — primitives, permissions, contracts, use-cases, adapters, components. Fourteen packages, each with one job.
+- **Holds everything that matters** — primitives, permissions, contracts, use-cases, adapters, components. Fifteen packages, each with one job.
 - **Knows nothing about which web framework you use.** No package imports `@tanstack/react-start`, and only one imports `@tanstack/*` at all.
 - **Never reads its own configuration.** Every package receives what it needs through a constructor. That is what makes the same `Container` work in a web server and a worker.
 - **Smell:** a package reaching for `process.env` because "it just needs one value."
@@ -251,14 +251,14 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 - **Holds three workspace packages** that configure the build: `tsconfig`, `biome-config`, and `eslint-config`. Plus `scripts/`, which holds the architecture assertions.
 - **`biome-config` is the odd one out**: it is a workspace member for organisation only. The root `biome.json` reaches it by *relative path*, because Biome's `extends` cannot resolve a package specifier — so unlike the other two, the root does not declare it as a dependency.
 - **Is consumed by every other package** but imported at runtime by none. These are `devDependencies` and config `extends` targets only.
-- **Is platform-owned.** Changes here affect all fourteen packages, so they go through whoever owns the repo rather than whoever is shipping a feature.
+- **Is platform-owned.** Changes here affect all fifteen packages, so they go through whoever owns the repo rather than whoever is shipping a feature.
 - **Never holds** runtime code, shared utilities, or "helpers that everything needs." Those want a real package.
 - **Smell:** anything under `tooling/` appearing in a `dependencies` block.
 
 ### `infra/`
 
 - **Holds descriptions of running services**: `docker-compose.yml` and the Postgres init SQL that creates extensions.
-- **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [10](10-local-infrastructure.md) says which managed service replaces each container.
+- **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [11](11-local-infrastructure.md) says which managed service replaces each container.
 - **Never holds** application code of any kind.
 - **Smell:** a `.ts` file.
 
@@ -481,6 +481,17 @@ Walked top to bottom, in the order the tree in [27](27-folder-structure.md) list
 - **Smell:** a `try/catch` that swallows a job failure; a wildcard principal; an HTTP server.
 
 ---
+
+## 2.20 Inside `apps/desktop`
+
+- **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything here is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
+- **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.
+- **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. This file plus `BearerAuthStrategy` is the *entire* difference between the desktop client and the browser client.
+- **`src/router.tsx`** — its own `@tanstack/react-router` instance on memory or hash history, because the webview serves from a custom protocol with no server to resolve a cold path against. Its own route tree; **not** its own paths — destinations come from `ROUTES` in `permissions`, and keeping the strings identical to web's is what lets a `<Link>` inside a `feature` component be correct in both shells.
+- **Holds no container.** No `composition`, no `application`, no `db`, no `auth`. It is a client, and the server-only ESLint boundary applies here with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt.
+- **Smell:** a `process.env` reference; a secret in `config.ts`; a hand-written route path; anything imported from `composition` or `application`.
+
+---
 # Part 3 — One feature, end to end
 
 **Task reactivation.** A closed task can be reopened, but only by someone holding `task.reactivate` on that goal, and only if the task is not locked from its assignee. Reactivating writes an audit entry and re-indexes the task for search.
@@ -644,7 +655,7 @@ auth  CapabilityCache invalidated for every affected user
 
 **Every use-case followed load → authorize → work → persist.** Authorization is step two, in the use-case, every time. Never in middleware, never in a router, never only in the UI.
 
-**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([29](29-desktop-app.md)).
+**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
 
 ---
 
@@ -654,4 +665,4 @@ Given a feature name and a layer, you can write the file path and the class name
 
 ---
 
-[← Folder Structure](27-folder-structure.md) · [`apps/desktop` (optional) →](29-desktop-app.md)
+[← Folder Structure](28-folder-structure.md) · [`apps/desktop` →](30-desktop-app.md)

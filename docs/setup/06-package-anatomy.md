@@ -1,8 +1,8 @@
 # 06 · Package Anatomy
 
-> The three config files every package has, its `src/` and `docs/`, why the `development` export condition exists, and a one-shot script that creates all fourteen.
+> The three config files every package has, its `src/` and `docs/`, why the `development` export condition exists, and a one-shot script that creates all fifteen.
 
-**Delivers:** Fourteen structurally identical packages with placeholder classes, wired into a real dependency graph and building in topological order.
+**Delivers:** Fifteen structurally identical packages with placeholder classes, wired into a real dependency graph and building in topological order.
 
 **Prerequisite:** [05 · Lint & Format](05-lint-and-format.md)
 
@@ -84,7 +84,7 @@ convention.
 }
 ```
 
-**The `development` export condition is the one non-obvious line.** With it, and with `resolve.conditions: ["development"]` in `apps/web/vite.config.ts` ([23](23-web-app.md)), Vite resolves `@loadbearing/core` straight to `src/index.ts`. Editing a package hot-reloads the browser with no rebuild step. Without it you consume `dist/` and every package edit needs `pnpm build:packages` before the change appears.
+**The `development` export condition is the one non-obvious line.** With it, and with `resolve.conditions: ["development"]` in `apps/web/vite.config.ts` ([24](24-web-app.md)), Vite resolves `@loadbearing/core` straight to `src/index.ts`. Editing a package hot-reloads the browser with no rebuild step. Without it you consume `dist/` and every package edit needs `pnpm build:packages` before the change appears.
 
 The condition order matters: `development` first, then `types`, then `default`. Node and tsup ignore `development` entirely and fall through to `default`, so production builds are unaffected.
 
@@ -115,7 +115,7 @@ export default defineConfig({
 >
 > If you ever do need a glob in a `clean` script, write `rimraf --glob "dist" "*.tsbuildinfo"`.
 
-One entry point per package. A package with multiple entrypoints is a package that wants splitting — the two exceptions (`@loadbearing/asset`'s CSS and SVG side-effect exports) are handled in [18](18-asset-package.md) and are not JavaScript.
+One entry point per package. A package with multiple entrypoints is a package that wants splitting — the two exceptions (`@loadbearing/asset`'s CSS and SVG side-effect exports) are handled in [19](19-asset-package.md) and are not JavaScript.
 
 ### `tsconfig.json`
 
@@ -127,13 +127,13 @@ One entry point per package. A package with multiple entrypoints is a package th
 ```
 
 > [!NOTE]
-> **No lint script and no lint config.** Biome and ESLint each run once over the whole repo from the root ([05](05-lint-and-format.md)), keyed on file globs rather than per-package files. Fourteen fewer config files, and no package can quietly opt itself out of a rule.
+> **No lint script and no lint config.** Biome and ESLint each run once over the whole repo from the root ([05](05-lint-and-format.md)), keyed on file globs rather than per-package files. Fifteen fewer config files, and no package can quietly opt itself out of a rule.
 
 ### `src/index.ts` — the barrel
 
 Every package has exactly one public entrypoint. Consumers write `import { Clock } from "@loadbearing/core"` and never `from "@loadbearing/core/dist/clock.js"`. The barrel is what makes internal reorganisation free: moving `clock.ts` into `time/clock.ts` is a one-line edit in `index.ts` and nobody downstream notices.
 
-Subject folders get their own `index.ts` that the root barrel re-exports — **naming every symbol, never `export *`** ([28](28-naming-and-boundaries.md#13-barrels-and-imports)):
+Subject folders get their own `index.ts` that the root barrel re-exports — **naming every symbol, never `export *`** ([29](29-naming-and-boundaries.md#13-barrels-and-imports)):
 
 ```ts
 // packages/contracts/src/index.ts
@@ -151,7 +151,7 @@ Note the `.js` extensions on relative imports throughout. `moduleResolution: "Bu
 
 ## Step 6.1 — The scaffold script
 
-Fourteen structurally identical packages. Scripting it avoids fourteen chances to make a typo.
+Fifteen structurally identical packages. Scripting it avoids fifteen chances to make a typo.
 
 Create **`scaffold.mjs`** at the repo root:
 
@@ -163,6 +163,7 @@ import { join } from "node:path";
 const PACKAGES = {
   core: ["Core", "ts", {}],
   permissions: ["Permissions", "ts", {}],
+  errors: ["Errors", "ts", {}],
   contracts: ["Contracts", "ts", {}],
   application: ["Application", "ts", {}],
   db: ["Db", "ts", { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:" }],
@@ -320,11 +321,14 @@ pnpm add --filter @loadbearing/permissions @loadbearing/core@workspace:*
 ```
 > The registry and `CapabilitySet` need only primitives. Deliberately no database and no HTTP: this package must run identically on the server, in the browser, in the worker, and later in the Tauri webview. That identity is what makes "one permission model" true rather than aspirational.
 
+### `@loadbearing/errors`
+No runtime dependencies. Like `core` and `permissions` it is a leaf, and for the same reason: a failure has to be constructible and readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it. Any dependency would exclude one of those. See [09](09-errors-package.md).
+
 ### `@loadbearing/contracts`
 ```bash
-pnpm add --filter @loadbearing/contracts @loadbearing/core@workspace:* @loadbearing/permissions@workspace:* zod@catalog: @orpc/contract@catalog:
+pnpm add --filter @loadbearing/contracts @loadbearing/core@workspace:* @loadbearing/permissions@workspace:* @loadbearing/errors@workspace:* zod@catalog: @orpc/contract@catalog:
 ```
-> `zod` for schemas, `@orpc/contract` for the contract router. It depends on `permissions` because entity methods like `canBeEditedBy()` take a `CapabilitySet`.
+> `zod` for schemas, `@orpc/contract` for the contract router. It depends on `permissions` because entity methods like `canBeEditedBy()` take a `CapabilitySet`, and on `errors` because a procedure declares the failures it can produce.
 
 ### `@loadbearing/application`
 ```bash
@@ -348,7 +352,7 @@ pnpm add --filter @loadbearing/infrastructure @loadbearing/core@workspace:* @loa
 ```
 > The non-Postgres adapters: Redis cache, S3 storage gateway, BullMQ queue publisher. Same inward dependency as `db` — it implements ports declared in `application`. Server-only.
 >
-> This is the fourteenth package and a departure from the architecture docs; see the note in [00](00-README.md) and the rationale in [14](14-infrastructure-package.md).
+> This is a departure from the architecture docs; see the note in [00](00-README.md) and the rationale in [15](15-infrastructure-package.md).
 
 ### `@loadbearing/auth`
 ```bash
@@ -443,7 +447,7 @@ Nothing ever points upward. `application` sits at the centre and knows nothing b
 
 ## ✅ Gate
 
-`packages/` contains fourteen directories. Every `packages/*/dist/` holds `index.js` and `index.d.ts`. The build log shows topological ordering.
+`packages/` contains fifteen directories. Every `packages/*/dist/` holds `index.js` and `index.d.ts`. The build log shows topological ordering.
 
 ```bash
 pnpm check && pnpm typecheck && pnpm lint && pnpm test
@@ -455,7 +459,7 @@ Commit:
 
 ```bash
 git add -A
-git commit -m "chore(repo): scaffold fourteen packages and wire the dependency graph"
+git commit -m "chore(repo): scaffold fifteen packages and wire the dependency graph"
 ```
 
 Do not proceed until this passes.

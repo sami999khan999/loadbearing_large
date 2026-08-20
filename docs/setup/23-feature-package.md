@@ -1,10 +1,10 @@
-# 22 · `@loadbearing/feature`
+# 23 · `@loadbearing/feature`
 
 > Components that fetch and mutate. The auth screens, the message provider, the session guard — and every feature screen that follows.
 
 **Delivers:** Sign-in, two-factor, session gating, and i18n binding, all mountable under any routing shell.
 
-**Prerequisite:** [21 · `@loadbearing/ui`](21-ui-package.md)
+**Prerequisite:** [22 · `@loadbearing/ui`](22-ui-package.md)
 
 ---
 
@@ -36,7 +36,7 @@ packages/feature/src/
 
 ---
 
-## Step 22.1 — The message provider
+## Step 23.1 — The message provider
 
 The React binding for `@loadbearing/content`'s `Translator`. It lives here, not in `content`, because `content` must stay React-free for the worker.
 
@@ -76,7 +76,7 @@ export function useMessages() {
 
 ---
 
-## Step 22.2 — The session context
+## Step 23.2 — The session context
 
 Session and capabilities are needed by nearly every component, and threading them through props for twelve levels is not a real option.
 
@@ -135,7 +135,7 @@ export function useCapabilities(): CapabilitySet {
 
 ---
 
-## Step 22.3 — `SessionGuard`
+## Step 23.3 — `SessionGuard`
 
 **`packages/feature/src/auth/session.guard.tsx`**
 
@@ -179,16 +179,16 @@ export function SessionGuard({
 
 **This is the third of four enforcement surfaces**, and the weakest one. The order of authority:
 
-1. `Authorizer.assert()` in the use-case — the real gate ([11](11-application-package.md))
-2. `principalMiddleware` in the oRPC handler — defence in depth ([23](23-web-app.md))
-3. `RouteGuard` in the route loader — stops the page rendering at all ([23](23-web-app.md))
+1. `Authorizer.assert()` in the use-case — the real gate ([12](12-application-package.md))
+2. `principalMiddleware` in the oRPC handler — defence in depth ([24](24-web-app.md))
+3. `RouteGuard` in the route loader — stops the page rendering at all ([24](24-web-app.md))
 4. `<Can>` and `SessionGuard` — hide affordances that would fail
 
 Removing a permission from a role must remove the nav item **and** return `FORBIDDEN`. Both, every time. If only the UI hides, you have security theatre; if only the API rejects, you have a UI full of buttons that produce errors.
 
 ---
 
-## Step 22.4 — `SignInForm`
+## Step 23.4 — `SignInForm`
 
 **`packages/feature/src/auth/sign-in.form.tsx`**
 
@@ -219,7 +219,9 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
       {
         onSuccess: () => onSuccess(),
         onError: (error) => {
-          if (error.message.includes("two-factor")) onNeedsTwoFactor?.();
+          if (ErrorNormalizer.normalize(error).code === "TWO_FACTOR_REQUIRED") {
+            onNeedsTwoFactor?.();
+          }
         },
       },
     );
@@ -267,6 +269,8 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 
 **`AuthClient` arrives as a prop, not from a module import.** Same reason `createQueryClient` is a factory: the instance differs per environment, and a module singleton in an SSR bundle is shared across requests.
 
+**Branch on the code, never on the message.** `error.message` is the code and nothing else ([09](09-errors-package.md)) — but even if it carried prose, matching on it would break the moment someone rewords the copy, and it would already be broken in every locale but English, because the sentence a user sees comes from `content`.
+
 **The error message is generic.** `t("auth.signInFailed")` — never "no account with that email" or "incorrect password". Distinguishing them is an account-enumeration oracle: an attacker learns which addresses are registered without needing a password. It is a small copy decision with a real security consequence.
 
 **`autoComplete` on both fields.** `email` and `current-password` are what password managers key on. Omitting them is a real usability cost for a class of users who will not report it.
@@ -275,7 +279,7 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 
 ---
 
-## Step 22.5 — What a feature screen looks like
+## Step 23.5 — What a feature screen looks like
 
 The shape every feature module follows:
 
@@ -320,7 +324,7 @@ Read through it: data comes from `query`, presentation from `ui`, copy from `con
 
 ---
 
-## Step 22.6 — Testing
+## Step 23.6 — Testing
 
 `feature` components are tested with fakes, never against a running server:
 
@@ -348,7 +352,7 @@ The test worth writing first: **render the same component with two different `Ca
 
 ---
 
-## Step 22.7 — The barrel
+## Step 23.7 — The barrel
 
 **`packages/feature/src/index.ts`**
 
@@ -368,7 +372,7 @@ export { MessageProvider, useMessages } from "./i18n/index.js";
 export { EffectivePermissionsInspector, PermissionMatrix } from "./rbac/index.js";
 ```
 
-**`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([28](28-naming-and-boundaries.md#13-barrels-and-imports)).
+**`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([29](29-naming-and-boundaries.md#13-barrels-and-imports)).
 
 ---
 
@@ -397,4 +401,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/ui`](21-ui-package.md) · [`apps/web` →](23-web-app.md)
+[← `@loadbearing/ui`](22-ui-package.md) · [`apps/web` →](24-web-app.md)

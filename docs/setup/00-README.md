@@ -1,6 +1,6 @@
 # Starter Kit — Build Order
 
-> The reusable foundation every project on this architecture starts from. Postgres + Drizzle, Redis, S3, Better Auth, pgvector behind a swappable seam, and the fourteen-package layout from the architecture docs — with **no product features in it**.
+> The reusable foundation every project on this architecture starts from. Postgres + Drizzle, Redis, S3, Better Auth, pgvector behind a swappable seam, and the fifteen-package layout from the architecture docs — with **no product features in it**.
 
 **Stack:** pnpm workspaces (no Turborepo) · TanStack Start + oRPC · standalone worker · Postgres 17 + pgvector · Redis · S3 (MinIO locally) · Better Auth
 **Paradigm:** strictly object-oriented everywhere except React components and hooks.
@@ -11,7 +11,7 @@
 
 Work through them **in order**. Each one ends with a **✅ Gate** — a concrete, checkable condition. The order is a real dependency chain: `core → permissions → contracts → application → db → infrastructure → auth → composition → api-client → asset → content → query → ui → feature → apps`. pnpm derives build ordering from the workspace graph, so nothing declares it.
 
-Nothing here creates a feature. When you finish [26](26-verification-and-first-feature.md) you have a repo that boots, authenticates, stores files, caches, embeds, and enforces permissions — and contains zero business logic. Feature 01 is then the first thing you write on top.
+Nothing here creates a feature. When you finish [27](27-verification-and-first-feature.md) you have a repo that boots, authenticates, stores files, caches, embeds, and enforces permissions — and contains zero business logic. Feature 01 is then the first thing you write on top.
 
 | Symbol | Meaning |
 |---|---|
@@ -40,53 +40,56 @@ Nothing here creates a feature. When you finish [26](26-verification-and-first-f
 |---|---|---|
 | 07 | [`@loadbearing/core`](07-core-package.md) | `Result`, `Clock`, `Uuid`, `ServerOnly` |
 | 08 | [`@loadbearing/permissions`](08-permissions-package.md) | `PermissionRegistry`, `ModuleRegistry`, `CapabilitySet` |
-| 09 | [`@loadbearing/contracts`](09-contracts-package.md) | Zod contract classes, entities, oRPC contract router, `ProcedurePermissions` |
+| 09 | [`@loadbearing/errors`](09-errors-package.md) | `AppError`, the closed `ErrorCode` union, the wire envelope, `ErrorNormalizer` |
+| 10 | [`@loadbearing/contracts`](10-contracts-package.md) | Zod contract classes, entities, oRPC contract router, `ProcedurePermissions` |
 
 ### Phase C — the server side
 
 | # | File | Delivers |
 |---|---|---|
-| 10 | [Local Infrastructure](10-local-infrastructure.md) | Postgres + pgvector, Redis, MinIO, and the bucket |
-| 11 | [`@loadbearing/application`](11-application-package.md) | `Principal`, `Authorizer`, domain errors, **every port** — zero framework imports |
-| 12 | [`@loadbearing/db`](12-db-package.md) | Drizzle, migrations, repositories, seeds |
-| 13 | [Vector Storage](13-vector-store.md) | `VectorStore` port + `PgVectorStore`, sized so Qdrant is a one-line swap |
-| 14 | [`@loadbearing/infrastructure`](14-infrastructure-package.md) | Redis cache, S3 storage gateway, BullMQ queue publisher |
-| 15 | [`@loadbearing/auth`](15-auth-package.md) | Better Auth, `PrincipalBuilder`, capability cache, API keys |
-| 16 | [`@loadbearing/composition`](16-composition-container.md) | The `Container` DI root |
+| 11 | [Local Infrastructure](11-local-infrastructure.md) | Postgres + pgvector, Redis, MinIO, and the bucket |
+| 12 | [`@loadbearing/application`](12-application-package.md) | `Principal`, `Authorizer`, **every port** — zero framework imports |
+| 13 | [`@loadbearing/db`](13-db-package.md) | Drizzle, migrations, repositories, seeds |
+| 14 | [Vector Storage](14-vector-store.md) | `VectorStore` port + `PgVectorStore`, sized so Qdrant is a one-line swap |
+| 15 | [`@loadbearing/infrastructure`](15-infrastructure-package.md) | Redis cache, S3 storage gateway, BullMQ queue publisher |
+| 16 | [`@loadbearing/auth`](16-auth-package.md) | Better Auth, `PrincipalBuilder`, capability cache, API keys |
+| 17 | [`@loadbearing/composition`](17-composition-container.md) | The `Container` DI root |
 
 ### Phase D — the client side
 
 | # | File | Delivers |
 |---|---|---|
-| 17 | [`@loadbearing/api-client`](17-api-client-package.md) | oRPC client + `AuthStrategy` — React-free |
-| 18 | [`@loadbearing/asset`](18-asset-package.md) | Every binary: images, icon sprite, fonts |
-| 19 | [`@loadbearing/content`](19-content-package.md) | Messages, documents, collections, `ContentSource` |
-| 20 | [`@loadbearing/query`](20-query-package.md) | The single TanStack owner: keys, options, client factory |
-| 21 | [`@loadbearing/ui`](21-ui-package.md) | Design system with no domain nouns |
-| 22 | [`@loadbearing/feature`](22-feature-package.md) | Components that fetch and mutate |
+| 18 | [`@loadbearing/api-client`](18-api-client-package.md) | oRPC client + `AuthStrategy` — React-free |
+| 19 | [`@loadbearing/asset`](19-asset-package.md) | Every binary: images, icon sprite, fonts |
+| 20 | [`@loadbearing/content`](20-content-package.md) | Messages, documents, collections, `ContentSource`, **all error copy** |
+| 21 | [`@loadbearing/query`](21-query-package.md) | The single TanStack owner: keys, options, client factory |
+| 22 | [`@loadbearing/ui`](22-ui-package.md) | Design system with no domain nouns |
+| 23 | [`@loadbearing/feature`](23-feature-package.md) | Components that fetch and mutate |
 
 ### Phase E — the apps and the seal
 
 | # | File | Delivers |
 |---|---|---|
-| 23 | [`apps/web`](23-web-app.md) | TanStack Start, oRPC handler, auth handler, route + UI gating |
-| 24 | [`apps/worker`](24-worker-app.md) | BullMQ consumers and repeatable schedules |
-| 25 | [Hygiene & CI](25-hygiene-and-ci.md) | Hooks, commit scopes, pipeline, bundle-leak assertion |
-| 26 | [Verification & First Feature](26-verification-and-first-feature.md) | Architecture checks, commit sequence, the add-a-module checklist |
+| 24 | [`apps/web`](24-web-app.md) | TanStack Start, oRPC handler, auth handler, route + UI gating |
+| 25 | [`apps/worker`](25-worker-app.md) | BullMQ consumers and repeatable schedules |
+| 26 | [Hygiene & CI](26-hygiene-and-ci.md) | Hooks, commit scopes, pipeline, bundle-leak assertion |
+| 27 | [Verification & First Feature](27-verification-and-first-feature.md) | Architecture checks, commit sequence, the add-a-module checklist |
+| 30 | [`apps/desktop`](30-desktop-app.md) | Tauri: one app directory, zero new packages |
 
-### Reference and optional extras
+> 30 is numbered last because it is read last — it depends on every package above it. It is not optional: Tauri is the desktop shell, and 16, 24 and 28 are written on that basis.
+
+### Reference
 
 | # | File | Delivers |
 |---|---|---|
-| 27 | [Folder Structure](27-folder-structure.md) | The complete tree after step 26, on one page |
-| 28 | [Naming & Boundaries](28-naming-and-boundaries.md) | Every naming rule, what each folder does and doesn't do, one feature traced end to end |
-| 29 | [`apps/desktop`](29-desktop-app.md) | Tauri: one app directory, zero new packages |
+| 28 | [Folder Structure](28-folder-structure.md) | The complete tree after step 27, on one page |
+| 29 | [Naming & Boundaries](29-naming-and-boundaries.md) | Every naming rule, what each folder does and doesn't do, one feature traced end to end |
 
 ---
 
-## The fourteen packages, in one paragraph
+## The fifteen packages, in one paragraph
 
-`core` holds primitives. `permissions` decides who may do what. `contracts` defines what data looks like and what it knows about itself. `application` holds every operation the product can perform plus the abstract ports it needs, with no framework anywhere. `db` implements the Postgres side of those ports. `infrastructure` implements the Redis, S3, and queue side. `auth` owns identity and turns any credential into a `Principal`. `composition` wires all of it together. `asset` holds every binary the product ships. `content` holds every user-visible string. `api-client` reaches the server, `query` caches what comes back, `ui` renders it, and `feature` assembles those into screens. The apps are thin adapters that read configuration, mount a transport, and compose components.
+`core` holds primitives. `permissions` decides who may do what. `errors` defines how a failure is shaped, serialised, and named — every runtime throws and reconstructs the same class, and it carries no prose, because `content` owns every word a user reads. `contracts` defines what data looks like and what it knows about itself. `application` holds every operation the product can perform plus the abstract ports it needs, with no framework anywhere. `db` implements the Postgres side of those ports. `infrastructure` implements the Redis, S3, and queue side. `auth` owns identity and turns any credential into a `Principal`. `composition` wires all of it together. `asset` holds every binary the product ships. `content` holds every user-visible string. `api-client` reaches the server, `query` caches what comes back, `ui` renders it, and `feature` assembles those into screens. The apps are thin adapters that read configuration, mount a transport, and compose components.
 
 ---
 
@@ -94,9 +97,9 @@ Nothing here creates a feature. When you finish [26](26-verification-and-first-f
 
 Both are called out again where they happen. Read them now so they aren't a surprise.
 
-**1. `packages/infrastructure` is a fourteenth package.** The architecture docs place concrete adapters in `db` "or in the app that constructs them." Neither works for Redis and S3: `db` means Postgres, and putting an S3 client in `apps/` duplicates it between `web` and `worker`. So non-Postgres adapters get one server-only package, exactly the way `auth` got one. If you would rather stay at thirteen, fold `infrastructure/src/cache/` and `infrastructure/src/storage/` into `db/src/` as sibling folders to `vector/` — every other line in these documents is unchanged.
+**1. `packages/infrastructure` is a package the architecture docs do not have.** The architecture docs place concrete adapters in `db` "or in the app that constructs them." Neither works for Redis and S3: `db` means Postgres, and putting an S3 client in `apps/` duplicates it between `web` and `worker`. So non-Postgres adapters get one server-only package, exactly the way `auth` got one. If you would rather stay at thirteen, fold `infrastructure/src/cache/` and `infrastructure/src/storage/` into `db/src/` as sibling folders to `vector/` — every other line in these documents is unchanged.
 
-**2. `VectorStore` is declared in `application/port/`, not in `db`.** The architecture docs put the abstract class in `packages/db/src/vector/`. That works only while the implementation is Postgres. Your requirement is to move to a dedicated vector database later without rewrites, and a use-case cannot depend on `db` — so the abstraction has to sit where every other port sits. `PgVectorStore` still lives in `db/src/vector/`. See [13](13-vector-store.md).
+**2. `VectorStore` is declared in `application/port/`, not in `db`.** The architecture docs put the abstract class in `packages/db/src/vector/`. That works only while the implementation is Postgres. Your requirement is to move to a dedicated vector database later without rewrites, and a use-case cannot depend on `db` — so the abstraction has to sit where every other port sits. `PgVectorStore` still lives in `db/src/vector/`. See [14](14-vector-store.md).
 
 ---
 

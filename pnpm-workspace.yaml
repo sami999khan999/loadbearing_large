@@ -31,6 +31,13 @@ catalog:
   # ── TanStack Query — peer of @orpc/tanstack-query, which needs query-core >=5.80.2 ──
   "@tanstack/react-query": ^5.101.4
 
+  # ── TanStack Router ──
+  "@tanstack/react-router": ^1.135.0
+
+  # ── Tauri ──
+  "@tauri-apps/api": ^2.9.0
+  "@tauri-apps/cli": ^2.9.0
+
   # ── data & infrastructure ──
   "drizzle-orm": ^0.44.7
   "drizzle-kit": ^0.31.0

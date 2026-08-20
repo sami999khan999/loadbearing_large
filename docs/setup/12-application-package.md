@@ -1,10 +1,10 @@
-# 11 · `@loadbearing/application`
+# 12 · `@loadbearing/application`
 
 > **The package that makes the plan reversible.** `Principal`, `Authorizer`, domain errors, and every abstract port. Zero framework imports, zero third-party runtime dependencies.
 
 **Delivers:** The complete port surface the rest of the system implements, plus the authorization primitive every use-case opens with.
 
-**Prerequisite:** [10 · Local Infrastructure](10-local-infrastructure.md)
+**Prerequisite:** [11 · Local Infrastructure](11-local-infrastructure.md)
 
 ---
 
@@ -43,7 +43,7 @@ packages/application/src/
 
 ---
 
-## Step 11.1 — `Principal`
+## Step 12.1 — `Principal`
 
 **`packages/application/src/principal.ts`**
 
@@ -82,11 +82,11 @@ export class Principal {
 
 Four credential types — a browser cookie, a desktop bearer token, an integration's API key, and the worker's scheduled run — collapse into one `Principal` before any use-case executes. A use-case cannot tell how the actor arrived, and must not care.
 
-**`Principal.system()` takes an explicit capability set.** The tempting shortcut is a wildcard principal for the worker. Don't. The overdue sweep needs exactly `task.read` and `task.update`; giving it everything means a bug in a schedule can do anything. See [24](24-worker-app.md).
+**`Principal.system()` takes an explicit capability set.** The tempting shortcut is a wildcard principal for the worker. Don't. The overdue sweep needs exactly `task.read` and `task.update`; giving it everything means a bug in a schedule can do anything. See [25](25-worker-app.md).
 
 ---
 
-## Step 11.2 — `Authorizer`
+## Step 12.2 — `Authorizer`
 
 **`packages/application/src/authorizer.ts`**
 
@@ -114,7 +114,7 @@ export class Authorizer {
 
 Three lines, and it is the single most important class in the system.
 
-**Authorization lives in the use-case, not in transport middleware.** Middleware is bypassed by the worker, which calls use-cases directly, and by SSR direct calls. `Authorizer.assert()` is not. The middleware check in [23](23-web-app.md) is defence in depth; this is the gate.
+**Authorization lives in the use-case, not in transport middleware.** Middleware is bypassed by the worker, which calls use-cases directly, and by SSR direct calls. `Authorizer.assert()` is not. The middleware check in [24](24-web-app.md) is defence in depth; this is the gate.
 
 **The shape every use-case follows:**
 
@@ -134,7 +134,22 @@ Load, assert, work. Because the assertion is always in the same position, review
 
 ---
 
-## Step 11.3 — Domain errors
+## Step 12.3 — Errors come from `@loadbearing/errors`
+
+There is no `src/error/` in this package. `AppError` and its subclasses live in [09](09-errors-package.md), below `contracts`, because three of the four runtimes that need to understand a failure cannot import this package — it is server-only. A use-case imports what it throws:
+
+```ts
+import { ForbiddenError, NotFoundError } from "@loadbearing/errors";
+```
+
+What stays true here is the discipline, and it is worth restating because this package is where it is easiest to break:
+
+**No `@loadbearing/application` code ever knows a status code.** `ForbiddenError` is a domain concept; `403` is a transport concept. Both now live in the same package, so a lint rule holds the line that a package boundary used to — importing `HTTP_STATUS` from here is an error ([09](09-errors-package.md) Step 9.4). The oRPC interceptor in [24](24-web-app.md) does the mapping; a NestJS exception filter would map the same `code` to `ForbiddenException`.
+
+That single rule is most of what keeps the transport swappable, and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
+
+<details>
+<summary>The original listing, for reference</summary>
 
 **`packages/application/src/error/domain.error.ts`**
 
@@ -145,7 +160,9 @@ export abstract class DomainError extends Error {
   constructor(message: string) {
     super(message);
     this.name = new.target.name;
-    Error.captureStackTrace?.(this, new.target);
+    // A bare `Error.captureStackTrace?.()` does not compile under `lib: ["ES2024"]` —
+    // it is a V8 extension. See [09](09-errors-package.md) for the typed form.
+    (Error as StackTraceCapture).captureStackTrace?.(this, new.target);
   }
 }
 ```
@@ -186,13 +203,15 @@ export class NotFoundError extends DomainError {
 
 Add `ConflictError` (`code = "CONFLICT"`, for optimistic-concurrency and uniqueness failures) and `ValidationError` (`code = "BAD_REQUEST"`, carrying a field map) on the same pattern.
 
-**No `@loadbearing/application` code ever knows about status codes.** `ForbiddenError` is a domain concept; `403` is a transport concept. The oRPC interceptor in [23](23-web-app.md) maps one to the other, and a NestJS exception filter would map it to `ForbiddenException`. That single discipline is most of what keeps the transport swappable — and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
+**No `@loadbearing/application` code ever knows about status codes.** `ForbiddenError` is a domain concept; `403` is a transport concept. The oRPC interceptor in [24](24-web-app.md) maps one to the other, and a NestJS exception filter would map it to `ForbiddenException`. That single discipline is most of what keeps the transport swappable — and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
 
-The `code` string is what the adapter switches on. It is a closed vocabulary rather than a class check because `instanceof` across a bundler boundary is a source of subtle failure.
+The `code` string is what the adapter switches on. It is a closed vocabulary rather than a class check because `instanceof` across a bundler boundary is a source of subtle failure — which is also why `ErrorNormalizer` detects an `AppError` structurally rather than with `instanceof`.
+
+</details>
 
 ---
 
-## Step 11.4 — The ports
+## Step 12.4 — The ports
 
 Every port is an **abstract class**, not an interface. Two reasons: abstract classes exist at runtime, so `extends` gives you a real prototype chain and `noImplicitOverride` catches renames; and a port can carry a shared concrete helper method where that is genuinely useful without becoming a mixin.
 
@@ -224,7 +243,7 @@ export abstract class CacheStore {
   public abstract deletePrefix(prefix: string): Promise<void>;
 }
 ```
-> Implemented by `RedisCacheStore` in [14](14-infrastructure-package.md) and by an in-memory fake in tests. `deletePrefix` exists because capability invalidation needs "everything for this user" and doing it by enumerating keys at the call site pushes Redis semantics into the domain.
+> Implemented by `RedisCacheStore` in [15](15-infrastructure-package.md) and by an in-memory fake in tests. `deletePrefix` exists because capability invalidation needs "everything for this user" and doing it by enumerating keys at the call site pushes Redis semantics into the domain.
 >
 > There is deliberately no `getOrSet`. Cache-aside logic with its stampede handling belongs in the adapter, not spread across use-cases.
 
@@ -301,7 +320,7 @@ export abstract class SessionResolver {
   public abstract resolve(headers: Headers): Promise<ResolvedSession | null>;
 }
 ```
-> `Headers` is the Web Fetch API type — global in Node 18+, available in browsers, and not a framework type. This is the port Better Auth implements in [15](15-auth-package.md), and it is what makes use-case tests need no auth library at all:
+> `Headers` is the Web Fetch API type — global in Node 18+, available in browsers, and not a framework type. This is the port Better Auth implements in [16](16-auth-package.md), and it is what makes use-case tests need no auth library at all:
 >
 > ```ts
 > class FakeSessionResolver extends SessionResolver {
@@ -359,9 +378,16 @@ export abstract class EmbeddingProvider {
 }
 ```
 
-**`VectorStore` is declared here, not in `db`.** This is the departure flagged in [00](00-README.md). The architecture docs place it in `packages/db/src/vector/`, which works only while the implementation is Postgres — and the stated requirement is to move to a dedicated vector database later without rewrites. A use-case cannot import `db`, so the abstraction has to live where every other port lives. `PgVectorStore` still lives in `db/src/vector/`; see [13](13-vector-store.md).
+**`VectorStore` is declared here, not in `db`.** This is the departure flagged in [00](00-README.md). The architecture docs place it in `packages/db/src/vector/`, which works only while the implementation is Postgres — and the stated requirement is to move to a dedicated vector database later without rewrites. A use-case cannot import `db`, so the abstraction has to live where every other port lives. `PgVectorStore` still lives in `db/src/vector/`; see [14](14-vector-store.md).
 
-**`goalIds` being a required parameter is the whole security design.** Filtering after retrieval means the model has already seen documents the actor cannot access, and "we filter the output" is not a defence you want to explain after an incident. Putting the permitted scope in the method signature means it cannot be forgotten — a caller must produce it, and `CapabilitySet.goalsWith()` is how.
+**`goalIds` being a required parameter is the whole security design.** Filtering after retrieval means the model has already seen documents the actor cannot access, and "we filter the output" is not a defence you want to explain after an incident. Putting the permitted scope in the method signature means it cannot be forgotten — a caller must produce it, and `CapabilitySet.goalsWith()` is how:
+
+```ts
+const goalIds = principal.capabilities.goalsWith("document.read", await goals.idsForOrg(orgId));
+const hits = await this.vectors.search(embedding, goalIds, 20);
+```
+
+`goalsWith()` takes the candidate set for the same reason `search()` does — a `CapabilitySet` knows only the goals its own DTO names, so a wildcard holder or an org-level grantee would otherwise resolve to `[]` and silently retrieve org-wide chunks only ([08](08-permissions-package.md)).
 
 ### `UnitOfWork`
 
@@ -408,7 +434,7 @@ Repository ports are **not** here — each lives in its feature slice, `applicat
 
 ---
 
-## Step 11.5 — What a repository port looks like
+## Step 12.5 — What a repository port looks like
 
 The starter kit ships none, but the shape is fixed. When feature 01 arrives:
 
@@ -428,7 +454,7 @@ export abstract class TaskRepository {
 
 ---
 
-## Step 11.6 — The barrel
+## Step 12.6 — The barrel
 
 **`packages/application/src/index.ts`**
 
@@ -461,7 +487,7 @@ export {
 export { Principal, type PrincipalKind } from "./principal.js";
 ```
 
-**Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every port the composition root must supply an implementation for. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([16](16-composition-container.md)).
+**Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every port the composition root must supply an implementation for. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([17](17-composition-container.md)).
 
 **Repository ports are not on the list.** `TaskRepository` lives in its slice and is exported through the barrel only when a consumer outside the package genuinely needs the type — `Container` does, `apps/web` does not.
 
@@ -485,10 +511,10 @@ Lists exactly three `dependencies`: `@loadbearing/core`, `@loadbearing/contracts
 pnpm --filter @loadbearing/application build && pnpm --filter @loadbearing/application lint
 ```
 
-Both pass. Put the grep in CI ([25](25-hygiene-and-ci.md)) — this is the check that quietly rots first if unenforced.
+Both pass. Put the grep in CI ([26](26-hygiene-and-ci.md)) — this is the check that quietly rots first if unenforced.
 
 Do not proceed until this passes.
 
 ---
 
-[← Local Infrastructure](10-local-infrastructure.md) · [`@loadbearing/db` →](12-db-package.md)
+[← Local Infrastructure](11-local-infrastructure.md) · [`@loadbearing/db` →](13-db-package.md)

@@ -94,7 +94,7 @@ Inside `src/`, the three presets extend the base by relative path (`"extends": "
 
 ## Step 4.3 — `library.json`
 
-For all fourteen `packages/*`.
+For all fifteen `packages/*`.
 
 **`tooling/tsconfig/src/library.json`**
 
@@ -155,12 +155,12 @@ For `apps/web`, `packages/ui`, `packages/feature`, and `packages/query`.
 > `jsx: "react-jsx"` is the automatic runtime — no `import React` at the top of every file.
 
 > [!CAUTION]
-> **Do not put `types: ["vite/client"]` here.** It looks right — it provides `import.meta.env` and asset-import types — but `packages/{ui,feature,query}` extend this preset and do **not** depend on Vite, so `tsc` fails them with `TS2688: Cannot find type definition file for 'vite/client'`. Vite only arrives with `apps/web` at [23](23-web-app.md), whose own `tsconfig.json` declares that `types` array itself. Only the app needs it.
+> **Do not put `types: ["vite/client"]` here.** It looks right — it provides `import.meta.env` and asset-import types — but `packages/{ui,feature,query}` extend this preset and do **not** depend on Vite, so `tsc` fails them with `TS2688: Cannot find type definition file for 'vite/client'`. Vite only arrives with `apps/web` at [24](24-web-app.md), whose own `tsconfig.json` declares that `types` array itself. Only the app needs it.
 
 > [!CAUTION]
 > **`incremental` is deliberately absent from `base.json`.** With it, tsup's declaration build fails on every package with `TS5074: Option '--incremental' can only be specified using tsconfig, emitting to single file or when option '--tsBuildInfoFile' is specified.`
 >
-> Adding `tsBuildInfoFile` to `base.json` does not fix it: a relative path there resolves against `tooling/tsconfig/src/`, so all fourteen packages would collide on one build-info file. Since `tsc` here only ever runs as `--noEmit` typecheck, the caching was worth little; dropping the flag is the cheaper trade.
+> Adding `tsBuildInfoFile` to `base.json` does not fix it: a relative path there resolves against `tooling/tsconfig/src/`, so all fifteen packages would collide on one build-info file. Since `tsc` here only ever runs as `--noEmit` typecheck, the caching was worth little; dropping the flag is the cheaper trade.
 
 **Note the `lib` split.** `base.json` sets `lib: ["ES2024"]` with no DOM. That is not an oversight: it is what makes a `document.querySelector` inside `@loadbearing/application` a compile error rather than a runtime crash in the worker. Only the React variant adds DOM.
 

@@ -41,8 +41,21 @@ export class CapabilitySet {
     );
   }
 
+  /**
+   * The only way in, and therefore where the vocabulary boundary belongs.
+   *
+   * A DTO reaches here from three places — the database, a Redis cache entry, and
+   * an SSR payload — and only the first has already been filtered through
+   * `isKnown()`. Re-filtering makes that boundary hold on every path instead of
+   * one, so a cache entry written before a permission was deleted (or a tampered
+   * one) cannot put a key into a grant set.
+   *
+   * The *sanitised* DTO is what gets stored, not the caller's: `toJSON()` returns
+   * it by reference, so keeping the original would write the unknown keys straight
+   * back out to Redis on the next cache fill.
+   */
   public static from(dto: CapabilitySetDto): CapabilitySet {
-    return new CapabilitySet(dto);
+    return new CapabilitySet(CapabilitySet.sanitised(dto));
   }
 
   public static empty(): CapabilitySet {
@@ -53,9 +66,45 @@ export class CapabilitySet {
     return [...new Set([...a, ...b])];
   }
 
-  /** Deny by default. An explicit deny beats every grant, including the wildcard. */
+  private static known(keys: readonly PermissionKey[]): PermissionKey[] {
+    return keys.filter((key) => PermissionRegistry.instance.isKnown(key));
+  }
+
+  private static scopedSet(dto: ScopedSetDto): ScopedSetDto {
+    return { grants: CapabilitySet.known(dto.grants), denies: CapabilitySet.known(dto.denies) };
+  }
+
+  /**
+   * Goal keys survive even when every permission inside one was dropped — an empty
+   * goal entry is meaningful to `intersect()`, which unions goal keys across both
+   * sides.
+   */
+  private static sanitised(dto: CapabilitySetDto): CapabilitySetDto {
+    return {
+      wildcard: dto.wildcard,
+      org: CapabilitySet.scopedSet(dto.org),
+      goals: Object.fromEntries(
+        Object.entries(dto.goals).map(([id, set]): [string, ScopedSetDto] => [
+          id,
+          CapabilitySet.scopedSet(set),
+        ]),
+      ),
+    };
+  }
+
+  /**
+   * Deny by default. An explicit deny beats every grant, including the wildcard.
+   *
+   * A permission the catalog does not define is denied rather than thrown on. The
+   * type rules that out at compile time, but a cast or a stale DTO can still get
+   * one here at runtime, and a `TypeError` from a permission check means a 500
+   * where the honest answer was a 403.
+   */
   public can(permission: PermissionKey, goalId?: string): boolean {
-    if (PermissionRegistry.instance.scopeOf(permission) === "goal") {
+    const scope = PermissionRegistry.instance.scopeOf(permission);
+    if (!scope) return false;
+
+    if (scope === "goal") {
       if (!goalId) return false;
       const goal = this.goalSets.get(goalId);
       if (goal?.deniesPermission(permission)) return false;
@@ -77,9 +126,22 @@ export class CapabilitySet {
     return permissions.some((p) => this.can(p, goalId));
   }
 
-  /** Goals in which this principal holds a given goal-scoped permission. */
-  public goalsWith(permission: PermissionKey): readonly string[] {
-    return [...this.goalSets.keys()].filter((id) => this.can(permission, id));
+  /**
+   * Which of `amongGoalIds` this principal holds `permission` in.
+   *
+   * The candidate set is a required parameter because this object cannot produce
+   * it. It knows only the goals its own DTO names, and two principal shapes hold a
+   * goal-scoped permission in goals that never appear there: a wildcard holder,
+   * and anyone granted the permission at org level. Filtering `this.goalSets`
+   * answered `[]` for both while `can()` answered `true` — which fed an empty
+   * permitted scope into `VectorStore.search()`, where empty means org-wide chunks
+   * only. A superuser got no goal-scoped results and no error.
+   *
+   * Passing the scope in also mirrors `VectorStore.search()` itself: the permitted
+   * set sits in the signature so a caller cannot forget to compute it.
+   */
+  public goalsWith(permission: PermissionKey, amongGoalIds: readonly string[]): readonly string[] {
+    return [...new Set(amongGoalIds)].filter((id) => this.can(permission, id));
   }
 
   /**

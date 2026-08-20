@@ -1,14 +1,14 @@
-# 25 · Hygiene and CI
+# 26 · Hygiene and CI
 
 > Hooks that catch mistakes before they leave your machine, and a pipeline that catches the ones that get past them.
 
 **Delivers:** Pre-commit formatting, conventional commits scoped to real packages, and a CI job that enforces the three architectural rules a type checker cannot see.
 
-**Prerequisite:** [24 · `apps/worker`](24-worker-app.md)
+**Prerequisite:** [25 · `apps/worker`](25-worker-app.md)
 
 ---
 
-## Step 25.1 — Hooks
+## Step 26.1 — Hooks
 
 ```bash
 pnpm add -Dw husky lint-staged @commitlint/cli @commitlint/config-conventional
@@ -66,7 +66,7 @@ ESLint's six architecture rules still block a merge — they run here and in CI,
 
 ---
 
-## Step 25.2 — Commit scopes
+## Step 26.2 — Commit scopes
 
 **`commitlint.config.js`**
 
@@ -101,7 +101,7 @@ chore(deps): bump drizzle-orm
 
 ---
 
-## Step 25.3 — The pipeline
+## Step 26.3 — The pipeline
 
 **`.github/workflows/ci.yml`**
 
@@ -158,7 +158,7 @@ jobs:
 > [!CAUTION]
 > **That web build is not optional.** `check:architecture`'s third assertion greps the built *client* output for server-only fingerprints. `build:packages` filters to `./packages/*` and never builds `apps/web`, so without this step the grep runs over a directory that does not exist — it passes silently and gives you permanent false confidence that no server code is reaching the browser.
 >
-> This is exactly the failure the note in Step 25.4 warns about, and the pipeline is where it actually bites. Make the script fail when it finds zero asset files, so a missing build is loud rather than green.
+> This is exactly the failure the note in Step 26.4 warns about, and the pipeline is where it actually bites. Make the script fail when it finds zero asset files, so a missing build is loud rather than green.
 
 **Services, not Docker Compose.** GitHub's `services` block gives health-checked containers on localhost with no compose file to keep in sync. The `pgvector` image is required — the vector migration will not apply on stock `postgres:17`.
 
@@ -174,7 +174,7 @@ jobs:
 
 ---
 
-## Step 25.4 — The three architectural assertions
+## Step 26.4 — The three architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Three greps can.
 
@@ -218,11 +218,12 @@ Shipping database driver code to the browser is not just a 400KB regression. It 
 
 ---
 
-## Step 25.5 — Optional but worth it
+## Step 26.5 — Optional but worth it
 
 - **`actions/cache`** on the pnpm store and package `dist/` dirs, keyed by lockfile hash.
 - **A `docker compose up` smoke job** running the real containers and a migration to catch drift the pinned CI images hide.
 - **Branch protection** requiring `verify` to pass before merge — otherwise all of this is advisory.
+- **A separate tag-triggered workflow for desktop builds** ([30](30-desktop-app.md)). Deliberately not part of `verify`: Tauri needs three OS runners and several minutes each. `verify` typechecks and lints `apps/desktop` through the root scripts like anything else, and does **not** compile the Rust half — so a broken `main.rs` surfaces at tag time rather than at merge.
 - **`pnpm audit --audit-level high`** as a separate non-blocking job; blocking on transitive advisories you cannot fix teaches people to ignore red builds. Advisories are filtered by **GHSA** id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
 - **`pnpm peers check`** to surface unmet peers, which pnpm 11 no longer prints as a tree during install.
 - **`pnpm sbom`** if anything downstream wants a CycloneDX or SPDX bill of materials.
@@ -242,4 +243,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `apps/worker`](24-worker-app.md) · [Verification and first feature →](26-verification-and-first-feature.md)
+[← `apps/worker`](25-worker-app.md) · [Verification and first feature →](27-verification-and-first-feature.md)

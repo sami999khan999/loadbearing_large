@@ -65,7 +65,13 @@
   },
   "overrides": [
     {
-      "includes": ["packages/ui/**", "packages/feature/**", "packages/query/**", "apps/web/src/**"],
+      "includes": [
+        "packages/ui/**",
+        "packages/feature/**",
+        "packages/query/**",
+        "packages/errors/**",
+        "apps/web/src/**"
+      ],
       "linter": {
         "rules": {
           "style": {

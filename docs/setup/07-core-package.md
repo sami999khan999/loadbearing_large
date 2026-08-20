@@ -318,9 +318,23 @@ Note the check goes through `globalThis` rather than naming `window` directly. `
 > resolve, and it needs neither the DOM lib nor an ambient `declare` that would collide with
 > `@types/node` wherever both land in one program.
 
-This is the second of three defences. The ESLint `no-restricted-imports` boundary ([05](05-lint-and-format.md)) is the first and catches the mistake at authoring time. This one catches it at runtime if someone adds an escape-hatch path. The CI bundle grep ([25](25-hygiene-and-ci.md)) catches it at build time if both are somehow bypassed.
+This is the second of three defences. The ESLint `no-restricted-imports` boundary ([05](05-lint-and-format.md)) is the first and catches the mistake at authoring time. This one catches it at runtime if someone adds an escape-hatch path. The CI bundle grep ([26](26-hygiene-and-ci.md)) catches it at build time if both are somehow bypassed.
 
 Three feels like a lot for one mistake. It is calibrated to the cost: a Drizzle import reaching the client ships your connection string and full table shapes to anyone who opens devtools.
+
+### This is the one error in the repository allowed to carry a message
+
+[09](09-errors-package.md) establishes that an error carries a **code and structured context, never prose** — every word a user reads lives in `content`, keyed and translated. `ServerOnly.assert` is the single deliberate exception, and it is declared here rather than retroactively there so that reading in order never turns up an unexplained violation.
+
+Three reasons it earns the exception:
+
+- **The audience is a developer, at module load.** There is no request, no locale, no `Translator`, and no client to send an envelope to. The thing reading this is a stack trace in a console.
+- **The prose *is* the payload.** Its whole value is "this is a leak, not a bundle-size problem" — the sentence that stops someone reaching for a bundler setting. Reduced to a code and `{ packageName }`, it would say strictly less.
+- **It never crosses a wire.** A build-time guard cannot reach a screen, so none of the reasons for keeping text out of errors apply.
+
+The package order makes it impossible anyway — `core` is below `errors`, so `AppError` is not importable here. That ordering is correct and this is not the reason for the exception; the three above are. Do not "fix" this by inverting the two packages or by moving `ServerOnly`.
+
+**Everything after this point throws `AppError`.** `permissions` ([08](08-permissions-package.md)) throws nothing at all by design — an unknown permission is denied, not raised — so this is the only pre-09 error in the build.
 
 ---
 
@@ -335,7 +349,7 @@ export { ServerOnly } from "./server-only.js";
 export { Uuid } from "./uuid.js";
 
 /**
- * Placeholder kept only until doc 23, where apps/web imports it once to prove the
+ * Placeholder kept only until doc 24, where apps/web imports it once to prove the
  * workspace → bundler chain end to end. Delete it after that step, not before.
  */
 export class CorePackage {
@@ -343,9 +357,9 @@ export class CorePackage {
 }
 ```
 
-**Every export is named; `export *` is a lint error** ([28](28-naming-and-boundaries.md#13-barrels-and-imports)). `Result` is a type alias, so it carries the inline `type` modifier and stays erased under `verbatimModuleSyntax`. `ResultBase` never appears, which here costs nothing because it was never exported from `result.ts` either — but that is the point of the named list: once a sibling file legitimately needs a symbol and `export` goes on it, the barrel is what decides whether the rest of the repository sees it.
+**Every export is named; `export *` is a lint error** ([29](29-naming-and-boundaries.md#13-barrels-and-imports)). `Result` is a type alias, so it carries the inline `type` modifier and stays erased under `verbatimModuleSyntax`. `ResultBase` never appears, which here costs nothing because it was never exported from `result.ts` either — but that is the point of the named list: once a sibling file legitimately needs a symbol and `export` goes on it, the barrel is what decides whether the rest of the repository sees it.
 
-The scaffold from [06](06-package-anatomy.md) wrote `CorePackage` as the whole of `index.ts`. Keep it — [23](23-web-app.md) imports it once to prove the workspace→bundler chain end to end, and it is deleted there, not here. It is the only class in the codebase that lives in a barrel rather than its own file, for exactly as long as it exists.
+The scaffold from [06](06-package-anatomy.md) wrote `CorePackage` as the whole of `index.ts`. Keep it — [24](24-web-app.md) imports it once to prove the workspace→bundler chain end to end, and it is deleted there, not here. It is the only class in the codebase that lives in a barrel rather than its own file, for exactly as long as it exists.
 
 ---
 
@@ -489,7 +503,7 @@ pnpm lint                                   # biome check . && eslint .
 >
 > Run `pnpm check` **before** `pnpm lint`, for the same reason [06](06-package-anatomy.md) does.
 
-`packages/core/dist/` contains `index.js` and `index.d.ts`. **Do not proceed if it does not** — every later package copies this exact shape, and a problem here multiplies by fourteen.
+`packages/core/dist/` contains `index.js` and `index.d.ts`. **Do not proceed if it does not** — every later package copies this exact shape, and a problem here multiplies by fifteen.
 
 Three of the four primitives come out of the build with the shape you expect; check that `index.d.ts` exports all of `Clock`, `SystemClock`, `FixedClock`, `Result`, `Ok`, `Err`, `ServerOnly`, `Uuid` and the temporary `CorePackage`. `Uuid`'s `private static webCrypto` appears in the declaration as an unresolved private — that is normal, and it is why the `WebCrypto` type is not exported.
 

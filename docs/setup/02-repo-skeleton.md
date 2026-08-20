@@ -24,7 +24,7 @@ Four directories, and the split between them is the architecture:
 
 | Directory | Holds | Rule |
 |---|---|---|
-| `apps/` | Framework code — TanStack Start, the worker's Node entrypoint, a Tauri desktop shell later | The only place `process.env` is read. The only place `@tanstack/react-router` appears. Deliberately thin enough to delete and rewrite in a week. |
+| `apps/` | Framework code — TanStack Start, the worker's Node entrypoint, the Tauri desktop shell | The only place `process.env` is read. The only place `@tanstack/react-router` appears. Deliberately thin enough to delete and rewrite in a week. |
 | `packages/` | Everything that matters — primitives, permissions, contracts, use-cases, adapters, React components | Knows nothing about which web framework you use. Never reads its own configuration. |
 | `tooling/` | Shared `tsconfig`, Biome, and ESLint configs, published as workspace packages | Changed rarely, by whoever owns the platform. |
 | `infra/` | `docker-compose.yml` and anything else that describes running services | No application code. |
@@ -116,7 +116,7 @@ OPENAI_API_KEY=
 NODE_ENV=development
 WEB_PORT=3000
 ```
-> Every variable that will ever be read, present from day one with a working local value. `S3_FORCE_PATH_STYLE` is `true` for MinIO and `false` for real AWS — having the switch here now means the production difference is a value, not a code change. `EMBEDDING_DIMENSIONS` is here because the pgvector column type depends on it, and changing it later is a migration ([13](13-vector-store.md)).
+> Every variable that will ever be read, present from day one with a working local value. `S3_FORCE_PATH_STYLE` is `true` for MinIO and `false` for real AWS — having the switch here now means the production difference is a value, not a code change. `EMBEDDING_DIMENSIONS` is here because the pgvector column type depends on it, and changing it later is a migration ([14](14-vector-store.md)).
 
 Copy it:
 

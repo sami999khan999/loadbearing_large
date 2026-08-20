@@ -1,10 +1,10 @@
-# 17 · `@loadbearing/api-client`
+# 18 · `@loadbearing/api-client`
 
 > The typed oRPC client, the auth-strategy hierarchy, and the transport seam that lets SSR skip the network entirely. React-free.
 
 **Delivers:** One client serving browser cookies, in-process SSR calls, and desktop bearer tokens — with no call-site changes between them.
 
-**Prerequisite:** [16 · `@loadbearing/composition`](16-composition-container.md)
+**Prerequisite:** [17 · `@loadbearing/composition`](17-composition-container.md)
 
 ---
 
@@ -29,7 +29,7 @@ packages/api-client/src/
 
 ---
 
-## Step 17.1 — Auth strategies
+## Step 18.1 — Auth strategies
 
 **`packages/api-client/src/auth/token.provider.ts`**
 
@@ -91,11 +91,11 @@ A Tauri webview runs on a `tauri://` origin, so a cookie set by your API is neve
 
 `TokenProvider` is abstract because *where* the token lives differs by host: the OS keychain reached through a Tauri command, a mobile keychain, an in-memory value in a test. None of those belong in this package — and note that all three are asynchronous, which is why `get()` returns a promise.
 
-`set(null)` is the clear path, so two methods cover storing, reading, and signing out. See [29](29-desktop-app.md) for the Tauri implementation.
+`set(null)` is the clear path, so two methods cover storing, reading, and signing out. See [30](30-desktop-app.md) for the Tauri implementation.
 
 ---
 
-## Step 17.2 — `ApiClient` takes a transport, not a URL
+## Step 18.2 — `ApiClient` takes a transport, not a URL
 
 The obvious design — `new ApiClient(baseUrl, auth)` — has a hidden cost during SSR. `"/api/rpc"` resolves to your own server, so every loader makes a real HTTP request out through the loopback interface and back in. You serialise and deserialise the same payload twice and burn two extra event-loop trips per query. A page with six loaders makes six self-requests before rendering a byte, and they compete with real user requests for your connection pool.
 
@@ -150,13 +150,13 @@ export function createServerRpcClient(request: Request) {
 }
 ```
 
-`createQueryClient()` in [20](20-query-package.md) then picks per environment — `inProcess` on the server, `overHttp` in the browser. Both satisfy the same type, so `query`, `feature`, and every component are identical either way. On client-side navigation the same loader runs in the browser and uses the HTTP client automatically, provided the client comes from the environment-aware factory rather than a module-scope singleton.
+`createQueryClient()` in [21](21-query-package.md) then picks per environment — `inProcess` on the server, `overHttp` in the browser. Both satisfy the same type, so `query`, `feature`, and every component are identical either way. On client-side navigation the same loader runs in the browser and uses the HTTP client automatically, provided the client comes from the environment-aware factory rather than a module-scope singleton.
 
 > **In-process is a transport optimisation, never an authorization shortcut.** Pass the real request headers into the context. It is tempting to skip them since you are already on the server, but `principalMiddleware` resolves the session from those headers — dropping them either breaks auth or tempts someone into constructing a privileged principal directly. Same middleware, same `Authorizer.assert()`, same everything; only the serialisation is skipped.
 
 ---
 
-## Step 17.3 — Namespace accessors
+## Step 18.3 — Namespace accessors
 
 As contract namespaces arrive, expose them as getters rather than making callers reach through `raw`:
 
@@ -174,7 +174,7 @@ Two lines per feature module, and it means `ApiClient` has a readable public sur
 
 ---
 
-## Step 17.4 — The auth client
+## Step 18.4 — The auth client
 
 Better Auth's **vanilla** client, never `better-auth/react`.
 
@@ -220,13 +220,13 @@ export class AuthClient {
 
 **Why not `better-auth/react`.** Its `useSession` hook maintains its own cache with its own invalidation rules. Adopting it means two caching systems in one app: TanStack Query for everything, and a separate one for the single piece of state that gates all of it. When they disagree — and they will, on sign-out — the UI shows a signed-in shell around a sequence of `UNAUTHORIZED` responses.
 
-Wrapping the vanilla client here means session state lives in the same TanStack cache as everything else, through `SessionQueries` in [20](20-query-package.md). One owner, one invalidation story.
+Wrapping the vanilla client here means session state lives in the same TanStack cache as everything else, through `SessionQueries` in [21](21-query-package.md). One owner, one invalidation story.
 
 **`AuthClient` throws on error rather than returning it.** Better Auth's client returns `{ data, error }`; the rest of this codebase throws. Normalising at the boundary means a `SignInForm` uses the same error handling as every other mutation.
 
 ---
 
-## Step 17.5 — The barrel
+## Step 18.5 — The barrel
 
 **`packages/api-client/src/index.ts`**
 
@@ -275,4 +275,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/composition`](16-composition-container.md) · [`@loadbearing/asset` →](18-asset-package.md)
+[← `@loadbearing/composition`](17-composition-container.md) · [`@loadbearing/asset` →](19-asset-package.md)

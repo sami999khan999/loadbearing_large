@@ -9,13 +9,13 @@ Resolved capabilities for one principal — a user or an API key, same shape.
 
 ```ts
 export class CapabilitySet {
-  public static from(dto: CapabilitySetDto): CapabilitySet;
+  public static from(dto: CapabilitySetDto): CapabilitySet;   // filters unknown keys
   public static empty(): CapabilitySet;
 
   public can(permission: PermissionKey, goalId?: string): boolean;
   public canAll(permissions: readonly PermissionKey[], goalId?: string): boolean;
   public canAny(permissions: readonly PermissionKey[], goalId?: string): boolean;
-  public goalsWith(permission: PermissionKey): readonly string[];
+  public goalsWith(permission: PermissionKey, amongGoalIds: readonly string[]): readonly string[];
   public intersect(other: CapabilitySet): CapabilitySet;
   public toJSON(): CapabilitySetDto;
 }
@@ -73,7 +73,7 @@ straight into `from()`.
 ## `goalsWith()` does more work than it looks
 
 ```ts
-caps.goalsWith("task.update"); // readonly string[]
+caps.goalsWith("task.update", candidateGoalIds); // readonly string[]
 ```
 
 Escalation that resolves targets *by permission rather than by role* is this method. "A manager sees
@@ -82,8 +82,30 @@ Writing it once, on the class that owns the data, is what makes "no hardcoded ro
 rather than aspirational — the alternative is `WHERE role = 'manager'` in three query files that
 drift apart.
 
-It answers for goal-scoped keys. Asked with an org-scoped key it returns every goal in the set,
-because the org grant covers all of them; that is consistent, not useful.
+### Why the candidate set is a parameter
+
+This object cannot produce it. It knows only the goals its own DTO names, and two principal shapes
+hold a goal-scoped permission in goals that never appear there — a wildcard holder, and anyone
+granted the permission at org level, since an org grant covers every goal.
+
+Filtering its own `goals` keys answered `[]` for both while `can()` answered `true`. That gap fed an
+empty permitted scope into `VectorStore.search()`, where empty means `isNull(goalId)` — org-wide
+chunks only ([14](../../../../docs/setup/14-vector-store.md)). A superuser asking about a project's
+documents got no goal-scoped results and **no error**: fail-closed, and silently wrong.
+
+Taking candidates and filtering them through `can()` makes all four shapes correct for free, because
+`can()` already handles each one:
+
+| Principal | Result |
+| --- | --- |
+| wildcard | every candidate |
+| org-level grant of a goal-scoped permission | every candidate |
+| per-goal grants | only the granted ones |
+| per-goal deny | excluded, even under wildcard |
+
+It also mirrors `VectorStore.search()` itself, where `goalIds` is required so the permitted scope
+cannot be forgotten ([12](../../../../docs/setup/12-application-package.md)). Duplicates in the input
+are collapsed; order is the caller's.
 
 ---
 
@@ -155,6 +177,30 @@ side is narrowed.
 
 ---
 
+## `from()` is where the vocabulary boundary holds
+
+A DTO arrives here from three places — the database, a Redis cache entry, and an SSR payload — and
+only the first has already been filtered through `isKnown()`. So `from()` re-filters every set, which
+is what makes that boundary true on all three paths instead of one:
+
+```ts
+CapabilitySet.from({
+  wildcard: false,
+  org: { grants: ["member.read", "task.archive"], denies: [] },
+  goals: {},
+}).toJSON().org.grants;                      // ["member.read"] — the unknown key is gone
+```
+
+Two details matter. The **sanitised** DTO is what gets stored, not the caller's — `toJSON()` returns it
+by reference, so keeping the original would write the dropped keys straight back out to the cache on
+the next fill. And a goal key survives even when every permission inside it was dropped, because an
+empty goal entry is still meaningful to `intersect()`, which unions goal keys across both sides.
+
+`intersect()` builds through `from()` too, on sets that are already clean. That redundant filter is a
+few keys' worth of work, and worth it to keep one entry point rather than a trusted back door.
+
+---
+
 ## `ScopedSet` is internal on purpose
 
 `grants` and `denies` are `ReadonlySet`s built once in the constructor, so `can()` is two hash
@@ -171,4 +217,4 @@ Note `public constructor(dto: ScopedSetDto)`: Biome's `useConsistentMemberAccess
 - [`@loadbearing/permissions`](../index.md)
 - [PermissionRegistry](permission-registry.md) — where `scopeOf()` comes from
 - [ModuleRegistry](module-registry.md) — the only other consumer of `can()` inside this package
-- [15 · auth](../../../../docs/setup/15-auth-package.md) — the API-key resolution path that calls `intersect()`
+- [16 · auth](../../../../docs/setup/16-auth-package.md) — the API-key resolution path that calls `intersect()`
