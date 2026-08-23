@@ -10,7 +10,9 @@
 
 ## What belongs here
 
-Only things that (a) every other package might need and (b) belong to no feature. The bar is deliberately high — this package depends on nothing at all, and every addition here is something that can never be tested with a fake.
+Only things that (a) every other package might need and (b) belong to no feature. The bar is deliberately high, and every addition here is something that can never be tested with a fake.
+
+**One dependency, and only one:** [`@loadbearing/errors`](09-errors-package.md), because `ServerOnly.assert` throws ([Step 7.4](#step-74--serveronly)) and nothing in this repository throws a bare `Error`. `errors` is itself a zero-dependency leaf, so `core` stays loadable in a browser, a Node worker, a Tauri webview, or a bare test file — which is the property that actually matters, not the edge count.
 
 ```
 packages/core/
@@ -24,6 +26,7 @@ packages/core/
 └── tests/
     ├── clock.spec.ts
     ├── result.spec.ts
+    ├── server-only.spec.ts
     └── uuid.spec.ts
 ```
 
@@ -31,7 +34,7 @@ packages/core/
 
 ## Step 7.1 — `Clock`
 
-**`packages/core/src/clock.ts`**
+**`packages/core/src/primitive/clock.ts`**
 
 ```ts
 export abstract class Clock {
@@ -69,15 +72,13 @@ This looks like over-engineering for `new Date()` until you count how much of a 
 
 ## Step 7.2 — `Result`
 
-**`packages/core/src/result.ts`**
+**`packages/core/src/primitive/result.ts`**
 
 ```ts
-/**
- * The shared behaviour of both cases. Not exported — `Result` is the union below,
- * and that is what call sites annotate with. Only the union narrows in every
- * position; an abstract base class narrows a positive `instanceof` and nothing else,
- * because TypeScript can subtract a member from a union but not from a class.
- */
+// The shared behaviour of both cases. Not exported — `Result` is the union below,
+// and that is what call sites annotate with. Only the union narrows in every
+// position; an abstract base class narrows a positive `instanceof` and nothing else,
+// because TypeScript can subtract a member from a union but not from a class.
 abstract class ResultBase<T, E> {
   public abstract unwrapOr(fallback: T): T;
   public abstract mapOk<U>(fn: (value: T) => U): Result<U, E>;
@@ -126,10 +127,8 @@ export class Err<T, E> extends ResultBase<T, E> {
 
 export type Result<T, E> = Ok<T, E> | Err<T, E>;
 
-/**
- * Factories. A type alias cannot carry statics, so these live on their own class
- * rather than on `Result` — the one cost of making `Result` a union.
- */
+// Factories. A type alias cannot carry statics, so these live on their own class
+// rather than on `Result` — the one cost of making `Result` a union.
 export class Results {
   private constructor() {}
 
@@ -201,20 +200,18 @@ This distinction matters, and getting it wrong produces either an exception-driv
 
 ## Step 7.3 — `Uuid`
 
-**`packages/core/src/uuid.ts`**
+**`packages/core/src/primitive/uuid.ts`**
 
 ```ts
-/**
- * The one Web Crypto method this package uses.
- *
- * `library.json` sets `lib: ["ES2024"]` with no DOM, so `crypto` is not a declared
- * identifier in this package. It happens to resolve today because `tests/clock.spec.ts`
- * imports vitest, which pulls vite's `/// <reference types="node" />` and with it
- * the `@types/node` globals into the program — so deleting the tests, or dropping
- * `tests/**` from this package's tsconfig `include`, would stop `Uuid` from
- * compiling. Naming the method and reaching it off `globalThis` makes the type
- * independent of whatever else lands in the program.
- */
+// The one Web Crypto method this package uses.
+//
+// `library.json` sets `lib: ["ES2024"]` with no DOM, so `crypto` is not a declared
+// identifier in this package. It happens to resolve today because `tests/clock.spec.ts`
+// imports vitest, which pulls vite's `/// <reference types="node" />` and with it
+// the `@types/node` globals into the program — so deleting the tests, or dropping
+// `tests/**` from this package's tsconfig `include`, would stop `Uuid` from
+// compiling. Naming the method and reaching it off `globalThis` makes the type
+// independent of whatever else lands in the program.
 type WebCrypto = {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
 };
@@ -226,11 +223,9 @@ export class Uuid {
     return (globalThis as unknown as { crypto: WebCrypto }).crypto;
   }
 
-  /**
-   * UUIDv7 — time-ordered. Sequential inserts stay on the right-hand side of the
-   * B-tree instead of scattering across it, which is worth a lot on a table
-   * that only ever grows.
-   */
+  // UUIDv7 — time-ordered. Sequential inserts stay on the right-hand side of the
+  // B-tree instead of scattering across it, which is worth a lot on a table
+  // that only ever grows.
   public static v7(): string {
     const ts = BigInt(Date.now());
     const bytes = Uuid.webCrypto().getRandomValues(new Uint8Array(16));
@@ -278,23 +273,25 @@ The side effect — IDs leak creation time — is worth knowing about. It is fin
 
 ## Step 7.4 — `ServerOnly`
 
-**`packages/core/src/server-only.ts`**
+**`packages/core/src/primitive/server-only.ts`**
 
 ```ts
+import { ServerOnlyError } from "@loadbearing/errors";
+
 export class ServerOnly {
   private constructor() {}
 
-  /** Call at the top of every server-only package barrel. */
+  // Call at the top of every server-only package barrel.
   public static assert(packageName: string): void {
     // `library.json` sets lib: ["ES2024"] with no DOM, so a bare `window` is an
     // unresolved identifier (TS2304) even behind `typeof`. Reaching it as an
     // optional property of `globalThis` is the same runtime check, expressed in
     // a way a package that has never heard of a browser can compile.
     if (typeof (globalThis as { window?: unknown }).window !== "undefined") {
-      throw new Error(
-        `${packageName} was imported into a client bundle. This is a leak, not a bundle-size problem — ` +
-          `it means database or credential code is reachable from the browser.`,
-      );
+      // No message. The sentence a developer needs lives in `@loadbearing/content`
+      // as `error.serverOnly`, keyed off this code and interpolated from
+      // `{ package: packageName }` — see [09](09-errors-package.md).
+      throw new ServerOnlyError(packageName);
     }
   }
 }
@@ -322,50 +319,88 @@ This is the second of three defences. The ESLint `no-restricted-imports` boundar
 
 Three feels like a lot for one mistake. It is calibrated to the cost: a Drizzle import reaching the client ships your connection string and full table shapes to anyone who opens devtools.
 
-### This is the one error in the repository allowed to carry a message
+### There is no error in this repository that carries a message
 
-[09](09-errors-package.md) establishes that an error carries a **code and structured context, never prose** — every word a user reads lives in `content`, keyed and translated. `ServerOnly.assert` is the single deliberate exception, and it is declared here rather than retroactively there so that reading in order never turns up an unexplained violation.
+[09](09-errors-package.md) establishes that an error carries a **code and structured context, never prose** — every word a user reads lives in `content` ([20](20-content-package.md)), keyed and translated. `ServerOnly.assert` is where that rule is easiest to argue an exception for, and it does not get one. The rule holds without a single carve-out, which is worth more than the sentence it costs.
 
-Three reasons it earns the exception:
+The tempting argument for an exception, and why it loses:
 
-- **The audience is a developer, at module load.** There is no request, no locale, no `Translator`, and no client to send an envelope to. The thing reading this is a stack trace in a console.
-- **The prose *is* the payload.** Its whole value is "this is a leak, not a bundle-size problem" — the sentence that stops someone reaching for a bundler setting. Reduced to a code and `{ packageName }`, it would say strictly less.
-- **It never crosses a wire.** A build-time guard cannot reach a screen, so none of the reasons for keeping text out of errors apply.
+| The case for prose here | Why it does not hold |
+| --- | --- |
+| The audience is a developer at module load — no request, no locale, no `Translator`. | True, and irrelevant: the reader still needs the *words*, and `content` is where words are. What the throw site needs is the code and the package name. |
+| The prose *is* the payload — "this is a leak, not a bundle-size problem" is what stops someone reaching for a bundler setting. | Still is. It moved to `error.serverOnly` in `content`, with `{package}` interpolated from the error's context, so an error boundary and a console reader get the identical sentence — and a Bengali-reading developer can get it in Bengali. |
+| It never crosses a wire, so none of the reasons for keeping text out of errors apply. | One reason still applies, and it is the one that matters: a `message` field on the base class is the thing that gets rendered. Leave it available for the honest case and it will be used for the dishonest one. |
 
-The package order makes it impossible anyway — `core` is below `errors`, so `AppError` is not importable here. That ordering is correct and this is not the reason for the exception; the three above are. Do not "fix" this by inverting the two packages or by moving `ServerOnly`.
+So `ServerOnly.assert` throws `ServerOnlyError` — code `SERVER_ONLY`, context `{ package }`, and `Error.message` equal to `"SERVER_ONLY"` like every other error in the build.
 
-**Everything after this point throws `AppError`.** `permissions` ([08](08-permissions-package.md)) throws nothing at all by design — an unknown permission is denied, not raised — so this is the only pre-09 error in the build.
+```
+ServerOnlyError: SERVER_ONLY
+    at ServerOnly.assert (…)
+    at packages/db/src/index.ts:2:12
+```
+
+That is a legible stack trace: it names the guard, and the frame below it names the package that leaked. The sentence is one `ERROR_COPY` lookup away.
+
+> [!NOTE]
+> **This is why `core` declares `@loadbearing/errors`.** The two packages are presented in this order
+> because `core`'s primitives are what a reader needs first, not because there is a layer between them —
+> `errors` is a zero-dependency leaf and the edge is acyclic. `pnpm build:packages` reads the graph, not
+> the doc numbers, so it builds `errors` first; if your build log shows `core` first, the dependency is
+> missing from `packages/core/package.json`.
+>
+> An earlier revision of this document declared the exception and told you not to "fix" it by inverting
+> the two packages. Inverting them was the fix.
+
+**`permissions` ([08](08-permissions-package.md)) throws nothing at all by design** — an unknown permission is denied, not raised — so `ServerOnlyError` is the only error thrown anywhere in docs 07–08.
 
 ---
 
-## Step 7.5 — The barrel
+## Step 7.5 — The two barrels
 
-**`packages/core/src/index.ts`**
+`src/` holds `index.ts`, `import.ts`, and folders — nothing else
+([Opinions · Folders](../opinions/folders.md)). All four primitives live in `primitive/`, so this
+package has one folder and two barrels.
+
+**`packages/core/src/primitive/index.ts`**
 
 ```ts
 export { Clock, FixedClock, SystemClock } from "./clock.js";
 export { Err, Ok, type Result, Results } from "./result.js";
 export { ServerOnly } from "./server-only.js";
 export { Uuid } from "./uuid.js";
-
-/**
- * Placeholder kept only until doc 24, where apps/web imports it once to prove the
- * workspace → bundler chain end to end. Delete it after that step, not before.
- */
-export class CorePackage {
-  public static readonly id = "@loadbearing/core";
-}
 ```
 
-**Every export is named; `export *` is a lint error** ([29](29-naming-and-boundaries.md#13-barrels-and-imports)). `Result` is a type alias, so it carries the inline `type` modifier and stays erased under `verbatimModuleSyntax`. `ResultBase` never appears, which here costs nothing because it was never exported from `result.ts` either — but that is the point of the named list: once a sibling file legitimately needs a symbol and `export` goes on it, the barrel is what decides whether the rest of the repository sees it.
+**`packages/core/src/index.ts`**
 
-The scaffold from [06](06-package-anatomy.md) wrote `CorePackage` as the whole of `index.ts`. Keep it — [24](24-web-app.md) imports it once to prove the workspace→bundler chain end to end, and it is deleted there, not here. It is the only class in the codebase that lives in a barrel rather than its own file, for exactly as long as it exists.
+```ts
+export {
+  Clock,
+  Err,
+  FixedClock,
+  Ok,
+  type Result,
+  Results,
+  ServerOnly,
+  SystemClock,
+  Uuid,
+} from "./primitive/index.js";
+```
+
+The root barrel names only folder barrels. The scaffold's `export {};` is replaced here — the
+placeholder class the earlier draft of this document kept until [24](24-web-app.md) is gone, and
+[24](24-web-app.md) proves the workspace→bundler chain with `Clock` instead.
+
+**Every export is named; `export *` is a lint error** ([Opinions · Imports](../opinions/imports.md)). `Result` is a type alias, so it carries the inline `type` modifier and stays erased under `verbatimModuleSyntax`. `ResultBase` never appears, which here costs nothing because it was never exported from `result.ts` either — but that is the point of the named list: once a sibling file legitimately needs a symbol and `export` goes on it, the barrel is what decides whether the rest of the repository sees it.
+
+**Two barrels rather than one is the shape every package has**, and the reason is that the root
+barrel then changes only when the *public surface* changes. Moving `clock.ts` from `primitive/` to
+a future `time/` touches `primitive/index.ts` and `index.ts` and nothing else in the repository.
 
 ---
 
 ## Step 7.6 — A first test
 
-**`packages/core/tests/clock.spec.ts`**
+**`packages/core/tests/primitive/clock.spec.ts`**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -395,7 +430,7 @@ One consequence to keep in mind: `tests/**` has to stay in the package's tsconfi
 
 Add one for `Uuid` too — it is the only primitive here whose behaviour is not obvious by reading it, and `vi.setSystemTime` makes the timestamp claim testable rather than assumed.
 
-**`packages/core/tests/uuid.spec.ts`**
+**`packages/core/tests/primitive/uuid.spec.ts`**
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -444,7 +479,7 @@ describe("Uuid", () => {
 
 The last assertion is the one worth keeping: `isValid` checks the *variant* nibble, not the version, so a well-formed string with a zero variant is correctly rejected while `…-7000-…` in the version position is not what the regex is looking at.
 
-**`packages/core/tests/result.spec.ts`** covers the factories and `mapOk`/`mapErr` the ordinary way, and then pins the narrowing:
+**`packages/core/tests/primitive/result.spec.ts`** covers the factories and `mapOk`/`mapErr` the ordinary way, and then pins the narrowing:
 
 ```ts
 describe("narrowing", () => {
@@ -473,15 +508,81 @@ describe("narrowing", () => {
 
 Add a minimal Vitest config so `include` points at `tests/` and doesn't pick up `dist/`:
 
+`ServerOnly` gets one too, and it is the least obvious of the four to test — the subject only fires
+when a global exists that this package cannot name:
+
+**`packages/core/tests/primitive/server-only.spec.ts`**
+
+```ts
+import { ServerOnlyError } from "@loadbearing/errors";
+import { afterEach, describe, expect, it } from "vitest";
+import { ServerOnly } from "../src/server-only.js";
+
+const global_ = globalThis as { window?: unknown };
+
+afterEach(() => {
+  delete global_.window;
+});
+
+describe("ServerOnly", () => {
+  it("is silent on a server, where there is no window", () => {
+    expect(() => {
+      ServerOnly.assert("@loadbearing/db");
+    }).not.toThrow();
+  });
+
+  it("carries a code and the package name, and no prose at all", () => {
+    global_.window = {};
+
+    try {
+      ServerOnly.assert("@loadbearing/auth");
+      expect.unreachable("assert should have thrown");
+    } catch (thrown) {
+      const error = thrown as ServerOnlyError;
+
+      expect(error.code).toBe("SERVER_ONLY");
+      expect(error.message).toBe("SERVER_ONLY");
+      expect(error.context).toEqual({ package: "@loadbearing/auth" });
+    }
+  });
+
+  // `globalThis.window` reached as an optional property — never a bare `window`.
+  it("treats an explicitly undefined window as absent", () => {
+    global_.window = undefined;
+
+    expect(() => {
+      ServerOnly.assert("@loadbearing/composition");
+    }).not.toThrow();
+  });
+});
+```
+
+**The third case is the one worth having.** `global_.window = undefined` is a *present* property
+holding `undefined`, and the guard has to read that as "no browser". A check written as
+`"window" in globalThis` passes this test's setup and then throws on a server that has any tooling
+which defines the property — which is the failure this spec is here to prevent.
+
 **`packages/core/vitest.config.ts`**
 
 ```ts
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Resolve workspace siblings to their `src/`, the same condition
+  // `apps/web/vite.config.ts` sets ([24](24-web-app.md)). Without it a spec runs
+  // against a sibling's stale `dist/` and a green suite proves nothing about the
+  // code you just edited.
+  resolve: { conditions: ["development"] },
   test: { include: ["tests/**/*.spec.ts"] },
 });
 ```
+
+> [!IMPORTANT]
+> **`resolve.conditions` is new here, and it is the first package that needs it.** `core` is the first
+> package to import a workspace sibling, and the `exports` map in [06](06-package-anatomy.md) resolves
+> `@loadbearing/errors` to `dist/index.js` under vitest's default conditions. Every package that
+> imports another `@loadbearing/*` package in a spec wants this line; a leaf like `permissions` does
+> not need it and does not have it.
 
 ---
 
@@ -489,6 +590,7 @@ export default defineConfig({
 
 ```bash
 pnpm check                                  # format + organise imports, first
+pnpm --filter @loadbearing/errors build     # core imports it; build the leaf first
 pnpm --filter @loadbearing/core build
 pnpm --filter @loadbearing/core test
 pnpm --filter @loadbearing/core typecheck
@@ -505,7 +607,9 @@ pnpm lint                                   # biome check . && eslint .
 
 `packages/core/dist/` contains `index.js` and `index.d.ts`. **Do not proceed if it does not** — every later package copies this exact shape, and a problem here multiplies by fifteen.
 
-Three of the four primitives come out of the build with the shape you expect; check that `index.d.ts` exports all of `Clock`, `SystemClock`, `FixedClock`, `Result`, `Ok`, `Err`, `ServerOnly`, `Uuid` and the temporary `CorePackage`. `Uuid`'s `private static webCrypto` appears in the declaration as an unresolved private — that is normal, and it is why the `WebCrypto` type is not exported.
+**`errors` first, and not as a courtesy.** `core` now declares it, so `tsc --noEmit` here resolves `@loadbearing/errors` through the `types` condition to `packages/errors/dist/index.d.ts`. If that file does not exist the typecheck fails with `TS2307` and it looks like a broken import rather than a missing build. `pnpm build:packages` handles the ordering itself; a single filtered build does not.
+
+Three of the four primitives come out of the build with the shape you expect; check that `index.d.ts` exports all of `Clock`, `SystemClock`, `FixedClock`, `Result`, `Ok`, `Err`, `ServerOnly` and `Uuid`. `Uuid`'s `private static webCrypto` appears in the declaration as an unresolved private — that is normal, and it is why the `WebCrypto` type is not exported.
 
 ---
 

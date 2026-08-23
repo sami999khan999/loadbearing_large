@@ -1,15 +1,112 @@
 ---
 title: "@loadbearing/contracts"
-description: TODO — one sentence on what this package is for.
+description: Branded identifiers, the one list envelope, the merged oRPC contract, and the procedure→permission map — the shapes every runtime agrees on.
 ---
 
 # `@loadbearing/contracts`
 
-> TODO — written when the package gets its first real file.
+Everything that crosses a boundary is described here, once. A shape declared in this package is the
+same shape the server validates, the browser form checks, the worker parses off a queue, and the
+desktop app's offline queue rejects before it ever enqueues a mutation.
+
+The package is **isomorphic and I/O-free**: Zod schemas, entity behaviour, and oRPC contract
+definitions. No handler, no database, no transport. That is what lets a rule like "a reactivation
+reason is at least ten characters" be written once and enforced in four places.
 
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/contracts` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | — |
-| **Used by** | — |
+| **Depends on** | `zod`, `@orpc/contract`, `@loadbearing/permissions` (type-only), and — once slices land — `@loadbearing/core` and `@loadbearing/errors` |
+| **Used by** | `application`, `db`, `api-client`, `query`, `ui`, `feature`, `apps/*` |
+| **Environment** | isomorphic — server, browser, worker, and Tauri webview |
+| **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
+
+```
+packages/contracts/
+├── vitest.config.ts
+├── src/
+│   ├── index.ts                     ← the public barrel; names only folder barrels
+│   ├── import.ts                    ← zod, @orpc/contract, @loadbearing/permissions
+│   ├── primitive/
+│   │   ├── index.ts
+│   │   ├── identifiers.ts           → Identifiers, UserId, RoleId, GoalId, TaskId, ApiKeyId
+│   │   ├── envelope.ts              → Envelope
+│   │   └── pagination.ts            → Pagination, PaginationQuery
+│   ├── procedure/
+│   │   └── index.ts                 → contract, AppContract   ← merges every slice's procedures
+│   ├── catalog/
+│   │   └── index.ts                 → PROCEDURE_PERMISSIONS   ← merges every slice's fragment
+│   ├── registry/
+│   │   ├── index.ts
+│   │   └── procedure-permissions.ts → ProcedurePermissions
+│   └── <subject>/                   ← one folder per domain subject; none ship yet
+│       ├── index.ts
+│       ├── <subject>.contract.ts    → <Subject>Contract   (Zod shapes)
+│       ├── <subject>.entity.ts      → <Subject>Entity     (behaviour, no I/O)
+│       └── <subject>.procedures.ts  → <Subject>Procedures (oRPC)
+└── tests/
+    ├── primitive/
+    │   ├── identifiers.spec.ts
+    │   ├── envelope.spec.ts
+    │   └── pagination.spec.ts
+    └── registry/
+        └── procedure-permissions.spec.ts
+```
+
+---
+
+## The four file roles a slice has
+
+| File | Class | Answers |
+| --- | --- | --- |
+| `<subject>.contract.ts` | `TaskContract` | What shape is this data? |
+| `<subject>.entity.ts` | `TaskEntity` | What does this data know about itself? |
+| `<subject>.procedures.ts` | `TaskProcedures` | What operations exist, at what path? |
+| `catalog/<subject>.permissions.ts` | — | Which permission gates each procedure path? |
+
+The fourth is **not** in the subject folder. It is a cross-check — "does every declared procedure
+have a gate" — rather than part of the subject's own definition, and it follows the fragment pattern
+`@loadbearing/permissions` uses for its own catalog: one team, one file, no merge conflicts.
+
+---
+
+## No feature slices ship
+
+`primitive/` is real. `procedure/` and `catalog/` are **empty merge points**, and that is the
+deliverable: `contract` is `{}` and `PROCEDURE_PERMISSIONS` is `{}` until a product adds a slice.
+The kit ships the seam, not a sample task tracker.
+
+That makes the coverage test in `tests/registry/` vacuous against the real contract, so it runs
+against a fixture built with `oc` as well — see
+[procedure-permissions](reference/procedure-permissions.md). Without the fixture the test would be
+green for the wrong reason and stay green through the first slice that forgot a gate.
+
+---
+
+## Two conversions that happen in exactly one place
+
+**Timestamps are ISO strings in contracts, `Date` in entities.** The contract crosses a JSON
+boundary and JSON has no date type: `z.iso.datetime()` at the edge, `new Date(…)` in `fromDto`.
+
+**Identifiers are strings on the wire, branded types in code.** `Identifiers.taskId.parse(raw)` at
+the boundary, and everything downstream is typed — see [identifiers](reference/identifiers.md).
+
+---
+
+## Schemas carry no messages
+
+A schema never takes `{ message: … }`. Zod's own text is discarded, and a custom string would be
+user-facing prose living outside `@loadbearing/content` — the one thing that split exists to
+prevent. A failed rule becomes `{ field, rule, params }` and `content` renders it.
+
+`z.string().min(10)` still declares the business rule exactly once. Only the sentence lives
+elsewhere.
+
+---
+
+## Testing
+
+Specs live in `tests/`, mirroring `src/`. `vitest.config.ts` sets
+`resolve.conditions: ["development"]` so a spec resolves `@loadbearing/permissions` to its source
+rather than a stale `dist/` — the same condition `apps/web/vite.config.ts` sets.

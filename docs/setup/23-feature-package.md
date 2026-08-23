@@ -43,36 +43,96 @@ The React binding for `@loadbearing/content`'s `Translator`. It lives here, not 
 **`packages/feature/src/i18n/message.context.tsx`**
 
 ```tsx
-import type { MessageKey, Translator } from "@loadbearing/content";
-import { createContext, useCallback, useContext, type ReactNode } from "react";
+import type {
+  ClientNamespace,
+  MessageStore,
+  NamespaceKeys,
+  ShellNamespace,
+  Translator,
+} from "@loadbearing/content";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 const MessageContext = createContext<Translator | null>(null);
 
+// Keys a component may use: its own namespace, plus the always-loaded shell.
+type ScopedKey<N extends ClientNamespace> = NamespaceKeys[N] | NamespaceKeys[ShellNamespace];
+
 export function MessageProvider({
-  translator,
+  messages,
   children,
 }: {
-  translator: Translator;
+  messages: MessageStore;
   children: ReactNode;
 }) {
+  const subscribe = useCallback((onChange: () => void) => messages.subscribe(onChange), [messages]);
+  const read = useCallback(() => messages.translator, [messages]);
+  const translator = useSyncExternalStore(subscribe, read, read);
+
   return <MessageContext.Provider value={translator}>{children}</MessageContext.Provider>;
 }
 
-export function useMessages() {
+export function useMessages<N extends ClientNamespace>(namespace: N) {
   const translator = useContext(MessageContext);
   if (!translator) throw new Error("useMessages must be used inside a MessageProvider.");
 
   const t = useCallback(
-    (key: MessageKey, params?: Readonly<Record<string, string | number>>) =>
+    (key: ScopedKey<N>, params?: Readonly<Record<string, string | number>>) =>
       translator.t(key, params),
     [translator],
   );
 
-  return { t };
+  return { t, locale: translator.locale };
 }
 ```
 
-**The translator is constructed server-side and passed down**, so the correct locale is present in the first rendered byte. Fetching translations client-side means either a flash of English or a blocking request before anything renders.
+**The snapshot is built server-side and inlined into the SSR payload** ([24](24-web-app.md)
+Step 24.10), so the correct locale is present in the first rendered byte. Fetching translations
+client-side means either a flash of English or a blocking request before anything renders.
+
+**A component declares the namespace it reads from**, and gets a `t` that will not accept
+anything else:
+
+```tsx
+const { t } = useMessages("auth");
+t("auth.signIn");       // ✓
+t("action.cancel");     // ✓  shell — always loaded
+t("nav.roles");         // ✗  compile error
+```
+
+> [!IMPORTANT]
+> **`N` is inferred once, from a single argument position, and that is what makes it work.**
+> `useMessages("auth")` fixes `N` before any key is written, so the returned `t` has a concrete
+> parameter type. The two-argument shape that looks equivalent does **not** constrain anything:
+>
+> ```ts
+> declare function t<N extends string>(ns: N, key: Extract<MessageKey, `${N}.${string}`>): string;
+> t("auth", "error.forbidden");   // compiles
+> ```
+>
+> There the key position is also an inference site, so `N` widens until both arguments fit.
+> `NamespaceKeys[N]` — an indexed access into a mapped type — is not an inference site. That is
+> why `Translator.t` keeps a flat `MessageKey` and **all** narrowing happens here, in the one
+> place that knows the namespace statically.
+
+**The shell namespaces are always in scope**, which is why `t("action.cancel")` and
+`t("error.forbidden")` work from an auth screen without declaring `common`. The type says
+exactly what the runtime guarantees: every `ContentSource` puts `common` and `error` in every
+snapshot ([20](20-content-package.md)), so they belong in every component's key union.
+
+**`email` cannot be named here at all.** `N extends ClientNamespace`, and `email` is a
+`ServerNamespace`. The ESLint ban in [05](05-lint-and-format.md) Step 5.3 is a second lock on a
+door the type system has already closed.
+
+**`useSyncExternalStore`, because navigation adds namespaces after the provider mounted.** The
+store is subscribed once, at the provider; `useMessages` stays a plain context read.
+`MessageStore.translator` returns a stable identity until `ensure()` genuinely adds something —
+if it minted a new `Translator` per call, this would re-render forever.
 
 ---
 
@@ -206,7 +266,7 @@ export interface SignInFormProps {
 }
 
 export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProps) {
-  const { t } = useMessages();
+  const { t } = useMessages("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -300,7 +360,7 @@ export interface TaskBoardProps {
 export function TaskBoard({ goalId, onOpenTask }: TaskBoardProps) {
   const client = useApiClient();
   const caps = useCapabilities();
-  const { t } = useMessages();
+  const { t } = useMessages("task");
 
   const { data, isPending } = useQuery(TaskQueries.list(client, { goalId }));
 
@@ -334,10 +394,13 @@ function renderWithFakes(ui: ReactNode, caps: CapabilitySetDto) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
 
+  const content = new BundledContentSource();
+  const messages = new MessageStore(content, content.snapshotSync("en"));
+
   return render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={fakeApiClient}>
-        <MessageProvider translator={new Translator(en)}>
+        <MessageProvider messages={messages}>
           <SessionProvider user={testUser} capabilities={caps}>
             {ui}
           </SessionProvider>
@@ -372,7 +435,7 @@ export { MessageProvider, useMessages } from "./i18n/index.js";
 export { EffectivePermissionsInspector, PermissionMatrix } from "./rbac/index.js";
 ```
 
-**`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([29](29-naming-and-boundaries.md#13-barrels-and-imports)).
+**`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([Opinions · Imports](../opinions/imports.md)).
 
 ---
 
@@ -394,6 +457,18 @@ grep -rn "@tanstack/react-router" packages/feature/src
 Returns nothing.
 
 - No string literal appears in rendered output — every user-visible string comes from `useMessages`.
+- The namespace narrowing is real, not decorative:
+
+  ```ts
+  const { t } = useMessages("auth");
+  t("auth.signIn");       // ✓
+  t("action.cancel");     // ✓  shell
+  t("error.forbidden");   // ✓  shell
+  t("nav.roles");         // ✗  compile error — not declared, not shell
+  ```
+
+  **That last line failing is the whole feature.** If it compiles, the mapped type has been
+  replaced with a template-literal `Extract` somewhere and the constraint is doing nothing.
 - The `packages/feature/src/**` block from [05](05-lint-and-format.md) Step 5.3 is in place and errors on a **value** import of either package, while allowing `import type`.
 - **Adding `import { Database } from "@loadbearing/db"` to a component in this package is a Biome error**, from the single server-only override. If it is not, some later `overrides` block has replaced that rule's `paths` instead of restating them — see the caution in [05](05-lint-and-format.md) Step 5.2.
 

@@ -169,7 +169,7 @@ export class ThemeRegistry {
     return value in THEMES;
   }
 
-  /** Apply to <html>. Safe to call before hydration to avoid a flash. */
+  // Apply to <html>. Safe to call before hydration to avoid a flash.
   public static apply(root: HTMLElement, key: ThemeKey): void {
     root.dataset.theme = key;
     root.style.colorScheme = THEMES[key].colorScheme;

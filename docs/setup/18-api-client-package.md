@@ -115,7 +115,7 @@ export type AppClient = ContractRouterClient<AppContract>;
 export class ApiClient {
   private constructor(private readonly rpc: AppClient) {}
 
-  /** Browser, Tauri webview, and any cross-process caller. */
+  // Browser, Tauri webview, and any cross-process caller.
   public static overHttp(baseUrl: string, auth: AuthStrategy): ApiClient {
     const link = new RPCLink({
       url: baseUrl,
@@ -125,12 +125,12 @@ export class ApiClient {
     return new ApiClient(createORPCClient<AppClient>(link));
   }
 
-  /** SSR — no network. The router client is built by apps/web and injected. */
+  // SSR — no network. The router client is built by apps/web and injected.
   public static inProcess(rpc: AppClient): ApiClient {
     return new ApiClient(rpc);
   }
 
-  /** Add one accessor per contract namespace as features arrive. */
+  // Add one accessor per contract namespace as features arrive.
   public get raw(): AppClient {
     return this.rpc;
   }

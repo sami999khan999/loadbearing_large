@@ -70,7 +70,8 @@
         "packages/feature/**",
         "packages/query/**",
         "packages/errors/**",
-        "apps/web/src/**"
+        "apps/web/src/**",
+        "apps/desktop/src/**"
       ],
       "linter": {
         "rules": {

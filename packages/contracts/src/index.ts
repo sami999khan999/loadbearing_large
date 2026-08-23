@@ -1,4 +1,13 @@
-/** Placeholder so the package has a real export. Replaced in the feature steps. */
-export class ContractsPackage {
-  public static readonly id = "@loadbearing/contracts";
-}
+export {
+  type ApiKeyId,
+  Envelope,
+  type GoalId,
+  Identifiers,
+  Pagination,
+  type PaginationQuery,
+  type RoleId,
+  type TaskId,
+  type UserId,
+} from "./primitive/index.js";
+export { type AppContract, contract } from "./procedure/index.js";
+export { ProcedurePermissions } from "./registry/index.js";

@@ -179,7 +179,7 @@ import { useMutation, useQueryClient, type UseMutationOptions } from "@tanstack/
 
 export interface AppMutationOptions<TData, TVariables>
   extends Omit<UseMutationOptions<TData, Error, TVariables>, "onSuccess"> {
-  /** Keys invalidated after a successful mutation. Declared, never imperative. */
+  // Keys invalidated after a successful mutation. Declared, never imperative.
   readonly invalidates?: readonly (readonly unknown[])[];
   readonly onSuccess?: (data: TData, variables: TVariables) => void | Promise<void>;
 }

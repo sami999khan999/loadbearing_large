@@ -1,25 +1,27 @@
 ---
 title: server-only
-description: ServerOnly.assert — the runtime tripwire that catches database or credential code reaching a client bundle, and the two other defences it sits between.
+description: ServerOnly.assert — the runtime tripwire that catches database or credential code reaching a client bundle, the ServerOnlyError it throws, and the two other defences it sits between.
 ---
 
 # `ServerOnly`
 
 ```ts
+import { ServerOnlyError } from "@loadbearing/errors";
+
 export class ServerOnly {
   private constructor() {}
 
-  /** Call at the top of every server-only package barrel. */
+  // Call at the top of every server-only package barrel.
   public static assert(packageName: string): void {
     if (typeof (globalThis as { window?: unknown }).window !== "undefined") {
-      throw new Error(
-        `${packageName} was imported into a client bundle. This is a leak, not a bundle-size problem — ` +
-          `it means database or credential code is reachable from the browser.`,
-      );
+      throw new ServerOnlyError(packageName);
     }
   }
 }
 ```
+
+This is the one import in `@loadbearing/core`, and the reason the package declares
+[`@loadbearing/errors`](../../../errors/docs/index.md) as its single dependency.
 
 ---
 
@@ -98,26 +100,65 @@ Adding `"DOM"` to `lib` would fix the error and destroy the property being relie
   positive is possible in principle; none has occurred in practice, and the failure mode is a loud
   crash at startup rather than a silent leak.
 
-The message is deliberately long. Whoever hits this is debugging a stack trace in a browser
-console and needs to know immediately that the fix is architectural, not a bundler setting.
-
 ---
 
-## The one error allowed to carry a message
+## What it throws, and where the words went
 
-[`@loadbearing/errors`](../../../errors/docs/index.md) makes an error carry a code and structured
-context and **never prose** — user-visible words live in `content`, keyed and translated. This throw is
-the single exception in the repository, and it is a deliberate one:
+```ts
+ServerOnly.assert("@loadbearing/db");
+// ServerOnlyError: SERVER_ONLY
+//   context: { package: "@loadbearing/db" }
+```
 
-| Why it holds | |
+`Error.message` is `"SERVER_ONLY"`. There is no sentence on the error, because
+[`@loadbearing/errors`](../../../errors/docs/index.md) has no message field to put one in and this
+throw does not get an exception to that rule.
+
+The sentence still exists, in the only package allowed to hold sentences:
+
+```ts
+// packages/content/src/message/en/error.ts
+"error.serverOnly":
+  "{package} was imported into a client bundle. This is a leak, not a bundle-size problem — " +
+  "it means database or credential code is reachable from the browser.",
+```
+
+```ts
+ErrorCopy.message(translator, error.toJSON());
+// "@loadbearing/db was imported into a client bundle. This is a leak, not a …"
+```
+
+`{package}` comes from the error's context — which is why the context key is `package` and not
+`packageName`. Rename it and the rendered sentence quietly contains a literal `{package}`; nothing
+else breaks, so both sides pin it with a test.
+
+### Why the hardest case for prose still loses
+
+This throw has the best available argument for carrying a message, and it is worth understanding why
+the argument fails rather than treating the rule as arbitrary:
+
+| The case for prose | Why it does not hold |
 | --- | --- |
-| The reader is a developer | It fires at module load. No request, no locale, no `Translator`, no client. |
-| The prose is the payload | "This is a leak, not a bundle-size problem" is what stops someone reaching for a bundler setting. A code plus `{ packageName }` says less. |
-| It never crosses a wire | A build-time guard cannot reach a screen. |
+| The reader is a developer at module load — no request, no locale, no `Translator`. | True, and beside the point. The reader still wants words; `content` is where words are. The throw site wants the code and the package name, which is what it has. |
+| The prose is the payload — "this is a leak, not a bundle-size problem" is what stops someone reaching for a bundler setting. | It still says exactly that, from `error.serverOnly`, and now a developer reading Bengali can get it in Bengali. |
+| It never crosses a wire, so the reasons for keeping text out of errors do not apply here. | One does. A `message` field on `AppError` is a field that gets *rendered* — by a toast, by a `<pre>` in an error boundary, by a log line pasted into a ticket. It is enforceable only with no exceptions, and here the exception costs nothing. |
 
-`core` also sits *below* `errors`, so `AppError` is not importable here — but that is a consequence of
-the ordering being right, not the justification. Don't invert the two packages to "fix" this, and don't
-read it as licence to put prose in errors that do reach a user.
+What the stack trace gives up is nothing:
+
+```
+ServerOnlyError: SERVER_ONLY
+    at ServerOnly.assert (…)
+    at packages/db/src/index.ts:2:12
+```
+
+The class names the fault; the frame below it names the package that leaked. And
+`{ package: "@loadbearing/db" }` is a field a log query can filter on, which a sentence is not.
+
+> [!NOTE]
+> An earlier revision of this page argued the opposite and told you not to invert `core` and
+> `errors` to "fix" it. Inverting them was the fix — `errors` is a zero-dependency leaf, the edge is
+> acyclic, and `pnpm build:packages` builds `errors` first. See
+> [09 · Step 9.3](../../../../docs/setup/09-errors-package.md).
 
 ---
 
@@ -126,4 +167,5 @@ read it as licence to put prose in errors that do reach a user.
 - [`@loadbearing/core`](../index.md)
 - [Clock](clock.md) · [Result](result.md) · [Uuid](uuid.md)
 - [The server-only boundary](../../../../tooling/biome-config/docs/reference/boundary.md) — defence 1
-- [`@loadbearing/errors`](../../../errors/docs/index.md) — the rule this is the exception to
+- [`@loadbearing/errors`](../../../errors/docs/index.md) — `ServerOnlyError`, and the rule with no exceptions
+- [`@loadbearing/content`](../../../content/docs/reference/error-copy.md) — where `error.serverOnly` lives

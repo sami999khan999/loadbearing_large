@@ -1,35 +1,43 @@
 ---
 title: "@loadbearing/core"
-description: Four primitives every other package may need and no feature owns — Clock, Result, Uuid, ServerOnly. Depends on nothing.
+description: Four primitives every other package may need and no feature owns — Clock, Result, Uuid, ServerOnly. One dependency, and it is a leaf.
 ---
 
 # `@loadbearing/core`
 
-The bottom of the dependency graph. Everything else may import it; it imports nothing, not even
-another workspace package. That constraint is the whole design: `core` is the one place where a
-dependency cannot be faked, so the bar for adding to it is deliberately high.
+One edge above the bottom of the dependency graph. Everything else may import it; it imports exactly
+one thing, [`@loadbearing/errors`](../../errors/docs/index.md), because
+[`ServerOnly.assert`](reference/server-only.md) throws and nothing in this repository throws a bare
+`Error`. `errors` is itself a zero-dependency leaf, so the property that matters survives: `core` is
+the one place where a dependency cannot be faked, and the bar for adding to it is deliberately high.
 
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/core` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | — nothing |
+| **Depends on** | `@loadbearing/errors` — and nothing else, ever |
 | **Used by** | every other package |
 | **Environment** | isomorphic — server, browser, and Tauri webview |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 
 ```
 packages/core/
-├── vitest.config.ts
-└── src/
-    ├── index.ts          ← barrel (plus the temporary CorePackage)
-    ├── clock.ts          → Clock, SystemClock, FixedClock
-    ├── clock.spec.ts
-    ├── result.ts         → Result, Ok, Err, Results
-    ├── result.spec.ts
-    ├── uuid.ts           → Uuid
-    ├── uuid.spec.ts
-    └── server-only.ts    → ServerOnly
+├── vitest.config.ts      ← resolve.conditions: ["development"], for the errors import
+├── src/
+│   ├── index.ts          ← the public barrel; names only folder barrels
+│   ├── import.ts         ← ServerOnlyError, from @loadbearing/errors
+│   └── primitive/
+│       ├── index.ts
+│       ├── clock.ts      → Clock, SystemClock, FixedClock
+│       ├── result.ts     → Result, Ok, Err, Results
+│       ├── uuid.ts       → Uuid
+│       └── server-only.ts → ServerOnly
+└── tests/
+    └── primitive/
+        ├── clock.spec.ts
+        ├── result.spec.ts
+        ├── server-only.spec.ts
+    └── uuid.spec.ts
 ```
 
 ---
@@ -126,27 +134,25 @@ pages, and both were found by running the build rather than by reading it.
 
 ---
 
-## The temporary export
+## One folder, two barrels
 
-`index.ts` still exports the scaffold's placeholder:
+Everything this package exports lives in `primitive/`: a value type or a small class with no layer
+role, which is exactly what that folder name means everywhere it appears — `content` uses it for
+`Locale`. `src/` itself holds only `index.ts` and `import.ts`
+([Opinions · Folders](../../../docs/opinions/folders.md)).
 
-```ts
-export class CorePackage {
-  public static readonly id = "@loadbearing/core";
-}
-```
+`primitive/index.ts` names the four exports; the root `index.ts` re-exports that one barrel. The
+indirection costs a line and buys the thing barrels exist for: moving `clock.ts` into a future
+`time/` folder changes two files and nothing downstream.
 
-It exists so [`23 · web app`](../../../docs/setup/24-web-app.md) can import one known value and
-prove the workspace → bundler chain end to end before any real code depends on it. **Delete it in
-23, not before.** It is the only class in the codebase that lives in a barrel instead of its own
-file.
+**If `core` ever needs a second folder, it has grown past its job.**
 
 ---
 
 ## Testing
 
 Tests live in this package's **`tests/`** directory, named `<subject>.spec.ts` and mirroring the
-`src/` tree — `src/clock.ts` is covered by `tests/clock.spec.ts`. Not colocated in `src/`, not in
+`src/` tree — `src/primitive/clock.ts` is covered by `tests/primitive/clock.spec.ts`. Not colocated in `src/`, not in
 `__tests__/`, and not in one repo-wide `test/` folder. Keeping specs out of `src/` keeps `src/`
 equal to the shipped surface, since `tsup` builds from `src/index.ts` and the `development` export
 condition resolves into `src/`; the mirrored path is what replaces adjacency.

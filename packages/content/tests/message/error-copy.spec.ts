@@ -1,0 +1,130 @@
+import {
+  ERROR_CATALOG,
+  type ErrorCode,
+  ErrorNormalizer,
+  ServerOnlyError,
+  ValidationError,
+} from "@loadbearing/errors";
+import { describe, expect, it } from "vitest";
+import { ERROR_COPY, ErrorCopy, FIELD_RULE_COPY } from "../../src/message/error-copy.js";
+import { StaticContentSource } from "../../src/source/static.content-source.js";
+
+const translator = (locale: "en" | "bn" = "en") => new StaticContentSource().translator(locale, []);
+
+describe("ERROR_COPY", () => {
+  // The compiler already makes this total. The test is here because the failure it
+  // guards against — a code with no copy — reaches a customer as a raw
+  // `SERVER_ONLY` on screen, so it is worth a runtime assertion too.
+  it("covers every error code", () => {
+    for (const code of Object.keys(ERROR_CATALOG) as ErrorCode[]) {
+      expect(ERROR_COPY[code], code).toBeTypeOf("string");
+    }
+
+    expect(Object.keys(ERROR_COPY).sort()).toEqual(Object.keys(ERROR_CATALOG).sort());
+  });
+
+  // Every value has to be a shell key. A code pointed at a lazily loaded namespace
+  // renders as its own raw key on any route that did not declare that namespace —
+  // which is exactly the case an error page cannot afford to get wrong.
+  it("resolves for every code against a snapshot that asked for nothing", async () => {
+    const t = await translator();
+
+    for (const code of Object.keys(ERROR_CATALOG) as ErrorCode[]) {
+      const key = ERROR_COPY[code];
+      expect(t.has(key), `${code} → ${key}`).toBe(true);
+    }
+  });
+});
+
+describe("FIELD_RULE_COPY", () => {
+  // Open by necessity, but it must cover every rule `ValidationError` can emit.
+  it("covers every rule ValidationError produces", () => {
+    const issues = [
+      { path: ["a"], code: "invalid_type" },
+      { path: ["b"], code: "too_small", minimum: 10 },
+      { path: ["c"], code: "too_big", maximum: 5 },
+      { path: ["d"], code: "invalid_format" },
+      { path: ["e"], code: "not_a_zod_code_we_know" },
+    ];
+
+    for (const violation of ValidationError.fromIssues(issues).fields ?? []) {
+      expect(FIELD_RULE_COPY[violation.rule], violation.rule).toBeTypeOf("string");
+    }
+  });
+});
+
+describe("ErrorCopy", () => {
+  it("renders a code with no context", async () => {
+    const t = await translator();
+
+    expect(ErrorCopy.message(t, { code: "FORBIDDEN", context: {} })).toBe(
+      "You do not have permission to do that.",
+    );
+  });
+
+  // The end-to-end shape of the split: `core` throws, `errors` carries the code and
+  // `{ package }`, and this package supplies the words. The sentence used to be a
+  // string literal inside `ServerOnly.assert`; it is copy now.
+  it("renders the sentence ServerOnly.assert used to carry inline", async () => {
+    const t = await translator();
+    const envelope = new ServerOnlyError("@loadbearing/db").toJSON();
+
+    expect(ErrorCopy.message(t, envelope)).toBe(
+      "@loadbearing/db was imported into a client bundle. This is a leak, not a bundle-size " +
+        "problem — it means database or credential code is reachable from the browser.",
+    );
+  });
+
+  it("interpolates a boolean context value without complaint", async () => {
+    const t = await translator();
+    const rendered = ErrorCopy.message(t, {
+      code: "UNAVAILABLE",
+      context: { retried: true, attempts: 3 },
+    });
+
+    expect(rendered).toBe("Something went wrong. Please try again.");
+  });
+
+  it("names the field in a violation sentence", async () => {
+    const t = await translator();
+    const envelope = ValidationError.fromIssues([
+      { path: ["reason"], code: "too_small", minimum: 10 },
+    ]).toJSON();
+
+    expect(ErrorCopy.fields(t, envelope)).toEqual(["reason must be at least 10 characters."]);
+  });
+
+  it("falls back for a rule it has never heard of", async () => {
+    const t = await translator();
+    const rendered = ErrorCopy.field(t, { field: "email", rule: "notInTheMap" });
+
+    expect(rendered).toBe("Something went wrong. Please try again.");
+  });
+
+  it("returns no field sentences for an error that has no violations", async () => {
+    const t = await translator();
+
+    expect(ErrorCopy.fields(t, { code: "INTERNAL", context: {} })).toEqual([]);
+  });
+
+  // An anonymised internal error still gets words, and never the original's words.
+  it("renders a normalised unknown throw", async () => {
+    const t = await translator();
+    const envelope = ErrorNormalizer.normalize(
+      new Error("connection to db-prod-01 refused"),
+    ).toJSON();
+
+    expect(ErrorCopy.message(t, envelope)).toBe("Something went wrong. Please try again.");
+  });
+
+  it("renders in the requested locale, falling back per key", async () => {
+    const t = await translator("bn");
+
+    expect(ErrorCopy.message(t, { code: "FORBIDDEN", context: {} })).toBe(
+      "এটি করার অনুমতি আপনার নেই।",
+    );
+    expect(ErrorCopy.message(t, { code: "CONFLICT", context: {} })).toBe(
+      "Someone else changed this first. Reload and try again.",
+    );
+  });
+});

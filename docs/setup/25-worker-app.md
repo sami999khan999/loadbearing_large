@@ -31,6 +31,8 @@ apps/worker/
     ├── system-principal.ts           → SystemPrincipal
     ├── consumer/
     │   └── embedding.consumer.ts     → EmbeddingConsumer
+    ├── notification/
+    │   └── digest.composer.ts        → DigestComposer  (the only email-namespace reader)
     └── schedule/
         └── cleanup.schedule.ts       → CleanupSchedule
 ```
@@ -74,13 +76,19 @@ Revisit this only if you ever set `erasableSyntaxOnly: true` and rewrite every c
 pnpm add --filter @loadbearing/worker \
   @loadbearing/composition@workspace:* @loadbearing/application@workspace:* \
   @loadbearing/infrastructure@workspace:* @loadbearing/permissions@workspace:* \
-  @loadbearing/core@workspace:* \
+  @loadbearing/content@workspace:* @loadbearing/core@workspace:* \
   bullmq@catalog: ioredis@catalog: zod@catalog:
 pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 ```
 > No `contracts`, no `api-client`, no `ui`. The worker never speaks HTTP and never renders. It reaches use-cases through the container.
 >
-> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary only applies to React packages and `apps/web`.
+> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary only applies to React packages, `apps/web`, and `apps/desktop`.
+>
+> **`content` is here because the worker sends email**, and email has words in it. It cannot
+> import `feature` — that is React — so it takes the plain `Translator` instead. This is the
+> dependency that makes `@loadbearing/content` being React-free a requirement rather than a
+> preference ([20](20-content-package.md)), and it is the only process that ever loads the
+> `email` namespace.
 
 **`apps/worker/tsconfig.json`**
 
@@ -122,10 +130,8 @@ import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbear
 export class SystemPrincipal {
   private constructor() {}
 
-  /**
-   * Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all().
-   * Typed as string[] so isKnown() can narrow each entry to a PermissionKey.
-   */
+  // Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all().
+  // Typed as string[] so isKnown() can narrow each entry to a PermissionKey.
   private static readonly GRANTS: readonly string[] = [
     "ai.embedding.write",
     "ai.embedding.read",
@@ -220,7 +226,42 @@ export class EmbeddingConsumer {
 
 ---
 
-## Step 25.5 — Schedules
+## Step 25.5 — Copy for email
+
+The worker is the only process that reads the `email` namespace, and it reads it the same way
+every other consumer reads copy — through `ContentSource`.
+
+**`apps/worker/src/notification/digest.composer.ts`**
+
+```ts
+import type { ContentSource, Locale } from "@loadbearing/content";
+
+export class DigestComposer {
+  public constructor(private readonly content: ContentSource) {}
+
+  public async subject(locale: Locale, count: number): Promise<string> {
+    const t = await this.content.translator(locale, ["email"]);
+    return t.t("email.digest.subject", { count });
+  }
+}
+```
+
+**One `Translator`, one interpolation implementation, one place a typo gets fixed.** A separate
+templating system for email is the standard way to end up with two copies of every string and a
+locale that is correct in the UI and English in the inbox.
+
+**The recipient's locale is a parameter**, so a per-recipient subject line is a second call
+rather than a second system. The container hands the worker a
+`StaticContentSource(SERVER_CATALOG)` ([17](17-composition-container.md)) — the only catalog
+that carries `email` at all.
+
+> The `["email"]` request still comes back with `common` and `error` in it, because
+> `ContentSource` adds the shell to every request ([20](20-content-package.md)). An escalation
+> notice that needs `error.conflict` already has it.
+
+---
+
+## Step 25.6 — Schedules
 
 **`apps/worker/src/schedule/cleanup.schedule.ts`** registers a BullMQ repeatable job:
 
@@ -249,7 +290,7 @@ await queue.add(
 
 ---
 
-## Step 25.6 — Bootstrap and entrypoint
+## Step 25.7 — Bootstrap and entrypoint
 
 **`apps/worker/src/worker-bootstrap.ts`**
 
@@ -308,7 +349,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 
 ---
 
-## Step 25.7 — Run it
+## Step 25.8 — Run it
 
 ```bash
 pnpm dev:worker

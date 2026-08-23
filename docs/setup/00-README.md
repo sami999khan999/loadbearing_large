@@ -38,9 +38,9 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 
 | # | File | Delivers |
 |---|---|---|
-| 07 | [`@loadbearing/core`](07-core-package.md) | `Result`, `Clock`, `Uuid`, `ServerOnly` |
+| 07 | [`@loadbearing/core`](07-core-package.md) | `Result`, `Clock`, `Uuid`, `ServerOnly` — its one dependency is `errors`, built first |
 | 08 | [`@loadbearing/permissions`](08-permissions-package.md) | `PermissionRegistry`, `ModuleRegistry`, `CapabilitySet` |
-| 09 | [`@loadbearing/errors`](09-errors-package.md) | `AppError`, the closed `ErrorCode` union, the wire envelope, `ErrorNormalizer` |
+| 09 | [`@loadbearing/errors`](09-errors-package.md) | `AppError`, the closed `ErrorCode` union, the wire envelope, `ErrorNormalizer` — plus the error slice of [20](20-content-package.md), because a code with no copy is a raw `SERVER_ONLY` on a customer's screen |
 | 10 | [`@loadbearing/contracts`](10-contracts-package.md) | Zod contract classes, entities, oRPC contract router, `ProcedurePermissions` |
 
 ### Phase C — the server side
@@ -83,7 +83,21 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | # | File | Delivers |
 |---|---|---|
 | 28 | [Folder Structure](28-folder-structure.md) | The complete tree after step 27, on one page |
-| 29 | [Naming & Boundaries](29-naming-and-boundaries.md) | Every naming rule, what each folder does and doesn't do, one feature traced end to end |
+| 29 | [Boundaries](29-naming-and-boundaries.md) | What each folder does and doesn't do, one feature traced end to end |
+
+### Opinions
+
+Not part of the build order. [`docs/opinions/`](../opinions/index.md) is the reference consulted
+continually — every rule for what to call a thing and where to put it, one page per topic.
+
+| Page | Decides |
+|---|---|
+| [Files](../opinions/files.md) | Casing, role suffixes, one class per file, where tests go |
+| [Folders](../opinions/folders.md) | What `src/` looks like, role folders vs subject folders |
+| [Imports and exports](../opinions/imports.md) | `index.ts`, `import.ts`, the three import rules |
+| [Classes and methods](../opinions/classes.md) | Class-name grammar, banned suffixes, method vocabulary |
+| [Vocabulary](../opinions/vocabulary.md) | Permissions, procedures, events, queues, contracts, database |
+| [Comments](../opinions/comments.md) | Line comments only, two lines, where the reasoning goes |
 
 ---
 

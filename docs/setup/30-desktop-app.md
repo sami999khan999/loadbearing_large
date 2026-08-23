@@ -81,7 +81,7 @@ pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli@catalog: vite @vitejs/
 
 `catalog:` for all three, same as everywhere else — `apps/desktop` is not an exception to the rule that one file owns every version ([03](03-workspace-and-catalogs.md)). `@tanstack/react-router` matters most: `apps/web` gets it transitively through TanStack Start, so without a catalog entry the two shells can resolve different router versions while sharing the same `feature` components.
 
-**Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The ESLint server-only boundary from [05](05-lint-and-format.md) applies here with no escape hatch at all, because unlike `apps/web` there is no `src/server/**` to exempt.
+**Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The **Biome** server-only boundary from [05](05-lint-and-format.md) Step 5.2 lists `apps/desktop/src/**` in the same override as `apps/web/src/**`, and here it has **no escape hatch at all** — unlike `apps/web` there is no `src/server/**` inside a Tauri bundle to exempt.
 
 ```
 apps/desktop/
@@ -96,6 +96,7 @@ apps/desktop/
 └── src/
     ├── config.ts               → Config  (import.meta.env, NOT process.env)
     ├── token-provider.ts       → TauriTokenProvider
+    ├── messages.ts             → the MessageStore  (every locale, synchronous)
     ├── api.ts                  → the ApiClient + QueryClient singletons
     ├── router.tsx              ← memory or hash history
     └── route/
@@ -218,7 +219,67 @@ If a screen genuinely has to live somewhere else here, override only the keys th
 
 ---
 
-## Step 30.7 — CI
+## Step 30.7 — Copy, offline, in the OS locale
+
+`apps/web` takes one locale per request because it has a server that knows the locale before the
+first byte. Desktop has no server, does not learn the locale until the process starts, and has
+to work with no network at all. So it takes the opposite answer.
+
+**`apps/desktop/src/messages.ts`**
+
+```ts
+import { BundledContentSource, Locales, MessageStore } from "@loadbearing/content";
+
+const content = new BundledContentSource();
+const locale = Locales.negotiate(navigator.language, localStorage.getItem("locale"));
+
+// Synchronous: no await before first render, no chunk fetch, no network.
+export const messages = new MessageStore(content, content.snapshotSync(locale));
+```
+
+**Taking the whole catalog is the correct answer here, not a concession.** Every trade that made
+narrowing right for the web points the other way on desktop: the bundle is downloaded once at
+install rather than per visit, the app must render correctly with the network off, and switching
+language should be instant rather than a loading state. Set against the 5–10 MB figure earlier in
+this doc, a few kilobytes of copy per locale is not a number anyone will measure.
+
+**This is why the narrowing lives in the app and not in the package.** `packages/content` ships
+every locale to everyone and lets each shell decide ([20](20-content-package.md)). Had the split
+been built into the package — trimming locales at its own boundary — this app could not exist in
+its current form, and `content` would not be on its dependency list at all.
+
+**`navigator.language` is the webview reporting the OS locale**, and it is available
+synchronously, which is what keeps `snapshotSync` synchronous. `@tauri-apps/plugin-os`'s
+`locale()` is more faithful on Linux and is async; if you switch, you await once at bootstrap
+and `MessageStore` takes the snapshot in its constructor either way.
+
+**`content` never touches `navigator`.** The string is passed in. That is what keeps the package
+DOM-free and testable in Node — the same rule that keeps it React-free for the worker.
+
+**No `email`.** `BundledContentSource` carries the client namespaces only, and `ClientNamespace`
+excludes `email` at the type level. The `SERVER_CATALOG` ban in [05](05-lint-and-format.md)
+Step 5.3 covers `apps/desktop/src/**` as the second lock.
+
+### If a mobile shell follows
+
+Two paths, and they differ only in the bundler.
+
+**Tauri 2 targets iOS and Android from this same webview bundle**, so `src/messages.ts` is
+already the mobile answer with nothing changed.
+
+**React Native or Expo** has no Vite, and Metro's `import()` handling is configuration-dependent
+— but it does not matter here, because mobile wants exactly what desktop wants: every locale,
+static, offline, locale from the OS (`expo-localization`, or
+`Intl.DateTimeFormat().resolvedOptions().locale`, into the same `Locales.negotiate`).
+`BundledContentSource` covers both.
+
+**A mobile shell needs no change to `packages/content`.** That is the test of whether the split
+was put at the right layer, and it is worth re-running against any future runtime: if adding a
+shell means editing the content package, the narrowing has drifted downward into it.
+
+---
+
+## Step 30.8 — CI
 
 Desktop builds do **not** belong in the `verify` job — they need three runners and several minutes each. Give them a separate workflow, triggered on tags:
 

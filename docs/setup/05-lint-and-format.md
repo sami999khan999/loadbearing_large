@@ -124,7 +124,7 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
 
 **`noStaticOnlyClass` is off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
 
-**`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([29](29-naming-and-boundaries.md#13-barrels-and-imports)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
+**`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([Opinions · Imports](../opinions/imports.md)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
 
 **`noProcessEnv` plus the `node:process` import ban.** The rule catches `process.env.FOO` but not `import { env } from "node:process"`, so both entries are needed to close the door. The exemption for the two `env.ts` files comes in Step 5.2.
 
@@ -139,7 +139,10 @@ This is the rule that keeps database code out of the browser, and it lives entir
 ```json
 "overrides": [
   {
-    "includes": ["packages/ui/**", "packages/feature/**", "packages/query/**", "apps/web/src/**"],
+    "includes": [
+      "packages/ui/**", "packages/feature/**", "packages/query/**", "packages/errors/**",
+      "apps/web/src/**", "apps/desktop/src/**"
+    ],
     "linter": {
       "rules": {
         "style": {
@@ -182,6 +185,13 @@ This is the rule that keeps database code out of the browser, and it lives entir
 **Biome's `noRestrictedImports` takes exact paths, not glob patterns** — which is fine here, because every banned import is an exact package name. If you ever need to ban a subpath family, that rule cannot do it and the ban moves to ESLint.
 
 **Order matters: later overrides win.** The escape hatch must come after the ban, or it does nothing.
+
+**`apps/desktop/src/**` is in the *same* block, not a second one.** That is not tidiness — see
+the CAUTION below. A separate override matching `apps/desktop/**` would replace the whole
+`paths` map rather than adding to it, and every server-only package would be silently unbanned
+wherever it matched. The desktop app is a client ([30](30-desktop-app.md)); it gets the same
+ban list as `apps/web` and, unlike `apps/web`, no escape hatch at all — there is no
+`src/server/**` inside a Tauri bundle to exempt.
 
 > [!CAUTION]
 > **Biome replaces rule options across overrides; it does not merge them.** If two `overrides` blocks both match a file and both set `noRestrictedImports`, only the last one's `paths` apply — the earlier map is discarded.
@@ -332,13 +342,43 @@ export default tseslint.config(
               message:
                 "Routing lives in apps/web. Pass navigation in as an onNavigate prop or an href string.",
             },
+            {
+              name: "@loadbearing/content",
+              importNames: ["SERVER_CATALOG"],
+              message:
+                "The email namespace is server-only. Components take a MessageStore; they never build a ContentSource.",
+            },
           ],
         },
       ],
     },
   },
 
-  // ── content may name a module, never a permission (see docs/setup/19) ──
+  // ── email copy is server-only: it exists for apps/worker's digests ──
+  {
+    files: [
+      "packages/{ui,query}/src/**/*.{ts,tsx}",
+      "apps/web/src/**/*.{ts,tsx}",
+      "apps/desktop/src/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@loadbearing/content",
+              importNames: ["SERVER_CATALOG"],
+              message:
+                "The email namespace is server-only. Client code takes the default CLIENT_CATALOG, or BundledContentSource on desktop.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ── content may name a module, never a permission (see docs/setup/20) ──
   {
     files: ["packages/content/src/**/*.ts"],
     rules: {
@@ -365,10 +405,8 @@ export default tseslint.config(
 ```ts
 import type { Linter } from "eslint";
 
-/**
- * The six rules Biome cannot express, plus the typed rules that need a whole
- * TypeScript program. Hand-written because this package has no build step.
- */
+// The six rules Biome cannot express, plus the typed rules that need a whole
+// TypeScript program. Hand-written because this package has no build step.
 declare const config: Linter.Config[];
 
 export default config;
@@ -445,9 +483,43 @@ Free functions are how a codebase loses its shape. `canReactivate` in a utils fi
 
 **The static-mutable-state ban** catches a real production bug. A `static cache = new Map()` on a repository looks fine locally and serves user A's rows to user B under concurrency. `static readonly` is fine; `static` alone is not.
 
+### Why the `email` ban lives here and not in Biome
+
+`@loadbearing/content` is a package every client file legitimately imports — `Translator`,
+`MessageStore`, `MessageKey`. The ban is on **one named export**, and Biome's
+`noRestrictedImports` has no `importNames`: it bans a module or nothing. That is the division
+already stated above — Biome takes bans that are "this whole module, no exceptions"; ESLint
+takes the ones needing named-export or type-import nuance. Same shape, same file, as the
+`content`/`PermissionKey` ban.
+
+**No `allowTypeImports` on this one.** `SERVER_CATALOG` is a value with no client-side type
+use, so the exemption would only widen the hole. It is on the two `feature` entries because
+`SignInForm` genuinely needs `import type { AuthClient }` ([23](23-feature-package.md)).
+
+> [!CAUTION]
+> **ESLint flat config resolves rules last-match-wins, per rule name — and `packages/feature`
+> turns the core rule off.** Its block sets `"no-restricted-imports": "off"` so the typed
+> variant can own the rule outright, which means a core-rule ban declared for `feature`
+> *anywhere earlier in the array* is silently dead. That is why the `email` ban lists
+> `packages/{ui,query}` and the two apps but not `feature`, and why feature's copy of it is a
+> fourth entry inside the existing `@typescript-eslint/no-restricted-imports` array. **Any
+> future ban on `feature` goes in that array**, never in a new block. This is the ESLint
+> analogue of the Biome options-replacement hazard in Step 5.2, and it fails just as quietly.
+
 **Zod schemas and Drizzle tables don't trip these.** They are _data shapes_, not behaviour — declared as `static readonly` class members (Zod) or module-level `pgTable` consts (Drizzle). Neither matches a selector above.
 
-**`packages/{ui,feature,query}` and `apps/*` are excluded from the OOP block** — React components and hooks are functions by contract with the framework. That exclusion is the `OOP_PACKAGES` glob, and it is the only place in the repo where the React/non-React split is written down.
+**`packages/{ui,feature,query}` and `apps/*` are excluded from the OOP block** — React components and hooks are functions by contract with the framework. That exclusion is the `OOP_PACKAGES` glob, and it is the only place in the repo where the React/non-React split is written down. It is also why `MessageProvider` and `useMessages` ([23](23-feature-package.md)) are exported functions without an exemption: `feature` is simply not in the glob.
+
+**`packages/content` *is* in the glob, and two things in it look like violations.** Neither is,
+and both are worth naming before someone "fixes" them:
+
+- **The catalog's loader arrows** ([20](20-content-package.md)) sit inside an object literal.
+  The banned selector is `ExportNamedDeclaration > VariableDeclaration > VariableDeclarator >
+  ArrowFunctionExpression` — a chain of *direct* children, matching `export const x = () => …`.
+  An arrow that is a property value has an `ObjectExpression` parent and does not match.
+- **`MessageStore`'s mutable fields** are instance members. The static-state selector is
+  `ClassBody > PropertyDefinition[static=true][readonly!=true]`, and per-request instance state
+  is exactly what that rule pushes you toward.
 
 **The `ignores` list covers what `projectService` cannot resolve.** TS config files and hand-written `.d.ts` sit outside every package's tsconfig `include`, so a type-aware rule fails on them with a parsing error rather than a lint finding. Deliberately `**/*.config.ts` rather than `*.config.*` — the wider glob also matches `eslint.config.js` itself, which makes editors report *"File ignored because of a matching ignore pattern"* on every config file you open.
 

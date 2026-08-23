@@ -2,7 +2,12 @@
 
 > Every user-visible string, document, and structured record — plus the `ContentSource` seam a CMS will slot into later. React-free.
 
-**Delivers:** `Translator`, `StaticContentSource`, the four content shapes, and a navigation model a content editor can safely change.
+**Delivers:** `Translator`, `MessageStore`, two `ContentSource` implementations, the four content shapes, and a navigation model a content editor can safely change — with copy split by locale and namespace so no runtime downloads words it cannot use.
+
+**Built in two passes.** The error slice — every word `@loadbearing/errors` needs — already exists,
+because [09](09-errors-package.md) has no other half and `core`'s `ServerOnly.assert` throws before
+anything else in the repository runs. Read the marker legend under the tree below before writing
+anything: some of what follows is on disk and some is the second pass.
 
 **Prerequisite:** [19 · `@loadbearing/asset`](19-asset-package.md)
 
@@ -18,32 +23,64 @@ Two reasons, and the second is the one people miss.
 
 ```
 packages/content/src/
-├── index.ts
-├── content-source.ts             → ContentSource (abstract)
-├── static.content-source.ts      → StaticContentSource
-├── translator.ts                 → Translator
-├── media/
+├── index.ts                      ✅
+├── locale.ts                     → Locale, Locales                       ✅
+├── content-source.ts             → ContentSource (abstract)              ◐  messages/translator only
+├── static.content-source.ts      → StaticContentSource   ← split; dynamic import   ◐
+├── bundled.content-source.ts     → BundledContentSource  ← every locale, static    ☐
+├── translator.ts                 → Translator, MessageSnapshot           ✅
+├── message-store.ts              → MessageStore          ← the SSR → client carrier ☐
+├── media/                                                                ☐  needs `asset`
 │   ├── index.ts
-│   ├── media-ref.ts              → MediaRef
+│   ├── media-ref.ts              → MediaResolver, ResolvedMedia
 │   └── static.media-resolver.ts  → StaticMediaResolver
 ├── message/                      ── shape 1: short keyed strings
-│   ├── en/
-│   │   ├── index.ts
-│   │   ├── common.ts
-│   │   ├── nav.ts
-│   │   ├── auth.ts
-│   │   ├── error.ts
-│   │   └── email.ts              ← the worker's namespace
-│   └── bn/ …                     ← Partial<>, falls back to en
-├── document/                     ── shape 2: long-form editorial
+│   ├── namespace.ts              → Namespace, NamespaceKeys, MessageKey  ◐  two namespaces
+│   ├── catalog.ts                → CLIENT_CATALOG   (locale × namespace → loader)  ◐
+│   ├── catalog.server.ts         → SERVER_CATALOG   (+ email)            ☐
+│   ├── error-copy.ts             → ERROR_COPY, FIELD_RULE_COPY, ErrorCopy ✅
+│   ├── en/                       ← no index.ts; nothing merges these
+│   │   ├── common.ts                                                     ✅
+│   │   ├── nav.ts                                                        ☐  lands with 20.6
+│   │   ├── auth.ts                                                       ☐  lands with [16](16-auth-package.md)
+│   │   ├── error.ts                                                      ✅
+│   │   └── email.ts              ← the worker's namespace, server-only    ☐  lands with [25](25-worker-app.md)
+│   └── bn/                       ← same files; NamespaceBundle<N> each     ◐  common + error
+├── document/                     ── shape 2: long-form editorial          ☐
 │   ├── document.schema.ts        → DocumentContract
 │   └── document.entity.ts        → DocumentEntity
-└── collection/                   ── shape 3: repeating records
+└── collection/                   ── shape 3: repeating records            ☐
     ├── collection.schema.ts      → CollectionContract
     └── nav/
         ├── nav.schema.ts         → NavContract
         └── nav.data.ts           → navItems
 ```
+
+> [!IMPORTANT]
+> **This package is deliberately built in two passes, and the first one is already done.**
+> ✅ exists and is final · ◐ exists in a reduced form this step describes precisely · ☐ is not
+> written yet.
+>
+> The error slice — `locale.ts`, `translator.ts`, the `common` and `error` namespaces in both
+> locales, `error-copy.ts`, and the `ContentSource` seam far enough to hand out a `Translator` —
+> was built early, out of order, because [09](09-errors-package.md) has no other half. An
+> `ErrorCode` with no copy is a raw `SERVER_ONLY` on a customer's screen, and `ServerOnly.assert`
+> in `core` ([07](07-core-package.md#step-74--serveronly)) throws before anything else in the
+> repository can. Both needed the words to exist somewhere, and this is the only package allowed
+> to hold words.
+>
+> Nothing in the reduced form is provisional. `namespace.ts` gains `nav`, `auth` and `email` as
+> members of a union and a mapped type; the shape does not change, and neither `MessageKey`'s
+> closedness nor `ERROR_COPY`'s totality is weaker for having two namespaces instead of five.
+> [Step 20.10](#step-2010--what-the-second-pass-adds) is the checklist for finishing it.
+
+**There is no `message/en/index.ts` and no `message/bn/index.ts`.** An earlier draft merged
+every namespace into one frozen `en` object and derived `MessageKey` from it, which made that
+object load-bearing: `Translator` needed all of English resident, `StaticContentSource` had to
+import every locale statically, and the consequence was that a browser downloaded Bengali it
+would never read plus the worker's email copy it could never render. **Merging was the bug.**
+Step 20.1 keeps the closed key union and drops the merge, which is possible only because types
+are erased and runtime data is not.
 
 ---
 
@@ -73,102 +110,451 @@ export const error = {
   "error.conflict": "Someone else changed this first. Reload and try again.",
   "error.rateLimited": "Too many attempts. Please wait a moment and try again.",
   "error.unexpected": "Something went wrong. Please try again.",
+  "error.twoFactorRequired": "Enter the code from your authenticator app to continue.",
+  // The developer-facing sentence `ServerOnly.assert` used to carry inline. It is
+  // copy like any other now — keyed, interpolated, and translatable — which is why
+  // `@loadbearing/errors` has no message field at all.
+  "error.serverOnly":
+    "{package} was imported into a client bundle. This is a leak, not a bundle-size problem — it means database or credential code is reachable from the browser.",
   "error.field.required": "{field} is required.",
   "error.field.tooShort": "{field} must be at least {min} characters.",
+  "error.field.tooLong": "{field} must be at most {max} characters.",
+  "error.field.invalidFormat": "{field} is not in the expected format.",
+  "error.field.invalid": "{field} is not valid.",
 } as const;
 ```
 
+**`error.serverOnly` is a developer-facing sentence in a user-facing catalog, and it belongs here
+anyway.** It is the string [07](07-core-package.md#step-74--serveronly) used to hold inline, and
+moving it is what let [09](09-errors-package.md) drop its last exception. It can only ever render
+in a build that is already broken — a server-only module executing in a browser — and in that
+build you want the words, wherever the error surfaces. `{package}` is interpolated from
+`ServerOnlyError`'s context. It is untranslated in `bn/error.ts` on purpose: a console reader wants
+the string they can search for.
+
+**There is one `error.field.*` key per rule `ValidationError` can emit** — `required`, `tooShort`,
+`tooLong`, `invalidFormat`, and the catch-all `invalid` that an unrecognised Zod issue code becomes
+([09](09-errors-package.md#step-94--errornormalizer)). Fewer than that and `FIELD_RULE_COPY` has a
+hole a schema can fall through.
+
+**`error.twoFactorRequired` is in this namespace, not in `auth`.** An earlier revision of this
+document mapped `TWO_FACTOR_REQUIRED` to `auth.twoFactorRequired`, and that was a defect: `auth` is
+a lazily loaded namespace, so the sign-in error would render as the literal string
+`auth.twoFactorRequired` on any route that had not declared it. Every value in `ERROR_COPY` has to
+be a *shell* key, and the type below is what makes that unrepresentable rather than remembered.
+
 **All error copy lives here, and nothing else does.** `@loadbearing/errors` ([09](09-errors-package.md)) names failures; this package is the only place a sentence about one exists. `Error.message` is the code, so if a user is going to read words, they come from this catalog and they are translated.
 
-That leaves one thing to enforce: a code with no copy. `Record<ErrorCode, MessageKey>` makes it a compile error rather than a raw key rendered to a customer.
+That leaves one thing to enforce: a code with no copy. `Record<ErrorCode, ShellMessageKey>` makes it a compile error rather than a raw key rendered to a customer.
 
 **`packages/content/src/message/error-copy.ts`**
 
 ```ts
-import type { ErrorCode } from "@loadbearing/errors";
-import type { MessageKey } from "./en/index.js";
+import type { ErrorCode, ErrorEnvelope, FieldViolation } from "@loadbearing/errors";
+import type { Translator } from "../translator.js";
+import type { ShellMessageKey } from "./namespace.js";
 
-/** Total by construction — a new ErrorCode fails to compile until it has copy. */
-export const ERROR_COPY: Readonly<Record<ErrorCode, MessageKey>> = {
+// Total by construction — a new ErrorCode fails to compile until it has copy.
+export const ERROR_COPY: Readonly<Record<ErrorCode, ShellMessageKey>> = {
   UNAUTHORIZED: "error.unauthorized",
   FORBIDDEN: "error.forbidden",
   NOT_FOUND: "error.notFound",
   CONFLICT: "error.conflict",
   BAD_REQUEST: "error.unexpected",
-  TWO_FACTOR_REQUIRED: "auth.twoFactorRequired",
+  TWO_FACTOR_REQUIRED: "error.twoFactorRequired",
   RATE_LIMITED: "error.rateLimited",
   UNAVAILABLE: "error.unexpected",
   INTERNAL: "error.unexpected",
+  SERVER_ONLY: "error.serverOnly",
 };
 
-/** Field-level rules from a ValidationError. Not total: rules are open-ended. */
-export const FIELD_RULE_COPY: Readonly<Record<string, MessageKey>> = {
+// Field-level rules from a ValidationError. Not total: rules are open-ended.
+export const FIELD_RULE_COPY: Readonly<Record<string, ShellMessageKey>> = {
   required: "error.field.required",
   tooShort: "error.field.tooShort",
+  tooLong: "error.field.tooLong",
+  invalidFormat: "error.field.invalidFormat",
+  invalid: "error.field.invalid",
 };
+
+// The seam an error page, an error boundary, or a toast calls. It exists as a
+// class rather than two repeated one-liners so the fallback for an unknown rule
+// is written once, and so `context` reaching `t()` as interpolation params is a
+// typed fact rather than a convention.
+export class ErrorCopy {
+  private constructor() {}
+
+  // Shown at the top of an error page. Interpolates the envelope's context.
+  public static message(translator: Translator, envelope: ErrorEnvelope): string {
+    return translator.t(ERROR_COPY[envelope.code], envelope.context);
+  }
+
+  // One sentence per field violation, in envelope order. Empty for a non-validation error.
+  public static fields(translator: Translator, envelope: ErrorEnvelope): readonly string[] {
+    return (envelope.fields ?? []).map((violation) => ErrorCopy.field(translator, violation));
+  }
+
+  // The field name is merged into the params, not left to the caller. Every
+  // `error.field.*` template opens with `{field}`, and a violation carries the name
+  // separately from its rule params — pass only `params` and the sentence renders
+  // with a literal `{field}` in it.
+  public static field(translator: Translator, violation: FieldViolation): string {
+    return translator.t(FIELD_RULE_COPY[violation.rule] ?? "error.unexpected", {
+      field: violation.field,
+      ...violation.params,
+    });
+  }
+}
 ```
+
+**The value type is `ShellMessageKey`, not `MessageKey`, and that is load-bearing.** `common` and
+`error` are the two namespaces every `ContentSource` guarantees in every snapshot
+([Step 20.7](#step-207--contentsource)); everything else is lazy. A code mapped into a lazy
+namespace renders as its own raw key on any route that did not happen to declare it — and an error
+page is precisely the screen that cannot afford to be the place a wiring bug shows up. Narrowing
+the value type makes it a compile error instead of a screenshot.
 
 **Several codes share one message on purpose.** `BAD_REQUEST`, `UNAVAILABLE` and `INTERNAL` all read "Something went wrong" — the distinction matters to an operator reading logs and not at all to the person looking at the screen. Mapping is not the same as duplicating.
 
-**`FIELD_RULE_COPY` is deliberately not total.** A rule name is whatever a schema produced, so this map cannot be closed the way `ERROR_COPY` is; an unknown rule falls back to `error.unexpected` and a test asserts every rule the contracts package can actually emit has an entry.
+**`FIELD_RULE_COPY` is deliberately not total.** A rule name is whatever a schema produced, so this map cannot be closed the way `ERROR_COPY` is; an unknown rule falls back to `error.unexpected` and a test asserts every rule `ValidationError` can actually emit has an entry.
 
-The rendering call is then one line, and `{field}`/`{min}` interpolation is what `Translator` already does:
+### Why `ErrorCopy` is a class and not two call sites
+
+An earlier revision of this document gave the rendering as two lines to copy wherever they were
+needed:
 
 ```ts
 t(ERROR_COPY[error.code], error.context);
 t(FIELD_RULE_COPY[violation.rule] ?? "error.unexpected", violation.params);
 ```
 
-**`packages/content/src/message/en/index.ts`**
+Both are wrong in ways that only show up on screen, which is the argument for writing them once:
+
+- **The second line drops the field name.** `violation.params` is `{ min: 10 }` — the name is
+  `violation.field`, a sibling property. Pass params alone and the user reads
+  `"{field} must be at least 10 characters."` `ErrorCopy.field` merges the name in.
+- **The first line does not typecheck.** `ErrorContext` allows `boolean`
+  ([09](09-errors-package.md#step-92--the-envelope)) and `t()`'s params did not. Rather than mapping
+  the context at every call site, `Translator.t` takes `MessageParams`
+  ([Step 20.1](#the-key-union-without-the-merge)), which allows `boolean` for exactly this reason —
+  `String(value)` renders it fine.
+- **The `?? "error.unexpected"` fallback is the kind of thing that gets forgotten** at the one call
+  site where the rule turns out to be open-ended.
+
+`ErrorCopy` is also where the `errors` → `content` seam is testable from this side. `errors` asserts
+that `ServerOnlyError` names its context key `package`; this package asserts that the rendered
+sentence comes out whole. Neither package can see the other's half, so both halves are pinned.
+
+### The key union, without the merge
+
+**`packages/content/src/message/namespace.ts`**
+
+The version on disk today carries the two shell namespaces. The five-namespace version it grows
+into is directly below it, and the difference is four lines.
 
 ```ts
-import { auth } from "./auth.js";
-import { common } from "./common.js";
-import { email } from "./email.js";
-import { error } from "./error.js";
-import { nav } from "./nav.js";
+import type { common } from "./en/common.js";
+import type { error } from "./en/error.js";
 
-export const en = { ...common, ...nav, ...auth, ...error, ...email } as const;
+// Type-only. `verbatimModuleSyntax` ([04](04-typescript-configs.md)) erases every import
+// above, so importing this module pulls in no catalog data at all. That is the whole
+// trick: the key union stays complete while the runtime data splits into chunks.
+//
+// **Partial today.** `nav`, `auth` and the server-only `email` namespaces join this
+// interface at their own setup steps. Nothing about the shape below changes when they do.
+interface NamespaceShape {
+  readonly common: typeof common;
+  readonly error: typeof error;
+}
 
-export type MessageKey = keyof typeof en;
-export type MessageCatalog = Record<MessageKey, string>;
+// Always present, in every snapshot, from every ContentSource. Never lazy.
+export type ShellNamespace = "common" | "error";
+// Everything a browser or a desktop bundle may load. Gains `nav` and `auth` later.
+export type ClientNamespace = ShellNamespace;
+// Gains the server-only `email` namespace when the worker's digests land.
+export type Namespace = ClientNamespace;
+
+export type NamespaceKeys = { [K in Namespace]: keyof NamespaceShape[K] & string };
+
+// The complete closed union — same meaning as the old `keyof typeof en`.
+export type MessageKey = NamespaceKeys[Namespace];
+
+// Only the keys guaranteed to be in every snapshot. `ERROR_COPY` is typed against
+// this rather than `MessageKey`, so an error code cannot be pointed at a lazily
+// loaded namespace and render as a raw key on a route that never asked for it.
+export type ShellMessageKey = NamespaceKeys[ShellNamespace];
+
+// One locale's copy for one namespace. Partial: translations arrive incrementally.
+export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+
+// A flat slice across whatever namespaces are loaded.
+export type MessageBundle = Partial<Record<MessageKey, string>>;
+
+// What `t()` interpolates. `boolean` is here because `ErrorContext` allows it.
+export type MessageParams = Readonly<Record<string, string | number | boolean>>;
+
+export const SHELL_NAMESPACES: readonly ShellNamespace[] = ["common", "error"];
+export const CLIENT_NAMESPACES: readonly ClientNamespace[] = ["common", "error"];
 ```
 
-**`packages/content/src/message/bn/index.ts`**
+**What the second pass changes, and nothing else:**
 
 ```ts
-import type { MessageKey } from "../en/index.js";
+import type { auth } from "./en/auth.js";     // + 3 type-only imports
+import type { email } from "./en/email.js";
+import type { nav } from "./en/nav.js";
 
-/** Partial by design — anything missing falls back to English. */
-export const bn: Partial<Record<MessageKey, string>> = {
+interface NamespaceShape {
+  readonly common: typeof common;
+  readonly nav: typeof nav;                    // +
+  readonly auth: typeof auth;                  // +
+  readonly error: typeof error;
+  readonly email: typeof email;                // +
+}
+
+export type ClientNamespace = ShellNamespace | "nav" | "auth";
+export type ServerNamespace = "email";
+export type Namespace = ClientNamespace | ServerNamespace;
+
+export const CLIENT_NAMESPACES: readonly ClientNamespace[] = ["common", "error", "nav", "auth"];
+```
+
+`ShellNamespace`, `NamespaceKeys`, `MessageKey`, `ShellMessageKey`, `NamespaceBundle`,
+`MessageBundle` and `MessageParams` are untouched, and no consumer of this module changes. That is
+the property that made building the error slice early safe rather than a down payment on a
+rewrite — `MessageKey` is a closed union over two namespaces exactly as rigorously as over five, so
+a typo is a compile error today, and `ERROR_COPY` is total today.
+
+**`MessageKey` is still one closed union.** A typo at a call site is still a compile error, and
+`ERROR_COPY: Record<ErrorCode, ShellMessageKey>` above is still total. Nothing about the guarantee
+changed — only where the runtime data lives.
+
+> [!IMPORTANT]
+> **`NamespaceKeys` is a mapped type deliberately, and the obvious alternative silently does
+> nothing.** The tempting form is a conditional over the namespace:
+>
+> ```ts
+> declare function t<N extends string>(ns: N, key: Extract<MessageKey, `${N}.${string}`>): string;
+> t("auth", "error.forbidden");   // compiles — the constraint is decorative
+> ```
+>
+> It fails because the key position is *also* an inference site, so `N` widens to satisfy both
+> arguments. `NamespaceKeys[N]` — an indexed access into a mapped type — is not an inference
+> site, and rejects the same call. Verified both ways against this repo's compiler flags.
+>
+> Deriving from the module type rather than a string prefix also handles `common`, whose keys
+> are `action.save` and `state.loading`. **Its prefix is not its namespace name**, and any
+> template-literal scheme breaks on it.
+
+### A locale is split the same way English is
+
+**`packages/content/src/message/bn/common.ts`**
+
+```ts
+import type { NamespaceBundle } from "../namespace.js";
+
+// Partial by design — anything missing falls back to English.
+export const common: NamespaceBundle<"common"> = {
   "action.save": "সংরক্ষণ",
   "action.cancel": "বাতিল",
 };
 ```
 
-**Namespaced by concern, merged into one flat catalog.** `MessageKey` is a closed union, so a typo at a call site is a compile error rather than a raw key rendered to a user.
+One file per namespace per locale, mirroring `en/` — two today, five when the second pass lands.
+**`NamespaceBundle<"common">` is stricter than the old `Partial<Record<MessageKey, string>>`** — a
+key from another namespace in this file is now a compile error, which is what stops `bn/nav.ts` from
+quietly shipping auth copy inside the nav chunk. The chunk boundary and the type boundary are the
+same boundary.
 
-**A locale is `Partial<Record<MessageKey, string>>`.** Translations arrive incrementally; requiring completeness means either blocking a locale until it is finished or filling it with placeholder English that nobody ever notices needs replacing.
+`bn/error.ts` is the one to read, because it shows the fallback layer doing its job:
 
-**`email` is a namespace, not a separate system.** The worker's digest subject lines come from the same catalog the UI uses, through the same `Translator`. Two copy systems means two places to fix a typo and one of them gets missed.
+```ts
+import type { NamespaceBundle } from "../namespace.js";
+
+// Partial by design. `error.serverOnly` is deliberately absent: it is read by a
+// developer in a console, so English is the right answer and the fallback layer
+// is what supplies it.
+export const error: NamespaceBundle<"error"> = {
+  "error.unauthorized": "চালিয়ে যেতে সাইন ইন করুন।",
+  "error.forbidden": "এটি করার অনুমতি আপনার নেই।",
+  "error.notFound": "আপনি যা খুঁজছেন তা আমরা পাইনি।",
+  "error.unexpected": "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।",
+  "error.field.required": "{field} আবশ্যক।",
+};
+```
+
+**Translations still arrive incrementally.** Requiring completeness means either blocking a
+locale until it is finished or filling it with placeholder English that nobody notices needs
+replacing.
 
 ---
 
-## Step 20.2 — `Translator`
+## Step 20.2 — The catalog: locale × namespace → loader
 
-**`packages/content/src/translator.ts`**
+**`packages/content/src/message/catalog.ts`**
 
 ```ts
-import type { MessageKey } from "./message/en/index.js";
+import type { Locale } from "../locale.js";
+import type { ClientNamespace, MessageBundle, Namespace } from "./namespace.js";
+
+export type BundleLoader = () => Promise<MessageBundle>;
+
+// A catalog need not cover every namespace — a client one deliberately omits `email`.
+// The individual catalogs below declare themselves precisely; this is the parameter type.
+export type MessageCatalog = Readonly<Record<Locale, Partial<Record<Namespace, BundleLoader>>>>;
+
+// Total over Locale × ClientNamespace — a new locale or client namespace fails to
+// compile until every cell exists. The same property `ERROR_COPY` has, for the same
+// reason. Note the annotation is the *precise* type, not `MessageCatalog`: widening it
+// here would give up the totality check that makes a forgotten cell a build failure.
+export const CLIENT_CATALOG: Readonly<
+  Record<Locale, Readonly<Record<ClientNamespace, BundleLoader>>>
+> = {
+  en: {
+    common: async () => (await import("./en/common.js")).common,
+    error: async () => (await import("./en/error.js")).error,
+    // nav, auth: one line each, when those namespaces land.
+  },
+  bn: {
+    common: async () => (await import("./bn/common.js")).common,
+    error: async () => (await import("./bn/error.js")).error,
+  },
+};
+```
+
+**Four cells today, and the totality check is already doing work.** `Record<Locale,
+Record<ClientNamespace, BundleLoader>>` is what makes adding `"nav"` to `ClientNamespace` a build
+failure in two places until both locales have a loader — which is the whole reason the union and
+the catalog are separate declarations.
+
+**`packages/content/src/message/catalog.server.ts`** ☐ *not written yet — it has nothing to add
+until the `email` namespace exists, and a `SERVER_CATALOG` identical to `CLIENT_CATALOG` would be a
+boundary that looks enforced and enforces nothing.*
+
+```ts
+import { CLIENT_CATALOG, type MessageCatalog } from "./catalog.js";
+
+// Adds the email namespace. Not importable from client code — [05](05-lint-and-format.md) Step 5.3.
+export const SERVER_CATALOG: MessageCatalog = {
+  en: { ...CLIENT_CATALOG.en, email: async () => (await import("./en/email.js")).email },
+  bn: { ...CLIENT_CATALOG.bn, email: async () => (await import("./bn/email.js")).email },
+};
+```
+
+> [!NOTE]
+> **The ESLint bans on importing `SERVER_CATALOG` are already in place** in
+> `tooling/eslint-config/src/index.js` ([05](05-lint-and-format.md) Step 5.3), for `packages/ui`,
+> `packages/query`, `packages/feature`, `apps/web` and `apps/desktop`. A `no-restricted-imports`
+> entry naming an export that does not exist yet costs nothing and cannot be forgotten later, which
+> is the right order for a boundary.
+
+**`MessageCatalog` is `Partial` over `Namespace`, and each catalog is not.** That split is the
+point: `CLIENT_CATALOG` is declared with an exact `Record<ClientNamespace, …>` so a missing cell
+is a compile error, and it is *assignable* to the `Partial` parameter type because a client
+catalog genuinely has no `email` entry. Typing the parameter as the total record instead makes
+`CLIENT_CATALOG` unassignable to it — the error is `Property 'email' is missing`, and the
+tempting fix (giving the client catalog an email cell) is the one that reintroduces the leak.
+
+**Asking a client source for `email` therefore yields nothing rather than throwing** — the
+lookup finds no loader, no keys land in the snapshot, and `t()` renders the key
+([Step 20.4](#step-204--translator)). That is the documented failure mode, arrived at
+structurally: a browser cannot obtain email copy even if something asks for it by name.
+`noUncheckedIndexedAccess` ([04](04-typescript-configs.md)) forces the lookup to be
+`BundleLoader | undefined` and the filter to be written, so this is checked rather than assumed.
+
+**Every `import()` specifier is a string literal, and that is not a style choice.** A computed
+specifier — ``import(`./${locale}/${ns}.js`)`` — is precisely what makes a bundler give up on
+static analysis and inline every matching file into the parent chunk. Literal specifiers are
+what produce one chunk per locale × namespace. If `dist/` ever holds a single chunk, this is
+the line that regressed, and the whole design is inert.
+
+**The loader arrows do not violate the OOP rules.** [05](05-lint-and-format.md) bans
+`export const x = () => …` with a selector requiring a direct `VariableDeclarator` parent; an
+arrow inside an object literal is not one. It looks like a violation, and someone will try to
+"fix" it.
+
+**`.server.ts` is the repo's existing server-only filename suffix**, already an escape-hatch
+glob in [05](05-lint-and-format.md) Step 5.2. Reusing it makes the boundary legible from the
+filename before anyone opens the file.
+
+**`email` is a namespace, not a separate system.** The worker's digest subject lines come from
+the same files the UI uses, through the same `Translator`. Two copy systems means two places
+to fix a typo and one of them gets missed. It is *reachable* only through `SERVER_CATALOG`,
+and only the worker and the web server ever hold one.
+
+---
+
+## Step 20.3 — `Locale`
+
+**`packages/content/src/primitive/locale.ts`**
+
+```ts
+export type Locale = "en" | "bn";
+
+export class Locales {
+  private constructor() {}
+
+  public static readonly ALL: readonly Locale[] = ["en", "bn"];
+  public static readonly DEFAULT: Locale = "en";
+
+  public static is(value: string | null | undefined): value is Locale {
+    return value !== null && value !== undefined && Locales.ALL.includes(value as Locale);
+  }
+
+  // `override` wins — a cookie, or a settings screen. Otherwise the first tag that matches.
+  public static negotiate(acceptLanguage: string | null, override: string | null): Locale {
+    if (Locales.is(override)) return override;
+
+    for (const part of (acceptLanguage ?? "").split(",")) {
+      const tag = part.split(";")[0]?.trim().split("-")[0] ?? "";
+      if (Locales.is(tag)) return tag;
+    }
+
+    return Locales.DEFAULT;
+  }
+}
+```
+
+**`negotiate` takes strings — never a `Request`, never `navigator`.** `apps/web` passes a
+header, `apps/desktop` passes `navigator.language`, and this package stays DOM-free and
+Node-testable, the same rule that keeps it React-free. `Locales.is()` is also the boundary that
+narrows an untrusted locale string to a two-member union before it can index a catalog.
+
+---
+
+## Step 20.4 — `Translator`
+
+**`packages/content/src/translator/translator.ts`**
+
+```ts
+import type { Locale } from "../primitive/index.js";
+import type { MessageBundle, MessageKey, MessageParams, Namespace } from "../message/index.js";
+
+// The wire format. This exact object is what apps/web inlines into the HTML.
+export interface MessageSnapshot {
+  readonly locale: Locale;
+  // Which namespaces `base` and `overrides` cover. Always includes the shell.
+  readonly namespaces: readonly Namespace[];
+  // English, for the loaded namespaces only. The fallback layer.
+  readonly base: MessageBundle;
+  // The requested locale, loaded namespaces only. Empty when locale is "en".
+  readonly overrides: MessageBundle;
+}
 
 export class Translator {
-  constructor(
-    private readonly base: Record<MessageKey, string>,
-    private readonly overrides: Partial<Record<MessageKey, string>> = {},
-  ) {}
+  public constructor(private readonly snapshot: MessageSnapshot) {}
 
-  public t(key: MessageKey, params?: Readonly<Record<string, string | number>>): string {
-    const template = this.overrides[key] ?? this.base[key];
+  public get locale(): Locale {
+    return this.snapshot.locale;
+  }
+
+  public loaded(namespace: Namespace): boolean {
+    return this.snapshot.namespaces.includes(namespace);
+  }
+
+  public t(key: MessageKey, params?: MessageParams): string {
+    const template = this.snapshot.overrides[key] ?? this.snapshot.base[key];
+    if (template === undefined) return key;
     if (!params) return template;
 
     return template.replace(/\{(\w+)\}/g, (match, name: string) =>
@@ -177,24 +563,65 @@ export class Translator {
   }
 
   public has(key: MessageKey): boolean {
-    return key in this.overrides || key in this.base;
+    return key in this.snapshot.overrides || key in this.snapshot.base;
   }
 
-  public with(overrides: Partial<Record<MessageKey, string>>): Translator {
-    return new Translator(this.base, { ...this.overrides, ...overrides });
+  public with(overrides: MessageBundle): Translator {
+    return new Translator({
+      ...this.snapshot,
+      overrides: { ...this.snapshot.overrides, ...overrides },
+    });
+  }
+
+  // Union of two snapshots of the same locale. Used when a navigation adds namespaces.
+  public static merge(a: MessageSnapshot, b: MessageSnapshot): MessageSnapshot {
+    return {
+      locale: a.locale,
+      namespaces: [...new Set([...a.namespaces, ...b.namespaces])],
+      base: { ...a.base, ...b.base },
+      overrides: { ...a.overrides, ...b.overrides },
+    };
   }
 }
 ```
 
+**`base` is no longer a total `Record<MessageKey, string>`.** A total record is precisely what
+forced all of English to be resident, and with it every locale into every bundle. A
+`MessageSnapshot` covers the namespaces actually loaded, and it does three jobs with one
+shape: the constructor argument, the JSON that crosses the SSR boundary, and the merge unit
+for client-side navigation. One shape, three jobs, no adapters.
+
 **`{name}` interpolation, no library.** ICU MessageFormat handles plurals and gender properly and is the right answer when you need it. Until you do, a twelve-line replace has no dependency, no bundle cost, and no learning curve. Swapping later is a change inside this one class because every call site goes through `t()`.
+
+**`params` is `MessageParams`, which allows `boolean`, and that is not slack.** It is exactly
+`ErrorContext` from [09](09-errors-package.md#step-92--the-envelope), so `ErrorCopy.message` can
+hand an envelope's context straight to `t()` with no mapping step. Narrowing it to
+`string | number` makes the one call site that matters most fail to typecheck, and the fix people
+reach for is a cast.
 
 **An unknown placeholder is left as-is**, not replaced with `undefined`. `"Hello {nmae}"` in the UI is obviously a bug; `"Hello undefined"` reads like a data problem and gets investigated in the wrong place.
 
-**Immutable `with()`.** Per-request locale overrides in the worker compose without mutating a shared instance.
+**A key from an unloaded namespace renders as the key itself**, for the same reason. Seeing
+`auth.signIn` on screen is unmistakably a wiring bug — a route that forgot to declare a
+namespace ([24](24-web-app.md)) — and it names the exact string to grep for. The alternatives
+are worse in both directions: throwing takes down an otherwise healthy page over a forgotten
+one-line declaration, and falling back to English ships the bug silently, to be discovered by
+a Bengali customer. **Make the failure loud and local, never plausible.**
+
+> [!NOTE]
+> **The error path and the loading path cannot reach that branch.** `error.*` and
+> `action.*`/`state.*` live in the shell namespaces, which every `ContentSource` puts in every
+> snapshot. A raw key can only ever surface in feature copy, which is where a missing
+> declaration actually is.
+
+**Immutable `with()`.** Per-recipient locale composition in the worker builds on a shared
+instance without mutating it.
 
 ---
 
-## Step 20.3 — Media references
+## Step 20.5 — Media references
+
+> ☐ **Second pass.** Needs [19](19-asset-package.md)'s `ImageManifest`.
 
 **`packages/content/src/media/media-ref.ts`**
 
@@ -232,7 +659,9 @@ Content records hold `"home.hero"`, never a path. Today that resolves through `I
 
 ---
 
-## Step 20.4 — Navigation, and the line content must not cross
+## Step 20.6 — Navigation, and the line content must not cross
+
+> ☐ **Second pass.** The rule below is already enforced by lint; it is vacuous until `nav.data.ts` exists.
 
 **`packages/content/src/collection/nav/nav.schema.ts`**
 
@@ -243,7 +672,7 @@ export class NavContract {
   private constructor() {}
 
   public static readonly item = z.object({
-    /** A ModuleKey from @loadbearing/permissions. NEVER a PermissionKey. */
+    // A ModuleKey from @loadbearing/permissions. NEVER a PermissionKey.
     module: z.string(),
     labelKey: z.string(),
     icon: z.string(),
@@ -303,108 +732,420 @@ Mechanically: **`content` must never import `PermissionKey`.** Biome's `noRestri
 
 ---
 
-## Step 20.5 — `ContentSource`
+## Step 20.7 — `ContentSource`
 
-**`packages/content/src/content-source.ts`**
+**`packages/content/src/source/content-source.ts`**
 
 ```ts
-import type { ImageKey } from "@loadbearing/asset";
-import type { ResolvedMedia } from "./media/media-ref.js";
-import type { MessageKey } from "./message/en/index.js";
-import type { NavItem } from "./collection/nav/nav.schema.js";
-import type { Translator } from "./translator.js";
-
-export type Locale = "en" | "bn";
+import type { Locale } from "../primitive/index.js";
+import { type Namespace, SHELL_NAMESPACES } from "../message/index.js";
+import type { MessageSnapshot, Translator } from "../translator/index.js";
 
 export abstract class ContentSource {
-  public abstract translator(locale: Locale): Promise<Translator>;
-  public abstract media(key: ImageKey): Promise<ResolvedMedia>;
-  public abstract nav(): Promise<readonly NavItem[]>;
-  public abstract document(slug: string): Promise<string | null>;
+  // In every snapshot, from every implementation. Callers cannot opt out.
+  public static readonly SHELL: readonly Namespace[] = SHELL_NAMESPACES;
 
-  public abstract messages(locale: Locale): Promise<Partial<Record<MessageKey, string>>>;
+  // Union of the shell and what was asked for, deduplicated.
+  protected static resolve(requested: readonly Namespace[]): readonly Namespace[] {
+    return [...new Set([...ContentSource.SHELL, ...requested])];
+  }
+
+  public abstract messages(
+    locale: Locale,
+    namespaces: readonly Namespace[],
+  ): Promise<MessageSnapshot>;
+
+  public abstract translator(
+    locale: Locale,
+    namespaces: readonly Namespace[],
+  ): Promise<Translator>;
+
+  // ☐ The second pass adds three more, once `asset` and the nav collection exist:
+  //
+  //   public abstract media(key: ImageKey): Promise<ResolvedMedia>;
+  //   public abstract nav(): Promise<readonly NavItem[]>;
+  //   public abstract document(slug: string): Promise<string | null>;
 }
 ```
 
-**`packages/content/src/static.content-source.ts`**
+**The message half of this seam is complete; the other three shapes are not declared yet.** An
+abstract method with no implementation is not a placeholder you can defer — it is a compile error in
+`StaticContentSource` the moment it exists. Declaring `media()` now would mean either writing
+`StaticMediaResolver` now (which needs `@loadbearing/asset`'s manifest) or stubbing it to throw,
+and a seam whose implementations throw is worse than a seam with fewer methods. Adding a method to
+an abstract class later is a mechanical change in one implementation; nothing outside the package
+depends on the count.
+
+**The shell is added by the base class, not by the caller.** `resolve()` is `protected static`
+and every implementation runs its request through it, so "`common` and `error` are always
+there" is a property of the seam rather than a convention every call site has to remember. A
+`DbContentSource` inherits it for free, and a route that declares `["auth"]` still gets working
+error copy.
+
+**`packages/content/src/source/static.content-source.ts`**
 
 ```ts
-import type { ImageKey } from "@loadbearing/asset";
-import { navItems } from "./collection/nav/nav.data.js";
-import { ContentSource, type Locale } from "./content-source.js";
-import { StaticMediaResolver } from "./media/static.media-resolver.js";
-import type { ResolvedMedia } from "./media/media-ref.js";
-import { bn } from "./message/bn/index.js";
-import { en, type MessageKey } from "./message/en/index.js";
-import type { NavItem } from "./collection/nav/nav.schema.js";
-import { Translator } from "./translator.js";
+import { ContentSource } from "./content-source.js";
+import type { Locale } from "../primitive/index.js";
+import { type BundleLoader, CLIENT_CATALOG, type MessageCatalog } from "../message/index.js";
+import type { MessageBundle, Namespace } from "../message/index.js";
+import { type MessageSnapshot, Translator } from "../translator/index.js";
 
 export class StaticContentSource extends ContentSource {
-  private readonly media_ = new StaticMediaResolver();
-
-  public override async translator(locale: Locale): Promise<Translator> {
-    return new Translator(en, await this.messages(locale));
+  // Defaults to the client catalog. The server passes SERVER_CATALOG explicitly.
+  public constructor(private readonly catalog: MessageCatalog = CLIENT_CATALOG) {
+    super();
   }
 
   public override async messages(
     locale: Locale,
-  ): Promise<Partial<Record<MessageKey, string>>> {
-    return locale === "bn" ? bn : {};
+    namespaces: readonly Namespace[],
+  ): Promise<MessageSnapshot> {
+    const wanted = ContentSource.resolve(namespaces);
+
+    const [base, overrides] = await Promise.all([
+      StaticContentSource.load(this.catalog.en, wanted),
+      locale === "en"
+        ? Promise.resolve({})
+        : StaticContentSource.load(this.catalog[locale], wanted),
+    ]);
+
+    return { locale, namespaces: wanted, base, overrides };
   }
 
-  public override async media(key: ImageKey): Promise<ResolvedMedia> {
-    return this.media_.resolve(key);
+  private static async load(
+    loaders: Partial<Record<Namespace, BundleLoader>>,
+    namespaces: readonly Namespace[],
+  ): Promise<MessageBundle> {
+    // A client catalog has no `email` cell. Skip what this catalog cannot serve
+    // rather than throwing — see the note under Step 20.2.
+    const present = namespaces
+      .map((n) => loaders[n])
+      .filter((loader): loader is BundleLoader => loader !== undefined);
+
+    const bundles = await Promise.all(present.map((loader) => loader()));
+    return Object.assign({}, ...bundles) as MessageBundle;
   }
 
-  public override async nav(): Promise<readonly NavItem[]> {
-    return navItems;
+  public override async translator(
+    locale: Locale,
+    namespaces: readonly Namespace[],
+  ): Promise<Translator> {
+    return new Translator(await this.messages(locale, namespaces));
   }
 
-  public override async document(_slug: string): Promise<string | null> {
-    return null;
-  }
+  // ☐ With the second pass, the other three arrive as genuinely synchronous work —
+  // so `Promise.resolve` rather than an `async` body, because `require-await`
+  // ([05](05-lint-and-format.md)) rejects an async function with no await:
+  //
+  //   public override media(key: ImageKey): Promise<ResolvedMedia> {
+  //     return Promise.resolve(this.media_.resolve(key));
+  //   }
+  //   public override nav(): Promise<readonly NavItem[]> {
+  //     return Promise.resolve(navItems);
+  //   }
+  //   public override document(_slug: string): Promise<string | null> {
+  //     return Promise.resolve(null);
+  //   }
 }
 ```
 
-**Every method is async even though nothing awaits.** That is deliberate: a `DbContentSource` will be async, and if the abstract signatures were synchronous, adding a CMS would change the return type of every method and every caller. The cost today is a handful of `await`s that resolve immediately.
+**English is always loaded alongside the target locale — per namespace.** That is the fallback
+layer, and it is what makes a `Partial<>` locale safe. Loading English *wholesale* was the
+original bug; loading it for the four namespaces in play is just the fallback doing its job.
 
-**`Container` constructs it** ([17](17-composition-container.md)):
+> [!CAUTION]
+> **The abstract signatures are async; the static implementation must not be.**
+> `@typescript-eslint/require-await` is `"error"` over `packages/*/src/**`
+> ([05](05-lint-and-format.md)), so `async media()` with no `await` inside fails lint. Return
+> `Promise.resolve(x)` from a plain method instead — identical return type, identical call
+> sites, no rule exemption, and it stops the method from claiming asynchrony it does not have.
+> `messages()` and `translator()` genuinely await, so they stay `async`.
+
+**`packages/content/src/source/bundled.content-source.ts`** ☐ *not written yet — it lands with
+[30](30-desktop-app.md), the app that needs it.*
 
 ```ts
-this.content = new StaticContentSource();
+// Every locale, every client namespace, statically imported. This is the variant
+// apps/desktop takes: there is no SSR to inline from, the locale is not known until
+// the process starts, and it has to work with no network at all. It carries no email
+// namespace — that is server-only, and a desktop bundle is not a server.
+export class BundledContentSource extends ContentSource {
+  private readonly media_ = new StaticMediaResolver();
+
+  // Beyond the abstract contract, and the reason this class exists.
+  public snapshotSync(
+    locale: Locale,
+    namespaces: readonly ClientNamespace[] = CLIENT_NAMESPACES,
+  ): MessageSnapshot {
+    const wanted = ContentSource.resolve(namespaces);
+
+    return {
+      locale,
+      namespaces: wanted,
+      base: BundledContentSource.slice("en", wanted),
+      overrides: locale === "en" ? {} : BundledContentSource.slice(locale, wanted),
+    };
+  }
+
+  public override messages(
+    locale: Locale,
+    namespaces: readonly Namespace[],
+  ): Promise<MessageSnapshot> {
+    return Promise.resolve(this.snapshotSync(locale, namespaces as readonly ClientNamespace[]));
+  }
+
+  // translator / media / nav / document: all Promise.resolve, as above.
+}
+```
+
+**`packages/content` still ships every locale, and that is deliberate.** Narrowing is an
+*app-level* decision. `apps/web` takes one slice per request because it has a server that knows
+the locale before the first byte; `apps/desktop` takes all of it because it has no server, gets
+its locale from the OS at runtime, and has to work on a plane ([30](30-desktop-app.md)).
+Building the narrowing into the *package* would have made the desktop app impossible — which is
+why doc 30 lists `content` as a direct desktop dependency.
+
+**`snapshotSync` sits outside the abstract contract on purpose.** The seam stays async so a CMS
+changes no call site; this one implementation additionally offers a synchronous read, which
+desktop uses to build its store before first render — no await, no flash, no chunk fetch. Tests
+use it for the same reason.
+
+**`Container` constructs the server variant** ([17](17-composition-container.md)):
+
+```ts
+this.content = new StaticContentSource(SERVER_CATALOG);
 // later:
 // this.content = new DbContentSource(this.database, this.cache);
 ```
 
-One line. That is the whole point of the seam.
+One line. **The seam survives the split intact** — that is worth checking rather than assuming,
+because a design that made the CMS swap expensive again would have traded the wrong thing.
 
 ---
 
-## Step 20.6 — The barrel
+## Step 20.8 — `MessageStore`
+
+> ☐ **Second pass.** Deferred until a route loader calls `ensure()` ([24](24-web-app.md) Step 24.10).
+
+A snapshot is immutable, but client-side navigation adds namespaces after the page has
+rendered. `MessageStore` is the mutable holder around it — React-free, so the same class works
+in `apps/web`'s SSR pass, in `apps/desktop`, in `apps/worker`, and in Node tests.
+
+**`packages/content/src/translator/message-store.ts`** ☐ *not written yet — nothing calls `ensure()` until a
+route loader exists ([24](24-web-app.md) Step 24.10). The error slice needs a `Translator`, not a
+store around one.*
+
+```ts
+import type { ContentSource } from "../source/index.js";
+import type { Namespace } from "../message/index.js";
+import { type MessageSnapshot, Translator } from "./translator.js";
+
+export class MessageStore {
+  private snapshot: MessageSnapshot;
+  private cached: Translator;
+  private readonly listeners = new Set<() => void>();
+
+  public constructor(
+    private readonly content: ContentSource,
+    initial: MessageSnapshot,
+  ) {
+    this.snapshot = initial;
+    this.cached = new Translator(initial);
+  }
+
+  // Identity is stable until `ensure()` actually adds something. That is not an
+  // optimisation — `useSyncExternalStore` ([23](23-feature-package.md)) re-renders
+  // forever if its read function returns a new object on every call.
+  public get translator(): Translator {
+    return this.cached;
+  }
+
+  public dehydrate(): MessageSnapshot {
+    return this.snapshot;
+  }
+
+  public restore(snapshot: MessageSnapshot): void {
+    this.snapshot = snapshot;
+    this.cached = new Translator(snapshot);
+  }
+
+  // Idempotent. Resolves immediately when nothing is missing.
+  public async ensure(namespaces: readonly Namespace[]): Promise<void> {
+    const missing = namespaces.filter((n) => !this.snapshot.namespaces.includes(n));
+    if (missing.length === 0) return;
+
+    const added = await this.content.messages(this.snapshot.locale, missing);
+    this.restore(Translator.merge(this.snapshot, added));
+    for (const listener of this.listeners) listener();
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+}
+```
+
+**Mutable instance fields are fine here.** The static-mutable-state ban in
+[05](05-lint-and-format.md) is a selector on `static` members specifically; instance state on a
+per-request object is the thing it exists to push you toward.
+
+**A `MessageStore` is per-request on the server**, for exactly the reason `createQueryClient` is
+a factory ([21](21-query-package.md)): a module-scope store built during one request serves that
+user's locale to the next one.
+
+**`ensure()` is what a route loader calls**, and `dehydrate()`/`restore()` are what carry the
+result across the SSR boundary. Both are wired in [24](24-web-app.md) Step 24.10.
+
+---
+
+## Step 20.9 — The barrel
 
 **`packages/content/src/index.ts`**
 
+What exists today, in full:
+
 ```ts
-export { NavContract, type NavItem } from "./collection/nav/nav.schema.js";
-export { ContentSource, type Locale } from "./content-source.js";
-export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
-export { en, type MessageCatalog, type MessageKey } from "./message/en/index.js";
-export { StaticContentSource } from "./static.content-source.js";
-export { Translator } from "./translator.js";
+export {
+  type BundleLoader,
+  CLIENT_CATALOG,
+  CLIENT_NAMESPACES,
+  type ClientNamespace,
+  ERROR_COPY,
+  ErrorCopy,
+  FIELD_RULE_COPY,
+  type MessageBundle,
+  type MessageCatalog,
+  type MessageKey,
+  type MessageParams,
+  type Namespace,
+  type NamespaceBundle,
+  type NamespaceKeys,
+  SHELL_NAMESPACES,
+  type ShellMessageKey,
+  type ShellNamespace,
+} from "./message/index.js";
+export { type Locale, Locales } from "./primitive/index.js";
+export { ContentSource, StaticContentSource } from "./source/index.js";
+export { type MessageSnapshot, Translator } from "./translator/index.js";
 ```
 
-**`bn` is not on the list, and `navItems` is not either.** Both are data that `StaticContentSource` reads; nothing outside the package imports them by name. Under `export *` they were public and nobody had decided that.
+The root barrel names four folder barrels and nothing else, because `src/` holds nothing else.
+
+The second pass adds five lines and changes none of the above:
+
+```ts
+export { BundledContentSource } from "./bundled.content-source.js";
+export { NavContract, type NavItem } from "./collection/nav/nav.schema.js";
+export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
+export { SERVER_CATALOG } from "./message/catalog.server.js";
+export { MessageStore } from "./message-store.js";
+```
+
+**The scaffold's `ContentPackage` placeholder is gone.** [06](06-package-anatomy.md) emits one per
+package so the barrel has a real export before the package has real code; this package has real code
+now, and a placeholder left in a barrel is something `apps/web` eventually imports by accident.
+
+**No catalog is on the list, in either locale.** `en` used to be exported — it was the merged
+frozen object, and exporting it meant any consumer could re-create the whole problem with one
+import. The only route to copy is now a `ContentSource`, which is the only thing that knows how
+to load a namespace and the only place the shell is guaranteed. `navItems` and `bn` are not on
+the list for the same reason they never were: they are data the source reads.
+
+**`SERVER_CATALOG` *is* on the list, and `email` copy is reachable through it.** The barrel
+cannot express "server-only" — [29](29-naming-and-boundaries.md) §1.3 forbids a second
+JavaScript entrypoint, so there is nowhere else to put it. The boundary is a **named-export
+ban in ESLint** instead ([05](05-lint-and-format.md) Step 5.3), which is the same mechanism, in
+the same tool, as this package's own `PermissionKey` ban.
+
+### `"sideEffects": false` is load-bearing here
+
+Add it to `packages/content/package.json` ([06](06-package-anatomy.md)):
+
+```json
+"sideEffects": false,
+```
+
+`BundledContentSource` statically imports every locale, and `packages/feature` imports
+`Translator` from this same barrel. **Without that flag no bundler can prove the unused class
+is droppable**, and the Bengali catalog rides into the client chunk through a barrel that never
+asked for it. This is the one package where the flag decides whether the design works rather
+than shaving a kilobyte — and [26](26-hygiene-and-ci.md)'s bundle grep is what proves it did.
+
+---
+
+## Step 20.10 — What the second pass adds
+
+The error slice is done and gated below. Finishing the package is these seven items, in any order,
+each of which is additive:
+
+| # | Add | Needs | Touches |
+| --- | --- | --- | --- |
+| 1 | `message/en/nav.ts` + `bn/nav.ts` | — | `NamespaceShape`, `ClientNamespace`, `CLIENT_NAMESPACES`, two `CLIENT_CATALOG` cells |
+| 2 | `message/en/auth.ts` + `bn/auth.ts` | [16](16-auth-package.md) for the copy it needs | same four places |
+| 3 | `message/en/email.ts` + `bn/email.ts`, `catalog.server.ts` | [25](25-worker-app.md) | `ServerNamespace`, `Namespace`, the barrel |
+| 4 | `media/` — `MediaResolver`, `StaticMediaResolver` | [19](19-asset-package.md)'s `ImageManifest` | `ContentSource.media()`, the barrel |
+| 5 | `collection/nav/` — `NavContract`, `navItems` | `zod` (already a dependency) | `ContentSource.nav()`, the barrel |
+| 6 | `document/` — `DocumentContract`, `DocumentEntity` | — | `ContentSource.document()`, the barrel |
+| 7 | `message-store.ts` — `MessageStore` | nothing; deferred so `ensure()` has a caller | the barrel |
+| 8 | `bundled.content-source.ts` — `BundledContentSource` | [30](30-desktop-app.md) | the barrel |
+
+**Two things are worth re-checking rather than assuming when item 3 lands.** `SERVER_CATALOG` is the
+first thing that makes `Namespace` wider than `ClientNamespace`, so it is the first time
+`MessageCatalog` being `Partial` over `Namespace` does any work — the note under
+[Step 20.2](#step-202--the-catalog-locale--namespace--loader) explains why typing it as the total
+record instead is the mistake that reintroduces the leak. And `StaticContentSource.load` skipping a
+namespace its catalog cannot serve is currently tested with a hand-built empty catalog; once a real
+client/server split exists, test it with `CLIENT_CATALOG` and `"email"`, which is the case that
+actually matters.
+
+**Item 5 is where [Step 20.6](#step-206--navigation-and-the-line-content-must-not-cross)'s rule
+starts being enforceable.** The ESLint ban on `PermissionKey` is already configured and already
+passing — vacuously, because nothing in this package imports `@loadbearing/permissions` at all. It
+stops being vacuous the moment `nav.data.ts` names a module.
 
 ---
 
 ## ✅ Gate
 
-- `new Translator(en).t("error.field.required", { field: "Email" })` returns `"Email is required."`
-- A misspelled `MessageKey` is a compile error.
-- `grep -rn "PermissionKey" packages/content/src` returns nothing.
-- `pnpm --filter @loadbearing/content build` succeeds with no React in the output.
+The error slice, which is what exists:
 
-Do not proceed until this passes.
+- `new Translator(snapshot).t("error.field.required", { field: "Email" })` returns `"Email is required."`
+- A misspelled `MessageKey` is a compile error, and so is a `bn/error.ts` entry keyed
+  `"action.save"` — `NamespaceBundle<"error">` will not take it.
+- `await new StaticContentSource().messages("bn", [])` returns a snapshot whose `namespaces` is
+  exactly `["common", "error"]`, whose `overrides` hold the Bengali copy, and whose `base` holds
+  English for the same keys. The shell arrives without being asked for.
+- **Every `ErrorCode` renders.** For each key of `ERROR_CATALOG`, `t.has(ERROR_COPY[code])` is
+  `true` against a translator built with `messages("en", [])` — a snapshot that asked for nothing.
+  This is the assertion that catches a code pointed at a lazily loaded namespace, which the
+  compiler cannot catch once `ShellMessageKey` widens.
+- **The `errors` seam round-trips.**
+  `ErrorCopy.message(t, new ServerOnlyError("@loadbearing/db").toJSON())` returns the full sentence
+  with `@loadbearing/db` substituted for `{package}`. That single assertion covers the whole
+  redesign in [09](09-errors-package.md) Step 9.3: the code carries no prose, and the prose is here.
+- `grep -rn "PermissionKey" packages/content/src` returns nothing.
+- `pnpm --filter @loadbearing/content build` succeeds with no React in the output, **and emits
+  more than one chunk in `dist/`** — one per locale × namespace. Five files today
+  (`index.js` plus `common-*.js` and `error-*.js` for each locale). A single chunk means the
+  dynamic imports got inlined and the entire split is inert.
+- `grep -c "সংরক্ষণ" packages/content/dist/index.js` is `0`. Bengali reaches the entry chunk only
+  if the split broke.
+- `pnpm lint` passes with `require-await` on, which it will not if any `ContentSource` method
+  is `async` with no `await` in its body.
+
+```bash
+pnpm --filter @loadbearing/content test        # 28 tests
+```
+
+> [!NOTE]
+> `packages/content/vitest.config.ts` needs `resolve: { conditions: ["development"] }`, for the same
+> reason `core`'s does ([07](07-core-package.md#step-76--a-first-test)): the specs import
+> `@loadbearing/errors`, and without it they run against that package's `dist/`.
+
+Do not proceed until this passes. The eight items in Step 20.10 are not gated here — each is gated
+by the step that needs it.
 
 ---
 

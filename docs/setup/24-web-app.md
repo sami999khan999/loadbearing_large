@@ -27,6 +27,7 @@ apps/web/
     └── route/
         ├── __root.tsx
         ├── -guard.ts               → RouteGuard
+        ├── -messages.ts            → MessageRouterContext  (module augmentation)
         ├── api/
         │   ├── auth/$.ts           ← mounts Better Auth's fetch handler
         │   └── rpc.$.ts            ← mounts the oRPC fetch handler
@@ -146,7 +147,7 @@ export class Env {
     return `${Env.parsed.AUTH_URL}/api/auth`;
   }
 
-  /** The one origin allowlist. Better Auth's CSRF check and CORS both read it. */
+  // The one origin allowlist. Better Auth's CSRF check and CORS both read it.
   public static get trustedOrigins(): readonly string[] {
     return Env.parsed.AUTH_TRUSTED_ORIGINS;
   }
@@ -208,7 +209,7 @@ Both Tauri entries, because the webview's scheme differs by platform — `tauri:
 import { Container } from "@loadbearing/composition";
 import { Env } from "~/env.js";
 
-/** One per process, at module scope. Never per request. */
+// One per process, at module scope. Never per request.
 export const container = new Container(Env.containerConfig());
 ```
 
@@ -226,10 +227,10 @@ import type { Principal } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import { ProcedurePermissions } from "@loadbearing/contracts";
 
-/** Initial context: environment-shaped, injected once by the adapter. */
+// Initial context: environment-shaped, injected once by the adapter.
 export const base = os.$context<{ container: Container; headers: Headers }>();
 
-/** Execution context: per-request, resolved by middleware. */
+// Execution context: per-request, resolved by middleware.
 export const principalMiddleware = base.middleware(async ({ context, next, path }) => {
   const principal: Principal | null = await context.container.principals.fromHeaders(
     context.headers,
@@ -374,7 +375,7 @@ export class Cors {
     return headers;
   }
 
-  /** Preflight. Returns null when the request is not one. */
+  // Preflight. Returns null when the request is not one.
   public static preflight(request: Request): Response | null {
     if (request.method !== "OPTIONS") return null;
     return new Response(null, { status: 204, headers: Cors.headersFor(request.headers.get("origin")) });
@@ -472,35 +473,176 @@ Used in a route's `beforeLoad`. Same `CapabilitySet.can()` the server calls — 
 
 ---
 
-## Step 24.10 — The root route
+## Step 24.10 — Messages in the SSR payload
+
+Copy reaches the browser the same way the session does: resolved on the server, embedded in the
+first response, never fetched. The difference is that copy is *split* — a route takes the
+namespaces it reads from and no others ([20](20-content-package.md)).
+
+### A route declares its namespaces
+
+**`apps/web/src/route/-messages.ts`**
+
+```ts
+import type { ClientNamespace, MessageStore } from "@loadbearing/content";
+
+declare module "@tanstack/react-router" {
+  interface StaticDataRouteOption {
+    // Namespaces this route's subtree may call t() with, beyond the shell.
+    readonly messages?: readonly ClientNamespace[];
+  }
+}
+
+export interface MessageRouterContext {
+  readonly messages: MessageStore;
+}
+```
+
+**`apps/web/src/route/sign-in.tsx`**
+
+```tsx
+const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
+
+export const Route = createFileRoute("/sign-in")({
+  staticData: { messages: MESSAGES },
+  loader: ({ context }) => context.messages.ensure(MESSAGES),
+  component: SignInPage,
+});
+```
+
+A route that also loads data resolves both at once — the namespace chunk and the API call are
+independent, so serialising them costs a round trip for nothing:
+
+```ts
+loader: async ({ context, params }) => {
+  const [, task] = await Promise.all([
+    context.messages.ensure(MESSAGES),
+    context.api.task.get({ id: params.taskId }),
+  ]);
+
+  return { task };
+},
+```
+
+**The declaration is one local `const` referenced twice, not a helper.** `staticData` is what a
+prefetcher or a coverage test can read without executing anything; the loader is what actually
+resolves it. Deriving one from the other means reaching into `ctx.route.options`, which is
+version-sensitive in exactly the way Step 24.8 already warns about — and the duplication is one
+identifier in one file.
+
+**The `-` prefix keeps `-messages.ts` out of the route tree**, the same convention as
+`-guard.ts` below.
+
+### The server builds a store per request
+
+**`apps/web/src/router.tsx`**
+
+```tsx
+export function createAppRouter(deps: {
+  messages: MessageStore;
+  queryClient: QueryClient;
+  api: ApiClient;
+}) {
+  return createRouter({
+    routeTree,
+    defaultPreload: "intent",
+    context: { messages: deps.messages, queryClient: deps.queryClient, api: deps.api },
+    dehydrate: () => ({ messages: deps.messages.dehydrate() }),
+    hydrate: (payload) => deps.messages.restore(payload.messages),
+  });
+}
+```
+
+Server entry — the locale is negotiated once, from the request:
+
+```ts
+const locale = Locales.negotiate(request.headers.get("accept-language"), localeCookie);
+const content = container.content;                       // StaticContentSource(SERVER_CATALOG)
+const messages = new MessageStore(content, await content.messages(locale, []));
+```
+
+Client entry — the store starts empty and `hydrate` fills it:
+
+```ts
+const content = new StaticContentSource();               // CLIENT_CATALOG — no email
+const messages = new MessageStore(content, MessageStore.EMPTY);
+```
+
+**A store is constructed per request, never at module scope.** Same reason
+`createQueryClient` is a factory ([21](21-query-package.md)): a module-scope store built during
+one request would serve that user's locale to the next one.
+
+### Why there is no second fetch
+
+`dehydrate()` runs after every matched route's loader has resolved, so the snapshot it returns
+is already the union of the shell plus every namespace on the entry path. TanStack Start
+serialises that into the SSR payload alongside the dehydrated `QueryClient`, and `hydrate` runs
+before the first client render. **The first client render sees a complete `Translator` — no
+fetch, no waterfall, no flash of English.**
+
+That is the same property `SessionProvider` gets from the `CapabilitySetDto` in Step 24.11, by
+the same mechanism, for the same reason. Three things ride the SSR payload — the session DTO,
+the capability set, and the message snapshot — and they are three instances of one pattern:
+**resolve on the server, serialise, render correct on the first byte.**
+
+> [!NOTE]
+> **Check `dehydrate`/`hydrate` against your pinned Start version.** The *contract* is stable —
+> a JSON object produced after matching, embedded in the payload, handed back before first
+> render — but the API surface moves. If it has, the fallback is a
+> `<script type="application/json">` in `__root.tsx` read by id at hydration; escape `<` in the
+> serialised string. Note the snapshot's *content* is never user input: the only
+> user-influenced value is the locale, and `Locales.is()` narrows it to a two-member union
+> before it can index a catalog.
+
+### Client-side navigation
+
+`ensure()` is the loader, and `defaultPreload: "intent"` makes TanStack Router run loaders on
+hover — alongside prefetching the route's own JavaScript chunk. So a namespace chunk downloads
+at the same moment the route chunk does, on the same trigger, and by click time both are warm.
+There is nothing else to build.
+
+**`defaultPreload: "intent"` is load-bearing here, not a nicety.** Without it, the first
+navigation into a namespace nobody has needed yet resolves its dynamic import *during* the
+loader — a visible pause on a route that would otherwise have been instant.
+
+| Where the copy comes from | When |
+|---|---|
+| Inlined in the HTML payload | shell + the entry route's namespaces, at first paint |
+| A prefetched JavaScript chunk | any namespace first needed by a client-side navigation |
+| Nowhere | `email` — it never leaves the server ([05](05-lint-and-format.md) Step 5.3) |
+
+---
+
+## Step 24.11 — The root route
 
 `__root.tsx` is where everything composes. In order:
 
-1. Import `@loadbearing/ui/token.css` and `@loadbearing/ui/theme.css`.
-2. An inline script in `<head>` applying the stored theme **before** hydration, or dark-mode users get a white flash on every load.
-3. `ApiClientProvider` with the environment-appropriate client.
-4. `QueryClientProvider` with the per-request or singleton `QueryClient`.
-5. `MessageProvider` with a translator built server-side from the request locale.
-6. `SessionProvider` with the user and the `CapabilitySetDto` resolved during SSR.
+1. `<html lang={locale}>` from the negotiated locale. Screen readers switch voice on it, and browsers pick hyphenation and quote rules from it.
+2. Import `@loadbearing/ui/token.css` and `@loadbearing/ui/theme.css`.
+3. An inline script in `<head>` applying the stored theme **before** hydration, or dark-mode users get a white flash on every load.
+4. `ApiClientProvider` with the environment-appropriate client.
+5. `QueryClientProvider` with the per-request or singleton `QueryClient`.
+6. `MessageProvider` with the per-request `MessageStore` from the router context — not a bare `Translator`, because client-side navigation adds namespaces after the provider has mounted.
+7. `SessionProvider` with the user and the `CapabilitySetDto` resolved during SSR.
 
 That last one matters: resolving capabilities on the server and serialising the DTO means the first rendered HTML already has correct permission gating. Fetching them client-side means every gated element flashes.
 
 ---
 
-## Step 24.11 — Prove the wiring
+## Step 24.12 — Prove the wiring
 
 Add to the root route component, temporarily:
 
 ```tsx
-import { CorePackage } from "@loadbearing/core";
-// render {CorePackage.id} somewhere visible
+import { SystemClock } from "@loadbearing/core";
+// render {new SystemClock().now().toISOString()} somewhere visible
 ```
 
 ```bash
 pnpm dev:web
 ```
 
-**That string travelling from a workspace package into the browser proves the entire chain**: workspace link → tsup build → export condition → Vite resolution → SSR → hydration. If it renders, everything below it is wired. Delete the placeholder afterwards.
+**That value travelling from a workspace package into the browser proves the entire chain**: workspace link → tsup build → export condition → Vite resolution → SSR → hydration. If it renders, everything below it is wired. Delete the temporary render afterwards.
 
 ---
 

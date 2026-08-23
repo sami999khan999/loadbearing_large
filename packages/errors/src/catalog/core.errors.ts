@@ -10,4 +10,6 @@ export const coreErrors = {
   RATE_LIMITED: { retryable: true, severity: "expected" },
   UNAVAILABLE: { retryable: true, severity: "unexpected" },
   INTERNAL: { retryable: false, severity: "unexpected" },
+  // A server-only module reached a client bundle. A build defect, never a request.
+  SERVER_ONLY: { retryable: false, severity: "unexpected" },
 } as const satisfies Record<string, ErrorMeta>;

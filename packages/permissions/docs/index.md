@@ -26,25 +26,32 @@ algorithm, and it loads anywhere.
 packages/permissions/
 ├── vitest.config.ts
 ├── src/
-│   ├── index.ts                 ← barrel
-│   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
-│   ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
-│   ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
-│   ├── catalog/                 ← one fragment per slice, team-owned
-│   │   ├── index.ts             ←   merges fragments (platform-owned)
+│   ├── index.ts                     ← the public barrel; names only folder barrels
+│   ├── registry/                    ← no import.ts: this package takes nothing from outside
+│   │   ├── index.ts
+│   │   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+│   │   └── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+│   ├── capability/
+│   │   ├── index.ts
+│   │   └── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+│   ├── catalog/                     ← one fragment per slice, team-owned
+│   │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   │   └── rbac.permissions.ts
-│   ├── gate/                    ← same pattern for nav gates
+│   ├── gate/                        ← same pattern for nav gates
 │   │   ├── index.ts
 │   │   └── rbac.gate.ts
-│   └── route/                   ← same pattern for destinations
-│       ├── index.ts             → ROUTES, AppRoute, RoutePath
-│       ├── shell.routes.ts      ←   platform-owned: home, sign-in, forbidden
+│   └── route/                       ← same pattern for destinations
+│       ├── index.ts                 → ROUTES, AppRoute, RoutePath
+│       ├── shell.routes.ts          ←   platform-owned: home, sign-in, forbidden
 │       └── rbac.routes.ts
 └── tests/
-    ├── permission-registry.spec.ts
-    ├── module-registry.spec.ts
-    ├── capability-set.spec.ts
-    └── route.spec.ts
+    ├── registry/
+    │   ├── permission-registry.spec.ts
+    │   └── module-registry.spec.ts
+    ├── capability/
+    │   └── capability-set.spec.ts
+    └── route/
+        └── route.spec.ts
 ```
 
 ---

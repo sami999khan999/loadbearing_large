@@ -28,5 +28,8 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@loadbearing/errors": "workspace:*"
   }
 }

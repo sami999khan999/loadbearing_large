@@ -91,7 +91,7 @@ import {
   PrincipalBuilder,
   type AuthInstance,
 } from "@loadbearing/auth";
-import { ContentSource, StaticContentSource } from "@loadbearing/content";
+import { ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
 import {
   Database,
   PgActivityLogger,
@@ -156,7 +156,7 @@ export class Container {
     this.vectors = new PgVectorStore(this.database);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
-    this.content = new StaticContentSource();
+    this.content = new StaticContentSource(SERVER_CATALOG);
 
     this.auth = AuthFactory.create(config.auth, this.database, this.cache);
     this.sessions = new BetterAuthSessionResolver(this.auth);

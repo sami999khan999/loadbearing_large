@@ -17,18 +17,35 @@ Every feature slice in this package has the same four files, and each answers a 
 | `<subject>.contract.ts` | `TaskContract` | What shape is this data? (Zod schemas, static readonly members) |
 | `<subject>.entity.ts` | `TaskEntity` | What does this data know about itself? (behaviour, no I/O) |
 | `<subject>.procedures.ts` | `TaskProcedures` | What operations exist, at what path? (oRPC contract) |
-| `<subject>.permissions.ts` | — | Which permission gates each procedure path? (fragment — lives in `permission/`, not the subject folder) |
+| `<subject>.permissions.ts` | — | Which permission gates each procedure path? (fragment — lives in `catalog/`, not the subject folder) |
+
+`src/` holds `index.ts`, `import.ts`, and folders ([Opinions · Folders](../opinions/folders.md)), so
+the two merge points live in folders named after their role. The shape is `permissions`' shape, one
+concept at a time:
+
+| `@loadbearing/permissions` | `@loadbearing/contracts` |
+|---|---|
+| `catalog/` → `CATALOG` | `catalog/` → `PROCEDURE_PERMISSIONS` |
+| `registry/` → `PermissionRegistry` | `registry/` → `ProcedurePermissions` |
+| `route/` → `ROUTES` | `procedure/` → `contract` |
 
 ```
 packages/contracts/src/
 ├── index.ts
-├── contract-router.ts         → contract, AppContract     (merges fragments)
-├── procedure-permissions.ts   → ProcedurePermissions      (merges fragments)
+├── import.ts                        ← zod, @orpc/contract, @loadbearing/permissions
 ├── primitive/
 │   ├── index.ts
-│   ├── identifiers.ts         → Identifiers, GoalId, TaskId, UserId, …
-│   ├── envelope.ts            → Envelope
-│   └── pagination.ts          → Pagination
+│   ├── identifiers.ts               → Identifiers, GoalId, TaskId, UserId, …
+│   ├── envelope.ts                  → Envelope
+│   └── pagination.ts                → Pagination
+├── procedure/
+│   └── index.ts                     → contract, AppContract   ← merges every slice's procedures
+├── catalog/
+│   ├── index.ts                     → PROCEDURE_PERMISSIONS   ← merges every slice's fragment
+│   └── <subject>.permissions.ts     ←   procedure path → PermissionKey
+├── registry/
+│   ├── index.ts
+│   └── procedure-permissions.ts     → ProcedurePermissions
 └── <subject>/
     ├── index.ts
     ├── <subject>.contract.ts
@@ -39,20 +56,42 @@ packages/contracts/src/
 Specs sit in `packages/contracts/tests/`, mirroring the tree above — so `src/<subject>/<subject>.entity.ts`
 is covered by `tests/<subject>/<subject>.entity.spec.ts`. See [07](07-core-package.md#step-76--a-first-test).
 
-```
-packages/contracts/src/permission/
-├── index.ts
-└── <subject>.permissions.ts   ← procedure path → PermissionKey
-```
+> [!NOTE]
+> **`procedure/` is a new name in the folder vocabulary**, added deliberately rather than reusing
+> `router/`. `apps/web/src/server/orpc/` holds the routers that *implement* this contract, and one
+> word meaning both would be the exact collision
+> [Opinions · Folders](../opinions/folders.md) exists to prevent.
 
 ---
 
 ## Step 10.1 — Branded identifiers
 
+First, the outside surface. Every external import this package takes is written once here
+([Opinions · Imports](../opinions/imports.md)):
+
+**`packages/contracts/src/import.ts`**
+
+```ts
+// Everything this package takes from outside itself, in one place. No relative
+// re-exports live here — that is what keeps it cycle-free.
+
+// ── @loadbearing/permissions ─────────────────────────────────────────────────
+export type { PermissionKey } from "@loadbearing/permissions";
+
+// ── @orpc/contract ───────────────────────────────────────────────────────────
+export type { AnyContractRouter } from "@orpc/contract";
+
+// ── zod ──────────────────────────────────────────────────────────────────────
+export { z } from "zod";
+```
+
+`@loadbearing/core` and `@loadbearing/errors` are declared in `package.json` and are not here yet:
+nothing imports them until the first slice adds an entity that takes a `Clock`.
+
 **`packages/contracts/src/primitive/identifiers.ts`**
 
 ```ts
-import { z } from "zod";
+import { z } from "../import.js";
 
 export class Identifiers {
   private constructor() {}
@@ -82,12 +121,12 @@ The cost: constructing a branded value requires parsing. `Identifiers.taskId.par
 **`packages/contracts/src/primitive/envelope.ts`**
 
 ```ts
-import { z } from "zod";
+import { z } from "../import.js";
 
 export class Envelope {
   private constructor() {}
 
-  public static paginated<T extends z.ZodTypeAny>(item: T) {
+  public static paginated<T extends z.ZodType>(item: T) {
     return z.object({
       items: z.array(item),
       total: z.number().int().nonnegative(),
@@ -105,7 +144,7 @@ export class Envelope {
 **`packages/contracts/src/primitive/pagination.ts`**
 
 ```ts
-import { z } from "zod";
+import { z } from "../import.js";
 
 export class Pagination {
   private constructor() {}
@@ -132,9 +171,8 @@ Contract classes are **static readonly Zod schemas on a class**. This is the dat
 **`packages/contracts/src/task/task.contract.ts`** — illustrative; the starter kit ships no feature slices.
 
 ```ts
-import { z } from "zod";
-import { Identifiers } from "../primitive/identifiers.js";
-import { Pagination } from "../primitive/pagination.js";
+import { z } from "../import.js";
+import { Identifiers, Pagination } from "../primitive/index.js";
 
 export class TaskContract {
   private constructor() {}
@@ -207,9 +245,10 @@ export type TaskStatus = z.infer<typeof TaskContract.status>;
 **`packages/contracts/src/task/task.entity.ts`**
 
 ```ts
-import type { Clock } from "@loadbearing/core";
-import type { CapabilitySet } from "@loadbearing/permissions";
-import type { GoalId, TaskId, UserId } from "../primitive/identifiers.js";
+// `Clock` and `CapabilitySet` join `src/import.ts` when this file lands — the first
+// slice is what makes those two dependencies real.
+import type { CapabilitySet, Clock } from "../import.js";
+import type { GoalId, TaskId, UserId } from "../primitive/index.js";
 import { TaskContract, type TaskDto, type TaskStatus } from "./task.contract.js";
 
 export class TaskEntity {
@@ -271,8 +310,8 @@ export class TaskEntity {
 **`packages/contracts/src/task/task.procedures.ts`**
 
 ```ts
-import { oc } from "@orpc/contract";
-import { Envelope } from "../primitive/envelope.js";
+import { oc } from "../import.js";
+import { Envelope } from "../primitive/index.js";
 import { TaskContract } from "./task.contract.js";
 
 export class TaskProcedures {
@@ -295,10 +334,23 @@ export class TaskProcedures {
 }
 ```
 
-**`packages/contracts/src/contract-router.ts`**
+**`packages/contracts/src/procedure/index.ts`** — the merge point. What ships is the empty one:
 
 ```ts
-import { TaskProcedures } from "./task/task.procedures.js";
+import type { AnyContractRouter } from "../import.js";
+
+// The merge point for every slice's `<subject>.procedures.ts`. Add each slice here —
+// `task: TaskProcedures.all`. `satisfies` is what makes a fragment that is not an
+// oRPC contract fail on this line rather than downstream in `apps/web`.
+export const contract = {} as const satisfies AnyContractRouter;
+
+export type AppContract = typeof contract;
+```
+
+With the illustrative task slice added, it reads:
+
+```ts
+import { TaskProcedures } from "../task/index.js";
 
 export const contract = {
   task: {
@@ -306,9 +358,7 @@ export const contract = {
     create: TaskProcedures.create,
     reactivate: TaskProcedures.reactivate,
   },
-};
-
-export type AppContract = typeof contract;
+} as const satisfies AnyContractRouter;
 ```
 
 **Write `.route({ method, path })` on every procedure, from the first one.** It costs one line now and buys three things: OpenAPI generation for external integrations, REST-shaped URLs so a partner can call your API without an oRPC client, and the path metadata `@orpc/nest` requires if you ever implement the same contract in a NestJS controller. Retrofitting it across two dozen feature modules is tedious in a way that "we'll add it later" always underestimates.
@@ -319,13 +369,13 @@ The router object is the one place a plain `export const` appears in this packag
 
 ## Step 10.6 — `ProcedurePermissions`
 
-**`packages/contracts/src/permission/task.permissions.ts`** — the slice's fragment.
+**`packages/contracts/src/catalog/task.permissions.ts`** — the slice's fragment.
 
 > [!NOTE]
-> This one file lives in `permission/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition, and the coverage test walks this folder specifically. See [29](29-naming-and-boundaries.md) §2.6.
+> This one file lives in `catalog/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition. `catalog/` is the same name `@loadbearing/permissions` and `@loadbearing/errors` give the same pattern: team-owned fragments plus a platform-owned index that merges them.
 
 ```ts
-import type { PermissionKey } from "@loadbearing/permissions";
+import type { PermissionKey } from "../import.js";
 
 export const taskProcedurePermissions = {
   "task.list": "task.read",
@@ -334,48 +384,65 @@ export const taskProcedurePermissions = {
 } as const satisfies Record<string, PermissionKey>;
 ```
 
-**`packages/contracts/src/procedure-permissions.ts`**
+**`packages/contracts/src/catalog/index.ts`** — the merge. What ships is the empty one:
 
 ```ts
-import type { PermissionKey } from "@loadbearing/permissions";
-import { taskProcedurePermissions } from "./permission/task.permissions.js";
+import type { PermissionKey } from "../import.js";
 
-/**
- * Every procedure path must appear here. The oRPC base middleware fails closed
- * on any path that does not — so forgetting an entry denies the call rather
- * than silently allowing it.
- */
+// Merged from team-owned fragments, one `<subject>.permissions.ts` per slice. Add
+// them here — `...taskProcedurePermissions`. Fragmented for the same reason the
+// permission catalog is: one team, one file, no merge conflicts in a shared list.
+//
+// Not re-exported from the package barrel. It is an input to `ProcedurePermissions`
+// and to the coverage test, and nothing outside this package may read it.
+export const PROCEDURE_PERMISSIONS: Readonly<Record<string, PermissionKey>> = {};
+```
+
+**`packages/contracts/src/registry/procedure-permissions.ts`**
+
+```ts
+import { PROCEDURE_PERMISSIONS } from "../catalog/index.js";
+import type { PermissionKey } from "../import.js";
+
+const PATHS: readonly string[] = Object.freeze(Object.keys(PROCEDURE_PERMISSIONS));
+
+// Every procedure path must appear in the catalog. The oRPC base middleware fails
+// closed on any path that does not, so a forgotten entry denies the call.
 export class ProcedurePermissions {
-  private static readonly MAP: Readonly<Record<string, PermissionKey>> = {
-    ...taskProcedurePermissions,
-  };
-
   private constructor() {}
 
+  // `Object.hasOwn`, not a bare index — `PROCEDURE_PERMISSIONS["toString"]` resolves
+  // up the prototype chain to a function, which would gate a procedure on garbage.
   public static required(path: string): PermissionKey | undefined {
-    return ProcedurePermissions.MAP[path];
+    return Object.hasOwn(PROCEDURE_PERMISSIONS, path) ? PROCEDURE_PERMISSIONS[path] : undefined;
   }
 
   public static paths(): readonly string[] {
-    return Object.keys(ProcedurePermissions.MAP);
+    return PATHS;
   }
 }
 ```
 
-Fragment it the same way as the permission catalog. Each slice declares its own map next to its procedures; this file merges them. Otherwise every team edits one file on every feature and it becomes the busiest merge conflict in the repository.
+Fragment it the same way as the permission catalog. Each slice declares its own map next to its procedures; `catalog/index.ts` merges them. Otherwise every team edits one file on every feature and it becomes the busiest merge conflict in the repository.
+
+> [!WARNING]
+> **`Object.hasOwn`, not `PROCEDURE_PERMISSIONS[path]`.** `path` arrives from the wire, and a bare index resolves up the prototype chain: `required("toString")` returns `Object.prototype.toString`, which is not `undefined`, so the middleware treats the procedure as gated and hands a function to the capability check. `noUncheckedIndexedAccess` does not catch it — the declared type says the index yields `PermissionKey | undefined` and is simply wrong about the runtime. Same reasoning as `PermissionRegistry.isKnown` ([08](08-permissions-package.md)) and `AppError.isKnownCode` ([09](09-errors-package.md)).
 
 ### The coverage test
 
-**`packages/contracts/tests/procedure-permissions.spec.ts`**
+**`packages/contracts/tests/registry/procedure-permissions.spec.ts`**
 
 ```ts
+import { isContractProcedure, oc } from "@orpc/contract";
 import { describe, expect, it } from "vitest";
-import { contract } from "../src/contract-router.js";
-import { ProcedurePermissions } from "../src/procedure-permissions.js";
+import { z } from "zod";
+import { contract } from "../../src/procedure/index.js";
+import { ProcedurePermissions } from "../../src/registry/procedure-permissions.js";
 
+// Flattens a contract router to the dotted paths a procedure is reachable at.
 class ContractWalker {
   public static paths(node: unknown, prefix: readonly string[] = []): string[] {
-    if (node && typeof node === "object" && "~orpc" in node) return [prefix.join(".")];
+    if (isContractProcedure(node)) return [prefix.join(".")];
     if (!node || typeof node !== "object") return [];
     return Object.entries(node).flatMap(([key, child]) =>
       ContractWalker.paths(child, [...prefix, key]),
@@ -383,33 +450,69 @@ class ContractWalker {
   }
 }
 
+// A stand-in for the first real slice. The kit ships none, so without this the two
+// coverage tests below would pass over an empty contract and prove nothing about
+// the walker that enforces them.
+const fixture = {
+  task: {
+    list: oc.route({ method: "GET", path: "/goals/{goalId}/tasks" })
+      .input(z.object({ goalId: z.uuid() }))
+      .output(z.object({ items: z.array(z.string()) })),
+    reactivate: oc.route({ method: "POST", path: "/tasks/{taskId}/reactivate" })
+      .input(z.object({ taskId: z.uuid() }))
+      .output(z.object({ ok: z.literal(true) })),
+  },
+};
+
+describe("ContractWalker", () => {
+  it("finds every procedure, at its dotted path", () => {
+    expect(ContractWalker.paths(fixture).sort()).toEqual(["task.list", "task.reactivate"]);
+  });
+
+  it("recognises an oRPC procedure as a leaf, not as a record to descend into", () => {
+    expect(ContractWalker.paths(fixture.task.list, ["task", "list"])).toEqual(["task.list"]);
+  });
+});
+
 describe("ProcedurePermissions", () => {
-  it("maps every procedure in the contract router", () => {
+  it("gates every procedure the contract router declares", () => {
     const declared = ContractWalker.paths(contract);
-    const missing = declared.filter((p) => ProcedurePermissions.required(p) === undefined);
+    const missing = declared.filter((path) => ProcedurePermissions.required(path) === undefined);
     expect(missing).toEqual([]);
   });
 
   it("has no entries for procedures that no longer exist", () => {
     const declared = new Set(ContractWalker.paths(contract));
-    const orphans = ProcedurePermissions.paths().filter((p) => !declared.has(p));
+    const orphans = ProcedurePermissions.paths().filter((path) => !declared.has(path));
     expect(orphans).toEqual([]);
+  });
+
+  it("answers undefined for an inherited key", () => {
+    expect(ProcedurePermissions.required("toString")).toBeUndefined();
   });
 });
 ```
 
-> Check the marker property oRPC uses on a contract procedure against the version you install — `~orpc` is current but internal. If it changes, the walker is four lines to fix and the test is the reason you notice.
+**Use `isContractProcedure`, not `"~orpc" in node`.** The tilde is oRPC saying the marker is
+internal; `@orpc/contract` exports the same check behind a supported name. The failure mode is
+silent either way and worth naming: if the marker stops matching, a procedure gets walked as a plain
+object and yields its *internal* keys as paths — `missing` comes out empty and the coverage test
+stays green while covering nothing. That is why the spec asserts a procedure is treated as a leaf.
 
-This is a **transport-layer guarantee that no procedure ships ungated**, and the second orphan test is what stops the map growing stale entries that look like coverage. The real authorization check still lives in the use-case; this is defence in depth, not the gate itself.
+**The fixture is not decoration.** The kit ships no slices, so `contract` is `{}` and both coverage
+tests pass over an empty list. Green, proving nothing — including nothing about the walker. Building
+a fixture with `oc` is what makes the test fail on the day the first real slice lands with a missing
+gate.
+
+This is a **transport-layer guarantee that no procedure ships ungated**, and the orphan test is what stops the map growing stale entries that look like coverage. The real authorization check still lives in the use-case; this is defence in depth, not the gate itself.
 
 ---
 
 ## Step 10.7 — The barrel
 
-**`packages/contracts/src/index.ts`**
+**`packages/contracts/src/index.ts`** — what ships:
 
 ```ts
-export { type AppContract, contract } from "./contract-router.js";
 export {
   type ApiKeyId,
   Envelope,
@@ -421,7 +524,13 @@ export {
   type TaskId,
   type UserId,
 } from "./primitive/index.js";
-export { ProcedurePermissions } from "./procedure-permissions.js";
+export { type AppContract, contract } from "./procedure/index.js";
+export { ProcedurePermissions } from "./registry/index.js";
+```
+
+A subject folder adds one more statement:
+
+```ts
 export {
   type CreateTaskInput,
   type ReactivateTaskInput,
@@ -433,9 +542,22 @@ export {
 } from "./task/index.js";
 ```
 
-**The `permission/` folder is not re-exported.** Its fragments are inputs to `ProcedurePermissions`, and the coverage test walks the folder directly. Under `export *` the distinction would have been impossible to express; here it is one line you did not write.
+**`catalog/` is not re-exported.** Its fragments are inputs to `ProcedurePermissions`, and the coverage test reaches `contract` and the class rather than the raw map. That is the private layer a named barrel gives you and `export *` cannot ([Opinions · Imports](../opinions/imports.md)).
 
-Adding a subject means three edits, not two: `contract-router.ts`, `procedure-permissions.ts`, and this barrel. The third is the one that makes the new surface show up in review.
+Adding a subject means three edits, not two: `procedure/index.ts`, `catalog/index.ts`, and this barrel. The third is the one that makes the new surface show up in review.
+
+---
+
+## What ships, and what is illustrative
+
+**`primitive/` is real.** `procedure/index.ts` and `catalog/index.ts` are **empty merge points**, and
+that is the deliverable — `contract` is `{}` and `PROCEDURE_PERMISSIONS` is `{}` until a product adds
+a slice. The kit ships the seam, not a sample task tracker.
+
+Every `task.*` sample above is illustrative and cannot be pasted in as-is: `@loadbearing/permissions`
+declares no `task.read` or `task.reactivate` key, so `satisfies Record<string, PermissionKey>` in the
+fragment would fail to compile. A slice means adding the permission keys in
+[08](08-permissions-package.md) first — which is the dependency direction working correctly.
 
 ---
 
@@ -446,9 +568,15 @@ pnpm --filter @loadbearing/contracts build
 pnpm --filter @loadbearing/contracts test
 ```
 
-- The build succeeds and `dist/index.d.ts` exists.
-- Adding a required field to `TaskContract.entity` breaks the typecheck of every consumer.
-- The `ProcedurePermissions` coverage test passes.
+- The build succeeds and `dist/index.d.ts` exists, exporting `Identifiers`, `Envelope`,
+  `Pagination`, `contract`, and `ProcedurePermissions` — and **not** `PROCEDURE_PERMISSIONS`.
+- `pnpm exec biome check packages/contracts` and `pnpm exec eslint packages/contracts` are clean.
+- The `ContractWalker` fixture tests pass — that is what proves the coverage test can fail.
+- `ProcedurePermissions.required("toString")` is `undefined`.
+- `Identifiers.taskId.parse(uuid)` and `Identifiers.goalId.parse(uuid)` are `===` at runtime, and
+  assigning one to the other is a compile error.
+- `src/` contains `index.ts`, `import.ts`, and folders — nothing else
+  ([Opinions · Folders](../opinions/folders.md)).
 
 Do not proceed until this passes.
 

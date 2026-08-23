@@ -1,4 +1,4 @@
-import type { ModuleGate } from "../module-registry.js";
+import type { ModuleGate } from "../registry/index.js";
 import { ROUTES } from "../route/index.js";
 
 export const rbacGates = {

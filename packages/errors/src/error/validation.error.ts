@@ -1,9 +1,6 @@
-import { AppError, type FieldViolation } from "../app.error.js";
+import { AppError, type FieldViolation } from "./app.error.js";
 
-/**
- * The minimum of a Zod issue this package needs, declared structurally so
- * `errors` keeps zero dependencies. Anything shaped like this normalises.
- */
+// The minimum of a Zod issue this package needs, declared structurally.
 export interface SchemaIssue {
   readonly path: readonly (string | number)[];
   readonly code: string;
@@ -11,12 +8,8 @@ export interface SchemaIssue {
   readonly maximum?: number | bigint;
 }
 
-/**
- * Zod's default messages are built-in messages, so they are **discarded** rather
- * than forwarded. An issue becomes `{ field, rule, params }` and `content` renders
- * the sentence — which is also why a schema must never carry `{ message: … }`:
- * that would be user-facing text living outside `content`.
- */
+// Zod's default messages are discarded, not forwarded — an issue becomes
+// `{ field, rule, params }` and `content` renders the sentence.
 export class ValidationError extends AppError {
   public constructor(fields: readonly FieldViolation[]) {
     super("BAD_REQUEST", { fieldCount: fields.length }, fields);
@@ -34,10 +27,7 @@ export class ValidationError extends AppError {
     return params ? { field, rule, params } : { field, rule };
   }
 
-  /**
-   * Zod issue codes are an open set and change between majors, so an unrecognised
-   * one becomes `"invalid"` rather than leaking a library token into the envelope.
-   */
+  // Zod codes are an open set, so an unknown one becomes `"invalid"` rather than leaking.
   private static ruleFor(issue: SchemaIssue): string {
     switch (issue.code) {
       case "invalid_type":

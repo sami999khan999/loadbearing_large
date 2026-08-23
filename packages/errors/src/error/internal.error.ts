@@ -1,13 +1,7 @@
-import { AppError } from "../app.error.js";
+import { AppError } from "./app.error.js";
 
-/**
- * What anything unrecognised becomes.
- *
- * The original is kept for the logger and **cannot** reach the envelope: it is
- * defined non-enumerable, so `JSON.stringify` skips it and `toJSON()` never names
- * it. That is what stops a Postgres error string — which happily contains your
- * table names — from travelling to a client.
- */
+// What anything unrecognised becomes. `cause` is non-enumerable, so the original
+// reaches the logger but never the envelope.
 export class InternalError extends AppError {
   public override readonly cause: unknown;
 

@@ -78,15 +78,13 @@ export class RedisConnection {
 
   constructor(private readonly config: RedisConfig) {}
 
-  /** A general-purpose client. Safe to share across cache and session reads. */
+  // A general-purpose client. Safe to share across cache and session reads.
   public client(): Redis {
     return this.create({ keyPrefix: this.config.keyPrefix ?? "ratchet:" });
   }
 
-  /**
-   * BullMQ requires `maxRetriesPerRequest: null` and its own key namespace.
-   * Sharing a prefixed client with the cache corrupts queue keys.
-   */
+  // BullMQ requires `maxRetriesPerRequest: null` and its own key namespace.
+  // Sharing a prefixed client with the cache corrupts queue keys.
   public queueClient(): Redis {
     return this.create({ maxRetriesPerRequest: null, enableReadyCheck: false });
   }
@@ -152,7 +150,7 @@ export class RedisCacheStore extends CacheStore {
     await this.redis.del(key);
   }
 
-  /** SCAN, never KEYS — KEYS blocks the server for the duration of the scan. */
+  // SCAN, never KEYS — KEYS blocks the server for the duration of the scan.
   public override async deletePrefix(prefix: string): Promise<void> {
     const pattern = `${this.redis.options.keyPrefix ?? ""}${prefix}*`;
     let cursor = "0";
@@ -194,7 +192,7 @@ import { Uuid } from "@loadbearing/core";
 export class StorageKey {
   private constructor() {}
 
-  /** `<subject>/<yyyy>/<mm>/<uuid>.<ext>` — date-partitioned, never user input. */
+  // `<subject>/<yyyy>/<mm>/<uuid>.<ext>` — date-partitioned, never user input.
   public static build(subject: string, originalFilename: string, at: Date): string {
     const year = at.getUTCFullYear();
     const month = String(at.getUTCMonth() + 1).padStart(2, "0");
@@ -232,7 +230,7 @@ export interface S3Config {
   readonly bucket: string;
   readonly accessKey: string;
   readonly secretKey: string;
-  /** true for MinIO, false for AWS. */
+  // true for MinIO, false for AWS.
   readonly forcePathStyle: boolean;
 }
 

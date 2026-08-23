@@ -60,16 +60,14 @@ export class Principal {
     public readonly kind: PrincipalKind = "user",
   ) {}
 
-  /** An API key is a principal whose capabilities cannot exceed its issuer's. */
+  // An API key is a principal whose capabilities cannot exceed its issuer's.
   public static apiKey(issuerId: UserId, caps: CapabilitySet): Principal {
     return new Principal(issuerId, caps, "api_key");
   }
 
-  /**
-   * The worker's actor for scheduled work. Given an explicit, narrow capability
-   * set — never a wildcard. A background job that can do anything is a job that
-   * will eventually do something it shouldn't.
-   */
+  // The worker's actor for scheduled work. Given an explicit, narrow capability
+  // set — never a wildcard. A background job that can do anything is a job that
+  // will eventually do something it shouldn't.
   public static system(id: UserId, caps: CapabilitySet): Principal {
     return new Principal(id, caps, "system");
   }
@@ -144,7 +142,7 @@ import { ForbiddenError, NotFoundError } from "@loadbearing/errors";
 
 What stays true here is the discipline, and it is worth restating because this package is where it is easiest to break:
 
-**No `@loadbearing/application` code ever knows a status code.** `ForbiddenError` is a domain concept; `403` is a transport concept. Both now live in the same package, so a lint rule holds the line that a package boundary used to — importing `HTTP_STATUS` from here is an error ([09](09-errors-package.md) Step 9.4). The oRPC interceptor in [24](24-web-app.md) does the mapping; a NestJS exception filter would map the same `code` to `ForbiddenException`.
+**No `@loadbearing/application` code ever knows a status code.** `ForbiddenError` is a domain concept; `403` is a transport concept. Both now live in the same package, so a lint rule holds the line that a package boundary used to — importing `HTTP_STATUS` from here is an error ([09](09-errors-package.md) Step 9.5). The oRPC interceptor in [24](24-web-app.md) does the mapping; a NestJS exception filter would map the same `code` to `ForbiddenException`.
 
 That single rule is most of what keeps the transport swappable, and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
 
@@ -239,7 +237,7 @@ export abstract class CacheStore {
   public abstract get<T>(key: string): Promise<T | null>;
   public abstract set<T>(key: string, value: T, ttlSeconds: number): Promise<void>;
   public abstract delete(key: string): Promise<void>;
-  /** Delete every key under a prefix. Used for invalidating a whole subject. */
+  // Delete every key under a prefix. Used for invalidating a whole subject.
   public abstract deletePrefix(prefix: string): Promise<void>;
 }
 ```
@@ -269,14 +267,14 @@ export abstract class StorageGateway {
   public abstract delete(key: string): Promise<void>;
   public abstract exists(key: string): Promise<boolean>;
 
-  /** A time-limited URL the browser can upload to directly, bypassing the app server. */
+  // A time-limited URL the browser can upload to directly, bypassing the app server.
   public abstract presignUpload(
     key: string,
     contentType: string,
     expiresInSeconds: number,
   ): Promise<string>;
 
-  /** A time-limited URL for reading. Never return a permanent public URL. */
+  // A time-limited URL for reading. Never return a permanent public URL.
   public abstract presignDownload(key: string, expiresInSeconds: number): Promise<string>;
 }
 ```
@@ -294,7 +292,7 @@ export abstract class StorageGateway {
 export interface JobOptions {
   readonly delayMs?: number;
   readonly attempts?: number;
-  /** Deduplication key — a second publish with the same id is a no-op. */
+  // Deduplication key — a second publish with the same id is a no-op.
   readonly jobId?: string;
 }
 
@@ -358,10 +356,8 @@ export abstract class VectorStore {
   public abstract upsert(chunks: readonly DocumentChunk[]): Promise<void>;
   public abstract deleteBySource(sourceId: string): Promise<void>;
 
-  /**
-   * `goalIds` is the caller's permitted scope. It is a required parameter so the
-   * permission filter runs on the input set, before retrieval — not on results.
-   */
+  // `goalIds` is the caller's permitted scope. It is a required parameter so the
+  // permission filter runs on the input set, before retrieval — not on results.
   public abstract search(
     embedding: readonly number[],
     goalIds: readonly string[],
@@ -444,7 +440,7 @@ import type { TaskEntity, TaskId } from "@loadbearing/contracts";
 
 export abstract class TaskRepository {
   public abstract findById(id: TaskId): Promise<TaskEntity | null>;
-  /** Throws NotFoundError. Use when the caller has no meaningful "absent" branch. */
+  // Throws NotFoundError. Use when the caller has no meaningful "absent" branch.
   public abstract findByIdOrFail(id: TaskId): Promise<TaskEntity>;
   public abstract save(task: TaskEntity): Promise<void>;
 }

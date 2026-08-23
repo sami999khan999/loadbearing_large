@@ -110,7 +110,9 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
  8. packages/api-client/src/lead/                          transport methods, if not generic
     packages/query/src/lead/                               LeadQueries, LeadMutations, keys
 
- 9. packages/content/src/message/en/lead.ts                labels, empty states, validation copy
+ 9. packages/content/src/message/namespace.ts              register "lead" in NamespaceShape + ClientNamespace
+    packages/content/src/message/catalog.ts                one loader per locale — total, so a missing cell will not compile
+    packages/content/src/message/en/lead.ts                labels, empty states, validation copy
 10. packages/feature/src/lead/                             LeadPipelineBoard
 
 11. apps/web/src/server/orpc/lead.router.ts                three lines per procedure
@@ -123,7 +125,14 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
 
 **The order is not arbitrary.** Each step compiles against the one before it. Write the permission first, the error codes second and the contract third, and by the time you reach the React component the permission key autocompletes, the error code autocompletes, and a typo in either is a compile error.
 
-**Step 2 is usually empty**, and that is the point. Most slices fail in the ways every slice fails — forbidden, not found, conflict — and reuse the shared codes. Reach for a slice-specific code only when a caller would genuinely branch on it differently, and remember that a new code cannot ship without copy: `Record<ErrorCode, MessageKey>` in `content` will not compile until it has a sentence ([09](09-errors-package.md), [20](20-content-package.md)).
+**Step 9's three lines are ordered for the same reason.** Registering the namespace has to
+precede the component that calls `useMessages("lead")`, because that hook's key type is derived
+from `NamespaceShape` — write the component first and the namespace argument itself will not
+typecheck. The route's `staticData.messages` and its loader's `ensure(["lead"])` land in step 12
+([24](24-web-app.md) Step 24.10); a component whose route forgot them renders raw keys rather
+than throwing, which is what makes the omission visible in review instead of at 3am.
+
+**Step 2 is usually empty**, and that is the point. Most slices fail in the ways every slice fails — forbidden, not found, conflict — and reuse the shared codes. Reach for a slice-specific code only when a caller would genuinely branch on it differently, and remember that a new code cannot ship without copy: `Record<ErrorCode, ShellMessageKey>` in `content` will not compile until it has a sentence ([09](09-errors-package.md), [20](20-content-package.md)).
 
 **If a feature needs a step outside this list, stop and look again.** It almost always means logic landed in the wrong layer — business rules in a router, a permission decision in middleware, a Drizzle query in a use-case. The checklist is a diagnostic as much as a recipe.
 

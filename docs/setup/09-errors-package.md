@@ -41,7 +41,8 @@ packages/errors/
 │   │   ├── not-found.error.ts    → NotFoundError
 │   │   ├── conflict.error.ts     → ConflictError
 │   │   ├── validation.error.ts   → ValidationError
-│   │   └── internal.error.ts     → InternalError
+│   │   ├── internal.error.ts     → InternalError
+│   │   └── server-only.error.ts  → ServerOnlyError   ← thrown by core, at module load
 │   └── transport/
 │       └── http.ts               → HTTP_STATUS   ← adapters only, never the domain
 └── tests/
@@ -66,7 +67,7 @@ This is the strongest available form of "no built-in error messages", because th
 - **The server never sends prose.** It sends `{ code, context }` and the client renders in *its* locale. No server-side locale negotiation for API errors, and a desktop app running in a different language than the server is correct for free.
 - **Error grouping in a reporter keys on the code**, not on an interpolated string that fragments into a thousand distinct "issues".
 
-**There is exactly one exception, and it predates this step.** `ServerOnly.assert` in `core` throws a bare `Error` with a long English sentence, and should keep doing so — it fires at module load for a developer reading a console, the sentence is the entire payload, and it never crosses a wire. The reasoning is set out at the point it happens, in [07](07-core-package.md#this-is-the-one-error-in-the-repository-allowed-to-carry-a-message). Nothing from 09 onward gets that latitude.
+**There is no exception, including the one that used to be here.** `ServerOnly.assert` in `core` ([07](07-core-package.md#step-74--serveronly)) is the hardest case in the repository — it fires at module load, for a developer reading a console, and never crosses a wire — and it still throws a code. [Step 9.3](#step-93--serveronlyerror-and-the-exception-that-is-not-one) is where that gets wired, and it is the reason `core` declares this package.
 
 > [!WARNING]
 > The temptation is to add "just a short developer message" to the base class. Don't. The moment a message field exists, something renders it — a toast, a log line someone screenshots into a ticket, a `<pre>` in an error boundary — and now user-facing text lives outside `content` and outside translation. Structured `context` covers every legitimate use.
@@ -92,6 +93,8 @@ export const coreErrors = {
   RATE_LIMITED: { retryable: true, severity: "expected" },
   UNAVAILABLE: { retryable: true, severity: "unexpected" },
   INTERNAL: { retryable: false, severity: "unexpected" },
+  // A server-only module reached a client bundle. A build defect, never a request.
+  SERVER_ONLY: { retryable: false, severity: "unexpected" },
 } as const satisfies Record<string, ErrorMeta>;
 ```
 
@@ -103,9 +106,9 @@ import { coreErrors } from "./core.errors.js";
 export type ErrorSeverity = "expected" | "unexpected";
 
 export interface ErrorMeta {
-  /** Whether retrying the same call could produce a different answer. */
+  // Whether retrying the same call could produce a different answer.
   readonly retryable: boolean;
-  /** `expected` belongs in a log line; `unexpected` belongs in an alert. */
+  // `expected` belongs in a log line; `unexpected` belongs in an alert.
   readonly severity: ErrorSeverity;
 }
 
@@ -125,16 +128,16 @@ export type ErrorCode = keyof typeof ERROR_CATALOG;
 
 ## Step 9.2 — The envelope
 
-**`packages/errors/src/app.error.ts`**
+**`packages/errors/src/error/app.error.ts`**
 
 ```ts
-import { ERROR_CATALOG, type ErrorCode } from "./catalog/index.js";
+import { ERROR_CATALOG, type ErrorCode } from "../catalog/index.js";
 
 export type ErrorContext = Readonly<Record<string, string | number | boolean>>;
 
 export interface FieldViolation {
   readonly field: string;
-  /** A rule name, never a sentence. `content` maps it to a MessageKey. */
+  // A rule name, never a sentence. `content` maps it to a MessageKey.
   readonly rule: string;
   readonly params?: Readonly<Record<string, string | number>>;
 }
@@ -146,11 +149,9 @@ export interface ErrorEnvelope {
   readonly traceId?: string;
 }
 
-/**
- * `captureStackTrace` is a V8 extension, so `lib: ["ES2024"]` does not declare it
- * and the bare call fails with `TS2339` — the same situation as `crypto` in
- * [07](07-core-package.md). Name the one method and reach it off the value.
- */
+// `captureStackTrace` is a V8 extension, so `lib: ["ES2024"]` does not declare it
+// and the bare call fails with `TS2339` — the same situation as `crypto` in
+// [07](07-core-package.md). Name the one method and reach it off the value.
 type StackTraceCapture = {
   captureStackTrace?: (target: object, constructorOpt?: unknown) => void;
 };
@@ -207,13 +208,84 @@ export class ForbiddenError extends AppError {
 
 ---
 
-## Step 9.3 — `ErrorNormalizer`
+## Step 9.3 — `ServerOnlyError`, and the exception that is not one
+
+`ServerOnly.assert` in `core` ([07](07-core-package.md#step-74--serveronly)) is the one throw in this repository with a real argument for carrying prose. It loses, and this is the class that replaces it.
+
+**`packages/errors/src/error/server-only.error.ts`**
+
+```ts
+import { AppError } from "./app.error.js";
+
+// A server-only package was loaded in a client bundle.
+//
+// Thrown by `ServerOnly.assert` in `@loadbearing/core` at module load — the one
+// error in this repository that fires before there is a request, a session, or a
+// locale. It still carries no prose: the sentence a developer needs is
+// `error.serverOnly` in `@loadbearing/content`, and `{package}` in that template
+// is interpolated from this context.
+//
+// The context key is `package`, not `packageName`, because the key *is* the
+// placeholder name in the copy.
+export class ServerOnlyError extends AppError {
+  public constructor(packageName: string) {
+    super("SERVER_ONLY", { package: packageName });
+  }
+}
+```
+
+### Why the hardest case still loses
+
+The sentence that used to be inline was worth keeping:
+
+> `@loadbearing/db` was imported into a client bundle. This is a leak, not a bundle-size problem — it means database or credential code is reachable from the browser.
+
+It is still worth keeping, and it is still exactly that. It lives in `content` as `error.serverOnly` ([20](20-content-package.md#step-201--messages)), `{package}` is interpolated from the context above, and `ERROR_COPY.SERVER_ONLY` points at it — so a console reader, an error boundary and a dev overlay all render the same words, and a developer who reads Bengali can have them in Bengali. Nothing was lost; the string moved to the only place in the repository that owns strings.
+
+What the throw site keeps is what a throw site is good at:
+
+```
+ServerOnlyError: SERVER_ONLY
+    at ServerOnly.assert (…)
+    at packages/db/src/index.ts:2:12
+```
+
+The class names the fault, the frame below names the package. `{ package: "@loadbearing/db" }` is the field a log query filters on, which a sentence is not.
+
+**The reason to refuse the exception is the base class, not this call site.** Grant a `message` field for the honest case and it exists for every other one — and a field that exists gets rendered, by a toast, by a `<pre>` in an error boundary, by a log line someone screenshots into a ticket. "No prose in errors" is enforceable only while it has no exceptions, and the cost of holding it here turned out to be zero.
+
+> [!NOTE]
+> **`SERVER_ONLY` is `severity: "unexpected"` and `retryable: false`.** It is a build defect, so it
+> belongs in an alert rather than a log line, and a second attempt at the same bundle produces the
+> same answer. `HTTP_STATUS` gives it `500` because the record is total over `ErrorCode` — no request
+> can ever reach it, since the module that would serve the request is the one that failed to load.
+
+### This is why `core` depends on `errors`
+
+```bash
+pnpm add --filter @loadbearing/core @loadbearing/errors@workspace:*
+```
+
+One edge, and it is acyclic: `errors` has no dependencies at all, so nothing here can reach back into `core`. `core` also stays isomorphic, which is the property that actually mattered about it being a leaf — `errors` loads in a browser, a worker, and a Tauri webview for the same reasons `core` does.
+
+The two packages are documented in this order because `core`'s primitives are what a reader needs first, not because a layer sits between them. **`pnpm build:packages` reads the graph, not the doc numbers**, and will build `errors` before `core`; if your build log shows the reverse, the dependency is missing from `packages/core/package.json`.
+
+> [!WARNING]
+> An earlier revision of [07](07-core-package.md) declared this the one permitted exception and said
+> not to "fix" it by inverting the two packages. Inverting them was the fix. If you are reading a
+> checked-out copy that still argues for the exception, this step is the newer decision.
+
+---
+
+## Step 9.4 — `ErrorNormalizer`
 
 The "handler" half. Everything thrown anywhere crosses this before it is transported, logged, or rendered.
 
-**`packages/errors/src/error-normalizer.ts`**
+**`packages/errors/src/normalizer/error-normalizer.ts`**
 
 ```ts
+import { AppError, InternalError, type SchemaIssue, ValidationError } from "../error/index.js";
+
 export class ErrorNormalizer {
   private constructor() {}
 
@@ -223,12 +295,10 @@ export class ErrorNormalizer {
     return new InternalError();
   }
 
-  /**
-   * Structural, not `instanceof`. Two copies of this package in one process —
-   * a pnpm hoisting quirk, a bundled dependency, an SSR/client boundary — give
-   * two distinct class identities, and `instanceof` silently answers `false`.
-   * A known `code` plus a callable `toJSON` is the durable check.
-   */
+  // Structural, not `instanceof`. Two copies of this package in one process —
+  // a pnpm hoisting quirk, a bundled dependency, an SSR/client boundary — give
+  // two distinct class identities, and `instanceof` silently answers `false`.
+  // A known `code` plus a callable `toJSON` is the durable check.
   private static isAppError(value: unknown): value is AppError {
     if (typeof value !== "object" || value === null) return false;
     const candidate = value as { code?: unknown; toJSON?: unknown };
@@ -262,7 +332,7 @@ export class ErrorNormalizer {
 
 ---
 
-## Step 9.4 — `HTTP_STATUS` is quarantined
+## Step 9.5 — `HTTP_STATUS` is quarantined
 
 **`packages/errors/src/transport/http.ts`**
 
@@ -277,6 +347,8 @@ export const HTTP_STATUS: Readonly<Record<ErrorCode, number>> = {
   RATE_LIMITED: 429,
   UNAVAILABLE: 503,
   INTERNAL: 500,
+  // Unreachable over HTTP — the guard fires at module load. Total record, so it needs one.
+  SERVER_ONLY: 500,
 };
 ```
 
@@ -303,7 +375,7 @@ Same mechanism, same file, as the ban that stops `content` importing `Permission
 
 ---
 
-## Step 9.5 — Throw or return?
+## Step 9.6 — Throw or return?
 
 Unchanged from [07](07-core-package.md), and worth restating rather than reopening:
 
@@ -314,7 +386,7 @@ Unchanged from [07](07-core-package.md), and worth restating rather than reopeni
 
 ---
 
-## Step 9.6 — Tests
+## Step 9.7 — Tests
 
 `vitest.config.ts` points `include` at `tests/`, and `tsconfig.json` lists `tests/**` alongside `src/**` so `tsc --noEmit` covers the specs ([07](07-core-package.md)).
 
@@ -325,6 +397,7 @@ The five that matter:
 3. **Round-trip.** `AppError.from(err.toJSON()).code === err.code`, and an envelope with an unknown code is rejected rather than trusted.
 4. **`ValidationError` carries rules.** Given a real `ZodError` from a `contracts` schema, the envelope holds `{ field, rule, params }` and **no Zod default message**.
 5. **Coverage.** Every `ErrorCode` has an entry in `HTTP_STATUS`; the compiler enforces it, and a test asserts the catalog and the status map have not diverged in count.
+6. **`ServerOnlyError` names its context key `package`.** That key is the placeholder in `error.serverOnly`, so renaming it here silently turns the rendered sentence back into a literal `{package}` — nothing else would fail. `tests/server-only.error.spec.ts` asserts the key list directly, and `content` asserts the rendered sentence from the other side ([20](20-content-package.md)). The seam is tested from both ends because neither package can see the other's half of it.
 
 ---
 
@@ -334,8 +407,10 @@ The five that matter:
 - `pnpm --filter @loadbearing/errors typecheck` is clean and `test` passes.
 - `pnpm exec biome check packages/errors` and `pnpm exec eslint packages/errors/src` are clean.
 - `pnpm --filter @loadbearing/errors build` emits `dist/index.d.ts`.
-- The package has **no `dependencies`** — only `devDependencies`. Like `permissions`, it is a leaf.
+- The package has **no `dependencies`** — only `devDependencies`. Like `permissions`, it is a leaf. `core` now depends on *it*, which is the direction that keeps this true.
 - `rg "message" packages/errors/src` finds the `message` getter and nothing that assigns prose.
+- `new ServerOnlyError("@loadbearing/db").message === "SERVER_ONLY"`, and `JSON.stringify(…toJSON())` contains none of the words *leak*, *bundle* or *browser*. The sentence is `content`'s job from here on.
+- `pnpm build:packages` builds `errors` **before** `core`. That is the proof the new edge is declared; if the order is reversed, `packages/core/package.json` is missing `@loadbearing/errors`.
 
 Do not proceed until this passes.
 

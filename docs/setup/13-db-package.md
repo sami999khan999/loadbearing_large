@@ -189,7 +189,7 @@ export const goalMembers = pgTable(
   ],
 );
 
-/** Per-user overrides. effect='deny' beats every grant, including the wildcard. */
+// Per-user overrides. effect='deny' beats every grant, including the wildcard.
 export const permissionOverrides = pgTable(
   "permission_overrides",
   {
@@ -371,12 +371,10 @@ interface MutableScoped {
 }
 
 export class PgCapabilityRepository extends BaseRepository implements CapabilityRepository {
-  /**
-   * Org role grants + goal role grants + per-user overrides, with deny winning.
-   * Every raw permission string passes PermissionRegistry.isKnown() before it is
-   * trusted, so a stale row can never grant a capability the registry no longer
-   * defines.
-   */
+  // Org role grants + goal role grants + per-user overrides, with deny winning.
+  // Every raw permission string passes PermissionRegistry.isKnown() before it is
+  // trusted, so a stale row can never grant a capability the registry no longer
+  // defines.
   public async resolveFor(userId: string): Promise<CapabilitySet> {
     const registry = PermissionRegistry.instance;
 
@@ -481,7 +479,7 @@ export class SystemRoleSeed extends BaseRepository {
     { key: "guest", name: "Guest", scope: "org", permissions: [] },
   ];
 
-  /** Idempotent: safe to run on every deploy. */
+  // Idempotent: safe to run on every deploy.
   public async run(): Promise<void> {
     for (const definition of SystemRoleSeed.ROLES) {
       const existing = await this.db

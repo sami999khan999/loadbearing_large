@@ -207,10 +207,30 @@ pnpm --filter @loadbearing/web build
 ```
 
 ```js
+// Absent from the WHOLE client output.
 const FINGERPRINTS = ["drizzle-orm", "pg-pool", "@aws-sdk/client-s3", "ioredis", "bullmq"];
+
+// Absent from the ENTRY chunk. A locale string in a lazily-loaded chunk is correct.
+const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
+
+// Absent from the whole client output, like the server list above.
+const EMAIL_FINGERPRINTS = ["email.digest."];
 ```
 
 **This is the third defence** from [05](05-lint-and-format.md) and the only one that inspects reality. ESLint catches direct imports; `ServerOnly.assert()` catches execution; this catches the case where a transitive re-export drags Drizzle into a component chunk. Grep the client assets only — the SSR bundle contains all of these legitimately.
+
+> [!IMPORTANT]
+> **Two greps, not one, because "absent" means different things.** A server fingerprint must not
+> appear anywhere in the client output. A **locale** fingerprint is different: a Bengali string
+> inside a lazily-loaded chunk is the split working exactly as designed
+> ([20](20-content-package.md)) — it is only a failure in the **entry** chunk, because that is
+> what "not a static import" means in practice. Assert against the entry chunk specifically, and
+> have the script fail if it cannot identify one, for the same reason the note below says to
+> fail on zero asset files.
+>
+> `email.*` goes back in the strict list. No client chunk, eager or lazy, has any business
+> carrying the worker's copy — the ESLint ban in [05](05-lint-and-format.md) Step 5.3 should
+> have stopped it, and this is what catches a transitive path around the ban.
 
 Shipping database driver code to the browser is not just a 400KB regression. It means your connection string's *shape* and your full schema are readable in devtools.
 

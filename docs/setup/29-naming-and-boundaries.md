@@ -1,234 +1,47 @@
-# 29 · Naming and boundaries
+# 29 · Boundaries
 
-> The reference you will consult most often. Every rule for naming a thing, a folder-by-folder account of what each directory is for, and one small feature traced through all of it.
+> A folder-by-folder account of what every directory in the repository is for, and one small feature
+> traced through all of it.
 
-**Delivers:** Nothing new. This is a reference — but it is the one to read before writing your first feature.
-
-Part 1 is naming: what to call a thing. Part 2 walks every folder in the repository and says what belongs in it, what does not, and the sign that something landed in the wrong place. Part 3 traces one small feature through all of it.
+**Delivers:** Nothing new. This is a reference — but it is the one to read before writing your first
+feature.
 
 **Prerequisite:** [28 · Folder structure](28-folder-structure.md)
 
 ---
 
-## The test every rule serves
+## Naming lives in `docs/opinions/`
 
-**Given a feature name and a layer, you should be able to write the file path and the class name without looking anything up.**
+Every rule for *what to call a thing* — files, folders, classes, methods, permissions, database
+objects, comments — moved out of this document into [`docs/opinions/`](../opinions/index.md). That
+split is the same one the repository already makes between `docs/setup/` and a package's `docs/`:
+**the setup sequence is walked once, a reference is consulted continually**, and naming rules are
+the most consulted thing here.
 
-That is the only justification any convention below needs. When a rule stops producing that property, the rule has a gap worth fixing rather than working around.
-
----
-
-# Part 1 — Naming
-
-## 1.1 Files
-
-**Everything is kebab-case, including React component files.** Case-sensitive CI plus case-insensitive macOS produces Git renames that appear to change nothing. Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFileNames` ([04](04-typescript-configs.md)) catches what slips through.
-
-Files carrying a recognised architectural role take a **dot-suffix**: `<subject>.<role>.ts`
-
-| Role suffix | Example file | Exports |
-|---|---|---|
-| `.contract.ts` | `task.contract.ts` | `TaskContract` |
-| `.entity.ts` | `task.entity.ts` | `TaskEntity` |
-| `.procedures.ts` | `task.procedures.ts` | `TaskProcedures` |
-| `.use-case.ts` | `reactivate-task.use-case.ts` | `ReactivateTaskUseCase` |
-| `.repository.ts` | `capability.repository.ts` | `CapabilityRepository` |
-| `.gateway.ts` | `s3-storage.gateway.ts` | `S3StorageGateway` |
-| `.store.ts` | `pg-vector.store.ts` | `PgVectorStore` |
-| `.policy.ts` | `overdue-lock.policy.ts` | `OverdueLockPolicy` |
-| `.strategy.ts` | `bearer-auth.strategy.ts` | `BearerAuthStrategy` |
-| `.router.ts` | `task.router.ts` | `TaskRouter` |
-| `.middleware.ts` | `principal.middleware.ts` | `principalMiddleware` |
-| `.consumer.ts` | `embedding.consumer.ts` | `EmbeddingConsumer` |
-| `.schedule.ts` | `overdue-sweep.schedule.ts` | `OverdueSweepSchedule` |
-| `.error.ts` | `forbidden.error.ts` | `ForbiddenError` |
-| `.schema.ts` | `rbac.schema.ts` | Drizzle tables |
-| `.permissions.ts` | `task.permissions.ts` | a catalog fragment |
-| `.spec.ts` | `reactivate-task.use-case.spec.ts` | tests, in the package's `tests/` |
-
-**Files with no layer role stay plain kebab-case**: `permission-registry.ts`, `capability-set.ts`, `clock.ts`, `container.ts`. This is why `core` and `permissions` read differently from `application` — those classes are not *in* a layer, they are the vocabulary the layers use.
-
-**One class per file, and the filename derives from the class.** Mechanically: strip the role suffix from the class name, kebab-case the remainder, append `.<role>.ts`. `ReactivateTaskUseCase` → `reactivate-task.use-case.ts`.
-
-## 1.2 Folders
-
-**A subject folder is singular, and every file inside is prefixed with the folder's name.** The folder is the subject; the suffix is the role. A path tells you both without opening anything.
-
-```
-packages/contracts/src/task/
-├── index.ts
-├── task.contract.ts
-├── task.entity.ts
-└── task.procedures.ts
-```
-
-**Non-subject folders are the layer noun, also singular**: `port/`, `primitive/`, `vector/`, `seed/`, `consumer/`, `schedule/`. No plurals anywhere — `tasks/` and `task/` coexisting in different packages is exactly the ambiguity this removes.
-
-### The two exemptions
-
-**1. Use-case files lead with the verb.** `reactivate-task.use-case.ts`, not `task-reactivate.use-case.ts`. The class is `ReactivateTaskUseCase`, and mirroring the class outranks folder-prefix symmetry.
-
-**2. Implementation files lead with the technology.** `pg-vector.store.ts`, `redis.cache-store.ts`, `s3-storage.gateway.ts`, `bearer-auth.strategy.ts`. You should be able to see what you would delete when a vendor changes.
-
-### Framework-dictated files win
-
-`$goalId.tsx`, `-guard.ts`, `rpc.$.ts`, `vite.config.ts`, `drizzle.config.ts`, `tsup.config.ts`. Inside `apps/web/src/route/` especially, TanStack's routing conventions are load-bearing — a `-` prefix is what marks a file as *not* a route. Don't fight them.
-
-## 1.3 Barrels and imports
-
-**Every package has exactly one public entrypoint: `src/index.ts`.** It re-exports and contains no logic. The `exports` map points at it and nothing else — no deep subpaths, so no consumer can reach into a package's internals and break when you move a file.
-
-The only permitted extra exports are non-JS side-effect files that physically cannot live in a barrel: `@loadbearing/asset` ships `./font.css` and `./sprite.svg`; `@loadbearing/ui` ships `./token.css` and `./theme.css`. **A package wanting extra JavaScript subpaths is a signal it should be two packages.**
-
-### Barrels name every export. `export *` is banned.
-
-```ts
-// packages/core/src/index.ts
-export { Clock, FixedClock, SystemClock } from "./clock.js";
-export { Err, Ok, type Result, Results } from "./result.js";
-export { ServerOnly } from "./server-only.js";
-export { Uuid } from "./uuid.js";
-```
-
-Not `export * from "./clock.js"`. Enforced by Biome's `performance/noReExportAll`, set to `error` ([05](05-lint-and-format.md)).
-
-Four reasons, in the order they will bite you:
-
-**1. `export *` makes the public API an accident.** With a star, adding `export` to any symbol in any file silently publishes it to every consumer in the repository. The reviewer looking at the diff on `clock.ts` sees a new class; they do not see that the package's public surface just grew. With a named list, widening the API is a second, deliberate edit to `index.ts` — visible in the diff, reviewable on its own terms, and attributable. This is the same reason the `exports` map has no deep subpaths: **the surface is a decision, not a side effect.**
-
-**2. It gives you a private layer.** Rule 3 below has siblings importing each other by direct file path. Under `export *`, every symbol a sibling needs is automatically public. Under a named list, `capability-set.ts` can export a helper that `permission-registry.ts` imports directly while the barrel never mentions it — internal by default, public by choice.
-
-**3. Collisions fail silently.** Two starred files exporting the same name do not error. ESM resolves the ambiguity by excluding the name from the namespace entirely, so the export simply vanishes and the failure surfaces downstream as an import that resolves to `undefined`. A named list produces a duplicate-identifier error at the barrel, on the line that caused it.
-
-**4. `verbatimModuleSyntax` needs the distinction.** Named re-exports carry the inline `type` modifier — `export { Err, Ok, type Result, Results }` — so type-only symbols stay erased at compile time. A star export cannot say which of its names are types.
-
-**Ordering is not yours to choose.** `biome check --write` sorts the statements by module specifier and the specifiers inside each brace alphabetically, ignoring the `type` keyword. Write them in any order and let the formatter settle it.
-
-**One exemption: `packages/db/src/schema.ts`.** It exists so `drizzle-kit` and `drizzle(pool, { schema })` receive every table, relation, and enum in the package; hand-enumerating them would add no API-surface safety, because the file is not an entrypoint — `index.ts` republishes it as a single namespace. The Biome rule is switched off for that one path and nowhere else. The namespace re-export itself is written as two statements, because `export * as schema from` is a star export too:
-
-```ts
-// packages/db/src/index.ts
-import * as schema from "./schema.js";
-
-export { schema };
-```
-
-**Import rules, in priority order:**
-
-1. **Across packages** — always the package name: `import { TaskEntity } from "@loadbearing/contracts"`.
-2. **Across folders inside a package** — the folder barrel: `import { Identifiers } from "../primitive/index.js"`.
-3. **Within one folder** — the direct file: `import { TaskContract } from "./task.contract.js"`.
-
-**Rule 3 is not stylistic.** Importing a sibling *through* your own folder barrel is the standard way to create a circular import, and the failure mode is a runtime `undefined` at module-init time that looks nothing like an import problem.
-
-> **Don't build a shared `import.ts` hub.** A file re-exporting everything a package imports forces every module to depend on the package's entire external surface: slower HMR, defeated tree-shaking, and cycles that are trivial to create and miserable to trace. If you want the single-surface property, take the type-only version — a `type.ts` re-exporting only `import type` symbols, which is erased at compile time and cannot produce a cycle.
-
-## 1.4 Classes
-
-| Kind | Convention | Example |
-|---|---|---|
-| Abstract seam | Plain role noun — **no `I`, no `Abstract`** | `VectorStore`, `AuthStrategy`, `Clock` |
-| Concrete implementation | **Technology prefix** + the seam name | `PgVectorStore`, `S3StorageGateway`, `SystemClock` |
-| Test double | `Fake` or `Fixed` prefix | `FakeTaskRepository`, `FixedClock` |
-| Use-case | `<Verb><Noun>UseCase` | `ReactivateTaskUseCase` |
-| Repository | `<Aggregate>Repository` | `TaskRepository` |
-| Entity | `<Noun>Entity` | `TaskEntity` |
-| Contract | `<Noun>Contract` | `TaskContract` |
-| Error | `<Reason>Error` | `ForbiddenError` |
-
-The technology-prefix rule is what makes a seam visible at a glance. Seeing `PgVectorStore` in the `Container` and `VectorStore` everywhere else tells you exactly where the Qdrant swap happens ([14](14-vector-store.md)).
-
-**Banned suffixes:** `Manager`, `Helper`, `Util`, `Handler`, and bare `Service`. They describe nothing. If a class fits none of `UseCase`, `Repository`, `Gateway`, `Store`, `Policy`, `Strategy`, `Entity`, `Registry`, it probably wants splitting. `Policy` is the escape valve for a domain rule too broad for one entity.
-
-**Banned filenames:** `utils.ts`, `helpers.ts`, `common.ts`, `misc.ts`. A barrel may re-export; it may never contain logic.
-
-## 1.5 Methods
-
-| Pattern | Rule | Example |
-|---|---|---|
-| Use-case entry | Always `execute` | `execute(principal, input)` |
-| Repository read, nullable | `findBy<X>` | `findById` |
-| Repository read, throwing | `findBy<X>OrFail` | `findByIdOrFail` |
-| Repository write | `save`, `delete` — never `update`/`insert` | `save(entity)` |
-| Existence | `exists<X>` | `existsByEmail` |
-| Mapping | `toDto` / `fromDto` / `toEntity` | `TaskEntity.fromDto(dto)` |
-| Factory | `static from<X>` or `static create` | `CapabilitySet.from(dto)` |
-| Boolean | `is` / `has` / `can` / `should` prefix | `isLockedFromAssignee()` |
-| Assertion (throws) | `assert<X>` | `authorizer.assert(...)` |
-| Predicate (returns) | `can<X>` | `capabilities.can(...)` |
-
-**The `assert` vs `can` split is worth internalising.** `can()` answers a question; `assert()` enforces an outcome. Mixing them produces the exact bug this architecture exists to prevent — a UI check silently becoming the only check.
-
-## 1.6 Permissions, procedures, events, queues
-
-Four vocabularies that look alike and mean different things.
-
-| Kind | Grammar | Example |
-|---|---|---|
-| **Permission key** | `<module>.<subject>.<action>[.<qualifier>]`, action **imperative** | `task.reactivate`, `task.update.self` |
-| **Procedure path** | `<subject>.<action>`, mirrors the permission it requires | `task.reactivate` |
-| **Activity / event name** | `<subject>.<action>`, action **past tense** | `task.reactivated` |
-| **Queue name** | `<domain>.<work>`, noun-ish | `embedding.generate` |
-| **Repeatable job key** | `schedule.<name>` | `schedule.overdue-sweep` |
-
-**Permission actions are imperative because they name a capability you hold; activity names are past tense because they record something that happened.** `task.reactivate` is a right. `task.reactivated` is a fact. Keeping them distinct is what makes an audit log readable.
-
-**The qualifier vocabulary is closed**: `.self`, `.goal`, `.global`, `.org`. Don't invent `.own` or `.mine` alongside `.self`.
-
-**Procedure paths mirror their permission where the mapping is 1:1**, and the `ProcedurePermissions` map stays explicit regardless. An identity-looking map is still the thing that fails closed when someone adds a procedure and forgets the entry ([10](10-contracts-package.md), [24](24-web-app.md)).
-
-**REST paths** on `.route({ path })` are kebab-case, plural resources, braced params matching the contract field name: `/tasks/{taskId}/reactivate`.
-
-## 1.7 Contract members
-
-Every `*Contract` class uses the same static member names, so reading one is reading all of them.
-
-| Member | Holds |
+| Page | Decides |
 |---|---|
-| `entity` | the full resource shape |
-| `create` | creation input |
-| `update` | patch input |
-| `listQuery` | filter / pagination input |
-| `<verb>` | any domain action's input — `reactivate`, `approve` |
+| [Files](../opinions/files.md) | Casing, role suffixes, one class per file, where tests go |
+| [Folders](../opinions/folders.md) | What `src/` looks like, role folders vs subject folders |
+| [Imports and exports](../opinions/imports.md) | `index.ts`, `import.ts`, the three import rules |
+| [Classes and methods](../opinions/classes.md) | Class-name grammar, banned suffixes, method vocabulary |
+| [Vocabulary](../opinions/vocabulary.md) | Permissions, procedures, events, queues, contracts, database |
+| [Comments](../opinions/comments.md) | Line comments only, two lines, where the reasoning goes |
 
-Derived types follow the schema name: `TaskDto` from `entity`, `CreateTaskInput` from `create`. **`Dto` for wire shapes, `Input` for procedure inputs**, never both on one type.
+**The test all of them serve:** given a feature name and a layer, you should be able to write the
+file path, the folder, and the class name without looking anything up.
 
-## 1.8 Database
-
-| Object | Convention | Example |
-|---|---|---|
-| Table | `snake_case`, **plural** | `goal_members` |
-| Column | `snake_case`, singular | `assignee_id` |
-| Foreign key | `<referenced_singular>_id` | `goal_id` |
-| Boolean column | `is_` / `has_` prefix | `is_system` |
-| Timestamp column | `<verb>ed_at` | `reactivated_at` |
-| Unique index | `<table>_<cols>_uq` | `goal_member_uq` |
-| Regular index | `<table>_<cols>_idx` | `goal_member_user_idx` |
-| Enum values | `snake_case` | `in_progress` |
-| Drizzle export | `camelCase` plural, matching the table | `goalMembers` |
-
-**Zod enums mirror the DB enum values exactly** — `in_progress`, never `IN_PROGRESS` or `InProgress`. One string travels from Postgres to a React `<select>` with no mapping layer to drift.
-
-## 1.9 Packages, env, React
-
-- **Packages:** `@loadbearing/<single-lowercase-word>`. Scope by layer, never by feature — no `@loadbearing/task-contracts`.
-- **Env vars:** `SCREAMING_SNAKE_CASE`, prefixed by subsystem: `DATABASE_URL`, `S3_BUCKET`. Client-exposed vars carry the framework's public prefix and nothing else does.
-- **React components:** `PascalCase` export in a kebab-case file — `task-card.tsx` exports `TaskCard`.
-- **Hooks:** `use<Noun>` — `useCapabilities`.
-- **Props type:** `<Component>Props`, same file.
-- **Handler props:** `on<Event>`; the implementations filling them: `handle<Event>`.
-- **Query factories:** `<Subject>Queries` / `<Subject>Mutations` in `@loadbearing/query`, never in `api-client`.
-- **Query keys** mirror the procedure path, params last: `["task", "list", { goalId }]`. Never hand-written at a call site.
+What remains below is *boundaries* — which folder a thing belongs in, and what it is not allowed to
+reach.
 
 ---
 
-# Part 2 — What every folder is for
+# Part 1 — What every folder is for
 
 Walked top to bottom, in the order the tree in [28](28-folder-structure.md) lists them. For each folder: what belongs in it, what does not, and the sign that something landed in the wrong place.
 
 ---
 
-## 2.1 The four root directories
+## 1.1 The four root directories
 
 ### `apps/`
 
@@ -264,7 +77,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.2 Root files
+## 1.2 Root files
 
 - **`pnpm-workspace.yaml`** — three jobs in one file: workspace membership, the dependency version catalog, and every pnpm setting. Under pnpm 11 this is the *only* place settings can go.
 - **`package.json`** — scripts, `devEngines.packageManager`, and devDependencies. It declares the two `tooling/*` configs it imports and no `packages/*` member, ever. A root declaration hoists a package into the root `node_modules` where everything can reach it, which quietly disables the boundary the whole architecture rests on.
@@ -279,13 +92,15 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.3 The shape every package has
+## 1.3 The shape every package has
 
 - **`package.json`** — name, `exports` map, scripts. The `exports` map points at `src/index.ts` and nothing else, which is what stops consumers reaching into internals. It carries the `development` condition so Vite can resolve to source in dev.
 - **`tsconfig.json`** — four lines, extending one of the `tooling/tsconfig` bases.
 - **`tsup.config.ts`** — entry, `dts: true`, ESM only, `target: es2024`.
 - **No lint config.** Both linters run once from the root, keyed on globs. A package's specific bans — `feature` blocking `api-client`, the OOP rules applying only to non-React packages — are `overrides` blocks in `biome.json` and `files` blocks in `eslint.config.js`. Keeping them central means a package cannot opt itself out of a rule that exists to constrain it.
 - **`src/index.ts`** — the public surface. Re-exports only, never logic. Server-only packages call `ServerOnly.assert()` on line two.
+- **`src/import.ts`** — the outside surface. Every workspace-package and npm import the package takes, re-exported to the rest of `src/`. External specifiers only, never a relative one. Absent when the package depends on nothing outside itself.
+- **Those two files are all `src/` holds.** Everything else lives in a folder named after its role — `error/`, `catalog/`, `registry/`, `transport/`, `primitive/` — or, where the contents repeat once per feature slice, after the subject. The vocabulary and the choice between the two are in [Opinions · Folders](../opinions/folders.md).
 - **`docs/`** — reference documentation for the package. Exactly two files at its root: `meta.json` (sidebar title, description, page order) and `index.md` (the overview). **Every other page lives in `docs/reference/`**, which carries its own `meta.json` for the group label and ordering. Plain Markdown with YAML frontmatter, **never MDX**, so it renders on GitHub and can be picked up by a documentation site later without rewriting content. Callouts use GitHub alert syntax. Not in `files`, so it never ships.
 
 **Every subfolder inside `src/` also has an `index.ts`.** That is what lets you move a file within a folder without touching a single import elsewhere.
@@ -294,37 +109,55 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.4 Inside `packages/core`
+## 1.4 Inside `packages/core`
 
-- **`src/`** is flat — no subfolders. Four primitives and their specs. If `core` ever needs a subfolder, it has grown past its job.
-- **Holds** things with no dependencies at all, not even on other `@loadbearing/*` packages: `Clock`, `Result`, `Uuid`, `ServerOnly`.
+- **`primitive/`** — the whole package. `Clock`, `Result`, `Uuid`, `ServerOnly`, and nothing else. If `core` ever needs a *second* folder, it has grown past its job.
+- **Holds** things every package might need that belong to no feature.
+- **Depends on `@loadbearing/errors` and nothing else, ever.** `ServerOnly.assert` throws, and nothing in this repository throws a bare `Error` ([09](09-errors-package.md) Step 9.3). `errors` is the root of the graph, so the edge is acyclic and `core` stays isomorphic.
 - **Never holds** a domain noun. `TaskId` is a `contracts` concern, not a primitive.
-- **Smell:** an import statement in any file here.
+- **Smell:** an import of any workspace package other than `errors`, or of any third-party package at all.
 
 ---
 
-## 2.5 Inside `packages/permissions`
+## 1.5 Inside `packages/errors`
 
-- **`src/` root files** — the three classes that define the model. `permission-registry.ts` is the vocabulary, `module-registry.ts` is the nav gate, `capability-set.ts` is the resolution algorithm.
+- **`error/`** — `app.error.ts` and one subclass per code that carries context. `AppError` sits *in* this folder, not above it: it carries the `.error.ts` suffix, so it belongs where every other `.error.ts` file is.
+- **`catalog/`** — the closed `ErrorCode` vocabulary, merged from team-owned fragments exactly as `permissions/catalog/` is. `ErrorMeta` is transport-agnostic: `retryable` is a fact about the code, which is why `query`'s retry callback and the worker's BullMQ config can read the same field and cannot disagree.
+- **`transport/`** — `HTTP_STATUS`, and the only place in this package that knows HTTP exists. `@loadbearing/application` may **not** import it; ESLint bans the name for that package specifically, because a status code is a transport concern and the discipline that keeps the transport swappable is that the domain layer has never heard of the number.
+- **`normalizer/`** — `ErrorNormalizer`, the boundary every thrown value crosses before it is transported, logged, or rendered. It matches structurally rather than with `instanceof`, because two copies of this package in one process produce two class identities.
+- **No `import.ts`.** This package is the root of the dependency graph and takes nothing from outside itself — not even `zod`, which is why `SchemaIssue` is declared structurally.
+- **Carries no prose.** `Error.message` is the code. Every word a user reads lives in `@loadbearing/content` keyed by that code ([09](09-errors-package.md), [20](20-content-package.md)).
+- **Smell:** a message string; an HTTP status outside `transport/`; a dependency in `package.json`.
+
+---
+
+## 1.6 Inside `packages/permissions`
+
+- **`registry/`** — the two lookup classes. `permission-registry.ts` is the vocabulary, `module-registry.ts` is the nav gate. Both are singletons over a frozen, module-level view of their catalog.
+- **`capability/`** — `capability-set.ts`, the resolution algorithm. It imports `../registry/permission-registry.js` by file rather than through that folder's barrel, because the barrel also loads `module-registry.ts`, which imports this folder back.
 - **`catalog/`** — one file per feature slice, each declaring that slice's permission keys, plus a platform-owned `index.ts` that merges them. **This folder is the team-ownership seam**: one team, one file, no merge conflicts in a shared list.
 - **`gate/`** — the same fragment pattern for module gates, which is what nav items are allowed to reference.
+- **`route/`** — the same fragment pattern for destinations. It lives here rather than in a shell because a router's generated route tree cannot be the shared source: a worker process has none, and web and desktop generate different ones ([08](08-permissions-package.md)).
 - **The whole package is synchronous and pure.** No I/O, no database, no `async`. That is not a stylistic choice — it is what lets the identical class run in the oRPC handler, the React component, the worker, and the desktop app and give the same answer.
 - **Smell:** an `async` method, or an import of anything outside `core`.
 
 ---
 
-## 2.6 Inside `packages/contracts`
+## 1.7 Inside `packages/contracts`
 
-- **`primitive/`** — the shared vocabulary every subject uses: branded identifiers, `Envelope`, `Pagination`. Non-subject folder, so it takes the layer noun.
-- **`<subject>/`** — one folder per domain subject (`task/`, `goal/`, `lead/`). Four files each: the Zod shapes, the entity with behaviour, the oRPC procedures, and the entity's spec.
-- **`permission/`** — one fragment per subject, mapping procedure path → permission key. Separate from the subject folders because it is a *cross-check*, not part of the subject's definition, and because the coverage test walks this folder specifically.
-- **`contract-router.ts` / `procedure-permissions.ts`** — the two merge points. Adding a subject means editing exactly these two files.
+- **`primitive/`** — the shared vocabulary every subject uses: branded identifiers, `Envelope`, `Pagination`. Same folder name as `core`'s and `content`'s, holding the same kind of thing.
+- **`<subject>/`** — one folder per domain subject (`task/`, `goal/`, `lead/`). Three files each: the Zod shapes, the entity with behaviour, the oRPC procedures. **None ship** — the kit delivers the seam, not a sample tracker.
+- **`procedure/`** — the merge point for every slice's `.procedures.ts`, producing `contract` and `AppContract`. Named `procedure/` rather than `router/` because `apps/web/src/server/orpc/` holds the routers that *implement* this contract, and one word for both would be a collision.
+- **`catalog/`** — one fragment per subject, mapping procedure path → permission key, plus the index that merges them. Same name and same pattern as `permissions/catalog/` and `errors/catalog/`. Separate from the subject folders because it is a *cross-check*, not part of the subject's definition.
+- **`registry/`** — `ProcedurePermissions`, the lookup class over that catalog. Same name and same shape as `permissions/registry/`.
+- **`catalog/` is not re-exported from the barrel.** Its merged map is an input to `registry/` and to the coverage test; nothing outside the package reads it. That is the private layer a named barrel buys.
+- **Adding a subject is three edits**: `procedure/index.ts`, `catalog/index.ts`, and the barrel.
 - **The whole package is isomorphic.** It is imported freely by both server and browser, which is why nothing in it may perform I/O.
 - **Smell:** an entity method that fetches something. Entities carry behaviour (`isLockedFromAssignee()`), never data access.
 
 ---
 
-## 2.7 Inside `packages/application`
+## 1.8 Inside `packages/application`
 
 - **`error/`** — the domain error hierarchy. Each carries a `code` string, which is the *only* thing the transport layer maps. No HTTP status codes anywhere in this folder.
 - **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
@@ -336,7 +169,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.8 Inside `packages/db`
+## 1.9 Inside `packages/db`
 
 - **`drizzle.config.ts` and `migrations/`** sit **above** `src/` because they are build-time artefacts, not shipped code. Migrations are generated and committed; `db:push` is never used.
 - **`src/` root files** — `database.ts` (the pool), `schema.ts` (a barrel re-exporting every `*.schema.ts`, which is what Drizzle Kit reads), `base.repository.ts`, `unit-of-work.ts`.
@@ -351,7 +184,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.9 Inside `packages/infrastructure`
+## 1.10 Inside `packages/infrastructure`
 
 - **`redis/`** — the connection itself, shared by the cache and the queue but configured differently for each (`maxRetriesPerRequest: null` for BullMQ, a key prefix only for the cache).
 - **`cache/`** — `RedisCacheStore`, implementing the `CacheStore` port.
@@ -364,7 +197,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.10 Inside `packages/auth`
+## 1.11 Inside `packages/auth`
 
 - **`src/` root files** — `AuthConfig` and `AuthFactory`. The factory is the only place Better Auth is constructed.
 - **`session/`** — `BetterAuthSessionResolver`, implementing the `SessionResolver` port. This is the wall: Better Auth types stop here.
@@ -375,7 +208,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.11 Inside `packages/composition`
+## 1.12 Inside `packages/composition`
 
 - **Three files, no subfolders.** `ContainerConfig` (the shape), `Container` (the wiring), `TestContainer` (the same wiring with fakes).
 - **Constructs every concrete class exactly once.** This is the only file in the repository that knows `PgVectorStore` and `VectorStore` are related.
@@ -386,7 +219,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.12 Inside `packages/api-client`
+## 1.13 Inside `packages/api-client`
 
 - **`src/` root** — `ApiClient`, with a private constructor and two factories: `overHttp` (browser and desktop) and `inProcess` (SSR, no network hop).
 - **`auth/`** — `AuthStrategy` (abstract) and its two implementations, plus `TokenProvider` (abstract) and `AuthClient`. This folder is the entire difference between a web client and a desktop client.
@@ -396,7 +229,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.13 Inside `packages/asset`
+## 1.14 Inside `packages/asset`
 
 - **`image/`** — a closed `ImageKey` union plus the files themselves under `file/`. A content record naming a missing image is a compile error.
 - **`icon/`** — source SVGs under `svg/`, plus the generated `sprite.svg` and `IconRegistry`. The sprite is gitignored; `build-sprite.mjs` regenerates it and fails the build on any hardcoded `fill` or `stroke`, because a hardcoded colour is an icon that breaks in dark mode.
@@ -407,18 +240,24 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.14 Inside `packages/content`
+## 1.15 Inside `packages/content`
 
-- **`message/`** — short keyed strings, one file per namespace, `en/` complete and every other locale `Partial<>` with fallback. `MessageKey` is a closed union, so a typo in a component is a compile error.
+- **`message/`** — short keyed strings in three tiers. `namespace.ts` derives the closed `MessageKey` union from **type-only** imports of the English files, so the union stays complete while the runtime data splits; `catalog.ts` maps locale × namespace to a dynamic-import loader; `catalog.server.ts` adds `email`, which is server-only. English files are `as const`; every other locale is `NamespaceBundle<N>` — `Partial<>` **per namespace**, not per locale, so a Bengali file cannot hold a key from a namespace it does not name. A typo in a component is still a compile error, and so is a key from a namespace that component never declared.
 - **`document/`** — long-form editorial content with a schema and an entity.
 - **`collection/`** — repeating records, including `nav/`. Nav items carry a **module**, never a permission — a `files`-scoped block in the root ESLint config bans importing `PermissionKey` here, because content authors should not be making authorization decisions.
 - **`media/`** — `MediaRef` and the resolver that turns one into a URL.
-- **`content-source.ts`** — abstract, with **every method async even though the static implementation is synchronous**. That is deliberate: it means moving to a CMS later changes no call site.
-- **Smell:** a permission key, or a synchronous read method.
+- **`message/error-copy.ts`** — the only place in the repository where a failure gets words. `ERROR_COPY` is `Record<ErrorCode, ShellMessageKey>`, so it is total over the error vocabulary *and* restricted to the two namespaces every snapshot guarantees; `ErrorCopy` is the class an error page calls. This package depends on `@loadbearing/errors` for those types and on `@loadbearing/core` for nothing — see [20](20-content-package.md).
+- **`source/`** — `content-source.ts` (abstract) and `static.content-source.ts`. The abstract class is the seam a CMS slots into, and `ContentSource.resolve()` is `protected static` so "`common` and `error` are always in the snapshot" is a property of the seam rather than of each implementation.
+- **`translator/`** — `Translator` and `MessageSnapshot`: `{name}` interpolation with no library, and the English-underneath-the-locale fallback.
+- **`primitive/`** — `locale.ts`. Same folder name as `core`'s, holding the same kind of thing: a value type with no layer role.
+- **`content-source.ts`** — abstract, with **every method async even though the static implementation is mostly synchronous**. That is deliberate: it means moving to a CMS later changes no call site. The synchronous implementations satisfy those signatures with `Promise.resolve`, never an `async` body with no `await` — `require-await` ([05](05-lint-and-format.md)) rejects the second, and it is a lie about what the method does either way.
+- **`message-store.ts`** — the mutable holder around an immutable snapshot, and the one object that crosses the SSR boundary and absorbs namespaces added by a client-side navigation. React-free, so `apps/worker` and Node tests use the same class the browser does.
+- **Smell:** a permission key; a synchronous read method on the abstract class; **a static import of a locale catalog anywhere but `bundled.content-source.ts`**; a `MessageKey` reaching `t()` with no namespace declaration behind it; an `ERROR_COPY` value outside the shell namespaces.
+- **Partially built.** The error slice of this package exists; the rest does not yet. [20](20-content-package.md) marks every file and Step 20.10 lists what is left.
 
 ---
 
-## 2.15 Inside `packages/query`
+## 1.16 Inside `packages/query`
 
 - **`src/` root** — `QueryKeys` (mirroring procedure paths, params last), `createQueryClient()`, the `ApiClientProvider` context, and `useAppMutation`.
 - **`session/`** — session queries and mutations, the one slice that ships with the kit.
@@ -430,7 +269,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.16 Inside `packages/ui`
+## 1.17 Inside `packages/ui`
 
 - **`token/`** — spacing, radii, type scale, motion durations. **Deliberately no colours.**
 - **`theme/`** — colours, as `[data-theme="…"]` custom properties, plus the registry. Splitting these two is what makes a second theme a file instead of a refactor.
@@ -442,7 +281,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.17 Inside `packages/feature`
+## 1.18 Inside `packages/feature`
 
 - **`i18n/`** — the message provider and hook. Lives here rather than in `content` because it is React.
 - **`auth/`** — sign-in, two-factor, the session guard, and the session context. `SessionProvider` takes a `CapabilitySetDto` and reconstructs the class, so the browser runs the identical resolution the server ran.
@@ -454,7 +293,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.18 Inside `apps/web`
+## 1.19 Inside `apps/web`
 
 - **`src/env.ts`** — one of two `process.env` readers. Parses at module load, so a missing secret crashes at boot with a field path rather than 500ing an hour later.
 - **`src/server/`** — **the entire transport layer**, and the thing that moves to `apps/api` if NestJS ever arrives. Nothing above or below it changes when it does. This is why it is one directory instead of scattered through routes.
@@ -471,7 +310,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.19 Inside `apps/worker`
+## 1.20 Inside `apps/worker`
 
 - **`src/env.ts`** — the second and last `process.env` reader. Parses a **smaller** schema than the web app's: no `AUTH_SECRET`, because the worker never issues or validates a session. Sharing one schema between the apps would hand the worker a secret it has no use for.
 - **`src/main.ts`** — construct the container, start the bootstrap, register signal handlers. Graceful shutdown is not optional: killing mid-job leaves it stalled until BullMQ's lock expires.
@@ -482,7 +321,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 2.20 Inside `apps/desktop`
+## 1.21 Inside `apps/desktop`
 
 - **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything here is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
 - **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.
@@ -492,7 +331,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **Smell:** a `process.env` reference; a secret in `config.ts`; a hand-written route path; anything imported from `composition` or `application`.
 
 ---
-# Part 3 — One feature, end to end
+# Part 2 — One feature, end to end
 
 **Task reactivation.** A closed task can be reopened, but only by someone holding `task.reactivate` on that goal, and only if the task is not locked from its assignee. Reactivating writes an audit entry and re-indexes the task for search.
 
@@ -525,6 +364,8 @@ packages/db/migrations/0004_task_reactivation.sql           ← + seeds the perm
 packages/query/src/task/task.mutations.ts                   TaskMutations.reactivate()
 packages/query/src/task/task.queries.ts                     TaskQueries.detail(taskId)
 
+packages/content/src/message/namespace.ts                   register "task" in NamespaceShape + ClientNamespace
+packages/content/src/message/catalog.ts                     one loader per locale — total, so a missing cell will not compile
 packages/content/src/message/en/task.ts                     labels, confirm copy, error text
 
 packages/feature/src/task/reactivate-task.dialog.tsx        <ReactivateTaskDialog />
@@ -566,8 +407,9 @@ application  GetTaskUseCase.execute(principal, input)
         │  3. work     → TaskEntity
         ▼  TaskDto
         ▼
-Back through the router. SSR serialises the DTO **and** the CapabilitySetDto
-into the HTML payload, so the first paint already knows what to hide.
+Back through the router. SSR serialises the DTO, the CapabilitySetDto **and** the
+MessageSnapshot into the HTML payload — so the first paint already knows what to
+hide, and says it in the right language. Three things, one mechanism.
         ▼
 feature  <TaskDetail> → ui  <Can permission="task.reactivate" goalId={…}>
                               ui  <Button> "Reactivate"
@@ -582,6 +424,7 @@ User clicks Reactivate
         ▼
 feature  <ReactivateTaskDialog>
         │  reads copy from content  message/en/task.ts
+        │  (inlined by the route's loader — never fetched)
         ▼
 query  TaskMutations.reactivate()          ← useAppMutation, declares its invalidations
         ▼

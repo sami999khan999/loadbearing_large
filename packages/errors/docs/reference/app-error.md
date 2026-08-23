@@ -121,8 +121,47 @@ through a JSON round-trip without inviting `fields.length` on a non-validation e
 
 ---
 
+## The subclasses, and what each carries
+
+A class exists for a code when a use-case needs to **throw** it with context. `RATE_LIMITED` and
+`UNAVAILABLE` have none, because a rate limiter and a health check are adapters.
+
+| Class | Code | Context |
+| --- | --- | --- |
+| `UnauthorizedError` | `UNAUTHORIZED` | `{ reason }`, defaulting to `"no-session"` |
+| `ForbiddenError` | `FORBIDDEN` | `{ permission }`, plus `goalId` when scoped |
+| `NotFoundError` | `NOT_FOUND` | `{ resource, id }` |
+| `ConflictError` | `CONFLICT` | `{ resource, reason }` |
+| `TwoFactorRequiredError` | `TWO_FACTOR_REQUIRED` | — |
+| `ValidationError` | `BAD_REQUEST` | `{ fieldCount }` + `fields` |
+| `InternalError` | `INTERNAL` | — (the original is held on a non-enumerable `cause`) |
+| `ServerOnlyError` | `SERVER_ONLY` | `{ package }` |
+| `TransportError` | any | whatever the envelope carried |
+
+### `ServerOnlyError` is the one thrown before anything else runs
+
+```ts
+// packages/core/src/primitive/server-only.ts
+throw new ServerOnlyError(packageName);
+```
+
+`ServerOnly.assert` fires at module load, in a browser, in a build that is already broken. It is the
+hardest case in the repository for "an error carries no message" — a developer-facing string, read
+from a console, that never crosses a wire — and it still carries only a code.
+
+The context key is **`package`**, not `packageName`, because that key *is* the `{package}` placeholder
+in `error.serverOnly` over in `content`. Renaming it breaks nothing except the rendered sentence,
+which is why a test asserts the key list directly.
+
+The full argument, including the case *for* an exception and why it fails, is on
+[core's `ServerOnly` page](../../../core/docs/reference/server-only.md#why-the-hardest-case-for-prose-still-loses).
+
+---
+
 ## See also
 
 - [`@loadbearing/errors`](../index.md)
 - [ErrorNormalizer](error-normalizer.md) — how anything thrown becomes one of these
 - [catalog](catalog.md) — where `ErrorCode` and `retryable` come from
+- [`ServerOnly`](../../../core/docs/reference/server-only.md) — the one caller that throws at module load
+- [`content`'s `ERROR_COPY`](../../../content/docs/reference/error-copy.md) — where the words are

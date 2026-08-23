@@ -10,10 +10,8 @@ export default tseslint.config(
       "**/dist/**",
       "**/.output/**",
       "**/migrations/**",
-      // Not inside any package's tsconfig `include`, so projectService cannot
-      // resolve them and a type-aware rule fails with a parsing error.
-      // Deliberately NOT "*.config.*" — that also matches eslint.config.js
-      // itself, which makes editors warn on every open config file.
+      // Outside every package's tsconfig `include`, so a type-aware rule fails to parse
+      // them. Deliberately not "*.config.*" — that matches eslint.config.js itself.
       "**/*.config.ts",
       "**/*.config.mts",
       "**/*.d.ts",
@@ -65,7 +63,7 @@ export default tseslint.config(
     },
   },
 
-  // ── feature: bans that need a type-import exemption, which Biome cannot express ──
+  // ── feature: bans needing a type-import exemption, which Biome cannot express ──
   {
     files: ["packages/feature/src/**/*.{ts,tsx}"],
     rules: {
@@ -87,6 +85,12 @@ export default tseslint.config(
               message:
                 "Routing lives in apps/web. Pass navigation in as an onNavigate prop or an href string.",
             },
+            {
+              name: "@loadbearing/content",
+              importNames: ["SERVER_CATALOG"],
+              message:
+                "The email namespace is server-only. Components take a MessageStore; they never build a ContentSource.",
+            },
           ],
         },
       ],
@@ -106,6 +110,30 @@ export default tseslint.config(
               importNames: ["HTTP_STATUS"],
               message:
                 "A status code is a transport concern. Throw the error; the adapter maps it. That discipline is what keeps the transport swappable.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ── email copy is server-only: it exists for apps/worker's digests ──
+  {
+    files: [
+      "packages/{ui,query}/src/**/*.{ts,tsx}",
+      "apps/web/src/**/*.{ts,tsx}",
+      "apps/desktop/src/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@loadbearing/content",
+              importNames: ["SERVER_CATALOG"],
+              message:
+                "The email namespace is server-only. Client code takes the default CLIENT_CATALOG, or BundledContentSource on desktop.",
             },
           ],
         },

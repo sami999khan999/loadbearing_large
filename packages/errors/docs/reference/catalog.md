@@ -22,19 +22,29 @@ and `ErrorCode` derived with `keyof typeof` — the same construction as `CATALO
 [`@loadbearing/permissions`](../../../permissions/docs/reference/permission-registry.md), for the same
 payoff: the union is closed, so a misspelled code is a compile error rather than a runtime `undefined`.
 
-The nine shipped codes:
+The ten shipped codes:
 
-| Code | `retryable` | `severity` |
-| --- | --- | --- |
-| `UNAUTHORIZED` | no | expected |
-| `FORBIDDEN` | no | expected |
-| `NOT_FOUND` | no | expected |
-| `CONFLICT` | no | expected |
-| `BAD_REQUEST` | no | expected |
-| `TWO_FACTOR_REQUIRED` | no | expected |
-| `RATE_LIMITED` | **yes** | expected |
-| `UNAVAILABLE` | **yes** | unexpected |
-| `INTERNAL` | no | unexpected |
+| Code | `retryable` | `severity` | Thrown by |
+| --- | --- | --- | --- |
+| `UNAUTHORIZED` | no | expected | `UnauthorizedError` |
+| `FORBIDDEN` | no | expected | `ForbiddenError` |
+| `NOT_FOUND` | no | expected | `NotFoundError` |
+| `CONFLICT` | no | expected | `ConflictError` |
+| `BAD_REQUEST` | no | expected | `ValidationError` |
+| `TWO_FACTOR_REQUIRED` | no | expected | `TwoFactorRequiredError` |
+| `RATE_LIMITED` | **yes** | expected | an adapter |
+| `UNAVAILABLE` | **yes** | unexpected | an adapter |
+| `INTERNAL` | no | unexpected | `InternalError`, via `ErrorNormalizer` |
+| `SERVER_ONLY` | no | unexpected | `ServerOnlyError`, from `core` at module load |
+
+**`RATE_LIMITED` and `UNAVAILABLE` have no class**, and that is not an omission. Neither is ever
+raised by domain code — a rate limiter and a health check are adapters, and they construct a
+`TransportError` or throw through the boundary that owns them. A class exists for a code when a
+use-case needs to *throw* it with context.
+
+**`SERVER_ONLY` gets `500` in `HTTP_STATUS` and can never be served.** The record is total over
+`ErrorCode`, so it needs a number; no request can reach it, because the module that would serve the
+request is the one that failed to load.
 
 ---
 

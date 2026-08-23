@@ -95,7 +95,7 @@ Lowercase, dot-separated, no plurals. `task.reactivate`, `finance.invoice.approv
 
 ## Step 8.2 — `PermissionRegistry`
 
-**`packages/permissions/src/permission-registry.ts`**
+**`packages/permissions/src/registry/permission-registry.ts`**
 
 ```ts
 import { CATALOG } from "./catalog/index.js";
@@ -119,10 +119,8 @@ export class PermissionRegistry {
     return ALL_KEYS;
   }
 
-  /**
-   * `undefined` rather than a throw for a key the catalog does not define. The type
-   * rules this out at compile time; a cast or a stale DTO does not.
-   */
+  // `undefined` rather than a throw for a key the catalog does not define. The type
+  // rules this out at compile time; a cast or a stale DTO does not.
   public meta(key: PermissionKey): PermissionMeta | undefined {
     return Object.hasOwn(CATALOG, key) ? CATALOG[key] : undefined;
   }
@@ -135,14 +133,12 @@ export class PermissionRegistry {
     return BY_MODULE.get(module) ?? NO_KEYS;
   }
 
-  /**
-   * Permission strings from the database must pass this before they are trusted.
-   *
-   * `Object.hasOwn`, not `value in CATALOG`: `in` walks the prototype chain, so a
-   * stored row reading `constructor` or `toString` would pass and then resolve to
-   * a `PermissionMeta` of `undefined`, whose `scope` check falls through to the
-   * org branch and grants a permission that does not exist.
-   */
+  // Permission strings from the database must pass this before they are trusted.
+  //
+  // `Object.hasOwn`, not `value in CATALOG`: `in` walks the prototype chain, so a
+  // stored row reading `constructor` or `toString` would pass and then resolve to
+  // a `PermissionMeta` of `undefined`, whose `scope` check falls through to the
+  // org branch and grants a permission that does not exist.
   public isKnown(value: string): value is PermissionKey {
     return Object.hasOwn(CATALOG, value);
   }
@@ -208,7 +204,7 @@ A gate names a destination, so the destinations have to exist before the gates d
 import { rbacRoutes } from "./rbac.routes.js";
 import { shellRoutes } from "./shell.routes.js";
 
-/** Every declared path is rooted — a missing leading slash fails to compile. */
+// Every declared path is rooted — a missing leading slash fails to compile.
 export type RoutePath = `/${string}`;
 
 export const ROUTES = {
@@ -263,17 +259,17 @@ export const GATES = {
 } as const;
 ```
 
-**`packages/permissions/src/module-registry.ts`**
+**`packages/permissions/src/registry/module-registry.ts`**
 
 ```ts
-import type { CapabilitySet } from "./capability-set.js";
+import type { CapabilitySet } from "../capability/index.js";
 import { GATES } from "./gate/index.js";
 import type { PermissionKey } from "./permission-registry.js";
 import type { AppRoute } from "./route/index.js";
 
 export interface ModuleGate {
   readonly permission: PermissionKey;
-  /** `AppRoute`, not `string` — a gate pointing at an undeclared path fails to compile. */
+  // `AppRoute`, not `string` — a gate pointing at an undeclared path fails to compile.
   readonly route: AppRoute;
 }
 
@@ -304,10 +300,10 @@ export class ModuleRegistry {
 
 ## Step 8.4 — `CapabilitySet`
 
-**`packages/permissions/src/capability-set.ts`**
+**`packages/permissions/src/capability/capability-set.ts`**
 
 ```ts
-import { type PermissionKey, PermissionRegistry } from "./permission-registry.js";
+import { type PermissionKey, PermissionRegistry } from "../registry/permission-registry.js";
 
 export interface ScopedSetDto {
   readonly grants: readonly PermissionKey[];
@@ -338,7 +334,7 @@ class ScopedSet {
   }
 }
 
-/** Resolved capabilities for one principal — user or API key, same shape. */
+// Resolved capabilities for one principal — user or API key, same shape.
 export class CapabilitySet {
   private readonly orgSet: ScopedSet;
   private readonly goalSets: ReadonlyMap<string, ScopedSet>;
@@ -362,7 +358,7 @@ export class CapabilitySet {
     return [...new Set([...a, ...b])];
   }
 
-  /** Deny by default. An explicit deny beats every grant, including the wildcard. */
+  // Deny by default. An explicit deny beats every grant, including the wildcard.
   public can(permission: PermissionKey, goalId?: string): boolean {
     const scope = PermissionRegistry.instance.scopeOf(permission);
     if (!scope) return false;
@@ -389,19 +385,17 @@ export class CapabilitySet {
     return permissions.some((p) => this.can(p, goalId));
   }
 
-  /** Goals in which this principal holds a given goal-scoped permission. */
+  // Goals in which this principal holds a given goal-scoped permission.
   public goalsWith(permission: PermissionKey): readonly string[] {
     return [...this.goalSets.keys()].filter((id) => this.can(permission, id));
   }
 
-  /**
-   * Narrow this set to the intersection with another. Used when an API key's
-   * scopes are re-intersected with its issuer's live capabilities at resolution.
-   *
-   * Denies union, grants intersect, goal keys union, and both sides' grants are
-   * candidates. See the four notes below — each one is a way this method leaked
-   * or over-narrowed before.
-   */
+  // Narrow this set to the intersection with another. Used when an API key's
+  // scopes are re-intersected with its issuer's live capabilities at resolution.
+  //
+  // Denies union, grants intersect, goal keys union, and both sides' grants are
+  // candidates. See the four notes below — each one is a way this method leaked
+  // or over-narrowed before.
   public intersect(other: CapabilitySet): CapabilitySet {
     const goalIds = new Set([...Object.keys(this.dto.goals), ...Object.keys(other.dto.goals)]);
     const orgCandidates = CapabilitySet.union(this.dto.org.grants, other.dto.org.grants);
@@ -435,7 +429,7 @@ export class CapabilitySet {
     return this.dto;
   }
 
-  /** `can()` for an org-scoped permission — and the org half of a goal-scoped one. */
+  // `can()` for an org-scoped permission — and the org half of a goal-scoped one.
   private allowsAtOrg(permission: PermissionKey): boolean {
     if (this.orgSet.deniesPermission(permission)) return false;
     if (this.dto.wildcard) return true;
@@ -525,7 +519,7 @@ export default defineConfig({
 And `tests/**` belongs in this package's tsconfig `include` too, or `pnpm typecheck` skips the specs
 entirely — see [07](07-core-package.md#step-76--a-first-test) for the convention in full.
 
-**`packages/permissions/tests/capability-set.spec.ts`** — the shape; the shipped file carries fourteen cases, including one per `intersect` rule above.
+**`packages/permissions/tests/capability/capability-set.spec.ts`** — the shape; the shipped file carries fourteen cases, including one per `intersect` rule above.
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -534,11 +528,9 @@ import { PermissionRegistry } from "../src/permission-registry.js";
 
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 
-/**
- * Every key the shipped catalog defines is org-scoped, so the goal-scoped branch
- * of `can()` is unreachable through it. Stubbing `scopeOf` tests that branch now
- * instead of leaving rule 3 unverified until a slice adds a goal-scoped key.
- */
+// Every key the shipped catalog defines is org-scoped, so the goal-scoped branch
+// of `can()` is unreachable through it. Stubbing `scopeOf` tests that branch now
+// instead of leaving rule 3 unverified until a slice adds a goal-scoped key.
 const treatEveryKeyAsGoalScoped = (): void => {
   vi.spyOn(PermissionRegistry.instance, "scopeOf").mockReturnValue("goal");
 };
@@ -601,14 +593,14 @@ Two details in that listing are not stylistic:
 
 ---
 
-## Step 8.6 — The barrel
+## Step 8.6 — The barrels
 
-**`packages/permissions/src/index.ts`**
+Five folders, so five folder barrels and one root barrel that names only those
+([Opinions · Folders](../opinions/folders.md)).
+
+**`packages/permissions/src/registry/index.ts`**
 
 ```ts
-export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability-set.js";
-export { CATALOG } from "./catalog/index.js";
-export { GATES } from "./gate/index.js";
 export { type ModuleGate, type ModuleKey, ModuleRegistry } from "./module-registry.js";
 export {
   type PermissionKey,
@@ -616,6 +608,30 @@ export {
   PermissionRegistry,
   type PermissionScope,
 } from "./permission-registry.js";
+```
+
+**`packages/permissions/src/capability/index.ts`**
+
+```ts
+export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability-set.js";
+```
+
+**`packages/permissions/src/index.ts`**
+
+```ts
+export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability/index.js";
+export { CATALOG } from "./catalog/index.js";
+export { GATES } from "./gate/index.js";
+export {
+  type ModuleGate,
+  type ModuleKey,
+  ModuleRegistry,
+  type PermissionKey,
+  type PermissionMeta,
+  PermissionRegistry,
+  type PermissionScope,
+} from "./registry/index.js";
+export { type AppRoute, ROUTES, type RoutePath } from "./route/index.js";
 ```
 
 `CATALOG` and `GATES` are on the list deliberately — the seed script and the permission matrix UI both iterate them. Under `export *` they were public by accident, which is the difference the named list makes visible.

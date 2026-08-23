@@ -76,6 +76,7 @@ ratchet/
 │
 ├── packages/                                  ← everything that matters
 │   ├── core/
+│   ├── errors/
 │   ├── permissions/
 │   ├── contracts/
 │   ├── application/
@@ -92,7 +93,8 @@ ratchet/
 │
 └── apps/                                      ← thin, deletable, framework-shaped
     ├── web/
-    └── worker/
+    ├── worker/
+    └── desktop/
 ```
 
 Expanded below, in build order.
@@ -110,7 +112,10 @@ packages/<name>/
 ├── tsup.config.ts        ← entry, dts, format: esm, target: es2024
 ├── vitest.config.ts      ← include: ["tests/**/*.spec.ts"]  (only where the package has tests)
 ├── src/
-│   └── index.ts          ← the public surface; nothing outside it is importable
+│   ├── index.ts          ← the public surface; nothing outside it is importable
+│   ├── import.ts         ← the outside surface; absent when the package takes nothing
+│   └── <role>/           ← everything else, in a folder named after its kind
+│       └── index.ts      ←   one barrel per folder
 ├── tests/                ← every spec, mirroring the src/ tree it covers
 └── docs/
     ├── meta.json         ← sidebar title, description, page order
@@ -119,9 +124,15 @@ packages/<name>/
         └── meta.json     ← group label and page order
 ```
 
+**`src/` holds `index.ts`, `import.ts`, and folders — never a loose third file.** The folder is
+named after the kind of thing inside it (`error/`, `catalog/`, `registry/`, `transport/`,
+`primitive/`), and the same kind gets the same name in every package. Where a package's contents
+repeat once per feature slice, the folder is named after the subject instead. The full rule, the
+shared vocabulary, and the boundary between the two are in
+[Opinions · Folders](../opinions/folders.md).
+
 **Tests are never in `src/`.** Every spec lives under its package's own `tests/`, at the path its
-subject has in `src/` — `src/<slice>/create-<slice>.use-case.ts` is covered by
-`tests/<slice>/create-<slice>.use-case.spec.ts`. That keeps `src/` equal to the shipped surface
+subject has in `src/` — `src/error/app.error.ts` is covered by `tests/error/app.error.spec.ts`. That keeps `src/` equal to the shipped surface
 (`tsup` builds from `src/index.ts`, and the `development` export condition resolves into `src/`),
 while the mirrored path preserves the one thing colocation was good at — knowing where a subject's
 test is without looking. Full rationale in [07](07-core-package.md#step-76--a-first-test).
@@ -140,46 +151,60 @@ Only deviations are noted from here on.
 ```
 packages/core/src/
 ├── index.ts
-├── clock.ts                 → Clock, SystemClock, FixedClock
-├── result.ts                → Result, Ok, Err
-├── uuid.ts                  → Uuid
-└── server-only.ts           → ServerOnly
+├── import.ts                    ← ServerOnlyError, from `errors`
+└── primitive/
+    ├── index.ts
+    ├── clock.ts                 → Clock, SystemClock, FixedClock
+    ├── result.ts                → Result, Ok, Err, Results
+    ├── uuid.ts                  → Uuid
+    └── server-only.ts           → ServerOnly   ← throws ServerOnlyError from `errors`
 
 packages/core/tests/
-├── clock.spec.ts
-├── result.spec.ts
-└── uuid.spec.ts
+└── primitive/
+    ├── clock.spec.ts
+    ├── result.spec.ts
+    ├── server-only.spec.ts
+    └── uuid.spec.ts
 ```
 
-Zero dependencies, including on other `@loadbearing/*` packages. It is the root of the graph.
+**One dependency: `@loadbearing/errors`.** `ServerOnly.assert` throws, and nothing here throws a bare `Error` ([09](09-errors-package.md) Step 9.3). `errors` is the root of the graph; `core` is one edge above it, and both are still zero-third-party and isomorphic.
 
 ### `packages/errors`
 
 ```
 packages/errors/src/
-├── index.ts
-├── app.error.ts                 → AppError, ErrorEnvelope, FieldViolation
-├── error-normalizer.ts          → ErrorNormalizer
+├── index.ts                     ← no import.ts: this package takes nothing from outside
 ├── catalog/                     ← one fragment per slice, team-owned
 │   ├── index.ts                 ←   ERROR_CATALOG, ErrorCode, ErrorMeta
 │   └── core.errors.ts
-├── error/                       ← one class per code that carries context
+├── error/                       ← the base class and one subclass per code with context
 │   ├── index.ts
+│   ├── app.error.ts             → AppError, ErrorEnvelope, FieldViolation, TransportError
 │   ├── forbidden.error.ts       → ForbiddenError
+│   ├── unauthorized.error.ts    → UnauthorizedError
+│   ├── two-factor-required.error.ts → TwoFactorRequiredError
 │   ├── not-found.error.ts       → NotFoundError
 │   ├── conflict.error.ts        → ConflictError
 │   ├── validation.error.ts      → ValidationError
-│   └── internal.error.ts        → InternalError
+│   ├── internal.error.ts        → InternalError
+│   └── server-only.error.ts     → ServerOnlyError   ← thrown by core, at module load
+├── normalizer/
+│   ├── index.ts
+│   └── error-normalizer.ts      → ErrorNormalizer
 └── transport/
+    ├── index.ts
     └── http.ts                  → HTTP_STATUS   ★ adapters only, never the domain
 
 packages/errors/tests/
-├── app.error.spec.ts
-├── error-normalizer.spec.ts
-└── transport/http.spec.ts
+├── error/
+│   ├── app.error.spec.ts
+│   ├── server-only.error.spec.ts
+│   └── validation.error.spec.ts
+└── normalizer/
+    └── error-normalizer.spec.ts
 ```
 
-**A leaf, like `core` and `permissions`.** Zero dependencies, because a failure has to be readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it — any dependency excludes one of those.
+**The root of the graph.** Zero dependencies, because a failure has to be readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it — any dependency excludes one of those. `core` and `content` both depend on it; it depends on neither.
 
 **`transport/http.ts` is the one file in this package the domain layer may not import.** `HTTP_STATUS` is a transport concern; a lint rule bans the import name for `packages/application/**` ([09](09-errors-package.md)).
 
@@ -189,10 +214,14 @@ packages/errors/tests/
 
 ```
 packages/permissions/src/
-├── index.ts
-├── permission-registry.ts       → PermissionRegistry, PermissionKey, PermissionMeta
-├── module-registry.ts           → ModuleRegistry, ModuleKey, ModuleGate
-├── capability-set.ts            → CapabilitySet, CapabilitySetDto
+├── index.ts                     ← no import.ts: this package takes nothing from outside
+├── registry/
+│   ├── index.ts
+│   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta
+│   └── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+├── capability/
+│   ├── index.ts
+│   └── capability-set.ts        → CapabilitySet, CapabilitySetDto
 ├── catalog/                     ← one fragment per slice, team-owned
 │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   ├── rbac.permissions.ts
@@ -208,10 +237,13 @@ packages/permissions/src/
     └── <slice>.routes.ts
 
 packages/permissions/tests/
-├── permission-registry.spec.ts
-├── module-registry.spec.ts
-├── capability-set.spec.ts
-└── route.spec.ts
+├── registry/
+│   ├── permission-registry.spec.ts
+│   └── module-registry.spec.ts
+├── capability/
+│   └── capability-set.spec.ts
+└── route/
+    └── route.spec.ts
 ```
 
 **The fragment folders are the team-ownership seam.** One team, one file, no merge conflicts in a shared catalog. All three follow it: a slice adds `<slice>.permissions.ts`, `<slice>.gate.ts`, and `<slice>.routes.ts`, and each platform-owned `index.ts` gains one spread line.
@@ -223,25 +255,33 @@ packages/permissions/tests/
 ```
 packages/contracts/src/
 ├── index.ts
-├── contract-router.ts               → contract, AppContract   (merges fragments)
-├── procedure-permissions.ts         → ProcedurePermissions    (merges fragments)
+├── import.ts                        ← zod, @orpc/contract, @loadbearing/permissions
 ├── primitive/
 │   ├── index.ts
 │   ├── identifiers.ts               → Identifiers, GoalId, TaskId, UserId, …
 │   ├── envelope.ts                  → Envelope
 │   └── pagination.ts                → Pagination
-├── permission/
+├── procedure/
+│   └── index.ts                     → contract, AppContract   ← merges every slice's procedures
+├── catalog/
+│   ├── index.ts                     → PROCEDURE_PERMISSIONS   ← merges every slice's fragment
+│   └── <subject>.permissions.ts     ←   procedure path → PermissionKey
+├── registry/
 │   ├── index.ts
-│   └── <subject>.permissions.ts     ← procedure path → PermissionKey
-└── <subject>/                       ← one folder per domain subject
+│   └── procedure-permissions.ts     → ProcedurePermissions
+└── <subject>/                       ← one folder per domain subject; none ship yet
     ├── index.ts
     ├── <subject>.contract.ts        → <Subject>Contract   (zod shapes)
     ├── <subject>.entity.ts          → <Subject>Entity     (behaviour, no I/O)
     └── <subject>.procedures.ts      → <Subject>Procedures (oRPC, .route() mandatory)
 
 packages/contracts/tests/
-├── contract-router.spec.ts          ← coverage + orphan tests, via ContractWalker
-├── procedure-permissions.spec.ts
+├── primitive/
+│   ├── identifiers.spec.ts
+│   ├── envelope.spec.ts
+│   └── pagination.spec.ts
+├── registry/
+│   └── procedure-permissions.spec.ts  ← coverage + orphan tests, via ContractWalker
 └── <subject>/
     └── <subject>.entity.spec.ts
 ```
@@ -450,36 +490,72 @@ Three entrypoints in `exports`: `.`, `./font.css`, `./sprite.svg`.
 ```
 packages/content/src/
 ├── index.ts
-├── content-source.ts                → ContentSource  (abstract, all methods async)
-├── static.content-source.ts         → StaticContentSource
-├── translator.ts                    → Translator
+├── import.ts                        ← ErrorCode, ErrorEnvelope, FieldViolation from `errors`
+├── primitive/
+│   ├── index.ts
+│   └── locale.ts                    → Locale, Locales
+├── source/
+│   ├── index.ts
+│   ├── content-source.ts            → ContentSource  (abstract, all methods async)
+│   ├── static.content-source.ts     → StaticContentSource   ← split; dynamic import
+│   └── bundled.content-source.ts    → BundledContentSource  ← every locale, static
+├── translator/
+│   ├── index.ts
+│   ├── translator.ts                → Translator, MessageSnapshot
+│   └── message-store.ts             → MessageStore  (the SSR → client carrier)
 ├── media/
 │   ├── index.ts
 │   ├── media-ref.ts                 → MediaRef
 │   └── static.media-resolver.ts     → StaticMediaResolver
 ├── message/                         ── shape 1: short keyed strings
-│   ├── index.ts                     ← MessageKey closed union
-│   ├── en/
-│   │   ├── index.ts
+│   ├── index.ts
+│   ├── namespace.ts                 ← MessageKey closed union, from type-only imports
+│   ├── catalog.ts                   → CLIENT_CATALOG  (locale × namespace → loader)
+│   ├── catalog.server.ts            → SERVER_CATALOG  (+ email)
+│   ├── error-copy.ts                → ERROR_COPY, FIELD_RULE_COPY, ErrorCopy
+│   ├── en/                          ← no index.ts; nothing merges these
 │   │   ├── common.ts
 │   │   ├── nav.ts
 │   │   ├── auth.ts
 │   │   ├── error.ts
-│   │   └── email.ts                 ← the worker's namespace
-│   └── bn/                          ← Partial<>, falls back to en
-│       └── index.ts
+│   │   └── email.ts                 ← the worker's namespace, server-only
+│   └── bn/                          ← same five files; NamespaceBundle<N> each
+│       ├── common.ts
+│       ├── nav.ts
+│       ├── auth.ts
+│       ├── error.ts
+│       └── email.ts
 ├── document/                        ── shape 2: long-form editorial
+│   ├── index.ts
 │   ├── document.schema.ts           → DocumentContract
 │   └── document.entity.ts           → DocumentEntity
 └── collection/                      ── shape 3: repeating records
+    ├── index.ts
     ├── collection.schema.ts         → CollectionContract
     └── nav/
+        ├── index.ts
         ├── nav.schema.ts            → NavContract   (carries `module`, never `permission`)
         └── nav.data.ts              → navItems
 
 packages/content/tests/
-└── translator.spec.ts
+├── primitive/
+│   └── locale.spec.ts
+├── source/
+│   └── static.content-source.spec.ts  ← the shell arrives unasked; English is the fallback
+├── translator/
+│   ├── translator.spec.ts
+│   └── message-store.spec.ts
+└── message/
+    └── error-copy.spec.ts             ← every ErrorCode has copy; every rule name resolves
 ```
+
+> [!NOTE]
+> **This tree is the finished package; the error slice of it is what exists today.** `locale.ts`,
+> `translator.ts`, `message/error-copy.ts`, `message/namespace.ts`, `message/catalog.ts`, the
+> `common` and `error` namespaces in both locales, and `content-source.ts` +
+> `static.content-source.ts` far enough to hand out a `Translator` were written early, because
+> [09](09-errors-package.md) has no other half. [20](20-content-package.md) marks each file and
+> lists what the second pass adds.
 
 ### `packages/query`
 
@@ -589,6 +665,7 @@ apps/web/
     └── route/
         ├── __root.tsx                  ← token.css, theme.css, all four providers
         ├── -guard.ts                   → RouteGuard   (hyphen = not a route)
+        ├── -messages.ts                → MessageRouterContext  (module augmentation)
         ├── index.tsx
         ├── sign-in.tsx
         ├── forbidden.tsx
@@ -616,6 +693,8 @@ apps/worker/
     ├── consumer/
     │   ├── embedding.consumer.ts       → EmbeddingConsumer
     │   └── <name>.consumer.ts
+    ├── notification/
+    │   └── digest.composer.ts          → DigestComposer  (the only email-namespace reader)
     └── schedule/
         └── cleanup.schedule.ts         → CleanupSchedule  (fixed jobId)
 ```
@@ -651,7 +730,7 @@ apps/desktop/
 
 **Count the `index.ts` files.** Every folder has one, and nothing outside a package's root `index.ts` is importable. That is why moving a file inside a package never breaks a consumer.
 
-**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [29](29-naming-and-boundaries.md#13-barrels-and-imports)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
+**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [Opinions · Imports](../opinions/imports.md)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
 
 **Notice what `apps/` does not contain.** No business logic, no schema, no permission decision, no domain error. Across three shells: two `env.ts` files, one `config.ts`, one transport directory, one bootstrap, and route files that compose. If any app directory grows past a few hundred lines of non-route code, something drifted downward that belongs in `packages/`.
 

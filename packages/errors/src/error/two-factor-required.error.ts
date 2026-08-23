@@ -1,10 +1,6 @@
-import { AppError } from "../app.error.js";
+import { AppError } from "./app.error.js";
 
-/**
- * Not a failure so much as a fork in the flow — the sign-in form branches on this
- * code to show the second factor. It exists as a code precisely so no one has to
- * match on the words "two-factor" in a message.
- */
+// A fork in the flow, not a failure — the sign-in form branches on this code.
 export class TwoFactorRequiredError extends AppError {
   public constructor() {
     super("TWO_FACTOR_REQUIRED");

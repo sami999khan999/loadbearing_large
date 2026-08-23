@@ -40,17 +40,17 @@ export const documentChunks = pgTable(
   {
     id: uuid("id").primaryKey(),
 
-    /** The domain row this chunk was derived from — a document, receipt, note. */
+    // The domain row this chunk was derived from — a document, receipt, note.
     sourceId: uuid("source_id").notNull(),
     sourceType: text("source_type").notNull(),
 
-    /** Null means org-wide. Anything else is the permission scope. */
+    // Null means org-wide. Anything else is the permission scope.
     goalId: uuid("goal_id"),
 
     chunkIndex: text("chunk_index").notNull(),
     content: text("content").notNull(),
 
-    /** Dimensions must match EMBEDDING_DIMENSIONS. Changing it is a migration. */
+    // Dimensions must match EMBEDDING_DIMENSIONS. Changing it is a migration.
     embedding: vector("embedding", { dimensions: 1536 }).notNull(),
 
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),

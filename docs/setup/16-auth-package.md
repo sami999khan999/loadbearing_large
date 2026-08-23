@@ -266,12 +266,12 @@ export class CapabilityCache {
     return resolved;
   }
 
-  /** Call on every RBAC write. See the invalidation list below. */
+  // Call on every RBAC write. See the invalidation list below.
   public async invalidate(userId: string): Promise<void> {
     await this.cache.delete(`${CapabilityCache.PREFIX}${userId}`);
   }
 
-  /** Role edits affect everyone holding it — cheaper to flush than to enumerate. */
+  // Role edits affect everyone holding it — cheaper to flush than to enumerate.
   public async invalidateAll(): Promise<void> {
     await this.cache.deletePrefix(CapabilityCache.PREFIX);
   }
@@ -361,12 +361,12 @@ export const apiKeys = pgTable(
     name: text("name").notNull(),
     issuerId: text("issuer_id").notNull(),
 
-    /** First 8 chars of the token — indexed lookup without storing the secret. */
+    // First 8 chars of the token — indexed lookup without storing the secret.
     prefix: text("prefix").notNull(),
-    /** sha256(token). The token itself is never stored, anywhere, ever. */
+    // sha256(token). The token itself is never stored, anywhere, ever.
     tokenHash: text("token_hash").notNull(),
 
-    /** Scopes at creation, already intersected with the issuer's capabilities. */
+    // Scopes at creation, already intersected with the issuer's capabilities.
     scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
 
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -384,7 +384,7 @@ export const apiKeys = pgTable(
 import { Uuid } from "@loadbearing/core";
 
 export interface GeneratedApiKey {
-  /** Shown to the user exactly once, at creation. Never stored. */
+  // Shown to the user exactly once, at creation. Never stored.
   readonly token: string;
   readonly prefix: string;
   readonly hash: string;

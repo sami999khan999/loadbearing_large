@@ -12,22 +12,27 @@ not. This package is the vocabulary all four share.
 ```
 packages/errors/
 ├── src/
-│   ├── app.error.ts          → AppError, ErrorEnvelope, FieldViolation, TransportError
-│   ├── error-normalizer.ts   → ErrorNormalizer
+│   ├── index.ts              ← no import.ts: this package takes nothing from outside
 │   ├── catalog/              ← one fragment per slice, team-owned
 │   │   ├── index.ts          ←   ERROR_CATALOG, ErrorCode, ErrorMeta, ErrorSeverity
 │   │   └── core.errors.ts
-│   ├── error/                ← one class per code that carries context
+│   ├── error/                ← the base class and one subclass per code with context
+│   │   ├── app.error.ts      → AppError, ErrorEnvelope, FieldViolation, TransportError
 │   │   ├── forbidden.error.ts · not-found.error.ts · conflict.error.ts
 │   │   ├── unauthorized.error.ts · two-factor-required.error.ts
-│   │   └── validation.error.ts · internal.error.ts
+│   │   ├── validation.error.ts · internal.error.ts
+│   │   └── server-only.error.ts   ★ thrown by core, at module load
+│   ├── normalizer/
+│   │   └── error-normalizer.ts → ErrorNormalizer
 │   └── transport/
 │       └── http.ts           → HTTP_STATUS   ★ adapters only, never the domain
 └── tests/
 ```
 
-Zero dependencies, like `core` and `permissions`. Any dependency would exclude one of those four
-runtimes, and then the vocabulary stops being shared.
+Zero dependencies — the root of the workspace graph. Any dependency would exclude one of those four
+runtimes, and then the vocabulary stops being shared. `@loadbearing/core` depends on *this* package,
+not the other way round, because [`ServerOnly.assert`](../../core/docs/reference/server-only.md)
+throws and there is no such thing here as a bare `Error`.
 
 ---
 
@@ -56,6 +61,23 @@ to leak, to forget to translate, or to match on. Three things follow, and each i
 > field exists, something renders it — a toast, a log line pasted into a ticket, a `<pre>` in an error
 > boundary — and user-facing text now lives outside `content` and outside translation. Structured
 > `context` covers every legitimate use.
+
+### There is no exception, including the one that used to exist
+
+`ServerOnly.assert` in `core` is the hardest case in the repository: it fires at module load, for a
+developer reading a console, and never crosses a wire. It throws `ServerOnlyError` — code
+`SERVER_ONLY`, context `{ package }` — and the long sentence it used to carry inline now lives in
+`content` as `error.serverOnly`, with `{package}` interpolated from that context.
+
+```ts
+new ServerOnlyError("@loadbearing/db").message;   // "SERVER_ONLY"
+ErrorCopy.message(translator, error.toJSON());    // "@loadbearing/db was imported into a client …"
+```
+
+Nothing was lost — the words are identical, and now translatable. What the throw site keeps is a
+greppable code and a field a log query can filter on. The full argument, including the case *for*
+the exception and why it fails, is on
+[core's `ServerOnly` page](../../core/docs/reference/server-only.md#why-the-hardest-case-for-prose-still-loses).
 
 ---
 
@@ -106,7 +128,7 @@ most of what keeps the transport swappable. ESLint enforces the import name.
 
 ## Testing
 
-27 tests. The ones worth knowing about:
+32 tests. The ones worth knowing about:
 
 - **`normalize()` is total** — an `Error`, a string, `undefined`, `null`, a number and a plain object
   all yield a valid envelope.
@@ -116,6 +138,9 @@ most of what keeps the transport swappable. ESLint enforces the import name.
 - **Zod's default message is discarded** — asserted against a realistic issue that carries one.
 - **Structural detection works across package copies**, and an unknown code is *not* mistaken for ours.
 - **The catalog and `HTTP_STATUS` have not drifted.**
+- **`ServerOnlyError` names its context key `package`** — asserted as a key list, because that key is
+  the placeholder in `error.serverOnly` and renaming it breaks only the rendered sentence.
+  `content` pins the other end of the same seam.
 
 ```bash
 pnpm --filter @loadbearing/errors test
@@ -127,4 +152,6 @@ pnpm --filter @loadbearing/errors test
 
 - [AppError](reference/app-error.md) · [ErrorNormalizer](reference/error-normalizer.md) · [catalog](reference/catalog.md)
 - [Build order · 09 · errors](../../../docs/setup/09-errors-package.md)
+- [`@loadbearing/content`](../../content/docs/reference/error-copy.md) — the other half: `ERROR_COPY`, `ErrorCopy`
+- [`@loadbearing/core`](../../core/docs/reference/server-only.md) — the one caller that throws at module load
 - [`@loadbearing/permissions`](../../permissions/docs/index.md) — the same codes-here/copy-there split

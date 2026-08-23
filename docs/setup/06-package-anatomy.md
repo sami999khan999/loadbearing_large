@@ -19,7 +19,10 @@ packages/<name>/
 ├── tsconfig.json
 ├── tsup.config.ts
 ├── src/
-│   └── index.ts        ← the only public entrypoint
+│   ├── index.ts        ← the only public entrypoint
+│   ├── import.ts       ← the only place the package reaches outside itself
+│   └── <role>/         ← everything else; index.ts + the files of that kind
+│       └── index.ts
 └── docs/
     ├── meta.json       ← title, description, page order
     ├── index.md        ← what this package is for
@@ -67,6 +70,7 @@ convention.
     }
   },
   "files": ["dist"],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -129,23 +133,82 @@ One entry point per package. A package with multiple entrypoints is a package th
 > [!NOTE]
 > **No lint script and no lint config.** Biome and ESLint each run once over the whole repo from the root ([05](05-lint-and-format.md)), keyed on file globs rather than per-package files. Fifteen fewer config files, and no package can quietly opt itself out of a rule.
 
+**`"sideEffects": false` is a claim, and it is true of every package here.** None of them
+import a CSS file or a polyfill for its side effect; `asset`'s stylesheet is a separate
+`exports` entry that the app imports by path, not a bare import inside a module. The flag is
+what lets a bundler drop an unused export *and everything it pulled in* rather than keeping the
+module alive on the chance that importing it did something.
+
+It is load-bearing in exactly one place today. `@loadbearing/content` exports both a
+split-by-namespace source and a `BundledContentSource` that statically imports every locale
+([20](20-content-package.md)); `packages/feature` imports `Translator` from that same barrel.
+Without the flag, no bundler can prove the unused class is droppable, and every locale rides
+into the client chunk through a barrel that never asked for it. **Get it wrong and nothing
+fails — the bundle just quietly doubles**, which is why [26](26-hygiene-and-ci.md) greps for a
+locale string in the entry chunk rather than trusting the flag.
+
 ### `src/index.ts` — the barrel
 
-Every package has exactly one public entrypoint. Consumers write `import { Clock } from "@loadbearing/core"` and never `from "@loadbearing/core/dist/clock.js"`. The barrel is what makes internal reorganisation free: moving `clock.ts` into `time/clock.ts` is a one-line edit in `index.ts` and nobody downstream notices.
+Every package has exactly one public entrypoint. Consumers write `import { Clock } from "@loadbearing/core"` and never `from "@loadbearing/core/dist/primitive/clock.js"`. The barrel is what makes internal reorganisation free: moving `clock.ts` from `primitive/` into `time/` is a one-line edit in `index.ts` and nobody downstream notices.
 
-Subject folders get their own `index.ts` that the root barrel re-exports — **naming every symbol, never `export *`** ([29](29-naming-and-boundaries.md#13-barrels-and-imports)):
+**Every folder gets its own `index.ts`, and the root barrel re-exports those** — **naming every symbol, never `export *`** ([Opinions · Imports](../opinions/imports.md)):
 
 ```ts
-// packages/contracts/src/index.ts
-export { type AppContract, contract } from "./contract-router.js";
-export { Envelope, Identifiers, Pagination, type TaskId } from "./primitive/index.js";
-export { ProcedurePermissions } from "./procedure-permissions.js";
-export { TaskContract, TaskEntity, TaskProcedures } from "./task/index.js";
+// packages/errors/src/index.ts
+export { ERROR_CATALOG, type ErrorCode, type ErrorMeta, type ErrorSeverity } from "./catalog/index.js";
+export {
+  AppError,
+  ConflictError,
+  // …
+  ValidationError,
+} from "./error/index.js";
+export { ErrorNormalizer } from "./normalizer/index.js";
+export { HTTP_STATUS } from "./transport/index.js";
 ```
+
+The root barrel names only folder barrels, because `src/` holds nothing else — see
+[Opinions · Folders](../opinions/folders.md).
 
 The named list is what makes the public surface a decision rather than a side effect: `export *` republishes anything a file exports, so widening the API becomes invisible in review. Biome's `noReExportAll` ([05](05-lint-and-format.md)) fails the build on a star, and `biome check --write` sorts the statements and the specifiers for you.
 
 Note the `.js` extensions on relative imports throughout. `moduleResolution: "Bundler"` doesn't require them, but `NodeNext` in `apps/worker` does, and writing them everywhere means code moves between the two without an edit.
+
+### `src/import.ts` — the outside surface
+
+`index.ts` is what a package gives. `import.ts` is what it takes. **Every import from another
+workspace package or an npm dependency is written once here and re-exported; the rest of `src/`
+imports it from `./import.js`.** Reading one short file tells you everything the package depends
+on — no `grep` across twenty modules, no drift between `package.json` and what the code actually
+uses.
+
+```ts
+// packages/core/src/import.ts
+// Everything this package takes from outside itself, in one place. No relative
+// re-exports live here — that is what keeps it cycle-free.
+
+// ── @loadbearing/errors ──────────────────────────────────────────────────────
+export { ServerOnlyError } from "@loadbearing/errors";
+```
+
+**One separator comment per source**, workspace packages before npm ones. The point of the file is
+that it is skimmable; a flat alphabetised list of thirty specifiers is not. Comments are `//`
+throughout this repository — [Opinions · Comments](../opinions/comments.md).
+
+Three rules keep it from becoming the hub that this pattern is usually warned about
+([Opinions · Imports](../opinions/imports.md)):
+
+1. **External only.** Never re-export a relative module from `import.ts`. That is the single
+   constraint that makes a cycle impossible — `import.ts` has no edge back into the package.
+2. **Named, never starred.** Same reason as the barrel, and `verbatimModuleSyntax` needs the
+   inline `type` modifier: `export type { ErrorCode } from "@loadbearing/errors"` stays erased.
+3. **No file, no dependencies.** `@loadbearing/errors` and `@loadbearing/permissions` have no
+   `import.ts`, and that is the statement — they import nothing from outside themselves. Never
+   commit an empty one.
+
+> [!NOTE]
+> The `no-restricted-imports` blocks in `tooling/eslint-config` match on the *specifier*, so they
+> now fire on `import.ts` and nowhere else. That is where the rule belongs — the ban on
+> `application` importing `HTTP_STATUS` is checked at the one line that could introduce it.
 
 ---
 
@@ -159,26 +222,26 @@ Create **`scaffold.mjs`** at the repo root:
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// name → [PlaceholderClass, entry extension, extra devDependencies]
+// name → [entry extension, extra devDependencies]
 const PACKAGES = {
-  core: ["Core", "ts", {}],
-  permissions: ["Permissions", "ts", {}],
-  errors: ["Errors", "ts", {}],
-  contracts: ["Contracts", "ts", {}],
-  application: ["Application", "ts", {}],
-  db: ["Db", "ts", { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:" }],
-  infrastructure: ["Infrastructure", "ts", { "@types/node": "catalog:" }],
-  auth: ["Auth", "ts", { "@types/node": "catalog:" }],
-  composition: ["Composition", "ts", {}],
-  asset: ["Asset", "ts", {}],
-  content: ["Content", "ts", {}],
-  "api-client": ["ApiClient", "ts", {}],
-  query: ["Query", "tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
-  ui: ["Ui", "tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
-  feature: ["Feature", "tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
+  core: ["ts", {}],
+  permissions: ["ts", {}],
+  errors: ["ts", {}],
+  contracts: ["ts", {}],
+  application: ["ts", {}],
+  db: ["ts", { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:" }],
+  infrastructure: ["ts", { "@types/node": "catalog:" }],
+  auth: ["ts", { "@types/node": "catalog:" }],
+  composition: ["ts", {}],
+  asset: ["ts", {}],
+  content: ["ts", {}],
+  "api-client": ["ts", {}],
+  query: ["tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
+  ui: ["tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
+  feature: ["tsx", { react: "catalog:react", "@types/react": "catalog:react" }],
 };
 
-for (const [name, [cls, ext, extraDev]] of Object.entries(PACKAGES)) {
+for (const [name, [ext, extraDev]] of Object.entries(PACKAGES)) {
   const dir = join("packages", name);
   mkdirSync(join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "docs"), { recursive: true });
@@ -247,14 +310,9 @@ export default defineConfig({
 `,
   );
 
-  writeFileSync(
-    join(dir, `src/index.${ext}`),
-    `/** Placeholder so the package has a real export. Replaced in the feature steps. */
-export class ${cls}Package {
-  public static readonly id = "@loadbearing/${name}";
-}
-`,
-  );
+  // An empty barrel, not a placeholder class. `export {}` makes the file a module
+  // rather than a script; tsup emits a 13-byte d.ts and nothing pretends to exist.
+  writeFileSync(join(dir, `src/index.${ext}`), `export {};\n`);
 
   mkdirSync(join(dir, "docs/reference"), { recursive: true });
 
@@ -312,17 +370,22 @@ node -e "require('fs').unlinkSync('scaffold.mjs')"
 
 **One command per package, in this order.** `db` depends on `application`, so `application` must be declared first for the graph to resolve cleanly on the first pass.
 
+### `@loadbearing/errors`
+No runtime dependencies. It is the root of the graph and depends on nothing at all, because a failure has to be constructible and readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it. Any dependency would exclude one of those. See [09](09-errors-package.md).
+
 ### `@loadbearing/core`
-No runtime dependencies. It is the root of the graph and depends on nothing at all — not even other `@loadbearing/*` packages — so it loads in a browser, a Node worker, a Tauri webview, or a test file.
+```bash
+pnpm add --filter @loadbearing/core @loadbearing/errors@workspace:*
+```
+> **One dependency, and it is the only one this package will ever have.** `ServerOnly.assert` throws, and nothing in this repository throws a bare `Error` ([09](09-errors-package.md) Step 9.3). Since `errors` is itself a leaf, `core` keeps the property that actually matters — it loads in a browser, a Node worker, a Tauri webview, or a bare test file.
+>
+> **`errors` is declared before `core` here on purpose.** The build order is the graph, not the doc numbers, and `pnpm build:packages` will show `errors` completing first.
 
 ### `@loadbearing/permissions`
 ```bash
 pnpm add --filter @loadbearing/permissions @loadbearing/core@workspace:*
 ```
 > The registry and `CapabilitySet` need only primitives. Deliberately no database and no HTTP: this package must run identically on the server, in the browser, in the worker, and later in the Tauri webview. That identity is what makes "one permission model" true rather than aspirational.
-
-### `@loadbearing/errors`
-No runtime dependencies. Like `core` and `permissions` it is a leaf, and for the same reason: a failure has to be constructible and readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it. Any dependency would exclude one of those. See [09](09-errors-package.md).
 
 ### `@loadbearing/contracts`
 ```bash
@@ -374,9 +437,13 @@ pnpm add --filter @loadbearing/asset zod@catalog:
 
 ### `@loadbearing/content`
 ```bash
-pnpm add --filter @loadbearing/content @loadbearing/core@workspace:* @loadbearing/asset@workspace:* zod@catalog:
+pnpm add --filter @loadbearing/content @loadbearing/errors@workspace:* @loadbearing/asset@workspace:* zod@catalog:
 ```
 > React-free on purpose: `apps/worker` needs copy for digest and escalation emails and cannot import `feature`.
+>
+> **`errors`, not `core`.** This package imports `ErrorCode`, `ErrorEnvelope` and `FieldViolation` — type-only, so nothing from `errors` reaches the runtime — because `ERROR_COPY` is total over the error vocabulary ([20](20-content-package.md)). It imports nothing from `core` at all, and declaring the dependency anyway would put a cycle one honest refactor away now that `core` depends on `errors`.
+>
+> This is also the one package where `"sideEffects": false` decides whether the design works rather than shaving a kilobyte — see [20](20-content-package.md#sideeffects-false-is-load-bearing-here).
 
 ### `@loadbearing/api-client`
 ```bash
@@ -417,7 +484,7 @@ pnpm install
 pnpm build:packages
 ```
 
-**Read the build log.** This is the gate that matters. `core` must complete before `permissions`, which completes before `contracts`, which completes before `application`, and so on through `composition`. That ordering is pnpm reading your dependency graph — nothing declares it anywhere — and it is the proof the workspace is wired correctly.
+**Read the build log.** This is the gate that matters. `errors` must complete before `core`, which completes before `permissions`, which completes before `contracts`, then `application`, and so on through `composition`. That ordering is pnpm reading your dependency graph — nothing declares it anywhere — and it is the proof the workspace is wired correctly.
 
 If two packages that should be ordered build in parallel, one of them is missing a `workspace:*` dependency. Fix it now; a missing edge in the graph produces intermittent build failures later that look like flakiness.
 
@@ -426,22 +493,24 @@ If two packages that should be ordered build in parallel, one of them is missing
 ## The resulting dependency graph
 
 ```
-core
- ├── permissions ──┐
- │                 ├── contracts ──┐
- │                 │               ├── application ──┬── db ────┐
- │                 │               │                 │          ├── auth ──┐
- │                 │               │                 └── infra ─┘          ├── composition
- │                 │               │                                       │
- │                 │               └── api-client ── query ── feature      │
- │                 │                                    │                  │
- │                 └────────────────────────────────────┘                  │
- │                                                                          │
- asset ── content ─────────────────────────────────────────────────────────┘
-   └── ui ── feature
+errors ── core
+ │         ├── permissions ──┐
+ │         │                 ├── contracts ──┐
+ │         │                 │               ├── application ──┬── db ────┐
+ │         │                 │               │                 │          ├── auth ──┐
+ │         │                 │               │                 └── infra ─┘          ├── composition
+ │         │                 │               │                                       │
+ │         │                 │               └── api-client ── query ── feature      │
+ │         │                 │                                    │                  │
+ │         │                 └────────────────────────────────────┘                  │
+ │         │                                                                          │
+ └─────────┴── asset ── content ──────────────────────────────────────────────────────┘
+                          └── ui ── feature
 ```
 
 Nothing ever points upward. `application` sits at the centre and knows nothing below it.
+
+**`errors` is the root, and `core` is one edge above it.** Both are leaves in the sense that matters — zero third-party dependencies, no Node built-ins, no DOM — so both load anywhere. `errors` genuinely depends on nothing; `core` depends on `errors` alone, because `ServerOnly.assert` throws and there is no such thing in this repository as a bare `Error`.
 
 ---
 

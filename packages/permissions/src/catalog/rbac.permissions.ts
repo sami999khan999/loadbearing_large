@@ -1,4 +1,4 @@
-import type { PermissionMeta } from "../permission-registry.js";
+import type { PermissionMeta } from "../registry/index.js";
 
 export const rbacPermissions = {
   "rbac.role.read": { scope: "org", module: "rbac", label: "View roles" },
