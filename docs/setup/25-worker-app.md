@@ -108,6 +108,8 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 
 `apps/worker/src/env.ts` is structurally identical to the web app's: a Zod schema parsed at module load, exposing `containerConfig()`.
 
+**It parses the same `LOG_LEVEL` and `LOG_PRETTY` the web app does**, and returns the same `logging` block. A worker with no log output is a worker you cannot operate.
+
 **It parses a smaller schema.** The worker needs `DATABASE_URL`, `REDIS_URL`, the S3 block, and the embedding block. It does **not** need `AUTH_SECRET`, `AUTH_URL`, or `AUTH_TRUSTED_ORIGINS` — it never issues or validates a session.
 
 **Do not share one `env.ts` between the two apps by extracting it to a package.** The whole point of the `process.env` rule is that each deployable declares exactly what it needs. A shared schema would force the worker to carry an `AUTH_SECRET` it never uses, which is one more secret in one more environment for no reason.
@@ -224,6 +226,22 @@ export class EmbeddingConsumer {
 
 **Let the handler throw.** BullMQ's retry and backoff are driven by rejection. Catching and logging turns a retryable failure into permanent silent data loss.
 
+**Which is exactly why job failures are logged from the `failed` event, not from a `catch`:**
+
+```ts
+const worker = new Worker<EmbeddingJobData>(QueueName.EMBEDDING, /* … */);
+
+worker.on("failed", (job, error) => {
+  this.container.logger.failure(error, {
+    queue: QueueName.EMBEDDING,
+    jobId: job?.id ?? "unknown",
+    attempt: job?.attemptsMade ?? 0,
+  });
+});
+```
+
+The listener observes without swallowing, so BullMQ still sees the rejection and still retries. `logger.failure` normalises whatever was thrown, reads its severity for the level, and keeps the raw cause — see [`observability`](../../packages/observability/docs/reference/logger.md).
+
 ---
 
 ## Step 25.5 — Copy for email
@@ -306,12 +324,25 @@ export class WorkerBootstrap {
   public async start(): Promise<void> {
     this.workers.push(new EmbeddingConsumer(this.container, this.redis.queueClient()).start());
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
-    console.log(`worker started: ${this.workers.length} consumer(s)`);
+    this.container.logger.emit("process.started", {
+      service: "worker",
+      consumers: this.workers.length,
+    });
   }
 
-  public async stop(): Promise<void> {
+  public async stop(signal: string): Promise<void> {
+    this.container.logger.emit("process.stopping", { service: "worker", signal });
+    const startedAt = this.container.clock.now();
+
     await Promise.all(this.workers.map((w) => w.close()));
     await this.redis.close();
+
+    this.container.logger.emit("process.stopped", {
+      service: "worker",
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+
+    // Last, because everything closing above it may have had something to say.
     await this.container.dispose();
   }
 }
@@ -338,7 +369,7 @@ await bootstrap.start();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    void bootstrap.stop().then(() => process.exit(0));
+    void bootstrap.stop(signal).then(() => process.exit(0));
   });
 }
 ```
@@ -361,7 +392,9 @@ Then, from `psql` or a scratch script, enqueue a job and watch the log. A round 
 
 ## ✅ Gate
 
-- `pnpm dev:worker` boots and logs its consumer count.
+- `pnpm dev:worker` boots and emits one line of JSON: `{"level":"info","event":"process.started","service":"worker","consumers":1}`.
+- `SIGTERM` emits `process.stopping` before draining, and `process.stopped` after.
+- `grep -rn "console\." apps/worker/src` returns nothing — Biome's `noConsole` ([05](05-lint-and-format.md)) fails the build otherwise.
 - Enqueuing an embedding job produces a row in `document_embeddings`.
 - `SIGTERM` drains in-flight jobs before exiting.
 - Restarting the worker three times leaves exactly **one** repeatable `cleanup-daily` entry (`redis-cli --scan --pattern 'bull:*repeat*'`).

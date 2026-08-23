@@ -124,6 +124,8 @@ export type ErrorCode = keyof typeof ERROR_CATALOG;
 
 `severity` is what separates "a user tried something they cannot do" from "we are broken". Both are errors; only one should wake anyone.
 
+**Its consumer is `Logger.failure()`** in `@loadbearing/observability`, which maps `expected → warn` and `unexpected → error`. That is the whole reason this field is metadata on the code rather than a judgement call at each `catch` — the decision is made once, next to the code, and every runtime that catches the error reaches the same answer.
+
 ---
 
 ## Step 9.2 — The envelope

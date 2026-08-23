@@ -1,8 +1,8 @@
 # 06 · Package Anatomy
 
-> The three config files every package has, its `src/` and `docs/`, why the `development` export condition exists, and a one-shot script that creates all fifteen.
+> The three config files every package has, its `src/` and `docs/`, why the `development` export condition exists, and a one-shot script that creates all sixteen.
 
-**Delivers:** Fifteen structurally identical packages with placeholder classes, wired into a real dependency graph and building in topological order.
+**Delivers:** Sixteen structurally identical packages with placeholder classes, wired into a real dependency graph and building in topological order.
 
 **Prerequisite:** [05 · Lint & Format](05-lint-and-format.md)
 
@@ -214,7 +214,7 @@ Three rules keep it from becoming the hub that this pattern is usually warned ab
 
 ## Step 6.1 — The scaffold script
 
-Fifteen structurally identical packages. Scripting it avoids fifteen chances to make a typo.
+Sixteen structurally identical packages. Scripting it avoids sixteen chances to make a typo.
 
 Create **`scaffold.mjs`** at the repo root:
 
@@ -225,8 +225,9 @@ import { join } from "node:path";
 // name → [entry extension, extra devDependencies]
 const PACKAGES = {
   core: ["ts", {}],
-  permissions: ["ts", {}],
   errors: ["ts", {}],
+  observability: ["ts", {}],
+  permissions: ["ts", {}],
   contracts: ["ts", {}],
   application: ["ts", {}],
   db: ["ts", { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:" }],
@@ -380,6 +381,12 @@ pnpm add --filter @loadbearing/core @loadbearing/errors@workspace:*
 > **One dependency, and it is the only one this package will ever have.** `ServerOnly.assert` throws, and nothing in this repository throws a bare `Error` ([09](09-errors-package.md) Step 9.3). Since `errors` is itself a leaf, `core` keeps the property that actually matters — it loads in a browser, a Node worker, a Tauri webview, or a bare test file.
 >
 > **`errors` is declared before `core` here on purpose.** The build order is the graph, not the doc numbers, and `pnpm build:packages` will show `errors` completing first.
+
+### `@loadbearing/observability`
+```bash
+pnpm add --filter @loadbearing/observability @loadbearing/core@workspace:* @loadbearing/errors@workspace:*
+```
+> The diagnostic stream. Two workspace dependencies and no third-party ones: `core` for `Clock` and `Uuid`, `errors` for `ERROR_CATALOG` and `ErrorNormalizer` — because the level of a logged failure comes from that catalog's `severity`. It sits this low in the graph so `db`, `infrastructure`, `auth`, and both apps can all reach it. **`application` may not**, and `check-architecture.mjs` asserts that. See [12](12-application-package.md).
 
 ### `@loadbearing/permissions`
 ```bash

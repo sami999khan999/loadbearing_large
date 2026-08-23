@@ -81,3 +81,20 @@ describe("catalog and transport coverage", () => {
     expect(Object.keys(HTTP_STATUS).sort()).toEqual(Object.keys(ERROR_CATALOG).sort());
   });
 });
+
+describe("traceId", () => {
+  it("survives the round trip, so a user can quote it back", () => {
+    const rebuilt = AppError.from({ code: "INTERNAL", context: {}, traceId: "t-1" });
+    expect(rebuilt?.toJSON().traceId).toBe("t-1");
+  });
+
+  it("is absent when the server did not stamp one", () => {
+    const rebuilt = AppError.from({ code: "INTERNAL", context: {} });
+    expect(rebuilt?.toJSON()).not.toHaveProperty("traceId");
+  });
+
+  it("is never invented by a server-thrown error", () => {
+    // The id belongs to the request, not to the failure. The adapter stamps it.
+    expect(new ForbiddenError("task.read").toJSON()).not.toHaveProperty("traceId");
+  });
+});

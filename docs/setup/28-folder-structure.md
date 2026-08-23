@@ -77,6 +77,7 @@ ratchet/
 ├── packages/                                  ← everything that matters
 │   ├── core/
 │   ├── errors/
+│   ├── observability/
 │   ├── permissions/
 │   ├── contracts/
 │   ├── application/
@@ -211,6 +212,43 @@ packages/errors/tests/
 **No message strings anywhere.** `Error.message` is the code; every word a user reads lives in `content` ([20](20-content-package.md)).
 
 ### `packages/permissions`
+
+```
+packages/observability/src/
+├── index.ts
+├── import.ts                        ← Clock, SystemClock, Uuid, ERROR_CATALOG, ErrorNormalizer
+├── primitive/
+│   ├── index.ts
+│   ├── log-level.ts                 → LogLevel, LogLevels
+│   └── correlation.ts               → Correlation, TraceId
+├── catalog/                         ← one fragment per slice, team-owned
+│   ├── index.ts                     ←   EVENT_CATALOG, EventCode, EventMeta
+│   └── core.events.ts
+├── event/
+│   ├── index.ts
+│   └── event-shape.ts               → EventShape, EventFields, LogFields, LogEntry
+└── logger/
+    ├── index.ts
+    ├── logger.ts                    → Logger        (abstract seam)
+    ├── json.logger.ts               → JsonLogger    ★ the one file allowed to call console
+    ├── silent.logger.ts             → SilentLogger
+    └── redactor.ts                  → Redactor
+
+packages/observability/tests/
+├── primitive/
+│   ├── log-level.spec.ts
+│   └── correlation.spec.ts
+├── catalog/
+│   └── catalog.spec.ts
+└── logger/
+    ├── logger.spec.ts
+    └── redactor.spec.ts
+```
+
+**The diagnostic stream, kept strictly apart from the audit trail.** `ActivityLogger` writes business
+facts to Postgres inside the transaction; this writes JSON to stdout and does not care if a line is
+lost. `packages/application` does not depend on it — the domain layer does not log
+([12](12-application-package.md)).
 
 ```
 packages/permissions/src/

@@ -14,6 +14,7 @@ Four vocabularies that look alike and mean different things.
 | **Permission key** | `<module>.<subject>.<action>[.<qualifier>]`, action **imperative** | `task.reactivate`, `task.update.self` |
 | **Procedure path** | `<subject>.<action>`, mirrors the permission it requires | `task.reactivate` |
 | **Activity / event name** | `<subject>.<action>`, action **past tense** | `task.reactivated` |
+| **Log event code** | `<subject>.<thing>.<state>`, state **past tense** | `queue.job.failed` |
 | **Queue name** | `<domain>.<work>`, noun-ish | `embedding.generate` |
 | **Repeatable job key** | `schedule.<name>` | `schedule.overdue-sweep` |
 
@@ -31,6 +32,13 @@ someone adds a procedure and forgets the entry
 
 **REST paths** on `.route({ path })` are kebab-case, plural resources, braced params matching the
 contract field name: `/tasks/{taskId}/reactivate`.
+
+**A log event code is not an activity name.** An activity is a business fact a user may read
+(`task.reactivated`); a log event is a diagnostic an operator reads (`queue.job.failed`). Both are
+past tense because both record something that already happened, and they live in different catalogs
+with different sinks — see [`@loadbearing/observability`](../../packages/observability/docs/index.md).
+Never emit one where the other belongs: a business fact in stdout is lost on restart, and a
+diagnostic in Postgres is a retention bill.
 
 ## Error codes
 

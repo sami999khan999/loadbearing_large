@@ -131,7 +131,20 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.6 Inside `packages/permissions`
+## 1.6 Inside `packages/observability`
+
+- **`catalog/`** — the closed `EventCode` vocabulary and its per-code policy: what level a code is, and whether it is sampled. Fragment-per-slice, the same team-ownership seam as `permissions/catalog/` and `errors/catalog/`.
+- **`event/`** — type-only. `EventShape` declares what each code carries, so a misspelled field is a compile error and a token cannot be logged unless somebody declared a field for it where a reviewer sees it.
+- **`logger/`** — the seam and its sinks. `JsonLogger` is **the one file in the repository allowed to call `console`**; Biome's `noConsole` is an error everywhere else, and this is the sink that rule exists to funnel everything into.
+- **`primitive/`** — `LogLevel` and `Correlation`. Same folder name as `core`'s, holding the same kind of thing.
+- **The level is in the catalog, never at the call site.** There is no `log.error(...)` — `emit("queue.job.failed", …)` is an error because the catalog says that code is, so it cannot be `info` in one adapter and `error` in another.
+- **`Logger` returns `void`, not `Promise<void>`** — the one deliberate break from the all-async port rule. An async logger makes a log line a scheduling decision and lights up `no-floating-promises` at every call site. Losing a line in a crash is acceptable here, which is exactly what separates it from `ActivityLogger`.
+- **Nothing in `packages/application` may import this.** The domain layer records business facts or throws; diagnostics belong to the adapters. `check-architecture.mjs` asserts it.
+- **Smell:** a free-form message string; a `log.emit` inside a use-case; a `catch { log }` in a consumer, which turns a retryable failure into silent data loss.
+
+---
+
+## 1.7 Inside `packages/permissions`
 
 - **`registry/`** — the two lookup classes. `permission-registry.ts` is the vocabulary, `module-registry.ts` is the nav gate. Both are singletons over a frozen, module-level view of their catalog.
 - **`capability/`** — `capability-set.ts`, the resolution algorithm. It imports `../registry/permission-registry.js` by file rather than through that folder's barrel, because the barrel also loads `module-registry.ts`, which imports this folder back.
@@ -143,7 +156,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.7 Inside `packages/contracts`
+## 1.8 Inside `packages/contracts`
 
 - **`primitive/`** — the shared vocabulary every subject uses: branded identifiers, `Envelope`, `Pagination`. Same folder name as `core`'s and `content`'s, holding the same kind of thing.
 - **`<subject>/`** — one folder per domain subject (`task/`, `goal/`, `lead/`). Three files each: the Zod shapes, the entity with behaviour, the oRPC procedures. **None ship** — the kit delivers the seam, not a sample tracker.
@@ -157,7 +170,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.8 Inside `packages/application`
+## 1.9 Inside `packages/application`
 
 - **`error/`** — the domain error hierarchy. Each carries a `code` string, which is the *only* thing the transport layer maps. No HTTP status codes anywhere in this folder.
 - **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
@@ -169,7 +182,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.9 Inside `packages/db`
+## 1.10 Inside `packages/db`
 
 - **`drizzle.config.ts` and `migrations/`** sit **above** `src/` because they are build-time artefacts, not shipped code. Migrations are generated and committed; `db:push` is never used.
 - **`src/` root files** — `database.ts` (the pool), `schema.ts` (a barrel re-exporting every `*.schema.ts`, which is what Drizzle Kit reads), `base.repository.ts`, `unit-of-work.ts`.
@@ -184,7 +197,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.10 Inside `packages/infrastructure`
+## 1.11 Inside `packages/infrastructure`
 
 - **`redis/`** — the connection itself, shared by the cache and the queue but configured differently for each (`maxRetriesPerRequest: null` for BullMQ, a key prefix only for the cache).
 - **`cache/`** — `RedisCacheStore`, implementing the `CacheStore` port.
@@ -197,7 +210,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.11 Inside `packages/auth`
+## 1.12 Inside `packages/auth`
 
 - **`src/` root files** — `AuthConfig` and `AuthFactory`. The factory is the only place Better Auth is constructed.
 - **`session/`** — `BetterAuthSessionResolver`, implementing the `SessionResolver` port. This is the wall: Better Auth types stop here.
@@ -208,7 +221,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.12 Inside `packages/composition`
+## 1.13 Inside `packages/composition`
 
 - **Three files, no subfolders.** `ContainerConfig` (the shape), `Container` (the wiring), `TestContainer` (the same wiring with fakes).
 - **Constructs every concrete class exactly once.** This is the only file in the repository that knows `PgVectorStore` and `VectorStore` are related.
@@ -219,7 +232,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.13 Inside `packages/api-client`
+## 1.14 Inside `packages/api-client`
 
 - **`src/` root** — `ApiClient`, with a private constructor and two factories: `overHttp` (browser and desktop) and `inProcess` (SSR, no network hop).
 - **`auth/`** — `AuthStrategy` (abstract) and its two implementations, plus `TokenProvider` (abstract) and `AuthClient`. This folder is the entire difference between a web client and a desktop client.
@@ -229,7 +242,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.14 Inside `packages/asset`
+## 1.15 Inside `packages/asset`
 
 - **`image/`** — a closed `ImageKey` union plus the files themselves under `file/`. A content record naming a missing image is a compile error.
 - **`icon/`** — source SVGs under `svg/`, plus the generated `sprite.svg` and `IconRegistry`. The sprite is gitignored; `build-sprite.mjs` regenerates it and fails the build on any hardcoded `fill` or `stroke`, because a hardcoded colour is an icon that breaks in dark mode.
@@ -240,7 +253,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.15 Inside `packages/content`
+## 1.16 Inside `packages/content`
 
 - **`message/`** — short keyed strings in three tiers. `namespace.ts` derives the closed `MessageKey` union from **type-only** imports of the English files, so the union stays complete while the runtime data splits; `catalog.ts` maps locale × namespace to a dynamic-import loader; `catalog.server.ts` adds `email`, which is server-only. English files are `as const`; every other locale is `NamespaceBundle<N>` — `Partial<>` **per namespace**, not per locale, so a Bengali file cannot hold a key from a namespace it does not name. A typo in a component is still a compile error, and so is a key from a namespace that component never declared.
 - **`document/`** — long-form editorial content with a schema and an entity.
@@ -257,7 +270,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.16 Inside `packages/query`
+## 1.17 Inside `packages/query`
 
 - **`src/` root** — `QueryKeys` (mirroring procedure paths, params last), `createQueryClient()`, the `ApiClientProvider` context, and `useAppMutation`.
 - **`session/`** — session queries and mutations, the one slice that ships with the kit.
@@ -269,7 +282,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.17 Inside `packages/ui`
+## 1.18 Inside `packages/ui`
 
 - **`token/`** — spacing, radii, type scale, motion durations. **Deliberately no colours.**
 - **`theme/`** — colours, as `[data-theme="…"]` custom properties, plus the registry. Splitting these two is what makes a second theme a file instead of a refactor.
@@ -281,7 +294,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.18 Inside `packages/feature`
+## 1.19 Inside `packages/feature`
 
 - **`i18n/`** — the message provider and hook. Lives here rather than in `content` because it is React.
 - **`auth/`** — sign-in, two-factor, the session guard, and the session context. `SessionProvider` takes a `CapabilitySetDto` and reconstructs the class, so the browser runs the identical resolution the server ran.
@@ -293,7 +306,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.19 Inside `apps/web`
+## 1.20 Inside `apps/web`
 
 - **`src/env.ts`** — one of two `process.env` readers. Parses at module load, so a missing secret crashes at boot with a field path rather than 500ing an hour later.
 - **`src/server/`** — **the entire transport layer**, and the thing that moves to `apps/api` if NestJS ever arrives. Nothing above or below it changes when it does. This is why it is one directory instead of scattered through routes.
@@ -310,7 +323,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.20 Inside `apps/worker`
+## 1.21 Inside `apps/worker`
 
 - **`src/env.ts`** — the second and last `process.env` reader. Parses a **smaller** schema than the web app's: no `AUTH_SECRET`, because the worker never issues or validates a session. Sharing one schema between the apps would hand the worker a secret it has no use for.
 - **`src/main.ts`** — construct the container, start the bootstrap, register signal handlers. Graceful shutdown is not optional: killing mid-job leaves it stalled until BullMQ's lock expires.
@@ -321,7 +334,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.21 Inside `apps/desktop`
+## 1.22 Inside `apps/desktop`
 
 - **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything here is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
 - **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.

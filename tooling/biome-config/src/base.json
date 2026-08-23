@@ -53,7 +53,8 @@
         }
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noConsole": "error"
       },
       "complexity": {
         "noStaticOnlyClass": "off"
@@ -123,6 +124,22 @@
         "rules": {
           "performance": {
             "noReExportAll": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.mjs",
+        "packages/db/src/migrate.ts",
+        "packages/db/src/seed/**",
+        "packages/infrastructure/src/smoke.ts",
+        "packages/observability/src/logger/json.logger.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
           }
         }
       }

@@ -62,6 +62,8 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `gate/` | module gates, fragment-per-slice | `permissions` |
 | `route/` | declared destinations, fragment-per-slice | `permissions` |
 | `procedure/` | the merged oRPC contract every slice's `.procedures.ts` feeds | `contracts` |
+| `event/` | type-only declarations of what an event carries | `observability` |
+| `logger/` | the diagnostic seam and its sinks | `observability` |
 | `port/` | abstract classes for cross-cutting infrastructure, zero implementations | `application` |
 | `seed/` | idempotent seeds, run after migration | `db` |
 | `consumer/` | queue consumers | `apps/worker` |
@@ -112,8 +114,8 @@ Subject folders repeat across packages by design: `contracts/task/`, `applicatio
 `db/task/`, `query/task/`, `feature/task/`, `web/route/task/`. Seven places, one glob per team —
 `packages/*/src/<slice>/**`.
 
-**Which packages are which.** `core`, `errors`, `permissions`, `content`, `composition`,
-`api-client` are role-organised — they hold one of each thing. `application`, `db`, `query`,
+**Which packages are which.** `core`, `errors`, `permissions`, `observability`, `content`,
+`composition`, `api-client` are role-organised — they hold one of each thing. `application`, `db`, `query`,
 `feature` are subject-organised — they hold one of each thing per slice. `infrastructure` is
 role-organised with the folder named after the *capability* (`cache/`, `storage/`, `queue/`,
 `embedding/`) and the file named after the technology, so a vendor swap is visibly local. `ui` is

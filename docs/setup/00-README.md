@@ -1,6 +1,6 @@
 # Starter Kit — Build Order
 
-> The reusable foundation every project on this architecture starts from. Postgres + Drizzle, Redis, S3, Better Auth, pgvector behind a swappable seam, and the fifteen-package layout from the architecture docs — with **no product features in it**.
+> The reusable foundation every project on this architecture starts from. Postgres + Drizzle, Redis, S3, Better Auth, pgvector behind a swappable seam, and the sixteen-package layout from the architecture docs — with **no product features in it**.
 
 **Stack:** pnpm workspaces (no Turborepo) · TanStack Start + oRPC · standalone worker · Postgres 17 + pgvector · Redis · S3 (MinIO locally) · Better Auth
 **Paradigm:** strictly object-oriented everywhere except React components and hooks.
@@ -101,9 +101,9 @@ continually — every rule for what to call a thing and where to put it, one pag
 
 ---
 
-## The fifteen packages, in one paragraph
+## The sixteen packages, in one paragraph
 
-`core` holds primitives. `permissions` decides who may do what. `errors` defines how a failure is shaped, serialised, and named — every runtime throws and reconstructs the same class, and it carries no prose, because `content` owns every word a user reads. `contracts` defines what data looks like and what it knows about itself. `application` holds every operation the product can perform plus the abstract ports it needs, with no framework anywhere. `db` implements the Postgres side of those ports. `infrastructure` implements the Redis, S3, and queue side. `auth` owns identity and turns any credential into a `Principal`. `composition` wires all of it together. `asset` holds every binary the product ships. `content` holds every user-visible string. `api-client` reaches the server, `query` caches what comes back, `ui` renders it, and `feature` assembles those into screens. The apps are thin adapters that read configuration, mount a transport, and compose components.
+`core` holds primitives. `observability` holds the diagnostic stream — closed event codes, levels decided by a catalog, structured JSON to stdout — kept strictly apart from the audit trail, and nothing in `application` may reach it. `permissions` decides who may do what. `errors` defines how a failure is shaped, serialised, and named — every runtime throws and reconstructs the same class, and it carries no prose, because `content` owns every word a user reads. `contracts` defines what data looks like and what it knows about itself. `application` holds every operation the product can perform plus the abstract ports it needs, with no framework anywhere. `db` implements the Postgres side of those ports. `infrastructure` implements the Redis, S3, and queue side. `auth` owns identity and turns any credential into a `Principal`. `composition` wires all of it together. `asset` holds every binary the product ships. `content` holds every user-visible string. `api-client` reaches the server, `query` caches what comes back, `ui` renders it, and `feature` assembles those into screens. The apps are thin adapters that read configuration, mount a transport, and compose components.
 
 ---
 

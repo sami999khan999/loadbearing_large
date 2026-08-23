@@ -104,7 +104,7 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
           }
         }
       },
-      "suspicious": { "noExplicitAny": "error" },
+      "suspicious": { "noExplicitAny": "error", "noConsole": "error" },
       "complexity": { "noStaticOnlyClass": "off" },
       "performance": { "noReExportAll": "error" }
     }
@@ -125,6 +125,8 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
 **`noStaticOnlyClass` is off on purpose.** It would flag `Uuid`, `Identifiers`, `ProcedurePermissions`, and `PermissionRegistry` — every static-only namespacing class. Those are the intended pattern here, not a smell.
 
 **`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([Opinions · Imports](../opinions/imports.md)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
+
+**`noConsole` is what keeps the log stream one stream.** Once `@loadbearing/observability` exists, a stray `console.log` is a line nobody can filter, level, sample, or redact — and it is the single easiest thing to add under deadline. Five paths are exempt and no more: `**/*.mjs`, `packages/db/src/migrate.ts`, `packages/db/src/seed/**`, `packages/infrastructure/src/smoke.ts`, and `packages/observability/src/logger/json.logger.ts` — the sink this rule exists to funnel everything into.
 
 **`noProcessEnv` plus the `node:process` import ban.** The rule catches `process.env.FOO` but not `import { env } from "node:process"`, so both entries are needed to close the door. The exemption for the two `env.ts` files comes in Step 5.2.
 

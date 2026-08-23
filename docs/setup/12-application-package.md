@@ -16,6 +16,13 @@ That is the whole argument, and it has a mechanical test: `grep -r "@orpc\|@tans
 
 Everything outside itself is reached through an abstract class in `port/`. That is what lets the entire system be constructed in a test with a fake database, a fake S3, and a frozen clock.
 
+> [!IMPORTANT]
+> **This package does not log, and does not depend on `@loadbearing/observability`.** A use-case records a business fact through `ActivityLogger`, or it throws a typed error. That is its entire vocabulary, and `check-architecture.mjs` asserts the missing import.
+>
+> The rule pays for itself immediately. Nothing has to thread a third argument into `execute(actor, input)`; there is no ambient request context to establish; the `Container` stays process-scoped. And a `ForbiddenError` gets logged **once**, at the boundary that catches it, with its full structured `context` — rather than three times on the way up, each layer adding a little and losing a little.
+>
+> Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `db` and `infrastructure`.
+
 ```
 packages/application/src/
 ├── index.ts

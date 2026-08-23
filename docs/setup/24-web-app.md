@@ -127,6 +127,9 @@ const Schema = z.object({
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
   OPENAI_API_KEY: z.string().default(""),
 
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  LOG_PRETTY: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -178,6 +181,7 @@ export class Env {
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
       },
+      logging: { level: e.LOG_LEVEL, pretty: e.LOG_PRETTY },
     } as const;
   }
 }
@@ -247,8 +251,19 @@ export const principalMiddleware = base.middleware(async ({ context, next, path 
   return next({ context: { principal } });
 });
 
-export const authed = base.use(principalMiddleware);
+// Before `principalMiddleware`, so a failure to resolve a principal is already
+// correlated. Both entrypoints pass the raw `Headers`, so nothing upstream changes.
+export const correlationMiddleware = base.middleware(async ({ context, next }) => {
+  const traceId = Correlation.fromHeaders(context.headers);
+  return next({ context: { traceId, log: context.container.logger.child({ traceId }) } });
+});
+
+export const authed = base.use(correlationMiddleware).use(principalMiddleware);
 ```
+
+**The trace id is a child logger, not ambient state.** `AsyncLocalStorage` would be Node-only, and doc 17 rule 2 forbids request-scoped state on the `Container`. A child bound with `{ traceId }` travels the same path the `Principal` already travels, and every line a handler writes carries it without naming it again.
+
+`Correlation.fromHeaders` adopts an upstream `x-request-id` where a proxy set one — sanitised first, because it arrives from the network and then rides every line of the request — and mints a `Uuid.v7()` otherwise.
 
 **The middleware calls `PrincipalBuilder`, never Better Auth directly.** That is what keeps the transport layer ignorant of the auth library, and it is why a NestJS migration rewrites a guard rather than rewriting authentication.
 
@@ -271,11 +286,17 @@ import { ErrorNormalizer, HTTP_STATUS } from "@loadbearing/errors";
 export class ErrorInterceptor {
   private constructor() {}
 
-  public static toTransport(thrown: unknown): never {
+  public static toTransport(thrown: unknown, log: Logger, traceId: string): never {
     const error = ErrorNormalizer.normalize(thrown);
+
+    // The one place every server-side failure passes through, so the one place
+    // that has to log it. `failure` reads the severity for its level and keeps the
+    // non-enumerable `cause` that `toJSON()` cannot reach.
+    log.failure(error);
+
     throw new ORPCError(error.code, {
       status: HTTP_STATUS[error.code],
-      data: error.toJSON(),
+      data: { ...error.toJSON(), traceId },
     });
   }
 }
@@ -284,6 +305,8 @@ export class ErrorInterceptor {
 **Three lines, and no `CODE_MAP`.** `normalize()` guarantees an `AppError` for anything thrown — a `ZodError`, a Postgres failure, a rejected string — so there is no fall-through branch to get wrong, and `HTTP_STATUS` is total over `ErrorCode` so a new code cannot ship without a status ([09](09-errors-package.md)).
 
 **The body is the envelope, not prose.** `error.toJSON()` sends `{ code, context, fields? }`, which the client reconstructs into the same class and renders through `content` in its own locale. The server has no opinion about the wording and never needs one.
+
+**The envelope carries the trace id, and that is what makes it worth minting.** `ErrorEnvelope.traceId` was declared from the first draft of `errors` and left unpopulated; this is the line that fills it. `AppError.from()` reads it back on the client and `TransportError` keeps it, so an error page can show a reference string. A user who says "it broke around two" hands over eight characters instead of a timestamp range.
 
 **Nothing unmapped can leak.** The old failure mode — a Postgres error string in a client response telling an attacker your table names — is closed at the normaliser rather than guarded against here: an unrecognised throw becomes `INTERNAL`, and the original is kept on a non-enumerable `cause` for the logger where `toJSON()` cannot reach it.
 

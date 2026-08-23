@@ -58,6 +58,12 @@ export interface ContainerConfig {
     readonly model: string;
     readonly dimensions: number;
   };
+  readonly logging: {
+    readonly level: LogLevel;
+    // Human-shaped output for a terminal. Never true in production — a collector
+    // wants one JSON object per line and nothing else.
+    readonly pretty: boolean;
+  };
 }
 ```
 
@@ -73,6 +79,7 @@ That is what lets you construct the entire system in a test with a fake database
 
 ```ts
 import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
+import { JsonLogger, type LogLevel, type Logger } from "@loadbearing/observability";
 import {
   Authorizer,
   type CacheStore,
@@ -120,6 +127,7 @@ export class Container {
   // ── shared primitives ─────────────────────────────────────
   public readonly clock: Clock;
   public readonly authorizer: Authorizer;
+  public readonly logger: Logger;
 
   // ── ports, exposed as their abstract types ────────────────
   public readonly cache: CacheStore;
@@ -142,6 +150,9 @@ export class Container {
   constructor(private readonly config: ContainerConfig) {
     this.database = new Database(config.database);
     this.redis = new RedisConnection({ url: config.redis.url });
+
+    // First, so a failure in anything below it has somewhere to be recorded.
+    this.logger = new JsonLogger(config.logging);
 
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
@@ -204,6 +215,11 @@ export class Container {
 
 **4. `dispose()` closes in reverse construction order.** Queues before Redis before Postgres. Closing Redis while BullMQ still holds blocking connections produces a hang on shutdown that looks like a deadlock, because it is one.
 
+**The logger is constructed first and disposed last**, which is the same rule read from both ends. Constructed first, because a `Database` that cannot reach Postgres should produce a structured line rather than a stack trace on stderr. Disposed last, because everything closing above it may have something to say on the way out.
+
+> [!NOTE]
+> **`logger` is a shared primitive, not a port.** It sits with `clock` and `authorizer` rather than in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` — the domain layer does not log at all ([12](12-application-package.md)). The seam lives in `@loadbearing/observability`, low enough in the graph that `db`, `infrastructure`, `auth`, and both apps can reach it.
+
 ---
 
 ## Step 17.3 — Where use-cases go
@@ -241,6 +257,7 @@ The reason this class exists in this shape:
 class TestContainer {
   public static build(overrides: Partial<Ports> = {}) {
     const clock = new FixedClock(new Date("2026-01-01T00:00:00Z"));
+    const logger = new SilentLogger();
     const authorizer = new Authorizer();
     const tasks = overrides.tasks ?? new InMemoryTaskRepository();
     const activity = overrides.activity ?? new RecordingActivityLogger();

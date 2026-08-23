@@ -44,7 +44,7 @@ export abstract class AppError extends Error {
   // Rebuild from the wire. `null` for an unrecognised code rather than trusting it.
   public static from(envelope: ErrorEnvelope): AppError | null {
     if (!AppError.isKnownCode(envelope.code)) return null;
-    return new TransportError(envelope.code, envelope.context, envelope.fields);
+    return new TransportError(envelope.code, envelope.context, envelope.fields, envelope.traceId);
   }
 
   public get retryable(): boolean {
@@ -61,4 +61,22 @@ export abstract class AppError extends Error {
 }
 
 // What `AppError.from()` produces — code and context survive, the class does not.
-export class TransportError extends AppError {}
+//
+// It carries the trace id because this is the client side of the wire: the server
+// stamps it onto the envelope from the request, and an error page shows it back so
+// a user reporting "it broke" hands over the string that finds the exact log line.
+// A server-thrown error has no trace id of its own — the id belongs to the request.
+export class TransportError extends AppError {
+  public constructor(
+    code: ErrorCode,
+    context?: ErrorContext,
+    fields?: readonly FieldViolation[],
+    public readonly traceId?: string,
+  ) {
+    super(code, context, fields);
+  }
+
+  public override toJSON(): ErrorEnvelope {
+    return { ...super.toJSON(), ...(this.traceId ? { traceId: this.traceId } : {}) };
+  }
+}

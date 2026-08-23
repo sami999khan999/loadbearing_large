@@ -1,0 +1,5 @@
+{
+  "title": "observability",
+  "description": "Logger, the closed EventCode union, and the trace id — one diagnostic stream to stdout, kept strictly apart from the audit trail",
+  "pages": ["index", "reference"]
+}

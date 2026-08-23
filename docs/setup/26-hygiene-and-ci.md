@@ -174,9 +174,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The three architectural assertions
+## Step 26.4 — The four architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Three greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Four greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts.
 
@@ -191,7 +191,15 @@ const BANNED = ["@orpc/", "@tanstack/", "drizzle-orm", "ioredis", "bullmq", "@aw
 
 **ESLint's boundary rules already cover this**, but a grep is independent of ESLint config, cannot be disabled with an inline comment, and keeps working if someone reorganises the lint setup.
 
-### 2 — Only `env.ts` reads `process.env`
+### 2 — `application` does not log
+
+```js
+// fail if packages/application/src/** imports @loadbearing/observability
+```
+
+The domain layer records business facts through `ActivityLogger` and throws typed errors; diagnostics belong to the adapters ([12](12-application-package.md)). This is the grep that keeps a `logger.emit` from appearing inside a use-case under deadline, and with it the request context that would have to be threaded there to make it useful.
+
+### 3 — Only `env.ts` reads `process.env`
 
 ```js
 // fail on any process.env outside apps/*/src/env.ts
@@ -199,7 +207,7 @@ const BANNED = ["@orpc/", "@tanstack/", "drizzle-orm", "ioredis", "bullmq", "@aw
 
 Every other `process.env` read is an unvalidated string that becomes `undefined` in production. This rule is what makes the `Env` classes trustworthy — it is not a style preference, it is the enforcement of a single validated boundary.
 
-### 3 — No server code in the client bundle
+### 4 — No server code in the client bundle
 
 ```bash
 pnpm --filter @loadbearing/web build
