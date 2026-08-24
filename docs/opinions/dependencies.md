@@ -1,0 +1,129 @@
+---
+title: Dependencies
+description: Three tiers by what a dependency can constrain, why framework-agnostic is not runtime-agnostic, and which layer may name what.
+---
+
+# Dependencies
+
+The kit targets **React, Next.js, and TanStack Start** on the front, and **pure Node, Express,
+NestJS, Fastify, and Hono** on the back. Every dependency decision is measured against that list.
+
+**Every version lives in `pnpm-workspace.yaml`.** A `package.json` writes `"zod": "catalog:"`, never
+a range. One place to upgrade, and two packages cannot drift onto different majors of the same
+library without somebody noticing.
+
+---
+
+## The three tiers
+
+The catalog is grouped by **what a dependency is able to constrain** — not by what it does.
+
+### Tier 1 — never ships
+
+Build, test, and lint tooling. It cannot constrain a consumer, because it never reaches one.
+`typescript`, `tsup`, `vitest`, `biome`, `eslint`, `drizzle-kit`, every `@types/*`.
+
+**One exception, and it is the most consequential entry in the file: `tsup` never ships but decides
+what does.** It is what makes every package ESM-only, and what decides whether a `"use client"`
+directive survives into `dist/` ([06 · Package anatomy](../setup/06-package-anatomy.md)). A bundler
+upgrade is a portability change wearing a dev-dependency costume.
+
+### Tier 2 — framework-agnostic runtime
+
+Ships, and works under every framework on the list. Split in two, because **framework-agnostic is
+not runtime-agnostic**:
+
+| | Runs in | Entries |
+|---|---|---|
+| **isomorphic** | server, browser, worker, webview, edge | `zod`, `@orpc/contract`, `@orpc/client` |
+| **node-only** | a Node process, under any framework | `pg`, `ioredis`, `bullmq`, `drizzle-orm`, `@aws-sdk/*` |
+
+`pg` and `ioredis` want raw TCP, so they are dead on an edge runtime — which is one config line away
+in Next, not a hypothetical. **That is the whole reason each one sits behind an abstract class in
+`packages/application/src/port/`.** A use-case must not learn which runtime it landed on, and the
+port is what stops it finding out.
+
+### Tier 3 — framework-scoped
+
+Each entry names a framework. Each is quarantined to the one layer allowed to name it.
+
+| Entry | May appear in | Why only there |
+|---|---|---|
+| `@orpc/server` | `apps/*/src/server/` | The transport seam. This is the file that changes when the backend framework does; nothing above it moves. |
+| `@tanstack/react-router` | `apps/` | Routing is app-shaped, not product-shaped. A Next app brings its own and reads paths from `@loadbearing/permissions`. |
+| `@tauri-apps/api` | `apps/desktop` | Desktop shell only. |
+| `@tanstack/react-query`, `@orpc/tanstack-query` | `packages/{query,ui,feature}` | React-scoped, which is inside the target set — all three front-end targets are React. |
+| `better-auth` | `packages/auth` | Multi-framework by export map: `./node` covers Node, Express, Fastify, Nest; `./next-js` and `./tanstack-start` cover two front-ends; the core web handler covers Hono. |
+
+`check-architecture.mjs` asserts the quarantine ([26](../setup/26-hygiene-and-ci.md)).
+
+---
+
+## Adding a dependency
+
+Three questions, in order. The first "yes" decides the tier.
+
+1. **Does it reach a consumer's bundle or `dist/`?** No → Tier 1. Done.
+2. **Does it name a framework, a router, or a shell?** Yes → Tier 3, and say in the catalog which
+   layer may import it. A framework-scoped dependency inside `packages/` is a design mistake unless
+   it is React.
+3. **Otherwise → Tier 2**, and answer the second question: isomorphic, or node-only? A node-only
+   addition needs a port in `application/src/port/` before any use-case can reach it.
+
+**If a dependency would be Tier 3 and you want it in `packages/`, the answer is almost always an
+abstract class instead.** That is what `port/` is for, and it is why `db` can hold `drizzle-orm`
+while `application` holds a `TaskRepository` that has never heard of SQL.
+
+---
+
+## Families that pin their siblings exactly
+
+Some libraries ship as a set and pin each other with an exact version rather than a caret. The four
+`@orpc/*` packages do:
+
+```
+@orpc/contract → "@orpc/shared": "1.15.0"     ← exact, not ^1.15.0
+@orpc/client   → "@orpc/shared": "1.15.0"
+```
+
+A skew between them therefore puts **two copies of the shared core in the tree**, which is the same
+class of failure that makes `ErrorNormalizer` match structurally instead of with `instanceof`.
+
+**Keep every member of such a family on one version line**, and say so in the catalog at each entry
+— the tiering deliberately splits the `@orpc/*` group across Tier 2 and Tier 3, so adjacency cannot
+be the reminder.
+
+> [!WARNING]
+> **`syncpack lint` does not catch this.** It verifies that *one* dependency carries the same range
+> across every package. It has no concept of a declared group that must move together.
+>
+> Not theoretical: this catalog shipped `@orpc/server` at `^1.13.7` beneath a comment reading *"pin
+> all four together"*, and every check in the repository passed. That is why it became the fifth
+> assertion in [26](../setup/26-hygiene-and-ci.md) rather than staying a comment.
+
+---
+
+## React is a peer, never a dependency
+
+`react` and `react-dom` are `peerDependencies` in `ui`, `query`, and `feature` — never `dependencies`.
+The consuming app supplies the single copy, so there is no path to two Reacts in one tree and no
+"invalid hook call" whose real cause is a duplicated renderer.
+
+They live in a **named catalog** (`catalog:react`), not the default one. React moves on its own
+cadence, and `catalog:react` in a `package.json` reads as a deliberate statement that this is a
+React package.
+
+---
+
+## What is enforced, and what is not
+
+| Rule | Enforced by |
+|---|---|
+| Framework-scoped entries stay out of `packages/` | `check-architecture.mjs` §1 |
+| `@orpc/*` on one version line | `check-architecture.mjs` §4 |
+| One range per dependency across packages | `syncpack lint` |
+| Dependency ordering in `package.json` | `sherif` |
+| No version published in the last 24h | pnpm `minimumReleaseAge` |
+| Tier placement, and the port rule for node-only | Review |
+
+The last row is the one to shrink.

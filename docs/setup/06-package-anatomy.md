@@ -173,6 +173,44 @@ The named list is what makes the public surface a decision rather than a side ef
 
 Note the `.js` extensions on relative imports throughout. `moduleResolution: "Bundler"` doesn't require them, but `NodeNext` in `apps/worker` does, and writing them everywhere means code moves between the two without an edit.
 
+### `"use client"` — the boundary that makes Next work
+
+The kit targets React, Next.js, and TanStack Start. Two of those need nothing extra. **Next's App
+Router does**, because every module is a Server Component until something says otherwise, and a page
+importing `<Can>` or `useSession` from a package that never declares a boundary fails the build with
+*"You're importing a component that needs `useState`."*
+
+So three packages carry the directive on the first line of their barrel:
+
+```ts
+// packages/ui/src/index.tsx
+"use client";
+
+export { Icon } from "./icon/index.js";
+```
+
+`ui`, `query`, and `feature` — and **only** those three. All three are React components and hooks
+end to end, so a barrel-level directive is accurate rather than a blunt instrument.
+
+**What must never carry it**: `content`, `contracts`, `permissions`, `errors`, `core`,
+`observability`. Those run on both sides. Marking `content` client-only breaks server-side rendering
+of translated copy; marking `permissions` breaks the authorization check in a Server Component. This
+is the half of the rule that gets fixed wrong under deadline, when someone adds the directive to make
+one import stop complaining.
+
+> [!NOTE]
+> **The directive survives the build**, verified against this repo's `tsup` and esbuild 0.25 —
+> a single entry point emits it at the top of `dist/index.js`. That is not something to assume:
+> esbuild has historically dropped top-level directives, and a bundler upgrade that reintroduces
+> the behaviour breaks Next silently, at the consumer, with an error naming their file.
+
+Nothing about this affects a Vite SPA or TanStack Start, which treat the directive as a no-op.
+
+The dangerous direction is not the missing directive — that fails loudly at the consumer's build.
+It is one added to an isomorphic package to make a single import stop complaining, which fails
+silently and in production. `check-architecture.mjs` §7 asserts the negative
+([26](26-hygiene-and-ci.md)).
+
 ### `src/import.ts` — the outside surface
 
 `index.ts` is what a package gives. `import.ts` is what it takes. **Every import from another

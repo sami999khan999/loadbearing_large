@@ -123,6 +123,10 @@ and without the comment the next person "simplifies" it into a compile error:
 if (typeof (globalThis as { window?: unknown }).window !== "undefined") {
 ```
 
-**Not enforced by a linter — yet.** Neither Biome nor ESLint is configured with a comment-style
-rule today, so this page is checked in review. That is the weakest kind of enforcement this
-repository has, and moving it to a lint rule is worth doing.
+**Enforced, but not by a linter.** Neither Biome nor ESLint ships a rule that expresses this, so
+it is assertion 5 in `check-architecture.mjs` ([26](../setup/26-hygiene-and-ci.md)): any line in
+`packages/*/{src,tests}` whose trimmed form opens with `/*` fails the build.
+
+Anchoring to the start of a trimmed line is what makes the grep safe. Biome always formats a block
+comment onto its own line, so a glob like `"**/dist/**"` inside a string cannot be mistaken for one
+— and unlike a lint rule, no inline comment can silence it.

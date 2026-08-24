@@ -29,6 +29,7 @@
     "clean": "pnpm -r --parallel run clean",
     "deps:check": "syncpack lint",
     "repo:check": "sherif -r unordered-dependencies",
+    "check:architecture": "node tooling/scripts/check-architecture.mjs",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
@@ -40,7 +41,6 @@
   },
   "devDependencies": {
     "@loadbearing/eslint-config": "workspace:*",
-
     "@biomejs/biome": "catalog:",
     "eslint": "catalog:",
     "rimraf": "catalog:",

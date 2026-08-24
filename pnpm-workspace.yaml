@@ -3,14 +3,32 @@ packages:
   - "packages/*"
   - "tooling/*"
 
+# Every version in this repository lives here, grouped by what a dependency can do
+# to portability. The kit targets React, Next.js and TanStack Start on the front,
+# and pure Node, Express, NestJS, Fastify and Hono on the back — a dependency's
+# tier says which of those it is able to constrain. See docs/setup/03.
 catalog:
+  # ════════════════════════════════════════════════════════════════════════════
+  # Tier 1 — never ships
+  #
+  # Build, test, and lint tooling. None of it enters a bundle or a dist/, so none
+  # of it can constrain a consumer's framework or runtime.
+  #
+  # One exception worth knowing: `tsup` never ships but decides what does. It is
+  # what makes every package ESM-only, and what determines whether a "use client"
+  # directive survives into dist/ — see docs/setup/06.
+  # ════════════════════════════════════════════════════════════════════════════
+
   # ── language & build ──
   typescript: ^5.8.3
   tsup: ^8.5.0
   tsx: ^4.19.0
   rimraf: ^6.0.1
   vitest: ^3.1.4
+
+  # ── types ──
   "@types/node": ^24.3.0
+  "@types/pg": ^8.11.10
 
   # ── lint & format ──
   "@biomejs/biome": ^2.4.15
@@ -19,38 +37,77 @@ catalog:
   sherif: ^1.13.0
   syncpack: ^15.3.2
 
-  # ── contracts ──
-  zod: ^4.4.3
-
-  # ── oRPC — pin all four together ──
-  "@orpc/contract": ^1.15.0
-  "@orpc/server": ^1.13.7
-  "@orpc/client": ^1.15.0
-  "@orpc/tanstack-query": ^1.15.0
-
-  # ── TanStack Query — peer of @orpc/tanstack-query, which needs query-core >=5.80.2 ──
-  "@tanstack/react-query": ^5.101.4
-
-  # ── TanStack Router ──
-  "@tanstack/react-router": ^1.135.0
-
-  # ── Tauri ──
-  "@tauri-apps/api": ^2.9.0
+  # ── generators & CLIs ──
+  drizzle-kit: ^0.31.0
   "@tauri-apps/cli": ^2.9.0
 
-  # ── data & infrastructure ──
-  "drizzle-orm": ^0.44.7
-  "drizzle-kit": ^0.31.0
+  # ════════════════════════════════════════════════════════════════════════════
+  # Tier 2 — framework-agnostic runtime
+  #
+  # Ships, and works under every framework on the list. **Framework-agnostic is
+  # not runtime-agnostic**, so the tier is split in two: the first group runs
+  # anywhere, the second needs a Node runtime and is dead in a browser, a Tauri
+  # webview, or an edge runtime — `pg` and `ioredis` both want raw TCP.
+  #
+  # That second group is why every one of them is reached through an abstract
+  # port in `packages/application/src/port/` and never imported directly by a
+  # use-case: the domain must not know which runtime it landed on.
+  # ════════════════════════════════════════════════════════════════════════════
+
+  # ── isomorphic — server, browser, worker, webview, edge ──
+  zod: ^4.4.3
+  # Keep every @orpc/* entry on one version line; see Tier 3 for why.
+  "@orpc/contract": ^1.15.0
+  "@orpc/client": ^1.15.0
+
+  # ── node-only, framework-neutral — behind a port, never imported by the domain ──
+  drizzle-orm: ^0.44.7
   pg: ^8.23.0
-  "@types/pg": ^8.11.10
   ioredis: ^5.11.1
   bullmq: ^5.81.3
   "@aws-sdk/client-s3": ^3.1107.0
   "@aws-sdk/s3-request-presigner": ^3.1107.0
 
-  # ── auth ──
-  "better-auth": ^1.6.26
+  # ════════════════════════════════════════════════════════════════════════════
+  # Tier 3 — framework-scoped
+  #
+  # Each entry names a framework, and each is quarantined to the one layer
+  # allowed to name it. Nothing here may appear in `packages/*` except the
+  # React-scoped group, and `check-architecture.mjs` asserts it (docs/setup/26).
+  # ════════════════════════════════════════════════════════════════════════════
 
+  # ── the transport seam — apps/*/src/server/ only ──
+  #    Ships fetch, node, and Nest adapters. This is the file that changes when
+  #    the backend framework does; nothing above it moves.
+  #
+  #    ⚠ All four @orpc/* entries must stay on one version line, here and in
+  #    Tier 2. They pin @orpc/shared **exactly** rather than with a caret, so a
+  #    skew puts two copies of it in the tree. `syncpack lint` does not catch
+  #    this — it checks one dependency across packages, not a declared group.
+  "@orpc/server": ^1.15.0
+
+  # ── multi-framework by export map — ./node, ./next-js, ./tanstack-start ──
+  #    ./node covers pure Node, Express, Fastify and Nest; the core web handler
+  #    covers Hono. Floored above CVE-2025-61928 — see docs/setup/03.
+  better-auth: ^1.6.26
+
+  # ── React-scoped — packages/{query,ui,feature} and apps/{web,desktop} ──
+  #    Inside the target set: all three front-end targets are React.
+  "@tanstack/react-query": ^5.101.4
+  "@orpc/tanstack-query": ^1.15.0
+
+  # ── router-scoped — apps/ only, never a package ──
+  #    Routing is app-shaped, not product-shaped. A Next app brings its own
+  #    router and reads paths from @loadbearing/permissions instead.
+  "@tanstack/react-router": ^1.135.0
+
+  # ── desktop-scoped — apps/desktop only ──
+  "@tauri-apps/api": ^2.9.0
+
+# React moves on its own cadence and only four packages consume it. A named
+# catalog means `catalog:react` in a package.json reads as a deliberate statement
+# that this is a React package. Declared as a peerDependency there, never a
+# dependency, so a consuming app supplies the single copy.
 catalogs:
   react:
     react: ^19.1.0

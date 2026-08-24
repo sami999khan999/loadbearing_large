@@ -31,6 +31,7 @@ rule has a gap worth fixing rather than working around.
 | [Files](files.md) | Casing, role suffixes, one class per file |
 | [Folders](folders.md) | What `src/` looks like, role folders vs subject folders, what may sit at the root |
 | [Imports and exports](imports.md) | `index.ts`, `import.ts`, the three import rules, why `export *` is banned |
+| [Dependencies](dependencies.md) | The three tiers, which layer may name a framework, what the catalog enforces |
 | [Classes and methods](classes.md) | Class-name grammar, banned suffixes, the method vocabulary |
 | [Vocabulary](vocabulary.md) | Permissions, procedures, events, queues, contract members, database, env, React |
 | [Comments](comments.md) | Line comments only, two lines, where the reasoning goes instead |
@@ -65,7 +66,17 @@ See [Comments](comments.md).
 | `application` may not import `HTTP_STATUS` | ESLint `no-restricted-imports` |
 | No exported free functions in OOP packages | ESLint `no-restricted-syntax` |
 | Consistent file casing | `forceConsistentCasingInFileNames` |
+| Framework-scoped dependency inside `packages/` | `check-architecture.mjs` §1 |
+| The domain layer never logs | `check-architecture.mjs` §2 |
+| `process.env` only in `apps/*/src/env.ts` | `check-architecture.mjs` §3 |
+| One version line per `@orpc/*` package | `check-architecture.mjs` §4 |
+| Comments are `//`, never a block | `check-architecture.mjs` §5 |
+| No top-level `await` in a package barrel | `check-architecture.mjs` §6 |
+| `"use client"` only in `ui`, `query`, `feature` | `check-architecture.mjs` §7 |
+| No server code in the client bundle | `check-architecture.mjs` §8 |
+| One range per dependency across packages | `syncpack lint` |
 | Everything else on these pages | Review |
 
-The last row is the one to shrink. A rule that moves from "review" to a linter is a rule that stops
-being argued about.
+The last row is the one to shrink. A rule that moves from "review" to a check is a rule that stops
+being argued about — and `check-architecture.mjs` exists because the most important rules here are
+ones no linter expresses.

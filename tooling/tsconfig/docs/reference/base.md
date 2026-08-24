@@ -31,15 +31,22 @@ Never extended directly by a package. It holds every compiler decision so the th
 
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
-    "incremental": true
-  },
-  "exclude": ["node_modules", "dist"]
+    "sourceMap": true
+  }
 }
 ```
 
-Note what is **absent**: `module` and `moduleResolution`. Those are the only things the three
-presets disagree about, so they live there rather than here.
+Note what is **absent**, in two categories.
+
+`module` and `moduleResolution` are the only things the three presets disagree about, so they live
+there rather than here.
+
+**And nothing relative lives here at all** — no `exclude`, no `files`, no `include`, no
+`tsBuildInfoFile`. A relative path resolves against the file it was written in, so an `exclude` here
+excludes `tooling/tsconfig/src/dist` in every consuming package rather than that package's own. Both
+`incremental` and `exclude` were removed for exactly that reason, and `exclude` was the more
+insidious of the two: it did not fail, it simply replaced TypeScript's built-in default with a
+no-op. Verify with `tsc --showConfig` from inside any package.
 
 ---
 

@@ -1,5 +1,14 @@
 {
   "title": "Opinions",
-  "description": "The positions this repository takes — naming, folders, imports, comments. One page per topic, each rule stated flatly with the failure it prevents.",
-  "pages": ["index", "files", "folders", "imports", "classes", "vocabulary", "comments"]
+  "description": "The positions this repository takes — naming, folders, imports, dependencies, comments. One page per topic, each rule stated flatly with the failure it prevents.",
+  "pages": [
+    "index",
+    "files",
+    "folders",
+    "imports",
+    "dependencies",
+    "classes",
+    "vocabulary",
+    "comments"
+  ]
 }

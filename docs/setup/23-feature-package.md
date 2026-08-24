@@ -36,6 +36,13 @@ packages/feature/src/
 
 ---
 
+> [!IMPORTANT]
+> **This package's barrel opens with `"use client"`.** It is React components and hooks end to end,
+> and Next's App Router treats every module as a Server Component until told otherwise — without the
+> directive, a Next page importing from here fails the build. A Vite SPA and TanStack Start ignore
+> it. The rule, and the list of packages that must **not** carry it, is in
+> [06](06-package-anatomy.md#use-client--the-boundary-that-makes-next-work).
+
 ## Step 23.1 — The message provider
 
 The React binding for `@loadbearing/content`'s `Translator`. It lives here, not in `content`, because `content` must stay React-free for the worker.

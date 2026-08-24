@@ -174,11 +174,23 @@ jobs:
 
 ---
 
-## Step 26.4 — The four architectural assertions
+## Step 26.4 — The eight architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Four greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Eight greps can.
 
-**`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts.
+**`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
+
+```
+✓ `application` imports no framework
+✓ every `@orpc/*` entry is on one version line
+✓ comments are `//`, never a block
+○ no server code in the client bundle — skipped: apps/web has no client build
+```
+
+> [!IMPORTANT]
+> **A skipped assertion prints `○`, never `✓`.** Two of these depend on artefacts that may not exist yet — a built `dist/`, a built client bundle — and an assertion that quietly passes when it did not run is worse than no assertion, because it converts an unknown into a false guarantee. The same reason the bundle check fails rather than passes when it finds zero asset files.
+>
+> **Write the failing case before you trust any of them.** Each of the seven runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
 
 ### 1 — `application` imports no framework
 
@@ -207,7 +219,43 @@ The domain layer records business facts through `ActivityLogger` and throws type
 
 Every other `process.env` read is an unvalidated string that becomes `undefined` in production. This rule is what makes the `Env` classes trustworthy — it is not a style preference, it is the enforcement of a single validated boundary.
 
-### 4 — No server code in the client bundle
+### 4 — Every `@orpc/*` entry is on one version line
+
+```js
+// fail if the @orpc/* entries in pnpm-workspace.yaml carry more than one range
+```
+
+They pin `@orpc/shared` **exactly** rather than with a caret, so a skew puts two copies of it in the tree. `syncpack lint` cannot see this: it checks that one dependency carries the same range across packages, and has no concept of a group that must move together. The catalog's tiering ([03](03-workspace-and-catalogs.md)) deliberately splits these entries across two tiers for portability reasons, which makes an automated check the only thing holding them level.
+
+Worth writing because it already happened: the catalog shipped `@orpc/server` at `^1.13.7` under a comment reading *"pin all four together"*, and every check in the repository passed.
+
+### 5 — Comments are `//`, never a block
+
+```js
+// fail on any line in packages/*/{src,tests} whose trimmed form starts with /*
+```
+
+[Opinions · Comments](../opinions/comments.md) bans block comments outright, and neither Biome nor ESLint ships a rule that expresses it. Anchoring to the start of a trimmed line is what makes this safe: Biome always formats a block comment onto its own line, so a glob like `"**/dist/**"` inside a string cannot be mistaken for one.
+
+### 6 — No top-level `await` in a built barrel
+
+```js
+// fail on /^(await |(var|let|const) \w+ = await )/ in any packages/*/dist/index.js
+```
+
+The default NestJS and Express scaffold is CommonJS, and a CJS consumer reaches an ESM package through `require(esm)` — unflagged on Node 22.12+, which this repo's `engines` floor guarantees. It refuses any module graph containing a top-level `await`.
+
+So a TLA in a package barrel breaks every CJS consumer, with an error naming the wrong thing. Nothing today has one; this is what keeps it that way. **Skips when no `dist/` exists**, so run it after `build:packages`.
+
+### 7 — `"use client"` only in `ui`, `query`, `feature`
+
+```js
+// fail on /^\s*["']use client["']/m in any other package's src/
+```
+
+The dangerous direction is not a missing directive — that fails loudly at the consumer's build. It is a directive added to an isomorphic package to make one import stop complaining, which silently breaks SSR of translated copy and authorization inside a Server Component ([06](06-package-anatomy.md)).
+
+### 8 — No server code in the client bundle
 
 ```bash
 pnpm --filter @loadbearing/web build

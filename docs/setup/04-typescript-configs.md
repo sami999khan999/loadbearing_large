@@ -69,10 +69,20 @@ Inside `src/`, the three presets extend the base by relative path (`"extends": "
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
-  },
-  "exclude": ["node_modules", "dist"]
+  }
 }
 ```
+
+> [!IMPORTANT]
+> **No `exclude`, and no other relative path, ever belongs in a shared base.** A relative path is resolved against *the file it was written in*, so `"exclude": ["node_modules", "dist"]` here does not exclude a consuming package's `dist/` — it excludes `tooling/tsconfig/src/dist`, which does not exist. `tsc --showConfig` inside any package shows the damage plainly:
+>
+> ```json
+> "exclude": ["../../tooling/tsconfig/src/node_modules", "../../tooling/tsconfig/src/dist"]
+> ```
+>
+> That is worse than writing nothing, because declaring `exclude` at all **replaces** TypeScript's built-in default (`node_modules`, `bower_components`, `jspm_packages`, and `outDir`). The repo traded a working default for a no-op, and nothing failed — `include` is per-package and already scopes the program to `src/` and `tests/`, so the mistake stayed invisible.
+>
+> It is the same rule that removed `incremental`: `tsBuildInfoFile` in a shared base resolves against `tooling/tsconfig/src/` too, and all sixteen packages would collide on one file. **`files`, `include`, and `exclude` are per-package. Compiler options are shared. Nothing relative crosses that line.**
 
 ### The five that do real work
 

@@ -49,6 +49,13 @@ packages/ui/src/
 
 ---
 
+> [!IMPORTANT]
+> **This package's barrel opens with `"use client"`.** It is React components and hooks end to end,
+> and Next's App Router treats every module as a Server Component until told otherwise — without the
+> directive, a Next page importing from here fails the build. A Vite SPA and TanStack Start ignore
+> it. The rule, and the list of packages that must **not** carry it, is in
+> [06](06-package-anatomy.md#use-client--the-boundary-that-makes-next-work).
+
 ## Step 22.1 — Tokens
 
 **`packages/ui/src/token/token.css`**
