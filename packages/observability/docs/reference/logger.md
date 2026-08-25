@@ -15,7 +15,7 @@ export abstract class Logger {
   public threshold(): LogLevel;
 }
 
-export class JsonLogger extends Logger {}    // stdout, the default
+export class JsonLogger extends Logger {}    // stdout → Alloy → Loki, the default
 export class SilentLogger extends Logger {}  // TestContainer, and logging genuinely off
 ```
 
@@ -32,7 +32,7 @@ is noise on lines that exist to reduce noise. Worse, an awaited log in a hot pat
 around it.
 
 A logger writes to a file descriptor and moves on. Losing a line during a crash is acceptable, which
-is exactly what separates this from `AuditTrail`, where it is not. **Do not "fix" this to match the
+is exactly what separates this from `ActivityLogger`, where it is not. **Do not "fix" this to match the
 other ports** — the difference is the point.
 
 ## `emit` is concrete, `write` is abstract

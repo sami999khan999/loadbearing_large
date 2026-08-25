@@ -1,6 +1,6 @@
 ---
 title: Dependencies
-description: Three tiers by what a dependency can constrain, why framework-agnostic is not runtime-agnostic, and which layer may name what.
+description: Four tiers by what a dependency can constrain, why framework-agnostic is not runtime-agnostic, and which layer may name what.
 ---
 
 # Dependencies
@@ -8,15 +8,34 @@ description: Three tiers by what a dependency can constrain, why framework-agnos
 The kit targets **React, Next.js, and TanStack Start** on the front, and **pure Node, Express,
 NestJS, Fastify, and Hono** on the back. Every dependency decision is measured against that list.
 
-**Every version lives in `pnpm-workspace.yaml`.** A `package.json` writes `"zod": "catalog:"`, never
+**Every version lives in `pnpm-workspace.yaml`** — every version that exists, which is Tiers 1 through 3. A `package.json` writes `"zod": "catalog:"`, never
 a range. One place to upgrade, and two packages cannot drift onto different majors of the same
 library without somebody noticing.
 
 ---
 
-## The three tiers
+## The four tiers
 
-The catalog is grouped by **what a dependency is able to constrain** — not by what it does.
+The catalog is grouped by **what a dependency is able to constrain** — not by what it does. Tier 0 is not in the catalog at all, which is the point of it.
+
+### Tier 0 — never imported
+
+Infrastructure the deployment provides and no code names: Postgres, both Redis instances, S3/MinIO,
+**Loki, the Alloy agent that ships stdout to it, and Grafana**, plus ClickHouse when it is adopted.
+All of them are in `infra/docker-compose.yml` ([11](../setup/11-local-infrastructure.md)); none of
+them is in any `package.json`. None of these appears in
+any `package.json`, which is exactly why they need a tier — otherwise question 2 below answers "it
+does not reach a bundle" and files a log aggregator under build tooling.
+
+**The rule that makes this tier worth naming: a Tier 0 dependency must not appear in code at all.**
+`JsonLogger` writes structured JSON to stdout and knows nothing about Loki; Alloy tails the container
+and does the shipping. The day `@loadbearing/observability` imports a Loki client, swapping log
+platforms stops being a config change and the argument in
+[Data and scale](data-and-scale.md) for choosing one at all falls apart.
+
+The same discipline as Tier 2, arrived at from the other direction: Tier 2 entries are quarantined
+behind a port; Tier 0 entries are quarantined behind a *protocol* — stdout, SQL, S3's API — that the
+code was going to speak anyway.
 
 ### Tier 1 — never ships
 
@@ -36,7 +55,7 @@ not runtime-agnostic**:
 | | Runs in | Entries |
 |---|---|---|
 | **isomorphic** | server, browser, worker, webview, edge | `zod`, `@orpc/contract`, `@orpc/client` |
-| **node-only** | a Node process, under any framework | `pg`, `ioredis`, `bullmq`, `drizzle-orm`, `@aws-sdk/*` |
+| **node-only** | a Node process, under any framework | `pg`, `ioredis`, `bullmq`, `drizzle-orm`, `@aws-sdk/*`, `@clickhouse/client` |
 
 `pg` and `ioredis` want raw TCP, so they are dead on an edge runtime — which is one config line away
 in Next, not a hypothetical. **That is the whole reason each one sits behind an abstract class in
@@ -61,13 +80,15 @@ Each entry names a framework. Each is quarantined to the one layer allowed to na
 
 ## Adding a dependency
 
-Three questions, in order. The first "yes" decides the tier.
+Four questions, in order. The first "yes" decides the tier.
 
-1. **Does it reach a consumer's bundle or `dist/`?** No → Tier 1. Done.
-2. **Does it name a framework, a router, or a shell?** Yes → Tier 3, and say in the catalog which
+1. **Is it something the deployment runs rather than something the code imports?** Yes → Tier 0.
+   Done.
+2. **Does it reach a consumer's bundle or `dist/`?** No → Tier 1. Done.
+3. **Does it name a framework, a router, or a shell?** Yes → Tier 3, and say in the catalog which
    layer may import it. A framework-scoped dependency inside `packages/` is a design mistake unless
    it is React.
-3. **Otherwise → Tier 2**, and answer the second question: isomorphic, or node-only? A node-only
+4. **Otherwise → Tier 2**, and answer the second question: isomorphic, or node-only? A node-only
    addition needs a port in `application/src/port/` before any use-case can reach it.
 
 **If a dependency would be Tier 3 and you want it in `packages/`, the answer is almost always an

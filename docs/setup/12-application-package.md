@@ -19,6 +19,8 @@ Everything outside itself is reached through an abstract class in `port/`. That 
 > [!IMPORTANT]
 > **This package does not log, and does not depend on `@loadbearing/observability`.** A use-case records a business fact through `ActivityLogger`, or it throws a typed error. That is its entire vocabulary, and `check-architecture.mjs` asserts the missing import.
 >
+> Those are two of the four data streams, and they differ in the way that matters here: an audit row **must not** be lost and commits inside the transaction, a diagnostic line **may** be lost and goes to stdout. Writing one where the other belongs is the failure [Data and scale](../opinions/data-and-scale.md) exists to prevent.
+>
 > The rule pays for itself immediately. Nothing has to thread a third argument into `execute(actor, input)`; there is no ambient request context to establish; the `Container` stays process-scoped. And a `ForbiddenError` gets logged **once**, at the boundary that catches it, with its full structured `context` — rather than three times on the way up, each layer adding a little and losing a little.
 >
 > Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `db` and `infrastructure`.
@@ -38,6 +40,7 @@ packages/application/src/
 └── port/                     ← abstract classes only, no implementations
     ├── index.ts
     ├── activity.logger.ts    → ActivityLogger
+    ├── analytics.reader.ts   → AnalyticsReader
     ├── cache.store.ts        → CacheStore
     ├── embedding.provider.ts → EmbeddingProvider
     ├── event.bus.ts          → EventBus
@@ -55,28 +58,37 @@ packages/application/src/
 **`packages/application/src/principal.ts`**
 
 ```ts
-import type { UserId } from "@loadbearing/contracts";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 
 export type PrincipalKind = "user" | "api_key" | "system";
 
 export class Principal {
   constructor(
+    public readonly organizationId: OrganizationId,
     public readonly userId: UserId,
     public readonly capabilities: CapabilitySet,
     public readonly kind: PrincipalKind = "user",
   ) {}
 
   // An API key is a principal whose capabilities cannot exceed its issuer's.
-  public static apiKey(issuerId: UserId, caps: CapabilitySet): Principal {
-    return new Principal(issuerId, caps, "api_key");
+  public static apiKey(
+    organizationId: OrganizationId,
+    issuerId: UserId,
+    caps: CapabilitySet,
+  ): Principal {
+    return new Principal(organizationId, issuerId, caps, "api_key");
   }
 
   // The worker's actor for scheduled work. Given an explicit, narrow capability
   // set — never a wildcard. A background job that can do anything is a job that
   // will eventually do something it shouldn't.
-  public static system(id: UserId, caps: CapabilitySet): Principal {
-    return new Principal(id, caps, "system");
+  public static system(
+    organizationId: OrganizationId,
+    id: UserId,
+    caps: CapabilitySet,
+  ): Principal {
+    return new Principal(organizationId, id, caps, "system");
   }
 
   public can(permission: PermissionKey, goalId?: string): boolean {
@@ -88,6 +100,12 @@ export class Principal {
 Four credential types — a browser cookie, a desktop bearer token, an integration's API key, and the worker's scheduled run — collapse into one `Principal` before any use-case executes. A use-case cannot tell how the actor arrived, and must not care.
 
 **`Principal.system()` takes an explicit capability set.** The tempting shortcut is a wildcard principal for the worker. Don't. The overdue sweep needs exactly `task.read` and `task.update`; giving it everything means a bug in a schedule can do anything. See [25](25-worker-app.md).
+
+**`organizationId` is first, and it is not optional.** The tenant has to enter the system somewhere, and this is the only place every caller already passes through — a cookie, a bearer token, an API key, and a scheduled job all become a `Principal` before anything else happens. Putting it on the `Container` would make it request state, which [17](17-composition-container.md) forbids for good reason; passing it separately alongside the actor means it can be forgotten or mismatched.
+
+Because it lives here, a repository can take the actor and derive the tenant filter, and there is no code path that produces a query with no tenant to scope it to. That is the whole mechanism behind "never write a query that cannot be scoped to a tenant" ([Data and scale](../opinions/data-and-scale.md) §4.1).
+
+**A `Principal` belongs to one organization at a time.** A user who is a member of three organizations is three principals, resolved from whichever one the request is addressed to — not one principal holding the union. The union is the bug: it makes every downstream `can()` return a confidently wrong answer.
 
 ---
 
@@ -235,6 +253,12 @@ export abstract class ActivityLogger {
 }
 ```
 > `action` is a dotted past-tense string mirroring the permission vocabulary: `task.reactivated`, `rbac.role.granted`. Same nouns, past tense, so `git grep` finds the permission and the audit entry together.
+>
+> **Not to be confused with the diagnostic `event_code` vocabulary.** `task.reactivated` is a business fact a user may read; `queue.job.failed` is an operator diagnostic. Two closed vocabularies, two sinks, two retention policies — [Vocabulary](../opinions/vocabulary.md) and [Data and scale](../opinions/data-and-scale.md).
+
+**The actor and the clock supply the rest.** `record()` takes no `occurredAt` and no tenant, because both are derivable at the adapter: `PgActivityLogger` stamps the time from the injected `Clock` and reads the organization from `actor`. A caller that could pass its own timestamp is a caller that can backdate an audit row.
+
+**This write happens inside the caller's transaction.** `PgActivityLogger` participates in whatever `UnitOfWork` is open, so the state change and its audit row commit together or neither does. That is the whole reason audit lives in Postgres rather than in the log stream, and it is a claim about the implementation rather than about intent — see the enrolment note in [13](13-db-package.md).
 
 ### `CacheStore`
 
@@ -342,6 +366,8 @@ export abstract class SessionResolver {
 
 ```ts
 // packages/application/src/port/vector.store.ts
+import type { OrganizationId } from "@loadbearing/contracts";
+
 export interface DocumentChunk {
   readonly id: string;
   readonly sourceId: string;
@@ -360,12 +386,21 @@ export interface SearchHit {
 }
 
 export abstract class VectorStore {
-  public abstract upsert(chunks: readonly DocumentChunk[]): Promise<void>;
-  public abstract deleteBySource(sourceId: string): Promise<void>;
+  public abstract upsert(
+    organizationId: OrganizationId,
+    chunks: readonly DocumentChunk[],
+  ): Promise<void>;
+
+  public abstract deleteBySource(
+    organizationId: OrganizationId,
+    sourceId: string,
+  ): Promise<void>;
 
   // `goalIds` is the caller's permitted scope. It is a required parameter so the
   // permission filter runs on the input set, before retrieval — not on results.
+  // `organizationId` is the boundary that scope is computed inside.
   public abstract search(
+    organizationId: OrganizationId,
     embedding: readonly number[],
     goalIds: readonly string[],
     limit: number,
@@ -386,11 +421,46 @@ export abstract class EmbeddingProvider {
 **`goalIds` being a required parameter is the whole security design.** Filtering after retrieval means the model has already seen documents the actor cannot access, and "we filter the output" is not a defence you want to explain after an incident. Putting the permitted scope in the method signature means it cannot be forgotten — a caller must produce it, and `CapabilitySet.goalsWith()` is how:
 
 ```ts
-const goalIds = principal.capabilities.goalsWith("document.read", await goals.idsForOrg(orgId));
-const hits = await this.vectors.search(embedding, goalIds, 20);
+const orgId = actor.organizationId;
+const goalIds = actor.capabilities.goalsWith("document.read", await goals.idsForOrg(orgId));
+const hits = await this.vectors.search(orgId, embedding, goalIds, 20);
 ```
 
 `goalsWith()` takes the candidate set for the same reason `search()` does — a `CapabilitySet` knows only the goals its own DTO names, so a wildcard holder or an org-level grantee would otherwise resolve to `[]` and silently retrieve org-wide chunks only ([08](08-permissions-package.md)).
+
+### `AnalyticsReader`
+
+```ts
+// packages/application/src/port/analytics.reader.ts
+import type { GoalId, UserId } from "@loadbearing/contracts";
+
+export interface DateRange {
+  readonly from: Date;
+  readonly to: Date;
+}
+
+export abstract class AnalyticsReader {
+  public abstract goalRiskScores(
+    goalIds: readonly GoalId[],
+  ): Promise<readonly RiskScore[]>;
+
+  public abstract reliabilityTrend(
+    userId: UserId,
+    goalIds: readonly GoalId[],
+    window: DateRange,
+  ): Promise<readonly TrendPoint[]>;
+}
+```
+
+Aggregate reads over time — the questions a dashboard asks, as opposed to the questions a screen asks. `PgAnalyticsReader` answers them from snapshot tables in [13](13-db-package.md); the reason the seam exists before a second implementation does is that a column store becomes necessary at a volume this kit will not reach for years, and by then every call site would otherwise have to change.
+
+**`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. That is even more true once the implementation is not Postgres: there is no join back to `goal_members` from ClickHouse.
+
+**Every method is `async` from the first day**, including any the Postgres implementation could answer synchronously. A remote store cannot be synchronous, so a synchronous seam would turn the swap into a breaking change at every call site — the same reasoning `ContentSource` uses in [20](20-content-package.md).
+
+**Nothing writes through this port.** Analytics is a derived read model, fed by the worker consuming domain events, and rebuildable by replaying the activity log. A write method here would be the moment it stopped being derived — see [Data and scale](../opinions/data-and-scale.md) §2.
+
+> **Why this sits in `port/` when `TaskRepository` does not.** The rule below is that repository ports live with their slice, and it holds: `port/` would otherwise grow one file per feature forever. `AnalyticsReader` is the other shape — one cross-cutting read seam that many subjects ask questions of, like `VectorStore`. The test is whether adding a feature adds a *method* here or a *file*; a method is fine, a file per slice is the smell.
 
 ### `UnitOfWork`
 
@@ -401,12 +471,16 @@ export abstract class UnitOfWork {
 }
 ```
 > Transactional boundaries as a domain concept. "Write the activity entry in the same transaction as the state change, then enqueue the notification" is a rule about correctness, and it needs somewhere to be expressed that is not `db.transaction(...)` inside a use-case.
+>
+> **The implementation must genuinely enrol the repositories that run inside `work()`.** A `run()` that opens a transaction the repositories never join is worse than no `UnitOfWork` at all: every call site reads as atomic and none of it is, and the first symptom is a state change with no audit row after a restart. [13](13-db-package.md) is where that is made real.
 
 ### `EventBus`
 
 ```ts
 // packages/application/src/port/event.bus.ts
 export interface DomainEvent {
+  // Stable identity, so a handler that runs twice can tell that it has.
+  readonly id: string;
   readonly name: string;
   readonly occurredAt: Date;
   readonly payload: Readonly<Record<string, unknown>>;
@@ -418,11 +492,23 @@ export abstract class EventBus {
 ```
 > The seam for cross-slice side effects. A finance use-case should not import a notification use-case; it publishes `invoice.approved` and the notification slice subscribes. Without this, slice ownership decays into a call graph where every team's code reaches into every other team's.
 
+The analytics projection is the second consumer class: the worker subscribes to domain events and writes snapshot rows, which is what keeps the analytics store derived rather than written to directly ([13](13-db-package.md)).
+
+**Keep this interface broker-shaped**, even while dispatch is in-process. Four properties, and each one is a thing a Kafka or Redis Streams implementation cannot give back later:
+
+- **`publish` is async and returns nothing.** A caller that reads a return value is a caller doing RPC.
+- **Handlers are idempotent.** At-least-once delivery is what every broker offers; `id` is what makes deduplication possible.
+- **No ordering assumptions.** Two events published in order may be handled out of order.
+- **No handler exceptions reaching the publisher.** In-process dispatch could propagate them; a broker cannot, so a use-case that catches an event-handler failure is depending on semantics that will disappear.
+
+A handler that starts relying on synchronous in-process behaviour is the one thing that would make the broker swap expensive — [Data and scale](../opinions/data-and-scale.md) §7.
+
 ### The barrel
 
 ```ts
 // packages/application/src/port/index.ts
 export { ActivityLogger } from "./activity.logger.js";
+export { AnalyticsReader, type DateRange } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type DomainEvent, EventBus } from "./event.bus.js";
@@ -472,7 +558,9 @@ export {
 } from "./error/index.js";
 export {
   ActivityLogger,
+  AnalyticsReader,
   CacheStore,
+  type DateRange,
   type DocumentChunk,
   type DomainEvent,
   EmbeddingProvider,

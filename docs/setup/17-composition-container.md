@@ -34,8 +34,10 @@ export interface ContainerConfig {
     readonly maxConnections?: number;
   };
   readonly redis: {
-    readonly url: string;
-    readonly queueUrl?: string;
+    // Two instances, different durability. Neither is optional: a missing
+    // queueUrl silently puts jobs on the instance that evicts them.
+    readonly cacheUrl: string;
+    readonly queueUrl: string;
   };
   readonly storage: {
     readonly endpoint: string;
@@ -60,9 +62,12 @@ export interface ContainerConfig {
   };
   readonly logging: {
     readonly level: LogLevel;
-    // Human-shaped output for a terminal. Never true in production — a collector
-    // wants one JSON object per line and nothing else.
+    // Human-shaped output for a terminal. Never true in production — Alloy wants
+    // one JSON object per line and nothing else.
     readonly pretty: boolean;
+    // Two of the four log labels. Low-cardinality by construction.
+    readonly app: string;
+    readonly env: string;
   };
 }
 ```
@@ -81,6 +86,8 @@ That is what lets you construct the entire system in a test with a fake database
 import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
 import { JsonLogger, type LogLevel, type Logger } from "@loadbearing/observability";
 import {
+  type ActivityLogger,
+  type AnalyticsReader,
   Authorizer,
   type CacheStore,
   type EmbeddingProvider,
@@ -102,10 +109,12 @@ import { ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing
 import {
   Database,
   PgActivityLogger,
+  PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgUnitOfWork,
   PgVectorStore,
+  TransactionScope,
 } from "@loadbearing/db";
 import {
   BullMqQueuePublisher,
@@ -123,6 +132,7 @@ export class Container {
   private readonly database: Database;
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
+  private readonly transactions: TransactionScope;
 
   // ── shared primitives ─────────────────────────────────────
   public readonly clock: Clock;
@@ -134,8 +144,10 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
+  public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
   public readonly sessions: SessionResolver;
+  public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
 
@@ -149,10 +161,20 @@ export class Container {
 
   constructor(private readonly config: ContainerConfig) {
     this.database = new Database(config.database);
-    this.redis = new RedisConnection({ url: config.redis.url });
+    this.redis = new RedisConnection({
+      cacheUrl: config.redis.cacheUrl,
+      queueUrl: config.redis.queueUrl,
+    });
+    this.transactions = new TransactionScope();
 
     // First, so a failure in anything below it has somewhere to be recorded.
-    this.logger = new JsonLogger(config.logging);
+    // `app` and `env` are bound rather than passed through: they belong on every
+    // line, and `JsonLoggerOptions` has no field of its own for either.
+    this.logger = new JsonLogger({
+      level: config.logging.level,
+      pretty: config.logging.pretty,
+      bound: { app: config.logging.app, env: config.logging.env },
+    });
 
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
@@ -161,10 +183,11 @@ export class Container {
     this.storage = new S3StorageGateway(config.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
-    this.unitOfWork = new PgUnitOfWork(this.database);
+    this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
 
-    // ── the two swap points ──
-    this.vectors = new PgVectorStore(this.database);
+    // ── the three swap points ──
+    this.vectors = new PgVectorStore(this.database, this.transactions);
+    this.analytics = new PgAnalyticsReader(this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
     this.content = new StaticContentSource(SERVER_CATALOG);
@@ -172,27 +195,35 @@ export class Container {
     this.auth = AuthFactory.create(config.auth, this.database, this.cache);
     this.sessions = new BetterAuthSessionResolver(this.auth);
 
-    const capabilityRepository = new PgCapabilityRepository(this.database);
+    const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
 
-    const apiKeyRepository = new PgApiKeyRepository(this.database);
+    const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
     const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
     this.principals = new PrincipalBuilder(this.sessions, apiKeyResolver, this.capabilities);
 
-    const activity = new PgActivityLogger(this.database, this.clock);
+    // Shares the transaction scope, which is what makes the audit row commit
+    // with the state change rather than beside it.
+    this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
 
     // ── use-cases, as features arrive ──
     // this.reactivateTask = new ReactivateTaskUseCase(
-    //   new PgTaskRepository(this.database),
+    //   new PgTaskRepository(this.database, this.transactions),
     //   this.authorizer,
-    //   activity,
+    //   this.activity,
     //   this.clock,
     // );
-    void activity;
   }
 
+  // Postgres and both Redis instances. A cache that is down degrades; a queue
+  // that is down silently stops accepting work, which is worth knowing about.
   public async healthy(): Promise<boolean> {
-    return this.database.healthy();
+    const [database, cache, queue] = await Promise.all([
+      this.database.healthy(),
+      this.redis.healthy("cache"),
+      this.redis.healthy("queue"),
+    ]);
+    return database && cache && queue;
   }
 
   public async dispose(): Promise<void> {
@@ -213,7 +244,13 @@ export class Container {
 
 **3. Config arrives as a constructor argument.** No `process.env` in this file or in any package. The two `env.ts` files are the boundary, and Biome's `noProcessEnv` rule from [05](05-lint-and-format.md) is what keeps it true.
 
-**4. `dispose()` closes in reverse construction order.** Queues before Redis before Postgres. Closing Redis while BullMQ still holds blocking connections produces a hang on shutdown that looks like a deadlock, because it is one.
+**The logger's `app` and `env` are bound fields, not options.** `JsonLoggerOptions` declares `level`, `pretty`, `sink`, `bound`, `clock` and `random` — and nothing else. Spreading `config.logging` into it would compile, because excess-property checking does not apply to a variable, and both values would be silently dropped: no error, no label, and a log platform that cannot tell `web` from `worker`.
+
+Binding them puts `app` and `env` on every line, which is what lets the Alloy pipeline read all four labels out of the JSON body rather than inferring two of them from container metadata that differs between Compose, Kubernetes, and a host-run `pnpm dev` ([11](11-local-infrastructure.md)). The application knows what it is; the orchestrator's name for the process is incidental.
+
+**4. `dispose()` closes in reverse construction order.** Queues before the Redis connections before Postgres. Closing Redis while BullMQ still holds blocking connections produces a hang on shutdown that looks like a deadlock, because it is one.
+
+`RedisConnection.close()` quits both instances, which is why they sit behind one object rather than as two fields on the container. Two fields is two things to remember at every shutdown path, and the one that gets forgotten is the queue — where an unclean close means in-flight jobs are redelivered rather than completed.
 
 **The logger is constructed first and disposed last**, which is the same rule read from both ends. Constructed first, because a `Database` that cannot reach Postgres should produce a structured line rather than a stack trace on stderr. Disposed last, because everything closing above it may have something to say on the way out.
 
@@ -261,11 +298,13 @@ class TestContainer {
     const authorizer = new Authorizer();
     const tasks = overrides.tasks ?? new InMemoryTaskRepository();
     const activity = overrides.activity ?? new RecordingActivityLogger();
+    const analytics = overrides.analytics ?? new StubAnalyticsReader();
 
     return {
       clock,
       tasks,
       activity,
+      analytics,
       reactivateTask: new ReactivateTaskUseCase(tasks, authorizer, activity, clock),
     };
   }
@@ -273,6 +312,10 @@ class TestContainer {
 ```
 
 No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test builds a `Principal` directly with a hand-made `CapabilitySet` and asserts on behaviour. Integration tests — the ones that need real infrastructure — are then reserved for the adapters themselves and the auth routes, which is a much smaller and much less flaky set.
+
+**A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs.
+
+**Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-db-package.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
 
 ---
 

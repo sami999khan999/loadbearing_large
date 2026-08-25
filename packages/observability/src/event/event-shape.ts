@@ -39,11 +39,40 @@ export interface EventShape {
   };
   readonly "queue.job.stalled": { readonly queue: string; readonly jobId: string };
   readonly "queue.schedule.registered": { readonly queue: string; readonly jobId: string };
+  readonly "queue.sweep.completed": {
+    readonly queue: string;
+    readonly found: number;
+    readonly reEnqueued: number;
+  };
 
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "db.query.slow": { readonly operation: string; readonly durationMs: number };
   readonly "storage.upload.failed": { readonly bucket: string; readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };
+
+  readonly "analytics.projection.completed": {
+    readonly projection: string;
+    readonly events: number;
+    readonly durationMs: number;
+  };
+  readonly "analytics.projection.failed": {
+    readonly projection: string;
+    readonly eventId: string;
+  };
+  readonly "analytics.projection.lagged": {
+    readonly projection: string;
+    readonly pending: number;
+    readonly lagSeconds: number;
+  };
+  readonly "analytics.reconciliation.completed": {
+    readonly days: number;
+    readonly durationMs: number;
+  };
+  readonly "analytics.reconciliation.drifted": {
+    readonly day: string;
+    readonly expected: number;
+    readonly actual: number;
+  };
 }
 
 export type EventFields<C extends EventCode> = EventShape[C];

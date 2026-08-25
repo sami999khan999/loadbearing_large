@@ -1,6 +1,6 @@
 ---
 title: Opinions
-description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, comments.
+description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, data ownership, comments.
 ---
 
 # Opinions
@@ -14,13 +14,21 @@ suggestion, and this repository prefers mechanical enforcement to good intention
 
 ---
 
-## The test every opinion serves
+## The two tests every opinion serves
 
-**Given a feature name and a layer, you should be able to write the file path, the folder, and the
-class name without looking anything up.**
+**1. Given a feature name and a layer, you should be able to write the file path, the folder, and
+the class name without looking anything up.**
 
-That is the only justification any rule here needs. When a rule stops producing that property, the
-rule has a gap worth fixing rather than working around.
+**2. Given a fact the system produces, you should be able to say which store owns it without another
+conversation.**
+
+Most pages here serve the first. [Data and scale](data-and-scale.md) serves the second, and it earns
+its place for the same reason: one answer, consulted continually, and expensive in a particular way
+if it is decided late. A naming rule adopted late costs a rename. A storage rule adopted late costs
+a migration with customer data in it.
+
+Those two are the only justification any rule here needs. When a rule stops producing either
+property, the rule has a gap worth fixing rather than working around.
 
 ---
 
@@ -31,9 +39,10 @@ rule has a gap worth fixing rather than working around.
 | [Files](files.md) | Casing, role suffixes, one class per file |
 | [Folders](folders.md) | What `src/` looks like, role folders vs subject folders, what may sit at the root |
 | [Imports and exports](imports.md) | `index.ts`, `import.ts`, the three import rules, why `export *` is banned |
-| [Dependencies](dependencies.md) | The three tiers, which layer may name a framework, what the catalog enforces |
+| [Dependencies](dependencies.md) | The four tiers, which layer may name a framework, what the catalog enforces |
 | [Classes and methods](classes.md) | Class-name grammar, banned suffixes, the method vocabulary |
 | [Vocabulary](vocabulary.md) | Permissions, procedures, events, queues, contract members, database, env, React |
+| [Data and scale](data-and-scale.md) | Which store owns which data, what is derived, what to build now, the order scaling moves happen in |
 | [Comments](comments.md) | Line comments only, two lines, where the reasoning goes instead |
 
 ---
@@ -74,7 +83,11 @@ See [Comments](comments.md).
 | No top-level `await` in a package barrel | `check-architecture.mjs` §6 |
 | `"use client"` only in `ui`, `query`, `feature` | `check-architecture.mjs` §7 |
 | No server code in the client bundle | `check-architecture.mjs` §8 |
+| Every domain table declares `organization_id` | `check-architecture.mjs` §9 |
+| The audit port is `ActivityLogger`, never `AuditTrail` | `check-architecture.mjs` §10 |
 | One range per dependency across packages | `syncpack lint` |
+| Loki labels stay within `app, env, level, event_code` | `infra/alloy/config.alloy` — the pipeline promotes exactly four |
+| A query that cannot be scoped to a tenant | Review |
 | Everything else on these pages | Review |
 
 The last row is the one to shrink. A rule that moves from "review" to a check is a rule that stops

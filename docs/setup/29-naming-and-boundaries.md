@@ -23,8 +23,10 @@ the most consulted thing here.
 | [Files](../opinions/files.md) | Casing, role suffixes, one class per file, where tests go |
 | [Folders](../opinions/folders.md) | What `src/` looks like, role folders vs subject folders |
 | [Imports and exports](../opinions/imports.md) | `index.ts`, `import.ts`, the three import rules |
+| [Dependencies](../opinions/dependencies.md) | The four tiers, which layer may name a framework |
 | [Classes and methods](../opinions/classes.md) | Class-name grammar, banned suffixes, method vocabulary |
 | [Vocabulary](../opinions/vocabulary.md) | Permissions, procedures, events, queues, contracts, database |
+| [Data and scale](../opinions/data-and-scale.md) | Which store owns which data, what is derived, what to build now |
 | [Comments](../opinions/comments.md) | Line comments only, two lines, where the reasoning goes |
 
 **The test all of them serve:** given a feature name and a layer, you should be able to write the
@@ -70,10 +72,11 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ### `infra/`
 
-- **Holds descriptions of running services**: `docker-compose.yml` and the Postgres init SQL that creates extensions.
+- **Holds descriptions of running services**: `docker-compose.yml`, the Postgres init SQL that creates extensions, Loki's storage and retention config, Alloy's log pipeline, Grafana's provisioned data sources, and ClickHouse's schema.
 - **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [11](11-local-infrastructure.md) says which managed service replaces each container.
-- **Never holds** application code of any kind.
-- **Smell:** a `.ts` file.
+- **Never holds** application code of any kind. Nothing in `packages/` or `apps/` imports anything from here — these are [Tier 0](../opinions/dependencies.md) dependencies, provided by the deployment and reached over a protocol the code was going to speak anyway.
+- **Two profiles.** `observability` is on by default because the diagnostic stream is live; `analytics` is opt-in because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet.
+- **Smell:** a `.ts` file, or a `LOKI_URL` in `.env.example` — the moment application code names the log platform, the platform stops being swappable by config.
 
 ---
 
@@ -173,7 +176,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 ## 1.9 Inside `packages/application`
 
 - **`error/`** — the domain error hierarchy. Each carries a `code` string, which is the *only* thing the transport layer maps. No HTTP status codes anywhere in this folder.
-- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
+- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, analytics, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
 - **`<slice>/`** — one folder per feature slice, holding that slice's use-cases, its policies, **and its repository port**.
 - **Repository ports live in the slice, not in `port/`.** `port/` is for capabilities the whole system shares; `TaskRepository` is meaningful only next to the use-cases that need it. Putting it in `port/` would make that folder grow by one file per feature forever.
 - **Every use-case has one public method, `execute(principal, input)`**, following load → authorize → work → persist.
@@ -185,21 +188,22 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 ## 1.10 Inside `packages/db`
 
 - **`drizzle.config.ts` and `migrations/`** sit **above** `src/` because they are build-time artefacts, not shipped code. Migrations are generated and committed; `db:push` is never used.
-- **`src/` root files** — `database.ts` (the pool), `schema.ts` (a barrel re-exporting every `*.schema.ts`, which is what Drizzle Kit reads), `base.repository.ts`, `unit-of-work.ts`.
+- **`src/` root files** — `database.ts` (the pool), `schema.ts` (a barrel re-exporting every `*.schema.ts`, which is what Drizzle Kit reads), `base.repository.ts` (the tenant `WHERE` clause and the transaction handle every repository inherits), `unit-of-work.ts`.
 - **`rbac/`** — the permission tables, the Better Auth CLI output, the API-key tables, and `PgCapabilityRepository`. Subject folder for the auth domain.
-- **`activity/`** — the audit table and `PgActivityLogger`.
+- **`activity/`** — the audit tables and `PgActivityLogger`. `activity_log` and `task_status_history` are partitioned by month and written inside the caller's transaction, which is what makes an audit row and its state change commit together ([13](13-db-package.md)).
 - **`vector/`** — the embeddings table and `PgVectorStore`. **This is infrastructure, not a feature slice**, which is why it sits alongside `rbac/` rather than inside one.
 - **`seed/`** — idempotent seeds, run after migration. The owner role's grants come from `PermissionRegistry.all()` so they cannot fall behind the catalog.
 - **`<slice>/`** — one folder per feature, holding that slice's schema and its `Pg<Slice>Repository`.
 - **The layout is by subject, not by layer.** No `schema/` folder holding twenty schemas and a `repository/` folder holding twenty repositories — a feature's schema and repository sit together, so a team owns one directory.
 - **Repositories fetch and persist. They never decide.** A `capabilities.can()` call in this package means an authorization decision escaped the use-case.
+- **Scoping by `organization_id` is not deciding.** The tenant filter is the boundary permissions are evaluated *inside*, not a permission check, so it belongs here — inherited from `BaseRepository` rather than written per method. A repository query with no tenant predicate is the bug; a repository asking `can()` is the other bug.
 - **Smell:** a permission check, or a folder for a non-Postgres concern.
 
 ---
 
 ## 1.11 Inside `packages/infrastructure`
 
-- **`redis/`** — the connection itself, shared by the cache and the queue but configured differently for each (`maxRetriesPerRequest: null` for BullMQ, a key prefix only for the cache).
+- **`redis/`** — the connections. **Two instances, not one**: the cache evicts under pressure and everything on it rebuilds from Postgres; the queue never evicts, because a queued job is derived from nothing. One class owns which is which, and they are configured differently besides (`maxRetriesPerRequest: null` for BullMQ, a key prefix only for the cache).
 - **`cache/`** — `RedisCacheStore`, implementing the `CacheStore` port.
 - **`storage/`** — `S3StorageGateway` and `StorageKey`. The gateway never takes a bucket in a method signature; the bucket is configuration.
 - **`queue/`** — `QueueName` (a closed union) and `BullMqQueuePublisher`.
@@ -476,7 +480,7 @@ Then, independently:
 Redis  embedding.generate
         ▼
 apps/worker  consumer/embedding.consumer.ts
-        │  SystemPrincipal.forOrganisation(orgId)   ← three named grants, never a wildcard
+        │  SystemPrincipal.forOrganization(orgId)   ← three named grants, never a wildcard
         ▼
 application  IndexTaskUseCase.execute(systemPrincipal, …)
         │  → EmbeddingProvider (port) → infrastructure  OpenAiEmbeddingProvider

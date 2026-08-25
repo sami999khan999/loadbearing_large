@@ -391,6 +391,90 @@ Server-only ban lists to update if a ClickHouse client ever lands:
 
 ---
 
+## K. The containers the decisions imply
+
+**This section was missing from the first pass, and its absence was a real gap:** every document now
+says diagnostics go to Loki and analytics go to ClickHouse, while `infra/docker-compose.yml` has
+neither. A stack that is described but not runnable is the kind of claim nobody discovers is false
+until they need it.
+
+### What runs by default, and what does not
+
+| Service | Profile | Why |
+|---|---|---|
+| `postgres`, `redis-cache`, `redis-queue`, `minio` | none — always | The four stores the app talks to |
+| `loki`, `alloy`, `grafana` | `observability` — on by default | The diagnostics stream is live **today**; `JsonLogger` already emits it |
+| `clickhouse` | `analytics` — opt-in | The page says *"do not do this week"*, and its ~5k topology has no ClickHouse |
+
+ClickHouse being profile-gated is the honest reading of the page rather than a hedge. The seam is
+`AnalyticsReader`, the implementation is `PgAnalyticsReader`, and a running ClickHouse with no
+consumer writing to it would be theatre. It is in the compose file so that adopting it is
+`--profile analytics`, not an infrastructure project.
+
+> **Compose gotcha worth writing down:** `docker compose down` does not stop services in a profile
+> that was not selected. `infra:down` and `infra:reset` need `--profile "*"`, or a `pnpm infra:reset`
+> leaves a ClickHouse running and the developer never notices.
+
+### Loki stores into MinIO, which is already there
+
+The page claims *"storage on S3 or MinIO — both already running"*. Make that literally true: Loki's
+`schema_config` points at the MinIO container with a `loki` bucket, created by the existing
+`minio-init` one-shot. Retention is then genuinely one config line — `retention_period: 720h` — which
+is the claim the page makes about why a log platform beats a table.
+
+### Alloy is where the label rule stops being a convention
+
+`opinions/index.md` currently files "Loki labels stay within `app, env, level, event_code`" under
+*Review — the Alloy config, once it exists*. It exists after this section, so the row changes.
+
+The pipeline extracts `level` and `event` from the JSON body and promotes **only** those two, with
+`app` from the container name and `env` static. Every other field — `traceId`, `organizationId`,
+`jobId` — stays in the body by construction, because nothing in the config names it.
+
+**The local-development wrinkle, stated rather than papered over.** `pnpm dev` runs the apps on the
+host, not in containers, so a Docker log source cannot see them. Two paths, and the docs should say
+which is which:
+
+- **Container logs** — `loki.source.docker`. Works for anything actually running in Compose, and is
+  the config that ships to production unchanged.
+- **Host `pnpm dev`** — `loki.source.file` tailing `infra/logs/*.log`, fed by `pnpm dev | tee`. Opt-in,
+  and `LOG_PRETTY=true` in a terminal remains the normal local workflow.
+
+Pretending local dev ships to Loki automatically would be the kind of documentation that is wrong on
+day one.
+
+### No new environment variables, and that is the proof
+
+Nothing in `.env.example` changes. The apps do not know Loki exists — `JsonLogger` writes to stdout
+and Alloy does the shipping. That is [Dependencies](opinions/dependencies.md) Tier 0 working: a
+platform dependency the deployment provides and no code imports. If this section had added a
+`LOKI_URL` the tier would have been wrong.
+
+Grafana takes port **3001**, because the web app owns 3000.
+
+### Files this adds under `infra/`
+
+```
+infra/
+├── docker-compose.yml            ← 8 services, 2 profiles
+├── postgres/init/01-extensions.sql
+├── loki/config.yml               ← MinIO-backed, 30-day retention
+├── alloy/config.alloy            ← the four-label pipeline
+├── grafana/provisioning/datasources/datasources.yml
+├── clickhouse/init/01-schema.sql ← analytics profile only
+└── logs/                         ← gitignored; the `pnpm dev | tee` target
+```
+
+### Ripple
+
+`00` (stack line, phase row 11) · `02` (the `infra/` description) · `03` (`infra:*` scripts) ·
+`11` (the whole step) · `26` (CI runs no Loki — say why) · `28` (the `infra/` tree) ·
+`29` (the `infra/` boundary note) · `README` (the new addresses) · root `package.json` (the scripts,
+a real code change) · `.gitignore` (`infra/logs/`) · `opinions/index.md` (the enforcement row) ·
+`opinions/data-and-scale.md` (the topology blocks now name Grafana and Alloy).
+
+---
+
 ## J. Pre-existing defects to fix in passing
 
 Unrelated to the new page, but cheap while the files are open:

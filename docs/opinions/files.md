@@ -24,6 +24,12 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.repository.ts` | `task.repository.ts` | `TaskRepository` |
 | `.gateway.ts` | `s3-storage.gateway.ts` | `S3StorageGateway` |
 | `.store.ts` | `pg-vector.store.ts` | `PgVectorStore` |
+| `.reader.ts` | `analytics.reader.ts` | `AnalyticsReader` |
+| `.logger.ts` | `activity.logger.ts` | `ActivityLogger` |
+| `.provider.ts` | `embedding.provider.ts` | `EmbeddingProvider` |
+| `.publisher.ts` | `queue.publisher.ts` | `QueuePublisher` |
+| `.resolver.ts` | `session.resolver.ts` | `SessionResolver` |
+| `.bus.ts` | `event.bus.ts` | `EventBus` |
 | `.policy.ts` | `overdue-lock.policy.ts` | `OverdueLockPolicy` |
 | `.strategy.ts` | `bearer-auth.strategy.ts` | `BearerAuthStrategy` |
 | `.router.ts` | `task.router.ts` | `TaskRouter` |

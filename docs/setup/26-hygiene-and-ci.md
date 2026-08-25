@@ -125,16 +125,25 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ratchet"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
+      redis-cache:
         image: redis:7-alpine
         ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis-queue:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
 
     env:
       DATABASE_URL: postgres://ratchet:ratchet@localhost:5432/ratchet_test
-      REDIS_URL: redis://localhost:6379
+      REDIS_CACHE_URL: redis://localhost:6379
+      REDIS_QUEUE_URL: redis://localhost:6380
+      APP: ci
+      ENV: test
 
     steps:
       - uses: actions/checkout@v4
@@ -155,6 +164,10 @@ jobs:
       - run: pnpm check:architecture
 ```
 
+> **CI runs no Loki, no Alloy, and no Grafana, and that is the correct choice rather than an omission.** Those three are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point.
+>
+> ClickHouse is absent for the stronger reason: nothing writes to it yet ([11](11-local-infrastructure.md)).
+
 > [!CAUTION]
 > **That web build is not optional.** `check:architecture`'s third assertion greps the built *client* output for server-only fingerprints. `build:packages` filters to `./packages/*` and never builds `apps/web`, so without this step the grep runs over a directory that does not exist — it passes silently and gives you permanent false confidence that no server code is reaching the browser.
 >
@@ -174,9 +187,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The eight architectural assertions
+## Step 26.4 — The ten architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Eight greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Ten greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -190,7 +203,7 @@ Types cannot express "this package must not import that one across a bundle boun
 > [!IMPORTANT]
 > **A skipped assertion prints `○`, never `✓`.** Two of these depend on artefacts that may not exist yet — a built `dist/`, a built client bundle — and an assertion that quietly passes when it did not run is worse than no assertion, because it converts an unknown into a false guarantee. The same reason the bundle check fails rather than passes when it finds zero asset files.
 >
-> **Write the failing case before you trust any of them.** Each of the seven runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
+> **Write the failing case before you trust any of them.** Each of the nine runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
 
 ### 1 — `application` imports no framework
 
@@ -291,6 +304,34 @@ const EMAIL_FINGERPRINTS = ["email.digest."];
 Shipping database driver code to the browser is not just a 400KB regression. It means your connection string's *shape* and your full schema are readable in devtools.
 
 > **Point the grep at the client output directory for your Vite version.** The path differs between Start versions; confirm it once and assert on the correct directory — a grep over an empty folder passes silently and gives you false confidence forever. Have the script fail if it finds zero asset files.
+
+### 9 — Every domain table declares `organization_id`
+
+```js
+// fail on any pgTable(...) in packages/db/src/** whose body has no organization_id,
+// unless its table name is on the exemption list
+const TENANT_EXEMPT = new Set([
+  "organizations",                                   // it is the tenant
+  "user", "session", "account", "verification",      // Better Auth owns these
+  "__drizzle_migrations",
+]);
+```
+
+`organization_id` is the sharding key and the tenant boundary ([13](13-db-package.md)). A table that ships without it is not a style problem — it is a table that has to be migrated under load later, and a query that cannot be scoped to a tenant in the meantime.
+
+**The exemption list is the point of the check, not a weakness in it.** Every entry is a decision someone had to write down: Better Auth's tables are exempt because it owns their schema, and `organizations` is exempt because it *is* the tenant. Adding a sixth entry means arguing for it in review, which is exactly the conversation that should happen before a global table exists.
+
+Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTable` returns the same type whichever columns you pass, and there is no compile error available — which is precisely the category of rule this file exists for.
+
+### 10 — The audit port is `ActivityLogger`
+
+```js
+// fail on the identifier AuditTrail anywhere in packages/** or apps/**
+```
+
+Cheap, and it exists because the name drifted once already: the observability docs said `AuditTrail` while eleven other files said `ActivityLogger`, and nothing caught it because both are prose in Markdown until the class exists.
+
+Two names for the audit port is worse than an ugly name. The whole point of [Data and scale](../opinions/data-and-scale.md) §1 is that a business fact and a diagnostic go to different places for different reasons, and a reader who sees two names reasonably assumes there are two things.
 
 ---
 

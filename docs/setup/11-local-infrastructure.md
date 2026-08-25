@@ -1,10 +1,12 @@
 # 11 · Local Infrastructure
 
-> Postgres 17 with pgvector, Redis, and MinIO as the S3 stand-in. Three containers, one command.
+> Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, and the log platform the diagnostic stream ships to. One command.
 
-**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to.
+**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki and Grafana, so the log stream has somewhere to land and something to read it with.
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
+
+> **Read [Data and scale](../opinions/data-and-scale.md) before this step.** It is why there are two Redis containers here rather than one, and it decides the partitioning and tenant column that [13](13-db-package.md) builds on.
 
 ---
 
@@ -33,13 +35,28 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
+  redis-cache:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    # Evicts under pressure and does not persist. Everything on it is rebuildable
+    # from Postgres, so losing it costs a slow minute rather than data.
+    command: ["redis-server", "--save", "", "--maxmemory-policy", "allkeys-lru"]
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-queue:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Never evicts and always persists. A queued job is derived from nothing, so a
+    # dropped key here is work that never happens.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports: ["6380:6379"]
     volumes:
-      - redisdata:/data
+      - redisqueuedata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -71,25 +88,146 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 ratchet ratchetsecret &&
       mc mb --ignore-existing local/ratchet &&
+      mc mb --ignore-existing local/loki &&
       mc anonymous set none local/ratchet &&
-      echo 'bucket ready'
+      mc anonymous set none local/loki &&
+      echo 'buckets ready'
       "
+
+  # ── observability ─────────────────────────────────────────
+  # On by default. The diagnostic stream exists today, so it needs
+  # somewhere to go and something to read it with.
+
+  loki:
+    image: grafana/loki:3.3.2
+    profiles: ["observability"]
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml"]
+    ports: ["3100:3100"]
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./loki/config.yml:/etc/loki/config.yml:ro
+      - lokidata:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    profiles: ["observability"]
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    ports: ["12345:12345"]
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Reads container stdout. Read-only, and the only reason this file
+      # touches the Docker socket at all.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # The `pnpm dev | tee` target, for apps running on the host.
+      - ./logs:/var/log/app:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:12345/-/ready | grep -q Ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    # 3001, because the web app owns 3000.
+    ports: ["3001:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # ── analytics, opt-in ─────────────────────────────────────
+  # Not started by `pnpm infra:up`. Nothing writes to it until the
+  # projection consumer exists — see the note below.
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    profiles: ["analytics"]
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: ratchet
+      CLICKHOUSE_PASSWORD: ratchet
+      CLICKHOUSE_DB: ratchet
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports: ["8123:8123", "9002:9000"]
+    volumes:
+      - clickhousedata:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8123/ping | grep -q Ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
-  redisdata:
+  redisqueuedata:
   miniodata:
+  lokidata:
+  grafanadata:
+  clickhousedata:
 ```
+
+> The cache has no volume on purpose. A named volume for something explicitly disposable invites someone to treat it as durable.
+
+> **ClickHouse's native port is remapped to 9002.** MinIO already owns 9000, and the collision produces a container that starts, binds nothing useful, and fails at connect time with an error naming neither service.
 
 ### Why each choice
 
-**`pgvector/pgvector:pg17`** is stock Postgres 17 with the vector extension available to enable. Using the official image and installing pgvector yourself works, but pins you to building an image on every developer machine and every CI runner. Postgres 17 rather than 16 for the improved `VACUUM` memory behaviour, which matters on the activity log more than anywhere else.
+**`pgvector/pgvector:pg17`** is stock Postgres 17 with the vector extension available to enable. Using the official image and installing pgvector yourself works, but pins you to building an image on every developer machine and every CI runner. Postgres 17 rather than 16 for the improved `VACUUM` memory behaviour, which matters on the activity log more than anywhere else — though the real answer for that table is monthly partitioning and a retention policy, which [13](13-db-package.md) sets up in the first migration.
 
-**`--maxmemory-policy noeviction` on Redis is deliberate and important.** Redis here is doing three jobs — cache, session secondary store, and BullMQ backing store — and only one of them is disposable. Under the default `allkeys-lru`, memory pressure silently evicts queued jobs. `noeviction` makes Redis return an error instead, which is loud and recoverable. If you later separate cache from queue onto two Redis instances, the cache one can use LRU.
+**Two Redis containers, because the three jobs Redis does are not equally disposable.** Cache and session storage are cache-aside: both rebuild from Postgres on a miss, so evicting them costs a slow minute. A BullMQ job is derived from nothing — it is work somebody asked for and has not happened yet, and losing it is a gap rather than a delay.
+
+Running one instance forces one eviction policy onto both. `allkeys-lru` silently drops queued jobs under memory pressure; `noeviction` protects the queue but turns a full cache into hard errors on a path that should degrade gracefully. There is no correct single answer, which is the tell that it is two concerns.
+
+**Splitting locally rather than only in production is the same argument that puts MinIO here** instead of a filesystem stand-in: the code path exercised in development is the code path that runs in production. `RedisConnection` takes two URLs ([15](15-infrastructure-package.md)), and a developer who flushes their cache while debugging does not lose the jobs they just enqueued.
+
+> **The consequence to keep in mind:** anything reached through `CacheStore` is on the instance that evicts. Better Auth's secondary storage is therefore a cache in front of the Postgres `session` table, never the record — see [16](16-auth-package.md). A session that vanishes under LRU must be a read-through, not a sign-out.
 
 **`minio-init` is a one-shot container**, not a long-running service. It creates the bucket and exits. Without it, every developer's first upload fails with `NoSuchBucket` and they go looking for a code bug. `mc anonymous set none` makes the bucket private, which is the correct default — files are served through presigned URLs from `S3StorageGateway`, never by public path.
 
-**Healthchecks on all three.** The web app and worker both connect on boot; without healthchecks, `pnpm dev` immediately after `pnpm infra:up` races Postgres's startup and fails with a connection error that looks like a config problem.
+**Healthchecks on everything long-running.** The web app and worker both connect on boot; without healthchecks, `pnpm dev` immediately after `pnpm infra:up` races Postgres's startup and fails with a connection error that looks like a config problem.
+
+**Loki stores into MinIO, which was already running.** That is the whole argument for a log platform over a log table: retention, search, and level filtering become configuration. `retention_period: 720h` below is literally the thirty-day policy [Data and scale](../opinions/data-and-scale.md) commits to, and there is no migration, no partition, and no cleanup job behind it.
+
+Pointing Loki at MinIO rather than a local volume also means the local topology matches production, where it is S3. One fewer thing that behaves differently on the day you deploy.
+
+**Grafana is one UI, not three.** It reads Loki now and Postgres immediately; when ClickHouse arrives it reads that too. Anonymous admin with the login form disabled, because a local observability stack behind a password is a local observability stack nobody opens.
+
+**Two profiles, and the split is a decision rather than a convenience.**
+
+`observability` is on by default because the diagnostic stream is not hypothetical — `JsonLogger` exists, `EVENT_CATALOG` exists, and every adapter written from [13](13-db-package.md) onward emits into it. A stream with no sink is a stream nobody checks.
+
+`analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. `AnalyticsReader` is the seam, `PgAnalyticsReader` is the implementation, and snapshot tables in Postgres answer every question this kit will ask for years. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics` and a consumer, not an infrastructure project.
+
+> **A running ClickHouse with nothing writing to it is worse than no ClickHouse**, because it looks like a decision that was made. Leave it stopped until a projection consumer exists.
 
 ---
 
@@ -111,7 +249,324 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ---
 
-## Step 11.3 — Start it
+## Step 11.3 — The log pipeline
+
+Two files. Neither is application code, and no package imports either of them — that is the point of
+[Tier 0](../opinions/dependencies.md): the deployment provides the log platform, and `JsonLogger`
+never learns it exists.
+
+**`infra/loki/config.yml`**
+
+```yaml
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+  storage:
+    s3:
+      endpoint: minio:9000
+      bucketnames: loki
+      access_key_id: ratchet
+      secret_access_key: ratchetsecret
+      s3forcepathstyle: true
+      insecure: true
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: s3
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # The thirty-day policy, as one line.
+  retention_period: 720h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # A guard against the failure this whole design is about.
+  max_label_names_per_series: 8
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: s3
+  retention_enabled: true
+```
+
+`s3forcepathstyle: true` and `insecure: true` are the MinIO equivalents of `S3_FORCE_PATH_STYLE`
+from [02](02-repo-skeleton.md) — same distinction, same reason, and the same two values flip for real
+S3.
+
+**`max_label_names_per_series: 8` is a backstop, not the rule.** The rule is the Alloy config below,
+which promotes exactly four. This makes a mistake fail loudly at ingest rather than quietly
+multiplying streams.
+
+**`infra/alloy/config.alloy`**
+
+```alloy
+// Container stdout, every service in the compose file. The filter is not
+// optional: `discovery.docker` finds every container on the machine, so without
+// it Alloy ingests unrelated projects a developer happens to have running.
+discovery.docker "compose" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=ratchet"]
+  }
+}
+
+discovery.relabel "compose" {
+  targets = discovery.docker.compose.targets
+
+  // The fallback `app`, for the containers that do not emit our JSON. Our own
+  // apps overwrite it from the log body in the pipeline below.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "app"
+  }
+}
+
+loki.source.docker "compose" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.compose.output
+  forward_to = [loki.process.stream.receiver]
+}
+
+// `pnpm dev` runs on the host, not in a container, so nothing above can see it.
+// `pnpm dev | tee infra/logs/dev.log` lands here.
+local.file_match "dev" {
+  path_targets = [{ __path__ = "/var/log/app/*.log", app = "dev" }]
+}
+
+loki.source.file "dev" {
+  targets    = local.file_match.dev.targets
+  forward_to = [loki.process.stream.receiver]
+}
+
+// One pipeline for every source. A stage that cannot parse a line extracts
+// nothing and falls through to the next, so the stages compose rather than
+// needing a branch per service.
+loki.process "stream" {
+  forward_to = [loki.write.default.receiver]
+
+  // Our own lines. `app` and `env` are bound onto every one by the container
+  // ([17]); `level` and `event` come from the catalog.
+  stage.json {
+    expressions = {
+      app        = "app",
+      env        = "env",
+      level      = "level",
+      event_code = "event",
+    }
+  }
+
+  // Loki, Grafana and Alloy emit logfmt with a `level` key. Same extracted key
+  // as above, so whichever stage understood the line is the one that wins.
+  stage.logfmt {
+    mapping = { level = "" }
+  }
+
+  // Every line gets `env`, including the third-party containers whose format
+  // carries no such field. Set before `stage.labels`, so an app line that
+  // carries its own `env` still overrides this.
+  stage.static_labels {
+    values = { env = "development" }
+  }
+
+  // Promote exactly these four. A key nothing extracted is left unset rather
+  // than blanked, which is what keeps the fallback `app` from the relabel rule.
+  stage.labels {
+    values = {
+      app        = "",
+      env        = "",
+      level      = "",
+      event_code = "",
+    }
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+```
+
+**This file is where the label rule stops being a convention.** Four labels leave here and no others,
+and all four are lifted out of the JSON body by name. `traceId`, `organizationId`, `userId` and
+`jobId` are never mentioned, so they cannot be promoted by accident — they ride in the log line and
+are reached with `| json` at query time.
+
+Adding a `values` entry here is the one edit that can quietly make Loki miserable. It should be as
+hard to do casually as adding a row to a catalog, and reviewing this file is how.
+
+### What each service actually gets
+
+Every container in the compose project is collected, but they do not all carry the same labels —
+third-party services have never heard of our event catalog, and pretending otherwise would mean a
+regex per vendor to maintain.
+
+| Service | `app` | `env` | `level` | `event_code` | Parsed as |
+|---|---|---|---|---|---|
+| `web`, `worker` (or `dev` via the file tail) | from body | from body | from body | ✅ | our JSON |
+| `loki`, `grafana`, `alloy` | service name | static | from body | — | logfmt |
+| `postgres`, `redis-cache`, `redis-queue`, `minio`, `clickhouse` | service name | static | — | — | plain text |
+
+**Only our own applications get all four**, which is the intended asymmetry: `event_code` exists
+because we have a closed catalog, and Postgres does not.
+
+**Everything gets `app` and `env`**, so `{env="development"}` really does mean the whole stack and
+`{app="postgres"}` finds the database. That is what the `stage.static_labels` line buys — without it,
+a failed `stage.json` left third-party lines with no `env` at all and any query scoped by environment
+silently excluded half the stack.
+
+**Postgres, Redis, MinIO and ClickHouse get no `level`.** Their severities are four different
+bespoke formats, and normalising each into our label is a regex per vendor that breaks on their next
+release. `{app="postgres"} |= "ERROR"` is the query, and a line-filter over one service's streams is
+cheap — this is the case Loki is good at. The `level` label exists for the volume our own code
+produces.
+
+> **Alloy collects Alloy.** That is deliberate — you want to see the shipper's own errors — and it
+> does not amplify: when Loki is unreachable Alloy retries from its own buffer with backoff rather
+> than logging once per dropped line.
+
+> **`refresh_interval = "15s"`** is how long a newly started container waits before its logs appear.
+> The default is a minute, which is long enough that a developer restarting one service concludes the
+> pipeline is broken.
+
+**All four labels come from the log line rather than from container metadata, and that is a
+deliberate reversal.** The obvious design reads `app` from the Compose service name and sets `env` as a static
+`external_labels` entry. It works here and stops working the moment the topology changes: on
+Kubernetes the container name is a pod name, `web-7d4f9` and `web-2a1c8` are two different values of
+what should be one label, and a host-run `pnpm dev` has no container at all.
+
+The application already knows which application it is. `Container` binds `app` and `env` onto every
+line it writes ([17](17-composition-container.md)), so one pipeline produces correct labels under
+Compose, under Kubernetes, and from a tailed file — and `APP` / `ENV` in `.env.example` are read
+rather than decorative.
+
+> **The contract this depends on is asserted in code**, in
+> `packages/observability/tests/logger/wire-contract.spec.ts`. That file is the only thing spanning
+> `JsonLogger`'s output and this config — no compiler sees both — so renaming the `event` field or
+> nesting `level` fails a test here rather than silently producing unlabelled streams in production.
+
+> **`LOG_PRETTY=true` makes this pipeline blind.** The human format is not JSON, `stage.json` drops
+> what it cannot parse, and the lines arrive with no labels beyond the target's. That is fine in a
+> terminal and wrong anywhere Alloy is reading — which is why the flag exists as config rather than
+> as a guess about the environment.
+
+> **Local `pnpm dev` does not ship to Loki by default, and that is deliberate.** The apps run on your
+> host; `LOG_PRETTY=true` in a terminal is the normal loop and is better for debugging than a web UI.
+> Pipe when you actually want to exercise the pipeline:
+>
+> ```bash
+> pnpm dev | tee infra/logs/dev.log
+> ```
+>
+> `infra/logs/` is gitignored. Everything running *in* Compose is picked up with no extra step.
+
+---
+
+## Step 11.4 — Grafana's data sources
+
+**`infra/grafana/provisioning/datasources/datasources.yml`**
+
+```yaml
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    jsonData:
+      # Follow a traceId from a log line into whatever traces you add later.
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"traceId":"([^"]+)"'
+          url: '$${__value.raw}'
+
+  - name: Postgres
+    type: grafana-postgresql-datasource
+    uid: postgres
+    access: proxy
+    url: postgres:5432
+    user: ratchet
+    jsonData:
+      database: ratchet
+      sslmode: disable
+    secureJsonData:
+      password: ratchet
+```
+
+**Provisioned as a file, never clicked in.** A data source configured through the UI lives in
+Grafana's volume and disappears on `infra:reset`, which is exactly when somebody is already debugging
+something else.
+
+The Postgres data source is here from day one because the activity log is a Postgres table. *"Who
+changed this"* is a Grafana query against Postgres; *"what did the system do"* is a Grafana query
+against Loki. Same UI, two stores, which is the argument for Grafana over a Loki-specific viewer.
+
+> `$${__value.raw}` is escaped for Compose, which expands `$`. Written `${__value.raw}` it silently
+> becomes an empty string.
+
+---
+
+## Step 11.5 — ClickHouse's schema, for later
+
+Only read when you start the `analytics` profile. It exists so the profile is runnable rather than a
+stub.
+
+**`infra/clickhouse/init/01-schema.sql`**
+
+```sql
+-- Derived, and rebuildable by replaying the activity log. Nothing here is a
+-- source of truth, which is what keeps the swap a performance decision.
+CREATE TABLE IF NOT EXISTS activity_events
+(
+  organization_id UUID,
+  occurred_at     DateTime64(3),
+  actor_id        String,
+  action          LowCardinality(String),
+  subject_id      Nullable(UUID),
+  payload         String
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(occurred_at)
+ORDER BY (organization_id, action, occurred_at)
+TTL toDateTime(occurred_at) + INTERVAL 5 YEAR;
+```
+
+**`ORDER BY` leads with `organization_id`** for the same reason every Postgres index does: it is the
+tenant boundary, and an analytics store that cannot answer a question for one organization cheaply is
+not useful.
+
+**`action` is `LowCardinality`** — the ClickHouse equivalent of the label-cardinality argument, one
+layer down.
+
+**A five-year TTL, against Postgres's twelve-to-twenty-four months.** That asymmetry is the reason
+the analytics store exists: Postgres keeps detail for as long as an operator needs to read a row, and
+the column store keeps aggregates for as long as the business needs a trend.
+
+---
+
+## Step 11.6 — Start it
 
 ```bash
 pnpm infra:up
@@ -120,7 +575,15 @@ pnpm infra:up
 ```bash
 docker compose -f infra/docker-compose.yml ps
 ```
-> All three should read `healthy`. `minio-init` should read `exited (0)` — that is success, not a failure.
+> Seven services should read `healthy`: postgres, redis-cache, redis-queue, minio, loki, alloy, grafana. `minio-init` should read `exited (0)` — that is success, not a failure. `clickhouse` should not be listed at all; it is behind the `analytics` profile.
+
+Loki takes longer to report healthy than the rest, because it waits for `minio-init` to create its bucket. Twenty retries at ten seconds is generous on purpose — a cold image pull on a slow connection is the usual cause, not a misconfiguration.
+
+To start the analytics profile as well, when there is finally something to put in it:
+
+```bash
+pnpm infra:up:analytics
+```
 
 If your Postgres volume predates the init script:
 
@@ -131,7 +594,7 @@ docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratc
 
 ---
 
-## Step 11.4 — Verify each service
+## Step 11.7 — Verify each service
 
 ```bash
 docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratchet -c "SELECT extname FROM pg_extension;"
@@ -139,15 +602,35 @@ docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratc
 > Should list `vector`, `pg_trgm`, and `uuid-ossp` alongside `plpgsql`.
 
 ```bash
-docker compose -f infra/docker-compose.yml exec redis redis-cli ping
+docker compose -f infra/docker-compose.yml exec redis-cache redis-cli ping
+```
+
+```bash
+docker compose -f infra/docker-compose.yml exec redis-queue redis-cli ping
 ```
 > `PONG`.
 
-Open `http://localhost:9001` and sign in with `ratchet` / `ratchetsecret`. The `ratchet` bucket should be listed and empty.
+Open `http://localhost:9001` and sign in with `ratchet` / `ratchetsecret`. Two buckets should be listed: `ratchet`, empty, and `loki`, which fills as soon as anything logs.
+
+```bash
+curl -s http://localhost:3100/ready
+```
+> `ready`. Loki is accepting writes.
+
+```bash
+curl -s -G http://localhost:3100/loki/api/v1/labels | jq -r '.data[]'
+```
+> Once anything has logged, this is the whole point of the exercise: it should print `app`, `env`, `event_code`, `level` — **and nothing else**. A fifth label here means the Alloy pipeline promoted something it should not have, and it is far cheaper to notice now than at a hundred thousand streams.
+
+Open `http://localhost:3001` for Grafana. It signs you in automatically, and both data sources are already configured. Try a query in Explore:
+
+```logql
+{app="postgres"} | json
+```
 
 ---
 
-## Step 11.5 — Useful operations
+## Step 11.8 — Useful operations
 
 ```bash
 pnpm infra:down
@@ -157,23 +640,42 @@ pnpm infra:down
 ```bash
 pnpm infra:reset
 ```
-> `down -v` — stops containers **and destroys the volumes**. This is the "give me a clean database" button, and it re-runs the init scripts on next start. It is also irreversible, which is why it is a separate script from `infra:down` rather than a flag someone adds by muscle memory.
+> `down -v --profile "*"` — stops containers **and destroys the volumes**. This is the "give me a clean database" button, and it re-runs the init scripts on next start. It is also irreversible, which is why it is a separate script from `infra:down` rather than a flag someone adds by muscle memory.
+
+> **`--profile "*"` on both `down` and `reset` is not decoration.** `docker compose down` only stops services in the profiles it was given, so without it a `pnpm infra:reset` leaves ClickHouse running and its volume intact — and the next `ps` shows a container the developer does not remember starting.
+
+> **`infra:reset` destroys the queue volume too**, which is the one thing in the stack that is not rebuildable from Postgres. Locally that is fine — it is a scratch database. The habit is what matters: in any environment with real pending work, clearing the cache and clearing the queue are different operations, and the split is what makes it possible to do one without the other.
+
+```bash
+docker compose -f infra/docker-compose.yml exec redis-cache redis-cli flushall
+```
+> The cache is disposable by construction, so this is a safe debugging move — everything on it reads through to Postgres on the next miss. Running the same command against `redis-queue` deletes work.
 
 ```bash
 docker compose -f infra/docker-compose.yml logs -f postgres
 ```
+> Raw container logs, when Grafana is the thing that is broken.
+
+```bash
+pnpm dev | tee infra/logs/dev.log
+```
+> Ships host-run app logs to Loki as well as your terminal. Optional — `LOG_PRETTY=true` and reading the terminal is the normal loop.
 
 ---
 
 ## What production looks like
 
-Nothing in the application code changes. These containers are development conveniences; the configuration in `.env` is what points elsewhere.
+The application code does not change between the two columns. These containers are development conveniences, and the configuration in `.env` is what points elsewhere — which works only because the *shape* matches: two Redis URLs locally and two in production, not one that becomes two on deployment day.
 
 | Local | Production |
 |---|---|
 | `pgvector/pgvector:pg17` container | Managed Postgres with the `vector` extension enabled — RDS, Cloud SQL, Neon, Supabase |
-| `redis:7-alpine` container | Managed Redis — ElastiCache, Upstash, Redis Cloud. **Two instances**: one for cache (LRU eviction), one for BullMQ (`noeviction`) |
+| `redis-cache` container | Managed Redis with `allkeys-lru` — ElastiCache, Upstash, Redis Cloud. Sized for working set; no persistence needed |
+| `redis-queue` container | A **separate** managed Redis with `noeviction` and AOF. Never the same instance as the cache |
 | MinIO | S3, R2, or any S3-compatible store. Set `S3_FORCE_PATH_STYLE=false` for AWS |
+| `loki` + `alloy` containers | Self-hosted Loki with S3 storage, or Grafana Cloud — the same config, a different `url`. Alloy runs as a DaemonSet on Kubernetes |
+| `grafana` container | Self-hosted Grafana or Grafana Cloud. The provisioning files are the same either way |
+| `clickhouse` container, stopped | ClickHouse Cloud or a managed instance — and only once the trigger in [Data and scale](../opinions/data-and-scale.md) §5 has actually fired |
 
 That last row is the reason MinIO is here rather than a local filesystem stand-in: the AWS SDK talks to MinIO unchanged, so the code path exercised in development is the code path that runs in production. A filesystem adapter would mean the S3 path is first executed on the day you deploy.
 
@@ -183,9 +685,21 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
 
 ## ✅ Gate
 
-- `docker compose -f infra/docker-compose.yml ps` shows postgres, redis, and minio all `healthy`.
+- `docker compose -f infra/docker-compose.yml ps` shows postgres, redis-cache, redis-queue, minio, loki, alloy, and grafana all `healthy`, and does **not** list clickhouse.
+- `redis-cache` reports `maxmemory_policy:allkeys-lru` and `redis-queue` reports `noeviction`:
+  `docker compose -f infra/docker-compose.yml exec redis-queue redis-cli config get maxmemory-policy`
 - `SELECT extname FROM pg_extension;` includes `vector`.
-- The MinIO console at `http://localhost:9001` shows a `ratchet` bucket.
+- The MinIO console at `http://localhost:9001` shows `ratchet` and `loki` buckets.
+- `curl -s http://localhost:3100/ready` returns `ready`.
+- **The label set is exactly four.** `curl -s -G http://localhost:3100/loki/api/v1/labels` returns `app`, `env`, `event_code`, `level` and nothing more.
+- **Every service is being collected.** This lists one entry per compose service, not just the ones that emit JSON:
+  ```bash
+  curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
+  ```
+  Expect `alloy`, `grafana`, `loki`, `minio`, `postgres`, `redis-cache`, `redis-queue`. A missing entry means that container has logged nothing yet, not that it is being skipped — restart it and look again.
+- **Nothing from other projects leaked in.** No value above belongs to a container outside this compose file. If one does, the `com.docker.compose.project` filter is wrong.
+- Grafana at `http://localhost:3001` opens without a login and lists Loki and Postgres under Connections.
+- `pnpm infra:up:analytics` starts clickhouse, and `curl -s http://localhost:8123/ping` returns `Ok`. Then stop it again — nothing writes to it yet.
 
 Do not proceed until this passes.
 

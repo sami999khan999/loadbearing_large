@@ -39,6 +39,12 @@ and a fresh id minted.
 Without that, a caller controls a string that appears in every log line, which is a log-injection
 primitive and an unbounded field on a per-request basis.
 
+**Unbounded per request is also why `traceId` must never become a log label.** A Loki label creates
+one stream per distinct value, so labelling the trace id means one stream per request. It stays in
+the body and is reached with `| json | traceId="…"` after the selector has narrowed the streams. The
+legal label set is `app`, `env`, `level`, `event_code` and nothing else — see
+[Data and scale](../../../../docs/opinions/data-and-scale.md).
+
 ```ts
 Correlation.sanitise("a b c");      // null — mint instead
 Correlation.sanitise("<script>");   // null
@@ -59,7 +65,7 @@ Minting uses `Uuid.v7()` from `core`, so a trace id sorts by time like every oth
 | Runtime | Where | Why there |
 | --- | --- | --- |
 | `apps/web` | a middleware **before** `principalMiddleware` | both entrypoints already pass raw `Headers`; nothing upstream changes |
-| `apps/worker` | per job, next to `SystemPrincipal.forOrganisation(...)` | the worker never runs oRPC middleware |
+| `apps/worker` | per job, next to `SystemPrincipal.forOrganization(...)` | the worker never runs oRPC middleware |
 
 In both cases the id is bound onto a child logger immediately, so every subsequent line carries it
 without any call site naming it again.

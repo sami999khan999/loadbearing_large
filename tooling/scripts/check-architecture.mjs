@@ -287,6 +287,70 @@ assert("no server code in the client bundle", (failures) => {
   return null;
 });
 
+// ── 9 — every domain table declares organization_id ──────────────────────────
+//
+// The tenant column is the sharding key and the boundary every repository query
+// narrows by. Drizzle tables are data, so no type can express this. See
+// docs/opinions/data-and-scale.md.
+
+const TENANT_EXEMPT = new Set([
+  // It is the tenant.
+  "organizations",
+  // Better Auth owns these schemas; its CLI generates them.
+  "user",
+  "session",
+  "account",
+  "verification",
+  "__drizzle_migrations",
+]);
+
+assert("every domain table declares `organization_id`", (failures) => {
+  const dir = join(ROOT, "packages/db/src");
+  if (!existsSync(dir)) return "packages/db has no src/ yet";
+
+  const files = walk(dir, [".ts"]).filter((f) => f.endsWith(".schema.ts"));
+  if (files.length === 0) return "no *.schema.ts files yet";
+
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+
+    // Both call shapes Biome produces: `pgTable("x", {...});` closes on `\n});`,
+    // and the three-argument form with an index callback closes on `\n);`.
+    // Matching only the latter is how this check silently passes on half the tables.
+    for (const match of source.matchAll(/pgTable\(\s*["'`]([^"'`]+)["'`]([\s\S]*?)\n\}?\);/g)) {
+      const [, table, body] = match;
+      if (TENANT_EXEMPT.has(table)) continue;
+      if (body.includes("organization_id")) continue;
+
+      failures.push(`${rel(file)}: table "${table}" has no organization_id`);
+    }
+  }
+
+  return null;
+});
+
+// ── 10 — the audit port is ActivityLogger, never AuditTrail ──────────────────
+//
+// The name drifted once already: the observability docs said AuditTrail while
+// eleven other files said ActivityLogger. Two names for the audit port reads as
+// two things, which is the exact confusion the audit/diagnostic split prevents.
+
+assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
+  for (const base of ["packages", "apps"]) {
+    const dir = join(ROOT, base);
+    if (!existsSync(dir)) continue;
+
+    for (const file of walk(dir, [".ts", ".tsx", ".md"])) {
+      const source = readFileSync(file, "utf8");
+      if (source.includes("AuditTrail")) {
+        failures.push(`${rel(file)}:${lineOf(source, "AuditTrail")} names AuditTrail`);
+      }
+    }
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;

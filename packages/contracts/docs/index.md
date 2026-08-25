@@ -30,7 +30,7 @@ packages/contracts/
 │   ├── import.ts                    ← zod, @orpc/contract, @loadbearing/permissions
 │   ├── primitive/
 │   │   ├── index.ts
-│   │   ├── identifiers.ts           → Identifiers, UserId, RoleId, GoalId, TaskId, ApiKeyId
+│   │   ├── identifiers.ts           → Identifiers, OrganizationId, UserId, RoleId, GoalId, TaskId, ApiKeyId
 │   │   ├── envelope.ts              → Envelope
 │   │   └── pagination.ts            → Pagination, PaginationQuery
 │   ├── procedure/

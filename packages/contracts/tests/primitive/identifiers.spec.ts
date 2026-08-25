@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Identifiers, type TaskId } from "../../src/primitive/identifiers.js";
+import { Identifiers, type OrganizationId, type TaskId } from "../../src/primitive/identifiers.js";
 
 const UUID = "018f2b3c-4d5e-7f80-9a1b-2c3d4e5f6071";
 
@@ -29,6 +29,16 @@ describe("Identifiers", () => {
     expect(taskId).toBe(goalId);
     // @ts-expect-error a GoalId is not a TaskId
     const wrong: TaskId = goalId;
+    expect(wrong).toBe(UUID);
+  });
+
+  it("brands the tenant key, where a swap is a cross-tenant leak", () => {
+    const organizationId: OrganizationId = Identifiers.organizationId.parse(UUID);
+    const goalId = Identifiers.goalId.parse(UUID);
+
+    expect(organizationId).toBe(goalId);
+    // @ts-expect-error a GoalId is not an OrganizationId
+    const wrong: OrganizationId = goalId;
     expect(wrong).toBe(UUID);
   });
 });

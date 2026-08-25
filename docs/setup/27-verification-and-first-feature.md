@@ -1,6 +1,6 @@
 # 27 · Verification and your first feature
 
-> Proof that the architecture holds, not just that it builds — and the eleven-step path every feature after this one follows.
+> Proof that the architecture holds, not just that it builds — and the twelve-step path every feature after this one follows.
 
 **Delivers:** A verified starter kit, a clean commit history, and a repeatable checklist.
 
@@ -17,7 +17,7 @@ git clone <your-repo> ratchet-verify && cd ratchet-verify
 cp .env.example .env
 
 pnpm install
-pnpm infra:up                 # wait for all three healthchecks
+pnpm infra:up                 # wait for all seven healthchecks
 pnpm db:migrate
 pnpm db:seed
 
@@ -48,9 +48,12 @@ These are the checks a green build does not give you. Run them by hand once now,
 - [ ] **Clean client bundle.** The built client output contains no Drizzle, no ioredis, no AWS SDK.
 - [ ] **Naming.** Every file under `packages/*/src` matches the rules in [29](29-naming-and-boundaries.md): one class, filename derived from it, kebab-case, role suffix.
 - [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two places: `packages/db/src/vector/` and `packages/composition/src/container.ts`. If it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
+- [ ] **The analytics seam.** `grep -rn "PgAnalyticsReader" packages/ apps/` returns hits in exactly two places, for the same reason. A use-case that names it has turned a config change into a rewrite.
+- [ ] **Tenant scoping.** `pnpm check:architecture` reports every domain table carrying `organization_id`, and no repository method queries without narrowing by it. The grep covers the schema; the query side is a review habit.
+- [ ] **Query counts.** The integration tests assert a fixed number of queries for `resolveFor` and every repository method that loops. An N+1 is invisible at fifty rows and fatal at fifty thousand.
 - [ ] **Env boundary.** `process.env` appears in exactly two files: `apps/web/src/env.ts` and `apps/worker/src/env.ts`.
 
-**The bundle check, the vector-seam check, and the naming check are the three that rot quietly.** The others fail loudly on their own. Put the first two in CI (you already did, in [26](26-hygiene-and-ci.md)); the naming one is a code-review habit.
+**The bundle check, the two seam checks, and the naming check are the four that rot quietly.** The others fail loudly on their own. Put the first three in CI (you already did, in [26](26-hygiene-and-ci.md)); the naming one is a code-review habit.
 
 ---
 
@@ -104,7 +107,10 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
  5. packages/contracts/src/permission/lead.permissions.ts  map each procedure path → permission
 
  6. packages/db/src/lead/lead.schema.ts                    tables + migration
-    packages/db/src/lead/pg-lead.repository.ts             implements the port
+                                                           organization_id on every table
+                                                           an index on every FK and filtered column
+                                                           append-only? partition it in this migration
+    packages/db/src/lead/pg-lead.repository.ts             implements the port, scoped by tenant
 
  7. packages/application/src/lead/                         use-cases + LeadRepository port
  8. packages/api-client/src/lead/                          transport methods, if not generic
@@ -159,7 +165,7 @@ Fifteen packages and three applications, where:
 - Business logic lives in `packages/`, and the applications are thin.
 - One permission decision drives four enforcement surfaces from one `can()`.
 - The domain layer imports no framework, so the use-cases outlive the frameworks.
-- Postgres, Redis, S3, and the vector store all sit behind ports, so each is a one-line swap in the container.
+- Postgres, both Redis instances, S3, the vector store, and the analytics store all sit behind ports, so each is a one-line swap in the container.
 - Every team owns one glob, one commit scope, one vertical slice.
 
 The next thing you build is a feature, not infrastructure. That was the point.

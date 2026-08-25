@@ -15,6 +15,7 @@ Four vocabularies that look alike and mean different things.
 | **Procedure path** | `<subject>.<action>`, mirrors the permission it requires | `task.reactivate` |
 | **Activity / event name** | `<subject>.<action>`, action **past tense** | `task.reactivated` |
 | **Log event code** | `<subject>.<thing>.<state>`, state **past tense** | `queue.job.failed` |
+| **Log label** | fixed set, low cardinality | `app`, `env`, `level`, `event_code` |
 | **Queue name** | `<domain>.<work>`, noun-ish | `embedding.generate` |
 | **Repeatable job key** | `schedule.<name>` | `schedule.overdue-sweep` |
 
@@ -39,6 +40,20 @@ past tense because both record something that already happened, and they live in
 with different sinks — see [`@loadbearing/observability`](../../packages/observability/docs/index.md).
 Never emit one where the other belongs: a business fact in stdout is lost on restart, and a
 diagnostic in Postgres is a retention bill.
+
+The sinks are the reason: activities go to a partitioned Postgres table inside the transaction and
+are kept for one to two years; log events go to stdout, on to Loki, and are kept for thirty days.
+[Data and scale](data-and-scale.md) has the full four-stream taxonomy.
+
+**A label is not a field.** The four labels above are the *only* ones a log line may be indexed by.
+Every other value — `trace_id`, `user_id`, `task_id`, `organization_id` — lives in the line body and
+is queried after the label selector has narrowed the streams. A label creates one stream per distinct
+value, so promoting a high-cardinality field looks like an optimisation and is the fastest way to
+make the log platform unusable.
+
+`event_code` being a label makes `EVENT_CATALOG` its cardinality budget — plus `error.raised`, the
+one code that lives outside the catalog because its level is decided by the error being logged. Every
+slice that adds a catalog fragment spends the budget, which is a reason to keep codes coarse.
 
 ## Error codes
 
@@ -67,23 +82,49 @@ Derived types follow the schema name: `TaskDto` from `entity`, `CreateTaskInput`
 | Object | Convention | Example |
 |---|---|---|
 | Table | `snake_case`, **plural** | `goal_members` |
+| Append-only table | `snake_case`, **singular** | `activity_log`, `task_status_history` |
+| Partition | `<parent>_<yyyy>_<mm>` | `activity_log_2026_08` |
 | Column | `snake_case`, singular | `assignee_id` |
+| Tenant column | `organization_id`, on every domain table | `organization_id` |
 | Foreign key | `<referenced_singular>_id` | `goal_id` |
 | Boolean column | `is_` / `has_` prefix | `is_system` |
 | Timestamp column | `<verb>ed_at` | `reactivated_at` |
 | Unique index | `<table>_<cols>_uq` | `goal_member_uq` |
 | Regular index | `<table>_<cols>_idx` | `goal_member_user_idx` |
+| Snapshot table | `<subject>_<grain>` | `goal_risk_daily` |
 | Enum values | `snake_case` | `in_progress` |
 | Drizzle export | `camelCase` plural, matching the table | `goalMembers` |
 
 **Zod enums mirror the DB enum values exactly** — `in_progress`, never `IN_PROGRESS` or
 `InProgress`. One string travels from Postgres to a React `<select>` with no mapping layer to drift.
 
+**Append-only tables are singular, and the exception is worth stating because it looks like a
+mistake.** `goal_members` is a collection of rows you add to and remove from; `activity_log` is one
+log, `task_status_history` is one history. The plural rule serves readability at a join site, and
+neither of these is ever joined that way. `session` is singular too, but only because Better Auth
+named it.
+
+**`organization_id` is on every domain table, and every unique index on one leads with it.**
+`roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role. The exceptions
+are the tenant table itself and the tables Better Auth generates, and `check-architecture.mjs` §9
+holds the list so that adding to it is a decision someone made rather than a file nobody noticed.
+
+Spell it **`organization`**, not `organisation`, everywhere — the column name settles it, and a
+codebase using both resolves it inconsistently per file.
+
+**A snapshot table name says it is derived.** `goal_risk_daily` reads as a rollup at a grain;
+`goal_risks` would read as a domain table somebody could write to. Only the projection consumer
+writes to these, and they are rebuildable by replaying the activity log
+([Data and scale](data-and-scale.md) §2).
+
 ## Packages, env, React
 
 - **Packages:** `@loadbearing/<single-lowercase-word>`. Scope by layer, never by feature — no
   `@loadbearing/task-contracts`.
-- **Env vars:** `SCREAMING_SNAKE_CASE`, prefixed by subsystem: `DATABASE_URL`, `S3_BUCKET`.
+- **Env vars:** `SCREAMING_SNAKE_CASE`, prefixed by subsystem: `DATABASE_URL`, `S3_BUCKET`. Where
+  one technology serves two purposes, the purpose is the prefix, not the technology —
+  `REDIS_CACHE_URL` and `REDIS_QUEUE_URL`, never one `REDIS_URL`, because the two have different
+  durability guarantees and mixing them loses queued work.
   Client-exposed vars carry the framework's public prefix and nothing else does. Read once in
   `apps/*/src/env.ts` and passed down — Biome's `noProcessEnv` enforces that everywhere else.
 - **React components:** `PascalCase` export in a kebab-case file — `task-card.tsx` exports

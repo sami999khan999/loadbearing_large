@@ -39,12 +39,13 @@ export const documentChunks = pgTable(
   "document_chunks",
   {
     id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
 
     // The domain row this chunk was derived from — a document, receipt, note.
     sourceId: uuid("source_id").notNull(),
     sourceType: text("source_type").notNull(),
 
-    // Null means org-wide. Anything else is the permission scope.
+    // Null means org-wide *within this organization*, never across organizations.
     goalId: uuid("goal_id"),
 
     chunkIndex: text("chunk_index").notNull(),
@@ -57,8 +58,8 @@ export const documentChunks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("document_chunks_source_idx").on(t.sourceId),
-    index("document_chunks_goal_idx").on(t.goalId),
+    index("document_chunks_source_idx").on(t.organizationId, t.sourceId),
+    index("document_chunks_goal_idx").on(t.organizationId, t.goalId),
     index("document_chunks_embedding_idx")
       .using("hnsw", t.embedding.op("vector_cosine_ops"))
       .with({ m: 16, ef_construction: 64 }),
@@ -67,13 +68,17 @@ export const documentChunks = pgTable(
 
 export const documentChunksGoalNullIdx = sql`
   CREATE INDEX IF NOT EXISTS document_chunks_goal_null_idx
-  ON document_chunks (id) WHERE goal_id IS NULL
+  ON document_chunks (organization_id, id) WHERE goal_id IS NULL
 `;
 ```
 
-### Four decisions in that table
+### Five decisions in that table
 
 **`goalId` is a real column, indexed, and part of every query.** Not metadata inside the JSONB blob. The permission filter runs as a `WHERE` clause on an indexed column, before the vector comparison, so the index can actually be used. Burying the scope in JSON means filtering after retrieval, which is the thing [12](12-application-package.md) exists to prevent.
+
+**`organizationId` is a real column for the same reason, and it is the more dangerous of the two.** A missing `goalId` predicate over-retrieves within one customer's data; a missing `organizationId` predicate retrieves *another customer's* data. Both indexes lead with it, and every query below carries it.
+
+The subtlety worth naming: `goal_id IS NULL` means "visible to everyone in this organization". Without a tenant predicate alongside it, that same condition means "visible to everyone, everywhere" — and it would read as correct in review, because the code says `isNull(goalId)` in both cases. This is exactly the shape of bug the branded `OrganizationId` in [10](10-contracts-package.md) exists to make hard to write.
 
 **HNSW rather than IVFFlat.** IVFFlat needs training data to build a useful index, so it performs badly until the table is populated and needs rebuilding as the distribution shifts. HNSW builds incrementally, which matters when the table starts empty and grows continuously. It costs more memory and more insert time; both are the right trade here.
 
@@ -96,13 +101,17 @@ import {
   type DocumentChunk,
   type SearchHit,
 } from "@loadbearing/application";
+import type { OrganizationId } from "@loadbearing/contracts";
 import { BaseRepository } from "../base.repository.js";
 import { documentChunks } from "./vector.schema.js";
 
 export class PgVectorStore extends BaseRepository implements VectorStore {
   private static readonly MIN_SCORE = 0.3;
 
-  public async upsert(chunks: readonly DocumentChunk[]): Promise<void> {
+  public async upsert(
+    organizationId: OrganizationId,
+    chunks: readonly DocumentChunk[],
+  ): Promise<void> {
     if (chunks.length === 0) return;
 
     await this.db
@@ -110,6 +119,7 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
       .values(
         chunks.map((chunk) => ({
           id: chunk.id,
+          organizationId,
           sourceId: chunk.sourceId,
           sourceType: String(chunk.metadata.sourceType ?? "unknown"),
           goalId: chunk.goalId,
@@ -129,11 +139,22 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
       });
   }
 
-  public async deleteBySource(sourceId: string): Promise<void> {
-    await this.db.delete(documentChunks).where(eq(documentChunks.sourceId, sourceId));
+  public async deleteBySource(
+    organizationId: OrganizationId,
+    sourceId: string,
+  ): Promise<void> {
+    await this.db
+      .delete(documentChunks)
+      .where(
+        and(
+          eq(documentChunks.organizationId, organizationId),
+          eq(documentChunks.sourceId, sourceId),
+        ),
+      );
   }
 
   public async search(
+    organizationId: OrganizationId,
     embedding: readonly number[],
     goalIds: readonly string[],
     limit: number,
@@ -155,7 +176,13 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
         score: similarity,
       })
       .from(documentChunks)
-      .where(and(scope, gt(similarity, PgVectorStore.MIN_SCORE)))
+      .where(
+        and(
+          eq(documentChunks.organizationId, organizationId),
+          scope,
+          gt(similarity, PgVectorStore.MIN_SCORE),
+        ),
+      )
       .orderBy((t) => desc(t.score))
       .limit(limit);
 
@@ -171,6 +198,10 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
 ```
 
 **`goalIds` empty means org-wide chunks only, never everything.** That default is the one that matters. If an empty scope meant "no filter," a bug that fails to compute the permitted set would silently grant access to the whole corpus — and it would look like it was working.
+
+**`organizationId` is what makes "org-wide" mean anything.** It is a separate predicate on every one of these three methods, and it is deliberately not folded into `scope`: the tenant filter is not a permission decision that a `CapabilitySet` computes, it is the boundary inside which permissions are computed at all. A caller cannot opt out of it, because there is no code path where it is optional.
+
+Note that `deleteBySource` takes it too. A delete keyed only on a caller-supplied `sourceId` is a cross-tenant write, and it is easier to miss than a read because nothing comes back looking wrong.
 
 **A minimum score threshold.** Vector search always returns `limit` results, however bad. Without a floor, an unrelated question retrieves the least-unrelated documents in the corpus and the model confidently summarises them. `0.3` is a starting point to tune against your own data, not a universal constant.
 

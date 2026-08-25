@@ -27,7 +27,7 @@ Four directories, and the split between them is the architecture:
 | `apps/` | Framework code — TanStack Start, the worker's Node entrypoint, the Tauri desktop shell | The only place `process.env` is read. The only place `@tanstack/react-router` appears. Deliberately thin enough to delete and rewrite in a week. |
 | `packages/` | Everything that matters — primitives, permissions, contracts, use-cases, adapters, React components | Knows nothing about which web framework you use. Never reads its own configuration. |
 | `tooling/` | Shared `tsconfig`, Biome, and ESLint configs, published as workspace packages | Changed rarely, by whoever owns the platform. |
-| `infra/` | `docker-compose.yml` and anything else that describes running services | No application code. |
+| `infra/` | `docker-compose.yml`, plus the config files the services read — Postgres init SQL, Loki's storage and retention, Alloy's log pipeline, Grafana's data sources | No application code, and nothing here is imported by a package. |
 
 `packages/` gets subdirectories in [06](06-package-anatomy.md) — leave it empty for now.
 
@@ -81,8 +81,13 @@ coverage/
 .DS_Store
 out/
 release/
+
+# The `pnpm dev | tee` target for the local Loki pipeline (docs/setup/11)
+infra/logs/
 ```
 > `.env.*` is ignored and `.env.example` is force-included. That asymmetry is what stops `.env.production` reaching the repo while keeping the template versioned.
+>
+> `infra/logs/` is the only ignored path under `infra/`. Everything else there is configuration that must be committed — a Loki retention policy or an Alloy label pipeline living only on one machine is the same problem as an uncommitted migration.
 
 ### `.env.example`
 
@@ -90,8 +95,11 @@ release/
 # ── Postgres ─────────────────────────────────────────────
 DATABASE_URL=postgres://ratchet:ratchet@localhost:5432/ratchet
 
-# ── Redis (cache, sessions, BullMQ) ──────────────────────
-REDIS_URL=redis://localhost:6379
+# ── Redis ────────────────────────────────────────────────
+# Two instances, because they have different durability needs. The cache evicts
+# under pressure; the queue must not, since a lost job is work that never happens.
+REDIS_CACHE_URL=redis://localhost:6379
+REDIS_QUEUE_URL=redis://localhost:6380
 
 # ── S3 / MinIO ───────────────────────────────────────────
 S3_ENDPOINT=http://localhost:9000
@@ -115,8 +123,16 @@ OPENAI_API_KEY=
 # ── App ──────────────────────────────────────────────────
 NODE_ENV=development
 WEB_PORT=3000
+# APP and ENV are two of the four legal log labels. They identify the stream a
+# line belongs to; everything higher-cardinality stays in the line body.
+APP=web
+ENV=development
 ```
 > Every variable that will ever be read, present from day one with a working local value. `S3_FORCE_PATH_STYLE` is `true` for MinIO and `false` for real AWS — having the switch here now means the production difference is a value, not a code change. `EMBEDDING_DIMENSIONS` is here because the pgvector column type depends on it, and changing it later is a migration ([14](14-vector-store.md)).
+
+> **Two Redis URLs from day one, even though both point at localhost.** They are separate containers with different eviction policies ([11](11-local-infrastructure.md)), and the reason is the same one that puts MinIO here rather than a filesystem stand-in: the code path exercised in development is the code path that runs in production. One URL now means the split arrives as a refactor of `Container`, `env.ts`, and every consumer, on the day a `FLUSHALL` on the cache eats the queue.
+
+> **`APP` and `ENV` look like they do nothing.** They are the low-cardinality labels a log platform indexes on; `LOG_LEVEL` supplies the third and the event catalog supplies the fourth. The rule that keeps that set closed — and keeps `traceId` and `organization_id` out of it — is in [Data and scale](../opinions/data-and-scale.md).
 
 Copy it:
 
@@ -148,7 +164,7 @@ trim_trailing_whitespace = false
 ```markdown
 # loadbearing
 
-pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis · S3
+pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis (cache + queue) · S3 · Loki
 
 ## Getting started
 
@@ -158,7 +174,7 @@ pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgve
     pnpm db:migrate && pnpm db:seed
     pnpm dev
 
-Web: http://localhost:3000 · MinIO console: http://localhost:9001
+Web: http://localhost:3000 · Grafana: http://localhost:3001 · MinIO console: http://localhost:9001
 
 See `docs/` for the architecture and the build order.
 ```

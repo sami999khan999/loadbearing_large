@@ -15,10 +15,10 @@
 | Library | Better Auth, self-hosted, tables in your own Postgres |
 | Package | One — `packages/auth`, server-only. Not two |
 | Roles / permissions | **Not** Better Auth's. `PermissionRegistry` and `CapabilitySet` keep that job |
-| Organization plugin | No. You already have `memberships` and `goal_members` |
+| Organization plugin | No. You own `organizations`, `memberships`, and `goal_members` |
 | Session transport | Cookie (web) **and** bearer token (desktop) from day one |
 | API keys | Your own implementation, not the plugin's session mocking |
-| Session storage | Postgres, with Redis as secondary storage |
+| Session storage | Postgres owns the record; Redis is a read-through cache in front of it |
 | Client-side session | Through `@loadbearing/query`, not Better Auth's React hooks |
 
 ---
@@ -98,11 +98,23 @@ ALTER TABLE goal_members
 ALTER TABLE permission_overrides
   ADD CONSTRAINT permission_overrides_user_fk
   FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE;
+
+-- Every foreign key needs a covering index. Postgres does not create one, and
+-- without it each ON DELETE CASCADE scans the whole referencing table.
+CREATE INDEX IF NOT EXISTS session_user_idx ON "session" (user_id);
+CREATE INDEX IF NOT EXISTS session_expires_idx ON "session" (expires_at);
+CREATE INDEX IF NOT EXISTS account_user_idx ON account (user_id);
 ```
 
 > `"user"` is quoted because it is a reserved word in SQL. Better Auth's naming, not a choice you get to make.
 
 Deleting a user now cascades their role assignments, which is what you want. It also means there is exactly one users table — a claim worth being able to make.
+
+**The three indexes above are the point of this migration as much as the constraints are.** The `user_id` columns on `memberships`, `goal_members` and `permission_overrides` are already indexed from [13](13-db-package.md); the tables Better Auth generated are not, and its CLI will not add them. `session_expires_idx` is what makes the expiry sweep below cheap.
+
+> **`session` is not partitioned, and that is deliberate.** It looks like a third append-only table next to `activity_log` and `task_status_history`, and it is not one: Better Auth updates a row on refresh, deletes it on sign-out, and looks rows up by id — a predicate carrying no partition key, so every lookup would scan every partition. Its generated schema will not produce the composite primary key that partitioning requires either.
+>
+> Sessions are bounded by expiry instead. A nightly `DELETE FROM "session" WHERE expires_at < now()` on the cleanup schedule ([25](25-worker-app.md)) keeps the table small, which is the outcome partitioning would have been for. See [Data and scale](../opinions/data-and-scale.md) §4.2.
 
 ---
 
@@ -175,7 +187,9 @@ export class AuthFactory {
         storage: "secondary-storage",
       },
 
-      // Redis as secondary storage — sessions and rate limits stop hitting Postgres.
+      // Redis in FRONT of Postgres, never instead of it. This is the cache
+      // instance, so anything here can vanish under memory pressure.
+      // Better Auth reads through to the `session` table on a miss.
       secondaryStorage: {
         get: async (key) => cache.get<string>(`auth:${key}`),
         set: async (key, value, ttl) => cache.set(`auth:${key}`, value, ttl ?? 300),
@@ -196,7 +210,9 @@ export class AuthFactory {
 
 **The bearer plugin is not optional.** The desktop shell is Tauri ([30](30-desktop-app.md)), its webview runs on a custom `tauri://localhost` origin (`http://tauri.localhost` on Windows), and a session cookie is never sent cross-origin. So it needs a token, and enabling the plugin costs one array element here versus touching every endpoint, guard, and test later.
 
-**Cookie cache on, with a short TTL.** Better Auth can store signed session data in the cookie itself, so most requests skip the session lookup entirely. This is the single biggest performance win available here and it costs one config block. **Keep the TTL under five minutes** — revocation only takes effect when the cookie cache expires, and that window is the price you pay.
+**Cookie cache on, with a short TTL.** Better Auth can store signed session data in the cookie itself, so most requests skip the session lookup entirely. This is the single biggest performance win available here and it costs one config block. **Sixty seconds, and no longer** — revocation only takes effect when the cookie cache expires, so this value *is* the revocation window, and it is capped by the same rule that caps the capability cache below. Anything longer and "remove this person's access" quietly means "in a few minutes".
+
+**Secondary storage is a cache, not the session record.** It sits on the Redis instance that runs `allkeys-lru` ([15](15-infrastructure-package.md)), which means an entry can disappear at any moment under memory pressure. That is fine — and only fine — because Postgres still holds the `session` row and Better Auth reads through to it on a miss. Point this at the queue instance to "make sessions durable" and you have made a `FLUSHALL` on a full queue sign everyone out; treat the Redis entry as authoritative and an ordinary eviction becomes a random sign-out. Rate-limit counters have the same property, and there the failure is benign: a lost counter means someone gets a few extra attempts, not a lockout.
 
 **`trustedOrigins` is your CSRF defence**, and it must be explicit. It carries **both** Tauri origins from day one — `tauri://localhost` and `http://tauri.localhost` — because the scheme genuinely differs by platform, and shipping one produces an app that works for half your team. The value lives in `AUTH_TRUSTED_ORIGINS` and the same list drives the CORS allowlist ([24](24-web-app.md)); one origin list, two consumers. A wildcard here is not a shortcut; it is the vulnerability.
 
@@ -255,20 +271,23 @@ export class CapabilityCache {
     private readonly cache: CacheStore,
   ) {}
 
-  public async forUser(userId: string): Promise<CapabilitySet> {
-    const key = `${CapabilityCache.PREFIX}${userId}`;
+  public async forUser(
+    organizationId: OrganizationId,
+    userId: string,
+  ): Promise<CapabilitySet> {
+    const key = `${CapabilityCache.PREFIX}${organizationId}:${userId}`;
 
     const cached = await this.cache.get<CapabilitySetDto>(key);
     if (cached) return CapabilitySet.from(cached);
 
-    const resolved = await this.repository.resolveFor(userId);
+    const resolved = await this.repository.resolveFor(organizationId, userId);
     await this.cache.set(key, resolved.toJSON(), CapabilityCache.TTL_SECONDS);
     return resolved;
   }
 
   // Call on every RBAC write. See the invalidation list below.
-  public async invalidate(userId: string): Promise<void> {
-    await this.cache.delete(`${CapabilityCache.PREFIX}${userId}`);
+  public async invalidate(organizationId: OrganizationId, userId: string): Promise<void> {
+    await this.cache.delete(`${CapabilityCache.PREFIX}${organizationId}:${userId}`);
   }
 
   // Role edits affect everyone holding it — cheaper to flush than to enumerate.
@@ -293,6 +312,10 @@ Every one of these must evict:
 | API key created or revoked | `invalidate(issuerId)` |
 
 **Get this wrong in the stale direction and a revoked permission keeps working until the TTL expires.** That is a security bug, not a caching bug. Every one of these events is already written to the activity log, so the eviction hook has an obvious home next to that write.
+
+**The cache key carries the organization, and that is not decoration.** A key of `capability:user:<id>` means a user who belongs to two organizations gets whichever capability set was cached first — a cross-tenant privilege bug with a one-minute fuse and no error anywhere. The prefix scheme still supports `deletePrefix`, because the organization segment sits between the fixed prefix and the user id.
+
+**This is the read path the whole system's throughput rests on.** At scale it is fronted by signed capability data in the session cookie and an in-process LRU, so most requests never reach Redis at all — Step 16.9 has the chain and the TTL ceiling. Build it as written first; the two tiers above it are the [Data and scale](../opinions/data-and-scale.md) §6 answer to a load test, not something to add speculatively.
 
 **Sixty seconds, and no longer.** The TTL is a backstop for an invalidation you forgot, not the primary mechanism. Raising it to an hour because the cache hit rate looks better is trading a security window for a metric.
 
@@ -335,7 +358,7 @@ export class PrincipalBuilder {
     const session = await this.sessions.resolve(headers);
     if (!session) return null;
 
-    const caps = await this.capabilities.forUser(session.userId);
+    const caps = await this.capabilities.forUser(session.organizationId, session.userId);
     return new Principal(session.userId as UserId, caps, "user");
   }
 }
@@ -358,6 +381,7 @@ export const apiKeys = pgTable(
   "api_keys",
   {
     id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id").notNull(),
     name: text("name").notNull(),
     issuerId: text("issuer_id").notNull(),
 
@@ -374,7 +398,11 @@ export const apiKeys = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("api_keys_hash_uq").on(t.tokenHash), index("api_keys_prefix_idx").on(t.prefix)],
+  (t) => [
+    uniqueIndex("api_keys_hash_uq").on(t.tokenHash),
+    index("api_keys_prefix_idx").on(t.prefix),
+    index("api_keys_issuer_idx").on(t.organizationId, t.issuerId),
+  ],
 );
 ```
 
@@ -473,7 +501,7 @@ export class ApiKeyResolver {
     });
 
     // Re-intersect with the issuer's LIVE capabilities on every request.
-    const issuer = await this.capabilities.forUser(record.issuerId);
+    const issuer = await this.capabilities.forUser(record.organizationId, record.issuerId);
     const effective = declared.intersect(issuer);
 
     await this.repository.touch(record.id, now);
@@ -521,11 +549,24 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 
 ---
 
-## Step 16.9 — Two things worth deciding now
+## Step 16.9 — Session lifetime, and the revocation chain
 
-**Multi-organisation or single?** The RBAC model has an org scope but the schema assumes one organisation. If you will ever run multiple tenants on one deployment, add `organization_id` to `memberships`, `goal_members`, and every domain table **now**. Retrofitting a tenant column across two dozen feature modules is a genuinely large migration, and it is the kind of thing discovered when the first customer asks.
+**Multi-organisation was the other open question here, and it is now decided.** `organization_id` is on every domain table from the first migration, and it is the sharding key ([13](13-db-package.md), [Data and scale](../opinions/data-and-scale.md) §4.1). The reasoning is unchanged — retrofitting a tenant column across two dozen feature modules is a genuinely large migration discovered when the first customer asks — but it is no longer conditional on whether you expect a second tenant. It costs a column now and it is the one thing on this page that cannot be added cheaply later.
 
-**Session lifetime and refresh.** Three values, and with the desktop shell settled they are answerable now rather than later. Record them here so the answer lives somewhere:
+What that leaves for this step is session lifetime, which interacts with something the scale work made concrete: **there are three caches between a permission change and a request seeing it.**
+
+```
+signed cookie cache   ← 60s max
+  → in-process LRU    ← 10s, per app instance
+    → Redis           ← 60s TTL
+      → Postgres      ← the truth
+```
+
+**The revocation window is the longest TTL in that chain, not the shortest cache.** Every tier has to be bounded by the number you are willing to answer for when someone says "I removed their access, why does it still work?" Sixty seconds is that number here. Explicit invalidation on a grant change is the mechanism; the TTLs are the backstop for an invalidation somebody forgot.
+
+An in-process LRU is the tier that surprises people, because a Redis `DEL` cannot reach it — twenty app instances hold twenty copies. Keep its TTL short enough that correctness never depends on invalidating it, which is why it is seconds rather than minutes.
+
+**Three values, and with the desktop shell settled they are answerable now rather than later.** Record them here so the answer lives somewhere:
 
 | Value | Chosen | Note |
 | --- | --- | --- |
@@ -534,6 +575,8 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 | Desktop token lifetime | *decide* | Usually longer than a web session |
 
 A longer-lived desktop token is the normal choice and it has a consequence: it needs **independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. Decide that mechanism at the same time, not when someone loses a laptop.
+
+**The desktop path has no cookie**, so the first tier of that chain does not exist for it ([30](30-desktop-app.md)). A bearer-token client pays a full capability resolution on every cache miss, and the in-process LRU is the only thing absorbing it. Worth knowing before the load test, because desktop traffic and web traffic have genuinely different cost profiles per request.
 
 ---
 
@@ -567,6 +610,7 @@ export { BetterAuthSessionResolver } from "./session/index.js";
 
 - `pnpm auth:generate` produced `packages/db/src/rbac/auth.schema.ts` and it is committed.
 - `pnpm db:migrate` created `user`, `session`, `account`, `verification`, and `api_keys`.
+- `api_keys` carries `organization_id`, and `api_keys_issuer_idx` covers the `issuer_id` foreign key.
 - The foreign keys from `memberships`, `goal_members`, and `permission_overrides` to `"user"(id)` exist.
 - `grep -rn "better-auth" packages --include=*.ts` matches only `packages/auth/` and (later) `packages/api-client/src/auth/`.
 

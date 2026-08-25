@@ -5,6 +5,9 @@ import { z } from "../import.js";
 export class Identifiers {
   private constructor() {}
 
+  // The tenant key, on every domain table. The one identifier where a swapped
+  // argument is a cross-tenant leak rather than an empty result set.
+  public static readonly organizationId = z.uuid().brand<"OrganizationId">();
   public static readonly userId = z.uuid().brand<"UserId">();
   public static readonly roleId = z.uuid().brand<"RoleId">();
   public static readonly goalId = z.uuid().brand<"GoalId">();
@@ -12,6 +15,7 @@ export class Identifiers {
   public static readonly apiKeyId = z.uuid().brand<"ApiKeyId">();
 }
 
+export type OrganizationId = z.infer<typeof Identifiers.organizationId>;
 export type UserId = z.infer<typeof Identifiers.userId>;
 export type RoleId = z.infer<typeof Identifiers.roleId>;
 export type GoalId = z.infer<typeof Identifiers.goalId>;

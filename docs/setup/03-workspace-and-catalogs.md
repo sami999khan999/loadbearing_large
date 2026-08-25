@@ -176,9 +176,12 @@ What belongs here is the pnpm mechanics and the three entries with a history.
     "format": "biome format --write .",
     "check": "biome check --write .",
 
-    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infra/docker-compose.yml down",
-    "infra:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "infra:up": "docker compose -f infra/docker-compose.yml --profile observability up -d",
+    "infra:up:analytics": "docker compose -f infra/docker-compose.yml --profile observability --profile analytics up -d",
+    "infra:core": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml --profile \"*\" down",
+    "infra:reset": "docker compose -f infra/docker-compose.yml --profile \"*\" down -v",
+    "infra:logs": "docker compose -f infra/docker-compose.yml --profile \"*\" logs -f",
 
     "db:generate": "pnpm --filter @loadbearing/db run db:generate",
     "db:migrate": "pnpm --filter @loadbearing/db run db:migrate",
@@ -190,6 +193,18 @@ What belongs here is the pnpm mechanics and the three entries with a history.
   "devDependencies": {}
 }
 ```
+
+### The `infra:*` scripts carry two profiles
+
+`infra:up` starts the four stores **and** the observability stack, because the diagnostic stream is
+live from the first adapter written. `infra:core` skips Loki, Alloy and Grafana when you want a
+lighter machine; `infra:up:analytics` adds ClickHouse, which is otherwise never started
+([11](11-local-infrastructure.md)).
+
+**`--profile "*"` on `down`, `reset` and `logs` is load-bearing.** Compose only acts on services in
+the profiles it was given, so `docker compose down` without it leaves anything profile-gated running
+— and `logs -f` without it silently omits those services from the output you are reading to debug
+them.
 
 ### What the flags actually do
 

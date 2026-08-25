@@ -11,3 +11,6 @@ coverage/
 .DS_Store
 out/
 release/
+
+# The `pnpm dev | tee` target for the local Loki pipeline (docs/setup/11)
+infra/logs/

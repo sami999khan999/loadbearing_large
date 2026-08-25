@@ -172,7 +172,7 @@ one that inspects what really shipped.
 > [!WARNING]
 > The CI grep is meaningful only if the pipeline builds `apps/web` first. A grep over a
 > directory that does not exist passes silently — make the script fail when it finds zero asset
-> files. See [25](../../../../docs/setup/25-hygiene-and-ci.md).
+> files. See [25](../../../../docs/setup/26-hygiene-and-ci.md).
 
 ---
 

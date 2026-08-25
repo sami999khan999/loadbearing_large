@@ -110,7 +110,7 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 
 **It parses the same `LOG_LEVEL` and `LOG_PRETTY` the web app does**, and returns the same `logging` block. A worker with no log output is a worker you cannot operate.
 
-**It parses a smaller schema.** The worker needs `DATABASE_URL`, `REDIS_URL`, the S3 block, and the embedding block. It does **not** need `AUTH_SECRET`, `AUTH_URL`, or `AUTH_TRUSTED_ORIGINS` — it never issues or validates a session.
+**It parses a smaller schema.** The worker needs `DATABASE_URL`, both Redis URLs, the S3 block, and the embedding block. It does **not** need `AUTH_SECRET`, `AUTH_URL`, or `AUTH_TRUSTED_ORIGINS` — it never issues or validates a session.
 
 **Do not share one `env.ts` between the two apps by extracting it to a package.** The whole point of the `process.env` rule is that each deployable declares exactly what it needs. A shared schema would force the worker to carry an `AUTH_SECRET` it never uses, which is one more secret in one more environment for no reason.
 
@@ -140,7 +140,7 @@ export class SystemPrincipal {
     "core.activity.write",
   ];
 
-  public static forOrganisation(organisationId: string): Principal {
+  public static forOrganization(organizationId: string): Principal {
     const registry = PermissionRegistry.instance;
 
     const grants: PermissionKey[] = SystemPrincipal.GRANTS.map((key) => {
@@ -151,7 +151,7 @@ export class SystemPrincipal {
     });
 
     return Principal.system(
-      organisationId as UserId,
+      organizationId as UserId,
       CapabilitySet.from({
         wildcard: false,
         org: { grants, denies: [] },
@@ -175,7 +175,7 @@ export class SystemPrincipal {
 
 **The `isKnown()` check catches typos and deleted permissions at boot** rather than at 3am when a job silently starts failing authorization.
 
-**Every job carries an organisation.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
+**Every job carries an organization.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
 
 ---
 
@@ -191,7 +191,7 @@ import { QueueName } from "@loadbearing/infrastructure";
 import { SystemPrincipal } from "../system-principal.js";
 
 interface EmbeddingJobData {
-  readonly organisationId: string;
+  readonly organizationId: string;
   readonly documentId: string;
   readonly text: string;
 }
@@ -211,7 +211,7 @@ export class EmbeddingConsumer {
   }
 
   private async handle(job: Job<EmbeddingJobData>): Promise<void> {
-    const principal = SystemPrincipal.forOrganisation(job.data.organisationId);
+    const principal = SystemPrincipal.forOrganization(job.data.organizationId);
     await this.container.ai.indexDocument.execute(principal, {
       documentId: job.data.documentId,
       text: job.data.text,
@@ -273,6 +273,27 @@ rather than a second system. The container hands the worker a
 `StaticContentSource(SERVER_CATALOG)` ([17](17-composition-container.md)) — the only catalog
 that carries `email` at all.
 
+> [!IMPORTANT]
+> **Rendering per recipient is cheap. Resolving permissions per recipient is not.**
+>
+> A digest is permission-filtered — each person sees the tasks and goals they may see. Written the
+> obvious way, a hundred thousand recipients means a hundred thousand capability resolutions and a
+> hundred thousand query sets, and the job runs for hours.
+>
+> **Group recipients by capability shape, run the queries once per group, and personalise at
+> render.** Most organizations have a handful of distinct shapes — everyone on the same goals with
+> the same role resolves to the same permitted set — so the expensive half collapses to tens of
+> queries while the cheap half stays per person.
+>
+> ```
+> recipients → group by capability shape → one query set per group
+>                                        → render per recipient (locale, name, counts)
+> ```
+>
+> This is one of the three paths worth load-testing at 10× before launch, and it fails in a way that
+> is invisible at development scale: with fifty seed users the naive version finishes instantly
+> ([Data and scale](../opinions/data-and-scale.md) §6).
+
 > The `["email"]` request still comes back with `common` and `error` in it, because
 > `ContentSource` adds the shell to every request ([20](20-content-package.md)). An escalation
 > notice that needs `error.conflict` already has it.
@@ -305,6 +326,27 @@ await queue.add(
 **2. Record before you send.** Anything with an external side effect — an email, a webhook, a payment — writes its "sent" row in the same transaction that decides to send, and checks that row first. Sending and then recording means a crash between the two sends it again on retry.
 
 **Never run cron in the web process.** Two web instances means every schedule fires twice, and nothing in the code will tell you.
+
+### The four schedules this kit ships with
+
+Each one exists because something else in the architecture assumed it would.
+
+| Schedule | Pattern | Why it exists |
+|---|---|---|
+| `cleanup-daily` | `0 3 * * *` | Expired sessions, orphaned uploads, stale verification rows |
+| `partitions-monthly` | `0 2 1 * *` | Creates the next few months of `activity_log` and `task_status_history` partitions |
+| `recovery-sweep-daily` | `0 4 * * *` | Re-enqueues work that was never processed |
+| `analytics-reconcile-daily` | `0 5 * * *` | Compares snapshot row counts against the activity log |
+
+**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. Create three months out and the job can fail twice before anything breaks.
+
+**Session expiry is a `DELETE`, and that is the whole reason `session` is not partitioned.** `DELETE FROM "session" WHERE expires_at < now()` on the index from [16](16-auth-package.md) keeps the table small, which is what partitioning would have bought — without fighting Better Auth's lookup pattern ([Data and scale](../opinions/data-and-scale.md) §4.2).
+
+**`recovery-sweep-daily` reconciles against Postgres, never against BullMQ.** A queued job is the one thing in the system that is derived from nothing — a `FLUSHALL`, a crash between enqueue and persist, or a handler that swallowed an error all lose work with no trace. The sweep asks *which domain rows should have been processed and have not been*, which catches all three. It cannot ask BullMQ, because completed jobs age out after an hour and failures after a day ([15](15-infrastructure-package.md)), long before a nightly run.
+
+This is what makes rule 1 above load-bearing rather than good practice: **the sweep re-enqueues work that may well have already been done.** A handler that is not idempotent turns a recovery mechanism into a duplicate-notification incident.
+
+**`analytics-reconcile-daily` is how a dead consumer gets noticed.** The realistic failure for a derived store is not an outage — it is a projection consumer that died quietly on a Tuesday and a quarterly report that looks wrong in March. Comparing per-day row counts against the activity log catches it in a day, and the drift is repaired by replaying rather than by writing to the analytics store directly, which is what keeps it derived.
 
 ---
 
@@ -363,7 +405,13 @@ import { WorkerBootstrap } from "./worker-bootstrap.js";
 
 const config = Env.containerConfig();
 const container = new Container(config);
-const bootstrap = new WorkerBootstrap(container, new RedisConnection({ url: config.redis.url }));
+const bootstrap = new WorkerBootstrap(
+  container,
+  new RedisConnection({
+    cacheUrl: config.redis.cacheUrl,
+    queueUrl: config.redis.queueUrl,
+  }),
+);
 
 await bootstrap.start();
 

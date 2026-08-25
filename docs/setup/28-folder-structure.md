@@ -43,10 +43,16 @@ ratchet/
 │
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                             ← postgres + redis services, 5 steps
+│       └── ci.yml                             ← postgres + two redis services, 5 steps
 │
 ├── infra/
-│   ├── docker-compose.yml                     ← pgvector/pg17, redis, minio, minio-init
+│   ├── docker-compose.yml                     ← 8 services, 2 profiles
+│   ├── postgres/init/01-extensions.sql
+│   ├── loki/config.yml                        ← MinIO-backed, 30-day retention
+│   ├── alloy/config.alloy                     ← the four-label pipeline
+│   ├── grafana/provisioning/datasources/
+│   ├── clickhouse/init/01-schema.sql          ← analytics profile only
+│   └── logs/                                  (ignored)
 │   └── postgres/
 │       └── init/
 │           └── 01-extensions.sql              ← vector, pg_trgm, uuid-ossp
@@ -72,7 +78,7 @@ ratchet/
 │   │       ├── index.js                       ← typed rules + OOP shape rules
 │   │       └── types/index.d.ts               ← hand-written; no build to emit it
 │   └── scripts/
-│       └── check-architecture.mjs             ← the three CI greps
+│       └── check-architecture.mjs             ← the ten CI greps
 │
 ├── packages/                                  ← everything that matters
 │   ├── core/
@@ -345,6 +351,7 @@ packages/application/src/
 ├── port/                         ← abstract classes only, no implementations
 │   ├── index.ts
 │   ├── activity.logger.ts        → ActivityLogger
+│   ├── analytics.reader.ts       → AnalyticsReader
 │   ├── cache.store.ts            → CacheStore
 │   ├── embedding.provider.ts     → EmbeddingProvider
 │   ├── event.bus.ts              → EventBus
@@ -374,7 +381,7 @@ packages/application/tests/
 packages/db/
 ├── drizzle.config.ts
 ├── migrations/                        ← generated, committed, never pushed
-│   ├── 0000_init.sql
+│   ├── 0000_init.sql                  ← hand-edited: PARTITION BY on the append-only tables
 │   ├── 0001_auth.sql                  ← Better Auth CLI output + hand-written FKs
 │   ├── 0002_vector.sql
 │   └── meta/
@@ -394,6 +401,10 @@ packages/db/
     │   ├── index.ts
     │   ├── activity.schema.ts
     │   └── activity.logger.ts         → PgActivityLogger
+    ├── analytics/                     ← infrastructure, not a slice
+    │   ├── index.ts
+    │   ├── analytics.schema.ts        ← snapshot tables
+    │   └── pg-analytics.reader.ts     → PgAnalyticsReader
     ├── vector/                        ← infrastructure, not a slice
     │   ├── index.ts
     │   ├── vector.schema.ts           ← HNSW index, cosine ops
@@ -418,7 +429,7 @@ packages/infrastructure/src/
 ├── index.ts                              ← ServerOnly.assert()
 ├── redis/
 │   ├── index.ts
-│   └── redis.connection.ts               → RedisConnection
+│   └── redis.connection.ts               → RedisConnection (cache + queue)
 ├── cache/
 │   ├── index.ts
 │   └── redis.cache-store.ts              → RedisCacheStore
@@ -774,9 +785,9 @@ apps/desktop/
 
 **Three shells, still two `process.env` readers.** `web` and `worker` read the environment; `desktop` cannot, because a webview has no Node runtime. So the assertion in [26](26-hygiene-and-ci.md) holds at two without an exemption, and it holds for a reason rather than by convention.
 
-**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The eleven-step checklist in [27](27-verification-and-first-feature.md) is just this list, walked in dependency order.
+**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The twelve-step checklist in [27](27-verification-and-first-feature.md) is just this list, walked in dependency order.
 
-**Notice the three `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, plus `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
+**Notice the four `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, and `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
 
 ---
 

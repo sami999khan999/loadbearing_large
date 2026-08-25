@@ -3,6 +3,7 @@ export {
   type ApiKeyId,
   type GoalId,
   Identifiers,
+  type OrganizationId,
   type RoleId,
   type TaskId,
   type UserId,

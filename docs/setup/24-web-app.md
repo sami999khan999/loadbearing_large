@@ -110,7 +110,8 @@ import { z } from "zod";
 
 const Schema = z.object({
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  REDIS_CACHE_URL: z.string().url(),
+  REDIS_QUEUE_URL: z.string().url(),
 
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1),
@@ -129,6 +130,9 @@ const Schema = z.object({
 
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   LOG_PRETTY: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // Two of the four log labels. Low-cardinality by construction.
+  APP: z.string().default("web"),
+  ENV: z.string().default("development"),
 
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
@@ -159,7 +163,7 @@ export class Env {
     const e = Env.parsed;
     return {
       database: { url: e.DATABASE_URL },
-      redis: { url: e.REDIS_URL },
+      redis: { cacheUrl: e.REDIS_CACHE_URL, queueUrl: e.REDIS_QUEUE_URL },
       storage: {
         endpoint: e.S3_ENDPOINT,
         region: e.S3_REGION,
@@ -173,7 +177,8 @@ export class Env {
         baseUrl: e.AUTH_URL,
         trustedOrigins: e.AUTH_TRUSTED_ORIGINS,
         sessionMaxAgeSeconds: 60 * 60 * 24 * 7,
-        cookieCacheMaxAgeSeconds: 300,
+        // The revocation window. Sixty seconds is the ceiling, not a default.
+        cookieCacheMaxAgeSeconds: 60,
         requireEmailVerification: e.NODE_ENV === "production",
       },
       embedding: {
@@ -181,7 +186,7 @@ export class Env {
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
       },
-      logging: { level: e.LOG_LEVEL, pretty: e.LOG_PRETTY },
+      logging: { level: e.LOG_LEVEL, pretty: e.LOG_PRETTY, app: e.APP, env: e.ENV },
     } as const;
   }
 }
@@ -217,7 +222,9 @@ import { Env } from "~/env.js";
 export const container = new Container(Env.containerConfig());
 ```
 
-Module scope means one connection pool, one Redis connection, one Better Auth instance for the process lifetime. Constructing per request would open a pool per request, which exhausts Postgres in about four seconds under load.
+Module scope means one connection pool, two Redis connections, and one Better Auth instance for the process lifetime. Constructing per request would open a pool per request, which exhausts Postgres in about four seconds under load.
+
+Count those pools across replicas rather than per process. Forty web instances at ten connections each is four hundred against a `max_connections` that defaults to a hundred, which is the point pgBouncer in transaction mode stops being optional ([Data and scale](../opinions/data-and-scale.md) §5).
 
 ---
 

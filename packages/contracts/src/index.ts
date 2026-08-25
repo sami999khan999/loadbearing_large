@@ -3,6 +3,7 @@ export {
   Envelope,
   type GoalId,
   Identifiers,
+  type OrganizationId,
   Pagination,
   type PaginationQuery,
   type RoleId,

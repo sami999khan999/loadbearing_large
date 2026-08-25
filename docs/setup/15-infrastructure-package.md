@@ -61,7 +61,7 @@ Read that list against `container.ts` ([17](17-composition-container.md)) and ev
 
 ## Step 15.1 — `RedisConnection`
 
-Redis is doing three jobs — cache, session secondary store, and BullMQ backing store — and they have different connection requirements. One class owns that distinction.
+Redis is doing three jobs — cache, session secondary store, and BullMQ backing store — and they do not have the same durability requirements. **Two instances, and one class owns which is which.**
 
 **`packages/infrastructure/src/redis/redis.connection.ts`**
 
@@ -69,7 +69,10 @@ Redis is doing three jobs — cache, session secondary store, and BullMQ backing
 import { Redis, type RedisOptions } from "ioredis";
 
 export interface RedisConfig {
-  readonly url: string;
+  // Evicts under pressure. Everything on it rebuilds from Postgres.
+  readonly cacheUrl: string;
+  // Never evicts. A queued job is derived from nothing.
+  readonly queueUrl: string;
   readonly keyPrefix?: string;
 }
 
@@ -78,19 +81,24 @@ export class RedisConnection {
 
   constructor(private readonly config: RedisConfig) {}
 
-  // A general-purpose client. Safe to share across cache and session reads.
+  // Cache and session reads. Prefixed, and safe to share.
   public client(): Redis {
-    return this.create({ keyPrefix: this.config.keyPrefix ?? "ratchet:" });
+    return this.create(this.config.cacheUrl, {
+      keyPrefix: this.config.keyPrefix ?? "ratchet:",
+    });
   }
 
   // BullMQ requires `maxRetriesPerRequest: null` and its own key namespace.
   // Sharing a prefixed client with the cache corrupts queue keys.
   public queueClient(): Redis {
-    return this.create({ maxRetriesPerRequest: null, enableReadyCheck: false });
+    return this.create(this.config.queueUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
   }
 
-  private create(options: RedisOptions): Redis {
-    const redis = new Redis(this.config.url, {
+  private create(url: string, options: RedisOptions): Redis {
+    const redis = new Redis(url, {
       lazyConnect: false,
       enableAutoPipelining: true,
       retryStrategy: (attempt) => Math.min(attempt * 200, 5_000),
@@ -113,7 +121,11 @@ export class RedisConnection {
 
 **`enableAutoPipelining: true`** batches commands issued in the same tick into one round trip. On the capability-cache path — several `get` calls while building a principal — that is a real latency saving for one line.
 
-**In production, run two Redis instances.** The cache one with `allkeys-lru` eviction; the queue one with `noeviction`. Locally they share a container ([11](11-local-infrastructure.md)) with `noeviction`, because losing queued jobs to eviction is a worse failure than a full cache. `RedisConnection` takes a URL, so splitting them later is two config values.
+**Two URLs, not one, in every environment.** The cache instance runs `allkeys-lru`; the queue instance runs `noeviction` with AOF. Locally they are two containers ([11](11-local-infrastructure.md)), because a split that exists only in production is a code path first exercised on deployment day.
+
+The reason it is one class taking two URLs rather than two classes: **which connection a consumer gets should be a property of what it is doing, not a wiring decision made in the container.** `RedisCacheStore` asks for `client()`, `BullMqQueuePublisher` asks for `queueClient()`, and neither can accidentally receive the other. Passing two bare `Redis` instances into `Container` puts that choice at a call site where the two arguments have the same type and swapping them compiles.
+
+> **This is a correctness boundary, not tuning.** Anything reached through `client()` can vanish under memory pressure — so it must be a cache in front of a durable store, never the store. Better Auth's secondary storage sits on this connection ([16](16-auth-package.md)), which is exactly why sessions stay in Postgres and Redis is only a read-through in front of them.
 
 ---
 
@@ -340,18 +352,22 @@ export class QueueName {
   public static readonly EMBEDDING = "embedding";
   public static readonly NOTIFICATION = "notification";
   public static readonly DOCUMENT = "document";
+  public static readonly ANALYTICS = "analytics";
   public static readonly MAINTENANCE = "maintenance";
 
   public static readonly ALL = [
     QueueName.EMBEDDING,
     QueueName.NOTIFICATION,
     QueueName.DOCUMENT,
+    QueueName.ANALYTICS,
     QueueName.MAINTENANCE,
   ] as const;
 }
 ```
 
 **A handful of queues by concern, not one per job type.** Queues are a concurrency and priority boundary: embedding is slow and rate-limited, notifications are fast and bursty, and you want to tune those separately. Fifty queues means fifty Redis connections and fifty things to monitor.
+
+**`ANALYTICS` is its own concern because it is allowed to fall behind.** Projecting domain events into snapshot tables is the one workload here where lag is acceptable and throughput matters more than latency — nobody is waiting on a dashboard row. Sharing a queue with notifications would let a backlog of projections delay something a user is actually waiting for. It is also the queue whose depth is the health signal for the derived store: a consumer that died on Tuesday shows up here before it shows up in a wrong quarterly number ([Data and scale](../opinions/data-and-scale.md) §2).
 
 **`packages/infrastructure/src/queue/bullmq.queue-publisher.ts`**
 
@@ -398,6 +414,10 @@ export class BullMqQueuePublisher extends QueuePublisher {
 ```
 
 **`removeOnComplete` and `removeOnFail` are mandatory, not tuning.** BullMQ keeps completed jobs forever by default. A queue processing ten jobs a second accumulates about a million records a day, and the first symptom is Redis running out of memory — which, with `noeviction`, means everything stops. Keeping an hour of successes and a day of failures gives you enough to debug with and a bounded footprint.
+
+> **A consequence worth stating, because it decides how the recovery sweep is built.** These retention windows mean job history is *not* a durable record of what happened — an hour after a success, and a day after a failure, the evidence is gone. So the nightly sweep that re-enqueues unprocessed work cannot ask BullMQ what it missed; by the time it runs, there is nothing to ask.
+>
+> It reconciles against Postgres instead: *which domain rows should have been processed and have not been?* That query works whether the job was lost to a `FLUSHALL`, a crash between enqueue and persist, or a bug that dropped it silently — and it is the reason handlers must be idempotent, since a re-enqueued job may be a duplicate rather than a replacement ([25](25-worker-app.md)).
 
 **`jobId` is the deduplication key**, and it comes from the port because idempotency is a domain rule. `jobId: "embed:receipt:<id>"` means enqueuing twice produces one job — which is exactly what you want when a retry re-publishes.
 
@@ -456,7 +476,10 @@ import { BullMqQueuePublisher, QueueName } from "./queue/index.js";
 import { RedisConnection } from "./redis/index.js";
 import { S3StorageGateway, StorageKey } from "./storage/index.js";
 
-const redis = new RedisConnection({ url: process.env.REDIS_URL! });
+const redis = new RedisConnection({
+  cacheUrl: process.env.REDIS_CACHE_URL!,
+  queueUrl: process.env.REDIS_QUEUE_URL!,
+});
 
 const cache = new RedisCacheStore(redis.client());
 await cache.set("smoke:probe", { ok: true }, 30);

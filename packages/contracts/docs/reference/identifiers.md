@@ -7,6 +7,7 @@ description: Why every UUID is branded, what branding costs, and where the parse
 
 ```ts
 export class Identifiers {
+  public static readonly organizationId: z.ZodBranded<z.ZodUUID, "OrganizationId">;
   public static readonly userId: z.ZodBranded<z.ZodUUID, "UserId">;
   public static readonly roleId: z.ZodBranded<z.ZodUUID, "RoleId">;
   public static readonly goalId: z.ZodBranded<z.ZodUUID, "GoalId">;
@@ -14,12 +15,18 @@ export class Identifiers {
   public static readonly apiKeyId: z.ZodBranded<z.ZodUUID, "ApiKeyId">;
 }
 
+export type OrganizationId = z.infer<typeof Identifiers.organizationId>;
 export type UserId = z.infer<typeof Identifiers.userId>;
 export type RoleId = z.infer<typeof Identifiers.roleId>;
 export type GoalId = z.infer<typeof Identifiers.goalId>;
 export type TaskId = z.infer<typeof Identifiers.taskId>;
 export type ApiKeyId = z.infer<typeof Identifiers.apiKeyId>;
 ```
+
+`organizationId` is the tenant key, present on every domain table and used as the sharding key
+([Data and scale](../../../../docs/opinions/data-and-scale.md)). It is the one identifier where a
+swapped argument is a cross-tenant leak rather than an empty result set, which is why it is branded
+like the rest rather than passed as a bare `string`.
 
 ---
 
