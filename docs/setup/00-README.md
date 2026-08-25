@@ -101,6 +101,7 @@ continually — every rule for what to call a thing and where to put it, one pag
 | [Classes and methods](../opinions/classes.md) | Class-name grammar, banned suffixes, method vocabulary |
 | [Vocabulary](../opinions/vocabulary.md) | Permissions, procedures, events, queues, contracts, database |
 | [Data and scale](../opinions/data-and-scale.md) | Which store owns which data, what is derived, what to build now |
+| [Simplicity](../opinions/simplicity.md) | How much structure to build; performance is part of the goal |
 | [Comments](../opinions/comments.md) | Line comments only, two lines, where the reasoning goes |
 
 ---
@@ -144,7 +145,7 @@ Every package is `@loadbearing/*` so these documents line up with the architectu
 - `noExternal: [/^@loadbearing\//]` in `apps/web/vite.config.ts`
 - the `group:` array in `tooling/eslint-config/src/react.js`
 - `name: ratchet` and the credentials in `infra/docker-compose.yml`
-- the `com.docker.compose.project=ratchet` filter in `infra/alloy/config.alloy` — it must match the
+- the `com.docker.compose.project=ratchet` filter in `infra/alloy.config.alloy` — it must match the
   compose project name, or Alloy silently collects nothing
 
 Nothing else. Do it before the first commit, not after.

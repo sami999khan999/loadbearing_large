@@ -10,40 +10,51 @@
 
 ## Layout
 
-**Organised by subject, not by layer.** A `schema/` + `repository/` split would put every slice's files in two directories that no single glob can capture, and `CODEOWNERS` would silently miss half of each team's files — the worst kind of miss, because it looks covered.
+**One folder per seam, plus one folder for every table.** The adapters are organised the way [15](15-infrastructure-package.md) organises its own — a folder per port, holding the class that implements it. The tables are not: they all live in `schema/`, because two tools require a single entry that names every one of them.
+
+That split has a real cost, and it is worth naming rather than discovering. A slice's files land in two directories — `schema/task.schema.ts` and `task/pg-task.repository.ts` — so a `CODEOWNERS` line per team needs both globs. [Folders](../opinions/folders.md) argues the other way for every package that has a choice; this one does not.
 
 ```
 packages/db/
 ├── drizzle.config.ts
 ├── migrations/                    ← generated, committed
 └── src/
-    ├── index.ts                   ← ServerOnly.assert() on line two
-    ├── database.ts                → Database
-    ├── schema.ts                  ← barrel re-exporting every *.schema.ts
-    ├── base.repository.ts         → BaseRepository
-    ├── unit-of-work.ts            → PgUnitOfWork, TransactionScope
-    ├── rbac/
-    │   ├── index.ts
+    ├── index.ts                   ← ServerOnly.assert() first among the statements
+    ├── import.ts                  ← every external symbol, drizzle and pg included
+    ├── schema/                    ← every table; index.ts is the drizzle-kit entry
+    │   ├── index.ts               ← the one `export *` in the repository
     │   ├── rbac.schema.ts         → roles, role_permissions, memberships, …
     │   ├── auth.schema.ts         ← Better Auth CLI output, committed
-    │   ├── api-key.schema.ts
-    │   └── capability.repository.ts → PgCapabilityRepository
-    ├── activity/                   ← partitioned monthly, written in-transaction
-    │   ├── index.ts
-    │   ├── activity.schema.ts     ← activity_log, task_status_history
-    │   └── activity.logger.ts     → PgActivityLogger
-    ├── analytics/                  ← infrastructure, not a slice
-    │   ├── index.ts
+    │   ├── activity.schema.ts     ← activity_log, partitioned monthly
     │   ├── analytics.schema.ts    ← snapshot tables, fed by domain events
-    │   └── pg-analytics.reader.ts → PgAnalyticsReader
-    ├── vector/                    ← infrastructure, not a slice — see 13
+    │   └── vector.schema.ts       ← document_chunks — see 14
+    ├── primitive/                 ← what every seam folder depends on
     │   ├── index.ts
-    │   ├── vector.schema.ts
-    │   └── pg-vector.store.ts     → PgVectorStore
-    └── seed/
-        ├── index.ts
-        └── system-role.seed.ts
+    │   ├── database.ts            → Database, DatabaseConfig, DrizzleClient
+    │   └── base.repository.ts     → BaseRepository
+    ├── transaction/               ← the UnitOfWork seam
+    │   ├── index.ts
+    │   ├── transaction-scope.ts   → TransactionScope
+    │   └── pg-unit-of-work.ts     → PgUnitOfWork
+    ├── rbac/
+    │   ├── index.ts
+    │   └── pg-capability.repository.ts → PgCapabilityRepository
+    ├── activity/                  → PgActivityLogger
+    ├── analytics/                 → PgAnalyticsReader
+    ├── vector/                    → PgVectorStore — see 14
+    ├── seed/                      → SystemRoleSeed
+    └── migrate/                   ← the migration runner
 ```
+
+**One folder per seam, each holding its adapter**, the same shape
+[15](15-infrastructure-package.md) uses. A seam folder holding one file is normal — `cache/` there
+holds one too.
+
+**Schemas are the exception to the subject-folder rule** ([Folders](../opinions/folders.md)), and it
+is a tooling exception rather than a taste one: `drizzle.config.ts` needs one path that names every
+table, and `drizzle(pool, { schema })` needs the same namespace at runtime or Better Auth's adapter
+cannot find `user`/`session`/`account` at all.
+
 
 ---
 
@@ -75,7 +86,7 @@ The assert sits above every export, so it runs the moment the module is evaluate
 
 ## Step 13.2 — `Database`
 
-**`packages/db/src/database.ts`**
+**`packages/db/src/primitive/database.ts`**
 
 ```ts
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -129,7 +140,7 @@ export class Database {
 
 Drizzle tables stay **declarative** — the same data-shape exemption Zod schemas get. They are `pgTable` calls at module scope, not classes. **All access goes through repository classes**; nothing outside `packages/db/src` imports a table.
 
-**`packages/db/src/rbac/rbac.schema.ts`**
+**`packages/db/src/schema/rbac.schema.ts`**
 
 ```ts
 import { relations } from "drizzle-orm";
@@ -269,15 +280,15 @@ The consequence that catches people is **`roles_key_uq`**. Keyed on `(key)` alon
 
 ## Step 13.4 — The schema barrel
 
-**`packages/db/src/schema.ts`**
+**`packages/db/src/schema/index.ts`**
 
 ```ts
-export * from "./activity/activity.schema.js";
-export * from "./analytics/analytics.schema.js";
-export * from "./rbac/api-key.schema.js";
-export * from "./rbac/auth.schema.js";
-export * from "./rbac/rbac.schema.js";
-export * from "./vector/vector.schema.js";
+export * from "./activity.schema.js";
+export * from "./analytics.schema.js";
+
+
+export * from "./rbac.schema.js";
+export * from "./vector.schema.js";
 ```
 
 One file that drizzle-kit points at, and one file to edit when a slice adds tables. Forgetting to add a slice here is the most common reason a new table does not appear in a generated migration.
@@ -295,7 +306,7 @@ One file that drizzle-kit points at, and one file to edit when a slice adds tabl
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  schema: "./src/schema.ts",
+  schema: "./src/schema/index.ts",
   out: "./migrations",
   dialect: "postgresql",
   dbCredentials: { url: process.env.DATABASE_URL! },
@@ -311,14 +322,14 @@ Add to **`packages/db/package.json`**:
 ```json
 "scripts": {
   "db:generate": "drizzle-kit generate",
-  "db:migrate": "tsx src/migrate.ts",
+  "db:migrate": "tsx src/migrate/index.ts",
   "db:push": "drizzle-kit push",
   "db:studio": "drizzle-kit studio",
   "db:seed": "tsx src/seed/index.ts"
 }
 ```
 
-**`packages/db/src/migrate.ts`**
+**`packages/db/src/migrate/index.ts`**
 
 ```ts
 import "dotenv/config";
@@ -410,7 +421,7 @@ pnpm db:studio
 
 ## Step 13.7 — Repositories
 
-**`packages/db/src/base.repository.ts`**
+**`packages/db/src/primitive/base.repository.ts`**
 
 ```ts
 import type { OrganizationId } from "@loadbearing/contracts";
@@ -443,7 +454,7 @@ export abstract class BaseRepository {
 
 **The transaction handle.** `db` resolves to the open transaction when there is one. Without that, `UnitOfWork.run()` opens a transaction that the repositories inside it never join — every call site *reads* as atomic and none of it *is*.
 
-**`packages/db/src/rbac/capability.repository.ts`**
+**`packages/db/src/rbac/pg-capability.repository.ts`**
 
 ```ts
 import { and, eq, isNull, or } from "drizzle-orm";
@@ -684,7 +695,7 @@ This is also the staged-rollout mechanism: until the migration that grants a mod
 
 ## Step 13.9 — `PgUnitOfWork`
 
-**`packages/db/src/unit-of-work.ts`**
+**`packages/db/src/transaction/pg-unit-of-work.ts`** and **`transaction-scope.ts`**
 
 ```ts
 import { AsyncLocalStorage } from "node:async_hooks";

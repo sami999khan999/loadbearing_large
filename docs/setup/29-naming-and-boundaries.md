@@ -27,6 +27,7 @@ the most consulted thing here.
 | [Classes and methods](../opinions/classes.md) | Class-name grammar, banned suffixes, method vocabulary |
 | [Vocabulary](../opinions/vocabulary.md) | Permissions, procedures, events, queues, contracts, database |
 | [Data and scale](../opinions/data-and-scale.md) | Which store owns which data, what is derived, what to build now |
+| [Simplicity](../opinions/simplicity.md) | How much structure to build; performance is part of the goal |
 | [Comments](../opinions/comments.md) | Line comments only, two lines, where the reasoning goes |
 
 **The test all of them serve:** given a feature name and a layer, you should be able to write the
@@ -76,6 +77,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [11](11-local-infrastructure.md) says which managed service replaces each container.
 - **Never holds** application code of any kind. Nothing in `packages/` or `apps/` imports anything from here — these are [Tier 0](../opinions/dependencies.md) dependencies, provided by the deployment and reached over a protocol the code was going to speak anyway.
 - **Two profiles.** `observability` is on by default because the diagnostic stream is live; `analytics` is opt-in because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet.
+- **Documented in [`infra/docs/`](../../infra/docs/index.md)** — one reference page per file and the service it configures.
 - **Smell:** a `.ts` file, or a `LOKI_URL` in `.env.example` — the moment application code names the log platform, the platform stops being swappable by config.
 
 ---
@@ -208,7 +210,9 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **`storage/`** — `S3StorageGateway` and `StorageKey`. The gateway never takes a bucket in a method signature; the bucket is configuration.
 - **`queue/`** — `QueueName` (a closed union) and `BullMqQueuePublisher`.
 - **`embedding/`** — `OpenAiEmbeddingProvider`.
-- **One folder per external system, named after the capability, with files named after the technology.** That pairing is what makes a vendor swap visibly local: you delete `s3-storage.gateway.ts` and write `azure-storage.gateway.ts`, and `storage/index.ts` is the only other file that changes.
+- **One folder per external system this package imports a client for**, named after the capability, with files named after the technology. That pairing is what makes a vendor swap visibly local: you delete `s3-storage.gateway.ts` and write `azure-storage.gateway.ts`, and `storage/index.ts` is the only other file that changes.
+- **A system nothing imports gets no folder.** Loki, Alloy and Grafana are real infrastructure and have no home here, because there is no client and no port — `JsonLogger` writes stdout and a separate process ships it. They live in `infra/` alone ([15](15-infrastructure-package.md)).
+- **Smell:** a folder for something that is not an npm dependency.
 - **Contains no business logic.** These are adapters: translate a port call into a vendor call, translate the response back.
 - **Smell:** a domain noun in a method name, or an import of `db`.
 

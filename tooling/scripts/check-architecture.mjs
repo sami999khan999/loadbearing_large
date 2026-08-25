@@ -7,7 +7,7 @@
 // Run: pnpm check:architecture
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -122,7 +122,7 @@ assert("`application` does not log", (failures) => {
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
-  /^packages\/db\/src\/migrate\.ts$/,
+  /^packages\/db\/src\/migrate\//,
   /^packages\/db\/src\/seed\//,
   /^packages\/[^/]+\/src\/smoke\.ts$/,
 ];
@@ -302,6 +302,10 @@ const TENANT_EXEMPT = new Set([
   "account",
   "verification",
   "__drizzle_migrations",
+  // `activity_log` is partitioned by time, not by tenant, so one monthly partition
+  // holds every organization's rows and the archive object recording it is global.
+  // A tenant column here would have no value to carry.
+  "activity_archive",
 ]);
 
 assert("every domain table declares `organization_id`", (failures) => {
@@ -345,6 +349,41 @@ assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
       if (source.includes("AuditTrail")) {
         failures.push(`${rel(file)}:${lineOf(source, "AuditTrail")} names AuditTrail`);
       }
+    }
+  }
+
+  return null;
+});
+
+// ── 11 — the schema barrel names every *.schema.ts ───────────────────────
+//
+// An empty or incomplete barrel passes typecheck, lint, build, and every test:
+// `import * as schema` from an empty module is legal and yields `{}`. The only tool
+// that notices is drizzle-kit, and it notices by generating DROP TABLE for every
+// table it can no longer see. That happened once. This is the guard.
+
+assert("the schema barrel names every `*.schema.ts`", (failures) => {
+  const dir = join(ROOT, "packages/db/src/schema");
+  if (!existsSync(dir)) return "packages/db has no schema/ yet";
+
+  const barrel = join(dir, "index.ts");
+  if (!existsSync(barrel)) {
+    failures.push("packages/db/src/schema/index.ts is missing");
+    return null;
+  }
+
+  const source = readFileSync(barrel, "utf8");
+  const files = walk(dir, [".ts"]).filter((file) => file.endsWith(".schema.ts"));
+
+  if (files.length === 0) {
+    failures.push("packages/db/src/schema holds no *.schema.ts files");
+    return null;
+  }
+
+  for (const file of files) {
+    const specifier = `./${basename(file, ".ts")}.js`;
+    if (!source.includes(specifier)) {
+      failures.push(`${rel(barrel)} does not re-export ${specifier}`);
     }
   }
 

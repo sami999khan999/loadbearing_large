@@ -24,3 +24,5 @@ started by default. See [docs/setup/11](docs/setup/11-local-infrastructure.md).
   for what to call a thing, where to put it, and which store owns it.
 - **`packages/*/docs/`** — one reference set per package: what it is for, and why each export is
   shaped the way it is.
+- **[`infra/docs/`](infra/docs/index.md)** — the running stack: what each container is for, how the
+  log pipeline works, and what to check when it is wrong.

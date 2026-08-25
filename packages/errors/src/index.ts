@@ -18,6 +18,7 @@ export {
   TransportError,
   TwoFactorRequiredError,
   UnauthorizedError,
+  UnavailableError,
   ValidationError,
 } from "./error/index.js";
 export { ErrorNormalizer } from "./normalizer/index.js";

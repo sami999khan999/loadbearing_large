@@ -339,7 +339,7 @@ pnpm --filter @loadbearing/composition build
 ```
 
 ```bash
-grep -rn "process\.env" packages --include=*.ts | grep -v "\.config\.ts" | grep -v "src/migrate.ts" | grep -v "src/seed/" | grep -v "src/smoke.ts"
+grep -rn "process\.env" packages --include=*.ts | grep -v "\.config\.ts" | grep -v "src/migrate/" | grep -v "src/seed/" | grep -v "src/smoke.ts"
 ```
 
 Returns **nothing**. No package reads its own configuration.

@@ -20,11 +20,17 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate/index.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/seed/index.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",
     "@types/pg": "catalog:",
+    "dotenv": "catalog:",
     "drizzle-kit": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

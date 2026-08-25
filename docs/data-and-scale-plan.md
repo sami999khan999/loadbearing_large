@@ -456,13 +456,14 @@ Grafana takes port **3001**, because the web app owns 3000.
 
 ```
 infra/
-├── docker-compose.yml            ← 8 services, 2 profiles
-├── postgres/init/01-extensions.sql
-├── loki/config.yml               ← MinIO-backed, 30-day retention
-├── alloy/config.alloy            ← the four-label pipeline
-├── grafana/provisioning/datasources/datasources.yml
-├── clickhouse/init/01-schema.sql ← analytics profile only
-└── logs/                         ← gitignored; the `pnpm dev | tee` target
+├── docker-compose.yml        ← 9 services, 2 profiles
+├── postgres.init.sql         ← extensions
+├── loki.config.yml           ← MinIO-backed, 30-day retention
+├── alloy.config.alloy        ← the four-label pipeline
+├── grafana.datasources.yml   ← Loki + Postgres
+├── clickhouse.init.sql       ← analytics profile only
+├── logs/                     ← the `pnpm dev | tee` target (ignored)
+└── README.md
 ```
 
 ### Ripple

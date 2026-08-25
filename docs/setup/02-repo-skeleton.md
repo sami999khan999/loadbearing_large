@@ -82,8 +82,11 @@ coverage/
 out/
 release/
 
-# The `pnpm dev | tee` target for the local Loki pipeline (docs/setup/11)
-infra/logs/
+# The `pnpm dev | tee` target for the local Loki pipeline (docs/setup/11).
+# The directory is committed, the logs are not: Docker creates a missing bind-mount
+# path as root, and then `tee` into it fails for the developer who owns the repo.
+infra/logs/*
+!infra/logs/.gitkeep
 ```
 > `.env.*` is ignored and `.env.example` is force-included. That asymmetry is what stops `.env.production` reaching the repo while keeping the template versioned.
 >

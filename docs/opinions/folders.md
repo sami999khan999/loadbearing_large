@@ -53,7 +53,7 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `catalog/` | team-owned fragments plus a platform-owned `index.ts` that merges them | `errors`, `permissions`, `contracts` |
 | `registry/` | singleton lookup classes over a catalog | `permissions`, `contracts` |
 | `capability/` | the resolution algorithm over a registry | `permissions` |
-| `error/` | `AppError` subclasses, one per code that carries context | `errors`, `application` |
+| `error/` | `AppError` subclasses, one per code that carries context | `errors` |
 | `normalizer/` | boundary converters — unknown in, known shape out | `errors` |
 | `transport/` | protocol mappings; the only place a wire format is named | `errors` |
 | `source/` | an abstract seam plus its implementations | `content` |
@@ -65,7 +65,10 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `event/` | type-only declarations of what an event carries | `observability` |
 | `logger/` | the diagnostic seam and its sinks | `observability` |
 | `port/` | abstract classes for cross-cutting infrastructure, zero implementations | `application` |
+| `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `db` |
+| `transaction/` | the `UnitOfWork` seam and the scope it reads | `db` |
 | `seed/` | idempotent seeds, run after migration | `db` |
+| `migrate/` | the migration runner | `db` |
 | `consumer/` | queue consumers | `apps/worker` |
 | `schedule/` | repeatable jobs | `apps/worker` |
 
@@ -78,26 +81,33 @@ already means something else here, it is the wrong name.
 ## Where the contents repeat per feature, the folder is the subject instead
 
 A role folder is right when the package has one of each thing. It is wrong when the package has one
-of each thing *per feature* — a `schema/` holding twenty schemas next to a `repository/` holding
-twenty repositories means a team owns files in two directories and neither directory belongs to
-anyone.
+of each thing *per feature* — twenty schemas in one directory next to twenty repositories in another
+means a team owns files in two places and neither place belongs to anyone.
 
 **So: if a folder's contents would repeat once per feature slice, name the folder after the
 subject.**
 
 ```
-packages/db/src/                      not:  packages/db/src/
-├── index.ts                                ├── schema/
-├── import.ts                                │   ├── rbac.schema.ts
-├── rbac/                                    │   ├── activity.schema.ts
-│   ├── index.ts                             │   └── task.schema.ts
-│   ├── rbac.schema.ts                       ├── repository/
-│   └── capability.repository.ts             │   ├── capability.repository.ts
-├── activity/                                │   └── pg-task.repository.ts
-├── vector/                                  └── seed/
-├── task/
-└── seed/
+packages/contracts/src/                not:  packages/contracts/src/
+├── index.ts                                 ├── contract/
+├── import.ts                                │   ├── task.contract.ts
+├── task/                                    │   └── goal.contract.ts
+│   ├── index.ts                             ├── entity/
+│   ├── task.contract.ts                     │   ├── task.entity.ts
+│   ├── task.entity.ts                       │   └── goal.entity.ts
+│   └── task.procedures.ts                   └── procedure/
+├── goal/                                        ├── task.procedures.ts
+└── primitive/                                   └── goal.procedures.ts
 ```
+
+> [!NOTE]
+> **`packages/db` deliberately does not follow this**, and it is the clearest place to see the
+> trade. Its tables live in one `schema/` folder — because `drizzle.config.ts` must be pointed at a
+> single barrel that names every table, and `drizzle(pool, { schema })` needs the same namespace at
+> runtime for Better Auth's adapter to find its tables at all. One folder is what those two tools
+> require, so `schema/rbac.schema.ts` and `rbac/pg-capability.repository.ts` do sit in two
+> directories. The rule above still describes the default; `db` is the exception, and it is an
+> exception because a tool demanded it rather than because it read better.
 
 A subject folder is singular, and **every file inside is prefixed with the folder's name**. The
 folder is the subject; the suffix is the role. A path tells you both without opening anything.
@@ -111,14 +121,17 @@ packages/contracts/src/task/
 ```
 
 Subject folders repeat across packages by design: `contracts/task/`, `application/task/`,
-`db/task/`, `query/task/`, `feature/task/`, `web/route/task/`. Seven places, one glob per team —
-`packages/*/src/<slice>/**`.
+`query/task/`, `feature/task/`, `web/route/task/`. One glob per team —
+`packages/*/src/<slice>/**`. In `db` a slice is split across `schema/task.schema.ts` and
+`task/pg-task.repository.ts`, for the tooling reason above.
 
 **Which packages are which.** `core`, `errors`, `permissions`, `observability`, `content`,
 `composition`, `api-client` are role-organised — they hold one of each thing. `application`, `db`, `query`,
 `feature` are subject-organised — they hold one of each thing per slice. `infrastructure` is
 role-organised with the folder named after the *capability* (`cache/`, `storage/`, `queue/`,
-`embedding/`) and the file named after the technology, so a vendor swap is visibly local. `ui` is
+`embedding/`, `analytics/`) and the file named after the technology, so a vendor swap is visibly
+local. It holds only vendors application code **imports** — a log platform the code never names has
+no folder here, because there would be nothing to put in it. `ui` is
 the third kind: one folder per exported component.
 
 **`contracts` is both, and that is the clearest illustration of the rule.** Its shared vocabulary

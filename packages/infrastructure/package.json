@@ -35,6 +35,7 @@
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@loadbearing/application": "workspace:*",
     "@loadbearing/core": "workspace:*",
+    "@loadbearing/errors": "workspace:*",
     "bullmq": "catalog:",
     "ioredis": "catalog:"
   }

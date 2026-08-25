@@ -1,5 +1,5 @@
 {
   "title": "db",
-  "description": "",
+  "description": "Postgres and the ports it implements — RBAC, a partitioned audit log, derived rollups, pgvector, and a UnitOfWork that really enrols",
   "pages": ["index", "reference"]
 }

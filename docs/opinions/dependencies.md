@@ -37,6 +37,13 @@ The same discipline as Tier 2, arrived at from the other direction: Tier 2 entri
 behind a port; Tier 0 entries are quarantined behind a *protocol* — stdout, SQL, S3's API — that the
 code was going to speak anyway.
 
+**The tier is decided by whether code imports a client, not by whether the thing is infrastructure.**
+Postgres and ClickHouse are infrastructure *and* Tier 2, because `pg` and `@clickhouse/client` are
+real imports behind real ports. Loki is infrastructure and Tier 0, because nothing imports anything.
+That is why the adapters live in `packages/db` and `packages/infrastructure` while Loki, Alloy and
+Grafana live only in `infra/docker-compose.yml` ([15](../setup/15-infrastructure-package.md) has the
+table).
+
 ### Tier 1 — never ships
 
 Build, test, and lint tooling. It cannot constrain a consumer, because it never reaches one.

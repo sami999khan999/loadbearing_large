@@ -292,6 +292,9 @@ catalogs:
     bullmq:
       specifier: ^5.81.3
       version: 5.81.3
+    dotenv:
+      specifier: ^17.4.2
+      version: 17.4.2
     drizzle-kit:
       specifier: ^0.31.0
       version: 0.31.10
@@ -410,6 +413,9 @@ importers:
       '@loadbearing/core':
         specifier: workspace:*
         version: link:../core
+      '@loadbearing/errors':
+        specifier: workspace:*
+        version: link:../errors
       '@loadbearing/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -643,6 +649,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.21.0
+      dotenv:
+        specifier: 'catalog:'
+        version: 17.4.2
       drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.10
@@ -737,6 +746,9 @@ importers:
       '@loadbearing/core':
         specifier: workspace:*
         version: link:../core
+      '@loadbearing/errors':
+        specifier: workspace:*
+        version: link:../errors
       bullmq:
         specifier: 'catalog:'
         version: 5.81.3(supports-color@7.2.0)
@@ -2374,6 +2386,10 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+    engines: {node: '>=12'}
 
   drizzle-kit@0.31.10:
     resolution: {integrity: sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==}
@@ -4512,6 +4528,8 @@ snapshots:
 
   detect-libc@2.1.2:
     optional: true
+
+  dotenv@17.4.2: {}
 
   drizzle-kit@0.31.10:
     dependencies:

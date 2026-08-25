@@ -1,6 +1,6 @@
 ---
 title: Opinions
-description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, data ownership, comments.
+description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, data ownership, simplicity, comments.
 ---
 
 # Opinions
@@ -30,6 +30,10 @@ a migration with customer data in it.
 Those two are the only justification any rule here needs. When a rule stops producing either
 property, the rule has a gap worth fixing rather than working around.
 
+[Simplicity](simplicity.md) is the one page that serves neither directly, and it is deliberately last
+in the reading order: it is the **tie-breaker** for when two designs both satisfy every rule above,
+and the answer to how much structure to build once the naming questions are settled.
+
 ---
 
 ## The pages
@@ -43,6 +47,7 @@ property, the rule has a gap worth fixing rather than working around.
 | [Classes and methods](classes.md) | Class-name grammar, banned suffixes, the method vocabulary |
 | [Vocabulary](vocabulary.md) | Permissions, procedures, events, queues, contract members, database, env, React |
 | [Data and scale](data-and-scale.md) | Which store owns which data, what is derived, what to build now, the order scaling moves happen in |
+| [Simplicity](simplicity.md) | How much structure to build, and why performance is part of the goal rather than the trade |
 | [Comments](comments.md) | Line comments only, two lines, where the reasoning goes instead |
 
 ---
@@ -86,7 +91,7 @@ See [Comments](comments.md).
 | Every domain table declares `organization_id` | `check-architecture.mjs` §9 |
 | The audit port is `ActivityLogger`, never `AuditTrail` | `check-architecture.mjs` §10 |
 | One range per dependency across packages | `syncpack lint` |
-| Loki labels stay within `app, env, level, event_code` | `infra/alloy/config.alloy` — the pipeline promotes exactly four |
+| Loki labels stay within `app, env, level, event_code` | `infra/alloy.config.alloy` — the pipeline promotes exactly four |
 | A query that cannot be scoped to a tenant | Review |
 | Everything else on these pages | Review |
 

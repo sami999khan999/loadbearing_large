@@ -1,0 +1,118 @@
+---
+title: postgres
+description: The source of truth — the pgvector image, the three extensions, and why the init script runs exactly once.
+---
+
+# `postgres`
+
+The store that owns anything a transaction depends on or a user reads immediately after writing:
+domain rows, RBAC, the audit trail, auth tables, and embeddings.
+
+| | |
+| --- | --- |
+| **Image** | `pgvector/pgvector:pg17` |
+| **Inside the network** | `postgres:5432` |
+| **From the host** | `localhost:5432` |
+| **Credentials** | `ratchet` / `ratchet`, database `ratchet` |
+| **Volume** | `pgdata` |
+| **Config file** | `postgres.init.sql` |
+
+---
+
+## Why this image
+
+`pgvector/pgvector:pg17` is stock Postgres 17 with the `vector` extension *available to enable*.
+Using the official `postgres` image and installing pgvector yourself works, and pins you to building
+an image on every developer machine and every CI runner.
+
+**Postgres 17 rather than 16** for the improved `VACUUM` memory behaviour, which matters on the
+activity log more than anywhere else — though the real answer for that table is monthly partitioning
+and a retention policy, which [13](../../../docs/setup/13-db-package.md) sets up in the first
+migration.
+
+---
+
+## `postgres.init.sql`
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+```
+
+Mounted at `/docker-entrypoint-initdb.d/01-extensions.sql`. The `01-` prefix is the execution order
+the entrypoint sorts by — irrelevant with one file, and the reason to keep the convention if a second
+ever appears.
+
+**`vector`** is the extension the image exists for. The column type `vector(1536)` in
+[14](../../../docs/setup/14-vector-store.md) does not exist without it, and the migration fails on
+stock Postgres with an error that reads like a typo.
+
+**`pg_trgm`** is trigram indexing for fuzzy text search. Every product ends up wanting
+`WHERE name % 'searchterm'`, and enabling an extension in a later migration means a lock on a live
+database. It is free until used.
+
+**`uuid-ossp`** is belt-and-braces. IDs are generated in application code by `Uuid.v7()`, so nothing
+needs it — but a data-repair SQL script that has to invent an id should not require a round trip
+through Node.
+
+> **`"uuid-ossp"` is quoted because of the hyphen.** Unquoted, Postgres parses it as
+> `uuid - ossp` — a subtraction — and reports a syntax error that names neither the extension nor the
+> hyphen.
+
+---
+
+## The init script runs exactly once
+
+Scripts in `/docker-entrypoint-initdb.d` run **only when the data directory is empty**. On every
+later start the entrypoint sees an initialised cluster and skips them entirely.
+
+That is the single most common confusion with this file: editing it and restarting does nothing.
+
+```bash
+# apply a change to an existing volume
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U ratchet -d ratchet -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+
+# or start over
+pnpm infra:reset
+```
+
+> Address the container by **service name** (`postgres`), not by a shell-substituted container ID.
+> That is what makes these commands identical in PowerShell and bash.
+
+---
+
+## Who connects, and how
+
+| Consumer | Reaches it at | For |
+|---|---|---|
+| `apps/web`, `apps/worker` (host) | `localhost:5432` | everything, via `DATABASE_URL` |
+| `grafana` (container) | `postgres:5432` | reading the audit trail — [grafana](grafana.md) |
+| `drizzle-kit` (host) | `localhost:5432` | migrations, via `packages/db/.env` |
+
+**Two different hostnames for one database**, and the difference is which side of the bridge network
+the client is on. Grafana using `localhost:5432` would reach *Grafana's own* loopback and find
+nothing.
+
+Connections are pooled per process at `max: 10` ([13](../../../docs/setup/13-db-package.md)), so
+count processes against `max_connections`: three web replicas and two workers is fifty, which is
+fine; forty replicas is not, and is the point pgBouncer stops being optional.
+
+---
+
+## Checking it
+
+```bash
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U ratchet -d ratchet -c "SELECT extname FROM pg_extension;"
+```
+
+`vector`, `pg_trgm`, `uuid-ossp` alongside `plpgsql`. If `vector` is missing, the volume predates the
+init script.
+
+```bash
+docker compose -f infra/docker-compose.yml exec postgres pg_isready -U ratchet -d ratchet
+```
+
+The same command the healthcheck runs.

@@ -1,0 +1,104 @@
+---
+title: Unit of work
+description: Why AsyncLocalStorage rather than a tx parameter, how nesting behaves, and the five-line test that is the only proof the transaction is real.
+---
+
+# `PgUnitOfWork` and `TransactionScope`
+
+```ts
+public override async run<T>(work: () => Promise<T>): Promise<T> {
+  return this.database.client.transaction((tx) => this.scope.within(tx, work));
+}
+```
+
+Two classes, and the important one is the three-line `TransactionScope`.
+
+## Why not a `tx` parameter
+
+The obvious design is `save(task, tx?)` on every repository method. It works, and it puts a database
+concept into `packages/application` — the one thing this architecture spends all its effort keeping
+out. A port with a transaction handle in its signature is a port that describes Postgres.
+
+`AsyncLocalStorage` is a Node built-in, costs effectively nothing, and keeps the transaction invisible
+above `db`. `BaseRepository` is the only reader:
+
+```ts
+protected get db() {
+  return this.scope.current() ?? this.database.client;
+}
+```
+
+**This is the one place ambient context is acceptable, and the reasons are specific.** The value is
+scoped to a single `run()` call rather than to a request, it is written in exactly one place, and
+nothing outside `BaseRepository` reads it. That is a different thing from a request-scoped container,
+which [17](../../../../docs/setup/17-composition-container.md) still bans — and the difference is
+lifetime, not mechanism.
+
+## One `TransactionScope` per container, not per call
+
+`PgUnitOfWork` and every repository must receive **the same instance**. Two scopes means two answers to
+"am I in a transaction", and the repository holding the wrong one writes outside the transaction while
+reading as though it is inside. Nothing fails; the audit row is simply not covered by the rollback.
+
+This is a wiring mistake that no type catches, so it is worth checking in `container.ts` by eye.
+
+## Nesting joins, it does not nest
+
+Postgres has no nested transactions. `storage.run` replaces the handle only for the duration of the
+inner callback, so a `run()` inside a `run()` sees the outer transaction and joins it. A use-case that
+calls another use-case therefore gets one atomic unit, which is what anyone reading `run()` expects.
+
+The consequence to know: **an inner failure rolls back the outer work too.** That is correct, and it is
+also why a use-case should not wrap an optional side effect in `run()` — put it after the commit, or
+publish an event.
+
+## What this makes true
+
+`PgActivityLogger` writes through the same scope, so a state change and its audit row commit together
+or neither does. That is the whole reason the audit trail lives in Postgres rather than in the log
+stream: no external store can join a transaction it has never heard of.
+
+It is also why the audit row doubles as a **transactional outbox**. The domain event published after
+commit is a latency optimisation, not a durability mechanism — if the publish is lost, the row is still
+in `activity_log`, reconciliation finds the gap, and a replay closes it. Publishing *inside* the
+transaction is the tempting mistake: it holds the transaction open across a network call and reintroduces
+the two-store atomicity problem the queue hop exists to avoid.
+
+## The test is the only proof
+
+An assertion, not a code review. `tests/unit-of-work.spec.ts` runs both directions against the local
+stack:
+
+```ts
+await expect(
+  uow.run(async () => {
+    await logger.record(actor, action, { probe: true });
+    throw new Error("boom");
+  }),
+).rejects.toThrow("boom");
+
+const found = await database.client
+  .select({ action: activityLog.action })
+  .from(activityLog)
+  .where(eq(activityLog.action, action));
+
+expect(found).toEqual([]);
+```
+
+**Test the commit case too.** A `run()` that rolls back everything — including on success — passes the
+rollback assertion perfectly.
+
+## The query-count assertion needs a seam
+
+`DatabaseConfig` takes an optional drizzle `logger`, and that exists so "three queries" can be an
+assertion rather than a claim:
+
+```ts
+counter.count = 0;
+await repository.resolveFor(organizationId, userId);
+expect(counter.count).toBe(3);
+```
+
+`PgCapabilityRepository.resolveFor` is the hottest query in the system. "Three queries" decays silently
+— someone adds a lookup inside the loop and it becomes 3 + N, invisible at ten users and fatal at five
+thousand. Without the logger seam there is no way to notice.

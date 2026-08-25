@@ -1,6 +1,6 @@
 # 15 · `@loadbearing/infrastructure`
 
-> The non-Postgres adapters: Redis caching, S3 file storage, and the BullMQ queue publisher. Server-only.
+> The non-Postgres adapters that application code actually imports: Redis caching, S3 file storage, and the BullMQ queue publisher. Server-only.
 
 **Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, and the embedding provider from [14](14-vector-store.md).
 
@@ -16,6 +16,42 @@ This is a departure from the architecture docs, flagged in [00](00-README.md). T
 - **`apps/` means duplication.** `apps/web` and `apps/worker` both need S3 and Redis. Constructing them in each app means two copies of the retry policy, the key layout, and the presign expiry — which will drift.
 
 So non-Postgres adapters get one server-only package, exactly the way `auth` got one. The dependency direction is identical to `db`: it implements ports declared in `application`, and `application` never imports it.
+
+### What belongs here, and what only looks like it does
+
+One test, and it is not "is this infrastructure":
+
+> **Does application code import a client for it, to satisfy a port declared in
+> `application/src/port/`?**
+
+Both halves matter. A node-only client with no port is a dependency a use-case can reach directly,
+which is the coupling `port/` exists to prevent. A port with no client is an abstraction over
+nothing.
+
+| Thing | Where | Why |
+|---|---|---|
+| Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
+| **ClickHouse** | **here**, when adopted | `@clickhouse/client` satisfying `AnalyticsReader` — the same shape as Redis |
+| **Postgres** | `packages/db` | It has a whole package, because `db` means Postgres ([00](00-README.md)) |
+| **Loki, Alloy, Grafana** | **nowhere in `packages/`** | No client, no port, nothing to import |
+
+**The last row is the one worth understanding**, because "we use Loki, so the Loki thing goes in the
+infrastructure package" is a reasonable-sounding sentence that would undo a deliberate design.
+
+`JsonLogger` writes structured JSON to stdout and has never heard of Loki. Alloy — a *separate
+process* — tails that stdout and ships it. Grafana reads Loki and never talks to us at all. There is
+no library to install and no seam to implement, which is precisely what makes swapping the log
+platform a config change instead of a migration ([Data and scale](../opinions/data-and-scale.md)).
+
+The moment `@loadbearing/observability` imports a Loki client, three things break at once: the
+package gains a runtime dependency it has spent its whole design avoiding, the log platform stops
+being swappable, and a browser bundle acquires a server-only import. They live in
+`infra/docker-compose.yml` ([11](11-local-infrastructure.md)) as
+[Tier 0](../opinions/dependencies.md) — provided by the deployment, reached over a protocol the code
+was going to speak anyway.
+
+**Smell:** a `*.dashboard.json` or a `loki` entry in any `package.json`. Grafana dashboards are
+infrastructure configuration and belong beside the provisioning files in `infra/`.
 
 **If you would rather stay at thirteen packages,** fold `src/cache/`, `src/storage/`, and `src/queue/` into `packages/db/src/` as siblings of `vector/`. Every other line in these documents is unchanged.
 
@@ -36,10 +72,18 @@ packages/infrastructure/src/
 │   ├── index.ts
 │   ├── queue-name.ts                 → QueueName
 │   └── bullmq.queue-publisher.ts     → BullMqQueuePublisher
-└── embedding/
+├── embedding/
+│   ├── index.ts
+│   └── openai.embedding-provider.ts  → OpenAiEmbeddingProvider
+└── analytics/                        ← empty until ClickHouse is adopted
     ├── index.ts
-    └── openai.embedding-provider.ts  → OpenAiEmbeddingProvider
+    └── clickhouse.analytics-reader.ts → ClickHouseAnalyticsReader
 ```
+
+> `analytics/` is listed for completeness and is **not** built now. `PgAnalyticsReader` in
+> [13](13-db-package.md) is the implementation until snapshots stop covering ad-hoc queries
+> ([Data and scale](../opinions/data-and-scale.md) §5). The folder is here so the answer to "where
+> would it go" is written down rather than argued about later.
 
 **`packages/infrastructure/src/index.ts`**
 

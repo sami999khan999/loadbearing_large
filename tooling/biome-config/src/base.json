@@ -119,7 +119,17 @@
       }
     },
     {
-      "includes": ["packages/db/src/schema.ts"],
+      "includes": ["**/*.config.ts", "packages/db/src/migrate/**", "packages/db/src/seed/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/db/src/schema/index.ts"],
       "linter": {
         "rules": {
           "performance": {
@@ -131,7 +141,7 @@
     {
       "includes": [
         "**/*.mjs",
-        "packages/db/src/migrate.ts",
+        "packages/db/src/migrate/**",
         "packages/db/src/seed/**",
         "packages/infrastructure/src/smoke.ts",
         "packages/observability/src/logger/json.logger.ts"

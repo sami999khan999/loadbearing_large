@@ -12,4 +12,5 @@ export { NotFoundError } from "./not-found.error.js";
 export { ServerOnlyError } from "./server-only.error.js";
 export { TwoFactorRequiredError } from "./two-factor-required.error.js";
 export { UnauthorizedError } from "./unauthorized.error.js";
+export { UnavailableError } from "./unavailable.error.js";
 export { type SchemaIssue, ValidationError } from "./validation.error.js";

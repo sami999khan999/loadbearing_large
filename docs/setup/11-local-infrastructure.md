@@ -6,6 +6,8 @@
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 
+> **[`infra/docs/`](../../infra/docs/index.md) is the reference for the stack this step builds.** This page is the build order, walked once; that one is what you consult afterwards when something is wrong.
+
 > **Read [Data and scale](../opinions/data-and-scale.md) before this step.** It is why there are two Redis containers here rather than one, and it decides the partitioning and tenant column that [13](13-db-package.md) builds on.
 
 ---
@@ -25,10 +27,10 @@ services:
       POSTGRES_USER: ratchet
       POSTGRES_PASSWORD: ratchet
       POSTGRES_DB: ratchet
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ratchet -d ratchet"]
       interval: 5s
@@ -41,7 +43,7 @@ services:
     # Evicts under pressure and does not persist. Everything on it is rebuildable
     # from Postgres, so losing it costs a slow minute rather than data.
     command: ["redis-server", "--save", "", "--maxmemory-policy", "allkeys-lru"]
-    ports: ["6379:6379"]
+    ports: ["${REDIS_CACHE_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -54,7 +56,7 @@ services:
     # Never evicts and always persists. A queued job is derived from nothing, so a
     # dropped key here is work that never happens.
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
-    ports: ["6380:6379"]
+    ports: ["${REDIS_QUEUE_PORT:-6380}:6379"]
     volumes:
       - redisqueuedata:/data
     healthcheck:
@@ -70,7 +72,7 @@ services:
     environment:
       MINIO_ROOT_USER: ratchet
       MINIO_ROOT_PASSWORD: ratchetsecret
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["${S3_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
     volumes:
       - miniodata:/data
     healthcheck:
@@ -103,12 +105,12 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yml"]
-    ports: ["3100:3100"]
+    ports: ["${LOKI_PORT:-3100}:3100"]
     depends_on:
       minio-init:
         condition: service_completed_successfully
     volumes:
-      - ./loki/config.yml:/etc/loki/config.yml:ro
+      - ./loki.config.yml:/etc/loki/config.yml:ro
       - lokidata:/loki
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready"]
@@ -124,19 +126,22 @@ services:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
       - /etc/alloy/config.alloy
-    ports: ["12345:12345"]
+    ports: ["${ALLOY_PORT:-12345}:12345"]
     depends_on:
       loki:
         condition: service_healthy
     volumes:
-      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./alloy.config.alloy:/etc/alloy/config.alloy:ro
       # Reads container stdout. Read-only, and the only reason this file
       # touches the Docker socket at all.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # The `pnpm dev | tee` target, for apps running on the host.
       - ./logs:/var/log/app:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:12345/-/ready | grep -q Ready"]
+      # The Alloy image ships neither wget nor curl, so the probe is bash's
+      # /dev/tcp. It proves Alloy is listening, not that every component loaded —
+      # the gate below checks that properly, by asking Loki what arrived.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/12345"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -146,14 +151,14 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
     # 3001, because the web app owns 3000.
-    ports: ["3001:3000"]
+    ports: ["${GRAFANA_PORT:-3001}:3000"]
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_USERS_DEFAULT_THEME: light
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana.datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - grafanadata:/var/lib/grafana
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health | grep -q ok"]
@@ -174,14 +179,17 @@ services:
       CLICKHOUSE_PASSWORD: ratchet
       CLICKHOUSE_DB: ratchet
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-    ports: ["8123:8123", "9002:9000"]
+    ports: ["${CLICKHOUSE_HTTP_PORT:-8123}:8123", "${CLICKHOUSE_NATIVE_PORT:-9002}:9000"]
     volumes:
       - clickhousedata:/var/lib/clickhouse
-      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+      - ./clickhouse.init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:8123/ping | grep -q Ok"]
+      # 127.0.0.1, not localhost. ClickHouse listens on 0.0.0.0 (IPv4 only) while
+      # busybox wget resolves localhost to ::1 first, so the localhost form is
+      # refused from inside the container and the service never reports healthy.
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8123/ping | grep -q Ok"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -196,6 +204,20 @@ volumes:
 ```
 
 > The cache has no volume on purpose. A named volume for something explicitly disposable invites someone to treat it as durable.
+
+> **Every host port is overridable, and every container port is not.** `${GRAFANA_PORT:-3001}:3000`
+> keeps the documented default while letting one developer move it. Port collisions on a developer
+> machine are not hypothetical — this stack met one on the first run, where `9001` was already held
+> by an unrelated tool — and the fix should be a line in `infra/.env` rather than an edit to a file
+> everyone shares:
+>
+> ```ini
+> # infra/.env — gitignored, this machine only
+> MINIO_CONSOLE_PORT=9003
+> ```
+>
+> Compose reads that file automatically because it sits beside the compose file. The container-side
+> port never changes, so nothing inside the network has to know.
 
 > **ClickHouse's native port is remapped to 9002.** MinIO already owns 9000, and the collision produces a container that starts, binds nothing useful, and fails at connect time with an error naming neither service.
 
@@ -235,7 +257,7 @@ Pointing Loki at MinIO rather than a local volume also means the local topology 
 
 The extension ships in the image but is not enabled in the database. Create an init script so a fresh volume enables it automatically.
 
-**`infra/postgres/init/01-extensions.sql`**
+**`infra/postgres.init.sql`**
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -255,7 +277,7 @@ Two files. Neither is application code, and no package imports either of them �
 [Tier 0](../opinions/dependencies.md): the deployment provides the log platform, and `JsonLogger`
 never learns it exists.
 
-**`infra/loki/config.yml`**
+**`infra/loki.config.yml`**
 
 ```yaml
 auth_enabled: false
@@ -299,6 +321,13 @@ limits_config:
   # A guard against the failure this whole design is about.
   max_label_names_per_series: 8
 
+  # Loki 3.x invents labels unless told not to. Left at their defaults it adds a
+  # `service_name` to every stream and a `detected_level` alongside ours — so the
+  # label set the Alloy pipeline carefully limits to four arrives as six.
+  # Both are off because the pipeline already decides what a label is.
+  discover_service_name: []
+  discover_log_levels: false
+
 compactor:
   working_directory: /loki/compactor
   delete_request_store: s3
@@ -313,7 +342,7 @@ S3.
 which promotes exactly four. This makes a mistake fail loudly at ingest rather than quietly
 multiplying streams.
 
-**`infra/alloy/config.alloy`**
+**`infra/alloy.config.alloy`**
 
 ```alloy
 // Container stdout, every service in the compose file. The filter is not
@@ -376,8 +405,17 @@ loki.process "stream" {
 
   // Loki, Grafana and Alloy emit logfmt with a `level` key. Same extracted key
   // as above, so whichever stage understood the line is the one that wins.
-  stage.logfmt {
-    mapping = { level = "" }
+  //
+  // Gated by a selector, unlike stage.json: a JSON stage that cannot parse a
+  // line fails silently, but stage.logfmt logs an error for every line it does
+  // not understand — and Alloy collects its own stdout, so ungated it spends the
+  // whole pipeline reporting that Postgres does not speak logfmt.
+  stage.match {
+    selector = "{app=~\"loki|grafana|alloy\"}"
+
+    stage.logfmt {
+      mapping = { level = "" }
+    }
   }
 
   // Every line gets `env`, including the third-party containers whose format
@@ -396,6 +434,14 @@ loki.process "stream" {
       level      = "",
       event_code = "",
     }
+  }
+
+  // `loki.source.file` attaches `filename` to every stream it creates, which is
+  // a fifth label and one stream per rotated file. Nothing in this config asked
+  // for it — which is exactly why the gate queries the live label set rather
+  // than trusting a reading of this file.
+  stage.label_drop {
+    values = ["filename"]
   }
 }
 
@@ -483,7 +529,7 @@ rather than decorative.
 
 ## Step 11.4 — Grafana's data sources
 
-**`infra/grafana/provisioning/datasources/datasources.yml`**
+**`infra/grafana.datasources.yml`**
 
 ```yaml
 apiVersion: 1
@@ -533,12 +579,16 @@ against Loki. Same UI, two stores, which is the argument for Grafana over a Loki
 Only read when you start the `analytics` profile. It exists so the profile is runnable rather than a
 stub.
 
-**`infra/clickhouse/init/01-schema.sql`**
+**`infra/clickhouse.init.sql`**
 
 ```sql
 -- Derived, and rebuildable by replaying the activity log. Nothing here is a
 -- source of truth, which is what keeps the swap a performance decision.
-CREATE TABLE IF NOT EXISTS activity_events
+--
+-- The name is database-qualified on purpose: ClickHouse's entrypoint runs the
+-- scripts in this directory against `default`, not against CLICKHOUSE_DB, so an
+-- unqualified CREATE succeeds in the wrong place and the table looks missing.
+CREATE TABLE IF NOT EXISTS ratchet.activity_events
 (
   organization_id UUID,
   occurred_at     DateTime64(3),
@@ -677,6 +727,10 @@ The application code does not change between the two columns. These containers a
 | `grafana` container | Self-hosted Grafana or Grafana Cloud. The provisioning files are the same either way |
 | `clickhouse` container, stopped | ClickHouse Cloud or a managed instance — and only once the trigger in [Data and scale](../opinions/data-and-scale.md) §5 has actually fired |
 
+The full path from here to a rented box, and from there to managed services, is
+[`infra/docs/deployment.md`](../../infra/docs/deployment.md) — including the one thing about this
+compose file that is safe on a laptop and dangerous on a public IP.
+
 That last row is the reason MinIO is here rather than a local filesystem stand-in: the AWS SDK talks to MinIO unchanged, so the code path exercised in development is the code path that runs in production. A filesystem adapter would mean the S3 path is first executed on the day you deploy.
 
 The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-repo-skeleton.md). MinIO needs path-style addressing (`endpoint/bucket/key`); AWS wants virtual-host style (`bucket.endpoint/key`). Having it as a config value rather than a code branch is what makes the difference one line in an environment file.
@@ -691,7 +745,17 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
 - `SELECT extname FROM pg_extension;` includes `vector`.
 - The MinIO console at `http://localhost:9001` shows `ratchet` and `loki` buckets.
 - `curl -s http://localhost:3100/ready` returns `ready`.
-- **The label set is exactly four.** `curl -s -G http://localhost:3100/loki/api/v1/labels` returns `app`, `env`, `event_code`, `level` and nothing more.
+- **The label set is exactly four.** Query a *fresh* window and inspect real streams, not the global label list — the global list includes streams from before any config change and will show ghosts:
+  ```bash
+  curl -s -G http://localhost:3100/loki/api/v1/series     --data-urlencode "start=$(($(date +%s)-60))000000000"     --data-urlencode 'match[]={app=~".+"}'
+  ```
+  Every stream must carry only `app`, `env`, `level`, `event_code`.
+
+  > **Check this against the running system, never by reading the config.** Two of the three label
+  > leaks found while writing this step came from components that were never named in
+  > `config.alloy`: Loki 3.x invents `service_name` unless `discover_service_name` is emptied, and
+  > `loki.source.file` attaches `filename` until a `stage.label_drop` removes it. A config review
+  > cannot see either one.
 - **Every service is being collected.** This lists one entry per compose service, not just the ones that emit JSON:
   ```bash
   curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
@@ -699,7 +763,11 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
   Expect `alloy`, `grafana`, `loki`, `minio`, `postgres`, `redis-cache`, `redis-queue`. A missing entry means that container has logged nothing yet, not that it is being skipped — restart it and look again.
 - **Nothing from other projects leaked in.** No value above belongs to a container outside this compose file. If one does, the `com.docker.compose.project` filter is wrong.
 - Grafana at `http://localhost:3001` opens without a login and lists Loki and Postgres under Connections.
-- `pnpm infra:up:analytics` starts clickhouse, and `curl -s http://localhost:8123/ping` returns `Ok`. Then stop it again — nothing writes to it yet.
+- `pnpm infra:up:analytics` starts clickhouse, `curl -s http://localhost:8123/ping` returns `Ok`, and the table is in the **`ratchet`** database rather than `default`:
+  ```bash
+  curl -s "http://localhost:8123/?user=ratchet&password=ratchet"     --data-binary "SELECT database, name FROM system.tables WHERE name = 'activity_events' FORMAT TSV"
+  ```
+  Then `docker compose -f infra/docker-compose.yml --profile analytics stop clickhouse` — nothing writes to it yet.
 
 Do not proceed until this passes.
 
