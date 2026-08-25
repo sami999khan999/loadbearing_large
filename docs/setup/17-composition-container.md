@@ -102,8 +102,9 @@ import {
   AuthFactory,
   BetterAuthSessionResolver,
   CapabilityCache,
-  PrincipalBuilder,
   type AuthInstance,
+  MembershipReader,
+  PrincipalBuilder,
 } from "@loadbearing/auth";
 import { ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
 import {
@@ -112,6 +113,7 @@ import {
   PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
+  PgMembershipReader,
   PgUnitOfWork,
   PgVectorStore,
   TransactionScope,
@@ -192,7 +194,15 @@ export class Container {
 
     this.content = new StaticContentSource(SERVER_CATALOG);
 
-    this.auth = AuthFactory.create(config.auth, this.database, this.cache);
+    // The fourth argument is what pins a tenant onto every session at sign-in. It is
+    // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
+    // `auth` declares — `db` cannot implement it nominally, because `auth` already
+    // depends on `db`, so this line is where a signature drift is caught.
+    const membershipReader: MembershipReader = new PgMembershipReader(
+      this.database,
+      this.transactions,
+    );
+    this.auth = AuthFactory.create(config.auth, this.database, this.cache, membershipReader);
     this.sessions = new BetterAuthSessionResolver(this.auth);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
@@ -219,7 +229,7 @@ export class Container {
   // that is down silently stops accepting work, which is worth knowing about.
   public async healthy(): Promise<boolean> {
     const [database, cache, queue] = await Promise.all([
-      this.database.healthy(),
+      this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
     ]);

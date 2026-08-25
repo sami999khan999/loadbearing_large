@@ -20,7 +20,12 @@ export {
 } from "@loadbearing/application";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-export { type GoalId, Identifiers, type OrganizationId } from "@loadbearing/contracts";
+export {
+  type GoalId,
+  Identifiers,
+  type OrganizationId,
+  type UserId,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { type Clock, ServerOnly, Uuid } from "@loadbearing/core";
@@ -37,6 +42,7 @@ export {
 // ── drizzle-orm ──────────────────────────────────────────────────────────────
 export {
   and,
+  asc,
   cosineDistance,
   desc,
   eq,

@@ -337,30 +337,54 @@ export abstract class QueuePublisher {
 
 ```ts
 // packages/application/src/port/session.resolver.ts
-import type { UserId } from "@loadbearing/contracts";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
+
+// Structurally satisfied by a Web `Headers`, so `resolve(request.headers)` just works.
+// Declared rather than named: `lib: ["ES2024"]` has no `Headers`, and adding @types/node
+// to borrow one method would put Node's globals in a runtime-neutral package.
+export interface RequestHeaders {
+  get(name: string): string | null;
+}
 
 export interface ResolvedSession {
+  readonly organizationId: OrganizationId;
   readonly userId: UserId;
   readonly sessionId: string;
   readonly expiresAt: Date;
 }
 
 export abstract class SessionResolver {
-  public abstract resolve(headers: Headers): Promise<ResolvedSession | null>;
+  public abstract resolve(headers: RequestHeaders): Promise<ResolvedSession | null>;
 }
 ```
-> `Headers` is the Web Fetch API type — global in Node 18+, available in browsers, and not a framework type. This is the port Better Auth implements in [16](16-auth-package.md), and it is what makes use-case tests need no auth library at all:
+
+**The session carries its organization, and that is not a convenience.** `PrincipalBuilder` ([16](16-auth-package.md)) is handed request headers and nothing else, and a `Principal` cannot be built without a tenant. The alternatives are worse in specific ways: resolving it per request is a membership query on every call, and taking it from a header is a value the client chooses. Pinning it at sign-in is one column. A user who belongs to two organizations gets two sessions — which is also what makes switching organizations an explicit act rather than an ambient one.
+
+**`RequestHeaders` is declared, not imported.** This package compiles against `lib: ["ES2024"]`, which has no `Headers`; pulling in `@types/node` to borrow one method would put Node's globals into a package that is supposed to run anywhere. A real `Headers` satisfies this structurally, so `resolve(request.headers)` needs no adapter.
+
+> This is the port Better Auth implements in [16](16-auth-package.md), and it is what makes use-case tests need no auth library at all:
 >
 > ```ts
 > class FakeSessionResolver extends SessionResolver {
->   constructor(private readonly userId: UserId | null) { super(); }
+>   constructor(
+>     private readonly organizationId: OrganizationId,
+>     private readonly userId: UserId | null,
+>   ) { super(); }
 >   public override async resolve(): Promise<ResolvedSession | null> {
 >     return this.userId
->       ? { userId: this.userId, sessionId: "test", expiresAt: new Date(Date.now() + 3_600_000) }
+>       ? {
+>           organizationId: this.organizationId,
+>           userId: this.userId,
+>           sessionId: "test",
+>           expiresAt: new Date(Date.now() + 3_600_000),
+>         }
 >       : null;
 >   }
 > }
 > ```
+
+> [!NOTE]
+> **One consumer needs more than `RequestHeaders` promises.** `BetterAuthSessionResolver` casts back to a real `Headers`, because Better Auth reads cookies by iterating rather than by `get()`. Every caller passes a genuine `Headers` ([24](24-web-app.md), [25](25-worker-app.md)), so the cast holds — but a hand-rolled stub with only `get` would typecheck at the port and fail at runtime inside the adapter.
 
 ### `VectorStore` and `EmbeddingProvider`
 
@@ -513,7 +537,11 @@ export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
-export { type ResolvedSession, SessionResolver } from "./session.resolver.js";
+export {
+  type RequestHeaders,
+  type ResolvedSession,
+  SessionResolver,
+} from "./session.resolver.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
 export { UnitOfWork } from "./unit-of-work.js";
 export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";
@@ -567,6 +595,7 @@ export {
   EventBus,
   type JobOptions,
   QueuePublisher,
+  type RequestHeaders,
   type ResolvedSession,
   type SearchHit,
   SessionResolver,

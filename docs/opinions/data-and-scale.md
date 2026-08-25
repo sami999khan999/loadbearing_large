@@ -165,7 +165,7 @@ Three jobs, and they do not have the same answer.
 | Use | Rebuilt from | If flushed |
 |---|---|---|
 | Capability cache | Postgres RBAC tables | A slow minute, then warm |
-| Session cache | Better Auth's `session` table | Slower auth; nobody logged out |
+| Session cache | Better Auth's `sessions` table | Slower auth; nobody logged out |
 | BullMQ queues | — | **Lost work** |
 
 The first two are cache-aside and pass the test — `CapabilityCache` reads through to

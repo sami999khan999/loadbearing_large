@@ -123,6 +123,16 @@ const Schema = z.object({
   AUTH_SECRET: z.string().min(32),
   AUTH_URL: z.string().url(),
   AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
+  AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+  AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+  // The revocation window. Capped in the schema, not by convention — a deploy that
+  // raises it to "improve cache hit rate" fails at boot instead of quietly widening
+  // the gap between removing access and access stopping.
+  AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),
+  AUTH_REQUIRE_EMAIL_VERIFICATION: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
 
   EMBEDDING_MODEL: z.string().min(1),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
@@ -176,10 +186,9 @@ export class Env {
         secret: e.AUTH_SECRET,
         baseUrl: e.AUTH_URL,
         trustedOrigins: e.AUTH_TRUSTED_ORIGINS,
-        sessionMaxAgeSeconds: 60 * 60 * 24 * 7,
-        // The revocation window. Sixty seconds is the ceiling, not a default.
-        cookieCacheMaxAgeSeconds: 60,
-        requireEmailVerification: e.NODE_ENV === "production",
+        sessionMaxAgeSeconds: e.AUTH_SESSION_MAX_AGE_SECONDS,
+        cookieCacheMaxAgeSeconds: e.AUTH_COOKIE_CACHE_MAX_AGE_SECONDS,
+        requireEmailVerification: e.AUTH_REQUIRE_EMAIL_VERIFICATION,
       },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
@@ -195,6 +204,10 @@ export class Env {
 **Parse at module load, not on first access.** A missing `AUTH_SECRET` should crash the process at boot with a field path, not produce a 500 on the first sign-in attempt an hour later.
 
 **`AUTH_SECRET` has a minimum length** because a short secret is a real weakness and the schema is the only place anyone will ever check.
+
+**Session lifetimes come from the environment, and the cookie cache is capped here rather than trusted.** A staging box and production do not want the same session length, so these are not literals in a factory. The `.max(60)` on the cookie cache is the load-bearing one: that value *is* the revocation window ([16](16-auth-package.md) §16.9), and the pressure to raise it always arrives as a performance argument. A schema that refuses to boot is a better answer than a comment asking people not to.
+
+**`AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` is parsed here but not consumed by `containerConfig()`.** It belongs to the desktop token policy ([30](30-desktop-app.md)), and it is validated at boot alongside the rest so a malformed value fails in one place rather than at first use on a machine nobody is watching.
 
 **`AUTH_TRUSTED_ORIGINS` carries the Tauri origins from the first deployment**, not from whenever the desktop app is built:
 

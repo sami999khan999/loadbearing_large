@@ -383,7 +383,7 @@ packages/db/
 ├── drizzle.config.ts
 ├── migrations/                        ← generated, committed, never pushed
 │   ├── 0000_init.sql                  ← hand-edited: PARTITION BY on the append-only tables
-│   ├── 0001_auth.sql                  ← Better Auth CLI output + hand-written FKs
+│   ├── 0001_auth.sql                  ← auth tables + the FKs, all schema-declared
 │   ├── 0002_vector.sql
 │   └── meta/
 └── src/
@@ -395,7 +395,7 @@ packages/db/
     ├── rbac/
     │   ├── index.ts
     │   ├── rbac.schema.ts             → roles, role_permissions, memberships, goal_members
-    │   ├── auth.schema.ts             ← Better Auth CLI output, committed
+    │   ├── auth.schema.ts             ← hand-authored; see docs/setup/16
     │   ├── api-key.schema.ts
     │   └── capability.repository.ts   → PgCapabilityRepository
     ├── activity/
@@ -454,19 +454,23 @@ packages/infrastructure/src/
 ```
 packages/auth/src/
 ├── index.ts                                 ← ServerOnly.assert()
+├── import.ts                                ← every external symbol
 ├── auth.config.ts                           → AuthConfig
-├── auth.factory.ts                          → AuthFactory.create(config)
+├── auth.factory.ts                          → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
-│   └── better-auth.session-resolver.ts      → BetterAuthSessionResolver
+│   ├── better-auth.session-resolver.ts      → BetterAuthSessionResolver
+│   └── membership.reader.ts                 → MembershipReader
 ├── principal/
 │   ├── index.ts
 │   ├── principal.builder.ts                 → PrincipalBuilder
 │   └── capability.cache.ts                  → CapabilityCache
-└── apikey/
-    ├── index.ts
-    ├── api-key.hasher.ts                    → ApiKeyHasher
-    └── api-key.resolver.ts                  → ApiKeyResolver
+├── apikey/
+│   ├── index.ts
+│   ├── api-key.hasher.ts                    → ApiKeyHasher
+│   └── api-key.resolver.ts                  → ApiKeyResolver
+└── tables/
+    └── index.ts                             ← schema inspection, never built
 
 packages/auth/tests/
 └── principal/

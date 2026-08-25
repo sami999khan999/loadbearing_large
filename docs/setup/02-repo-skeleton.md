@@ -115,7 +115,25 @@ S3_FORCE_PATH_STYLE=true
 # ── Auth ─────────────────────────────────────────────────
 AUTH_SECRET=change-me-generate-with-openssl-rand-base64-32
 AUTH_URL=http://localhost:3000
-AUTH_TRUSTED_ORIGINS=http://localhost:3000
+# Both Tauri origins from the first deployment — the webview scheme differs by
+# platform (tauri://localhost on macOS/Linux, http://tauri.localhost on Windows),
+# so shipping one produces an app that works for half your team. The same list
+# drives the CORS allowlist on /api/rpc and /api/auth.
+AUTH_TRUSTED_ORIGINS=http://localhost:3000,tauri://localhost,http://tauri.localhost
+
+# Session lifetime is an operational value, not a literal in a factory: it differs
+# between a staging box and production. Slides on activity — Better Auth refreshes
+# at a quarter of this. 7 days.
+AUTH_SESSION_MAX_AGE_SECONDS=604800
+# Longer than the web session, which is what makes independent revocation
+# mandatory: "sign out all devices" has to reach a machine that may be offline. 30 days.
+AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS=2592000
+# This is the revocation window, not a performance dial. Signed session data lives
+# in the cookie for this long, so removed access keeps working until it expires.
+# Sixty seconds, and no longer — the same ceiling the capability cache is held to.
+AUTH_COOKIE_CACHE_MAX_AGE_SECONDS=60
+# Off only for local work. With it off, anyone can register under a colleague's address.
+AUTH_REQUIRE_EMAIL_VERIFICATION=true
 
 # ── AI / embeddings ──────────────────────────────────────
 EMBEDDING_PROVIDER=openai

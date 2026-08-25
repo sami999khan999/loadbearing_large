@@ -121,6 +121,7 @@
     {
       "includes": [
         "**/*.config.ts",
+        "packages/auth/src/tables/**",
         "packages/db/src/migrate/**",
         "packages/db/src/seed/**",
         "packages/*/src/smoke/**"
@@ -146,6 +147,7 @@
     {
       "includes": [
         "**/*.mjs",
+        "packages/auth/src/tables/**",
         "packages/db/src/migrate/**",
         "packages/db/src/seed/**",
         "packages/*/src/smoke/**",

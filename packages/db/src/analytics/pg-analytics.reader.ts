@@ -11,6 +11,7 @@ import {
   type RiskScore,
   sql,
   type TrendPoint,
+  type UserId,
 } from "../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { goalRiskDaily, userReliabilityDaily } from "../schema/index.js";
@@ -38,7 +39,7 @@ export class PgAnalyticsReader extends BaseRepository implements AnalyticsReader
   // Recomputed from the stored components, never averaged from the stored ratios —
   // the mean of per-goal ratios is not the ratio across goals.
   public async reliabilityTrend(
-    userId: string,
+    userId: UserId,
     goalIds: readonly GoalId[],
     window: DateRange,
   ): Promise<readonly TrendPoint[]> {

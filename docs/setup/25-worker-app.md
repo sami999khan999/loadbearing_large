@@ -340,7 +340,7 @@ Each one exists because something else in the architecture assumed it would.
 
 **`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. Create three months out and the job can fail twice before anything breaks.
 
-**Session expiry is a `DELETE`, and that is the whole reason `session` is not partitioned.** `DELETE FROM "session" WHERE expires_at < now()` on the index from [16](16-auth-package.md) keeps the table small, which is what partitioning would have bought — without fighting Better Auth's lookup pattern ([Data and scale](../opinions/data-and-scale.md) §4.2).
+**Session expiry is a `DELETE`, and that is the whole reason `sessions` is not partitioned.** `DELETE FROM sessions WHERE expires_at < now()` on the index from [16](16-auth-package.md) keeps the table small, which is what partitioning would have bought — without fighting Better Auth's lookup pattern ([Data and scale](../opinions/data-and-scale.md) §4.2).
 
 **`recovery-sweep-daily` reconciles against Postgres, never against BullMQ.** A queued job is the one thing in the system that is derived from nothing — a `FLUSHALL`, a crash between enqueue and persist, or a handler that swallowed an error all lose work with no trace. The sweep asks *which domain rows should have been processed and have not been*, which catches all three. It cannot ask BullMQ, because completed jobs age out after an hour and failures after a day ([15](15-infrastructure-package.md)), long before a nightly run.
 

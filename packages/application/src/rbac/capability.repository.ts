@@ -1,12 +1,14 @@
-import type { CapabilitySet, OrganizationId } from "../import.js";
+import type { CapabilitySet, OrganizationId, UserId } from "../import.js";
 
 // A repository port, so it lives with its subject rather than in `port/` — one
 // file per slice there would grow forever.
 export abstract class CapabilityRepository {
-  // `userId` is a plain string, not a branded `UserId`: Better Auth owns the user
-  // table and generates its own identifier format.
+  // Both arguments branded, and both for the same reason: they are two opaque uuids in a
+  // row, so a swap compiles and returns a confidently wrong `CapabilitySet` rather than
+  // an error. `UserId` holds here because the auth library is configured to mint
+  // `Uuid.v7()` ids (16) — it was a plain string while the user table owned its own format.
   public abstract resolveFor(
     organizationId: OrganizationId,
-    userId: string,
+    userId: UserId,
   ): Promise<CapabilitySet>;
 }

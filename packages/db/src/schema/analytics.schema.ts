@@ -9,6 +9,7 @@ import {
   real,
   text,
   timestamp,
+  type UserId,
   uuid,
 } from "../import.js";
 
@@ -47,7 +48,7 @@ export const userReliabilityDaily = pgTable(
   "user_reliability_daily",
   {
     organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
     goalId: uuid("goal_id").$type<GoalId>().notNull(),
     period: date("period", { mode: "string" }).notNull(),
     commitmentsMet: integer("commitments_met").notNull(),

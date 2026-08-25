@@ -5,9 +5,11 @@ import {
   pgTable,
   text,
   timestamp,
+  type UserId,
   uniqueIndex,
   uuid,
 } from "../import.js";
+import { users } from "./auth.schema.js";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").$type<OrganizationId>().primaryKey(),
@@ -63,7 +65,15 @@ export const memberships = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    userId: text("user_id").notNull(),
+    // A real uuid foreign key, not the `text` placeholder of (13) — Better Auth is
+    // configured to mint `Uuid.v7()` ids, so there is no longer a foreign id format to
+    // accommodate. Declared here rather than in a hand-authored migration on purpose:
+    // drizzle-kit generates by diffing this file against the migration history, so a
+    // constraint it cannot see is a constraint the next generated migration drops.
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
@@ -84,7 +94,10 @@ export const goalMembers = pgTable(
       .notNull()
       .references(() => organizations.id),
     goalId: uuid("goal_id").notNull(),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
@@ -106,7 +119,10 @@ export const permissionOverrides = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     goalId: uuid("goal_id"), // null = org scope
     permission: text("permission").notNull(),
     effect: text("effect", { enum: ["grant", "deny"] }).notNull(),

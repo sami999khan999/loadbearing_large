@@ -53,7 +53,8 @@ holds one too.
 **Schemas are the exception to the subject-folder rule** ([Folders](../opinions/folders.md)), and it
 is a tooling exception rather than a taste one: `drizzle.config.ts` needs one path that names every
 table, and `drizzle(pool, { schema })` needs the same namespace at runtime or Better Auth's adapter
-cannot find `user`/`session`/`account` at all.
+cannot find `users`/`sessions`/`accounts` at all — it resolves a model by looking the export name up
+in that namespace ([16](16-auth-package.md)).
 
 
 ---
@@ -145,6 +146,8 @@ Drizzle tables stay **declarative** — the same data-shape exemption Zod schema
 ```ts
 import { relations } from "drizzle-orm";
 import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
+import { users } from "./auth.schema.js";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey(),
@@ -195,7 +198,10 @@ export const memberships = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
@@ -216,7 +222,10 @@ export const goalMembers = pgTable(
       .notNull()
       .references(() => organizations.id),
     goalId: uuid("goal_id").notNull(),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
@@ -238,7 +247,10 @@ export const permissionOverrides = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    userId: text("user_id").notNull(),
+    userId: uuid("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     goalId: uuid("goal_id"), // null = org scope
     permission: text("permission").notNull(),
     effect: text("effect", { enum: ["grant", "deny"] }).notNull(),
@@ -264,7 +276,13 @@ export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => 
 
 ### Five modelling notes
 
-**`user_id` is `text`, not `uuid`.** Better Auth owns the `user` table and generates its own identifier format. Matching its type is what lets you add a real foreign key in [16](16-auth-package.md) once `auth.schema.ts` exists. Fighting it — generating your own users table and syncing — is the mistake that produces two identity systems.
+**`user_id` is a real `uuid` foreign key to `users.id`, from the first migration.** That is only true because [16](16-auth-package.md) configures the auth library to mint `Uuid.v7()` identifiers rather than accepting its default opaque string. Take that configuration away and this column has to become `text` to match whatever format the library chose — which is the version of this document you may have read before, and the reason the constraint used to arrive a chapter late.
+
+The ordering consequence is worth stating plainly: **these tables reference `users`, so `auth.schema.ts` has to exist before this migration is generated.** The two schema files are written together and land in one migration; there is no window in which `memberships` exists without the constraint.
+
+**The constraint is declared here, in the schema, and never in a hand-authored migration.** drizzle-kit generates by diffing this file against the migration history, so a foreign key it cannot see is a foreign key the next generated migration drops — silently, and in the migration nobody reads closely because it was supposed to be about something else.
+
+**What has not changed is that there is exactly one users table.** Generating your own alongside the auth library's and syncing them is the mistake that produces two identity systems, and no amount of correct column typing rescues it.
 
 **`permission` is `text`, not an enum.** A Postgres enum would need a migration every time a permission is added, and the vocabulary lives in `PermissionRegistry` where it belongs. The column is untrusted text and `isKnown()` is the gate. This is the same reason `role_permissions` has no foreign key to a permissions table: there is no permissions table.
 
@@ -387,7 +405,7 @@ Replace the generated `CREATE TABLE activity_log (...)` with:
 CREATE TABLE activity_log (
   id              uuid        NOT NULL,
   organization_id uuid        NOT NULL,
-  actor_id        text        NOT NULL,
+  actor_id        uuid        NOT NULL,
   action          text        NOT NULL,
   payload         jsonb       NOT NULL DEFAULT '{}'::jsonb,
   occurred_at     timestamptz NOT NULL DEFAULT now(),
@@ -424,7 +442,7 @@ pnpm db:studio
 **`packages/db/src/primitive/base.repository.ts`**
 
 ```ts
-import type { OrganizationId } from "@loadbearing/contracts";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import type { Database } from "./database.js";
 import type { TransactionScope } from "./unit-of-work.js";
 
@@ -482,7 +500,7 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
   // defines.
   public async resolveFor(
     organizationId: OrganizationId,
-    userId: string,
+    userId: UserId,
   ): Promise<CapabilitySet> {
     const registry = PermissionRegistry.instance;
 

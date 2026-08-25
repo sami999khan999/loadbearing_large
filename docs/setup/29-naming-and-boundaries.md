@@ -221,11 +221,12 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 ## 1.12 Inside `packages/auth`
 
 - **`src/` root files** — `AuthConfig` and `AuthFactory`. The factory is the only place Better Auth is constructed.
-- **`session/`** — `BetterAuthSessionResolver`, implementing the `SessionResolver` port. This is the wall: Better Auth types stop here.
+- **`session/`** — `BetterAuthSessionResolver`, implementing the `SessionResolver` port, and `MembershipReader`, the port that answers which organization a new session belongs to. This is the wall: Better Auth types stop here.
 - **`principal/`** — `PrincipalBuilder` (any credential → a `Principal`) and `CapabilityCache` (Redis, short TTL, invalidated explicitly on every grant change — the TTL is a backstop, not the mechanism).
 - **`apikey/`** — hashing and resolution. The resolver re-intersects a key's grants with the *issuer's current* capabilities on every request, so revoking a person's access revokes their keys' access at the same instant.
 - **The rest of the system never sees Better Auth.** Transport calls `PrincipalBuilder`; use-cases receive a `Principal`. Swapping the auth library rewrites this package and nothing else.
-- **Smell:** `better-auth` imported from any other package.
+- **`tables/`** — a script, not module code: it prints the schema the pinned Better Auth version expects, to be diffed against `packages/db` after an upgrade. Never exported, never built into `dist/`.
+- **Smell:** `better-auth` imported from any other package. Also `@better-auth/cli` in any `package.json` — it trails the library's release line, and a generator behind the runtime writes a schema that is wrong where it matters.
 
 ---
 

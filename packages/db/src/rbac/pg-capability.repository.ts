@@ -8,6 +8,7 @@ import {
   type PermissionKey,
   PermissionRegistry,
   type ScopedSetDto,
+  type UserId,
 } from "../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { goalMembers, memberships, permissionOverrides, rolePermissions } from "../schema/index.js";
@@ -20,7 +21,7 @@ interface MutableScoped {
 export class PgCapabilityRepository extends BaseRepository implements CapabilityRepository {
   // Org grants + goal grants + per-user overrides, deny winning. Three targeted
   // queries, not one join: the join is a cartesian product needing dedup in code.
-  public async resolveFor(organizationId: OrganizationId, userId: string): Promise<CapabilitySet> {
+  public async resolveFor(organizationId: OrganizationId, userId: UserId): Promise<CapabilitySet> {
     const registry = PermissionRegistry.instance;
 
     const org: MutableScoped = { grants: new Set(), denies: new Set() };

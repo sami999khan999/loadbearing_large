@@ -231,7 +231,7 @@ Running one instance forces one eviction policy onto both. `allkeys-lru` silentl
 
 **Splitting locally rather than only in production is the same argument that puts MinIO here** instead of a filesystem stand-in: the code path exercised in development is the code path that runs in production. `RedisConnection` takes two URLs ([15](15-infrastructure-package.md)), and a developer who flushes their cache while debugging does not lose the jobs they just enqueued.
 
-> **The consequence to keep in mind:** anything reached through `CacheStore` is on the instance that evicts. Better Auth's secondary storage is therefore a cache in front of the Postgres `session` table, never the record — see [16](16-auth-package.md). A session that vanishes under LRU must be a read-through, not a sign-out.
+> **The consequence to keep in mind:** anything reached through `CacheStore` is on the instance that evicts. Better Auth's secondary storage is therefore a cache in front of the Postgres `sessions` table, never the record — and that is a configuration flag, not a default; see [16](16-auth-package.md). A session that vanishes under LRU must be a read-through, not a sign-out.
 
 **`minio-init` is a one-shot container**, not a long-running service. It creates the bucket and exits. Without it, every developer's first upload fails with `NoSuchBucket` and they go looking for a code bug. `mc anonymous set none` makes the bucket private, which is the correct default — files are served through presigned URLs from `S3StorageGateway`, never by public path.
 

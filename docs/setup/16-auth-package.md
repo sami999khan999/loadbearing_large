@@ -20,6 +20,8 @@
 | API keys | Your own implementation, not the plugin's session mocking |
 | Session storage | Postgres owns the record; Redis is a read-through cache in front of it |
 | Client-side session | Through `@loadbearing/query`, not Better Auth's React hooks |
+| Schema | Yours. Plural tables, `uuid` primary keys, and three columns Better Auth never heard of |
+| Identifiers | `Uuid.v7()`, configured — not Better Auth's opaque string |
 
 ---
 
@@ -40,19 +42,23 @@
 ```
 packages/auth/src/
 ├── index.ts                              ← ServerOnly.assert()
+├── import.ts                             ← every external symbol, better-auth included
 ├── auth.config.ts                        → AuthConfig
-├── auth.factory.ts                       → AuthFactory.create(config)
+├── auth.factory.ts                       → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
-│   └── better-auth.session-resolver.ts   → BetterAuthSessionResolver
+│   ├── better-auth.session-resolver.ts   → BetterAuthSessionResolver
+│   └── membership.reader.ts              → MembershipReader
 ├── principal/
 │   ├── index.ts
 │   ├── principal.builder.ts              → PrincipalBuilder
 │   └── capability.cache.ts               → CapabilityCache
-└── apikey/
-    ├── index.ts
-    ├── api-key.hasher.ts                 → ApiKeyHasher
-    └── api-key.resolver.ts               → ApiKeyResolver
+├── apikey/
+│   ├── index.ts
+│   ├── api-key.hasher.ts                 → ApiKeyHasher
+│   └── api-key.resolver.ts               → ApiKeyResolver
+└── tables/
+    └── index.ts                          ← prints what the pinned runtime expects
 ```
 
 **Depends on** `core`, `contracts`, `permissions`, `application`, `db`, `infrastructure`.
@@ -62,59 +68,64 @@ The **client** side of auth does not live here. Better Auth's client is a thin f
 
 ---
 
-## Step 16.1 — Generate the auth schema
+## Step 16.1 — The auth schema is yours
 
-Better Auth's CLI writes the tables it needs. Run it, commit the output, and let your normal Drizzle migrations own it from then on.
+**Do not run `@better-auth/cli generate`.** It is published from a different release line than the library and trails it — 1.4.21 against a 1.6.26 runtime at the time of writing — so a generator two minors behind writes a schema missing the fields the installed version actually reads. That is wrong in the worst available way: it typechecks, migrates cleanly, and fails on a query nobody runs until production.
 
-Add to **`packages/auth/package.json`**:
+Author the schema instead, and check it against the runtime rather than against a generator.
+
+**`packages/auth/package.json`**
 
 ```json
 "scripts": {
-  "auth:generate": "better-auth generate --config ./src/auth.config.ts --output ../db/src/rbac/auth.schema.ts"
+  "auth:tables": "tsx src/tables/index.ts"
 }
 ```
 
-```bash
-pnpm auth:generate
+**`packages/auth/src/tables/index.ts`** builds the auth instance through `AuthFactory` — never a second copy of the options, which would describe an instance that does not exist — and prints what it needs:
+
+```ts
+import { getSchema } from "better-auth/db";
+
+for (const [model, table] of Object.entries(getSchema(auth.options))) {
+  console.log(`\n${model}`);
+  for (const [field, attribute] of Object.entries(table.fields)) {
+    console.log(`  ${field.padEnd(24)} ${attribute.type}`, /* flags */);
+  }
+}
 ```
 
-It produces `user`, `session`, `account`, and `verification` tables (plus `twoFactor` if that plugin is enabled). Add the file to `packages/db/src/schema.ts`, then:
+`getSchema` is the same function the CLI calls, taken from the version actually installed — so it cannot skew, because only one version is involved. Nothing connects: `new Pool()` is lazy and no query is issued, so this runs without Postgres.
+
+```bash
+pnpm --filter @loadbearing/auth run auth:tables
+```
+
+Run it after every Better Auth upgrade and diff the output against `packages/db/src/schema/auth.schema.ts`. That is the whole maintenance procedure.
+
+### What goes in the schema
+
+Five models — `users`, `sessions`, `accounts`, `verifications`, `twoFactors` — written like every other table here: plural, snake_case columns, `uuid` primary keys, in `packages/db/src/schema/auth.schema.ts` and exported from `schema/index.ts`. Step 16.2 configures the library to accept those names.
+
+> [!IMPORTANT]
+> **The Drizzle export names and property keys are load-bearing; the SQL names are not.** The adapter resolves a column by looking up `schema[modelName][fieldName]`, so each export must match a `modelName` from Step 16.2 and each property must match a Better Auth field name. Rename an export and authentication fails at runtime with a message about a missing Drizzle schema. Rename a *column* and nothing happens at all — which is why the columns are snake_case and the properties are not.
+
+**The foreign keys are declared in the schema, never in a hand-authored migration.** drizzle-kit generates by diffing the schema against the migration history, so a constraint it cannot see is a constraint the next generated migration drops — silently, inside a migration that was supposed to be about something else. `memberships`, `goal_members`, `permission_overrides` and `api_keys.issuer_id` all carry `.references(() => users.id, { onDelete: "cascade" })` in [13](13-db-package.md), and that is the only place they exist.
 
 ```bash
 pnpm db:generate && pnpm db:migrate
 ```
 
-**Now add the real foreign keys.** Your domain tables reference `user_id` as `text` from [13](13-db-package.md) precisely so this works. Write a hand-authored migration:
+Deleting a user cascades their role assignments, which is what you want. It also means there is exactly one users table — a claim worth being able to make.
 
-```sql
-ALTER TABLE memberships
-  ADD CONSTRAINT memberships_user_fk
-  FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE;
+> [!WARNING]
+> **If you are adding this to a database that already has rows,** the generated migration will contain bare `ALTER COLUMN "user_id" SET DATA TYPE uuid` statements. Postgres rejects those on a populated `text` column; add `USING "user_id"::uuid` to each. Editing generated SQL is safe here — drizzle-kit reads its snapshots, not the migration bodies — and it is the one edit this chapter asks for.
 
-ALTER TABLE goal_members
-  ADD CONSTRAINT goal_members_user_fk
-  FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE;
+**Cover every foreign key with an index.** Postgres does not create one, and without it each `ON DELETE CASCADE` scans the whole referencing table. `sessions_user_idx`, `sessions_organization_idx`, `accounts_user_idx` and `two_factors_user_idx` exist for that reason; `sessions_expires_idx` is what makes the expiry sweep below cheap, and `sessions_user_surface_idx` is what makes "revoke this person's desktop sessions" a lookup rather than a scan.
 
-ALTER TABLE permission_overrides
-  ADD CONSTRAINT permission_overrides_user_fk
-  FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE;
-
--- Every foreign key needs a covering index. Postgres does not create one, and
--- without it each ON DELETE CASCADE scans the whole referencing table.
-CREATE INDEX IF NOT EXISTS session_user_idx ON "session" (user_id);
-CREATE INDEX IF NOT EXISTS session_expires_idx ON "session" (expires_at);
-CREATE INDEX IF NOT EXISTS account_user_idx ON account (user_id);
-```
-
-> `"user"` is quoted because it is a reserved word in SQL. Better Auth's naming, not a choice you get to make.
-
-Deleting a user now cascades their role assignments, which is what you want. It also means there is exactly one users table — a claim worth being able to make.
-
-**The three indexes above are the point of this migration as much as the constraints are.** The `user_id` columns on `memberships`, `goal_members` and `permission_overrides` are already indexed from [13](13-db-package.md); the tables Better Auth generated are not, and its CLI will not add them. `session_expires_idx` is what makes the expiry sweep below cheap.
-
-> **`session` is not partitioned, and that is deliberate.** It looks like a third append-only table next to `activity_log` and `task_status_history`, and it is not one: Better Auth updates a row on refresh, deletes it on sign-out, and looks rows up by id — a predicate carrying no partition key, so every lookup would scan every partition. Its generated schema will not produce the composite primary key that partitioning requires either.
+> **`sessions` is not partitioned, and that is deliberate.** It looks like a third append-only table next to `activity_log` and `task_status_history`, and it is not one: Better Auth updates a row on refresh, deletes it on sign-out, and looks rows up by id — a predicate carrying no partition key, so every lookup would scan every partition. Partitioning would also require a composite primary key including the partition column, which the library's own id lookups do not supply.
 >
-> Sessions are bounded by expiry instead. A nightly `DELETE FROM "session" WHERE expires_at < now()` on the cleanup schedule ([25](25-worker-app.md)) keeps the table small, which is the outcome partitioning would have been for. See [Data and scale](../opinions/data-and-scale.md) §4.2.
+> Sessions are bounded by expiry instead. A nightly `DELETE FROM sessions WHERE expires_at < now()` on the cleanup schedule ([25](25-worker-app.md)) keeps the table small, which is the outcome partitioning would have been for. See [Data and scale](../opinions/data-and-scale.md) §4.2.
 
 ---
 
@@ -133,22 +144,20 @@ export interface AuthConfig {
 }
 ```
 
+**Every value comes from the environment**, through `ContainerConfig` ([24](24-web-app.md)). None of them are literals in the factory: session lifetime differs between a staging box and production, and burying it in code makes it a deploy rather than a variable.
+
 **`packages/auth/src/auth.factory.ts`**
 
 ```ts
-import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { bearer, twoFactor } from "better-auth/plugins";
-import type { Database } from "@loadbearing/db";
-import type { CacheStore } from "@loadbearing/application";
-import type { AuthConfig } from "./auth.config.js";
-
-export type AuthInstance = ReturnType<typeof betterAuth>;
-
 export class AuthFactory {
   private constructor() {}
 
-  public static create(config: AuthConfig, database: Database, cache: CacheStore): AuthInstance {
+  public static create(
+    config: AuthConfig,
+    database: Database,
+    cache: CacheStore,
+    memberships: MembershipReader,
+  ) {
     const options = {
       secret: config.secret,
       baseURL: config.baseUrl,
@@ -162,17 +171,49 @@ export class AuthFactory {
         revokeSessionsOnPasswordReset: true,
       },
 
+      // `modelName` is what the Drizzle adapter looks up, so these five names *are*
+      // the export names in `auth.schema.ts`. Field names need no mapping: Better
+      // Auth's are already camelCase, which is the convention here too.
+      user: {
+        modelName: "users",
+        additionalFields: {
+          locale: { type: "string", required: false, defaultValue: "en" },
+          timezone: { type: "string", required: false },
+          deactivatedAt: { type: "date", required: false, input: false },
+        },
+      },
+
+      account: { modelName: "accounts" },
+
       session: {
+        modelName: "sessions",
         expiresIn: config.sessionMaxAgeSeconds,
         updateAge: Math.floor(config.sessionMaxAgeSeconds / 4),
+
+        // NOT a default — see below. Without it, Redis owns the session record.
+        storeSessionInDatabase: true,
+
         cookieCache: {
           enabled: true,
           maxAge: config.cookieCacheMaxAgeSeconds,
         },
+
+        // Pinned at sign-in, never accepted from the client.
+        additionalFields: {
+          activeOrganizationId: { type: "string", required: true, input: false },
+          surface: { type: "string", required: true, input: false },
+        },
+      },
+
+      // NOT a default either, and the same failure one table over.
+      verification: {
+        modelName: "verifications",
+        storeInDatabase: true,
       },
 
       advanced: {
         cookiePrefix: "ratchet",
+        database: { generateId: (): string => Uuid.v7() },
         defaultCookieAttributes: {
           httpOnly: true,
           sameSite: "lax",
@@ -187,56 +228,107 @@ export class AuthFactory {
         storage: "secondary-storage",
       },
 
-      // Redis in FRONT of Postgres, never instead of it. This is the cache
-      // instance, so anything here can vanish under memory pressure.
-      // Better Auth reads through to the `session` table on a miss.
+      // Redis in FRONT of Postgres, never instead of it.
       secondaryStorage: {
         get: async (key) => cache.get<string>(`auth:${key}`),
         set: async (key, value, ttl) => cache.set(`auth:${key}`, value, ttl ?? 300),
         delete: async (key) => cache.delete(`auth:${key}`),
       },
 
-      plugins: [bearer(), twoFactor()],
+      databaseHooks: {
+        session: {
+          create: {
+            before: async (session, context) => {
+              const organizationId = await memberships.activeOrganizationFor(
+                session.userId as UserId,
+              );
+              if (!organizationId) return false;
+
+              const origin = context?.request?.headers.get("origin") ?? null;
+              return {
+                data: {
+                  ...session,
+                  activeOrganizationId: organizationId,
+                  surface: surfaceOf(origin),
+                },
+              };
+            },
+          },
+        },
+      },
+
+      plugins: [bearer(), twoFactor({ schema: { twoFactor: { modelName: "twoFactors" } } })],
     } satisfies BetterAuthOptions;
 
     return betterAuth(options);
   }
 }
+
+// Read back off the factory, not annotated. See below.
+export type AuthInstance = ReturnType<typeof AuthFactory.create>;
 ```
 
 > Better Auth's option names move between minor versions. Check the current documentation for `secondaryStorage`, `cookieCache`, and the plugin signatures against the version your catalog pins. The *shape* above — Drizzle adapter, cookie cache on, Redis secondary storage, bearer enabled — is what matters and is stable.
 
-### Three configuration decisions
+### The two defaults that quietly invert this design
+
+> [!CAUTION]
+> **Configuring `secondaryStorage` silently transfers ownership of sessions to Redis.** `storeSessionInDatabase` defaults to `false`, and with secondary storage present Better Auth stops writing the `sessions` row at all. Every sentence in this chapter about Postgres owning the record and Redis being a read-through in front of it is false without that one line — and the instance it lands on runs `allkeys-lru` ([15](15-infrastructure-package.md)), so an ordinary eviction under memory pressure becomes a random sign-out with no error anywhere.
+>
+> **`verification.storeInDatabase` is the same trap one table over.** Left at its default, the `verifications` table is never created at all and email-verification and password-reset tokens live in Redis alone. An eviction there is a reset link that stops working, silently, for a user who is already locked out. Better Auth's own source carries a TODO acknowledging this is a problem for security-sensitive paths.
+>
+> Both are one line. Neither is discoverable from a failing test, because nothing fails until memory pressure arrives.
+
+### The rest of the configuration
+
+**Identifiers are `Uuid.v7()`, not Better Auth's default.** `advanced.database.generateId` is what makes `user_id` a real `uuid` foreign key throughout [13](13-db-package.md) rather than a `text` column shaped around a foreign format — and it is what makes the branded `UserId` in `contracts`, declared `z.uuid()`, true rather than aspirational.
+
+**`AuthInstance` is read back off the factory, never annotated.** `ReturnType<typeof betterAuth>` is `Auth<BetterAuthOptions>` — the *unconfigured* instance — and the two-factor plugin widens the user type, so annotating `create()` with it fails to assign. The type has to be inferred from these options and exported afterwards.
 
 **The bearer plugin is not optional.** The desktop shell is Tauri ([30](30-desktop-app.md)), its webview runs on a custom `tauri://localhost` origin (`http://tauri.localhost` on Windows), and a session cookie is never sent cross-origin. So it needs a token, and enabling the plugin costs one array element here versus touching every endpoint, guard, and test later.
 
-**Cookie cache on, with a short TTL.** Better Auth can store signed session data in the cookie itself, so most requests skip the session lookup entirely. This is the single biggest performance win available here and it costs one config block. **Sixty seconds, and no longer** — revocation only takes effect when the cookie cache expires, so this value *is* the revocation window, and it is capped by the same rule that caps the capability cache below. Anything longer and "remove this person's access" quietly means "in a few minutes".
+**Cookie cache on, with a short TTL.** Better Auth can store signed session data in the cookie itself, so most requests skip the session lookup entirely. This is the single biggest performance win available here and it costs one config block. **Sixty seconds, and no longer** — revocation only takes effect when the cookie cache expires, so this value *is* the revocation window, and it is capped by the same rule that caps the capability cache below. That ceiling is enforced in the env schema ([24](24-web-app.md)), not by this paragraph.
 
-**Secondary storage is a cache, not the session record.** It sits on the Redis instance that runs `allkeys-lru` ([15](15-infrastructure-package.md)), which means an entry can disappear at any moment under memory pressure. That is fine — and only fine — because Postgres still holds the `session` row and Better Auth reads through to it on a miss. Point this at the queue instance to "make sessions durable" and you have made a `FLUSHALL` on a full queue sign everyone out; treat the Redis entry as authoritative and an ordinary eviction becomes a random sign-out. Rate-limit counters have the same property, and there the failure is benign: a lost counter means someone gets a few extra attempts, not a lockout.
+**Rate-limit counters share the cache instance, and there the failure is benign:** a lost counter means someone gets a few extra attempts, not a lockout. That is the test for what may live on an evicting store, and it is precisely the test sessions and verification tokens fail.
 
 **`trustedOrigins` is your CSRF defence**, and it must be explicit. It carries **both** Tauri origins from day one — `tauri://localhost` and `http://tauri.localhost` — because the scheme genuinely differs by platform, and shipping one produces an app that works for half your team. The value lives in `AUTH_TRUSTED_ORIGINS` and the same list drives the CORS allowlist ([24](24-web-app.md)); one origin list, two consumers. A wildcard here is not a shortcut; it is the vulnerability.
 
+### Where the tenant and the surface come from
+
+`PrincipalBuilder` is handed request headers and nothing else, and a `Principal` cannot be built without an organization. Both facts are resolved once, at sign-in, by the session-create hook and written onto the session row:
+
+- **`activeOrganizationId`** — from `MembershipReader` (Step 16.3). Returning `false` aborts the session, so a user with no membership gets a failed sign-in rather than a principal with no tenant — which would read every tenant's rows, with nothing downstream positioned to notice.
+- **`surface`** — `web` or `desktop`, derived from the request origin. Recorded rather than inferred later, because desktop sessions are longer-lived and have to be revocable on their own ([30](30-desktop-app.md)), and a user-agent string is not a durable answer to which is which.
+
+Both are `input: false`. That is what stops a sign-up body from naming its own tenant or claiming a surface — the fields exist on the model, so without it they would be writable by whoever is registering.
+
+### Three columns on `users` that Better Auth never heard of
+
+`locale` is read on the first server render of every request ([20](20-content-package.md)), which is why it lives here rather than in a preferences table that would need a join before anything can be rendered. `timezone` is nullable. `deactivatedAt` exists because deactivation is a state and not a delete — the activity log points at that row forever, and a deactivated user keeps their rows while losing their capabilities.
+
 ---
 
-## Step 16.3 — `BetterAuthSessionResolver`
+## Step 16.3 — `BetterAuthSessionResolver` and `MembershipReader`
 
 **`packages/auth/src/session/better-auth.session-resolver.ts`**
 
 ```ts
-import type { UserId } from "@loadbearing/contracts";
-import { SessionResolver, type ResolvedSession } from "@loadbearing/application";
-import type { AuthInstance } from "../auth.factory.js";
-
 export class BetterAuthSessionResolver extends SessionResolver {
-  constructor(private readonly auth: AuthInstance) {
+  public constructor(private readonly auth: AuthInstance) {
     super();
   }
 
-  public override async resolve(headers: Headers): Promise<ResolvedSession | null> {
-    const result = await this.auth.api.getSession({ headers });
+  public override async resolve(headers: RequestHeaders): Promise<ResolvedSession | null> {
+    const result = await this.auth.api.getSession({ headers: headers as Headers });
     if (!result?.session) return null;
 
+    // Pinned by the session-create hook. A session that predates it — or one written
+    // by hand — has none, and is treated as no session at all.
+    const { activeOrganizationId } = result.session as { activeOrganizationId?: string };
+    if (!activeOrganizationId) return null;
+
     return {
+      organizationId: activeOrganizationId as OrganizationId,
       userId: result.session.userId as UserId,
       sessionId: result.session.id,
       expiresAt: new Date(result.session.expiresAt),
@@ -249,6 +341,25 @@ export class BetterAuthSessionResolver extends SessionResolver {
 
 `getSession` handles cookie and bearer transparently; both arrive as headers.
 
+**A missing `activeOrganizationId` returns `null`, never a default.** Guessing a tenant here is a cross-tenant read that raises no error and appears in no log. The only correct behaviour for a session that does not name its organization is to treat it as no session.
+
+**The cast to `Headers` is the one place this package leans on something the port does not promise.** `RequestHeaders` is deliberately narrow — `application` declares `{ get() }` rather than naming a `Headers` it has no lib for ([12](12-application-package.md)) — but Better Auth reads cookies by iterating. Every caller passes a genuine `Headers` ([24](24-web-app.md), [25](25-worker-app.md)), so it holds; a hand-rolled stub with only `get` would typecheck and fail at runtime.
+
+**`packages/auth/src/session/membership.reader.ts`**
+
+```ts
+export abstract class MembershipReader {
+  // Null when the user holds no membership.
+  public abstract activeOrganizationFor(userId: UserId): Promise<OrganizationId | null>;
+}
+```
+
+Implemented in `db` as `PgMembershipReader`, ordered by creation so a user in two organizations lands in the same one every time rather than wherever the planner happened to look first.
+
+> **Declared here rather than in `application`, and that is the same judgement `ApiKeyRepository` gets in Step 16.6.** It exists to populate an authentication artifact, and no use-case should learn that sessions have an organization column.
+>
+> The cost is that `db` cannot implement it nominally — `auth` already depends on `db`, so the arrow cannot point back — and the two are bound structurally in `Container` ([17](17-composition-container.md)). A signature drift fails composition's typecheck rather than this package's. That is a real trade, and the alternative is worse: a port in `application` describing a table `application` is not allowed to know exists.
+
 ---
 
 ## Step 16.4 — `CapabilityCache`
@@ -258,8 +369,8 @@ export class BetterAuthSessionResolver extends SessionResolver {
 **`packages/auth/src/principal/capability.cache.ts`**
 
 ```ts
-import type { CacheStore } from "@loadbearing/application";
-import type { CapabilityRepository } from "@loadbearing/application";
+import type { CacheStore, CapabilityRepository } from "@loadbearing/application";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import { CapabilitySet, type CapabilitySetDto } from "@loadbearing/permissions";
 
 export class CapabilityCache {
@@ -273,7 +384,7 @@ export class CapabilityCache {
 
   public async forUser(
     organizationId: OrganizationId,
-    userId: string,
+    userId: UserId,
   ): Promise<CapabilitySet> {
     const key = `${CapabilityCache.PREFIX}${organizationId}:${userId}`;
 
@@ -286,7 +397,7 @@ export class CapabilityCache {
   }
 
   // Call on every RBAC write. See the invalidation list below.
-  public async invalidate(organizationId: OrganizationId, userId: string): Promise<void> {
+  public async invalidate(organizationId: OrganizationId, userId: UserId): Promise<void> {
     await this.cache.delete(`${CapabilityCache.PREFIX}${organizationId}:${userId}`);
   }
 
@@ -351,7 +462,7 @@ export class PrincipalBuilder {
     private readonly capabilities: CapabilityCache,
   ) {}
 
-  public async fromHeaders(headers: Headers): Promise<Principal | null> {
+  public async fromHeaders(headers: RequestHeaders): Promise<Principal | null> {
     const apiKey = headers.get("x-api-key");
     if (apiKey) return this.apiKeys.resolve(apiKey);
 
@@ -359,7 +470,7 @@ export class PrincipalBuilder {
     if (!session) return null;
 
     const caps = await this.capabilities.forUser(session.organizationId, session.userId);
-    return new Principal(session.userId as UserId, caps, "user");
+    return new Principal(session.organizationId, session.userId, caps, "user");
   }
 }
 ```
@@ -376,14 +487,22 @@ export class PrincipalBuilder {
 
 ```ts
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { UserId } from "@loadbearing/contracts";
+import { users } from "./auth.schema.js";
+import { organizations } from "./rbac.schema.js";
 
 export const apiKeys = pgTable(
   "api_keys",
   {
     id: uuid("id").primaryKey(),
-    organizationId: uuid("organization_id").notNull(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    issuerId: text("issuer_id").notNull(),
+    issuerId: uuid("issuer_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
 
     // First 8 chars of the token — indexed lookup without storing the secret.
     prefix: text("prefix").notNull(),
@@ -462,7 +581,8 @@ import { ApiKeyHasher } from "./api-key.hasher.js";
 
 export interface ApiKeyRecord {
   readonly id: string;
-  readonly issuerId: string;
+  readonly organizationId: OrganizationId;
+  readonly issuerId: UserId;
   readonly tokenHash: string;
   readonly scopes: readonly string[];
   readonly expiresAt: Date | null;
@@ -505,7 +625,7 @@ export class ApiKeyResolver {
     const effective = declared.intersect(issuer);
 
     await this.repository.touch(record.id, now);
-    return Principal.apiKey(record.issuerId as UserId, effective);
+    return Principal.apiKey(record.organizationId, record.issuerId, effective);
   }
 }
 ```
@@ -528,7 +648,7 @@ export class ApiKeyResolver {
 
 **Desktop (Tauri)** — the bearer plugin. The token lives in the OS keychain on the Rust side; the webview asks for it through a Tauri command and passes it via `BearerAuthStrategy` ([18](18-api-client-package.md)). The token is never written to `localStorage`, where any injected script could read it.
 
-**Client portal** — the same `user` table and the same login. A portal user is a user whose role resolves to a deliberately tiny capability set. There is no second auth system, which is why the portal cannot develop its own vulnerabilities.
+**Client portal** — the same `users` table and the same login. A portal user is a user whose role resolves to a deliberately tiny capability set. There is no second auth system, which is why the portal cannot develop its own vulnerabilities.
 
 **Integrations** — an API key resolving to a `Principal` with `kind: "api_key"`.
 
@@ -545,7 +665,7 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 - **Auth events go to the audit trail** — sign-in, sign-out, password change, 2FA enrolment, session revocation, API-key creation and revocation.
 - **Never log tokens, session IDs, or key material.** Redact at the logger, not at each call site — a rule enforced in one place holds.
 - **Invite-only registration** for internal roles. Open sign-up creates unaffiliated users the RBAC model has no place for.
-- **Pin Better Auth and watch its advisories.** The catalog floor is 1.3.26 for a reason ([03](03-workspace-and-catalogs.md)).
+- **Pin Better Auth and watch its advisories.** The catalog floor sits above CVE-2025-61928 for a reason ([03](03-workspace-and-catalogs.md)), and every upgrade ends with `auth:tables` diffed against the schema — a field the runtime gained and the schema did not is a column that silently reads as null.
 
 ---
 
@@ -566,15 +686,18 @@ signed cookie cache   ← 60s max
 
 An in-process LRU is the tier that surprises people, because a Redis `DEL` cannot reach it — twenty app instances hold twenty copies. Keep its TTL short enough that correctness never depends on invalidating it, which is why it is seconds rather than minutes.
 
-**Three values, and with the desktop shell settled they are answerable now rather than later.** Record them here so the answer lives somewhere:
+**Three values, and they are answered — as environment variables, not literals.** The defaults below ship in `.env.example`; a staging box and production are not obliged to agree, which is the whole reason they are not constants in `AuthFactory`.
 
-| Value | Chosen | Note |
-| --- | --- | --- |
-| Web session lifetime | *decide* | |
-| Slides on activity? | *decide* | A sliding window and a short cookie-cache TTL interact — the cache delays revocation regardless |
-| Desktop token lifetime | *decide* | Usually longer than a web session |
+| Value | Variable | Default | Note |
+| --- | --- | --- | --- |
+| Web session lifetime | `AUTH_SESSION_MAX_AGE_SECONDS` | 7 days | |
+| Slides on activity? | — | Yes | `updateAge` is a quarter of the lifetime, so a session in daily use is never interrupted while an abandoned one still expires on schedule. A sliding window and a short cookie-cache TTL interact — the cache delays revocation regardless |
+| Desktop token lifetime | `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` | 30 days | Longer, which is what makes the next paragraph mandatory rather than nice to have |
+| Revocation window | `AUTH_COOKIE_CACHE_MAX_AGE_SECONDS` | 60s | Capped at 60 in the env schema ([24](24-web-app.md)), because the pressure to raise it always arrives as a performance argument |
 
-A longer-lived desktop token is the normal choice and it has a consequence: it needs **independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. Decide that mechanism at the same time, not when someone loses a laptop.
+**A longer-lived desktop token needs independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. That is what the `surface` column on `sessions` is for (Step 16.2): every session records whether it was opened from the web or the desktop shell, so revoking one class is `DELETE FROM sessions WHERE user_id = $1 AND surface = 'desktop'` against `sessions_user_surface_idx` — not a scan, and not a guess made from a user-agent string months after the fact.
+
+Deciding this at the same time as the lifetime is the point. The mechanism is cheap now and expensive on the afternoon somebody loses a laptop.
 
 **The desktop path has no cookie**, so the first tier of that chain does not exist for it ([30](30-desktop-app.md)). A bearer-token client pays a full capability resolution on every cache miss, and the in-process LRU is the only thing absorbing it. Worth knowing before the load test, because desktop traffic and web traffic have genuinely different cost profiles per request.
 
@@ -585,7 +708,7 @@ A longer-lived desktop token is the normal choice and it has a consequence: it n
 **`packages/auth/src/index.ts`**
 
 ```ts
-import { ServerOnly } from "@loadbearing/core";
+import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/auth");
 
@@ -599,8 +722,10 @@ export {
 export type { AuthConfig } from "./auth.config.js";
 export { AuthFactory, type AuthInstance } from "./auth.factory.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
-export { BetterAuthSessionResolver } from "./session/index.js";
+export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js";
 ```
+
+**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `db` gives `migrate/` and `infrastructure` gives `smoke/` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
 
@@ -608,11 +733,18 @@ export { BetterAuthSessionResolver } from "./session/index.js";
 
 ## ✅ Gate
 
-- `pnpm auth:generate` produced `packages/db/src/rbac/auth.schema.ts` and it is committed.
-- `pnpm db:migrate` created `user`, `session`, `account`, `verification`, and `api_keys`.
+- `pnpm --filter @loadbearing/auth run auth:tables` runs, and every field it prints has a matching property in `packages/db/src/schema/auth.schema.ts` under Better Auth's own name.
+- `pnpm db:migrate` created `users`, `sessions`, `accounts`, `verifications`, `two_factors`, and `api_keys`.
+- `sessions` has both `active_organization_id` and `surface`, each `NOT NULL`.
 - `api_keys` carries `organization_id`, and `api_keys_issuer_idx` covers the `issuer_id` foreign key.
-- The foreign keys from `memberships`, `goal_members`, and `permission_overrides` to `"user"(id)` exist.
+- The foreign keys from `memberships`, `goal_members`, and `permission_overrides` to `users(id)` exist, and every `user_id` column is `uuid`.
 - `grep -rn "better-auth" packages --include=*.ts` matches only `packages/auth/` and (later) `packages/api-client/src/auth/`.
+
+```bash
+grep -rn 'text("user_id")\|text("actor_id")\|text("issuer_id")' packages/db/src
+```
+
+Returns nothing. A `text` user reference left anywhere means the `generateId` configuration in Step 16.2 was skipped, and the foreign keys above silently did not apply.
 
 Do not proceed until this passes.
 
