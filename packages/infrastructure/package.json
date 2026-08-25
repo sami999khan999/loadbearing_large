@@ -20,13 +20,16 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "smoke": "tsx src/smoke/index.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "dotenv": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

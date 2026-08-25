@@ -124,7 +124,7 @@ const ENV_EXEMPT = [
   /\.config\.(ts|mts|js|mjs)$/,
   /^packages\/db\/src\/migrate\//,
   /^packages\/db\/src\/seed\//,
-  /^packages\/[^/]+\/src\/smoke\.ts$/,
+  /^packages\/[^/]+\/src\/smoke\//,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {

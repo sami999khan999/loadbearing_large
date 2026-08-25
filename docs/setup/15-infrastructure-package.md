@@ -58,6 +58,7 @@ infrastructure configuration and belong beside the provisioning files in `infra/
 ```
 packages/infrastructure/src/
 ├── index.ts                          ← ServerOnly.assert()
+├── import.ts                         ← every external symbol, vendor SDKs included
 ├── redis/
 │   ├── index.ts
 │   └── redis.connection.ts           → RedisConnection
@@ -75,9 +76,11 @@ packages/infrastructure/src/
 ├── embedding/
 │   ├── index.ts
 │   └── openai.embedding-provider.ts  → OpenAiEmbeddingProvider
-└── analytics/                        ← empty until ClickHouse is adopted
-    ├── index.ts
-    └── clickhouse.analytics-reader.ts → ClickHouseAnalyticsReader
+├── analytics/                        ← empty until ClickHouse is adopted
+│   ├── index.ts
+│   └── clickhouse.analytics-reader.ts → ClickHouseAnalyticsReader
+└── smoke/
+    └── index.ts                      ← the wiring check, run against live containers
 ```
 
 > `analytics/` is listed for completeness and is **not** built now. `PgAnalyticsReader` in
@@ -208,13 +211,16 @@ export class RedisCacheStore extends CacheStore {
 
   // SCAN, never KEYS — KEYS blocks the server for the duration of the scan.
   public override async deletePrefix(prefix: string): Promise<void> {
-    const pattern = `${this.redis.options.keyPrefix ?? ""}${prefix}*`;
+    const keyPrefix = this.redis.options.keyPrefix ?? "";
+    const pattern = `${keyPrefix}${prefix}*`;
     let cursor = "0";
 
     do {
       const [next, keys] = await this.redis.scan(cursor, "MATCH", pattern, "COUNT", 200);
       cursor = next;
-      if (keys.length > 0) await this.redis.unlink(...keys);
+      if (keys.length > 0) {
+        await this.redis.unlink(...keys.map((key) => key.slice(keyPrefix.length)));
+      }
     } while (cursor !== "0");
   }
 }
@@ -226,7 +232,12 @@ export class RedisCacheStore extends CacheStore {
 
 **`SCAN` with `UNLINK`, never `KEYS` with `DEL`.** `KEYS` is O(n) over the entire keyspace and blocks Redis while it runs — on a production instance that is a multi-second stall for every other consumer. `UNLINK` frees memory on a background thread rather than inline.
 
-**The prefix has to be re-added manually in `deletePrefix`.** ioredis's `keyPrefix` applies to key arguments but not to `SCAN`'s `MATCH` pattern. This asymmetry is a genuine footgun and the reason the line looks redundant.
+**The `keyPrefix` asymmetry cuts both ways, and `deletePrefix` has to handle each.** ioredis applies `keyPrefix` to key arguments but not to `SCAN` — so the `MATCH` pattern needs it **added**, and the keys `SCAN` hands back need it **stripped** before they go to `unlink`.
+
+> [!WARNING]
+> **Missing the second half is silent.** `SCAN` returns fully-prefixed keys; passing them straight to `unlink` prefixes them a second time, and `UNLINK` on a key that does not exist is not an error. The prune reports success and deletes nothing. Verified against a running Redis: `ratchet:smoke:probe` survived the call, and `ratchet:ratchet:smoke:probe` was what the command actually targeted.
+>
+> It matters more than a cache bug usually would, because `deletePrefix` is how capability invalidation works ([16](16-auth-package.md)) — a silently broken prune is a user who keeps permissions after their role changed.
 
 ### Key naming
 
@@ -279,6 +290,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { StorageGateway, type StoredObject } from "@loadbearing/application";
+import { NotFoundError } from "@loadbearing/errors";
 
 export interface S3Config {
   readonly endpoint: string;
@@ -327,7 +339,7 @@ export class S3StorageGateway extends StorageGateway {
     const result = await this.s3.send(
       new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
     );
-    if (!result.Body) throw new Error(`Object ${key} has no body.`);
+    if (!result.Body) throw new NotFoundError("storage.object", key);
     return new Uint8Array(await result.Body.transformToByteArray());
   }
 
@@ -511,7 +523,7 @@ Folder barrels name their exports for the same reason root barrels do — and he
 
 Not a unit test — these classes are adapters and testing them against fakes tests nothing. Write one script that exercises all three against the running containers.
 
-**`packages/infrastructure/src/smoke.ts`**
+**`packages/infrastructure/src/smoke/index.ts`**
 
 ```ts
 import "dotenv/config";
@@ -555,10 +567,12 @@ await redis.close();
 
 ```bash
 pnpm add --filter @loadbearing/infrastructure -D dotenv tsx@catalog:
-pnpm --filter @loadbearing/infrastructure exec tsx src/smoke.ts
+pnpm --filter @loadbearing/infrastructure run smoke
 ```
 
-Delete `smoke.ts` once it has passed, or move it under a `scripts/` folder excluded from the build. It is a wiring check, not a test suite.
+It lives in `src/smoke/` rather than loose at `src/` root, for the same reason `db` has `migrate/` — [Folders](../opinions/folders.md) keeps the root to `index.ts`, `import.ts`, and folders. `tsup` only builds `src/index.ts`, so it never reaches `dist/`.
+
+**Keep it.** It is cheap to re-run after any infrastructure change, and it is the only thing that exercises these classes against real containers. Assert a read-back *after* `deletePrefix` — without that line the prune above reported success while deleting nothing.
 
 ---
 
