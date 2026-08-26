@@ -119,12 +119,17 @@ assert("`application` does not log", (failures) => {
 
 // ── 3 — only `env.ts` reads `process.env` ────────────────────────────────────
 
+// Must stay in step with Biome's `noProcessEnv` overrides in
+// tooling/biome-config/src/base.json. A path exempted in one and not the other is either
+// a gate that passes while the rule is broken, or a build that fails for no reason.
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
   /^packages\/db\/src\/migrate\//,
   /^packages\/db\/src\/seed\//,
   /^packages\/[^/]+\/src\/smoke\//,
+  // Schema inspection, run by hand against a throwaway URL and never built. See 16.
+  /^packages\/auth\/src\/tables\//,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {
@@ -241,6 +246,17 @@ assert('`"use client"` only in ui, query, feature', (failures) => {
 
 const SERVER_FINGERPRINTS = ["drizzle-orm", "pg-pool", "@aws-sdk/client-s3", "ioredis", "bullmq"];
 const EMAIL_FINGERPRINTS = ["email.digest."];
+
+// Field names from the `env.ts` schemas, which no adapter drags in on its own — they
+// arrive only when a route file or `router.tsx` imports `Env` for one accessor. That
+// happened, and the grep above did not see it: `Env` imports no server *package*, so the
+// bundle carried the whole server configuration surface and a `Schema.parse({})` that
+// threw before the first render. These names are the fingerprint of the file itself.
+const ENV_FINGERPRINTS = [
+  "REDIS_QUEUE_URL",
+  "S3_FORCE_PATH_STYLE",
+  "AUTH_COOKIE_CACHE_MAX_AGE_SECONDS",
+];
 const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 
 const CLIENT_OUTPUTS = [
@@ -264,7 +280,7 @@ assert("no server code in the client bundle", (failures) => {
   for (const file of assets) {
     const source = readFileSync(file, "utf8");
 
-    for (const print of [...SERVER_FINGERPRINTS, ...EMAIL_FINGERPRINTS]) {
+    for (const print of [...SERVER_FINGERPRINTS, ...EMAIL_FINGERPRINTS, ...ENV_FINGERPRINTS]) {
       if (source.includes(print)) failures.push(`${rel(file)} contains "${print}"`);
     }
   }
@@ -296,11 +312,15 @@ assert("no server code in the client bundle", (failures) => {
 const TENANT_EXEMPT = new Set([
   // It is the tenant.
   "organizations",
-  // Better Auth owns these schemas; its CLI generates them.
-  "user",
-  "session",
-  "account",
-  "verification",
+  // Better Auth owns these, and they are global by nature: one person has one login
+  // and may belong to several organizations, so the tenant lives on `memberships`
+  // rather than here. The names are the `modelName` values doc 16 chose — Better
+  // Auth's own defaults are singular, and this list read `user`/`session`/`account`
+  // for a while after the rename, which made the whole assertion vacuous for them.
+  "users",
+  "accounts",
+  "verifications",
+  "two_factors",
   "__drizzle_migrations",
   // `activity_log` is partitioned by time, not by tenant, so one monthly partition
   // holds every organization's rows and the archive object recording it is global.

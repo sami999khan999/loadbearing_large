@@ -416,12 +416,16 @@ The shape every feature module follows:
 
 ```tsx
 // packages/feature/src/task/task-board.tsx
-import { TaskQueries } from "@loadbearing/query";
-import { useApiClient } from "@loadbearing/query";
-import { Can, DataTable, EmptyState } from "@loadbearing/ui";
-import { useQuery } from "@tanstack/react-query";
-import { useCapabilities } from "../auth/session.context.js";
-import { useMessages } from "../i18n/message.context.js";
+import {
+  Can,
+  DataTable,
+  EmptyState,
+  TaskQueries,
+  useApiClient,
+  useAppQuery,
+} from "../import.js";
+import { useCapabilities } from "../auth/index.js";
+import { useMessages } from "../i18n/index.js";
 
 export interface TaskBoardProps {
   readonly goalId: string;
@@ -433,7 +437,7 @@ export function TaskBoard({ goalId, onOpenTask }: TaskBoardProps) {
   const caps = useCapabilities();
   const { t } = useMessages("task");
 
-  const { data, isPending } = useQuery(TaskQueries.list(client, { goalId }));
+  const { data, isPending } = useAppQuery(TaskQueries.list(client, { goalId }));
 
   if (isPending) return <DataTable.Skeleton rows={5} />;
   if (!data || data.items.length === 0) {
@@ -453,19 +457,17 @@ export function TaskBoard({ goalId, onOpenTask }: TaskBoardProps) {
 
 Read through it: data comes from `query`, presentation from `ui`, copy from `content`, permission from the session context, navigation from a prop. It imports no router, no `api-client`, and no server code. That is the whole pattern, and every feature module repeats it.
 
-> [!WARNING]
-> **That `useQuery` import contradicts [21](21-query-package.md)'s gate**, which asserts
-> `grep -rn "@tanstack" packages | grep -v packages/query` returns nothing. The first real feature
-> slice forces a choice, and it is worth making deliberately rather than discovering:
+> [!NOTE]
+> **`useAppQuery`, not `useQuery` — and that is the whole reason it exists.** An earlier revision of
+> this listing imported `useQuery` from the cache library directly, which contradicted
+> [21](21-query-package.md)'s gate: no shipped module outside `packages/query` may name it. The
+> wrapper is three lines and a pass-through ([21](21-query-package.md) Step 21.4b), and it keeps the
+> invariant whole rather than exempting this package from it.
 >
-> - **Add `useAppQuery` to `query`**, beside the `useAppMutation` that already exists, and have
->   feature components call that. Keeps the "exactly one package imports `@tanstack/*`" invariant
->   whole, at the cost of one thin wrapper.
-> - **Or exempt `feature` from that gate**, and accept that two packages name the cache library.
->
-> The first is the smaller change and matches the shape `useAppMutation` already set. Nothing
-> forces it yet — `AppContract` is `{}`, so there are no slices — but the gate and this listing
-> cannot both be right once there is one.
+> Test files are a different matter: a harness mounting a real `QueryClientProvider` is building the
+> environment a component runs in, not bypassing `query`, and `import.ts` governs `src/` rather than
+> `tests/` ([Opinions · Imports](../opinions/imports.md)). The gate is scoped to `packages/*/src`
+> accordingly.
 
 ---
 

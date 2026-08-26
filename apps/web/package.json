@@ -1,0 +1,48 @@
+{
+  "name": "@loadbearing/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf dist .output .nitro .tanstack"
+  },
+  "dependencies": {
+    "@loadbearing/api-client": "workspace:*",
+    "@loadbearing/application": "workspace:*",
+    "@loadbearing/auth": "workspace:*",
+    "@loadbearing/composition": "workspace:*",
+    "@loadbearing/content": "workspace:*",
+    "@loadbearing/contracts": "workspace:*",
+    "@loadbearing/errors": "workspace:*",
+    "@loadbearing/feature": "workspace:*",
+    "@loadbearing/observability": "workspace:*",
+    "@loadbearing/permissions": "workspace:*",
+    "@loadbearing/query": "workspace:*",
+    "@loadbearing/ui": "workspace:*",
+    "@orpc/client": "catalog:",
+    "@orpc/server": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "@tanstack/react-start": "catalog:",
+    "nitro": "catalog:",
+    "react": "catalog:react",
+    "react-dom": "catalog:react",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@loadbearing/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "@vitejs/plugin-react": "catalog:",
+    "rimraf": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

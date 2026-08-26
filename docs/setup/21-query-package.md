@@ -23,7 +23,8 @@ packages/query/src/
 │   ├── index.ts
 │   ├── query-client.ts         → createQueryClient()
 │   ├── api-client.context.tsx  → ApiClientProvider, useApiClient
-│   └── use-app-mutation.ts     → useAppMutation
+│   ├── use-app-mutation.ts     → useAppMutation
+│   └── use-app-query.ts        → useAppQuery
 └── session/                    ── one subject folder per slice
     ├── index.ts
     ├── session.queries.ts      → SessionQueries
@@ -137,8 +138,10 @@ One definition, three call sites:
 
 ```ts
 // apps/web/src/router.tsx — browser
+// `Endpoint.rpc`, not `Env.apiUrl`. `router.tsx` is isomorphic, and importing the env
+// schema here is what put `DATABASE_URL` in the client bundle ([24](24-web-app.md) 24.2).
 const { queryClient, apiClient } = createQueryClient({
-  transport: ApiClient.overHttp(Env.apiUrl, new CookieAuthStrategy()),
+  transport: ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()),
 });
 
 // apps/web SSR — same factory, in-process transport, no network
@@ -224,6 +227,40 @@ export function useAppMutation<TData, TVariables>(
 ```
 
 **Invalidation is declared, not written imperatively at each call site.** A mutation says *what it affects*; the hook does the invalidating. That means the "what does reactivating a task affect" question has one answer in one place, and updating it when a new panel starts depending on task state is a one-line edit.
+
+---
+
+## Step 21.4b — `useAppQuery`
+
+**`packages/query/src/runtime/use-app-query.ts`**
+
+```ts
+import { type QueryKey, useQuery, type UseQueryOptions, type UseQueryResult } from "../import.js";
+
+export function useAppQuery<TQueryFnData, TError, TData, TQueryKey extends QueryKey>(
+  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+): UseQueryResult<TData, TError> {
+  return useQuery(options);
+}
+```
+
+A pass-through, and that is the entire point. `useAppMutation` earns its wrapper by making
+invalidation declarative; this one earns its wrapper by **existing** — it is what lets
+`packages/feature` read through a defined query without naming the cache library, which is the
+invariant the gate at the bottom of this document asserts.
+
+Without it, the first feature slice imports `useQuery` directly and that gate starts failing — the
+listing in [23](23-feature-package.md) Step 23.5 originally did exactly that.
+
+> [!IMPORTANT]
+> **There is nothing else in this function, and there must not be.** All four generics are inferred
+> from the single argument, so `useAppQuery(TaskQueries.list(client, params))` types its `data`
+> exactly as `useQuery` would. Adding a defaulted parameter — a retry policy, a `staleTime`, an
+> options merge — moves the inference site and every call site quietly becomes `unknown`. Per-query
+> defaults belong in the `queryOptions` factory; global ones belong in `createQueryClient`.
+>
+> A type-level spec pins this: the wrapper's parameter still accepts what `queryOptions()` produces,
+> and its result still narrows to that query's data.
 
 ---
 
@@ -349,6 +386,7 @@ export {
   type QueryRuntime,
   useApiClient,
   useAppMutation,
+  useAppQuery,
 } from "./runtime/index.js";
 export { SessionMutations, SessionQueries } from "./session/index.js";
 ```
@@ -377,10 +415,18 @@ Keys and options never name a transport, so all of it is `ApiClient`-internal:
 ## ✅ Gate
 
 ```bash
-grep -rn "@tanstack" packages --include=*.ts --include=*.tsx | grep -v "packages/query"
+grep -rn "@tanstack" packages/*/src | grep -v "packages/query"
 ```
 
 Returns nothing.
+
+> [!NOTE]
+> **The gate scopes to `src/`, deliberately.** `import.ts` governs the shipped surface, not `tests/`
+> ([Opinions · Imports](../opinions/imports.md)) — a spec imports its harness directly, the same way
+> it imports `vitest`. `packages/feature`'s test harness mounts a real `QueryClientProvider`, which
+> is building the environment a component runs in rather than bypassing this package. Scoping the
+> grep to `packages/*/src` is what makes the rule say what it means: **no shipped module outside this
+> package names the cache library.**
 
 ```bash
 grep -rn "@tanstack/react-router" packages/query/src

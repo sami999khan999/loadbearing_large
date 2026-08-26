@@ -172,7 +172,7 @@ This is the rule that keeps database code out of the browser, and it lives entir
     }
   },
   {
-    "includes": ["apps/web/src/server/**", "apps/web/src/route/api/**", "**/*.server.ts"],
+    "includes": ["apps/web/src/server/**", "**/*.server.ts"],
     "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
   },
   {
@@ -209,7 +209,9 @@ ban list as `apps/web` and, unlike `apps/web`, no escape hatch at all — there 
 >
 > Both `feature` bans therefore sit in the ESLint config, where `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`. **Biome handles bans that are "this whole module, no exceptions"; ESLint handles the ones needing named-export or type-import nuance** — the same division as `content`'s `PermissionKey` ban ([20](20-content-package.md)).
 
-**The escape hatch is exactly two directories and one filename suffix.** Server-only packages are importable from `apps/web/src/server/**`, `apps/web/src/route/api/**`, and any `*.server.ts`, and nowhere else. Everything else crosses the boundary through `@loadbearing/contracts`, which is isomorphic by construction.
+**The escape hatch is one directory and one filename suffix.** Server-only packages are importable from `apps/web/src/server/**` and any `*.server.ts`, and nowhere else. Everything else crosses the boundary through `@loadbearing/contracts`, which is isomorphic by construction.
+
+**The endpoints moved back to `apps/web/src/route/api/**` in [24](24-web-app.md), and this override still does not list it.** That is deliberate. A Start server route there is three lines that call into `~/server/…`; it never imports `@loadbearing/composition` or `better-auth` itself, so it needs no exemption. **A dead escape hatch is worse than none** — it is the obvious place for the next person to put something that should not be there, and a route file that suddenly wants one is a route file doing work that belongs in `src/server/`.
 
 **The `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
 
@@ -269,12 +271,21 @@ export default tseslint.config(
       "**/dist/**",
       "**/.output/**",
       "**/migrations/**",
-      // Not inside any package's tsconfig `include`, so projectService cannot
-      // resolve them and a type-aware rule fails with a parsing error.
-      // Deliberately NOT "*.config.*" — that also matches eslint.config.js
+      // Build configs at a package root. Not inside any package's tsconfig
+      // `include`, so projectService cannot resolve them and a type-aware rule
+      // fails with a parsing error.
+      //
+      // Scoped to one directory below the workspace root, NOT "**/*.config.ts":
+      // the wider glob also swallows `packages/*/src/**/*.config.ts`, which *is*
+      // inside `include` and is ordinary source — `auth.config.ts` and
+      // `container.config.ts` went unlinted for exactly that reason.
+      //
+      // Deliberately NOT "*.config.*" either — that matches eslint.config.js
       // itself, which makes editors warn on every open config file.
-      "**/*.config.ts",
-      "**/*.config.mts",
+      "*.config.ts",
+      "*.config.mts",
+      "{packages,apps,tooling}/*/*.config.ts",
+      "{packages,apps,tooling}/*/*.config.mts",
       "**/*.d.ts",
     ],
   },

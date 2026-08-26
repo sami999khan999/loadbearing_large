@@ -321,18 +321,19 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ## 1.20 Inside `apps/web`
 
-- **`src/env.ts`** — one of two `process.env` readers. Parses at module load, so a missing secret crashes at boot with a field path rather than 500ing an hour later.
+- **`src/env.ts`** — one of two `process.env` readers. Parses at module load, so a missing secret crashes at boot with a field path rather than 500ing an hour later. **Server-only**, and enforced by a marker import rather than by convention: everything in a TanStack Start app is isomorphic unless something says otherwise, and one client-facing accessor on `Env` is enough to put the whole schema in the browser bundle ([24](24-web-app.md) Step 24.2).
+- **`src/endpoint.ts`** — `Endpoint`. The two API paths, and nothing else — what isomorphic code imports *instead of* `Env`. Reads no environment, so there is nothing for it to leak.
 - **`src/server/`** — **the entire transport layer**, and the thing that moves to `apps/api` if NestJS ever arrives. Nothing above or below it changes when it does. This is why it is one directory instead of scattered through routes.
   - **`container.ts`** — one `Container` at module scope. Per-request construction would open a connection pool per request.
-  - **`orpc/base.ts`** — the shared context type, `principalMiddleware`, and the `authed` base. The middleware calls `PrincipalBuilder`, never Better Auth, and fails closed on any procedure with no permission mapping.
+  - **`orpc/base.ts`** — the shared context type and three middlewares: correlation, error, principal. `principalMiddleware` calls `PrincipalBuilder`, never Better Auth, fails closed on any procedure with no permission mapping, and throws `AppError`s so `errorMiddleware` logs and shapes them like everything else.
   - **`orpc/<subject>.router.ts`** — three lines per procedure: pull the use-case off the container, call `execute`, return.
-  - **`orpc/error.interceptor.ts`** — the one place `DomainError.code` becomes a transport code.
+  - **`orpc/error.interceptor.ts`** — the one place `AppError.code` becomes a transport code, and the one place a server-side failure is logged. Reached from a **middleware**, not an adapter interceptor: oRPC's `clientInterceptors` see only the initial context, so they have no `traceId` and no request-scoped logger.
   - **`rpc-client.ts`** — the in-process client for SSR, which skips serialisation but runs the same middleware.
-- **`src/route/`** — composition only. Loaders reach the server through `ApiClient`, never by importing `appRouter`.
-  - **`api/`** — two mounted fetch handlers, one for oRPC and one for Better Auth.
+- **`src/route/`** — pages and composition, plus `api/rpc/$.ts` and `api/auth/$.ts`. Those two are Start server routes and are three lines each: hand the `Request` to `src/server/`, return its `Response`. Nothing here *implements* an API. Loaders reach the server through `ApiClient`, never by importing `appRouter`.
+  - They are file routes rather than Nitro handlers because `serverDir` scanning is Nitro's, and Nitro is one deployment target of several — a route in the tree ships wherever the app ships ([24](24-web-app.md)).
   - **`-guard.ts`** — route gating. The leading hyphen is TanStack's marker for "not a route"; framework naming wins inside this directory.
   - **`__root.tsx`** — the composition point: both stylesheets, the pre-hydration theme script, and all four providers.
-- **Smell:** a router handler longer than three lines; `createServerFn` wrapping a business operation; `import { appRouter }` in a loader.
+- **Smell:** a router handler longer than three lines; `createServerFn` wrapping a business operation; `import { appRouter }` in a loader; **a second directory named `server/`** — Nitro's default puts one at the app root, and taking it splits the transport layer in two.
 
 ---
 
@@ -458,7 +459,7 @@ api-client  ApiClient.task.reactivate({ taskId, reason })
         │  auth/  CookieAuthStrategy   (web)  ─┐
         │         BearerAuthStrategy   (desktop) ┘  same call site
         ▼  POST /api/rpc  →  /tasks/{taskId}/reactivate
-apps/web  route/api/rpc.$.ts
+apps/web  route/api/rpc/$.ts
         ▼  principalMiddleware  (identical to Flow 1)
 apps/web  server/orpc/task.router.ts
         ▼

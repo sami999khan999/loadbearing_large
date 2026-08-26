@@ -10,5 +10,6 @@ export {
   type QueryRuntime,
   useApiClient,
   useAppMutation,
+  useAppQuery,
 } from "./runtime/index.js";
 export { SessionMutations, SessionQueries } from "./session/index.js";

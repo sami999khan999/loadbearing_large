@@ -10,10 +10,15 @@ export default tseslint.config(
       "**/dist/**",
       "**/.output/**",
       "**/migrations/**",
-      // Outside every package's tsconfig `include`, so a type-aware rule fails to parse
-      // them. Deliberately not "*.config.*" — that matches eslint.config.js itself.
-      "**/*.config.ts",
-      "**/*.config.mts",
+      // Build configs at a package root — outside every tsconfig `include`, so a
+      // type-aware rule fails to parse them. Scoped to one directory below the workspace
+      // root rather than "**/*.config.ts": that wider glob also swallowed
+      // `packages/*/src/**/*.config.ts`, which *is* inside `include` and is ordinary
+      // source. Deliberately not "*.config.*" either — that matches eslint.config.js.
+      "*.config.ts",
+      "*.config.mts",
+      "{packages,apps,tooling}/*/*.config.ts",
+      "{packages,apps,tooling}/*/*.config.mts",
       "**/*.d.ts",
     ],
   },
@@ -138,6 +143,20 @@ export default tseslint.config(
           ],
         },
       ],
+    },
+  },
+
+  // ── route files throw redirects, which are not Errors (see docs/setup/24) ──
+  //
+  // `throw redirect({ to })` is how TanStack Router leaves a `beforeLoad` — the value
+  // is a `Redirect`, deliberately, because the router catches it as control flow rather
+  // than as a failure. `only-throw-error` is right in general and wrong here, so it is
+  // off for the route directory and nowhere else. `src/server/**` keeps it: a transport
+  // handler throwing a non-Error is a real bug.
+  {
+    files: ["apps/*/src/route/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/only-throw-error": "off",
     },
   },
 

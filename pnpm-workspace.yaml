@@ -22,6 +22,9 @@ catalog:
   # ── language & build ──
   typescript: ^5.8.3
   tsup: ^8.5.0
+  # Vite builds the apps; `tsup` builds the packages. Neither ships.
+  vite: ^8.0.0
+  "@vitejs/plugin-react": ^6.0.1
   tsx: ^4.19.0
   rimraf: ^6.0.1
   vitest: ^3.1.4
@@ -105,7 +108,20 @@ catalog:
   # ── router-scoped — apps/ only, never a package ──
   #    Routing is app-shaped, not product-shaped. A Next app brings its own
   #    router and reads paths from @loadbearing/permissions instead.
-  "@tanstack/react-router": ^1.135.0
+  #
+  #    `react-start` is the fullstack framework around that router. Both are apps-only
+  #    for the same reason the router is — swapping to Next replaces this group and
+  #    nothing above it.
+  #
+  #    `nitro` is a **separate, swappable** entry, not something react-start bundles:
+  #    it is the deployment adapter that turns `vite build` into a `.output/` a Node
+  #    host can run, and `@cloudflare/vite-plugin` or the Netlify plugin replaces it
+  #    one line at a time. Nothing in `apps/web/src/` may name it — the API endpoints
+  #    are Start server routes precisely so the host stays this replaceable (24).
+  "@tanstack/react-router": ^1.170.32
+  "@tanstack/react-start": ^1.168.49
+  "@tanstack/router-cli": ^1.167.33
+  nitro: 3.0.260610-beta
 
   # ── desktop-scoped — apps/desktop only ──
   "@tauri-apps/api": ^2.9.0

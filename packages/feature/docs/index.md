@@ -156,11 +156,8 @@ not exist yet. `StaticContentSource` gives the same snapshot asynchronously and 
 **No feature slices.** `AppContract` is `{}`, so there is nothing to query. The shape a slice takes
 is in doc 23 §23.5.
 
-**No `useQuery` anywhere** — which is why the conflict below has not bitten yet.
-
-> [!WARNING]
-> **Doc 23 §23.5's feature screen imports `useQuery` from `@tanstack/react-query`, and
-> [21](../../../docs/setup/21-query-package.md)'s gate forbids exactly that** — it asserts the cache
-> library appears in no package but `query`. The first real slice forces the choice: either `query`
-> grows a `useAppQuery` beside the `useAppMutation` it already has, or `feature` is exempted from
-> that gate. The first is smaller and matches the shape already set. Both documents now say so.
+**No cache-library import.** A slice reads through
+[`useAppQuery`](../../query/docs/index.md) — a three-line pass-through in `query` that exists so this
+package never names `@tanstack/*`. The invariant is asserted over `packages/*/src`: `import.ts`
+governs the shipped surface, and a test harness mounting a real `QueryClientProvider` is building the
+environment a component runs in rather than bypassing `query`.

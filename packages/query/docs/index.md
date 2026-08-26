@@ -11,10 +11,14 @@ different reasons — the first when the backend changes, the second when produc
 **One package in the repository imports `@tanstack/*`. This is it.**
 
 ```bash
-grep -rn "@tanstack" packages --include=*.ts --include=*.tsx | grep -v "packages/query"
+grep -rn "@tanstack" packages/*/src | grep -v "packages/query"
 ```
 
-Returns nothing. And the mirror of that rule matters as much:
+Returns nothing. Scoped to `src/` because `import.ts` governs the shipped surface, not `tests/` — a
+spec imports its harness directly, the same way it imports `vitest`, and `feature`'s harness mounts a
+real `QueryClientProvider` to build the environment a component runs in.
+
+And the mirror of that rule matters as much:
 
 ```bash
 grep -rn "@tanstack/react-router" packages/query/src
@@ -42,7 +46,8 @@ packages/query/src/
 │   ├── index.ts
 │   ├── query-client.ts             → createQueryClient, QueryClientOptions, QueryRuntime
 │   ├── api-client.context.tsx      → ApiClientProvider, useApiClient
-│   └── use-app-mutation.ts         → useAppMutation, AppMutationOptions
+│   ├── use-app-mutation.ts         → useAppMutation, AppMutationOptions
+│   └── use-app-query.ts            → useAppQuery
 └── session/                        ── one subject folder per slice
     ├── index.ts
     ├── session.queries.ts          → SessionQueries
@@ -123,6 +128,26 @@ grepping for `invalidateQueries`.
 rather than `["task", "list", goalId, status]` — adding a filter later then does not shift every key
 and invalidate the whole namespace on deploy.
 
+## `useAppQuery` exists so that grep can keep returning nothing
+
+```ts
+export function useAppQuery<TQueryFnData, TError, TData, TQueryKey extends QueryKey>(
+  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+): UseQueryResult<TData, TError> {
+  return useQuery(options);
+}
+```
+
+A pass-through, and unlike `useAppMutation` it adds nothing — it earns its place by **existing**.
+[`feature`](../../feature/docs/index.md) reads through it, so the first feature slice does not have
+to name the cache library and the one-package invariant survives contact with a real screen.
+
+**There must be nothing else in this function.** All four generics are inferred from the single
+argument, so `useAppQuery(TaskQueries.list(client, params))` types its `data` exactly as `useQuery`
+would. A defaulted parameter — a retry policy, a `staleTime`, an options merge — moves the inference
+site and every call site quietly becomes `unknown`. Per-query defaults belong in the `queryOptions`
+factory; global ones belong in `createQueryClient`. A type-level spec pins both directions.
+
 ## Invalidation is declared
 
 ```ts
@@ -183,7 +208,8 @@ key. `QueryKeys` carries `session` and `rbac` — both of which name things that
 slice adds a subject folder plus one barrel line. Doc 21's `QueryKeys.task` is illustrative; there is
 no task contract to mirror.
 
-**No hook tests.** `QueryKeys`, `createQueryClient` (including its retry predicate) and
-`SessionQueries` are covered because they are plain values and functions. `useAppMutation`,
+**No hook tests.** `QueryKeys`, `createQueryClient` (including its retry predicate),
+`useAppQuery`'s type preservation and `SessionQueries` are covered because they are plain values,
+functions and types. `useAppMutation`,
 `ApiClientProvider` and `SessionMutations` need a React renderer, which arrives with
 [22](../../../docs/setup/22-ui-package.md)'s testing setup.

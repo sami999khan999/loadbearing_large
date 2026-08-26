@@ -232,6 +232,14 @@ The domain layer records business facts through `ActivityLogger` and throws type
 
 Every other `process.env` read is an unvalidated string that becomes `undefined` in production. This rule is what makes the `Env` classes trustworthy — it is not a style preference, it is the enforcement of a single validated boundary.
 
+> [!IMPORTANT]
+> **This exemption list and Biome's `noProcessEnv` overrides must stay in step.** They are two
+> statements of the same rule in two tools, and a path exempted in one and not the other is either a
+> gate that passes while the rule is broken, or a build that fails for no reason. The set is:
+> `apps/*/src/env.ts`, any `*.config.*`, `db/src/migrate/`, `db/src/seed/`, `*/src/smoke/`, and
+> `auth/src/tables/` — the last being schema inspection run by hand against a throwaway URL
+> ([16](16-auth-package.md)), which had a Biome exemption and no matching one here.
+
 ### 4 — Every `@orpc/*` entry is on one version line
 
 ```js
@@ -284,9 +292,31 @@ const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 
 // Absent from the whole client output, like the server list above.
 const EMAIL_FINGERPRINTS = ["email.digest."];
+
+// Field names from the `env.ts` schemas. Also absent from the whole client output.
+const ENV_FINGERPRINTS = [
+  "REDIS_QUEUE_URL",
+  "S3_FORCE_PATH_STYLE",
+  "AUTH_COOKIE_CACHE_MAX_AGE_SECONDS",
+];
 ```
 
 **This is the third defence** from [05](05-lint-and-format.md) and the only one that inspects reality. ESLint catches direct imports; `ServerOnly.assert()` catches execution; this catches the case where a transitive re-export drags Drizzle into a component chunk. Grep the client assets only — the SSR bundle contains all of these legitimately.
+
+> [!CAUTION]
+> **`ENV_FINGERPRINTS` was added after this assertion passed a build that shipped the entire server
+> configuration schema to the browser.** `apps/web/src/env.ts` imports **no** server-only package —
+> just `zod` — so every fingerprint above was legitimately absent while `DATABASE_URL`,
+> `AUTH_SECRET` and `S3_SECRET_KEY` sat in the entry chunk, followed by a `Schema.parse({})` that
+> threw before the app could hydrate ([24](24-web-app.md) Step 24.2).
+>
+> **A file can be server-only without importing anything server-only.** Fingerprinting the
+> *dependencies* only catches a leak that drags a dependency with it; the names of the fields are
+> what identify the file itself.
+>
+> The real fix is upstream — `env.ts` carries `import "@tanstack/react-start/server-only"`, so Start's
+> import-protection plugin now **fails the build** and names the file and line. This grep is the
+> backstop for anything that gets around the marker, which is why it belongs here anyway.
 
 > [!IMPORTANT]
 > **Two greps, not one, because "absent" means different things.** A server fingerprint must not
@@ -312,14 +342,23 @@ Shipping database driver code to the browser is not just a 400KB regression. It 
 // unless its table name is on the exemption list
 const TENANT_EXEMPT = new Set([
   "organizations",                                   // it is the tenant
-  "user", "session", "account", "verification",      // Better Auth owns these
+  // Better Auth's, and global by nature: one person has one login and may belong
+  // to several organizations, so the tenant lives on `memberships`. These are the
+  // `modelName` values doc 16 chose — Better Auth's own defaults are singular.
+  "users", "accounts", "verifications", "two_factors",
   "__drizzle_migrations",
+  "activity_archive",                                // partitioned by time, not tenant
 ]);
 ```
 
 `organization_id` is the sharding key and the tenant boundary ([13](13-db-package.md)). A table that ships without it is not a style problem — it is a table that has to be migrated under load later, and a query that cannot be scoped to a tenant in the meantime.
 
-**The exemption list is the point of the check, not a weakness in it.** Every entry is a decision someone had to write down: Better Auth's tables are exempt because it owns their schema, and `organizations` is exempt because it *is* the tenant. Adding a sixth entry means arguing for it in review, which is exactly the conversation that should happen before a global table exists.
+**The exemption list is the point of the check, not a weakness in it.** Every entry is a decision someone had to write down: Better Auth's tables are exempt because a login is global, and `organizations` is exempt because it *is* the tenant. Adding another entry means arguing for it in review, which is exactly the conversation that should happen before a global table exists.
+
+> [!WARNING]
+> **Names on this list are the `modelName` values, not Better Auth's defaults.** [16](16-auth-package.md) renames all five to this repository's plural convention, and a list still reading `user`/`session`/`account` exempts *nothing* — the assertion silently passes on tables it was never checking. Verify the list the way every assertion here is verified: add a table with no `organization_id`, watch it fail, remove it.
+>
+> `sessions` is deliberately absent, because it genuinely carries the tenant — `activeOrganizationId`, pinned at sign-in ([16](16-auth-package.md)).
 
 Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTable` returns the same type whichever columns you pass, and there is no compile error available — which is precisely the category of rule this file exists for.
 

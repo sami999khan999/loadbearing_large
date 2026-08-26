@@ -1,4 +1,5 @@
 import type { Namespace } from "../message/index.js";
+import type { Locale } from "../primitive/index.js";
 import type { ContentSource } from "../source/index.js";
 import { type MessageSnapshot, Translator } from "./translator.js";
 
@@ -9,6 +10,14 @@ export class MessageStore {
   private snapshot: MessageSnapshot;
   private cached: Translator;
   private readonly listeners = new Set<() => void>();
+
+  // The starting point for a client store that will be filled by `hydrate` before the
+  // first render. Doc 24 calls this `MessageStore.EMPTY`; it has to be a factory rather
+  // than a constant because a snapshot carries its locale, and `namespaces: []` is what
+  // makes `ensure()` fetch everything the first navigation asks for.
+  public static empty(locale: Locale): MessageSnapshot {
+    return { locale, namespaces: [], base: {}, overrides: {} };
+  }
 
   public constructor(
     private readonly content: ContentSource,
