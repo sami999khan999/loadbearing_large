@@ -33,7 +33,8 @@ const cache: CacheStore = {
 };
 
 class UnusedMembershipReader extends MembershipReader {
-  public override async activeOrganizationFor(): Promise<OrganizationId | null> {
+  // Not `async`: there is nothing to await, and `never` satisfies the port's return type.
+  public override activeOrganizationFor(): Promise<OrganizationId | null> {
     return unreachable();
   }
 }

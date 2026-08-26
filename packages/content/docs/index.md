@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/content"
-description: Every user-visible string, split by locale and namespace so no runtime downloads words it cannot use. Partially built — the error slice exists, the rest arrives with the features that need it.
+description: Every user-visible string, document, and structured record, split by locale and namespace so no runtime downloads words it cannot use. All four content shapes are declared; three items wait on the apps that call them.
 ---
 
 # `@loadbearing/content`
@@ -13,18 +13,18 @@ lives here, keyed and translated.
 | --- | --- |
 | **Package** | `@loadbearing/content` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | `@loadbearing/errors` (type-only), `@loadbearing/asset`, `zod` |
+| **Depends on** | `@loadbearing/errors` (type-only), `@loadbearing/asset`, `@loadbearing/permissions` (`ModuleKey`, type-only), `zod` |
 | **Used by** | `composition`, `feature`, `apps/web`, `apps/worker`, `apps/desktop` |
 | **Environment** | isomorphic and **React-free** — the worker renders email copy with the same class the browser uses |
 | **Build** | `tsup` → one chunk per locale × namespace, plus the entry |
 
 > [!IMPORTANT]
-> **This package is deliberately half-built.** The error slice below is finished and tested; the
-> document, collection, media and message-store halves are not written yet. `@loadbearing/errors`
-> has no other half — a code with no copy is a raw `SERVER_ONLY` rendered to a customer — and
-> `ServerOnly.assert` in `core` throws before anything else in the repository runs, so the copy had
-> to exist first. Nothing in the reduced form is provisional; see
-> [What exists](#what-exists-and-what-does-not) for the exact line.
+> **This package was built in two passes, and the second one is done.** The error slice came first,
+> out of order, because `@loadbearing/errors` has no other half — a code with no copy is a raw
+> `SERVER_ONLY` rendered to a customer — and `ServerOnly.assert` in `core` throws before anything
+> else in the repository runs. All four content shapes are now declared and implemented. Three items
+> remain, each waiting on the app that calls it rather than on anything here; see
+> [What exists](#what-exists-and-what-does-not).
 
 ```
 packages/content/
@@ -40,19 +40,31 @@ packages/content/
 │   │   └── translator.ts          → Translator, MessageSnapshot
 │   ├── source/
 │   │   ├── index.ts
-│   │   ├── content-source.ts      → ContentSource (abstract)
+│   │   ├── content-source.ts      → ContentSource (abstract) — all four shapes
 │   │   └── static.content-source.ts → StaticContentSource
-│   └── message/
+│   ├── media/                     ── shape 2: media references
+│   │   ├── index.ts
+│   │   ├── media-ref.ts           → MediaResolver, ResolvedMedia
+│   │   └── static.media-resolver.ts → StaticMediaResolver
+│   ├── collection/                ── shape 3: repeating records
+│   │   ├── index.ts
+│   │   └── nav/
+│   │       ├── index.ts
+│   │       ├── nav.schema.ts      → NavContract, NavItem
+│   │       └── nav.data.ts        → navItems
+│   ├── document/                  ── shape 4: long-form editorial
+│   │   ├── index.ts
+│   │   ├── document.schema.ts     → DocumentContract
+│   │   └── document.entity.ts     → DocumentEntity, DocumentRecord
+│   └── message/                   ── shape 1: short keyed strings
 │       ├── index.ts
 │       ├── namespace.ts           → MessageKey, ShellMessageKey, NamespaceBundle, MessageParams
 │       ├── catalog.ts             → CLIENT_CATALOG  (locale × namespace → loader)
 │       ├── error-copy.ts          → ERROR_COPY, FIELD_RULE_COPY, ErrorCopy
 │       ├── en/                    ← as const; the key union is derived from these
-│       │   ├── common.ts
-│       │   └── error.ts
+│       │   ├── common.ts · nav.ts · auth.ts · error.ts
 │       └── bn/                    ← NamespaceBundle<N>; Partial by design
-│           ├── common.ts
-│           └── error.ts
+│           └── common.ts · nav.ts · auth.ts · error.ts
 └── tests/
     ├── primitive/
     │   └── locale.spec.ts
@@ -148,15 +160,24 @@ repository permitted to carry a message. Moving it here cost nothing and removed
 | Area | State |
 | --- | --- |
 | `locale.ts`, `translator.ts` | ✅ final |
-| `message/en/{common,error}.ts`, `message/bn/{common,error}.ts` | ✅ final |
-| `message/namespace.ts` | ◐ two namespaces; gains `nav`, `auth`, `email` as union members |
-| `message/catalog.ts` | ◐ four cells; gains two per namespace |
+| `message/en/*`, `message/bn/*` — `common`, `nav`, `auth`, `error` | ✅ four namespaces per locale |
+| `message/namespace.ts` | ◐ four namespaces; gains the server-only `email` as a union member |
+| `message/catalog.ts` | ◐ eight cells, total over `Locale × ClientNamespace` |
 | `message/error-copy.ts` | ✅ final |
-| `content-source.ts`, `static.content-source.ts` | ◐ `messages()` / `translator()`; gains `media()`, `nav()`, `document()` |
-| `message/catalog.server.ts` — `SERVER_CATALOG` | ☐ nothing to add until `email` exists |
-| `media/`, `document/`, `collection/` | ☐ |
-| `message-store.ts` — `MessageStore` | ☐ deferred until a route loader calls `ensure()` |
-| `bundled.content-source.ts` — `BundledContentSource` | ☐ lands with the desktop app |
+| `content-source.ts`, `static.content-source.ts` | ✅ all four shapes declared and implemented |
+| `media/` — `MediaResolver`, `StaticMediaResolver` | ✅ final |
+| `collection/nav/` — `NavContract`, `navItems` | ✅ final |
+| `document/` — `DocumentContract`, `DocumentEntity` | ✅ shape declared; `document()` answers `null` |
+| `message/catalog.server.ts` — `SERVER_CATALOG` | ☐ **blocked**: nothing to add until `email` copy exists, and the worker (25) is what defines it |
+| `translator/message-store.ts` — `MessageStore` | ☐ deferred until a route loader calls `ensure()` (24) |
+| `bundled.content-source.ts` — `BundledContentSource` | ☐ lands with the desktop app (30) |
+
+**A `SERVER_CATALOG` identical to `CLIENT_CATALOG` would be a boundary that looks enforced and
+enforces nothing**, which is why it waits for `email` rather than shipping empty. It is also the
+first thing that makes `Namespace` wider than `ClientNamespace` — the first time `MessageCatalog`
+being `Partial` over `Namespace` does any work. Until then,
+[`Container`](../../composition/docs/reference/container.md) constructs
+`new StaticContentSource()` with no argument.
 
 **Widening `Namespace` is additive.** `ShellNamespace`, `NamespaceKeys`, `MessageKey`,
 `ShellMessageKey`, `NamespaceBundle`, `MessageBundle` and `MessageParams` are untouched by it, and no

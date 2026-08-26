@@ -1,5 +1,5 @@
 {
   "title": "asset",
-  "description": "",
+  "description": "Every binary the product ships — a sprite built at compile time, a closed image key union, and one @font-face sheet",
   "pages": ["index", "reference"]
 }

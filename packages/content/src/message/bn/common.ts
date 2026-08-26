@@ -6,4 +6,6 @@ export const common: NamespaceBundle<"common"> = {
   "action.cancel": "বাতিল",
   "action.delete": "মুছে ফেলুন",
   "state.loading": "লোড হচ্ছে…",
+  "state.allowed": "অনুমোদিত",
+  "state.denied": "অননুমোদিত",
 };

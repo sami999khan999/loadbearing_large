@@ -76,6 +76,15 @@ the same type and swapping them compiles.
 ioredis's default retry limit kills them — the symptom is workers that stop consuming after a few
 minutes, with no error.
 
+**One client per role, memoised.** `client()` called twice used to be two TCP connections, and the
+second one is invisible until the connection count is the symptom. `healthy(role)` then pings the
+connection the cache store and the queue publisher are *already* using — opening a fresh one to
+answer a health check reports green on a socket nothing else has.
+
+`healthy` takes the role rather than handing out a `Redis`, which is what lets
+[`Container.healthy()`](../../composition/docs/reference/container.md) check both instances without
+`ioredis` ever appearing in `packages/composition`.
+
 ## The `keyPrefix` asymmetry, in both directions
 
 ioredis applies `keyPrefix` to key arguments but **not** to `SCAN`. That cuts both ways, and

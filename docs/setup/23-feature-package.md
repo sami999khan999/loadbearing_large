@@ -18,7 +18,8 @@ Both are enforced by a `files`-scoped block in the root ESLint config ([05](05-l
 
 ```
 packages/feature/src/
-├── index.ts
+├── index.tsx                      ← "use client" on line 1
+├── import.ts                      ← every external symbol. The two bans, made visible
 ├── i18n/
 │   ├── index.ts
 │   └── message.context.tsx        → MessageProvider, useMessages
@@ -97,6 +98,12 @@ export function useMessages<N extends ClientNamespace>(namespace: N) {
   return { t, locale: translator.locale };
 }
 ```
+
+> [!NOTE]
+> **`MessageStore` is item 7 of [20](20-content-package.md) Step 20.10, deferred there "until
+> `ensure()` has a caller".** This is that caller — `MessageProvider` subscribes to it, and
+> [24](24-web-app.md)'s route loader calls `ensure()`. Build it now, in `content`, not here: it is
+> React-free and the worker uses the same class.
 
 **The snapshot is built server-side and inlined into the SSR payload** ([24](24-web-app.md)
 Step 24.10), so the correct locale is present in the first rendered byte. Fetching translations
@@ -260,11 +267,17 @@ Removing a permission from a role must remove the nav item **and** return `FORBI
 **`packages/feature/src/auth/sign-in.form.tsx`**
 
 ```tsx
-import type { AuthClient } from "@loadbearing/api-client";
-import { SessionMutations } from "@loadbearing/query";
-import { Button, Field, Input } from "@loadbearing/ui";
-import { useState, type FormEvent } from "react";
-import { useMessages } from "../i18n/message.context.js";
+import {
+  type AuthClient,
+  Button,
+  ErrorNormalizer,
+  Field,
+  type FormEvent,
+  Input,
+  SessionMutations,
+  useState,
+} from "../import.js";
+import { useMessages } from "../i18n/index.js";
 
 export interface SignInFormProps {
   readonly auth: AuthClient;
@@ -332,6 +345,13 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 }
 ```
 
+> [!IMPORTANT]
+> **This listing needs three things earlier steps do not deliver.** `Button`, `Field` and `Input`
+> are imported from `@loadbearing/ui` and appear nowhere in [22](22-ui-package.md) — not in its tree,
+> not in its barrel. They are simple enough to write by hand under that document's rule 4, and they
+> go there rather than here because they carry no domain knowledge. `ErrorNormalizer` is used and
+> never imported; it comes from `@loadbearing/errors`, which this package therefore depends on.
+
 ### Four things worth copying from this
 
 **`AuthClient` arrives as a prop, not from a module import.** Same reason `createQueryClient` is a factory: the instance differs per environment, and a module singleton in an SSR bundle is shared across requests.
@@ -343,6 +363,50 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 **`autoComplete` on both fields.** `email` and `current-password` are what password managers key on. Omitting them is a real usability cost for a class of users who will not report it.
 
 **Every string comes from `useMessages`.** No literals in this package either. `feature` is where copy meets components, and it meets it through the catalog.
+
+---
+
+## Step 23.4b — The three components this document names and does not specify
+
+`TwoFactorForm`, `PermissionMatrix` and `EffectivePermissionsInspector` are in the tree above and in
+the barrel below, with no listing anywhere in this document. What they need is worth stating, because
+two of them turn out to need nothing at all:
+
+**`TwoFactorForm`** is the second leg of a sign-in that answered `TWO_FACTOR_REQUIRED`, and it needs
+one method that [18](18-api-client-package.md) does not define: `AuthClient.verifyTwoFactor(code)`,
+wrapping Better Auth's `client.twoFactor.verifyTotp`. Add it there, throwing on a bad code like every
+other method on that class, so the form has one error path rather than two.
+
+> [!CAUTION]
+> **`AuthClient`'s private field cannot be typed `ReturnType<typeof createAuthClient>`.** That is the
+> **unconfigured** client; the two-factor plugin widens the instance, and annotating with the
+> unconfigured type erases the widening, so `client.twoFactor` does not exist and the file will not
+> compile. Extract a non-exported `const createClient = (config) => createAuthClient({…})` and type
+> the field `ReturnType<typeof createClient>`. This is the same trap `AuthFactory.create` documents
+> on the server side ([16](16-auth-package.md)) — infer from the options, read the type back out.
+
+**`PermissionMatrix` and `EffectivePermissionsInspector` need no query at all**, which is the
+interesting part. The permission axis is `PermissionRegistry.instance` — already in the bundle — and
+the answer axis is `CapabilitySet.can()`, which is already in the session context. So the inspector
+takes nothing but an optional `goalId`, and the matrix takes its *subjects* as a prop:
+
+```ts
+export interface MatrixSubject {
+  readonly id: string;
+  readonly label: string;
+  readonly capabilities: CapabilitySet;
+}
+```
+
+That is the one deliberate departure from the fetch-here pattern in Step 23.5, and it is worth
+understanding rather than copying blindly: the rows are the **catalog**, which is static, and the
+columns are whatever the caller is comparing — roles on an admin screen, two users in a support tool.
+A component that fetched its own columns could only ever do one of those.
+
+**Both render a word, not a glyph.** `✓` announces as "check mark", which is not an answer, so the
+cells read `t("state.allowed")` / `t("state.denied")` — two keys this adds to `content`'s `common`
+namespace — and carry `data-allowed` for a design pass to hang an icon on. Biome's
+`useAriaPropsSupportedByRole` rejects the obvious shortcut of an `aria-label` on a bare `<span>`.
 
 ---
 
@@ -389,11 +453,35 @@ export function TaskBoard({ goalId, onOpenTask }: TaskBoardProps) {
 
 Read through it: data comes from `query`, presentation from `ui`, copy from `content`, permission from the session context, navigation from a prop. It imports no router, no `api-client`, and no server code. That is the whole pattern, and every feature module repeats it.
 
+> [!WARNING]
+> **That `useQuery` import contradicts [21](21-query-package.md)'s gate**, which asserts
+> `grep -rn "@tanstack" packages | grep -v packages/query` returns nothing. The first real feature
+> slice forces a choice, and it is worth making deliberately rather than discovering:
+>
+> - **Add `useAppQuery` to `query`**, beside the `useAppMutation` that already exists, and have
+>   feature components call that. Keeps the "exactly one package imports `@tanstack/*`" invariant
+>   whole, at the cost of one thin wrapper.
+> - **Or exempt `feature` from that gate**, and accept that two packages name the cache library.
+>
+> The first is the smaller change and matches the shape `useAppMutation` already set. Nothing
+> forces it yet — `AppContract` is `{}`, so there are no slices — but the gate and this listing
+> cannot both be right once there is one.
+
 ---
 
 ## Step 23.6 — Testing
 
 `feature` components are tested with fakes, never against a running server:
+
+> [!NOTE]
+> **`BundledContentSource` is item 8 of [20](20-content-package.md) Step 20.10 and lands with
+> [30](30-desktop-app.md).** Until it does, `StaticContentSource` gives the same snapshot
+> asynchronously — `new MessageStore(content, await content.messages("en", namespaces))` — and the
+> harness becomes `async`. Nothing else about it changes.
+>
+> This package also needs the same three test files [22](22-ui-package.md) introduced:
+> `vitest.config.ts` with `environment: "jsdom"`, and a `vitest.setup.ts` running
+> `afterEach(cleanup)` — **not optional with `globals: false`**.
 
 ```tsx
 function renderWithFakes(ui: ReactNode, caps: CapabilitySetDto) {
@@ -424,22 +512,32 @@ The test worth writing first: **render the same component with two different `Ca
 
 ## Step 23.7 — The barrel
 
-**`packages/feature/src/index.ts`**
+**`packages/feature/src/index.tsx`**
 
-```ts
+```tsx
+"use client";
+
 export {
   SessionGuard,
   type SessionGuardProps,
   SessionProvider,
+  type SessionProviderProps,
   type SessionUser,
   SignInForm,
   type SignInFormProps,
   TwoFactorForm,
+  type TwoFactorFormProps,
   useCapabilities,
   useSession,
 } from "./auth/index.js";
-export { MessageProvider, useMessages } from "./i18n/index.js";
-export { EffectivePermissionsInspector, PermissionMatrix } from "./rbac/index.js";
+export { MessageProvider, type MessageProviderProps, useMessages } from "./i18n/index.js";
+export {
+  EffectivePermissionsInspector,
+  type EffectivePermissionsInspectorProps,
+  type MatrixSubject,
+  PermissionMatrix,
+  type PermissionMatrixProps,
+} from "./rbac/index.js";
 ```
 
 **`SessionValue` is not on the list**, even though `useSession()` returns it. Callers get the type through inference, and the interface stays free to gain a field without that being a public API change — the private layer a star export cannot give you ([Opinions · Imports](../opinions/imports.md)).
@@ -452,7 +550,10 @@ export { EffectivePermissionsInspector, PermissionMatrix } from "./rbac/index.js
 grep -rn "@loadbearing/api-client" packages/feature/src
 ```
 
-Returns nothing **except** `import type { AuthClient }` — a type-only import is permitted, since it creates no runtime dependency.
+Returns nothing **except** `import type { AuthClient }` in `src/import.ts`, and the separator
+comment above it — every `import.ts` in the repository groups its specifiers under a header naming
+the source ([Opinions · Imports](../opinions/imports.md)), and this gate matches comments. A
+type-only import is permitted because it creates no runtime dependency.
 
 > [!IMPORTANT]
 > **This is why the ban lives in ESLint rather than Biome.** Biome's `noRestrictedImports` flags `import type` exactly like a value import and has no type-import exemption — verified against 2.5.7 — so a Biome-side ban would error on `SignInForm`'s own import. `@typescript-eslint/no-restricted-imports` supports `allowTypeImports: true`, and the core rule must be `"off"` alongside it, since it has no such option. See [05](05-lint-and-format.md) Step 5.3.

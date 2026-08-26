@@ -25,6 +25,11 @@ catalog:
   tsx: ^4.19.0
   rimraf: ^6.0.1
   vitest: ^3.1.4
+  # The React renderer the component packages test through. Tier 1: never ships, and
+  # `packages/{ui,feature}` are the only consumers.
+  jsdom: ^28.0.0
+  "@testing-library/react": ^16.3.0
+  "@testing-library/dom": ^10.4.1
 
   # ── types ──
   "@types/node": ^24.3.0

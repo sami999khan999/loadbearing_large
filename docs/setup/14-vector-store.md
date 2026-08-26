@@ -29,7 +29,7 @@ EmbeddingProvider (abstract)             packages/application/src/port/embedding
 
 ## Step 14.1 — The schema
 
-**`packages/db/src/vector/vector.schema.ts`**
+**`packages/db/src/schema/vector.schema.ts`**
 
 ```ts
 import { sql } from "drizzle-orm";

@@ -14,16 +14,28 @@
 
 ```
 packages/query/src/
-├── index.ts
-├── query-key.ts                → QueryKeys
-├── query-client.ts             → createQueryClient()
-├── api-client.context.tsx      → ApiClientProvider, useApiClient
-├── use-app-mutation.ts         → useAppMutation
-└── session/
+├── index.tsx                   ← "use client" on line 1
+├── import.ts                   ← every external symbol
+├── key/
+│   ├── index.ts
+│   └── query-key.ts            → QueryKeys
+├── runtime/
+│   ├── index.ts
+│   ├── query-client.ts         → createQueryClient()
+│   ├── api-client.context.tsx  → ApiClientProvider, useApiClient
+│   └── use-app-mutation.ts     → useAppMutation
+└── session/                    ── one subject folder per slice
     ├── index.ts
     ├── session.queries.ts      → SessionQueries
     └── session.mutations.ts    → SessionMutations
 ```
+
+Two role folders and one subject folder — the same split `contracts` has, and for the same reason:
+there is exactly one `QueryKeys` and one client factory, and one queries/mutations pair *per slice*
+([Folders](../opinions/folders.md), which lists `query` as subject-organised).
+
+**The barrel is `index.tsx`, not `index.ts`.** It is what the scaffolded `exports` map and the `tsup`
+entry both name ([06](06-package-anatomy.md)), the same as `ui`'s.
 
 ---
 
@@ -36,7 +48,7 @@ packages/query/src/
 
 ## Step 21.1 — `QueryKeys`
 
-**`packages/query/src/query-key.ts`**
+**`packages/query/src/key/query-key.ts`**
 
 ```ts
 export class QueryKeys {
@@ -44,6 +56,8 @@ export class QueryKeys {
 
   public static readonly session = ["session"] as const;
 
+  // Illustrative until the slice exists: `AppContract` is `{}` today, so there is no
+  // `task` procedure to mirror. Add the block with the slice, not before.
   public static readonly task = {
     all: () => ["task"] as const,
     list: (params: { goalId: string; status?: string }) => ["task", "list", params] as const,
@@ -70,11 +84,10 @@ export class QueryKeys {
 
 ## Step 21.2 — `createQueryClient()`
 
-**`packages/query/src/query-client.ts`**
+**`packages/query/src/runtime/query-client.ts`**
 
 ```ts
-import { QueryClient } from "@tanstack/react-query";
-import type { ApiClient } from "@loadbearing/api-client";
+import { type ApiClient, ERROR_CATALOG, ErrorNormalizer, QueryClient } from "../import.js";
 
 export interface QueryClientOptions {
   readonly transport: ApiClient;
@@ -138,6 +151,8 @@ const { queryClient, apiClient } = createQueryClient({
 
 **`retry: false` on `FORBIDDEN`.** Retrying a permission failure twice with backoff turns an instant "you cannot do that" into a three-second wait for the same answer, and it triples the load from a client stuck in a bad state.
 
+**It is the catalog that decides, not this file.** `ERROR_CATALOG[code].retryable` is declared once in [09](09-errors-package.md) and read here — which is why `@loadbearing/errors` is a dependency of this package. `ErrorNormalizer.normalize` runs first, so a library error that is not an `AppError` becomes `INTERNAL` and gets an answer from the catalog rather than a default. Both are worth pulling out into a spec: the predicate is reachable as `queryClient.getDefaultOptions().queries.retry`.
+
 **`refetchOnWindowFocus: false`.** The default is a reasonable choice for a dashboard someone leaves open all day and a poor one for an app where every refetch is an authenticated round trip carrying a capability resolution. Turn it on per-query where freshness genuinely matters.
 
 **`createQueryClient` is an exported function, which the OOP rule would normally reject** — hence this package using the `react` config. It is a factory in the React idiom, and wrapping it in a class to satisfy a lint rule would be cargo cult.
@@ -146,21 +161,19 @@ const { queryClient, apiClient } = createQueryClient({
 
 ## Step 21.3 — The provider
 
-**`packages/query/src/api-client.context.tsx`**
+**`packages/query/src/runtime/api-client.context.tsx`**
 
 ```tsx
-import { createContext, useContext, type ReactNode } from "react";
-import type { ApiClient } from "@loadbearing/api-client";
+import { type ApiClient, createContext, type ReactNode, useContext } from "../import.js";
 
 const ApiClientContext = createContext<ApiClient | null>(null);
 
-export function ApiClientProvider({
-  client,
-  children,
-}: {
-  client: ApiClient;
-  children: ReactNode;
-}) {
+export interface ApiClientProviderProps {
+  readonly client: ApiClient;
+  readonly children: ReactNode;
+}
+
+export function ApiClientProvider({ client, children }: ApiClientProviderProps): ReactNode {
   return <ApiClientContext.Provider value={client}>{children}</ApiClientContext.Provider>;
 }
 
@@ -179,10 +192,10 @@ Context rather than a module singleton, for the same reason `createQueryClient` 
 
 ## Step 21.4 — `useAppMutation`
 
-**`packages/query/src/use-app-mutation.ts`**
+**`packages/query/src/runtime/use-app-mutation.ts`**
 
-```tsx
-import { useMutation, useQueryClient, type UseMutationOptions } from "@tanstack/react-query";
+```ts
+import { type UseMutationOptions, useMutation, useQueryClient } from "../import.js";
 
 export interface AppMutationOptions<TData, TVariables>
   extends Omit<UseMutationOptions<TData, Error, TVariables>, "onSuccess"> {
@@ -221,9 +234,8 @@ Session is the piece of state that gates everything else, so it lives in the sam
 **`packages/query/src/session/session.queries.ts`**
 
 ```ts
-import { queryOptions } from "@tanstack/react-query";
-import type { AuthClient } from "@loadbearing/api-client";
-import { QueryKeys } from "../query-key.js";
+import { type AuthClient, queryOptions } from "../import.js";
+import { QueryKeys } from "../key/index.js";
 
 export class SessionQueries {
   private constructor() {}
@@ -242,9 +254,9 @@ export class SessionQueries {
 **`packages/query/src/session/session.mutations.ts`**
 
 ```ts
-import type { AuthClient } from "@loadbearing/api-client";
-import { QueryKeys } from "../query-key.js";
-import { useAppMutation } from "../use-app-mutation.js";
+import type { AuthClient } from "../import.js";
+import { QueryKeys } from "../key/index.js";
+import { useAppMutation } from "../runtime/index.js";
 
 export class SessionMutations {
   private constructor() {}
@@ -322,14 +334,23 @@ export class TaskMutations {
 
 ## Step 21.7 — The barrel
 
-**`packages/query/src/index.ts`**
+**`packages/query/src/index.tsx`**
 
-```ts
-export { ApiClientProvider, useApiClient } from "./api-client.context.js";
-export { createQueryClient, type QueryClientOptions, type QueryRuntime } from "./query-client.js";
-export { QueryKeys } from "./query-key.js";
+```tsx
+"use client";
+
+export { QueryKeys } from "./key/index.js";
+export {
+  ApiClientProvider,
+  type ApiClientProviderProps,
+  type AppMutationOptions,
+  createQueryClient,
+  type QueryClientOptions,
+  type QueryRuntime,
+  useApiClient,
+  useAppMutation,
+} from "./runtime/index.js";
 export { SessionMutations, SessionQueries } from "./session/index.js";
-export { type AppMutationOptions, useAppMutation } from "./use-app-mutation.js";
 ```
 
 A new slice adds one line here — `export { TaskMutations, TaskQueries } from "./task/index.js";` — and that line is the eleventh step of the checklist in [27](27-verification-and-first-feature.md) being visible in a diff.
@@ -367,8 +388,19 @@ grep -rn "@tanstack/react-router" packages/query/src
 
 Returns nothing.
 
+> [!WARNING]
+> **That gate greps comments too.** The natural `import.ts` note explaining *why* the router is absent
+> contains the exact specifier and fails the gate describing it. Say "the router package from the same
+> vendor" instead. Docs [18](18-api-client-package.md) and [20](20-content-package.md) have gates with
+> the same shape and the same trap.
+
 - `packages/query/package.json` has `react` as a peer, not a dependency.
-- `createQueryClient` is called nowhere at module scope.
+- `createQueryClient` is called nowhere at module scope, and
+  `grep -rn "new QueryClient" packages apps` returns **exactly one** hit — inside the factory. That
+  grep is the regression check for the request-scoped leak; the spec asserting two calls return two
+  instances would still pass if a module singleton were reintroduced beside it.
+- `head -1 packages/query/dist/index.js` is `"use client";`. Worth checking rather than assuming —
+  esbuild has historically dropped top-level directives ([06](06-package-anatomy.md)).
 
 Do not proceed until this passes.
 

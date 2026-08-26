@@ -16,16 +16,31 @@ That is also why it is the only place a swap happens. Moving from pgvector to Qd
 
 ```
 packages/composition/src/
-├── index.ts                ← ServerOnly.assert()
-├── container.config.ts     → ContainerConfig
-└── container.ts            → Container
+├── index.ts                        ← ServerOnly.assert(). Two exports, and no more
+├── import.ts                       ← every external symbol, both sides of every seam
+├── container/
+│   ├── index.ts
+│   ├── container.config.ts         → ContainerConfig
+│   ├── container.ts                → Container
+│   └── test-container.ts           → TestContainer, TestPorts   (off the barrel)
+└── fake/
+    ├── index.ts
+    └── …                           one fake per port in `application/src/port/`
 ```
+
+**`src/` holds `index.ts`, `import.ts`, and folders** — the rule from
+[Folders](../opinions/folders.md), which also lists `composition` as role-organised. `container/`
+holds one subject's worth of files and `container/container.ts` stutters; accept it, the same way
+`content/src/translator/translator.ts` does.
+
+**`import.ts` here is the longest in the repository**, and that is the package working: naming a port
+and the class behind it exactly once is the entire deliverable.
 
 ---
 
 ## Step 17.1 — `ContainerConfig`
 
-**`packages/composition/src/container.config.ts`**
+**`packages/composition/src/container/container.config.ts`**
 
 ```ts
 export interface ContainerConfig {
@@ -76,11 +91,24 @@ export interface ContainerConfig {
 
 That is what lets you construct the entire system in a test with a fake database and a frozen clock — and it is what lets the same code run in a web server and a background worker without either fighting over environment variables. (The Tauri desktop app never constructs a `Container` at all — see [30](30-desktop-app.md).)
 
+> [!WARNING]
+> **`auth` is required here and [25](25-worker-app.md) asks for it to be optional.** That is a real
+> open decision, not an oversight, and it is worth reading both sides before you pick. The worker
+> never issues or validates a session, so handing it an `AUTH_SECRET` is one more secret in one more
+> environment for no reason. But making the block optional puts `| undefined` on `auth`, `sessions`
+> and `principals` — three fields the web app uses at four call sites where the value is never
+> actually absent, so the type would be lying in the direction of noise.
+>
+> Build it required, as written here. Decide when you reach [25](25-worker-app.md), where the worker's
+> constraints are concrete: either the block goes optional and the three fields become
+> possibly-undefined, or the worker's `env.ts` supplies a block it does not use. Whichever you pick,
+> the other document needs the same edit.
+
 ---
 
 ## Step 17.2 — `Container`
 
-**`packages/composition/src/container.ts`**
+**`packages/composition/src/container/container.ts`**
 
 ```ts
 import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
@@ -106,7 +134,7 @@ import {
   MembershipReader,
   PrincipalBuilder,
 } from "@loadbearing/auth";
-import { ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
+import { ContentSource, StaticContentSource } from "@loadbearing/content";
 import {
   Database,
   PgActivityLogger,
@@ -152,6 +180,7 @@ export class Container {
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
+  // `EventBus` is the tenth port and is deliberately absent — see below.
 
   // ── auth ──────────────────────────────────────────────────
   public readonly auth: AuthInstance;
@@ -192,7 +221,9 @@ export class Container {
     this.analytics = new PgAnalyticsReader(this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
-    this.content = new StaticContentSource(SERVER_CATALOG);
+    // No argument until `SERVER_CATALOG` exists — the constructor already defaults to
+    // the client catalog, and a server catalog identical to it would enforce nothing (20).
+    this.content = new StaticContentSource();
 
     // The fourth argument is what pins a tenant onto every session at sign-in. It is
     // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
@@ -269,6 +300,19 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 
 ---
 
+> [!NOTE]
+> **Nine of the ten ports are wired here. `EventBus` is not.** `application` declares it for
+> cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
+> notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
+> adapter in `db` or `infrastructure` and no field on this class. Adding one is a field plus a
+> constructor line, exactly like the rest.
+>
+> A fake for it exists regardless, in `TestContainer` — which is the point of that file: the first
+> use-case that publishes an event is testable on the day it is written, without a port double being
+> the thing that blocks it.
+
+---
+
 ## Step 17.3 — Where use-cases go
 
 A container with fifty use-cases as fields is unwieldy but it is honest, and it is still simpler than a module graph. Two ways to keep it readable as features arrive:
@@ -300,30 +344,84 @@ The oRPC router then reads `context.container.task.reactivate.execute(...)`, whi
 
 The reason this class exists in this shape:
 
-```ts
-class TestContainer {
-  public static build(overrides: Partial<Ports> = {}) {
-    const clock = new FixedClock(new Date("2026-01-01T00:00:00Z"));
-    const logger = new SilentLogger();
-    const authorizer = new Authorizer();
-    const tasks = overrides.tasks ?? new InMemoryTaskRepository();
-    const activity = overrides.activity ?? new RecordingActivityLogger();
-    const analytics = overrides.analytics ?? new StubAnalyticsReader();
+**`packages/composition/src/container/test-container.ts`**
 
+```ts
+// One entry per port in `application/src/port/`. Adding a port there is one line here
+// and a compile error until it is written — which is the whole reason this file is in
+// `src/` and not in a spec: it is checked by `tsc`, not by a test that runs.
+export interface TestPorts {
+  readonly activity: ActivityLogger;
+  readonly analytics: AnalyticsReader;
+  readonly cache: CacheStore;
+  readonly content: ContentSource;
+  readonly embeddings: EmbeddingProvider;
+  readonly events: EventBus;
+  readonly queue: QueuePublisher;
+  readonly sessions: SessionResolver;
+  readonly storage: StorageGateway;
+  readonly unitOfWork: UnitOfWork;
+  readonly vectors: VectorStore;
+}
+
+// The ports plus the three shared primitives a use-case is constructed with. No `auth`,
+// no `principals`, no `capabilities`: a use-case test never authenticates.
+export interface TestHarness extends TestPorts {
+  readonly clock: FixedClock;
+  readonly logger: Logger;
+  readonly authorizer: Authorizer;
+}
+
+export class TestContainer {
+  private static readonly EPOCH = "2026-01-01T00:00:00Z";
+
+  private constructor() {}
+
+  public static build(overrides: Partial<TestPorts> = {}): TestHarness {
     return {
-      clock,
-      tasks,
-      activity,
-      analytics,
-      reactivateTask: new ReactivateTaskUseCase(tasks, authorizer, activity, clock),
+      clock: new FixedClock(new Date(TestContainer.EPOCH)),
+      logger: new SilentLogger(),
+      authorizer: new Authorizer(),
+
+      activity: overrides.activity ?? new RecordingActivityLogger(),
+      analytics: overrides.analytics ?? new StubAnalyticsReader(),
+      cache: overrides.cache ?? new InMemoryCacheStore(),
+      // Already in-memory: its catalog is a map of dynamic imports, so there is nothing
+      // to fake. The one port whose real implementation is the test double.
+      content: overrides.content ?? new StaticContentSource(),
+      embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
+      events: overrides.events ?? new RecordingEventBus(),
+      queue: overrides.queue ?? new RecordingQueuePublisher(),
+      sessions: overrides.sessions ?? new StubSessionResolver(),
+      storage: overrides.storage ?? new InMemoryStorageGateway(),
+      unitOfWork: overrides.unitOfWork ?? new DirectUnitOfWork(),
+      vectors: overrides.vectors ?? new InMemoryVectorStore(),
     };
   }
 }
 ```
 
+A use-case spec then builds the repository itself — repository ports live in their slice, not in
+`port/` ([12](12-application-package.md)) — and takes the rest from the harness:
+
+```ts
+const activity = new RecordingActivityLogger();
+const harness = TestContainer.build({ activity });
+const tasks = new InMemoryTaskRepository();
+
+await new ReactivateTaskUseCase(tasks, harness.authorizer, activity, harness.clock)
+  .execute(principal, { taskId });
+
+expect(activity.actions()).toEqual(["task.reactivated"]);
+```
+
 No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test builds a `Principal` directly with a hand-made `CapabilitySet` and asserts on behaviour. Integration tests — the ones that need real infrastructure — are then reserved for the adapters themselves and the auth routes, which is a much smaller and much less flaky set.
 
-**A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs.
+**A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that.
+
+**Two of them carry real logic anyway, and both earn it.** `InMemoryVectorStore` computes actual cosine, because a fake that scored every hit identically would let *"the top result is the right one"* pass either way — the one assertion a retrieval use-case is worth testing. And `RecordingQueuePublisher` honours `jobId` deduplication, because "enqueue OCR for this receipt, once" is a business rule the use-case is responsible for, not queue configuration.
+
+**`RecordingEventBus` exists even though `Container` wires no `EventBus`.** That is the point of the file rather than an inconsistency: the first use-case that publishes a domain event is testable on the day it is written.
 
 **Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-db-package.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
 
@@ -334,11 +432,42 @@ No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test build
 **`packages/composition/src/index.ts`**
 
 ```ts
-export type { ContainerConfig } from "./container.config.js";
-export { Container } from "./container.js";
+import { ServerOnly } from "./import.js";
+
+ServerOnly.assert("@loadbearing/composition");
+
+export { Container, type ContainerConfig } from "./container/index.js";
 ```
 
-**`TestContainer` is not exported.** It exists for specs inside packages that already depend on `composition`, and leaving it off the barrel is the difference between "test helper" and "public API" — a distinction `export *` could not have made.
+**`TestContainer` is not exported.** Leaving it off the barrel is the difference between "test
+helper" and "public API" — a distinction `export *` could not have made.
+
+**It lives in `src/`, not `tests/`, and that is the point.** `TestPorts` has one entry per abstract
+class in `packages/application/src/port/`, so adding an eleventh port there stops this file
+compiling until it has a double. That is a `tsc` check rather than a spec's, which is the only way
+the claim above — *"one line here rather than a compile error in forty specs"* — actually holds.
+`tsup` builds from `src/index.ts`, which names neither `test-container.ts` nor `fake/`, so nothing
+reaches `dist/`:
+
+```bash
+grep -c "TestContainer\|InMemory\|Recording\|Stub" packages/composition/dist/index.js
+```
+
+Returns `0`.
+
+**`build()` returns the ports as their abstract types** — the one place this repository does the
+*opposite* of rule 1, for the same underlying reason. `harness.activity.recorded()` deliberately does
+not compile: a spec asserting on a fake should own the reference, so the assertion reads off a
+variable the test already declared rather than a chain into a container.
+
+```ts
+const activity = new RecordingActivityLogger();
+const harness = TestContainer.build({ activity });
+// …
+expect(activity.actions()).toEqual(["task.reactivated"]);
+```
+
+That is also why `src/fake/` has a barrel and `TestContainer` does not go on the package's.
 
 ---
 
@@ -349,10 +478,15 @@ pnpm --filter @loadbearing/composition build
 ```
 
 ```bash
-grep -rn "process\.env" packages --include=*.ts | grep -v "\.config\.ts" | grep -v "src/migrate/" | grep -v "src/seed/" | grep -v "src/smoke.ts"
+grep -rn "process\.env" packages --include=*.ts | grep -vE "\.config\.ts|src/(migrate|seed|smoke|tables)/"
 ```
 
 Returns **nothing**. No package reads its own configuration.
+
+The four exempted directories are exactly the ones Biome's `noProcessEnv` override lists
+([05](05-lint-and-format.md)) — build-time entry points, not shipped code. Keep the two lists in
+step: a path exempted in one and not the other is a gate that passes while the rule is broken, or a
+build that fails for no reason.
 
 Every public field on `Container` that is a port is annotated with an abstract type, not a concrete class.
 

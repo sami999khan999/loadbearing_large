@@ -470,21 +470,27 @@ pnpm add --filter @loadbearing/auth @loadbearing/core@workspace:* @loadbearing/c
 
 ### `@loadbearing/composition`
 ```bash
-pnpm add --filter @loadbearing/composition @loadbearing/core@workspace:* @loadbearing/application@workspace:* @loadbearing/db@workspace:* @loadbearing/infrastructure@workspace:* @loadbearing/auth@workspace:* @loadbearing/content@workspace:*
+pnpm add --filter @loadbearing/composition @loadbearing/core@workspace:* @loadbearing/application@workspace:* @loadbearing/observability@workspace:* @loadbearing/contracts@workspace:* @loadbearing/db@workspace:* @loadbearing/infrastructure@workspace:* @loadbearing/auth@workspace:* @loadbearing/content@workspace:*
 ```
 > The DI root. It is the only package that knows both the abstract ports and every concrete implementation, because wiring them together is its entire job. Server-only.
+>
+> `observability` is on the list because `Container` constructs the `JsonLogger` and `ContainerConfig` names its `LogLevel`. `contracts` is there for the branded ids two port signatures use — `VectorStore.upsert` and `AnalyticsReader.goalRiskScores` — which `TestContainer`'s fakes cannot override without them ([17](17-composition-container.md)).
 
 ### `@loadbearing/asset`
 ```bash
-pnpm add --filter @loadbearing/asset zod@catalog:
+# Nothing. This package has no dependencies of any kind.
 ```
 > Every binary the product ships. **No React here** — icons are SVG files compiled into a sprite at build time, not components — so this package stays importable by React-free consumers like `content`.
+>
+> **And no runtime dependency either.** `ImageManifest` is a frozen object, `IconRegistry` is generated, and `font.css` is a file. An earlier draft installed `zod` here and nothing ever imported it. `tsup` does need a `loader` map for the binary imports — see [19](19-asset-package.md).
 
 ### `@loadbearing/content`
 ```bash
-pnpm add --filter @loadbearing/content @loadbearing/errors@workspace:* @loadbearing/asset@workspace:* zod@catalog:
+pnpm add --filter @loadbearing/content @loadbearing/errors@workspace:* @loadbearing/asset@workspace:* @loadbearing/permissions@workspace:* zod@catalog:
 ```
 > React-free on purpose: `apps/worker` needs copy for digest and escalation emails and cannot import `feature`.
+>
+> `permissions` is here for **`ModuleKey` and nothing else** — the nav collection names a module, never the permission that gates it. The ESLint ban enforcing that difference is in [05](05-lint-and-format.md) Step 5.3, and it is what makes this dependency safe to have ([20](20-content-package.md) Step 20.6).
 >
 > **`errors`, not `core`.** This package imports `ErrorCode`, `ErrorEnvelope` and `FieldViolation` — type-only, so nothing from `errors` reaches the runtime — because `ERROR_COPY` is total over the error vocabulary ([20](20-content-package.md)). It imports nothing from `core` at all, and declaring the dependency anyway would put a cycle one honest refactor away now that `core` depends on `errors`.
 >
@@ -492,17 +498,21 @@ pnpm add --filter @loadbearing/content @loadbearing/errors@workspace:* @loadbear
 
 ### `@loadbearing/api-client`
 ```bash
-pnpm add --filter @loadbearing/api-client @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @orpc/client@catalog: better-auth@catalog:
+pnpm add --filter @loadbearing/api-client @loadbearing/contracts@workspace:* @orpc/client@catalog: @orpc/contract@catalog: better-auth@catalog:
 ```
 > Depends on `contracts` but **not** on `db` or `application` — the client knows the shape of the API, never its implementation. `better-auth` is here for its *vanilla* client only (`better-auth/client`), never `better-auth/react`.
+>
+> **Both `@orpc` packages, and no `core`.** `ContractRouterClient` comes from `@orpc/contract`, not from `@orpc/client`; and nothing in this package imports `@loadbearing/core` — it is isomorphic and carries no `ServerOnly.assert`.
 >
 > **No `@tanstack/*` and no `react` here, ever.** This package must load in plain Node scripts, integration tests, and any non-React host.
 
 ### `@loadbearing/query`
 ```bash
-pnpm add --filter @loadbearing/query @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @loadbearing/api-client@workspace:* @tanstack/react-query@catalog: @orpc/tanstack-query@catalog:
+pnpm add --filter @loadbearing/query @loadbearing/api-client@workspace:* @loadbearing/errors@workspace:* @tanstack/react-query@catalog:
 ```
-> **The only package that may import `@tanstack/*`.** It must not import `@tanstack/react-router` — routing stays in `apps/web`, which is what lets the Tauri app reuse everything above it.
+> **The only package that may import `@tanstack/*`.** It must not import the router package from the same vendor — routing stays in `apps/web`, which is what lets the Tauri app reuse everything above it.
+>
+> `errors` is on the list because the retry default reads `ERROR_CATALOG[code].retryable` ([21](21-query-package.md) Step 21.2): retryability is a fact about the code, declared once. **`@orpc/tanstack-query` is deliberately absent** — its query utilities derive keys from the procedure path automatically, which is the job `QueryKeys` exists to do in one place, and having both gives you two key schemes with invalidation that works for one of them. Add `contracts` with the first feature slice, which is what needs its DTO types.
 
 ### `@loadbearing/ui`
 ```bash
@@ -512,9 +522,12 @@ pnpm add --filter @loadbearing/ui @loadbearing/asset@workspace:*
 
 ### `@loadbearing/feature`
 ```bash
-pnpm add --filter @loadbearing/feature @loadbearing/ui@workspace:* @loadbearing/query@workspace:* @loadbearing/content@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:*
+pnpm add --filter @loadbearing/feature @loadbearing/ui@workspace:* @loadbearing/query@workspace:* @loadbearing/content@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* @loadbearing/errors@workspace:*
+pnpm add --filter @loadbearing/feature -D @loadbearing/api-client@workspace:*
 ```
 > Fetches and mutates through `@loadbearing/query`, never through `@loadbearing/api-client` directly.
+>
+> `errors` is on the list because `SignInForm` branches on `ErrorNormalizer.normalize(error).code`. And **`api-client` is a `devDependency`, deliberately**: the only thing this package takes from it is the `AuthClient` *type*, which `verbatimModuleSyntax` erases — so it is not a runtime edge, and declaring it as one would contradict the ban that defines this package. `packages/ui` does the same with `permissions`.
 
 ---
 

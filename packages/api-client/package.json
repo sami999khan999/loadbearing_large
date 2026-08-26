@@ -31,8 +31,8 @@
   },
   "dependencies": {
     "@loadbearing/contracts": "workspace:*",
-    "@loadbearing/core": "workspace:*",
     "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
     "better-auth": "catalog:"
   }
 }

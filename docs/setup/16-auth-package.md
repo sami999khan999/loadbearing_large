@@ -483,7 +483,7 @@ export class PrincipalBuilder {
 
 ## Step 16.6 — API keys
 
-**`packages/db/src/rbac/api-key.schema.ts`**
+**`packages/db/src/schema/api-key.schema.ts`**
 
 ```ts
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";

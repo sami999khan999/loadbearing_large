@@ -37,9 +37,7 @@
   },
   "dependencies": {
     "@loadbearing/api-client": "workspace:*",
-    "@loadbearing/contracts": "workspace:*",
-    "@loadbearing/core": "workspace:*",
-    "@orpc/tanstack-query": "catalog:",
+    "@loadbearing/errors": "workspace:*",
     "@tanstack/react-query": "catalog:"
   }
 }

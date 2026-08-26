@@ -7,4 +7,6 @@ export const common = {
   "state.loading": "Loading…",
   "state.empty": "Nothing here yet",
   "state.error": "Something went wrong",
+  "state.allowed": "Allowed",
+  "state.denied": "Denied",
 } as const;

@@ -10,7 +10,9 @@
       "development": "./src/index.tsx",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./token.css": "./src/token/token.css",
+    "./theme.css": "./src/theme/theme.css"
   },
   "files": [
     "dist"
@@ -23,9 +25,15 @@
     "clean": "rimraf dist"
   },
   "devDependencies": {
+    "@loadbearing/permissions": "workspace:*",
     "@loadbearing/tsconfig": "workspace:*",
+    "@testing-library/dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "jsdom": "catalog:",
     "react": "catalog:react",
+    "react-dom": "catalog:react",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
@@ -37,5 +45,8 @@
   },
   "dependencies": {
     "@loadbearing/asset": "workspace:*"
-  }
+  },
+  "sideEffects": [
+    "*.css"
+  ]
 }

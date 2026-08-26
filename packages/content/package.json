@@ -33,6 +33,7 @@
   "dependencies": {
     "@loadbearing/asset": "workspace:*",
     "@loadbearing/errors": "workspace:*",
+    "@loadbearing/permissions": "workspace:*",
     "zod": "catalog:"
   }
 }

@@ -4,10 +4,15 @@
 
 **Delivers:** `Translator`, `MessageStore`, two `ContentSource` implementations, the four content shapes, and a navigation model a content editor can safely change — with copy split by locale and namespace so no runtime downloads words it cannot use.
 
-**Built in two passes.** The error slice — every word `@loadbearing/errors` needs — already exists,
+**Built in two passes.** The error slice — every word `@loadbearing/errors` needs — came first,
 because [09](09-errors-package.md) has no other half and `core`'s `ServerOnly.assert` throws before
 anything else in the repository runs. Read the marker legend under the tree below before writing
-anything: some of what follows is on disk and some is the second pass.
+anything: some of what follows is on disk and some waits on the app that calls it.
+
+**Three items are blocked on later steps, and only three** — `SERVER_CATALOG` plus the `email`
+namespace ([25](25-worker-app.md)), `MessageStore` ([24](24-web-app.md)), and
+`BundledContentSource` ([30](30-desktop-app.md)). Everything else in
+[Step 20.10](#step-2010--what-the-second-pass-adds) is unblocked.
 
 **Prerequisite:** [19 · `@loadbearing/asset`](19-asset-package.md)
 
@@ -23,37 +28,43 @@ Two reasons, and the second is the one people miss.
 
 ```
 packages/content/src/
-├── index.ts                      ✅
-├── locale.ts                     → Locale, Locales                       ✅
-├── content-source.ts             → ContentSource (abstract)              ◐  messages/translator only
-├── static.content-source.ts      → StaticContentSource   ← split; dynamic import   ◐
-├── bundled.content-source.ts     → BundledContentSource  ← every locale, static    ☐
-├── translator.ts                 → Translator, MessageSnapshot           ✅
-├── message-store.ts              → MessageStore          ← the SSR → client carrier ☐
-├── media/                                                                ☐  needs `asset`
+├── index.ts                                                              ✅
+├── import.ts                     ← every external symbol                 ✅
+├── primitive/
+│   └── locale.ts                 → Locale, Locales                       ✅
+├── translator/
+│   ├── translator.ts             → Translator, MessageSnapshot           ✅
+│   └── message-store.ts          → MessageStore  ← the SSR → client carrier ✅
+├── source/
+│   ├── content-source.ts         → ContentSource (abstract)              ✅  all four shapes
+│   ├── static.content-source.ts  → StaticContentSource   ← split; dynamic import   ✅
+│   └── bundled.content-source.ts → BundledContentSource  ← every locale, static    ☐
+├── media/                        ── shape 2: media references            ✅
 │   ├── index.ts
 │   ├── media-ref.ts              → MediaResolver, ResolvedMedia
 │   └── static.media-resolver.ts  → StaticMediaResolver
 ├── message/                      ── shape 1: short keyed strings
-│   ├── namespace.ts              → Namespace, NamespaceKeys, MessageKey  ◐  two namespaces
+│   ├── namespace.ts              → Namespace, NamespaceKeys, MessageKey  ◐  four namespaces
 │   ├── catalog.ts                → CLIENT_CATALOG   (locale × namespace → loader)  ◐
 │   ├── catalog.server.ts         → SERVER_CATALOG   (+ email)            ☐
 │   ├── error-copy.ts             → ERROR_COPY, FIELD_RULE_COPY, ErrorCopy ✅
 │   ├── en/                       ← no index.ts; nothing merges these
 │   │   ├── common.ts                                                     ✅
-│   │   ├── nav.ts                                                        ☐  lands with 20.6
-│   │   ├── auth.ts                                                       ☐  lands with [16](16-auth-package.md)
+│   │   ├── nav.ts                                                        ✅
+│   │   ├── auth.ts                                                       ✅
 │   │   ├── error.ts                                                      ✅
 │   │   └── email.ts              ← the worker's namespace, server-only    ☐  lands with [25](25-worker-app.md)
-│   └── bn/                       ← same files; NamespaceBundle<N> each     ◐  common + error
-├── document/                     ── shape 2: long-form editorial          ☐
-│   ├── document.schema.ts        → DocumentContract
-│   └── document.entity.ts        → DocumentEntity
-└── collection/                   ── shape 3: repeating records            ☐
-    ├── collection.schema.ts      → CollectionContract
-    └── nav/
-        ├── nav.schema.ts         → NavContract
-        └── nav.data.ts           → navItems
+│   └── bn/                       ← same files; NamespaceBundle<N> each     ◐  four, all Partial
+├── collection/                   ── shape 3: repeating records            ✅
+│   ├── index.ts
+│   └── nav/
+│       ├── index.ts
+│       ├── nav.schema.ts         → NavContract, NavItem
+│       └── nav.data.ts           → navItems
+└── document/                     ── shape 4: long-form editorial          ✅
+    ├── index.ts
+    ├── document.schema.ts        → DocumentContract
+    └── document.entity.ts        → DocumentEntity, DocumentRecord
 ```
 
 > [!IMPORTANT]
@@ -672,7 +683,10 @@ export class NavContract {
   private constructor() {}
 
   public static readonly item = z.object({
-    // A ModuleKey from @loadbearing/permissions. NEVER a PermissionKey.
+    // A `ModuleKey`, and never the thing that gates it: `ModuleRegistry` owns that
+    // mapping, and a content edit able to change it would be a privilege escalation.
+    // `nav.data.ts` pins the narrow type at authoring time; this stays `string`
+    // because a CMS row arrives unvalidated.
     module: z.string(),
     labelKey: z.string(),
     icon: z.string(),
@@ -1036,12 +1050,16 @@ The root barrel names four folder barrels and nothing else, because `src/` holds
 The second pass adds five lines and changes none of the above:
 
 ```ts
-export { BundledContentSource } from "./bundled.content-source.js";
-export { NavContract, type NavItem } from "./collection/nav/nav.schema.js";
+export { navItems, NavContract, type NavItem } from "./collection/index.js";
+export { DocumentContract, DocumentEntity, type DocumentRecord } from "./document/index.js";
 export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
-export { SERVER_CATALOG } from "./message/catalog.server.js";
-export { MessageStore } from "./message-store.js";
+export { SERVER_CATALOG } from "./message/catalog.server.js";        // ☐ with 25
+export { BundledContentSource } from "./source/index.js";            // ☐ with 30
+export { MessageStore } from "./translator/index.js";                // ✅ with 23
 ```
+
+Every path goes through a folder barrel, because `src/` holds only `index.ts` and `import.ts`
+([Folders](../opinions/folders.md)).
 
 **The scaffold's `ContentPackage` placeholder is gone.** [06](06-package-anatomy.md) emits one per
 package so the barrel has a real export before the package has real code; this package has real code
@@ -1077,19 +1095,44 @@ than shaving a kilobyte — and [26](26-hygiene-and-ci.md)'s bundle grep is what
 
 ## Step 20.10 — What the second pass adds
 
-The error slice is done and gated below. Finishing the package is these seven items, in any order,
+The error slice is done and gated below. Finishing the package is these eight items, in any order,
 each of which is additive:
 
 | # | Add | Needs | Touches |
 | --- | --- | --- | --- |
 | 1 | `message/en/nav.ts` + `bn/nav.ts` | — | `NamespaceShape`, `ClientNamespace`, `CLIENT_NAMESPACES`, two `CLIENT_CATALOG` cells |
 | 2 | `message/en/auth.ts` + `bn/auth.ts` | [16](16-auth-package.md) for the copy it needs | same four places |
-| 3 | `message/en/email.ts` + `bn/email.ts`, `catalog.server.ts` | [25](25-worker-app.md) | `ServerNamespace`, `Namespace`, the barrel |
+| 3 | `message/en/email.ts` + `bn/email.ts`, `catalog.server.ts` | **[25](25-worker-app.md)** — the worker is what defines the copy | `ServerNamespace`, `Namespace`, the barrel |
 | 4 | `media/` — `MediaResolver`, `StaticMediaResolver` | [19](19-asset-package.md)'s `ImageManifest` | `ContentSource.media()`, the barrel |
-| 5 | `collection/nav/` — `NavContract`, `navItems` | `zod` (already a dependency) | `ContentSource.nav()`, the barrel |
+| 5 | `collection/nav/` — `NavContract`, `navItems` | `zod` (already a dependency), `ModuleKey` from `permissions` | `ContentSource.nav()`, the barrel |
 | 6 | `document/` — `DocumentContract`, `DocumentEntity` | — | `ContentSource.document()`, the barrel |
-| 7 | `message-store.ts` — `MessageStore` | nothing; deferred so `ensure()` has a caller | the barrel |
-| 8 | `bundled.content-source.ts` — `BundledContentSource` | [30](30-desktop-app.md) | the barrel |
+| 7 | `translator/message-store.ts` — `MessageStore` | [23](23-feature-package.md)'s `MessageProvider` is the caller | the barrel |
+| 8 | `bundled.content-source.ts` — `BundledContentSource` | **[30](30-desktop-app.md)** | the barrel |
+
+**Items 1, 2, 4, 5 and 6 are unblocked and go in together.** Doing them as one pass is what makes
+`ContentSource` declare all four shapes at once — which matters, because an abstract method with no
+implementation is a compile error in `StaticContentSource` the moment it exists, so the seam and its
+one implementation have to move in the same commit.
+
+**Items 3 and 8 wait on a caller, not on anything here.** (Item 7's caller turned out to be
+[23](23-feature-package.md)'s `MessageProvider`, not [24](24-web-app.md)'s loader — it subscribes to
+the store; the loader only calls `ensure()` on it later.) Each is listed in the barrel snippet
+above with the step it arrives with. Until item 3 lands, [17](17-composition-container.md)'s
+`Container` constructs `new StaticContentSource()` with no argument.
+
+> [!NOTE]
+> **Items 5 and 6 need a decision this document does not make.** `nav.data.ts` wants two types for
+> one record: the Zod schema stays wide (`module: z.string()`) because it is what will parse a
+> database row, and the authored literal is pinned against a narrower `NavRecord`
+> (`module: ModuleKey`, `labelKey: NamespaceKeys["nav"]`, `icon: IconName`) with
+> `as const satisfies`. Both checks run and they check different things — narrowing the schema to
+> the unions instead makes it unable to parse the untrusted input it exists for.
+>
+> And `document/` is named in the tree without a schema anywhere in this document. The minimum a
+> database-backed `document()` has to parse is an addressable slug, a title, a markdown body, and
+> when it last changed. Note the loose end while you are there: `ContentSource.document(slug)`
+> returns `string | null` — the body — which is narrower than a `DocumentEntity`, and will want
+> widening when a `DbContentSource` exists.
 
 **Two things are worth re-checking rather than assuming when item 3 lands.** `SERVER_CATALOG` is the
 first thing that makes `Namespace` wider than `ClientNamespace`, so it is the first time
@@ -1101,9 +1144,10 @@ client/server split exists, test it with `CLIENT_CATALOG` and `"email"`, which i
 actually matters.
 
 **Item 5 is where [Step 20.6](#step-206--navigation-and-the-line-content-must-not-cross)'s rule
-starts being enforceable.** The ESLint ban on `PermissionKey` is already configured and already
-passing — vacuously, because nothing in this package imports `@loadbearing/permissions` at all. It
-stops being vacuous the moment `nav.data.ts` names a module.
+starts being enforceable.** The ESLint ban is already configured and already passing — vacuously,
+because nothing in this package imports `@loadbearing/permissions` at all. It stops being vacuous the
+moment `nav.data.ts` names a module, which is also when `permissions` joins this package's
+dependencies for `ModuleKey` and nothing else.
 
 ---
 
@@ -1125,7 +1169,10 @@ The error slice, which is what exists:
   `ErrorCopy.message(t, new ServerOnlyError("@loadbearing/db").toJSON())` returns the full sentence
   with `@loadbearing/db` substituted for `{package}`. That single assertion covers the whole
   redesign in [09](09-errors-package.md) Step 9.3: the code carries no prose, and the prose is here.
-- `grep -rn "PermissionKey" packages/content/src` returns nothing.
+- `grep -rn "PermissionKey" packages/content/src` returns nothing. **Including comments** — the
+  obvious comment on `nav.schema.ts` explaining why the field is a module key fails this gate by
+  naming the thing it is telling you not to use. Paraphrase. Docs [18](18-api-client-package.md) and
+  [21](21-query-package.md) have gates with the same shape and the same trap.
 - `pnpm --filter @loadbearing/content build` succeeds with no React in the output, **and emits
   more than one chunk in `dist/`** — one per locale × namespace. Five files today
   (`index.js` plus `common-*.js` and `error-*.js` for each locale). A single chunk means the

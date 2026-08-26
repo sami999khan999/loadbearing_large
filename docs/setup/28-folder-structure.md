@@ -421,7 +421,7 @@ packages/db/
 
 **`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not shipped code.
 
-**`grep -rn "PgVectorStore" packages/ apps/` must return hits in exactly two places** — here, and `composition/container.ts`. That is the seam that keeps a Qdrant swap cheap.
+**`grep -rn "PgVectorStore" packages/ apps/` must return hits in exactly two packages** — here, and `composition` (twice there: `src/import.ts` and `src/container/container.ts`, since every external symbol enters through the one outside surface). A third package naming it is what makes a Qdrant swap expensive again.
 
 ### `packages/infrastructure`
 
@@ -481,13 +481,21 @@ packages/auth/tests/
 
 ```
 packages/composition/src/
-├── index.ts                ← ServerOnly.assert()
-├── container.config.ts     → ContainerConfig
-├── container.ts            → Container
-└── test-container.ts       → TestContainer   (fakes for every port)
+├── index.ts                         ← ServerOnly.assert()
+├── import.ts                        ← every external symbol, both sides of every seam
+├── container/
+│   ├── index.ts
+│   ├── container.config.ts          → ContainerConfig
+│   ├── container.ts                 → Container
+│   └── test-container.ts            → TestContainer, TestPorts   (off the barrel)
+└── fake/
+    ├── index.ts
+    └── …                            one fake per port in `application/src/port/`
 ```
 
-**Three files, and the second-largest file in the repository.** Every wiring decision is here and nowhere else.
+**Every wiring decision is here and nowhere else**, which is why `import.ts` is the longest in the repository — naming a port and the class behind it exactly once is the whole deliverable.
+
+**`test-container.ts` and `fake/` live in `src/`, not `tests/`, deliberately.** `TestPorts` has one entry per abstract class in `application/src/port/`, so adding a port there stops this file compiling until it has a double — a `tsc` check rather than a spec's. `tsup` builds from `index.ts`, which names neither, so nothing reaches `dist/`.
 
 ---
 
@@ -498,11 +506,14 @@ packages/composition/src/
 ```
 packages/api-client/src/
 ├── index.ts
-├── api-client.ts                    → ApiClient  (private ctor; overHttp / inProcess)
+├── import.ts                        ← every external symbol. Note what is absent
+├── client/
+│   ├── index.ts
+│   └── api-client.ts                → ApiClient  (private ctor; overHttp / inProcess)
 └── auth/
     ├── index.ts
     ├── auth.client.ts               → AuthClient  (better-auth vanilla, never /react)
-    ├── auth.strategy.ts             → AuthStrategy  (abstract)
+    ├── auth.strategy.ts             → AuthStrategy  (abstract), RequestCredentials
     ├── cookie-auth.strategy.ts      → CookieAuthStrategy
     ├── bearer-auth.strategy.ts      → BearerAuthStrategy
     └── token.provider.ts            → TokenProvider  (abstract)
@@ -537,7 +548,9 @@ packages/asset/
         └── inter-variable.woff2
 ```
 
-Three entrypoints in `exports`: `.`, `./font.css`, `./sprite.svg`.
+Three entrypoints in `exports`: `.`, `./font.css`, `./sprite.svg`. Two `tsup` requirements come with
+them — a `loader` map for the binary imports, and `"asset.d.ts"` in the tsconfig `include`, since a
+`.d.ts` above `src/` is otherwise outside the program ([19](19-asset-package.md)).
 
 ### `packages/content`
 
@@ -557,9 +570,9 @@ packages/content/src/
 │   ├── index.ts
 │   ├── translator.ts                → Translator, MessageSnapshot
 │   └── message-store.ts             → MessageStore  (the SSR → client carrier)
-├── media/
+├── media/                           ── shape 2: media references
 │   ├── index.ts
-│   ├── media-ref.ts                 → MediaRef
+│   ├── media-ref.ts                 → MediaResolver, ResolvedMedia
 │   └── static.media-resolver.ts     → StaticMediaResolver
 ├── message/                         ── shape 1: short keyed strings
 │   ├── index.ts
@@ -579,10 +592,10 @@ packages/content/src/
 │       ├── auth.ts
 │       ├── error.ts
 │       └── email.ts
-├── document/                        ── shape 2: long-form editorial
+├── document/                        ── shape 4: long-form editorial
 │   ├── index.ts
 │   ├── document.schema.ts           → DocumentContract
-│   └── document.entity.ts           → DocumentEntity
+│   └── document.entity.ts           → DocumentEntity, DocumentRecord
 └── collection/                      ── shape 3: repeating records
     ├── index.ts
     ├── collection.schema.ts         → CollectionContract
@@ -615,11 +628,16 @@ packages/content/tests/
 
 ```
 packages/query/src/
-├── index.ts
-├── query-key.ts                   → QueryKeys       (mirrors procedure paths)
-├── query-client.ts                → createQueryClient()
-├── api-client.context.tsx         → ApiClientProvider, useApiClient
-├── use-app-mutation.ts            → useAppMutation   (declarative `invalidates`)
+├── index.tsx                      ← "use client" on line 1
+├── import.ts                      ← every external symbol
+├── key/
+│   ├── index.ts
+│   └── query-key.ts               → QueryKeys       (mirrors procedure paths)
+├── runtime/
+│   ├── index.ts
+│   ├── query-client.ts            → createQueryClient()
+│   ├── api-client.context.tsx     → ApiClientProvider, useApiClient
+│   └── use-app-mutation.ts        → useAppMutation   (declarative `invalidates`)
 ├── session/
 │   ├── index.ts
 │   ├── session.queries.ts         → SessionQueries
@@ -630,7 +648,7 @@ packages/query/src/
     └── <slice>.mutations.ts       → <Slice>Mutations
 ```
 
-**The only package that may import `@tanstack/*`** — and still not `@tanstack/react-router`.
+**The only package that may import `@tanstack/*`** — and still not the router package from the same vendor. Two role folders (`key/`, `runtime/`) plus one subject folder per slice, the same split `contracts` has.
 
 ### `packages/ui`
 

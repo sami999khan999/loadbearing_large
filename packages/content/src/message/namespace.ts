@@ -1,18 +1,22 @@
+import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
 import type { error } from "./en/error.js";
+import type { nav } from "./en/nav.js";
 
 // Type-only. `verbatimModuleSyntax` erases the imports above, so the key union stays
 // complete while the runtime data splits into one chunk per locale × namespace.
-// Partial today: `nav`, `auth` and the server-only `email` join at their own steps.
+// Partial still: the server-only `email` namespace joins with the worker's digests (25).
 interface NamespaceShape {
   readonly common: typeof common;
+  readonly nav: typeof nav;
+  readonly auth: typeof auth;
   readonly error: typeof error;
 }
 
 // Always present, in every snapshot, from every ContentSource. Never lazy.
 export type ShellNamespace = "common" | "error";
-// Everything a browser or desktop bundle may load. Gains `nav` and `auth` later.
-export type ClientNamespace = ShellNamespace;
+// Everything a browser or desktop bundle may load. Lazy: a route declares what it needs.
+export type ClientNamespace = ShellNamespace | "nav" | "auth";
 // Gains the server-only `email` namespace when the worker's digests land.
 export type Namespace = ClientNamespace;
 
@@ -34,4 +38,4 @@ export type MessageBundle = Partial<Record<MessageKey, string>>;
 export type MessageParams = Readonly<Record<string, string | number | boolean>>;
 
 export const SHELL_NAMESPACES: readonly ShellNamespace[] = ["common", "error"];
-export const CLIENT_NAMESPACES: readonly ClientNamespace[] = ["common", "error"];
+export const CLIENT_NAMESPACES: readonly ClientNamespace[] = ["common", "error", "nav", "auth"];

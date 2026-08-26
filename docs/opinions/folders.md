@@ -41,6 +41,13 @@ are reached only by string-literal `import()` from `message/catalog.ts`, and tha
 them into one chunk per locale × namespace. A barrel there would be dead weight that anyone could
 accidentally import and collapse the split. See [20](../setup/20-content-package.md).
 
+**A second exemption: directories that hold no modules.** In `packages/asset`, `icon/svg/`,
+`image/file/` and `font/` hold `.svg`, `.webp` and `.woff2`; in `packages/ui`, `token/` holds one
+stylesheet. None of them hold modules. There is nothing for a barrel to name, and
+the surfaces that reach them are `ImageManifest` (which imports the files by path) and the `exports`
+map (which publishes `./font.css`, `./sprite.svg`, `./token.css` and `./theme.css` directly). The
+rule is about folders of code.
+
 ## A folder is named after its role, and the vocabulary is shared
 
 **The default is a role folder: the folder name says what kind of thing is inside.** The same kind
@@ -59,6 +66,9 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `source/` | an abstract seam plus its implementations | `content` |
 | `translator/` | interpolation and fallback over a message bundle | `content` |
 | `message/` | keyed copy, split by locale and namespace | `content` |
+| `media/` | the media-reference seam and its resolvers | `content` |
+| `collection/` | repeating editorial records, one subject folder each | `content` |
+| `document/` | long-form editorial — a contract and the entity over it | `content` |
 | `gate/` | module gates, fragment-per-slice | `permissions` |
 | `route/` | declared destinations, fragment-per-slice | `permissions` |
 | `procedure/` | the merged oRPC contract every slice's `.procedures.ts` feeds | `contracts` |
@@ -69,6 +79,17 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `transaction/` | the `UnitOfWork` seam and the scope it reads | `db` |
 | `seed/` | idempotent seeds, run after migration | `db` |
 | `migrate/` | the migration runner | `db` |
+| `container/` | the DI root and the config shape it takes | `composition` |
+| `fake/` | test doubles for ports, one per port, never on the barrel | `composition` |
+| `client/` | the outbound transport and the typed client over it | `api-client` |
+| `key/` | the cache-key vocabulary every slice's queries name | `query` |
+| `runtime/` | what an app constructs and every slice consumes | `query` |
+| `i18n/` | the React binding for the message catalog | `feature` |
+| `rbac/` | screens over the permission catalog, no query of their own | `feature` |
+| `icon/` | source SVGs, the generated sprite, and the name union over it | `asset` |
+| `image/` | the shipped image files and the closed key union over them | `asset` |
+| `font/` | self-hosted font files and the one `@font-face` sheet | `asset` |
+| `auth/` | the credential seam — strategies, token storage, the auth SDK wrapper | `api-client` |
 | `consumer/` | queue consumers | `apps/worker` |
 | `schedule/` | repeatable jobs | `apps/worker` |
 

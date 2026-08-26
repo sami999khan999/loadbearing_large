@@ -145,6 +145,16 @@
       }
     },
     {
+      "includes": ["packages/asset/src/icon/svg/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "**/*.mjs",
         "packages/auth/src/tables/**",

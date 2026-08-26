@@ -232,7 +232,8 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ## 1.13 Inside `packages/composition`
 
-- **Three files, no subfolders.** `ContainerConfig` (the shape), `Container` (the wiring), `TestContainer` (the same wiring with fakes).
+- **`container/`** — `ContainerConfig` (the shape), `Container` (the wiring), `TestContainer` (the same wiring with fakes). **`fake/`** — one double per port in `application/src/port/`, off the barrel.
+- **`TestPorts` is a compile-time completeness check.** One entry per abstract port class, so adding a port stops this package compiling until it has a double. That is why it lives in `src/` rather than `tests/`: the check has to be `tsc`'s.
 - **Constructs every concrete class exactly once.** This is the only file in the repository that knows `PgVectorStore` and `VectorStore` are related.
 - **Exposes ports as abstract types**, so a consumer holding `container.vectorStore` cannot accidentally depend on the concrete class.
 - **Contains no logic.** An `if` that is not about configuration means something crept in.
@@ -243,9 +244,10 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ## 1.14 Inside `packages/api-client`
 
-- **`src/` root** — `ApiClient`, with a private constructor and two factories: `overHttp` (browser and desktop) and `inProcess` (SSR, no network hop).
+- **`client/`** — `ApiClient`, with a private constructor and two factories: `overHttp` (browser and desktop) and `inProcess` (SSR, no network hop).
 - **`auth/`** — `AuthStrategy` (abstract) and its two implementations, plus `TokenProvider` (abstract) and `AuthClient`. This folder is the entire difference between a web client and a desktop client.
 - **Never imports `react` or `@tanstack/*`.** It must load in plain Node scripts, integration tests, and any future non-React host.
+- **Names no DOM type.** `RequestCredentials` is restated locally and `fetch` is reached off `globalThis`, because `library.json` loads `lib: ["ES2024"]` and giving this package the DOM lib would declare `document` in something that has to run in Node.
 - **Caches nothing.** Caching is `query`'s job, and the split exists because the two change for different reasons — this package when the backend changes, `query` when product behaviour does.
 - **Smell:** a hook, or a `queryKey`.
 
@@ -256,7 +258,8 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **`image/`** — a closed `ImageKey` union plus the files themselves under `file/`. A content record naming a missing image is a compile error.
 - **`icon/`** — source SVGs under `svg/`, plus the generated `sprite.svg` and `IconRegistry`. The sprite is gitignored; `build-sprite.mjs` regenerates it and fails the build on any hardcoded `fill` or `stroke`, because a hardcoded colour is an icon that breaks in dark mode.
 - **`font/`** — self-hosted variable fonts and the `@font-face` CSS. Self-hosted so there is no third-party request on first paint.
-- **`build-sprite.mjs`** sits above `src/` — build tooling, not shipped code.
+- **`build-sprite.mjs`** and **`asset.d.ts`** sit above `src/` — build tooling, not shipped code. The `.d.ts` therefore has to be named in the tsconfig `include`, or it is silently outside the program.
+- **The sprite is gitignored; the registry is committed.** Output that the type system depends on has to survive a fresh clone, or nothing typechecks before a build. And because the registry lands in a linted tree, the generator owns its formatting — Biome collapses a short array inline, so the generator has to as well or every icon addition is a diff in two places.
 - **Holds only assets you ship.** User uploads are S3's problem and never appear here.
 - **Smell:** a file that differs per environment.
 
@@ -267,25 +270,26 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **`message/`** — short keyed strings in three tiers. `namespace.ts` derives the closed `MessageKey` union from **type-only** imports of the English files, so the union stays complete while the runtime data splits; `catalog.ts` maps locale × namespace to a dynamic-import loader; `catalog.server.ts` adds `email`, which is server-only. English files are `as const`; every other locale is `NamespaceBundle<N>` — `Partial<>` **per namespace**, not per locale, so a Bengali file cannot hold a key from a namespace it does not name. A typo in a component is still a compile error, and so is a key from a namespace that component never declared.
 - **`document/`** — long-form editorial content with a schema and an entity.
 - **`collection/`** — repeating records, including `nav/`. Nav items carry a **module**, never a permission — a `files`-scoped block in the root ESLint config bans importing `PermissionKey` here, because content authors should not be making authorization decisions.
-- **`media/`** — `MediaRef` and the resolver that turns one into a URL.
-- **`message/error-copy.ts`** — the only place in the repository where a failure gets words. `ERROR_COPY` is `Record<ErrorCode, ShellMessageKey>`, so it is total over the error vocabulary *and* restricted to the two namespaces every snapshot guarantees; `ErrorCopy` is the class an error page calls. This package depends on `@loadbearing/errors` for those types and on `@loadbearing/core` for nothing — see [20](20-content-package.md).
+- **`media/`** — `MediaResolver` (abstract) and `StaticMediaResolver`, which turns an `ImageKey` into a URL by reading [19](19-asset-package.md)'s manifest. Async in the seam, synchronous in the implementation, for the same reason as everything else here.
+- **`message/error-copy.ts`** — the only place in the repository where a failure gets words. `ERROR_COPY` is `Record<ErrorCode, ShellMessageKey>`, so it is total over the error vocabulary *and* restricted to the two namespaces every snapshot guarantees; `ErrorCopy` is the class an error page calls. This package depends on `@loadbearing/errors` for those types, on `@loadbearing/asset` for `ImageKey`, on `@loadbearing/permissions` for `ModuleKey` **and nothing else from it**, and on `@loadbearing/core` for nothing — see [20](20-content-package.md).
 - **`source/`** — `content-source.ts` (abstract) and `static.content-source.ts`. The abstract class is the seam a CMS slots into, and `ContentSource.resolve()` is `protected static` so "`common` and `error` are always in the snapshot" is a property of the seam rather than of each implementation.
 - **`translator/`** — `Translator` and `MessageSnapshot`: `{name}` interpolation with no library, and the English-underneath-the-locale fallback.
 - **`primitive/`** — `locale.ts`. Same folder name as `core`'s, holding the same kind of thing: a value type with no layer role.
-- **`content-source.ts`** — abstract, with **every method async even though the static implementation is mostly synchronous**. That is deliberate: it means moving to a CMS later changes no call site. The synchronous implementations satisfy those signatures with `Promise.resolve`, never an `async` body with no `await` — `require-await` ([05](05-lint-and-format.md)) rejects the second, and it is a lie about what the method does either way.
-- **`message-store.ts`** — the mutable holder around an immutable snapshot, and the one object that crosses the SSR boundary and absorbs namespaces added by a client-side navigation. React-free, so `apps/worker` and Node tests use the same class the browser does.
+- **`source/content-source.ts`** — abstract, with **every method async even though the static implementation is mostly synchronous**. That is deliberate: it means moving to a CMS later changes no call site. The synchronous implementations satisfy those signatures with `Promise.resolve`, never an `async` body with no `await` — `require-await` ([05](05-lint-and-format.md)) rejects the second, and it is a lie about what the method does either way.
+- **`translator/message-store.ts`** — the mutable holder around an immutable snapshot, and the one object that crosses the SSR boundary and absorbs namespaces added by a client-side navigation. React-free, so `apps/worker` and Node tests use the same class the browser does.
 - **Smell:** a permission key; a synchronous read method on the abstract class; **a static import of a locale catalog anywhere but `bundled.content-source.ts`**; a `MessageKey` reaching `t()` with no namespace declaration behind it; an `ERROR_COPY` value outside the shell namespaces.
-- **Partially built.** The error slice of this package exists; the rest does not yet. [20](20-content-package.md) marks every file and Step 20.10 lists what is left.
+- **Three items outstanding, each waiting on a caller rather than on anything here**: `SERVER_CATALOG` + `email` ([25](25-worker-app.md)), `MessageStore` ([24](24-web-app.md)), `BundledContentSource` ([30](30-desktop-app.md)). [20](20-content-package.md) marks every file and Step 20.10 lists them.
 
 ---
 
 ## 1.17 Inside `packages/query`
 
-- **`src/` root** — `QueryKeys` (mirroring procedure paths, params last), `createQueryClient()`, the `ApiClientProvider` context, and `useAppMutation`.
+- **`key/`** — `QueryKeys`, mirroring procedure paths with params last. **`runtime/`** — `createQueryClient()`, the `ApiClientProvider` context, and `useAppMutation`.
 - **`session/`** — session queries and mutations, the one slice that ships with the kit.
 - **`<slice>/`** — per-feature `queryOptions` factories and mutations.
 - **The single TanStack owner.** Exactly one package imports `@tanstack/*`, and this is it.
-- **Still may not import `@tanstack/react-router`.** Routing stays in the app, which is what lets a desktop shell reuse everything above this layer.
+- **Still may not import the router package from the same vendor.** Routing stays in the app, which is what lets a desktop shell reuse everything above this layer. The gate greps for that specifier, so a comment naming it fails the gate too — paraphrase.
+- **`"use client"` on line 1 of the barrel**, one of the three packages that carry it. Check it survives the build: `head -1 dist/index.js`.
 - **`createQueryClient()` is a factory, not a singleton**, because a module-scope client on the server is shared across concurrent requests — a cross-tenant leak, not a caching bug.
 - **Smell:** a hand-written query key at a call site.
 
@@ -398,7 +402,7 @@ apps/web/src/route/task/$taskId.tsx                         composes the dialog
 
 apps/worker/src/consumer/embedding.consumer.ts              ← already exists, no change
 
-packages/composition/src/container.ts                       ← expose the use-case
+packages/composition/src/container/container.ts             ← expose the use-case
 ```
 
 **The migration is what makes the feature appear.** Until it seeds `task.reactivate` and grants it to the right roles, the button is invisible and the endpoint returns `FORBIDDEN` for everyone. That is the staged-rollout mechanism working as designed.
@@ -520,7 +524,7 @@ auth  CapabilityCache invalidated for every affected user
 
 **Every use-case followed load → authorize → work → persist.** Authorization is step two, in the use-case, every time. Never in middleware, never in a router, never only in the UI.
 
-**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
+**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container/container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
 
 ---
 

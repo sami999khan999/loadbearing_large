@@ -55,7 +55,7 @@ packages/application/src/
 
 ## Step 12.1 — `Principal`
 
-**`packages/application/src/principal.ts`**
+**`packages/application/src/primitive/principal.ts`**
 
 ```ts
 import type { OrganizationId, UserId } from "@loadbearing/contracts";
@@ -111,7 +111,7 @@ Because it lives here, a repository can take the actor and derive the tenant fil
 
 ## Step 12.2 — `Authorizer`
 
-**`packages/application/src/authorizer.ts`**
+**`packages/application/src/primitive/authorizer.ts`**
 
 ```ts
 import type { PermissionKey } from "@loadbearing/permissions";
@@ -607,7 +607,9 @@ export {
 export { Principal, type PrincipalKind } from "./principal.js";
 ```
 
-**Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every port the composition root must supply an implementation for. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([17](17-composition-container.md)).
+**Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every seam the composition root wires. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([17](17-composition-container.md)).
+
+**One port on that list has no implementation yet, deliberately.** `EventBus` is declared because the *shape* is what a broker cannot give back later (see below), not because something publishes an event today — so `Container` wires nine of these ten and gains an `events` field with the first use-case that needs one. A port is a declaration of what the domain may ask for; it is not a promise that an adapter exists on the day it is written.
 
 **Repository ports are not on the list.** `TaskRepository` lives in its slice and is exported through the barrel only when a consumer outside the package genuinely needs the type — `Container` does, `apps/web` does not.
 

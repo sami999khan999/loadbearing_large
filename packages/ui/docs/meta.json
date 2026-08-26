@@ -1,5 +1,5 @@
 {
   "title": "ui",
-  "description": "",
+  "description": "The design system — structural tokens, themes as custom properties, and components that take props and nothing else",
   "pages": ["index", "reference"]
 }

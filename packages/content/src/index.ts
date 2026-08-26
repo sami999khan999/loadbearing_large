@@ -1,3 +1,6 @@
+export { NavContract, type NavItem, navItems } from "./collection/index.js";
+export { DocumentContract, DocumentEntity, type DocumentRecord } from "./document/index.js";
+export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
 export {
   type BundleLoader,
   CLIENT_CATALOG,
@@ -19,4 +22,4 @@ export {
 } from "./message/index.js";
 export { type Locale, Locales } from "./primitive/index.js";
 export { ContentSource, StaticContentSource } from "./source/index.js";
-export { type MessageSnapshot, Translator } from "./translator/index.js";
+export { type MessageSnapshot, MessageStore, Translator } from "./translator/index.js";

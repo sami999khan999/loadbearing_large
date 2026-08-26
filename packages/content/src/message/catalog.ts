@@ -17,9 +17,13 @@ export const CLIENT_CATALOG: Readonly<
   en: {
     common: async () => (await import("./en/common.js")).common,
     error: async () => (await import("./en/error.js")).error,
+    nav: async () => (await import("./en/nav.js")).nav,
+    auth: async () => (await import("./en/auth.js")).auth,
   },
   bn: {
     common: async () => (await import("./bn/common.js")).common,
     error: async () => (await import("./bn/error.js")).error,
+    nav: async () => (await import("./bn/nav.js")).nav,
+    auth: async () => (await import("./bn/auth.js")).auth,
   },
 };

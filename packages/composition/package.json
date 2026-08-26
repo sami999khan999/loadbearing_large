@@ -33,8 +33,10 @@
     "@loadbearing/application": "workspace:*",
     "@loadbearing/auth": "workspace:*",
     "@loadbearing/content": "workspace:*",
+    "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
     "@loadbearing/db": "workspace:*",
-    "@loadbearing/infrastructure": "workspace:*"
+    "@loadbearing/infrastructure": "workspace:*",
+    "@loadbearing/observability": "workspace:*"
   }
 }

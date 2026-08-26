@@ -22,30 +22,39 @@
 | Test with | Storybook / props | Fake `ApiClient` + `CapabilitySet` fixtures |
 
 ```
-packages/ui/src/
-├── index.ts
-├── token/
-│   ├── index.ts
-│   └── token.css              ← imports @loadbearing/asset/font.css
-├── theme/
-│   ├── index.ts
-│   ├── theme-registry.ts      → ThemeRegistry, ThemeKey
-│   ├── theme.css              ← [data-theme="…"] custom properties
-│   └── font-registry.ts       → FontRegistry, FontKey
-├── icon/
-│   ├── index.ts
-│   └── icon.tsx               → Icon
-├── can/
-│   ├── index.ts
-│   └── can.tsx                → Can
-├── data-table/
-│   ├── index.ts
-│   ├── data-table.tsx         → DataTable
-│   └── data-table.stories.tsx
-├── dialog/ …
-├── empty-state/ …
-└── status-badge/ …
+packages/ui/
+├── ui.d.ts                    ← declare module "*.svg"; named in tsconfig `include`
+├── vitest.setup.ts            ← afterEach(cleanup)
+└── src/
+    ├── index.tsx              ← "use client" on line 1
+    ├── import.ts              ← every external symbol. Two workspace entries, both type-only
+    ├── token/
+    │   └── token.css          ← imports @loadbearing/asset/font.css. No index.ts: no modules
+    ├── theme/
+    │   ├── index.ts
+    │   ├── theme.css          ← [data-theme="…"] custom properties
+    │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
+    │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
+    ├── icon/
+    │   ├── index.ts
+    │   └── icon.tsx           → Icon
+    ├── can/
+    │   ├── index.ts
+    │   └── can.tsx            → Can
+    ├── data-table/
+    │   ├── index.ts
+    │   └── data-table.tsx     → DataTable, DataTable.Skeleton
+    ├── empty-state/ …         → EmptyState
+    ├── status-badge/ …        → StatusBadge, BadgeTone
+    ├── button/ …              → Button, ButtonVariant
+    ├── field/ …               → Field
+    ├── input/ …               → Input
+    └── dialog/ …              ☐ needs a headless library — see Step 22.5
 ```
+
+**`token/` has no `index.ts`.** It holds one stylesheet and no modules, so there is nothing for a
+barrel to name — the same exemption the binary directories in `asset` have
+([Folders](../opinions/folders.md)).
 
 ---
 
@@ -172,8 +181,12 @@ export class ThemeRegistry {
     return THEMES[key];
   }
 
+  // `Object.hasOwn`, not `in` — `in` walks the prototype chain, so `"toString"` would
+  // pass this guard and `meta()` would hand back a function. This is the boundary an
+  // untrusted stored preference crosses, which is exactly where that matters. Same bug
+  // the permission catalog had ([08](08-permissions-package.md)).
   public static isKnown(value: string): value is ThemeKey {
-    return value in THEMES;
+    return Object.hasOwn(THEMES, value);
   }
 
   // Apply to <html>. Safe to call before hydration to avoid a flash.
@@ -197,6 +210,13 @@ export class ThemeRegistry {
 ## Step 22.3 — `<Icon>`
 
 **`packages/ui/src/icon/icon.tsx`**
+
+> [!IMPORTANT]
+> **`import spriteUrl from "…/sprite.svg"` needs an ambient declaration in *this* package.**
+> `packages/asset/asset.d.ts` declares `*.svg` for asset's own compilation; ambient module
+> declarations are per-program, so they do not travel to a consumer. Add a `ui.d.ts` above `src/` with
+> the same `declare module "*.svg"` block and name it in this package's tsconfig `include`
+> ([19](19-asset-package.md)). `apps/web` needs the same, for the same reason.
 
 ```tsx
 import type { IconName } from "@loadbearing/asset";
@@ -255,8 +275,16 @@ export interface CanProps {
   readonly fallback?: ReactNode;
 }
 
-export function Can({ permission, capabilities, goalId, children, fallback = null }: CanProps) {
-  return capabilities.can(permission, goalId) ? <>{children}</> : <>{fallback}</>;
+export function Can({
+  permission,
+  capabilities,
+  goalId,
+  children,
+  fallback = null,
+}: CanProps): ReactNode {
+  // Returned bare rather than wrapped in a fragment: both branches are already
+  // `ReactNode`, and Biome's `noUselessFragments` objects to the wrapper.
+  return capabilities.can(permission, goalId) ? children : fallback;
 }
 ```
 
@@ -270,7 +298,15 @@ export function Can({ permission, capabilities, goalId, children, fallback = nul
 
 ## Step 22.5 — Primitives
 
-The starter kit ships a small set. Each follows the same rules.
+The starter kit ships `EmptyState`, `StatusBadge`, `DataTable`, and the three form primitives
+`SignInForm` needs in [23](23-feature-package.md) — `Button`, `Field` and `Input`. None needs a
+library or an interaction model beyond a click. Each follows the four rules below.
+
+Two of those carry a decision worth naming. **`Button` defaults `type` to `"button"`**, because the
+DOM's default inside a form is `submit` — so every icon button in a form submits it, and that is
+remembered at the call site or not at all. **`Field.htmlFor` is required, not optional**: a label not
+tied to a control is decoration — a screen reader announces the input as unlabelled and clicking the
+text does nothing — and making it mandatory is what stops that shipping.
 
 **`packages/ui/src/empty-state/empty-state.tsx`**
 
@@ -309,37 +345,75 @@ That constraint has a design consequence worth stating: an empty state is an inv
 3. **Keyboard and focus, always.** Visible focus ring using `--focus-ring`, `Escape` closes overlays, focus is trapped in a modal and restored on close. Retrofitting this across thirty components later is a project; doing it per component as you write it is a minute each.
 4. **Use headless primitives for anything with complex interaction semantics.** Dialogs, popovers, comboboxes, and menus have genuinely hard focus and ARIA requirements. Radix or Ark handle them correctly. Write your own only for things that are actually simple.
 
+> [!IMPORTANT]
+> **`Dialog` is the one component this step does not deliver, and rule 4 is why.** A dialog needs a
+> focus trap, an inert background, restored focus on close, `Escape` handling, and correct
+> `aria-modal` semantics. Hand-rolling it is exactly what rule 4 forbids, so it waits on a library
+> choice this document deliberately leaves open — and that choice is not a file, it is a package that
+> lands in the client bundle of every consumer.
+>
+> Pick one, add it to the **React-scoped** group of the catalog in
+> [03](03-workspace-and-catalogs.md), and wrap it here:
+>
+> ```yaml
+> "@radix-ui/react-dialog": ^1.1.0   # or @ark-ui/react
+> ```
+>
+> Until then `packages/ui` exports no `Dialog`, and the barrel below says so. That is better than a
+> stub: a dialog that traps focus incorrectly is worse than one that does not exist, because the first
+> ships and the second fails a build.
+
 ---
 
 ## Step 22.6 — Storybook, or not
 
-Colocated `*.stories.tsx` files are in the layout above because a design system with no isolated rendering environment stops being reviewable — you end up checking a button by navigating to the one screen that uses it.
+A design system with no isolated rendering environment stops being reviewable — you end up checking a button by navigating to the one screen that uses it. Colocated `*.stories.tsx` files sit in `src/` when you have Storybook (they are not tests; [Files](../opinions/files.md) keeps them out of `tests/`), and there are none in the layout above because **this is the second decision this step leaves to you.**
 
 Storybook is the default answer and it is a real amount of configuration. A cheaper alternative that works well early: a `/kitchen-sink` route in `apps/web` that renders every primitive in every state. It has no addons and no test integration, and it takes ten minutes.
 
 Pick one deliberately. The failure mode is picking neither and reviewing components through the app.
 
+**What ships instead, for now:** component tests under `tests/`, using `jsdom` and
+`@testing-library/react` — both new tier-1 catalog entries, neither of which ever enters a bundle.
+That is not a substitute for isolated rendering, and it is not meant to be: it asserts behaviour
+(does a clickable row respond to `Enter`, does an unlabelled icon hide itself from assistive tech)
+where a story shows appearance. You want both. This is the half that can be automated.
+
 ---
 
 ## Step 22.7 — The barrel
 
-**`packages/ui/src/index.ts`**
+**`packages/ui/src/index.tsx`**
 
-```ts
+```tsx
+"use client";
+
 export { Can, type CanProps } from "./can/index.js";
-export { DataTable } from "./data-table/index.js";
-export { Dialog } from "./dialog/index.js";
+export {
+  DataTable,
+  type DataTableProps,
+  type DataTableSkeletonProps,
+  type TableColumn,
+  type TableRow,
+} from "./data-table/index.js";
+export { Button, type ButtonProps, type ButtonVariant } from "./button/index.js";
 export { EmptyState, type EmptyStateProps } from "./empty-state/index.js";
+export { Field, type FieldProps } from "./field/index.js";
 export { Icon, type IconProps } from "./icon/index.js";
-export { StatusBadge } from "./status-badge/index.js";
+export { Input, type InputProps } from "./input/index.js";
+export { type BadgeTone, StatusBadge, type StatusBadgeProps } from "./status-badge/index.js";
 export {
   type FontKey,
+  type FontMeta,
   FontRegistry,
   type ThemeKey,
   type ThemeMeta,
   ThemeRegistry,
 } from "./theme/index.js";
 ```
+
+**No `Dialog` line yet** — see the note under Step 22.5. Adding it is one export and one wrapper
+once the headless library is chosen.
 
 **`token/` is absent on purpose** — it ships CSS, not JavaScript, and reaches the app through the `./token.css` export below rather than through this file.
 
@@ -351,17 +425,41 @@ import "@loadbearing/ui/token.css";
 import "@loadbearing/ui/theme.css";
 ```
 
-Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does ([19](19-asset-package.md)).
+Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does
+([19](19-asset-package.md)), along with `"sideEffects": ["*.css"]` — the JavaScript here is
+tree-shakeable and the stylesheets are not, and a blanket `false` would let a bundler drop them.
+
+> [!NOTE]
+> **The two stylesheets are tokens and themes. Component rules are not in this package.** Every
+> component carries a `ui-*` class — `ui-empty-state__title`, `ui-data-table__row--clickable` — and
+> those are styling *hooks*, deliberately: the class names are the contract, and what they resolve to
+> is a design decision this document does not make. Reading the components, the full set is small
+> enough to style in an afternoon.
+>
+> The honest consequence is that a fresh `packages/ui` renders correct, accessible, unstyled markup.
+> That is the right order — the token and theme layers are what a design pass builds *on*, and
+> shipping a default look here would be a third decision to undo.
 
 ---
 
 ## ✅ Gate
 
 ```bash
-grep -rniE "task|goal|invoice|lead" packages/ui/src --include=*.tsx --include=*.ts
+grep -rniE "task|goal|invoice|lead" packages/ui/src --include=*.tsx --include=*.ts   | grep -v "src/can/can.tsx"
 ```
 
 Returns nothing. No domain nouns in the design system.
+
+> [!WARNING]
+> **`src/can/can.tsx` is the one exclusion, and it is not a loophole.** `<Can>` forwards a
+> permission *scope* id to `CapabilitySet.can(permission, goalId?)`, and `goalId` is that method's
+> own parameter name — "goal" is a tier in the authorization model, not a domain entity this
+> component knows about. Renaming the prop would hide the pass-through behind a word nobody can grep
+> for, which is worse than one documented exclusion.
+>
+> Note also that this gate matches **comments**, so prose naming the thing it forbids — "`StatusBadge`
+> is `ui`, `TaskStatusBadge` is `feature`" — fails it too. Docs [18](18-api-client-package.md),
+> [20](20-content-package.md) and [21](21-query-package.md) all have gates with the same trap.
 
 ```bash
 grep -rn "@tanstack\|@loadbearing/query\|@loadbearing/contracts" packages/ui/src

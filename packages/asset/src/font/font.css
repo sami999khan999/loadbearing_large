@@ -1,0 +1,18 @@
+/* Every @font-face the product ships, declared once. Imported by packages/ui/src/token/token.css
+   and nowhere else (22). */
+
+@font-face {
+  font-family: "Inter";
+  src: url("./inter-variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./jetbrains-mono-variable.woff2") format("woff2-variations");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}

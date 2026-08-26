@@ -47,7 +47,7 @@ These are the checks a green build does not give you. Run them by hand once now,
 - [ ] **One decision, four surfaces.** Removing a permission from a role removes the nav item **and** returns `FORBIDDEN` from the API — without touching the frontend.
 - [ ] **Clean client bundle.** The built client output contains no Drizzle, no ioredis, no AWS SDK.
 - [ ] **Naming.** Every file under `packages/*/src` matches the rules in [29](29-naming-and-boundaries.md): one class, filename derived from it, kebab-case, role suffix.
-- [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two places: `packages/db/src/vector/` and `packages/composition/src/container.ts`. If it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
+- [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two *packages*: `packages/db/src/vector/`, and `packages/composition` — where it appears twice, in `src/import.ts` and `src/container/container.ts`, because every external symbol enters a package through its one outside surface. What matters is that no third package names it: if it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
 - [ ] **The analytics seam.** `grep -rn "PgAnalyticsReader" packages/ apps/` returns hits in exactly two places, for the same reason. A use-case that names it has turned a config change into a rewrite.
 - [ ] **Tenant scoping.** `pnpm check:architecture` reports every domain table carrying `organization_id`, and no repository method queries without narrowing by it. The grep covers the schema; the query side is a review habit.
 - [ ] **Query counts.** The integration tests assert a fixed number of queries for `resolveFor` and every repository method that loops. An N+1 is invisible at fifty rows and fatal at fifty thousand.
@@ -124,7 +124,7 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
 11. apps/web/src/server/orpc/lead.router.ts                three lines per procedure
 12. apps/web/src/route/lead/                               compose the components
 
-    packages/composition/src/container.ts                  expose the new use-cases
+    packages/composition/src/container/container.ts        expose the new use-cases
 ```
 
 **Plus a migration seeding the new permission rows and granting them to the right system roles** — which is what makes the module *appear*. Until that migration runs, the feature is invisible and uncallable for everyone. That is your staged-rollout mechanism working as designed, not a bug.

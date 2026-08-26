@@ -123,44 +123,73 @@ export interface RedisConfig {
   readonly keyPrefix?: string;
 }
 
-export class RedisConnection {
-  private readonly clients = new Set<Redis>();
+// Which instance a consumer is asking about. `healthy()` takes it rather than handing
+// out a client, so `Container` never names `Redis` ([17](17-composition-container.md)).
+export type RedisRole = "cache" | "queue";
 
-  constructor(private readonly config: RedisConfig) {}
+export class RedisConnection {
+  private readonly clients = new Map<RedisRole, Redis>();
+
+  public constructor(private readonly config: RedisConfig) {}
 
   // Cache and session reads. Prefixed, and safe to share.
   public client(): Redis {
-    return this.create(this.config.cacheUrl, {
-      keyPrefix: this.config.keyPrefix ?? "ratchet:",
-    });
+    return this.resolve("cache");
   }
 
   // BullMQ requires `maxRetriesPerRequest: null` and its own key namespace.
   // Sharing a prefixed client with the cache corrupts queue keys.
   public queueClient(): Redis {
-    return this.create(this.config.queueUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+    return this.resolve("queue");
+  }
+
+  // PING on the instance callers actually hold. Opening a second connection to answer
+  // this would report on a socket nothing else uses — green while the cache is down.
+  public async healthy(role: RedisRole): Promise<boolean> {
+    try {
+      return (await this.resolve(role).ping()) === "PONG";
+    } catch {
+      return false;
+    }
+  }
+
+  // One client per role, memoised. Without this, `client()` called twice is two TCP
+  // connections, and the second one is invisible until the connection count is the symptom.
+  private resolve(role: RedisRole): Redis {
+    const existing = this.clients.get(role);
+    if (existing) return existing;
+
+    const created =
+      role === "cache"
+        ? this.create(this.config.cacheUrl, { keyPrefix: this.config.keyPrefix ?? "ratchet:" })
+        : this.create(this.config.queueUrl, {
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
+          });
+
+    this.clients.set(role, created);
+    return created;
   }
 
   private create(url: string, options: RedisOptions): Redis {
-    const redis = new Redis(url, {
+    return new Redis(url, {
       lazyConnect: false,
       enableAutoPipelining: true,
       retryStrategy: (attempt) => Math.min(attempt * 200, 5_000),
       ...options,
     });
-    this.clients.add(redis);
-    return redis;
   }
 
   public async close(): Promise<void> {
-    await Promise.all([...this.clients].map((c) => c.quit()));
+    await Promise.all([...this.clients.values()].map((c) => c.quit()));
     this.clients.clear();
   }
 }
 ```
+
+**`healthy(role)` takes the role rather than handing out a `Redis`, and that is what keeps `ioredis` confined to this package.** `Container.healthy()` ([17](17-composition-container.md)) checks Postgres and *both* Redis instances; if it had to reach a client to ping it, `packages/composition` would import `ioredis` and the vendor-confinement grep at the top of this document would stop returning nothing.
+
+**One client per role, memoised, and the memoisation is load-bearing for the health check.** An earlier draft created a fresh connection on every `client()` call, which meant a health check pinged a socket that nothing else was using — reporting green while the connection the cache store actually held was down. It also meant two consumers were two connections, silently.
 
 **`maxRetriesPerRequest: null` for the queue client is not optional** — BullMQ's blocking commands sit open indefinitely, and ioredis's default retry limit kills them. The symptom is workers that stop consuming after a few minutes with no error, which is a genuinely unpleasant thing to debug.
 
