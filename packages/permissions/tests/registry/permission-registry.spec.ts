@@ -23,8 +23,12 @@ describe("PermissionRegistry", () => {
   });
 
   it("groups keys by module and returns nothing for a module it has never seen", () => {
-    expect(registry.modules()).toEqual(["rbac"]);
-    expect(registry.byModule("rbac")).toHaveLength(registry.all().length);
+    // Insertion order of the fragments merged in `catalog/index.ts`.
+    expect(registry.modules()).toEqual(["core", "rbac", "ai"]);
+
+    const grouped = registry.modules().flatMap((module) => registry.byModule(module));
+    expect(grouped).toHaveLength(registry.all().length);
+
     expect(registry.byModule("finance")).toEqual([]);
   });
 

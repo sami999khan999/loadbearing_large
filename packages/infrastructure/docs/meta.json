@@ -1,5 +1,5 @@
 {
   "title": "infrastructure",
-  "description": "Redis, S3, BullMQ and OpenAI behind their ports — every vendor SDK the system speaks to, confined to one package",
+  "description": "Postgres, Redis, S3, BullMQ and OpenAI behind their ports — every concrete adapter the system owns, confined to one package",
   "pages": ["index", "reference"]
 }

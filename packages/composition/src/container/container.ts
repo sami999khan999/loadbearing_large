@@ -1,4 +1,5 @@
 import {
+  type ActivityArchiveGateway,
   type ActivityLogger,
   type AnalyticsReader,
   ApiKeyResolver,
@@ -13,14 +14,18 @@ import {
   type ContentSource,
   Database,
   type EmbeddingProvider,
+  IndexDocumentUseCase,
   JsonLogger,
   type Logger,
+  type MaintenanceGateway,
   type MembershipReader,
   OpenAiEmbeddingProvider,
+  PgActivityArchiveGateway,
   PgActivityLogger,
   PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
+  PgMaintenanceGateway,
   PgMembershipReader,
   PgUnitOfWork,
   PgVectorStore,
@@ -29,6 +34,7 @@ import {
   RedisCacheStore,
   RedisConnection,
   S3StorageGateway,
+  SERVER_CATALOG,
   type SessionResolver,
   StaticContentSource,
   type StorageGateway,
@@ -60,18 +66,24 @@ export class Container {
   public readonly vectors: VectorStore;
   public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
-  public readonly sessions: SessionResolver;
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
+  // Platform housekeeping, carrying no principal because it owns no tenant's rows.
+  // Reachable only from the worker's schedules, never from a request path.
+  public readonly maintenance: MaintenanceGateway;
+  public readonly activityArchive: ActivityArchiveGateway;
 
-  // ── auth ──────────────────────────────────────────────────
-  public readonly auth: AuthInstance;
+  // ── auth, absent in a process that never authenticates ────
+  private readonly authInstance: AuthInstance | undefined;
+  private readonly sessionResolver: SessionResolver | undefined;
+  private readonly principalBuilder: PrincipalBuilder | undefined;
   public readonly capabilities: CapabilityCache;
-  public readonly principals: PrincipalBuilder;
 
-  // ── use-cases go here as features arrive ──────────────────
-  // Each is a field on this class, constructed eagerly. See docs/reference/container.md.
+  // ── use-cases, one field each, constructed eagerly ────────
+  // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
+  // docs/reference/container.md.
+  public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
 
   public constructor(config: ContainerConfig) {
     this.database = new Database(config.database);
@@ -98,37 +110,90 @@ export class Container {
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
+    this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
 
     // ── the three swap points ──
     this.vectors = new PgVectorStore(this.database, this.transactions);
     this.analytics = new PgAnalyticsReader(this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
-    // No argument: `SERVER_CATALOG` and the `email` namespace arrive with 20, and
-    // until then the server catalog would be a copy of the client one.
-    this.content = new StaticContentSource();
-
-    // The fourth argument is what pins a tenant onto every session at sign-in. It is
-    // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
-    // `auth` declares — `db` cannot implement it nominally, because `auth` already
-    // depends on `db`, so this line is where a signature drift is caught.
-    const membershipReader: MembershipReader = new PgMembershipReader(
-      this.database,
-      this.transactions,
-    );
-    this.auth = AuthFactory.create(config.auth, this.database, this.cache, membershipReader);
-    this.sessions = new BetterAuthSessionResolver(this.auth);
+    // The server catalog, which is the only one carrying the `email` namespace the
+    // worker's digests read. A client bundle cannot reach it — 05 bans the import.
+    this.content = new StaticContentSource(SERVER_CATALOG);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
 
-    const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
-    const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
-    this.principals = new PrincipalBuilder(this.sessions, apiKeyResolver, this.capabilities);
+    // Everything below is skipped when `config.auth` is absent — `apps/worker` builds a
+    // `SystemPrincipal` from a named grant list and never resolves a credential (25.3).
+    if (config.auth) {
+      // The fourth argument is what pins a tenant onto every session at sign-in. It is
+      // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
+      // `auth` declares — `db` cannot implement it nominally, because `auth` already
+      // depends on `db`, so this line is where a signature drift is caught.
+      const membershipReader: MembershipReader = new PgMembershipReader(
+        this.database,
+        this.transactions,
+      );
+      this.authInstance = AuthFactory.create(
+        config.auth,
+        this.database,
+        this.cache,
+        membershipReader,
+      );
+      this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
+
+      const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
+      const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
+      this.principalBuilder = new PrincipalBuilder(
+        this.sessionResolver,
+        apiKeyResolver,
+        this.capabilities,
+      );
+    }
 
     // Shares the transaction scope, which is what makes the audit row commit
     // with the state change rather than beside it.
     this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
+
+    // Takes the storage gateway, because archiving a partition is a database read and
+    // an object write in one operation — the only place those two ports meet.
+    this.activityArchive = new PgActivityArchiveGateway(
+      this.database,
+      this.transactions,
+      this.storage,
+    );
+
+    this.ai = {
+      indexDocument: new IndexDocumentUseCase(
+        this.authorizer,
+        this.embeddings,
+        this.vectors,
+        this.activity,
+        this.unitOfWork,
+      ),
+    };
+  }
+
+  // Getters rather than optional fields, so `apps/web` still reads `container.auth`
+  // with no `?.` and a process that skipped auth fails loudly at the call site.
+  public get auth(): AuthInstance {
+    if (!this.authInstance) throw new Error("This container was built without an auth config.");
+    return this.authInstance;
+  }
+
+  public get sessions(): SessionResolver {
+    if (!this.sessionResolver) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.sessionResolver;
+  }
+
+  public get principals(): PrincipalBuilder {
+    if (!this.principalBuilder) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.principalBuilder;
   }
 
   // Postgres and both Redis instances. A cache that is down degrades; a queue

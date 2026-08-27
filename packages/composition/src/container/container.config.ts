@@ -23,7 +23,9 @@ export interface ContainerConfig {
     readonly secretKey: string;
     readonly forcePathStyle: boolean;
   };
-  readonly auth: {
+  // Optional, because `apps/worker` never issues or validates a session and must not
+  // carry an AUTH_SECRET it has no use for (25.2). Absent means no `AuthFactory`.
+  readonly auth?: {
     readonly secret: string;
     readonly baseUrl: string;
     readonly trustedOrigins: readonly string[];

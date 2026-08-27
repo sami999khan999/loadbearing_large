@@ -39,6 +39,21 @@ export interface EventShape {
   };
   readonly "queue.job.stalled": { readonly queue: string; readonly jobId: string };
   readonly "queue.schedule.registered": { readonly queue: string; readonly jobId: string };
+
+  readonly "maintenance.sweep.completed": {
+    readonly sessions: number;
+    readonly verifications: number;
+  };
+  readonly "maintenance.partitions.ensured": {
+    readonly table: string;
+    readonly created: number;
+    readonly monthsAhead: number;
+  };
+  readonly "maintenance.partition.archived": {
+    readonly period: string;
+    readonly key: string;
+    readonly rowCount: number;
+  };
   readonly "queue.sweep.completed": {
     readonly queue: string;
     readonly found: number;

@@ -1,0 +1,68 @@
+import type { Container } from "@loadbearing/composition";
+import { QueueName } from "@loadbearing/infrastructure";
+import { type Job, Worker } from "bullmq";
+import type { Redis } from "ioredis";
+import { SystemPrincipal } from "../system-principal.js";
+
+interface EmbeddingJobData {
+  readonly organizationId: string;
+  readonly documentId: string;
+  readonly text: string;
+  readonly goalId?: string | null;
+  readonly sourceType?: string;
+}
+
+// A thin adapter, exactly like an oRPC router: deserialise the job, build a principal,
+// call a use-case. Everything worth testing lives in `IndexDocumentUseCase`.
+export class EmbeddingConsumer {
+  public constructor(
+    private readonly container: Container,
+    private readonly connection: Redis,
+    private readonly concurrency: number,
+  ) {}
+
+  public start(): Worker {
+    const worker = new Worker<EmbeddingJobData>(
+      QueueName.EMBEDDING,
+      async (job: Job<EmbeddingJobData>) => this.handle(job),
+      { connection: this.connection, concurrency: this.concurrency },
+    );
+
+    // Observed from the event, never from a `catch` inside the handler. The listener
+    // does not swallow, so BullMQ still sees the rejection and still retries.
+    worker.on("failed", (job, error) => {
+      this.container.logger.failure(error, {
+        queue: QueueName.EMBEDDING,
+        jobId: job?.id ?? "unknown",
+        attempt: job?.attemptsMade ?? 0,
+      });
+    });
+
+    worker.on("completed", (job) => {
+      this.container.logger.emit("queue.job.completed", {
+        queue: QueueName.EMBEDDING,
+        jobId: job.id ?? "unknown",
+        durationMs: Math.max(0, (job.finishedOn ?? 0) - (job.processedOn ?? 0)),
+      });
+    });
+
+    worker.on("stalled", (jobId) => {
+      this.container.logger.emit("queue.job.stalled", { queue: QueueName.EMBEDDING, jobId });
+    });
+
+    return worker;
+  }
+
+  // Let it throw. BullMQ's retry and backoff are driven by rejection, so catching and
+  // logging here turns a retryable failure into permanent, silent data loss.
+  private async handle(job: Job<EmbeddingJobData>): Promise<void> {
+    const principal = SystemPrincipal.forOrganization(job.data.organizationId);
+
+    await this.container.ai.indexDocument.execute(principal, {
+      documentId: job.data.documentId,
+      text: job.data.text,
+      goalId: job.data.goalId ?? null,
+      sourceType: job.data.sourceType ?? "document",
+    });
+  }
+}

@@ -3,8 +3,15 @@ import { ServerOnly } from "./import.js";
 ServerOnly.assert("@loadbearing/application");
 
 export {
+  type IndexDocumentInput,
+  type IndexDocumentResult,
+  IndexDocumentUseCase,
+} from "./ai/index.js";
+export {
+  ActivityArchiveGateway,
   ActivityLogger,
   AnalyticsReader,
+  type ArchivedPartition,
   CacheStore,
   type DateRange,
   type DocumentChunk,
@@ -12,6 +19,7 @@ export {
   EmbeddingProvider,
   EventBus,
   type JobOptions,
+  MaintenanceGateway,
   QueuePublisher,
   type RequestHeaders,
   type ResolvedSession,
@@ -20,6 +28,7 @@ export {
   SessionResolver,
   StorageGateway,
   type StoredObject,
+  type SweepOutcome,
   type TrendPoint,
   UnitOfWork,
   VectorStore,

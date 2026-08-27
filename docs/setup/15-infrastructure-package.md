@@ -33,13 +33,13 @@ nothing.
 | Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
 | **ClickHouse** | **here**, when adopted | `@clickhouse/client` satisfying `AnalyticsReader` — the same shape as Redis |
 | **Postgres** | `packages/db` | It has a whole package, because `db` means Postgres ([00](00-README.md)) |
-| **Loki, Alloy, Grafana** | **nowhere in `packages/`** | No client, no port, nothing to import |
+| **Loki, Alloy** | **nowhere in `packages/`** | No client, no port, nothing to import |
 
 **The last row is the one worth understanding**, because "we use Loki, so the Loki thing goes in the
 infrastructure package" is a reasonable-sounding sentence that would undo a deliberate design.
 
 `JsonLogger` writes structured JSON to stdout and has never heard of Loki. Alloy — a *separate
-process* — tails that stdout and ships it. Grafana reads Loki and never talks to us at all. There is
+process* — tails that stdout and ships it. Nothing in `packages/` reads it back. There is
 no library to install and no seam to implement, which is precisely what makes swapping the log
 platform a config change instead of a migration ([Data and scale](../opinions/data-and-scale.md)).
 
@@ -50,7 +50,7 @@ being swappable, and a browser bundle acquires a server-only import. They live i
 [Tier 0](../opinions/dependencies.md) — provided by the deployment, reached over a protocol the code
 was going to speak anyway.
 
-**Smell:** a `*.dashboard.json` or a `loki` entry in any `package.json`. Grafana dashboards are
+**Smell:** a `*.dashboard.json` or a `loki` entry in any `package.json`. Dashboards are
 infrastructure configuration and belong beside the provisioning files in `infra/`.
 
 **If you would rather stay at thirteen packages,** fold `src/cache/`, `src/storage/`, and `src/queue/` into `packages/db/src/` as siblings of `vector/`. Every other line in these documents is unchanged.

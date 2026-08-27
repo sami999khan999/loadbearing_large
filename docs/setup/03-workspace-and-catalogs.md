@@ -199,7 +199,7 @@ What belongs here is the pnpm mechanics and the three entries with a history.
 ### The `infra:*` scripts carry two profiles
 
 `infra:up` starts the four stores **and** the observability stack, because the diagnostic stream is
-live from the first adapter written. `infra:core` skips Loki, Alloy and Grafana when you want a
+live from the first adapter written. `infra:core` skips Loki and Alloy when you want a
 lighter machine; `infra:up:analytics` adds ClickHouse, which is otherwise never started
 ([11](11-local-infrastructure.md)).
 

@@ -58,7 +58,7 @@ eleven directories — four of which contained no files at all, existing only as
 
 ```
 infra/postgres/init/01-extensions.sql        →  infra/postgres.init.sql
-infra/grafana/provisioning/datasources/…yml  →  infra/grafana.datasources.yml
+infra/loki/config/loki.config.yml            →  infra/loki.config.yml
 ```
 
 Every one of those directories existed because the compose file mounted a *directory* where it could

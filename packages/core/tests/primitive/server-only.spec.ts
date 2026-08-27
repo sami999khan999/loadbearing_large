@@ -11,7 +11,7 @@ afterEach(() => {
 describe("ServerOnly", () => {
   it("is silent on a server, where there is no window", () => {
     expect(() => {
-      ServerOnly.assert("@loadbearing/db");
+      ServerOnly.assert("@loadbearing/infrastructure");
     }).not.toThrow();
   });
 
@@ -19,7 +19,7 @@ describe("ServerOnly", () => {
     global_.window = {};
 
     expect(() => {
-      ServerOnly.assert("@loadbearing/db");
+      ServerOnly.assert("@loadbearing/infrastructure");
     }).toThrow(ServerOnlyError);
   });
 

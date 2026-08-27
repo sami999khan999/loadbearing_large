@@ -46,7 +46,7 @@ so a Biome-side ban would error on `SignInForm`'s own `AuthClient` import.
 `"off"` beside it since it has no such option.
 
 Both are verified the way this repository verifies every rule — by writing the violation and watching
-it fail. A value import of `api-client` errors; so does `import { Database } from "@loadbearing/db"`,
+it fail. A value import of `api-client` errors; so does `import { Database } from "@loadbearing/infrastructure"`,
 from the single server-only Biome override.
 
 ## `useMessages` narrows to one namespace, and the shape is what makes it work

@@ -109,7 +109,7 @@ directly. Authentication is asserted against Better Auth in the integration tier
 
 A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter
 against a real database can. `DatabaseConfig.logger` is the seam that assertion reads, and the
-assertion lives next to the repository in `packages/db` ([`db/docs`](../../../db/docs/index.md)).
+assertion lives next to the repository in `packages/infrastructure` ([`infrastructure/docs`](../../../infrastructure/docs/index.md)).
 
 That is the reason the integration tier exists at all, rather than being a slower copy of the unit
 tier.

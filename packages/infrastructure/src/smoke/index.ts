@@ -1,8 +1,7 @@
 import "dotenv/config";
-import { RedisCacheStore } from "../cache/index.js";
-import { BullMqQueuePublisher, QueueName } from "../queue/index.js";
-import { RedisConnection } from "../redis/index.js";
-import { S3StorageGateway, StorageKey } from "../storage/index.js";
+import { BullMqQueuePublisher, QueueName } from "../bullmq/index.js";
+import { RedisCacheStore, RedisConnection } from "../redis/index.js";
+import { S3StorageGateway, StorageKey } from "../s3/index.js";
 
 // A wiring check against the running containers, not a unit test. These classes are
 // adapters, and testing an adapter against a fake tests the fake.

@@ -21,7 +21,7 @@ The catalog is grouped by **what a dependency is able to constrain** — not by 
 ### Tier 0 — never imported
 
 Infrastructure the deployment provides and no code names: Postgres, both Redis instances, S3/MinIO,
-**Loki, the Alloy agent that ships stdout to it, and Grafana**, plus ClickHouse when it is adopted.
+**Loki and the Alloy agent that ships stdout to it**, plus ClickHouse when it is adopted.
 All of them are in `infra/docker-compose.yml` ([11](../setup/11-local-infrastructure.md)); none of
 them is in any `package.json`. None of these appears in
 any `package.json`, which is exactly why they need a tier — otherwise question 2 below answers "it
@@ -40,9 +40,13 @@ code was going to speak anyway.
 **The tier is decided by whether code imports a client, not by whether the thing is infrastructure.**
 Postgres and ClickHouse are infrastructure *and* Tier 2, because `pg` and `@clickhouse/client` are
 real imports behind real ports. Loki is infrastructure and Tier 0, because nothing imports anything.
-That is why the adapters live in `packages/db` and `packages/infrastructure` while Loki, Alloy and
-Grafana live only in `infra/docker-compose.yml` ([15](../setup/15-infrastructure-package.md) has the
+That is why the adapters live in `packages/db` and `packages/infrastructure` while Loki and Alloy
+live only in `infra/docker-compose.yml` ([15](../setup/15-infrastructure-package.md) has the
 table).
+
+> A super admin dashboard that queries Loki's HTTP API would move Loki from Tier 0 to Tier 2 — a
+> `LogReader` port, a `LokiLogReader` adapter, and `LOKI_URL` in `ContainerConfig`. That is a real
+> cost and worth naming before it is paid: it ends "swapping log platforms is a config change".
 
 ### Tier 1 — never ships
 

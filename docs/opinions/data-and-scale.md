@@ -65,8 +65,15 @@ if self-hosting stops being worth it. Loki wins all four: Grafana Labs behind it
 Kubernetes ecosystem, years of answers already written down, and Grafana Cloud runs the identical
 thing if you stop wanting to operate it — a config change, not a migration.
 
-Grafana is also where the Postgres and ClickHouse dashboards will live, so it is one observability UI
-rather than three.
+**Nothing self-hosted reads it back.** Loki is storage plus a `query_range` API, and the reader is
+the super admin dashboard — the same surface that already knows what an organization is, which is the
+one thing a generic log console cannot know. Grafana was in this stack and was removed for exactly
+that reason: two consoles for one operator, and the query that matters — *these logs, for this
+tenant, joined to that tenant's audit rows* — was the one it could not express.
+
+Until that dashboard ships, reading logs is `docker compose logs` or curl against Loki's API. That
+gap is accepted knowingly, and both remain the break-glass path afterwards: a log query that needs
+the app running is no use during the incident where the app is down.
 
 Deployment is Alloy tailing container stdout, storage on S3 or MinIO — both already running
 ([11](../setup/11-local-infrastructure.md)). Retention is a config line, literally
@@ -492,7 +499,6 @@ Redis (cache)           capability cache · session cache      ← allkeys-lru
 Redis (queue)           BullMQ                                ← noeviction, AOF
 S3 / MinIO              uploads · Loki chunks
 stdout → Alloy → Loki   diagnostics, 30 days
-Grafana                 reads Loki and Postgres
 ```
 
 Five stores, and all of them are in `infra/docker-compose.yml` from
@@ -514,7 +520,6 @@ ClickHouse                          analytics aggregates, fed by domain events
 pgvector or Qdrant                  embeddings, behind VectorStore
 S3                                  uploads · Loki chunks
 stdout → Alloy → Loki               diagnostics, 30-day retention
-Grafana                             one UI over Loki, Postgres, ClickHouse
 ```
 
 ### ~100k DAU
@@ -529,7 +534,6 @@ Qdrant                              embeddings
 Kafka or Redis Streams              the event bus
 S3                                  uploads · Loki chunks
 stdout → Alloy → Loki               diagnostics
-Grafana                             one UI over everything above
 ```
 
 > [!IMPORTANT]

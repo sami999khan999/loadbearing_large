@@ -31,7 +31,7 @@ Letting per-request state into the DI root couples you to a lifecycle model, and
 any future NestJS migration become expensive. It also removes the temptation to reach for
 `AsyncLocalStorage` as ambient auth state — the one place this repository does use it is
 `TransactionScope`, where the alternative is a `tx` parameter on every port method
-([`db/docs/reference/unit-of-work.md`](../../../db/docs/reference/unit-of-work.md)).
+([`infrastructure/docs/reference/unit-of-work.md`](../../../infrastructure/docs/reference/unit-of-work.md)).
 
 ## 3. Config arrives as a constructor argument
 
@@ -117,7 +117,7 @@ const membershipReader: MembershipReader = new PgMembershipReader(
 );
 ```
 
-`MembershipReader` is declared in `@loadbearing/auth` and implemented in `@loadbearing/db`, which
+`MembershipReader` is declared in `@loadbearing/auth` and implemented in `@loadbearing/infrastructure`, which
 cannot import it — `auth` already depends on `db`, so the arrow cannot point back.
 `PgMembershipReader` therefore satisfies it **structurally**, and nothing checks that until the two
 meet. The annotation on this local is that check. Drop it and a signature drift compiles everywhere

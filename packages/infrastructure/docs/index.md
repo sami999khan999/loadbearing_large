@@ -1,44 +1,68 @@
 ---
 title: "@loadbearing/infrastructure"
-description: Every vendor SDK the system speaks to, behind a port and confined to one package. Redis, S3, BullMQ and OpenAI — five adapters and their config types.
+description: Every concrete adapter the system owns, behind a port and confined to one package — Postgres and its schema, Redis, S3, BullMQ and OpenAI.
 ---
 
 # `@loadbearing/infrastructure`
 
-The package that owns `ioredis`, `@aws-sdk/*` and `bullmq`, so nothing else has to. Each class
-implements a port from [`@loadbearing/application`](../../application/docs/index.md), and the
-`Container` decides which one to build.
+The package that owns `drizzle-orm`, `pg`, `ioredis`, `@aws-sdk/*` and `bullmq`, so nothing else has
+to. Each class implements a port from [`@loadbearing/application`](../../application/docs/index.md),
+and the `Container` decides which one to build.
 
 ```bash
-grep -rn "ioredis\|@aws-sdk\|bullmq" packages --include=*.ts | grep -v "packages/infrastructure"
+grep -rn "drizzle-orm\|ioredis\|@aws-sdk\|bullmq\|from \"pg\"" packages --include=*.ts   | grep -v "packages/infrastructure"
 ```
 
-Returns nothing. Those three appear in exactly one package, which is the whole claim.
+Returns nothing. Every one of them appears in exactly one package, which is the whole claim.
+
+**`packages/infrastructure` used to be separate and was folded in here.** The two were siblings with no edge
+between them, and the split put one seam in two places — `PgAnalyticsReader` on the Postgres side,
+`ClickHouseAnalyticsReader` on this one. Merging in this direction rather than the other keeps the
+name honest: an S3 client in a package called `db` would be a lie, but Postgres genuinely is
+infrastructure.
 
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/infrastructure` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | `@loadbearing/application` (the ports), `core`, `errors`, plus `ioredis`, `bullmq`, `@aws-sdk/*` |
-| **Used by** | `composition`, `apps/worker` — **never** a browser bundle |
+| **Depends on** | `@loadbearing/application` (the ports), `contracts`, `core`, `errors`, `permissions`, plus `drizzle-orm`, `pg`, `ioredis`, `bullmq`, `@aws-sdk/*` |
+| **Used by** | `auth`, `composition`, `apps/worker` — **never** a browser bundle |
 | **Environment** | server-only; `ServerOnly.assert()` is the runtime tripwire |
 
 ```
 packages/infrastructure/src/
 ├── index.ts
 ├── import.ts                          ← every external symbol, vendor SDKs included
+├── pg/                                Postgres — the biggest tenant
+│   ├── primitive/   database.ts       → Database, DrizzleClient
+│   │                base.repository.ts → BaseRepository
+│   ├── schema/      *.schema.ts       ← drizzle tables + the barrel drizzle-kit reads
+│   ├── activity/    pg-activity.logger.ts   → PgActivityLogger
+│   ├── analytics/   pg-analytics.reader.ts  → PgAnalyticsReader
+│   ├── rbac/        pg-*.repository.ts      → PgApiKeyRepository, PgCapabilityRepository
+│   │                pg-membership.reader.ts → PgMembershipReader
+│   ├── transaction/ pg-unit-of-work.ts      → PgUnitOfWork, TransactionScope
+│   ├── vector/      pg-vector.store.ts      → PgVectorStore
+│   ├── migrate/     index.ts                ← the migration runner
+│   └── seed/        index.ts                ← system roles, idempotent
 ├── redis/     redis.connection.ts     → RedisConnection, RedisConfig
-├── cache/     redis.cache-store.ts    → RedisCacheStore
-├── storage/   s3-storage.gateway.ts   → S3StorageGateway, S3Config
+│              redis.cache-store.ts    → RedisCacheStore
+├── s3/        s3-storage.gateway.ts   → S3StorageGateway, S3Config
 │              storage-key.ts          → StorageKey
-├── queue/     bullmq.queue-publisher.ts → BullMqQueuePublisher
+├── bullmq/    bullmq.queue-publisher.ts → BullMqQueuePublisher
 │              queue-name.ts           → QueueName
-├── embedding/ openai.embedding-provider.ts → OpenAiEmbeddingProvider
+├── openai/    openai.embedding-provider.ts → OpenAiEmbeddingProvider
 └── smoke/     index.ts                ← the wiring check, run against live containers
 ```
 
-One folder per seam, each holding its adapter — the same shape
-[`@loadbearing/db`](../../db/docs/index.md) uses. A seam folder holding one file is normal.
+**One folder per external system**, so `ls src/` answers "what does this package depend on?" in one
+line. The filenames already led with the technology ([Files](../../../docs/opinions/files.md) — *"you
+should be able to see what you would delete"*); the folders now agree with them, which makes each one
+a subject folder in the sense [Folders](../../../docs/opinions/folders.md) means.
+
+`smoke/` is the only folder that is not a system: it spans Redis, S3 and BullMQ at once. And
+`pg/schema/` is the one place the subject rule bends — drizzle-kit needs a single barrel naming every
+table, so the tables sit together rather than beside the repositories that read them.
 
 ## What belongs here and what only looks like it does
 
@@ -48,9 +72,9 @@ One folder per seam, each holding its adapter — the same shape
 | S3 / MinIO | **yes** | `StorageGateway` |
 | BullMQ | **yes** | `QueuePublisher`. Consumers live in `apps/worker` |
 | OpenAI | **yes** | `EmbeddingProvider` |
+| Postgres | **yes** | `drizzle-orm` + `pg` behind six ports, plus the schema and migrations |
 | ClickHouse | **here, when adopted** | `AnalyticsReader`, same shape as the rest |
-| Postgres | `packages/db` | It has a whole package, because `db` means Postgres |
-| Loki, Alloy, Grafana | **nowhere** | No client, no port, nothing to import |
+| Loki, Alloy | **nowhere** | No client, no port, nothing to import |
 
 **The last row is the one worth understanding.** `JsonLogger` writes structured JSON to stdout and has
 never heard of Loki; Alloy is a separate process that tails it. There is no library to install and no

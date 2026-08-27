@@ -403,7 +403,7 @@ until they need it.
 | Service | Profile | Why |
 |---|---|---|
 | `postgres`, `redis-cache`, `redis-queue`, `minio` | none — always | The four stores the app talks to |
-| `loki`, `alloy`, `grafana` | `observability` — on by default | The diagnostics stream is live **today**; `JsonLogger` already emits it |
+| `loki`, `alloy` | `observability` — on by default | The diagnostics stream is live **today**; `JsonLogger` already emits it |
 | `clickhouse` | `analytics` — opt-in | The page says *"do not do this week"*, and its ~5k topology has no ClickHouse |
 
 ClickHouse being profile-gated is the honest reading of the page rather than a hedge. The seam is
@@ -450,7 +450,7 @@ and Alloy does the shipping. That is [Dependencies](opinions/dependencies.md) Ti
 platform dependency the deployment provides and no code imports. If this section had added a
 `LOKI_URL` the tier would have been wrong.
 
-Grafana takes port **3001**, because the web app owns 3000.
+Loki's query API is on port **3100**; nothing in the stack reads it back (the super admin dashboard will).
 
 ### Files this adds under `infra/`
 
@@ -460,7 +460,6 @@ infra/
 ├── postgres.init.sql         ← extensions
 ├── loki.config.yml           ← MinIO-backed, 30-day retention
 ├── alloy.config.alloy        ← the four-label pipeline
-├── grafana.datasources.yml   ← Loki + Postgres
 ├── clickhouse.init.sql       ← analytics profile only
 ├── logs/                     ← the `pnpm dev | tee` target (ignored)
 └── README.md
@@ -472,7 +471,7 @@ infra/
 `11` (the whole step) · `26` (CI runs no Loki — say why) · `28` (the `infra/` tree) ·
 `29` (the `infra/` boundary note) · `README` (the new addresses) · root `package.json` (the scripts,
 a real code change) · `.gitignore` (`infra/logs/`) · `opinions/index.md` (the enforcement row) ·
-`opinions/data-and-scale.md` (the topology blocks now name Grafana and Alloy).
+`opinions/data-and-scale.md` (the topology blocks now name Loki and Alloy).
 
 ---
 

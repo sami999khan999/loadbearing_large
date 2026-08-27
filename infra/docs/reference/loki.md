@@ -5,7 +5,8 @@ description: Every block of Loki's config — single-binary mode, MinIO-backed s
 
 # `loki.config.yml`
 
-The log store. Alloy pushes to it, Grafana queries it, MinIO holds its chunks.
+The log store. Alloy pushes to it, MinIO holds its chunks, and the only reader is whoever calls its
+HTTP query API — `curl` today, the super admin dashboard later.
 
 | | |
 | --- | --- |
@@ -25,7 +26,7 @@ does not remove tenancy — it hard-codes every request to the tenant `fake`, wh
 appear under `fake/` in the bucket.
 
 For a single-tenant local stack that is correct. **Turning it on means every client must send the
-header**, including Alloy's `loki.write` and Grafana's data source.
+header**, including Alloy's `loki.write` and every query client.
 
 ---
 
@@ -185,7 +186,7 @@ restart.
 | Direction | Who | How |
 |---|---|---|
 | in | `alloy` | `POST http://loki:3100/loki/api/v1/push` |
-| out | `grafana` | queries `http://loki:3100` |
+| out | query clients | `GET http://loki:3100/loki/api/v1/query_range` |
 | out | you | `curl localhost:3100/loki/api/v1/...` |
 | storage | `minio` | chunks and index to bucket `loki` |
 

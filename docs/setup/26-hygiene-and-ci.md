@@ -164,7 +164,7 @@ jobs:
       - run: pnpm check:architecture
 ```
 
-> **CI runs no Loki, no Alloy, and no Grafana, and that is the correct choice rather than an omission.** Those three are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point.
+> **CI runs neither Loki nor Alloy, and that is the correct choice rather than an omission.** Both are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point.
 >
 > ClickHouse is absent for the stronger reason: nothing writes to it yet ([11](11-local-infrastructure.md)).
 

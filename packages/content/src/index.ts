@@ -16,6 +16,8 @@ export {
   type Namespace,
   type NamespaceBundle,
   type NamespaceKeys,
+  SERVER_CATALOG,
+  type ServerNamespace,
   SHELL_NAMESPACES,
   type ShellMessageKey,
   type ShellNamespace,

@@ -15,7 +15,7 @@ S3, from Better Auth to something else — each is one line here, and nothing up
 grep -rn "PgVectorStore" packages apps --include=*.ts
 ```
 
-Hits in `packages/db` (where it is defined) and `packages/composition/src/container/` (where it is
+Hits in `packages/infrastructure` (where it is defined) and `packages/composition/src/container/` (where it is
 named). Nothing between.
 
 | | |

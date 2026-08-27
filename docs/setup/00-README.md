@@ -2,7 +2,7 @@
 
 > The reusable foundation every project on this architecture starts from. Postgres + Drizzle, two Redis instances, S3, Better Auth, pgvector behind a swappable seam, and the sixteen-package layout from the architecture docs — with **no product features in it**.
 
-**Stack:** pnpm workspaces (no Turborepo) · TanStack Start + oRPC · standalone worker · Postgres 17 + pgvector · Redis (cache + queue, separate) · S3 (MinIO locally) · Better Auth · stdout → Alloy → Loki, read in Grafana
+**Stack:** pnpm workspaces (no Turborepo) · TanStack Start + oRPC · standalone worker · Postgres 17 + pgvector · Redis (cache + queue, separate) · S3 (MinIO locally) · Better Auth · stdout → Alloy → Loki
 **Paradigm:** strictly object-oriented everywhere except React components and hooks.
 
 ---
@@ -49,7 +49,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 
 | # | File | Delivers |
 |---|---|---|
-| 11 | [Local Infrastructure](11-local-infrastructure.md) | Postgres + pgvector, **two** Redis instances, MinIO and its buckets, and the Loki/Alloy/Grafana stack |
+| 11 | [Local Infrastructure](11-local-infrastructure.md) | Postgres + pgvector, **two** Redis instances, MinIO and its buckets, and the Loki/Alloy log pipeline |
 | 12 | [`@loadbearing/application`](12-application-package.md) | `Principal`, `Authorizer`, **all ten ports** — zero framework imports |
 | 13 | [`@loadbearing/db`](13-db-package.md) | Drizzle, tenant-scoped repositories, partitioned migrations, seeds |
 | 14 | [Vector Storage](14-vector-store.md) | `VectorStore` port + `PgVectorStore`, sized so Qdrant is a one-line swap |

@@ -1,5 +1,5 @@
 {
   "title": "Reference",
   "description": "One page per file and the service it configures",
-  "pages": ["compose", "postgres", "redis", "minio", "loki", "alloy", "grafana", "clickhouse"]
+  "pages": ["compose", "postgres", "redis", "minio", "loki", "alloy", "clickhouse"]
 }

@@ -3,14 +3,17 @@ import {
   InMemoryCacheStore,
   InMemoryStorageGateway,
   InMemoryVectorStore,
+  RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingEventBus,
+  RecordingMaintenanceGateway,
   RecordingQueuePublisher,
   StubAnalyticsReader,
   StubEmbeddingProvider,
   StubSessionResolver,
 } from "../fake/index.js";
 import {
+  type ActivityArchiveGateway,
   type ActivityLogger,
   type AnalyticsReader,
   Authorizer,
@@ -20,6 +23,7 @@ import {
   type EventBus,
   FixedClock,
   type Logger,
+  type MaintenanceGateway,
   type QueuePublisher,
   type SessionResolver,
   SilentLogger,
@@ -34,11 +38,13 @@ import {
 // `src/` rather than in a spec: it is checked by `tsc`, not by a test that runs.
 export interface TestPorts {
   readonly activity: ActivityLogger;
+  readonly activityArchive: ActivityArchiveGateway;
   readonly analytics: AnalyticsReader;
   readonly cache: CacheStore;
   readonly content: ContentSource;
   readonly embeddings: EmbeddingProvider;
   readonly events: EventBus;
+  readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
@@ -73,6 +79,7 @@ export class TestContainer {
       authorizer: new Authorizer(),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
+      activityArchive: overrides.activityArchive ?? new RecordingActivityArchiveGateway(),
       analytics: overrides.analytics ?? new StubAnalyticsReader(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       // Already in-memory — its catalog is a map of dynamic imports, so there is
@@ -80,6 +87,7 @@ export class TestContainer {
       content: overrides.content ?? new StaticContentSource(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       events: overrides.events ?? new RecordingEventBus(),
+      maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),

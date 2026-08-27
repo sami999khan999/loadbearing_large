@@ -73,7 +73,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ### `infra/`
 
-- **Holds descriptions of running services**: `docker-compose.yml`, the Postgres init SQL that creates extensions, Loki's storage and retention config, Alloy's log pipeline, Grafana's provisioned data sources, and ClickHouse's schema.
+- **Holds descriptions of running services**: `docker-compose.yml`, the Postgres init SQL that creates extensions, Loki's storage and retention config, Alloy's log pipeline, and ClickHouse's schema.
 - **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [11](11-local-infrastructure.md) says which managed service replaces each container.
 - **Never holds** application code of any kind. Nothing in `packages/` or `apps/` imports anything from here — these are [Tier 0](../opinions/dependencies.md) dependencies, provided by the deployment and reached over a protocol the code was going to speak anyway.
 - **Two profiles.** `observability` is on by default because the diagnostic stream is live; `analytics` is opt-in because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet.
@@ -211,7 +211,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **`queue/`** — `QueueName` (a closed union) and `BullMqQueuePublisher`.
 - **`embedding/`** — `OpenAiEmbeddingProvider`.
 - **One folder per external system this package imports a client for**, named after the capability, with files named after the technology. That pairing is what makes a vendor swap visibly local: you delete `s3-storage.gateway.ts` and write `azure-storage.gateway.ts`, and `storage/index.ts` is the only other file that changes.
-- **A system nothing imports gets no folder.** Loki, Alloy and Grafana are real infrastructure and have no home here, because there is no client and no port — `JsonLogger` writes stdout and a separate process ships it. They live in `infra/` alone ([15](15-infrastructure-package.md)).
+- **A system nothing imports gets no folder.** Loki and Alloy are real infrastructure and have no home here, because there is no client and no port — `JsonLogger` writes stdout and a separate process ships it. They live in `infra/` alone ([15](15-infrastructure-package.md)).
 - **Smell:** a folder for something that is not an npm dependency.
 - **Contains no business logic.** These are adapters: translate a port call into a vendor call, translate the response back.
 - **Smell:** a domain noun in a method name, or an import of `db`.
