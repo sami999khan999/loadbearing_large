@@ -375,78 +375,97 @@ packages/application/tests/
 
 **No framework imports anywhere in this tree** — `check-architecture.mjs` asserts it.
 
-### `packages/db`
-
-```
-packages/db/
-├── drizzle.config.ts
-├── migrations/                        ← generated, committed, never pushed
-│   ├── 0000_init.sql                  ← hand-edited: PARTITION BY on the append-only tables
-│   ├── 0001_auth.sql                  ← auth tables + the FKs, all schema-declared
-│   ├── 0002_vector.sql
-│   └── meta/
-└── src/
-    ├── index.ts                       ← ServerOnly.assert() on line two
-    ├── database.ts                    → Database
-    ├── schema.ts                      ← barrel re-exporting every *.schema.ts
-    ├── base.repository.ts             → BaseRepository
-    ├── unit-of-work.ts                → PgUnitOfWork
-    ├── rbac/
-    │   ├── index.ts
-    │   ├── rbac.schema.ts             → roles, role_permissions, memberships, goal_members
-    │   ├── auth.schema.ts             ← hand-authored; see docs/setup/16
-    │   ├── api-key.schema.ts
-    │   └── capability.repository.ts   → PgCapabilityRepository
-    ├── activity/
-    │   ├── index.ts
-    │   ├── activity.schema.ts
-    │   └── activity.logger.ts         → PgActivityLogger
-    ├── analytics/                     ← infrastructure, not a slice
-    │   ├── index.ts
-    │   ├── analytics.schema.ts        ← snapshot tables
-    │   └── pg-analytics.reader.ts     → PgAnalyticsReader
-    ├── vector/                        ← infrastructure, not a slice
-    │   ├── index.ts
-    │   ├── vector.schema.ts           ← HNSW index, cosine ops
-    │   └── pg-vector.store.ts         → PgVectorStore
-    ├── <slice>/
-    │   ├── index.ts
-    │   ├── <slice>.schema.ts
-    │   └── pg-<slice>.repository.ts   → Pg<Slice>Repository
-    └── seed/
-        ├── index.ts
-        └── system-role.seed.ts        ← idempotent
-```
-
-**`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not shipped code.
-
-**`grep -rn "PgVectorStore" packages/ apps/` must return hits in exactly two packages** — here, and `composition` (twice there: `src/import.ts` and `src/container/container.ts`, since every external symbol enters through the one outside surface). A third package naming it is what makes a Qdrant swap expensive again.
-
 ### `packages/infrastructure`
 
+Every concrete adapter the system owns, in one server-only package. `packages/db` was folded in here:
+the two were siblings with no edge between them, and the split put one seam in two places.
+
 ```
-packages/infrastructure/src/
-├── index.ts                              ← ServerOnly.assert()
-├── redis/
-│   ├── index.ts
-│   └── redis.connection.ts               → RedisConnection (cache + queue)
-├── cache/
-│   ├── index.ts
-│   └── redis.cache-store.ts              → RedisCacheStore
-├── storage/
-│   ├── index.ts
-│   ├── storage-key.ts                    → StorageKey
-│   └── s3-storage.gateway.ts             → S3StorageGateway
-├── queue/
-│   ├── index.ts
-│   ├── queue-name.ts                     → QueueName
-│   └── bullmq.queue-publisher.ts         → BullMqQueuePublisher
-└── embedding/
-    ├── index.ts
-    └── openai.embedding-provider.ts      → OpenAiEmbeddingProvider
+packages/infrastructure/
+├── drizzle.config.ts
+├── migrations/                        ← generated, committed, never pushed
+│   ├── 0000_*.sql                     ← hand-edited: PARTITION BY on the append-only tables
+│   ├── 0001_*.sql                     ← auth tables + the FKs, all schema-declared
+│   ├── 0002_*.sql
+│   └── meta/
+└── src/
+    ├── index.ts                              ← ServerOnly.assert() above every export
+    ├── import.ts                             ← every external symbol, vendor SDKs included
+    ├── pg/
+    │   ├── index.ts
+    │   ├── primitive/
+    │   │   ├── database.ts                   → Database, DrizzleClient
+    │   │   └── base.repository.ts            → BaseRepository
+    │   ├── schema/                           ← the one barrel drizzle-kit reads
+    │   │   ├── index.ts
+    │   │   ├── rbac.schema.ts                → roles, role_permissions, memberships, goal_members
+    │   │   ├── auth.schema.ts                ← Better Auth CLI output, committed
+    │   │   ├── api-key.schema.ts
+    │   │   ├── activity.schema.ts            ← activity_log, partitioned monthly
+    │   │   ├── analytics.schema.ts           ← rollup tables + activity_archive
+    │   │   └── vector.schema.ts              ← HNSW index, cosine ops
+    │   ├── repository/                       ← every adapter, one file each, flat
+    │   │   ├── index.ts
+    │   │   ├── pg-activity.logger.ts         → PgActivityLogger
+    │   │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
+    │   │   ├── pg-activity-replay.reader.ts  → PgActivityReplayReader
+    │   │   ├── pg-analytics.reader.ts        → PgAnalyticsReader
+    │   │   ├── pg-api-key.repository.ts      → PgApiKeyRepository
+    │   │   ├── pg-capability.repository.ts   → PgCapabilityRepository
+    │   │   ├── pg-maintenance.gateway.ts     → PgMaintenanceGateway
+    │   │   ├── pg-membership.reader.ts       → PgMembershipReader
+    │   │   ├── pg-vector.store.ts            → PgVectorStore
+    │   │   └── pg-<slice>.repository.ts      → Pg<Slice>Repository
+    │   ├── transaction/
+    │   │   ├── transaction-scope.ts          → TransactionScope
+    │   │   └── pg-unit-of-work.ts            → PgUnitOfWork
+    │   ├── migrate/index.ts                  ← the migration runner
+    │   └── seed/system-role.seed.ts          ← idempotent
+    ├── redis/
+    │   ├── redis.connection.ts               → RedisConnection (cache + queue)
+    │   └── redis.cache-store.ts              → RedisCacheStore
+    ├── s3/
+    │   ├── storage-key.ts                    → StorageKey
+    │   └── s3-storage.gateway.ts             → S3StorageGateway
+    ├── bullmq/
+    │   ├── queue-name.ts                     → QueueName
+    │   └── bullmq.queue-publisher.ts         → BullMqQueuePublisher
+    ├── openai/
+    │   └── openai.embedding-provider.ts      → OpenAiEmbeddingProvider
+    ├── clickhouse/                           ← opt-in: built only when configured
+    │   ├── clickhouse.connection.ts          → ClickHouseConnection
+    │   ├── clickhouse.analytics-reader.ts    → ClickHouseAnalyticsReader
+    │   └── clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
+    ├── loki/                                 ← opt-in: built only when LOKI_URL is set
+    │   └── loki.log-reader.ts                → LokiLogReader
+    └── smoke/index.ts                        ← the wiring check, against live containers
 ```
 
-**Every filename here leads with its technology.** That is the second naming exemption: `redis.cache-store.ts`, not `cache-store.redis.ts`. You should be able to see what you would delete when you swap a vendor.
+**`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not
+shipped code.
+
+**Every folder under `src/` is an external system, and that is the only axis.** `ls src/` answers
+"what does this package depend on?" in one line. Two consequences that look like inconsistencies and
+are not:
+
+- **`pg/repository/` is flat.** It was once `activity/`, `analytics/`, `rbac/`, `vector/` and
+  `maintenance/`, each holding one or two files. A folder holding one file is a path, not a subject
+  — and `pg/analytics/` beside `clickhouse/` reads as two different things, when what it is now that
+  ClickHouse has an implementation is two implementations of one port.
+- **`pg/schema/` groups tables rather than putting each beside the repository that reads it.**
+  drizzle-kit needs one barrel naming every table, and `check-architecture.mjs` asserts that barrel
+  is complete — an incomplete one passes typecheck, lint, build and every test, and is noticed only
+  by drizzle-kit generating `DROP TABLE`.
+
+**Every filename leads with its technology.** That is the second naming exemption:
+`redis.cache-store.ts`, not `cache-store.redis.ts`. You should be able to see what you would delete
+when you swap a vendor — and with the folders naming the vendor too, `rm -r src/clickhouse/` is the
+complete answer.
+
+**`grep -rn "PgVectorStore" packages/ apps/` must return hits in exactly two packages** — here, and
+`composition` (twice there: `src/import.ts` and `src/container/container.ts`, since every external
+symbol enters through the one outside surface). A third package naming it is what makes a vector-store
+swap expensive again. The same grep for `ClickHouseAnalyticsReader` must answer identically.
 
 ### `packages/auth`
 
@@ -818,7 +837,7 @@ apps/desktop/
 
 **Count the `index.ts` files.** Every folder has one, and nothing outside a package's root `index.ts` is importable. That is why moving a file inside a package never breaks a consumer.
 
-**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [Opinions · Imports](../opinions/imports.md)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/db/src/schema.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
+**Then open one.** Every barrel names each symbol it publishes — `export { Clock, FixedClock, SystemClock } from "./clock.js"`, never `export *`, enforced by Biome's `noReExportAll` ([05](05-lint-and-format.md), [Opinions · Imports](../opinions/imports.md)). The `→ Name` annotations in the trees above are what a file *contains*; the barrel is what a package *publishes*, and those are deliberately allowed to differ. `packages/infrastructure/src/pg/schema/index.ts` is the single exemption, because drizzle-kit consumes it and nothing else does.
 
 **Notice what `apps/` does not contain.** No business logic, no schema, no permission decision, no domain error. Across three shells: two `env.ts` files, one `endpoint.ts`, one `config.ts`, one transport directory, one bootstrap, and route files that compose. If any app directory grows past a few hundred lines of non-route code, something drifted downward that belongs in `packages/`.
 

@@ -22,6 +22,53 @@ Two fields are deliberately concrete. `capabilities: CapabilityCache` and
 `principals: PrincipalBuilder` are not adapters over a seam; they *are* the caching decision and the
 credential-collapsing decision, and there is no second implementation to be abstract about.
 
+## 1b. Swappable ports are chosen by a `driver`, not by a `new`
+
+```ts
+this.vectors   = Container.buildVectorStore(config, this.database, this.transactions);
+this.analytics = config.analytics.driver === "clickhouse" && this.clickhouse
+  ? new ClickHouseAnalyticsReader(this.clickhouse)
+  : new PgAnalyticsReader(this.database, this.transactions);
+```
+
+Rule 1 makes the *type* swappable. This makes the *choice* configurable, and the two are not the same
+claim.
+
+**A seam with exactly one implementation is untested by construction.** Abstract types on the public
+surface prove nobody calls a Postgres-specific method; they do not prove a second implementation could
+be dropped in, because until one exists nothing has tried. A discriminated `driver` on
+`ContainerConfig` is exercised the first time somebody flips the value — in an environment file, with
+no code change.
+
+`buildVectorStore` is a `switch` with a `never` default, so a driver added to the union and not to the
+switch is a build error rather than a runtime surprise. `VECTOR_DRIVER` has one legal value today;
+that is the point of writing it as a union rather than as nothing.
+
+### Two derived stores are absent unless configured
+
+`analyticsProjector` and `logReader` are `T | undefined`, reached through `projector` / `logs` getters
+that throw and `hasProjector` / `hasLogs` booleans the worker branches on.
+
+**Optional fields rather than no-op implementations.** A `NullAnalyticsProjector` would let the worker
+register a projection consumer that runs every five minutes and writes nowhere — indistinguishable
+from a working pipeline until a quarterly report comes out wrong. Absent means the consumer is never
+registered, which is the state the compose file's stopped `clickhouse` container describes.
+
+Same reasoning as the `auth` getter one section down, and the same shape: a process that reaches a
+port it was not built with fails at the call site with a sentence, rather than at the first insert
+with a `TypeError`.
+
+### The driver and the connection are two switches, on purpose
+
+`CLICKHOUSE_URL` builds the projector. `ANALYTICS_DRIVER` moves reads. Setting the first without the
+second is the supported way to adopt ClickHouse: the projection fills the store and the nightly
+reconciliation reports, while dashboards still read Postgres. One combined switch would cut reads over
+to a store that is still filling.
+
+The reverse — `ANALYTICS_DRIVER=clickhouse` with no URL — throws in the constructor. The alternative
+is a silent fall back to Postgres, where the dashboard keeps answering out of the store the operator
+believed they had moved off.
+
 ## 2. Never build request-scoped state into the container
 
 The `Principal` is passed as an argument to `execute()`, never held here. **One container per
@@ -92,16 +139,26 @@ something to say on the way out.
 ## `healthy()` pings what callers actually hold
 
 ```ts
-const [database, cache, queue] = await Promise.all([
+const [database, cache, queue, analytics] = await Promise.all([
   this.database.isHealthy(),
   this.redis.healthy("cache"),
   this.redis.healthy("queue"),
+  this.clickhouse?.healthy() ?? Promise.resolve(true),
 ]);
 ```
 
 Postgres and **both** Redis instances. A cache that is down degrades; a queue that is down silently
 stops accepting work, which is worth knowing about — and the two are separate servers with different
 eviction policies, so one being up says nothing about the other.
+
+**ClickHouse only when it is part of this deployment.** A container with no ClickHouse reports healthy
+without it, which is correct: it is not degraded, it is not running one.
+
+**Loki is deliberately absent from this list**, even though `LokiLogReader.healthy()` exists. Loki
+being down loses diagnostics and nothing else. Failing a readiness probe over it takes the application
+down in order to protect its logs — the wrong trade in every deployment, and exactly backwards during
+the incident where the logs matter most. The asymmetry is the decision: a dashboard reading from a
+store that is not answering is user-visible; a log line nobody is reading right now is not.
 
 `RedisConnection.healthy(role)` takes the role rather than handing out a client, which is what keeps
 `ioredis` confined to `packages/infrastructure`. It pings the memoised connection the cache store and

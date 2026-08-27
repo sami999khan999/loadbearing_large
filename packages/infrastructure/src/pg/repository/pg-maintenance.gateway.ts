@@ -39,12 +39,21 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
       );
       if (probe.rows[0]?.present) continue;
 
-      // Identifiers cannot be bound as parameters, so the name is built here rather
-      // than interpolated from anything a caller supplied — it is derived entirely
-      // from a Date, which is why this is not an injection surface.
+      // Every value in this statement is inlined, and it has to be: Postgres accepts
+      // **no** bind parameters in DDL, not for the identifiers and not for the range
+      // bounds either. The parameterised form fails at bind time with
+      // `bind message supplies 2 parameters, but prepared statement "" requires 0`,
+      // which is a runtime error a type-checker cannot see and a unit test against a
+      // fake cannot reach — this ran green for months while creating no partitions.
+      //
+      // Nothing here is an injection surface. `name` and both bounds are derived
+      // entirely from a `Date`, and `iso()` formats them; no caller-supplied string
+      // reaches this statement.
       await this.db.execute(
-        sql`create table ${sql.identifier(name)} partition of ${sql.identifier("activity_log")}
-            for values from (${PgMaintenanceGateway.iso(start)}) to (${PgMaintenanceGateway.iso(end)})`,
+        sql.raw(
+          `create table ${name} partition of activity_log ` +
+            `for values from ('${PgMaintenanceGateway.iso(start)}') to ('${PgMaintenanceGateway.iso(end)}')`,
+        ),
       );
 
       created.push(name);

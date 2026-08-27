@@ -91,7 +91,7 @@ use-case is responsible for, not queue configuration.
 
 ## `EventBus` is faked but never wired
 
-`Container` constructs nine of the ten ports. `EventBus` has no implementation in `db` or
+`Container` constructs fourteen of the fifteen ports. `EventBus` has no implementation in `db` or
 `infrastructure` and no field on the container, because nothing publishes a domain event yet.
 `RecordingEventBus` exists regardless — the fake is what makes the first publishing use-case testable
 on the day it is written, and its absence from `Container` is a gap in
@@ -100,7 +100,7 @@ rather than a decision taken here.
 
 ## No `auth`, no `sessions`, no `principals`
 
-`TestHarness` carries the eleven ports plus `clock`, `logger` and `authorizer`. It does **not** carry
+`TestHarness` carries every port plus `clock`, `logger` and `authorizer`. It does **not** carry
 `AuthInstance`, `CapabilityCache` or `PrincipalBuilder`, because a use-case test never authenticates
 — it constructs a `Principal` with a hand-made `CapabilitySet` and calls `execute(principal, input)`
 directly. Authentication is asserted against Better Auth in the integration tier.

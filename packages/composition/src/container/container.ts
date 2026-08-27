@@ -1,6 +1,8 @@
 import {
   type ActivityArchiveGateway,
   type ActivityLogger,
+  type ActivityReplayReader,
+  type AnalyticsProjector,
   type AnalyticsReader,
   ApiKeyResolver,
   AuthFactory,
@@ -10,6 +12,9 @@ import {
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
+  ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
+  ClickHouseConnection,
   type Clock,
   type ContentSource,
   Database,
@@ -17,11 +22,14 @@ import {
   IndexDocumentUseCase,
   JsonLogger,
   type Logger,
+  type LogReader,
+  LokiLogReader,
   type MaintenanceGateway,
   type MembershipReader,
   OpenAiEmbeddingProvider,
   PgActivityArchiveGateway,
   PgActivityLogger,
+  PgActivityReplayReader,
   PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
@@ -53,6 +61,9 @@ export class Container {
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
   private readonly transactions: TransactionScope;
+  // Present only when `config.analytics.clickhouse` is. Held so `healthy()` can ping
+  // it and `dispose()` can close it without `Container` handing the connection out.
+  private readonly clickhouse: ClickHouseConnection | undefined;
 
   // ── shared primitives ─────────────────────────────────────
   public readonly clock: Clock;
@@ -73,6 +84,19 @@ export class Container {
   // Reachable only from the worker's schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
   public readonly activityArchive: ActivityArchiveGateway;
+  // The source half of the projection pipeline. Always built, because replaying the
+  // audit trail is useful with or without a derived store behind it — a reconciliation
+  // against nothing is simply a count.
+  public readonly activityReplay: ActivityReplayReader;
+
+  // ── the derived stores, absent unless configured ─────────
+  //
+  // Optional fields rather than no-op implementations. A `NullAnalyticsProjector`
+  // would let the worker register a projection consumer that runs every five minutes
+  // and writes nowhere, which is indistinguishable from a working pipeline until a
+  // quarterly report comes out wrong. Absent means the consumer is never registered.
+  private readonly analyticsProjector: AnalyticsProjector | undefined;
+  private readonly logReader: LogReader | undefined;
 
   // ── auth, absent in a process that never authenticates ────
   private readonly authInstance: AuthInstance | undefined;
@@ -112,10 +136,47 @@ export class Container {
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
     this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
 
-    // ── the three swap points ──
-    this.vectors = new PgVectorStore(this.database, this.transactions);
-    this.analytics = new PgAnalyticsReader(this.database, this.transactions);
+    // ── the swap points ──
+    //
+    // Each reads a `driver` off the config rather than naming one class directly.
+    // That is the difference between a seam and a claim about one: the alternative
+    // implementation is named here, in a switch a compiler checks, instead of in a
+    // document describing what somebody would do.
+    this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
+
+    // ClickHouse is opt-in and stopped by default (`--profile analytics`). Building
+    // the connection only when configured is what keeps "the seam exists, the
+    // container exists, and nothing writes to it" true rather than aspirational.
+    this.clickhouse = config.analytics.clickhouse
+      ? new ClickHouseConnection(config.analytics.clickhouse)
+      : undefined;
+
+    // A `clickhouse` driver with no `clickhouse` block would otherwise degrade to
+    // Postgres silently — the dashboard keeps answering, out of the store the
+    // operator believed they had moved off.
+    if (config.analytics.driver === "clickhouse" && !this.clickhouse) {
+      throw new Error(
+        "analytics.driver is clickhouse but no analytics.clickhouse config was given.",
+      );
+    }
+
+    this.analytics =
+      config.analytics.driver === "clickhouse" && this.clickhouse
+        ? new ClickHouseAnalyticsReader(this.clickhouse)
+        : new PgAnalyticsReader(this.database, this.transactions);
+
+    // The writer is tied to the connection, not to the driver. Pointing the reader at
+    // Postgres while the projection already fills ClickHouse is the supported way to
+    // adopt it: project first, watch the reconciliation come back clean, then flip
+    // `ANALYTICS_DRIVER` — rather than cutting reads over to an empty store.
+    this.analyticsProjector = this.clickhouse
+      ? new ClickHouseAnalyticsProjector(this.clickhouse)
+      : undefined;
+
+    // The only in-process reader of the diagnostic stream. Its absence changes
+    // nothing about what is written: `JsonLogger` goes to stdout either way.
+    this.logReader = config.logs ? new LokiLogReader(config.logs) : undefined;
 
     // The server catalog, which is the only one carrying the `email` namespace the
     // worker's digests read. A client bundle cannot reach it — 05 bans the import.
@@ -164,6 +225,8 @@ export class Container {
       this.storage,
     );
 
+    this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
+
     this.ai = {
       indexDocument: new IndexDocumentUseCase(
         this.authorizer,
@@ -196,15 +259,49 @@ export class Container {
     return this.principalBuilder;
   }
 
+  // The projection writer, when one exists. A getter rather than a public optional
+  // field, so `apps/worker` reads `container.projector` with no `?.` and a process
+  // that reached it without ClickHouse configured fails at the call site with a
+  // sentence rather than at the first insert with a `TypeError`.
+  public get projector(): AnalyticsProjector {
+    if (!this.analyticsProjector) {
+      throw new Error("This container was built without an analytics.clickhouse config.");
+    }
+    return this.analyticsProjector;
+  }
+
+  // What the worker branches on. Registering a projection consumer against a store
+  // that is not running is the exact failure this arrangement is shaped to prevent.
+  public get hasProjector(): boolean {
+    return this.analyticsProjector !== undefined;
+  }
+
+  public get logs(): LogReader {
+    if (!this.logReader) throw new Error("This container was built without a logs config.");
+    return this.logReader;
+  }
+
+  public get hasLogs(): boolean {
+    return this.logReader !== undefined;
+  }
+
   // Postgres and both Redis instances. A cache that is down degrades; a queue
   // that is down silently stops accepting work, which is worth knowing about.
   public async healthy(): Promise<boolean> {
-    const [database, cache, queue] = await Promise.all([
+    const [database, cache, queue, analytics] = await Promise.all([
       this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
+      // Only when it is part of this deployment. A container with no ClickHouse
+      // reports healthy without it, which is correct — it is not degraded, it is
+      // not running one.
+      //
+      // The log platform is deliberately absent from this list. Loki being down
+      // loses diagnostics and nothing else, and failing a readiness probe over it
+      // takes the application down in order to protect its logs.
+      this.clickhouse?.healthy() ?? Promise.resolve(true),
     ]);
-    return database && cache && queue;
+    return database && cache && queue && analytics;
   }
 
   // Reverse construction order. Closing Redis while BullMQ still holds blocking
@@ -212,6 +309,32 @@ export class Container {
   public async dispose(): Promise<void> {
     await this.queuePublisher.close();
     await this.redis.close();
+    await this.clickhouse?.close();
     await this.database.close();
+  }
+
+  // The one place a port and the concrete class behind it meet for vectors, kept as
+  // a static so adopting a dedicated vector database is a `case` in a switch the
+  // compiler checks rather than another branch inside an already-long constructor.
+  //
+  // What makes that swap cheap is not this method — it is that `VectorStore.search()`
+  // takes the resolved goal scope as a parameter. A remote store holds no
+  // `CapabilitySet` and can join back to nothing, so the permission filter had to
+  // run on the input set from the first day or the port would have been unswappable.
+  private static buildVectorStore(
+    config: ContainerConfig,
+    database: Database,
+    transactions: TransactionScope,
+  ): VectorStore {
+    switch (config.vector.driver) {
+      case "pgvector":
+        return new PgVectorStore(database, transactions);
+      default: {
+        // Exhaustiveness, checked at build time. A driver added to the union and not
+        // to this switch is a compile error rather than a runtime surprise.
+        const unreachable: never = config.vector.driver;
+        throw new Error(`Unknown vector driver: ${String(unreachable)}`);
+      }
+    }
   }
 }

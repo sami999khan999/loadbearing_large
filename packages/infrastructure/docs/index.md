@@ -15,11 +15,12 @@ grep -rn "drizzle-orm\|ioredis\|@aws-sdk\|bullmq\|from \"pg\"" packages --includ
 
 Returns nothing. Every one of them appears in exactly one package, which is the whole claim.
 
-**`packages/infrastructure` used to be separate and was folded in here.** The two were siblings with no edge
-between them, and the split put one seam in two places — `PgAnalyticsReader` on the Postgres side,
+**`packages/db` used to be separate and was folded in here.** The two were siblings with no edge
+between them, and the split put one seam in two places — `PgAnalyticsReader` on the `db` side,
 `ClickHouseAnalyticsReader` on this one. Merging in this direction rather than the other keeps the
 name honest: an S3 client in a package called `db` would be a lie, but Postgres genuinely is
-infrastructure.
+infrastructure. Both analytics adapters now sit here, one folder apart, which is what that merge was
+for.
 
 | | |
 | --- | --- |
@@ -34,35 +35,50 @@ packages/infrastructure/src/
 ├── index.ts
 ├── import.ts                          ← every external symbol, vendor SDKs included
 ├── pg/                                Postgres — the biggest tenant
-│   ├── primitive/   database.ts       → Database, DrizzleClient
+│   ├── primitive/   database.ts        → Database, DrizzleClient
 │   │                base.repository.ts → BaseRepository
 │   ├── schema/      *.schema.ts       ← drizzle tables + the barrel drizzle-kit reads
-│   ├── activity/    pg-activity.logger.ts   → PgActivityLogger
-│   ├── analytics/   pg-analytics.reader.ts  → PgAnalyticsReader
-│   ├── rbac/        pg-*.repository.ts      → PgApiKeyRepository, PgCapabilityRepository
-│   │                pg-membership.reader.ts → PgMembershipReader
-│   ├── transaction/ pg-unit-of-work.ts      → PgUnitOfWork, TransactionScope
-│   ├── vector/      pg-vector.store.ts      → PgVectorStore
-│   ├── migrate/     index.ts                ← the migration runner
-│   └── seed/        index.ts                ← system roles, idempotent
-├── redis/     redis.connection.ts     → RedisConnection, RedisConfig
-│              redis.cache-store.ts    → RedisCacheStore
-├── s3/        s3-storage.gateway.ts   → S3StorageGateway, S3Config
-│              storage-key.ts          → StorageKey
+│   ├── repository/  pg-*.ts           → every adapter, one file each, flat
+│   ├── transaction/ pg-unit-of-work.ts → PgUnitOfWork, TransactionScope
+│   ├── migrate/     index.ts          ← the migration runner
+│   └── seed/        index.ts          ← system roles, idempotent
+├── clickhouse/ clickhouse.connection.ts          → ClickHouseConnection
+│              clickhouse.analytics-reader.ts     → ClickHouseAnalyticsReader
+│              clickhouse.analytics-projector.ts  → ClickHouseAnalyticsProjector
+├── loki/      loki.log-reader.ts       → LokiLogReader
+├── redis/     redis.connection.ts      → RedisConnection, RedisConfig
+│              redis.cache-store.ts     → RedisCacheStore
+├── s3/        s3-storage.gateway.ts    → S3StorageGateway, S3Config
+│              storage-key.ts           → StorageKey
 ├── bullmq/    bullmq.queue-publisher.ts → BullMqQueuePublisher
-│              queue-name.ts           → QueueName
+│              queue-name.ts            → QueueName
 ├── openai/    openai.embedding-provider.ts → OpenAiEmbeddingProvider
-└── smoke/     index.ts                ← the wiring check, run against live containers
+└── smoke/     index.ts                 ← the wiring check, run against live containers
 ```
 
 **One folder per external system**, so `ls src/` answers "what does this package depend on?" in one
 line. The filenames already led with the technology ([Files](../../../docs/opinions/files.md) — *"you
-should be able to see what you would delete"*); the folders now agree with them, which makes each one
-a subject folder in the sense [Folders](../../../docs/opinions/folders.md) means.
+should be able to see what you would delete"*); the folders agree with them, which makes each one a
+subject folder in the sense [Folders](../../../docs/opinions/folders.md) means.
 
-`smoke/` is the only folder that is not a system: it spans Redis, S3 and BullMQ at once. And
-`pg/schema/` is the one place the subject rule bends — drizzle-kit needs a single barrel naming every
-table, so the tables sit together rather than beside the repositories that read them.
+**The external system is the subject, and it is the only subject.** `pg/repository/` used to be five
+folders — `activity/`, `analytics/`, `rbac/`, `vector/`, `maintenance/` — each holding one or two
+files. They were flattened for two reasons.
+
+The first is [Simplicity](../../../docs/opinions/simplicity.md): a folder holding one file is a path,
+not a subject. The second is what happens when a port gets a second implementation. `pg/analytics/`
+beside `clickhouse/` reads as two different things; `pg/repository/pg-analytics.reader.ts` beside
+`clickhouse/clickhouse.analytics-reader.ts` reads as what it is — two implementations of one port,
+one per store, each named after the store it speaks to. **The technology is the axis this package
+sorts on, and naming the subject twice broke that.**
+
+`smoke/` is the only folder that is not a system: it spans every store at once. And `pg/schema/` is
+the one place the subject rule bends — drizzle-kit needs a single barrel naming every table, so the
+tables sit together rather than beside the repositories that read them.
+
+**A folder here means the seam is implemented, not that the container is started.** `clickhouse/` and
+`loki/` are adapters for services behind an opt-in compose profile, and `Container` builds neither
+unless its configuration block is present — see [the swap points](#the-swap-points-and-what-makes-them-real).
 
 ## What belongs here and what only looks like it does
 
@@ -72,13 +88,56 @@ table, so the tables sit together rather than beside the repositories that read 
 | S3 / MinIO | **yes** | `StorageGateway` |
 | BullMQ | **yes** | `QueuePublisher`. Consumers live in `apps/worker` |
 | OpenAI | **yes** | `EmbeddingProvider` |
-| Postgres | **yes** | `drizzle-orm` + `pg` behind six ports, plus the schema and migrations |
-| ClickHouse | **here, when adopted** | `AnalyticsReader`, same shape as the rest |
-| Loki, Alloy | **nowhere** | No client, no port, nothing to import |
+| Postgres | **yes** | `drizzle-orm` + `pg` behind seven ports, plus the schema and migrations |
+| ClickHouse | **yes** | `AnalyticsReader` *and* `AnalyticsProjector`, same shape as the rest |
+| Loki | **yes, read side only** | `LogReader`. Nothing here writes to it |
+| Alloy | **nowhere** | A separate process that tails stdout. No client, no port, nothing to import |
 
-**The last row is the one worth understanding.** `JsonLogger` writes structured JSON to stdout and has
-never heard of Loki; Alloy is a separate process that tails it. There is no library to install and no
-seam to implement, which is exactly what makes swapping the log platform a config change.
+**The last two rows are the ones worth understanding, and they are two different answers.**
+
+`JsonLogger` writes structured JSON to stdout and has never heard of Loki; Alloy tails it. That
+asymmetry is deliberate and it is what keeps swapping the log platform a config change — the write
+path has no seam because it has no dependency. `LokiLogReader` exists for the other direction:
+reading diagnostics back, for the operator surface that knows what an organization is, which is the
+one thing a generic log console cannot know. One file, one API, replaced wholesale if the platform
+changes.
+
+**ClickHouse has two adapters, not one, and the split is the guard.** `ClickHouseAnalyticsReader`
+answers dashboard questions and is reachable from a request path. `ClickHouseAnalyticsProjector`
+writes, and is reachable only from the worker. A single class with both would put `project()` on the
+object a dashboard query holds — and "nothing writes here except the consumer" is what makes the
+store rebuildable rather than authoritative.
+
+Neither is built unless `analytics.clickhouse` is configured. Both are exercised by
+[the smoke check](#the-smoke-check).
+
+## The swap points, and what makes them real
+
+Three ports have, or will have, more than one implementation. Each is chosen by a `driver` field on
+`ContainerConfig` rather than by a `new` in the constructor — so adopting a store is an environment
+variable and one `case`, never a change to a use-case, a repository, or a test.
+
+| Port | `driver` | Today | Next | Trigger |
+| --- | --- | --- | --- | --- |
+| `VectorStore` | `VECTOR_DRIVER` | `pgvector` | a dedicated vector database | pgvector recall or latency degrades |
+| `AnalyticsReader` | `ANALYTICS_DRIVER` | `postgres` | `clickhouse` | snapshots stop covering ad-hoc queries |
+| `LogReader` | `LOKI_URL` set or not | Loki | anything with a range-query API | search latency during a real incident |
+
+**The `driver` field is what stops "swap the implementation" from being a claim.** A seam with exactly
+one implementation is untested by construction. A seam with a discriminated config is exercised the
+first time somebody flips the value — and `Container.buildVectorStore` has an exhaustive `switch`, so
+a driver added to the union and not to the switch is a build error.
+
+**Adopting ClickHouse is deliberately two steps, not one.** Setting `CLICKHOUSE_URL` builds the
+projector and starts the worker's projection and reconciliation; `ANALYTICS_DRIVER` still says
+`postgres`, so reads do not move. Flip the driver once the nightly reconciliation has come back clean
+for a few days. The alternative — one variable that moves reads and writes together — cuts dashboards
+over to a store that is still filling.
+
+**What makes the vector swap cheap is not the switch.** It is that `VectorStore.search()` takes the
+resolved goal scope as a parameter. A remote store holds no `CapabilitySet` and can join back to
+nothing, so the permission filter had to run on the input set from the first day or the port would
+have been unswappable at any price. Same shape, same reasoning, in `AnalyticsReader.goalRiskScores()`.
 
 ## Two Redis instances, one class
 
@@ -160,3 +219,20 @@ Not a unit test — these are adapters, and testing an adapter against a fake te
 round-trips the cache, prunes it and reads back, round-trips an object through S3 with a checksum,
 presigns a URL, deletes and confirms absence, then publishes a job. Against the running containers,
 with no errors.
+
+**The two opt-in stores are checked when they are configured and skipped with a line when they are
+not.** A smoke run against a stack that does not include them should say so and pass, rather than
+fail on a service nobody started.
+
+- **ClickHouse** — inserts the same probe row **twice** and counts it back with `FINAL`, expecting
+  `1`. That is not a formality: the projection consumer's idempotency rests entirely on
+  `ReplacingMergeTree` collapsing a redelivered batch, and an `ENGINE = MergeTree` typo in the init
+  script would be invisible until a redelivery doubled a quarter's numbers.
+- **Loki** — pings `/ready` and runs a real `query_range` over the last hour, printing what came
+  back. It deliberately does *not* assert on a particular line: that would make the check depend on
+  something having been logged recently, which is a flaky test rather than a wiring check. That the
+  query returns and parses is the claim.
+
+It reads `.env` from the repository root explicitly rather than through a bare `dotenv/config`
+import. Under a pnpm filter the process cwd is this package, so the bare form found nothing and every
+variable came back undefined — which looks exactly like an unconfigured stack.

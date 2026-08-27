@@ -50,7 +50,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | # | File | Delivers |
 |---|---|---|
 | 11 | [Local Infrastructure](11-local-infrastructure.md) | Postgres + pgvector, **two** Redis instances, MinIO and its buckets, and the Loki/Alloy log pipeline |
-| 12 | [`@loadbearing/application`](12-application-package.md) | `Principal`, `Authorizer`, **all ten ports** — zero framework imports |
+| 12 | [`@loadbearing/application`](12-application-package.md) | `Principal`, `Authorizer`, **all fifteen ports** — zero framework imports |
 | 13 | [`@loadbearing/db`](13-db-package.md) | Drizzle, tenant-scoped repositories, partitioned migrations, seeds |
 | 14 | [Vector Storage](14-vector-store.md) | `VectorStore` port + `PgVectorStore`, sized so Qdrant is a one-line swap |
 | 15 | [`@loadbearing/infrastructure`](15-infrastructure-package.md) | Redis cache **and** queue connections, S3 storage gateway, BullMQ queue publisher |

@@ -2,34 +2,53 @@
 
 > pgvector today, a dedicated vector database later, with no rewrite in between. The seam, the schema, and the four rules that keep the swap cheap.
 
-**Delivers:** `PgVectorStore` implementing the `VectorStore` port, an `EmbeddingProvider`, and a migration path to Qdrant or Pinecone that touches one line of `Container`.
+**Delivers:** `PgVectorStore` implementing the `VectorStore` port, an `EmbeddingProvider`, and a migration path to a dedicated vector database that is one new folder, one `case`, and one environment variable.
 
-**Prerequisite:** [13 · `@loadbearing/db`](13-db-package.md)
+**Prerequisite:** [13 · `@loadbearing/infrastructure` — the Postgres side](13-db-package.md)
 
 ---
 
 ## The seam, restated
 
-`VectorStore` and `EmbeddingProvider` are abstract classes in `packages/application/src/port/` ([12](12-application-package.md)). Concrete implementations live in `db` (Postgres) or `infrastructure` (anything else). Use-cases depend only on the abstractions.
+`VectorStore` and `EmbeddingProvider` are abstract classes in `packages/application/src/port/`
+([12](12-application-package.md)). Concrete implementations live in `packages/infrastructure/src/`,
+one folder per external system. Use-cases depend only on the abstractions.
 
 ```
-VectorStore (abstract)                   packages/application/src/port/vector.store.ts
-    ├── PgVectorStore                    packages/db/src/vector/pg-vector.store.ts       ← today
-    ├── QdrantVectorStore                packages/infrastructure/src/vector/…            ← later
-    └── FakeVectorStore                  test fixtures
+VectorStore (abstract)              packages/application/src/port/vector.store.ts
+    ├── PgVectorStore               infrastructure/src/pg/repository/pg-vector.store.ts   ← today
+    ├── <Vendor>VectorStore         infrastructure/src/<vendor>/…                         ← later
+    └── InMemoryVectorStore         composition/src/fake/
 
-EmbeddingProvider (abstract)             packages/application/src/port/embedding.provider.ts
-    ├── OpenAiEmbeddingProvider          packages/infrastructure/src/embedding/…
-    └── FakeEmbeddingProvider            test fixtures
+EmbeddingProvider (abstract)        packages/application/src/port/embedding.provider.ts
+    ├── OpenAiEmbeddingProvider     infrastructure/src/openai/openai.embedding-provider.ts
+    └── StubEmbeddingProvider       composition/src/fake/
 ```
 
-> **Why the port is not in `db`.** The architecture docs put `VectorStore` in `packages/db/src/vector/`. That is fine while the implementation is Postgres and stops being fine the moment it is not: `application` cannot import `db`, so a use-case could not name the type. Moving the abstraction to `port/` is the change that makes the stated requirement — swap to a dedicated vector DB without rewrites — actually true. `PgVectorStore` stays in `db` because it is Drizzle code operating on a Postgres table.
+> **Why the port is not beside the Postgres implementation.** The architecture docs put `VectorStore`
+> in the database package. That is fine while the implementation is Postgres and stops being fine the
+> moment it is not: `application` cannot import `infrastructure`, so a use-case could not name the
+> type. Moving the abstraction to `port/` is the change that makes the stated requirement — swap to a
+> dedicated vector DB without rewrites — actually true. `PgVectorStore` stays in `pg/repository/`
+> because it is Drizzle code operating on a Postgres table.
+
+### The folder is the vendor, and that is what makes room for the next one
+
+A dedicated vector database is **a sibling folder to `pg/`, never a subfolder of it.**
+`infrastructure/src/qdrant/qdrant.vector-store.ts` sits beside `infrastructure/src/clickhouse/` and
+`infrastructure/src/loki/`, each named for the system it speaks to.
+
+That is not filing preference. `pg/vector/` — which is where `PgVectorStore` used to live — would put
+a second implementation in an awkward place: either nested under Postgres, which it has nothing to do
+with, or in a top-level `vector/` that names the *subject* while every neighbour names the
+*technology*. ClickHouse is the case that forced the question, since `pg/analytics/` and
+`clickhouse/` were the same collision one port over. **One axis: the external system.**
 
 ---
 
 ## Step 14.1 — The schema
 
-**`packages/db/src/schema/vector.schema.ts`**
+**`packages/infrastructure/src/pg/schema/vector.schema.ts`**
 
 ```ts
 import { sql } from "drizzle-orm";
@@ -92,7 +111,7 @@ The subtlety worth naming: `goal_id IS NULL` means "visible to everyone in this 
 
 ## Step 14.2 — `PgVectorStore`
 
-**`packages/db/src/vector/pg-vector.store.ts`**
+**`packages/infrastructure/src/pg/repository/pg-vector.store.ts`**
 
 ```ts
 import { and, cosineDistance, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
@@ -279,28 +298,61 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
 
 ## Step 14.4 — Migration to a dedicated vector database
 
-The whole design exists for this moment. When pgvector stops being enough — typically somewhere past a few million chunks, or when you want managed filtering and hybrid search — here is the complete change:
+The whole design exists for this moment. When pgvector stops being enough — typically somewhere past
+a few million chunks, or when you want managed filtering and hybrid search — here is the complete
+change:
 
-**1.** Write `QdrantVectorStore extends VectorStore` in `packages/infrastructure/src/vector/`. It implements three methods.
+**1.** Write `<Vendor>VectorStore implements VectorStore` in a **new sibling folder**,
+`packages/infrastructure/src/<vendor>/`. Three methods. It sits beside `pg/`, `clickhouse/` and
+`loki/`, named for the system it speaks to.
 
-**2.** Change one line in `Container`:
+**2.** Add the driver to the union and to the switch. Two lines, in two files:
 
 ```ts
-// before
-this.vectors = new PgVectorStore(this.db);
-// after
-this.vectors = new QdrantVectorStore(config.qdrant);
+// packages/composition/src/container/container.config.ts
+readonly vector: { readonly driver: "pgvector" | "<vendor>" };
 ```
 
-**3.** Backfill: read `document_chunks` in pages, write to Qdrant, verify counts.
+```ts
+// packages/composition/src/container/container.ts
+switch (config.vector.driver) {
+  case "pgvector":  return new PgVectorStore(database, transactions);
+  case "<vendor>":  return new VendorVectorStore(config.vector.connection);
+  default: {
+    const unreachable: never = config.vector.driver;
+    throw new Error(`Unknown vector driver: ${String(unreachable)}`);
+  }
+}
+```
 
-**4.** Drop the table and the HNSW index in a later migration, once you are confident.
+The `never` default is why this is two lines and not a hunt: adding the driver to the union without
+adding the `case` is a **build error**, not a runtime surprise in whichever environment flipped the
+variable first.
 
-Nothing in `application`, `contracts`, `permissions`, or any use-case changes. No React changes. The worker's embedding consumer changes not at all, because it publishes chunks to a `VectorStore` and never knew which one.
+**3.** Set `VECTOR_DRIVER=<vendor>` in the environment. Nothing is rebuilt and no call site moves.
+
+**4.** Backfill: read `document_chunks` in pages, write to the new store, verify counts. Or re-embed
+from source documents — embeddings are derived, which is the property that makes this safe.
+
+**5.** Drop the table and the HNSW index in a later migration, once you are confident.
+
+Nothing in `application`, `contracts`, `permissions`, or any use-case changes. No React changes. The
+worker's embedding consumer changes not at all, because it publishes chunks to a `VectorStore` and
+never knew which one.
+
+> [!NOTE]
+> **`VECTOR_DRIVER` has exactly one legal value today, and it exists anyway.** A seam with one
+> implementation is untested by construction — abstract types prove nobody calls a Postgres-specific
+> method, but they do not prove a second implementation could be dropped in, because nothing has
+> tried. Writing the choice as a discriminated union means step 2 above is a compiler-checked edit
+> rather than a search for every `new PgVectorStore`.
+>
+> `ANALYTICS_DRIVER` is the same mechanism with the second implementation already written
+> ([15](15-infrastructure-package.md)), which is where the shape was proven.
 
 ### Four rules that keep it that cheap
 
-1. **No `vector` column helpers, no `cosineDistance`, no Qdrant client outside the implementing class.** Grep for them in CI if you want certainty.
+1. **No `vector` column helpers, no `cosineDistance`, no vendor client outside the implementing class.** Grep for them in CI if you want certainty.
 2. **`search()` keeps its exact signature.** Adding a Postgres-specific option — a partial index hint, a `tsvector` join — to the port means the port now describes Postgres.
 3. **Chunk IDs are generated by you (`Uuid.v7()`), not by the store.** A store that assigns its own IDs makes migration a re-keying exercise.
 4. **The permission filter stays a parameter.** Every vector database expresses filtering differently; keeping it as `goalIds: readonly string[]` in the signature means each adapter translates it and no caller learns any of their dialects.
@@ -326,7 +378,7 @@ docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratc
 
 - The `embedding` column is `vector(1536)`.
 - `document_chunks_embedding_idx` exists and is `hnsw`.
-- `grep -rn "cosineDistance\|drizzle-orm/pg-core.*vector" packages --include=*.ts` matches only `packages/db/src/vector/`.
+- `grep -rn "cosineDistance\|drizzle-orm/pg-core.*vector" packages --include=*.ts` matches only `packages/infrastructure/src/pg/`.
 
 Do not proceed until this passes.
 

@@ -301,7 +301,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 ---
 
 > [!NOTE]
-> **Nine of the ten ports are wired here. `EventBus` is not.** `application` declares it for
+> **Fourteen of the fifteen ports are wired here. `EventBus` is not.** `application` declares it for
 > cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
 > notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
 > adapter in `db` or `infrastructure` and no field on this class. Adding one is a field plus a

@@ -166,7 +166,11 @@ jobs:
 
 > **CI runs neither Loki nor Alloy, and that is the correct choice rather than an omission.** Both are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point.
 >
-> ClickHouse is absent for the stronger reason: nothing writes to it yet ([11](11-local-infrastructure.md)).
+> ClickHouse is absent for a different reason. Its adapters *are* written, but nothing in the unit
+> tiers touches them — `ClickHouseAnalyticsProjector` is covered by the smoke check, which runs
+> against live containers by hand and is not a CI job ([15](15-infrastructure-package.md)). If that
+> ever becomes a CI job, ClickHouse joins the service list; until then a container CI starts and
+> nothing asserts against is cost with no signal.
 
 > [!CAUTION]
 > **That web build is not optional.** `check:architecture`'s third assertion greps the built *client* output for server-only fingerprints. `build:packages` filters to `./packages/*` and never builds `apps/web`, so without this step the grep runs over a directory that does not exist — it passes silently and gives you permanent false confidence that no server code is reaching the browser.

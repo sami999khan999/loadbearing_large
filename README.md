@@ -1,6 +1,6 @@
 # loadbearing
 
-pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis (cache + queue) · S3 · stdout to Loki
+pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgvector · Redis (cache + queue) · S3 · stdout to Loki · ClickHouse behind a driver flag
 
 ## Getting started
 
@@ -13,8 +13,15 @@ pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgve
 Web: http://localhost:3000 · Loki API: http://localhost:3100 · MinIO console: http://localhost:9001
 
 `pnpm infra:up` starts Postgres, two Redis instances (cache and queue, deliberately separate), MinIO,
-and the Loki/Alloy log pipeline. ClickHouse sits behind `pnpm infra:up:analytics` and is not
-started by default. See [docs/setup/11](docs/setup/11-local-infrastructure.md).
+and the Loki/Alloy log pipeline. ClickHouse sits behind `pnpm infra:up:analytics` and is not started
+by default. See [docs/setup/11](docs/setup/11-local-infrastructure.md).
+
+**Two stores are wired but off.** ClickHouse (`AnalyticsReader`, `AnalyticsProjector`) and Loki's read
+side (`LogReader`) have working adapters, a projection consumer, and a nightly reconciliation — and
+the container builds none of them unless `CLICKHOUSE_URL` / `LOKI_URL` are set. *The seam being
+implemented* and *the store being started* are separate decisions, and only the second costs anything
+to be wrong about. See
+[reference/clickhouse](packages/infrastructure/docs/reference/clickhouse.md).
 
 ## Documentation
 

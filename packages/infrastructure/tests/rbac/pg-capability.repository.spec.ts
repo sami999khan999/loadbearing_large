@@ -3,7 +3,7 @@ import { Uuid } from "@loadbearing/core";
 import type { Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
-import { PgCapabilityRepository } from "../../src/pg/rbac/pg-capability.repository.js";
+import { PgCapabilityRepository } from "../../src/pg/repository/pg-capability.repository.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 

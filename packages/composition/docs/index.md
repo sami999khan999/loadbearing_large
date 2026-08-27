@@ -117,7 +117,7 @@ as eagerly-constructed `public readonly` fields, grouped by slice — the shape 
 [20](../../../docs/setup/20-content-package.md); until then a server catalog would be a copy of the
 client one, and the line becomes `new StaticContentSource(SERVER_CATALOG)`.
 
-**`EventBus` has no implementation, so `Container` wires nine of the ten ports.** `application`
+**`EventBus` has no implementation, so `Container` wires fourteen of the fifteen ports.** `application`
 declares it for cross-slice side effects — a finance use-case publishes `invoice.approved` rather
 than importing the notification slice — and nothing publishes one yet. It has no adapter in `db` or
 `infrastructure` and no field here. `RecordingEventBus` exists anyway, so the first use-case that

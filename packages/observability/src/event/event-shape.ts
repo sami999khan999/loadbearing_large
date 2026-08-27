@@ -69,6 +69,15 @@ export interface EventShape {
     readonly projection: string;
     readonly events: number;
     readonly durationMs: number;
+    // How far behind the checkpoint is once the run finished. On the success line
+    // rather than only on the warning one, because the number a dashboard plots is
+    // the one emitted every run — a field that appears only when something is wrong
+    // has no baseline to be wrong against.
+    readonly lagSeconds: number;
+    // True when the run stopped at its own batch ceiling rather than because it
+    // caught up. This is what separates "five minutes behind and closing" from
+    // "five minutes behind every run for a week".
+    readonly capped: boolean;
   };
   readonly "analytics.projection.failed": {
     readonly projection: string;
@@ -76,13 +85,20 @@ export interface EventShape {
   };
   readonly "analytics.projection.lagged": {
     readonly projection: string;
-    readonly pending: number;
     readonly lagSeconds: number;
+    // The threshold that fired, so the line explains itself without the reader
+    // having to find the constant. `pending` stood here and was removed: counting
+    // unprojected rows is `count(*)` over the un-caught-up tail of a partitioned
+    // table, which is the one query this pipeline exists to avoid running.
+    readonly thresholdSeconds: number;
   };
   readonly "analytics.reconciliation.completed": {
     readonly days: number;
     readonly durationMs: number;
   };
+  // One line per drifting day, not one line listing them. `LogValue` is a scalar by
+  // design — a field is something you filter on, never a structure you read — and a
+  // day is exactly the grain an operator alerts and groups on.
   readonly "analytics.reconciliation.drifted": {
     readonly day: string;
     readonly expected: number;

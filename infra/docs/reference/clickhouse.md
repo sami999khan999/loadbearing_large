@@ -29,15 +29,26 @@ service.
 explicit about when: *"do not do this week."* Its five-thousand-employee topology has no ClickHouse
 in it at all.
 
-**Today, `AnalyticsReader` is the port and `PgAnalyticsReader` is the implementation**, reading
-snapshot tables in Postgres. Half a million rows a year is a Postgres table with a good index.
+**Today, `AnalyticsReader` is the port and `PgAnalyticsReader` is the default implementation**,
+reading snapshot tables in Postgres. Half a million rows a year is a Postgres table with a good index.
 
-Defining the container means adopting ClickHouse later is `--profile analytics` and a consumer,
-rather than an infrastructure project scheduled during the week a dashboard got slow. Leaving it
-*running* would be worse than not having it:
+**The code side is finished; the deployment side is off.** `ClickHouseAnalyticsReader`,
+`ClickHouseAnalyticsProjector`, the worker's projection consumer and the nightly reconciliation all
+exist and are covered by the smoke check — see
+[the package reference](../../../packages/infrastructure/docs/reference/clickhouse.md). What is off is
+this container and the two environment variables that reach it.
+
+That is the distinction worth holding: *the seam being implemented* and *the store being started* are
+two different decisions, and only the second one costs anything to be wrong about.
+
+Leaving it *running* with nothing writing to it would be worse than not having it:
 
 > **A running analytics store with nothing writing to it looks like a decision somebody made.** The
 > next person assumes it is load-bearing, and the rebuild story quietly stops being true.
+
+Which is why `CLICKHOUSE_URL` is unset in `.env.example` even though the adapter is written. Starting
+the container is `pnpm infra:up:analytics`; *feeding* it is that variable, and the two are separate on
+purpose.
 
 **The trigger is specific:** snapshots stop covering ad-hoc queries. Not "the table is large", not
 "ClickHouse would be faster" — the moment the questions being asked are ones no precomputed rollup
@@ -63,20 +74,23 @@ as a container nobody remembers starting.
 ```sql
 CREATE TABLE IF NOT EXISTS ratchet.activity_events
 (
+  id              UUID,
   organization_id UUID,
   occurred_at     DateTime64(3),
-  actor_id        String,
+  actor_id        UUID,
   action          LowCardinality(String),
   subject_id      Nullable(UUID),
   payload         String
 )
-ENGINE = MergeTree
+ENGINE = ReplacingMergeTree
 PARTITION BY toYYYYMM(occurred_at)
-ORDER BY (organization_id, action, occurred_at)
+ORDER BY (organization_id, occurred_at, id)
 TTL toDateTime(occurred_at) + INTERVAL 5 YEAR;
 ```
 
-Mounted at `/docker-entrypoint-initdb.d/01-schema.sql`.
+Mounted at `/docker-entrypoint-initdb.d/01-schema.sql`, alongside `goal_risk_daily` and
+`user_reliability_daily` — the two rollups `AnalyticsReader` answers from, mirroring the Postgres
+schema column for column.
 
 ### `ratchet.` is qualified on purpose
 
@@ -84,11 +98,32 @@ ClickHouse's entrypoint runs the scripts in that directory against **`default`**
 `CLICKHOUSE_DB`. An unqualified `CREATE TABLE` therefore succeeds in the wrong database and the table
 looks missing — verified by it happening here.
 
-### `ENGINE = MergeTree`
+### `ENGINE = ReplacingMergeTree`
 
 ClickHouse's table engines are not interchangeable the way a storage engine usually is. `MergeTree`
 is the family that supports partitioning, sorting keys and TTL — the three clauses below all require
 it. `Log` or `Memory` would accept the columns and none of the behaviour.
+
+**`Replacing`, specifically, is what makes the projection idempotent.** Rows sharing a sorting key
+collapse to one at merge time, and the sorting key ends in the `activity_log` id — so a batch BullMQ
+redelivers overwrites the rows it already wrote instead of doubling them.
+
+That is not an optimisation. BullMQ *will* redeliver, so a plain `MergeTree` here would mean a retry
+after a partial failure silently double-counts a day, and the nightly reconciliation would report
+drift the projection itself caused.
+
+> [!IMPORTANT]
+> **Deduplication happens at merge time, not at insert time.** A `SELECT` issued before the parts
+> merge still sees both copies. Every query that counts rows uses `FINAL` for exactly this reason —
+> otherwise the reconciliation reports drift that will resolve itself in a few minutes, and a false
+> alarm on that check is how a real one stops being read.
+
+### `id`, the first column
+
+The `activity_log` primary key, carried across. It is what the dedup key ends with, and what
+`AnalyticsProjector.checkpoint()` reads back to resume a replay — the projection stores its cursor in
+the destination table rather than beside it, because a cursor kept elsewhere can disagree with what
+actually landed.
 
 ### `PARTITION BY toYYYYMM(occurred_at)`
 
@@ -99,18 +134,35 @@ This is the same reasoning as the monthly partitioning on Postgres's `activity_l
 ([13](../../../docs/setup/13-db-package.md)) — the difference is that ClickHouse does it natively
 rather than needing hand-written DDL.
 
-### `ORDER BY (organization_id, action, occurred_at)`
+### `ORDER BY (organization_id, occurred_at, id)`
 
-**The sorting key, and in `MergeTree` it is also the primary index.** Data is stored physically in
-this order, and ClickHouse keeps a sparse index over it — so a query whose predicate matches the
-leading columns reads a fraction of the data.
+**The sorting key, and in `MergeTree` it is also the primary index — and under `ReplacingMergeTree`
+it is the deduplication key as well.** Data is stored physically in this order, ClickHouse keeps a
+sparse index over it, and rows sharing the whole tuple collapse at merge time.
 
 **It leads with `organization_id` for the same reason every Postgres index does:** it is the tenant
 boundary, and an analytics store that cannot cheaply answer a question for one organization is not
-useful. `action` second, because filtering by activity type is the next most common narrowing;
-`occurred_at` last, since the partition has usually already narrowed time.
+useful. `occurred_at` second, because every analytics question is a time range. `id` last, and it is
+there to make the tuple unique — a dedup key that stopped at `occurred_at` would collapse two
+unrelated audit rows written in the same millisecond into one.
 
-Reordering these is not a tuning tweak — it changes physical layout and requires a rewrite.
+`action` used to sit second and was moved out entirely. Filtering by activity type is common, but it
+cannot be in the dedup key without pinning it: an `action` in the sorting key means correcting a
+mislabelled row creates a second row rather than replacing the first.
+
+Reordering these is not a tuning tweak — it changes physical layout, changes what deduplicates, and
+requires a rewrite.
+
+### The rollup tables order on the goal, not the tenant
+
+`goal_risk_daily` is `ORDER BY (goal_id, period, organization_id)`, which breaks the tenant-first rule
+directly above it.
+
+`AnalyticsReader.goalRiskScores(goalIds)` carries no organization — the permitted scope arrives
+already resolved by `capabilities.goalsWith()`, because a remote analytics store holds no
+`CapabilitySet` and can join back to nothing. So the tenant column is genuinely unavailable as a
+leading key, and the query would scan without this order. Postgres has the identical problem and the
+identical answer, spelled `goal_risk_daily_goal_idx`.
 
 ### `LowCardinality(String)` on `action`
 
@@ -151,16 +203,26 @@ docker volume rm ratchet_clickhousedata     # then start again
 ## The two guards that keep it derived
 
 Purely derived is what makes ClickHouse a performance decision rather than a correctness one. It stays
-that way only if both hold:
+that way only if both hold — **and both are implemented**, which they were not when this page was
+first written:
 
-- **Nothing writes to it except the event consumer.** No direct writes from use-cases, no manual
-  backfills that are not replays.
-- **A daily reconciliation job** comparing row counts per day against the activity log. The realistic
-  failure is not an outage — it is a consumer that died quietly on a Tuesday and a quarterly report
-  that looks wrong in March.
+- **Nothing writes to it except the projection.** `ClickHouseAnalyticsProjector` is the only class in
+  the repository that inserts, and it is reachable only from the worker. `ClickHouseAnalyticsReader`
+  is the class a request path can reach, and it has no write method. No direct writes from use-cases,
+  no manual backfills that are not replays.
+- **A daily reconciliation job** comparing row counts per day against the activity log. That is
+  `analytics-reconcile`, at 05:00, over the last seven days. The realistic failure is not an outage —
+  it is a consumer that died quietly on a Tuesday and a quarterly report that looks wrong in March.
+
+Both live in
+[the package reference](../../../packages/infrastructure/docs/reference/clickhouse.md), which is where
+the mechanics are; this page is about the container they run against.
 
 **The way it stops being derived:** a KPI computed in a materialized view and stored nowhere else. At
-that point it is authoritative, the rebuild story is gone, and nobody decided it.
+that point it is authoritative, the rebuild story is gone, and nobody decided it. This is a live
+temptation rather than a hypothetical one — `goal_risk_daily` and `user_reliability_daily` are
+currently empty in both stores, and a materialized view over `activity_events` would fill the
+ClickHouse copy in an afternoon.
 
 ---
 
@@ -177,7 +239,13 @@ curl -s "http://localhost:8123/?user=ratchet&password=ratchet" \
 ```
 
 The database must be **`ratchet`**, not `default`. If it is `default`, the init script ran before the
-qualification was added — drop the volume and start again.
+qualification was added — drop the volume and start again.  The engine must be
+**`ReplacingMergeTree`**: a plain `MergeTree` there is an init script from before the projection
+existed, and it will double-count the first time a job is redelivered.
+
+The end-to-end check is `pnpm --filter @loadbearing/infrastructure run smoke` with `CLICKHOUSE_URL`
+set. It inserts the same row twice and expects to read back one — the dedup claim above, tested
+rather than asserted.
 
 > **The healthcheck uses `127.0.0.1`, not `localhost`.** ClickHouse listens on IPv4 only while busybox
 > `wget` resolves `localhost` to `::1` first, so the `localhost` form is refused from inside the

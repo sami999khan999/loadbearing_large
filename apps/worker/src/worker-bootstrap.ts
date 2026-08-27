@@ -1,12 +1,15 @@
 import type { Container } from "@loadbearing/composition";
 import type { RedisConnection } from "@loadbearing/infrastructure";
 import type { Worker } from "bullmq";
+import { AnalyticsConsumer } from "./consumer/analytics.consumer.js";
 import { EmbeddingConsumer } from "./consumer/embedding.consumer.js";
 import { MaintenanceConsumer } from "./consumer/maintenance.consumer.js";
 import { Env } from "./env.js";
 import { ArchiveSchedule } from "./schedule/archive.schedule.js";
 import { CleanupSchedule } from "./schedule/cleanup.schedule.js";
 import { PartitionsSchedule } from "./schedule/partitions.schedule.js";
+import { ProjectionSchedule } from "./schedule/projection.schedule.js";
+import { ReconcileSchedule } from "./schedule/reconcile.schedule.js";
 
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
@@ -37,12 +40,38 @@ export class WorkerBootstrap {
       ).start(),
     );
 
+    // The derived-store pipeline, and the whole branch is the point. A container built
+    // without a ClickHouse config holds no `AnalyticsProjector`, so no consumer starts
+    // and no schedule registers — the analytics queue stays empty rather than filling
+    // with jobs that would each project into nothing.
+    //
+    // Same failure the maintenance consumer was written for, in the harder direction:
+    // a schedule with no consumer accumulates silently, and a consumer with no store
+    // succeeds silently, which is the one that survives a code review.
+    if (this.container.hasProjector) {
+      this.workers.push(
+        new AnalyticsConsumer(
+          this.container,
+          this.redis.queueClient(),
+          Env.analyticsConcurrency,
+        ).start(),
+      );
+    }
+
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     await new ArchiveSchedule(this.container, this.redis.queueClient()).register();
 
+    if (this.container.hasProjector) {
+      await new ProjectionSchedule(this.container, this.redis.queueClient()).register();
+      await new ReconcileSchedule(this.container, this.redis.queueClient()).register();
+    }
+
     this.container.logger.emit("process.started", {
       service: "worker",
+      // The projection consumer is counted here when it started and absent when it
+      // did not, which is the only difference on the wire between a worker running
+      // the analytics pipeline and one built without a store to project into.
       consumers: this.workers.length,
     });
   }

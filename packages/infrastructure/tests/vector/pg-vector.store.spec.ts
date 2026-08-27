@@ -3,9 +3,9 @@ import { Uuid } from "@loadbearing/core";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { PgVectorStore } from "../../src/pg/repository/pg-vector.store.js";
 import { documentChunks, organizations } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { PgVectorStore } from "../../src/pg/vector/pg-vector.store.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
 let database: Database;

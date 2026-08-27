@@ -1,6 +1,9 @@
 import {
   DirectUnitOfWork,
+  InMemoryActivityReplayReader,
+  InMemoryAnalyticsProjector,
   InMemoryCacheStore,
+  InMemoryLogReader,
   InMemoryStorageGateway,
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
@@ -15,6 +18,8 @@ import {
 import {
   type ActivityArchiveGateway,
   type ActivityLogger,
+  type ActivityReplayReader,
+  type AnalyticsProjector,
   type AnalyticsReader,
   Authorizer,
   type CacheStore,
@@ -23,6 +28,7 @@ import {
   type EventBus,
   FixedClock,
   type Logger,
+  type LogReader,
   type MaintenanceGateway,
   type QueuePublisher,
   type SessionResolver,
@@ -39,11 +45,17 @@ import {
 export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityArchive: ActivityArchiveGateway;
+  readonly activityReplay: ActivityReplayReader;
   readonly analytics: AnalyticsReader;
+  // The two halves of the derived-store pipeline. Present here even though the real
+  // container leaves them absent unless ClickHouse is configured — a test has no
+  // opinion about the deployment, and a consumer spec needs both sides to exist.
+  readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
   readonly content: ContentSource;
   readonly embeddings: EmbeddingProvider;
   readonly events: EventBus;
+  readonly logs: LogReader;
   readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
@@ -80,13 +92,16 @@ export class TestContainer {
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityArchive: overrides.activityArchive ?? new RecordingActivityArchiveGateway(),
+      activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
       analytics: overrides.analytics ?? new StubAnalyticsReader(),
+      analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       // Already in-memory — its catalog is a map of dynamic imports, so there is
       // nothing to fake. The one port whose real implementation is the test double.
       content: overrides.content ?? new StaticContentSource(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       events: overrides.events ?? new RecordingEventBus(),
+      logs: overrides.logs ?? new InMemoryLogReader(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),

@@ -20,12 +20,17 @@ The catalog is grouped by **what a dependency is able to constrain** — not by 
 
 ### Tier 0 — never imported
 
-Infrastructure the deployment provides and no code names: Postgres, both Redis instances, S3/MinIO,
-**Loki and the Alloy agent that ships stdout to it**, plus ClickHouse when it is adopted.
-All of them are in `infra/docker-compose.yml` ([11](../setup/11-local-infrastructure.md)); none of
-them is in any `package.json`. None of these appears in
-any `package.json`, which is exactly why they need a tier — otherwise question 2 below answers "it
-does not reach a bundle" and files a log aggregator under build tooling.
+Infrastructure the deployment provides and **no `package.json` names**: Postgres, both Redis
+instances, S3/MinIO, Loki, the Alloy agent that ships stdout to it, and ClickHouse. All of them are in
+`infra/docker-compose.yml` ([11](../setup/11-local-infrastructure.md)); none of them is in any
+`package.json`, which is exactly why they need a tier — otherwise question 2 below answers "it does
+not reach a bundle" and files a log aggregator under build tooling.
+
+**Some of them are reached from code, and reached over a protocol is not the same as imported.**
+`ClickHouseAnalyticsReader` and `LokiLogReader` are real adapters behind real ports, and both are
+`fetch` against a documented HTTP API — no `@clickhouse/client`, no Loki SDK, nothing added to a
+manifest. `OpenAiEmbeddingProvider` was the first instance of that pattern; these two are why it is a
+pattern rather than a one-off.
 
 **The rule that makes this tier worth naming: a Tier 0 dependency must not appear in code at all.**
 `JsonLogger` writes structured JSON to stdout and knows nothing about Loki; Alloy tails the container
@@ -37,16 +42,31 @@ The same discipline as Tier 2, arrived at from the other direction: Tier 2 entri
 behind a port; Tier 0 entries are quarantined behind a *protocol* — stdout, SQL, S3's API — that the
 code was going to speak anyway.
 
-**The tier is decided by whether code imports a client, not by whether the thing is infrastructure.**
-Postgres and ClickHouse are infrastructure *and* Tier 2, because `pg` and `@clickhouse/client` are
-real imports behind real ports. Loki is infrastructure and Tier 0, because nothing imports anything.
-That is why the adapters live in `packages/db` and `packages/infrastructure` while Loki and Alloy
-live only in `infra/docker-compose.yml` ([15](../setup/15-infrastructure-package.md) has the
-table).
+**The tier is decided by whether a `package.json` gains an entry, not by whether code talks to the
+thing.** Postgres is Tier 2, because `pg` and `drizzle-orm` are real dependencies. ClickHouse and Loki
+stay Tier 0 even though both have adapters, because reaching them cost a manifest line of exactly
+zero.
 
-> A super admin dashboard that queries Loki's HTTP API would move Loki from Tier 0 to Tier 2 — a
-> `LogReader` port, a `LokiLogReader` adapter, and `LOKI_URL` in `ContainerConfig`. That is a real
-> cost and worth naming before it is paid: it ends "swapping log platforms is a config change".
+That distinction is the one worth carrying. An earlier version of this page predicted that a
+super-admin dashboard querying Loki's HTTP API *"would move Loki from Tier 0 to Tier 2 — a `LogReader`
+port, a `LokiLogReader` adapter, and `LOKI_URL` in `ContainerConfig`,"* and warned that it would end
+"swapping log platforms is a config change."
+
+**All three of those now exist, and the warning did not come true.** The reason is worth being precise
+about, because the prediction was reasonable:
+
+- **The write path never gained a dependency.** `JsonLogger` still writes to stdout and still has
+  never heard of Loki; Alloy still tails it. Swapping the log platform is still a config change,
+  because the thing that would have to be rewritten is one 130-line reader.
+- **The read path added no package.** `fetch` against `query_range` is the protocol the code was
+  going to speak anyway — the same quarantine as SQL or S3's API, which is what Tier 0 has always
+  meant here.
+- **`LOKI_URL` is optional.** A deployment without it builds no reader, and nothing else changes.
+
+The real lesson is that the tier boundary is **the manifest**, not the absence of code. A `LogReader`
+port with an SDK behind it *would* have been the move to Tier 2; a `LogReader` port with `fetch`
+behind it is Tier 0 with a seam. `@loadbearing/observability` importing a Loki client would still be
+the failure — and this arrangement is what makes sure it never has to.
 
 ### Tier 1 — never ships
 
@@ -66,7 +86,7 @@ not runtime-agnostic**:
 | | Runs in | Entries |
 |---|---|---|
 | **isomorphic** | server, browser, worker, webview, edge | `zod`, `@orpc/contract`, `@orpc/client` |
-| **node-only** | a Node process, under any framework | `pg`, `ioredis`, `bullmq`, `drizzle-orm`, `@aws-sdk/*`, `@clickhouse/client` |
+| **node-only** | a Node process, under any framework | `pg`, `ioredis`, `bullmq`, `drizzle-orm`, `@aws-sdk/*` |
 
 `pg` and `ioredis` want raw TCP, so they are dead on an edge runtime — which is one config line away
 in Next, not a hypothetical. **That is the whole reason each one sits behind an abstract class in

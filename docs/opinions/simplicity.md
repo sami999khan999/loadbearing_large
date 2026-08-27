@@ -122,9 +122,14 @@ Both pass a specific test — **the cost of adding it later is spread across the
 concentrated in one file.** An abstraction whose future swap touches one adapter has not earned
 anything; write the adapter.
 
-The counter-example is in the same architecture: ClickHouse is in the compose file and **stopped**.
-The port is built because it is cheap and pervasive; the store is not run because nothing writes to
-it. Building both would be preparing for a future twice.
+The counter-example is in the same architecture: ClickHouse is in the compose file and **stopped**,
+and `CLICKHOUSE_URL` is unset even though both adapters are written. The seam is built because it is
+cheap and pervasive and because a seam with one implementation is untested by construction. The store
+is not *run*, because running one nobody needs costs an operator forever while writing the adapter
+cost a day once.
+
+**"The seam is implemented" and "the store is started" are two decisions, and only the second one is
+expensive to be wrong about.** Preparing for a future twice would be running it.
 
 ---
 

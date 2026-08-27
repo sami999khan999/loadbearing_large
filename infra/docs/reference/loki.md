@@ -5,8 +5,14 @@ description: Every block of Loki's config — single-binary mode, MinIO-backed s
 
 # `loki.config.yml`
 
-The log store. Alloy pushes to it, MinIO holds its chunks, and the only reader is whoever calls its
-HTTP query API — `curl` today, the super admin dashboard later.
+The log store. Alloy pushes to it, MinIO holds its chunks, and everything that reads goes through its
+HTTP query API — `curl`, the smoke check, and
+[`LokiLogReader`](../../../packages/infrastructure/docs/reference/loki.md), which is the seam the
+super-admin dashboard will read through.
+
+**Nothing in this repository pushes to it.** `JsonLogger` writes to stdout and has never heard of
+Loki; Alloy tails stdout and pushes. That asymmetry is why swapping the log platform is a config
+change — the write path has no dependency to swap.
 
 | | |
 | --- | --- |
@@ -186,9 +192,18 @@ restart.
 | Direction | Who | How |
 |---|---|---|
 | in | `alloy` | `POST http://loki:3100/loki/api/v1/push` |
-| out | query clients | `GET http://loki:3100/loki/api/v1/query_range` |
+| out | `LokiLogReader` | `GET http://loki:3100/loki/api/v1/query_range` |
 | out | you | `curl localhost:3100/loki/api/v1/...` |
 | storage | `minio` | chunks and index to bucket `loki` |
+
+`LokiLogReader` is built only when `LOKI_URL` is set, and its absence changes nothing about what is
+written. It is also deliberately **not** part of `Container.healthy()`: Loki being down loses
+diagnostics and nothing else, and failing a readiness probe over it takes the application down in
+order to protect its logs.
+
+Its `LogQuery` type offers the four labels and a substring filter, and nothing else — so a caller
+cannot express a query that would need a high-cardinality label. The cardinality rule below is
+enforced by the shape of the port rather than by convention.
 
 ---
 
@@ -206,6 +221,11 @@ curl -s -G http://localhost:3100/loki/api/v1/series \
 
 **The global `/labels` endpoint includes streams from before any config change** and will show ghosts
 long after the cause is fixed. Always scope to a fresh window when checking cardinality.
+
+The application-side check is `pnpm --filter @loadbearing/infrastructure run smoke` with `LOKI_URL`
+set: it pings `/ready` and runs a real `query_range` over the last hour, printing what came back. It
+deliberately asserts nothing about a particular line — that would make the check depend on something
+having been logged recently, which is a flaky test rather than a wiring check.
 
 > Loki takes longer than everything else to report healthy on a cold start, because it waits for
 > `minio-init` to create its bucket. Twenty retries at ten seconds is generous on purpose.

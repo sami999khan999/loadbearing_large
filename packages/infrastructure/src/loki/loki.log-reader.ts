@@ -1,0 +1,143 @@
+import { type LogEntry, type LogQuery, type LogReader, UnavailableError } from "../import.js";
+
+export interface LokiConfig {
+  // The query API, not the push endpoint. Nothing in this repository pushes to Loki —
+  // Alloy does, by tailing stdout, which is what keeps `JsonLogger` unaware the
+  // platform exists.
+  readonly url: string;
+  // Loki's multi-tenancy header. Unset for the single-tenant local stack; set on
+  // Grafana Cloud, which is the swap this whole arrangement exists to make cheap.
+  readonly tenantId?: string;
+  readonly timeoutMs?: number;
+}
+
+interface LokiStream {
+  readonly stream: Readonly<Record<string, string>>;
+  // `[unixNanoseconds, line]`, and the timestamp is a string because nanoseconds
+  // do not survive a JSON number.
+  readonly values: readonly (readonly [string, string])[];
+}
+
+interface LokiResponse {
+  readonly data?: { readonly result?: readonly LokiStream[] };
+}
+
+// The read side of the diagnostic stream, and the only code in the repository that
+// knows Loki exists. That asymmetry is deliberate: the write path is stdout, so
+// swapping the log platform replaces this one file and an Alloy config line.
+//
+// It exists for the operator surface — the reader that knows what an organization is,
+// which is the one thing a generic log console cannot know. Break-glass stays
+// `docker compose logs`: a log query that needs the app running is no use during the
+// incident where the app is down.
+export class LokiLogReader implements LogReader {
+  private static readonly DEFAULT_TIMEOUT_MS = 15_000;
+  // Loki's own ceiling is 5000. Asking for more is a 400, not a truncation.
+  private static readonly MAX_LIMIT = 5_000;
+
+  public constructor(private readonly config: LokiConfig) {}
+
+  public async query(query: LogQuery): Promise<readonly LogEntry[]> {
+    const url = new URL("/loki/api/v1/query_range", this.config.url);
+    url.searchParams.set("query", LokiLogReader.toLogQl(query));
+    // Nanoseconds since the epoch. Milliseconds are accepted and then interpreted as
+    // nanoseconds, which silently returns an empty window in 1970.
+    url.searchParams.set("start", LokiLogReader.nanos(query.from));
+    url.searchParams.set("end", LokiLogReader.nanos(query.to));
+    url.searchParams.set("limit", String(Math.min(query.limit ?? 100, LokiLogReader.MAX_LIMIT)));
+    // Newest first, which is what an operator opening a log view wants. Loki's own
+    // default is `forward`, and the difference is invisible until the window is
+    // wider than `limit` and the page shows the oldest lines in it.
+    url.searchParams.set("direction", "backward");
+
+    const response = await fetch(url, {
+      headers: this.config.tenantId ? { "x-scope-orgid": this.config.tenantId } : {},
+      signal: AbortSignal.timeout(this.config.timeoutMs ?? LokiLogReader.DEFAULT_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      throw new UnavailableError(`Loki query failed (${response.status}): ${detail}`);
+    }
+
+    const body = (await response.json()) as LokiResponse;
+    return (body.data?.result ?? []).flatMap((stream) =>
+      stream.values.map((value) => LokiLogReader.toEntry(stream.stream, value)),
+    );
+  }
+
+  public async healthy(): Promise<boolean> {
+    try {
+      const response = await fetch(new URL("/ready", this.config.url), {
+        signal: AbortSignal.timeout(this.config.timeoutMs ?? LokiLogReader.DEFAULT_TIMEOUT_MS),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // The selector carries only the four labels, and the line filter carries everything
+  // else. That split is not a style choice: a label creates one stream per distinct
+  // value, so a `userId` selector at 100k users means 100k streams and Loki falls
+  // over. `LogQuery` offers no shape that could produce one.
+  private static toLogQl(query: LogQuery): string {
+    const selector: string[] = [];
+    if (query.app) selector.push(`app=${JSON.stringify(query.app)}`);
+    if (query.env) selector.push(`env=${JSON.stringify(query.env)}`);
+    if (query.level) selector.push(`level=${JSON.stringify(query.level)}`);
+    if (query.eventCode) selector.push(`event_code=${JSON.stringify(query.eventCode)}`);
+
+    // A stream selector cannot be empty and cannot match everything, so an unfiltered
+    // query still has to name a label. `app=~".+"` is the cheapest one that matches
+    // every stream this pipeline creates, since Alloy binds `app` onto all of them.
+    const stream = selector.length > 0 ? selector.join(",") : 'app=~".+"';
+
+    // `| json` after the selector, so the parse cost is paid only on the streams that
+    // survived it. `contains` is a substring filter on the raw line — high-cardinality
+    // fields are matched here, which is exactly where they belong.
+    return query.contains
+      ? `{${stream}} |= ${JSON.stringify(query.contains)} | json`
+      : `{${stream}} | json`;
+  }
+
+  // The label set is the four Alloy promotes; everything else was in the line body
+  // and comes back out of it. A line that is not our JSON — Postgres, MinIO — parses
+  // to nothing and keeps its raw text as the message, which is the correct outcome:
+  // a third-party line is still a diagnostic.
+  private static toEntry(
+    labels: Readonly<Record<string, string>>,
+    [timestamp, line]: readonly [string, string],
+  ): LogEntry {
+    const parsed = LokiLogReader.parse(line);
+
+    return {
+      // Nanoseconds to milliseconds. `Number` on the whole string loses precision
+      // above 2^53, so the division happens on the string's own digits.
+      timestamp: new Date(Number(BigInt(timestamp) / 1_000_000n)),
+      app: labels.app ?? "unknown",
+      env: labels.env ?? "unknown",
+      level: labels.level ?? LokiLogReader.text(parsed.level) ?? "info",
+      eventCode: labels.event_code ?? LokiLogReader.text(parsed.event) ?? "",
+      message: LokiLogReader.text(parsed.message) ?? line,
+      fields: parsed,
+    };
+  }
+
+  private static parse(line: string): Readonly<Record<string, unknown>> {
+    try {
+      const value: unknown = JSON.parse(line);
+      return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private static text(value: unknown): string | undefined {
+    return typeof value === "string" ? value : undefined;
+  }
+
+  private static nanos(value: Date): string {
+    return `${BigInt(value.getTime()) * 1_000_000n}`;
+  }
+}

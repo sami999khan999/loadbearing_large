@@ -30,9 +30,34 @@ const Schema = z.object({
   // Serial by default. Maintenance jobs take table-level locks and run nightly; two
   // overlapping buys nothing and can deadlock on the same partition.
   WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
+  // Serial, and not a dial worth turning. Two projection runs read the same
+  // checkpoint, project the same rows, and turn one batch into two — correctness here
+  // rests on there being exactly one writer, not on the insert being idempotent.
+  WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
 
   // The same block the web app parses. A worker with no log output is a worker you
   // cannot operate.
+  // ── the swappable stores ──
+  //
+  // Each is a driver plus the connection detail that driver needs. `Container` reads
+  // the driver and builds the class behind the port, so adopting a store is these
+  // variables and nothing else — no code change, no migration, no call site touched.
+  VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
+  ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
+  // Optional, and their absence is what keeps ClickHouse stopped. Present without
+  // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
+  // runs and the reconciliation reports, while reads still come from Postgres.
+  CLICKHOUSE_URL: z.url().optional(),
+  CLICKHOUSE_DATABASE: z.string().min(1).default("ratchet"),
+  CLICKHOUSE_USER: z.string().min(1).default("ratchet"),
+  CLICKHOUSE_PASSWORD: z.string().default(""),
+  // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
+  // written to stdout and still shipped by Alloy, and reading them is
+  // `docker compose logs` or curl against Loki, which stays the break-glass path
+  // regardless.
+  LOKI_URL: z.url().optional(),
+  LOKI_TENANT_ID: z.string().optional(),
+
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   LOG_PRETTY: z
     .enum(["true", "false"])
@@ -71,6 +96,10 @@ export class Env {
     return Env.parsed.WORKER_MAINTENANCE_CONCURRENCY;
   }
 
+  public static get analyticsConcurrency(): number {
+    return Env.parsed.WORKER_ANALYTICS_CONCURRENCY;
+  }
+
   // The boundary where environment becomes `ContainerConfig` (17). No `auth` block:
   // the worker never issues or validates a session, so `Container` builds no
   // `AuthFactory` and this process holds no session secret.
@@ -92,6 +121,24 @@ export class Env {
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
       },
+      // Undefined unless a URL was given, which is what `Container` branches on.
+      // Spreading a partly-filled object here instead would build a ClickHouse
+      // connection pointed at nothing.
+      analytics: {
+        driver: e.ANALYTICS_DRIVER,
+        clickhouse: e.CLICKHOUSE_URL
+          ? {
+              url: e.CLICKHOUSE_URL,
+              database: e.CLICKHOUSE_DATABASE,
+              username: e.CLICKHOUSE_USER,
+              password: e.CLICKHOUSE_PASSWORD,
+            }
+          : undefined,
+      },
+      vector: { driver: e.VECTOR_DRIVER },
+      logs: e.LOKI_URL
+        ? { driver: "loki" as const, url: e.LOKI_URL, tenantId: e.LOKI_TENANT_ID }
+        : undefined,
       logging: { level: e.LOG_LEVEL, pretty: e.LOG_PRETTY, app: e.APP, env: e.ENV },
     } as const;
   }

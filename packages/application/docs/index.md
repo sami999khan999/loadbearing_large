@@ -38,10 +38,16 @@ packages/application/
 │   └── port/                     ← abstract classes only, zero implementations
 │       ├── index.ts
 │       ├── activity.logger.ts    → ActivityLogger
+│       ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
+│       ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
+│       │                                 ProjectionCheckpoint, DailyCount
+│       ├── analytics.projector.ts → AnalyticsProjector
 │       ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
 │       ├── cache.store.ts        → CacheStore
 │       ├── embedding.provider.ts → EmbeddingProvider
 │       ├── event.bus.ts          → EventBus, DomainEvent
+│       ├── log.reader.ts         → LogReader, LogQuery, LogEntry
+│       ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
 │       ├── queue.publisher.ts    → QueuePublisher, JobOptions
 │       ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
 │       ├── storage.gateway.ts    → StorageGateway, StoredObject
@@ -66,29 +72,51 @@ The rule pays for itself immediately. Nothing threads a third argument into
 **once** — at the boundary that catches it, with its full structured context — rather than three
 times on the way up, each layer adding a little and losing a little.
 
-## The ten ports
+## The ports
 
 Every one is an **abstract class**, not an interface: abstract classes exist at runtime, so `extends`
 gives a real prototype chain and `noImplicitOverride` catches a rename.
 
 | Port | Implemented by | Swap target |
 | --- | --- | --- |
-| `ActivityLogger` | `PgActivityLogger` — `db` | never; audit is Postgres at every scale |
-| `AnalyticsReader` | `PgAnalyticsReader` — `db` | `ClickHouseAnalyticsReader` |
-| `CacheStore` | `RedisCacheStore` — `infrastructure` | managed Redis |
-| `EmbeddingProvider` | `OpenAiEmbeddingProvider` — `infrastructure` | any embedding API |
+| `ActivityLogger` | `PgActivityLogger` | never; audit is Postgres at every scale |
+| `ActivityArchiveGateway` | `PgActivityArchiveGateway` | never — it *is* the Postgres side |
+| `ActivityReplayReader` | `PgActivityReplayReader` | never — reads the source of truth |
+| `AnalyticsReader` | `PgAnalyticsReader` | `ClickHouseAnalyticsReader` — **written** |
+| `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
+| `CacheStore` | `RedisCacheStore` | managed Redis |
+| `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
 | `EventBus` | in-process dispatch — `composition` | a broker |
-| `QueuePublisher` | `BullMqQueuePublisher` — `infrastructure` | managed Redis |
+| `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |
+| `MaintenanceGateway` | `PgMaintenanceGateway` | never |
+| `QueuePublisher` | `BullMqQueuePublisher` | managed Redis |
 | `SessionResolver` | Better Auth — `auth` | any session library |
-| `StorageGateway` | `S3StorageGateway` — `infrastructure` | S3, R2 |
-| `UnitOfWork` | `PgUnitOfWork` — `db` | never |
-| `VectorStore` | `PgVectorStore` — `db` | Qdrant |
+| `StorageGateway` | `S3StorageGateway` | S3, R2 |
+| `UnitOfWork` | `PgUnitOfWork` | never |
+| `VectorStore` | `PgVectorStore` | a dedicated vector database |
 
-Read that list against `container.ts` and every name lines up with one binding. **Repository ports
-are not here** — each lives with its feature slice, `src/task/task.repository.ts`, so a slice is one
-glob and `CODEOWNERS` stays honest. `AnalyticsReader` and `VectorStore` are the exception because
-they are one cross-cutting read seam that many subjects query, not one per subject: the test is
-whether a new feature adds a *method* here or a *file*.
+Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts` and
+every name lines up with one binding. **Repository ports are not here** — each lives with its feature
+slice, `src/task/task.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
+`AnalyticsReader` and `VectorStore` are the exception because they are one cross-cutting read seam
+that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
+or a *file*.
+
+### Three ports are split read-from-write, and each split is a guard
+
+**`ActivityLogger` writes the audit trail; `ActivityReplayReader` reads it.** The writer runs inside a
+transaction and every use-case holds it. The reader scans in bulk, carries no `Principal`, and is
+reachable only from the worker. One port with both would put a cross-tenant scan on the object every
+use-case already has.
+
+**`AnalyticsReader` reads the derived store; `AnalyticsProjector` writes it.** The reader is reachable
+from a request path and the projector is not. This is the guard that keeps the analytics store
+derived: *nothing writes to it except the projection*, and a single port with both would make that
+unenforceable.
+
+**`LogReader` reads diagnostics and nothing writes them from here at all.** `JsonLogger` goes to
+stdout; a collector tails it. The write path has no port because it has no dependency — which is
+exactly what makes swapping the log platform a config change.
 
 ## Two ports carry a required permitted scope
 

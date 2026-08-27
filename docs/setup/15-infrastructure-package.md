@@ -1,8 +1,11 @@
-# 15 · `@loadbearing/infrastructure`
+# 15 · `@loadbearing/infrastructure` — the non-Postgres adapters
 
-> The non-Postgres adapters that application code actually imports: Redis caching, S3 file storage, and the BullMQ queue publisher. Server-only.
+> Redis caching, S3 file storage, the BullMQ queue publisher, the embedding provider, and the two
+> opt-in stores: ClickHouse and Loki. Server-only.
 
-**Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, and the embedding provider from [14](14-vector-store.md).
+**Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, the
+embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsReader` /
+`ClickHouseAnalyticsProjector`, and `LokiLogReader`.
 
 **Prerequisite:** [14 · Vector Storage](14-vector-store.md)
 
@@ -31,78 +34,108 @@ nothing.
 | Thing | Where | Why |
 |---|---|---|
 | Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
-| **ClickHouse** | **here**, when adopted | `@clickhouse/client` satisfying `AnalyticsReader` — the same shape as Redis |
-| **Postgres** | `packages/db` | It has a whole package, because `db` means Postgres ([00](00-README.md)) |
-| **Loki, Alloy** | **nowhere in `packages/`** | No client, no port, nothing to import |
+| **ClickHouse** | **here** | `AnalyticsReader` and `AnalyticsProjector` — the same shape as Redis |
+| **Postgres** | **here**, in `src/pg/` | Folded in from `packages/db` — see [13](13-db-package.md) |
+| **Loki** | **here, the read side only** | `LogReader`. Nothing in `packages/` writes to it |
+| **Alloy** | **nowhere in `packages/`** | A separate process that tails stdout. No client, no port |
 
-**The last row is the one worth understanding**, because "we use Loki, so the Loki thing goes in the
-infrastructure package" is a reasonable-sounding sentence that would undo a deliberate design.
+**The Loki row is the one worth understanding**, because it is two different answers in one line and
+"we use Loki, so the Loki thing goes in the infrastructure package" is a reasonable-sounding sentence
+that would undo half a deliberate design.
 
-`JsonLogger` writes structured JSON to stdout and has never heard of Loki. Alloy — a *separate
-process* — tails that stdout and ships it. Nothing in `packages/` reads it back. There is
-no library to install and no seam to implement, which is precisely what makes swapping the log
-platform a config change instead of a migration ([Data and scale](../opinions/data-and-scale.md)).
+**The write path has no seam, because it has no dependency.** `JsonLogger` writes structured JSON to
+stdout and has never heard of Loki. Alloy — a *separate process* — tails that stdout and ships it.
+There is no library to install on that side, which is precisely what makes swapping the log platform
+a config change instead of a migration ([Data and scale](../opinions/data-and-scale.md)).
+
+**The read path has one, because reading back is a query against an HTTP API.** `LokiLogReader`
+implements `LogReader`, is built only when `LOKI_URL` is set, and exists for the operator surface that
+knows what an organization is — the one thing a generic log console cannot know. It is `fetch` against
+`query_range`; there is still no library.
 
 The moment `@loadbearing/observability` imports a Loki client, three things break at once: the
 package gains a runtime dependency it has spent its whole design avoiding, the log platform stops
-being swappable, and a browser bundle acquires a server-only import. They live in
-`infra/docker-compose.yml` ([11](11-local-infrastructure.md)) as
+being swappable, and a browser bundle acquires a server-only import. **That constraint is on
+`observability`, and this package is where the read adapter goes precisely so `observability` never
+needs one.** The containers live in `infra/docker-compose.yml` ([11](11-local-infrastructure.md)) as
 [Tier 0](../opinions/dependencies.md) — provided by the deployment, reached over a protocol the code
 was going to speak anyway.
 
-**Smell:** a `*.dashboard.json` or a `loki` entry in any `package.json`. Dashboards are
-infrastructure configuration and belong beside the provisioning files in `infra/`.
-
-**If you would rather stay at thirteen packages,** fold `src/cache/`, `src/storage/`, and `src/queue/` into `packages/db/src/` as siblings of `vector/`. Every other line in these documents is unchanged.
+**Smell:** a `*.dashboard.json`, or a `loki` / `@clickhouse/client` entry in any `package.json`. Both
+adapters here are `fetch` against a documented HTTP API, for the same reason
+`OpenAiEmbeddingProvider` is: one dependency fewer, and a stable request shape.
 
 ```
 packages/infrastructure/src/
-├── index.ts                          ← ServerOnly.assert()
-├── import.ts                         ← every external symbol, vendor SDKs included
+├── index.ts                              ← ServerOnly.assert()
+├── import.ts                             ← every external symbol, vendor SDKs included
+├── pg/                                   ← Postgres, and the biggest tenant — see 13
 ├── redis/
 │   ├── index.ts
-│   └── redis.connection.ts           → RedisConnection
-├── cache/
+│   ├── redis.connection.ts               → RedisConnection
+│   └── redis.cache-store.ts              → RedisCacheStore
+├── s3/
 │   ├── index.ts
-│   └── redis.cache-store.ts          → RedisCacheStore
-├── storage/
+│   ├── s3-storage.gateway.ts             → S3StorageGateway
+│   └── storage-key.ts                    → StorageKey
+├── bullmq/
 │   ├── index.ts
-│   ├── s3-storage.gateway.ts         → S3StorageGateway
-│   └── storage-key.ts                → StorageKey
-├── queue/
+│   ├── queue-name.ts                     → QueueName
+│   └── bullmq.queue-publisher.ts         → BullMqQueuePublisher
+├── openai/
 │   ├── index.ts
-│   ├── queue-name.ts                 → QueueName
-│   └── bullmq.queue-publisher.ts     → BullMqQueuePublisher
-├── embedding/
+│   └── openai.embedding-provider.ts      → OpenAiEmbeddingProvider
+├── clickhouse/                           ← opt-in: built only when configured
 │   ├── index.ts
-│   └── openai.embedding-provider.ts  → OpenAiEmbeddingProvider
-├── analytics/                        ← empty until ClickHouse is adopted
+│   ├── clickhouse.connection.ts          → ClickHouseConnection
+│   ├── clickhouse.analytics-reader.ts    → ClickHouseAnalyticsReader
+│   └── clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
+├── loki/                                 ← opt-in: built only when LOKI_URL is set
 │   ├── index.ts
-│   └── clickhouse.analytics-reader.ts → ClickHouseAnalyticsReader
+│   └── loki.log-reader.ts                → LokiLogReader
 └── smoke/
-    └── index.ts                      ← the wiring check, run against live containers
+    └── index.ts                          ← the wiring check, run against live containers
 ```
 
-> `analytics/` is listed for completeness and is **not** built now. `PgAnalyticsReader` in
-> [13](13-db-package.md) is the implementation until snapshots stop covering ad-hoc queries
-> ([Data and scale](../opinions/data-and-scale.md) §5). The folder is here so the answer to "where
-> would it go" is written down rather than argued about later.
+**One folder per external system, and the system is the only subject.** `ls src/` answers "what does
+this package depend on?" in one line. The filenames already led with the technology
+([Files](../opinions/files.md)); the folders agree with them.
+
+The folders used to name the *seam* — `cache/`, `storage/`, `queue/`, `embedding/`, `analytics/` — and
+that broke the first time a port got a second implementation. `pg/analytics/` beside `clickhouse/`
+reads as two different things; `pg/repository/pg-analytics.reader.ts` beside
+`clickhouse/clickhouse.analytics-reader.ts` reads as what it is. **One axis, and it is the vendor.**
+
+> [!NOTE]
+> **A folder here means the seam is implemented, not that the store is running.** `clickhouse/` and
+> `loki/` are behind opt-in compose profiles, and `Container` builds neither unless its config block
+> is present. Those are two separate decisions and only the second one costs anything to be wrong
+> about — see [reference/clickhouse](../../packages/infrastructure/docs/reference/clickhouse.md).
 
 **`packages/infrastructure/src/index.ts`**
 
 ```ts
-import { ServerOnly } from "@loadbearing/core";
+import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/infrastructure");
 
-export { RedisCacheStore } from "./cache/index.js";
-export { type OpenAiEmbeddingConfig, OpenAiEmbeddingProvider } from "./embedding/index.js";
-export { BullMqQueuePublisher, QueueName } from "./queue/index.js";
-export { type RedisConfig, RedisConnection } from "./redis/index.js";
-export { type S3Config, S3StorageGateway, StorageKey } from "./storage/index.js";
+export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
+export {
+  ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
+  type ClickHouseConfig,
+  ClickHouseConnection,
+} from "./clickhouse/index.js";
+export { type LokiConfig, LokiLogReader } from "./loki/index.js";
+export { type OpenAiEmbeddingConfig, OpenAiEmbeddingProvider } from "./openai/index.js";
+export { /* Database, BaseRepository, every Pg* adapter */ } from "./pg/index.js";
+export { RedisCacheStore, type RedisConfig, RedisConnection, type RedisRole } from "./redis/index.js";
+export { type S3Config, S3StorageGateway, StorageKey } from "./s3/index.js";
 ```
 
-Read that list against `container.ts` ([17](17-composition-container.md)) and every name lines up with one `port` binding. That is the whole public surface of the package — five adapters and their config types.
+Read that list against `container.ts` ([17](17-composition-container.md)) and every name lines up with
+one `port` binding — which is the property that makes the container the only file in the repository
+knowing both an abstract port and the concrete class behind it.
 
 ---
 
@@ -512,32 +545,96 @@ export class BullMqQueuePublisher extends QueuePublisher {
 
 ---
 
-## Step 15.5 — Barrels
+## Step 15.5 — The two opt-in stores
+
+Both are `fetch` against a documented HTTP API. No `@clickhouse/client`, no Loki SDK — the same
+choice `OpenAiEmbeddingProvider` makes, and for the same reasons: the request shape is stable, the
+dependency count stays where it is, and both stores stay [Tier 0](../opinions/dependencies.md)
+dependencies reached over a protocol this runtime already speaks.
+
+### `src/clickhouse/` — the derived analytics store
+
+Three files, and the split between them is a guard rather than an organisational preference.
+
+| Class | Port | Reachable from |
+|---|---|---|
+| `ClickHouseConnection` | — | the two below |
+| `ClickHouseAnalyticsReader` | `AnalyticsReader` | a request path |
+| `ClickHouseAnalyticsProjector` | `AnalyticsProjector` | the worker, only |
+
+**A single class with both would put `project()` on the object a dashboard query holds.** *Nothing
+writes to ClickHouse except the projection* is the first of the two guards that keep the store
+derived, and a merged port makes it unenforceable.
+
+Three things `ClickHouseConnection` does that are easy to get wrong by hand:
+
+- **Server-side bound parameters, never interpolation.** ClickHouse reads `{name:Type}` placeholders
+  out of `param_*` query-string entries. The analytics store holds every tenant's rows in one table,
+  so an injected predicate here is a cross-tenant read.
+- **Table names qualified against the configured database.** ClickHouse resolves an unqualified name
+  against the session default, which is `default` — the same trap the init script documents, and the
+  reason a table can look missing while it exists.
+- **`DateTime64(3)` is `YYYY-MM-DD HH:MM:SS.mmm`.** An ISO string's `T` and `Z` are rejected.
+
+The full mechanics — the checkpoint, the keyset, the `ReplacingMergeTree` dedup, the reconciliation —
+are in [reference/clickhouse](../../packages/infrastructure/docs/reference/clickhouse.md).
+
+### `src/loki/` — the read side of the diagnostic stream
+
+One file, one method that matters, and a type that refuses to express a bad query:
 
 ```ts
-// packages/infrastructure/src/cache/index.ts
+interface LogQuery {
+  from: Date; to: Date;
+  app?: string; env?: string; level?: string; eventCode?: string;   // the four labels
+  contains?: string;                                                // the line body
+  limit?: number;
+}
+```
+
+**A label creates one stream per distinct value.** `user_id` at 100k users means 100k streams and Loki
+falls over — the most common way a Loki deployment fails, and entirely avoidable. Here the avoidance
+is not a convention: `LogQuery` has no field that could produce one. High-cardinality fields go in
+`contains`, which becomes a line filter applied *after* the selector has narrowed the streams.
+
+Details in [reference/loki](../../packages/infrastructure/docs/reference/loki.md).
+
+---
+
+## Step 15.6 — Barrels
+
+```ts
+// packages/infrastructure/src/redis/index.ts
 export { RedisCacheStore } from "./redis.cache-store.js";
+export { type RedisConfig, RedisConnection, type RedisRole } from "./redis.connection.js";
 ```
 
 ```ts
-// packages/infrastructure/src/storage/index.ts
+// packages/infrastructure/src/s3/index.ts
 export { type S3Config, S3StorageGateway } from "./s3-storage.gateway.js";
 export { StorageKey } from "./storage-key.js";
 ```
 
 ```ts
-// packages/infrastructure/src/queue/index.ts
+// packages/infrastructure/src/bullmq/index.ts
 export { BullMqQueuePublisher } from "./bullmq.queue-publisher.js";
 export { QueueName } from "./queue-name.js";
 ```
 
 ```ts
-// packages/infrastructure/src/redis/index.ts
-export { type RedisConfig, RedisConnection } from "./redis.connection.js";
+// packages/infrastructure/src/clickhouse/index.ts
+export { ClickHouseAnalyticsProjector } from "./clickhouse.analytics-projector.js";
+export { ClickHouseAnalyticsReader } from "./clickhouse.analytics-reader.js";
+export { type ClickHouseConfig, ClickHouseConnection } from "./clickhouse.connection.js";
 ```
 
 ```ts
-// packages/infrastructure/src/embedding/index.ts
+// packages/infrastructure/src/loki/index.ts
+export { type LokiConfig, LokiLogReader } from "./loki.log-reader.js";
+```
+
+```ts
+// packages/infrastructure/src/openai/index.ts
 export {
   type OpenAiEmbeddingConfig,
   OpenAiEmbeddingProvider,
@@ -548,9 +645,23 @@ Folder barrels name their exports for the same reason root barrels do — and he
 
 ---
 
-## Step 15.6 — A smoke test
+## Step 15.7 — A smoke test
 
-Not a unit test — these classes are adapters and testing them against fakes tests nothing. Write one script that exercises all three against the running containers.
+Not a unit test — these classes are adapters and testing them against fakes tests nothing. Write one
+script that exercises every one of them against the running containers.
+
+**The two opt-in stores are checked when configured and skipped with a line when they are not.** A
+smoke run against a stack that does not include them should say so and pass, rather than fail on a
+service nobody started.
+
+The ClickHouse probe inserts **the same row twice** and expects to read back one. That is not a
+formality: the projection consumer's idempotency rests entirely on `ReplacingMergeTree` collapsing a
+redelivered batch, and an `ENGINE = MergeTree` typo in the init script stays invisible until a
+redelivery doubles a quarter's numbers.
+
+The Loki probe runs a real `query_range` and prints what came back, but deliberately asserts nothing
+about a particular line — that would make the check depend on something having been logged recently,
+which is a flaky test rather than a wiring check.
 
 **`packages/infrastructure/src/smoke/index.ts`**
 

@@ -1,6 +1,12 @@
-# 13 · `@loadbearing/db`
+# 13 · `@loadbearing/infrastructure` — the Postgres side
 
-> Drizzle schema, the connection class, repository implementations, migrations, and seeds. Server-only.
+> Drizzle schema, the connection class, repository implementations, migrations, and seeds.
+> Server-only.
+>
+> **This document used to build `@loadbearing/db`.** That package was folded into
+> `@loadbearing/infrastructure` — the two were siblings with no edge between them, and the split put
+> one seam in two places. Everything below is now `packages/infrastructure/src/pg/`; the other stores
+> are [15](15-infrastructure-package.md).
 
 **Delivers:** RBAC tables with `organization_id` on every one, `CapabilityRepository`, a migration pipeline whose first migration is already partitioned, `PgAnalyticsReader`, and the four system roles.
 
@@ -15,7 +21,7 @@
 That split has a real cost, and it is worth naming rather than discovering. A slice's files land in two directories — `schema/task.schema.ts` and `task/pg-task.repository.ts` — so a `CODEOWNERS` line per team needs both globs. [Folders](../opinions/folders.md) argues the other way for every package that has a choice; this one does not.
 
 ```
-packages/db/
+packages/infrastructure/
 ├── drizzle.config.ts
 ├── migrations/                    ← generated, committed
 └── src/
@@ -36,19 +42,34 @@ packages/db/
     │   ├── index.ts
     │   ├── transaction-scope.ts   → TransactionScope
     │   └── pg-unit-of-work.ts     → PgUnitOfWork
-    ├── rbac/
+    ├── repository/                ← every adapter, one file each, flat
     │   ├── index.ts
-    │   └── pg-capability.repository.ts → PgCapabilityRepository
-    ├── activity/                  → PgActivityLogger
-    ├── analytics/                 → PgAnalyticsReader
-    ├── vector/                    → PgVectorStore — see 14
+    │   ├── pg-activity.logger.ts          → PgActivityLogger
+    │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
+    │   ├── pg-activity-replay.reader.ts   → PgActivityReplayReader
+    │   ├── pg-analytics.reader.ts         → PgAnalyticsReader
+    │   ├── pg-api-key.repository.ts       → PgApiKeyRepository
+    │   ├── pg-capability.repository.ts    → PgCapabilityRepository
+    │   ├── pg-maintenance.gateway.ts      → PgMaintenanceGateway
+    │   ├── pg-membership.reader.ts        → PgMembershipReader
+    │   └── pg-vector.store.ts             → PgVectorStore — see 14
     ├── seed/                      → SystemRoleSeed
     └── migrate/                   ← the migration runner
 ```
 
-**One folder per seam, each holding its adapter**, the same shape
-[15](15-infrastructure-package.md) uses. A seam folder holding one file is normal — `cache/` there
-holds one too.
+**One folder per external system, and the system is the only subject.** This whole tree lives under
+`packages/infrastructure/src/pg/`, beside `clickhouse/`, `loki/`, `redis/`, `s3/`, `bullmq/` and
+`openai/` ([15](15-infrastructure-package.md)).
+
+**The adapters sit flat in `repository/` rather than in a folder per seam.** They were once
+`activity/`, `analytics/`, `rbac/`, `vector/` and `maintenance/`, each holding one or two files, and
+that was wrong twice over.
+
+A folder holding one file is a path, not a subject ([Simplicity](../opinions/simplicity.md)). And
+`pg/analytics/` beside `clickhouse/` reads as two different things, when what it actually is — now
+that ClickHouse has an implementation — is two implementations of one port. Flat, each file is
+`pg-<port>.ts` beside `clickhouse-<port>.ts` one directory over, and the technology stays the axis
+this package sorts on.
 
 **Schemas are the exception to the subject-folder rule** ([Folders](../opinions/folders.md)), and it
 is a tooling exception rather than a taste one: `drizzle.config.ts` needs one path that names every
@@ -61,33 +82,49 @@ in that namespace ([16](16-auth-package.md)).
 
 ## Step 13.1 — The tripwire and the barrel
 
-**`packages/db/src/index.ts`**
+**`packages/infrastructure/src/pg/index.ts`**
 
 ```ts
-import { ServerOnly } from "@loadbearing/core";
-import * as schema from "./schema.js";
-
-ServerOnly.assert("@loadbearing/db");
-
-export { PgActivityLogger } from "./activity/index.js";
-export { PgAnalyticsReader } from "./analytics/index.js";
-export { BaseRepository } from "./base.repository.js";
-export { Database, type DatabaseConfig } from "./database.js";
-export { PgCapabilityRepository } from "./rbac/index.js";
-export { PgUnitOfWork, TransactionScope } from "./unit-of-work.js";
-export { PgVectorStore } from "./vector/index.js";
-export { schema };
+export {
+  BaseRepository,
+  Database,
+  type DatabaseConfig,
+  type DrizzleClient,
+} from "./primitive/index.js";
+export {
+  type ApiKeyRow,
+  PgActivityArchiveGateway,
+  PgActivityLogger,
+  PgActivityReplayReader,
+  PgAnalyticsReader,
+  PgApiKeyRepository,
+  PgCapabilityRepository,
+  PgMaintenanceGateway,
+  PgMembershipReader,
+  PgVectorStore,
+} from "./repository/index.js";
+export { PgUnitOfWork, TransactionScope } from "./transaction/index.js";
 ```
+
+**`schema/`, `migrate/` and `seed/` are deliberately absent.** drizzle-kit and the two runners reach
+them by path, and nothing outside this package may name a table.
+
+The `ServerOnly.assert` tripwire lives one level up, in `packages/infrastructure/src/index.ts`, above
+every export — so it runs the moment the module is evaluated in a browser rather than after a Drizzle
+import has already been pulled in. `import` statements are hoisted regardless of where the assert
+sits, so being first among the *statements* is what matters, not first in the file.
 
 The assert sits above every export, so it runs the moment the module is evaluated in a browser rather than after a Drizzle import has already been pulled in. The two `import` lines above it are hoisted regardless of where the statement sits, so putting the assert first among the *statements* is what matters, not first in the file.
 
-**The schema namespace is two statements, not `export * as schema from`.** That form is a star export and `noReExportAll` rejects it ([05](05-lint-and-format.md)) — `import * as` followed by a named `export` is the same thing to the module graph and passes. It also publishes exactly one name, `schema`, which is the property that made a namespace right here in the first place.
+**`Database` builds the schema namespace with two statements, not `export * as schema from`.** That
+form is a star export and `noReExportAll` rejects it ([05](05-lint-and-format.md)) — `import * as`
+followed by a named use is the same thing to the module graph and passes.
 
 ---
 
 ## Step 13.2 — `Database`
 
-**`packages/db/src/primitive/database.ts`**
+**`packages/infrastructure/src/pg/primitive/database.ts`**
 
 ```ts
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -139,9 +176,9 @@ export class Database {
 
 ## Step 13.3 — The schema
 
-Drizzle tables stay **declarative** — the same data-shape exemption Zod schemas get. They are `pgTable` calls at module scope, not classes. **All access goes through repository classes**; nothing outside `packages/db/src` imports a table.
+Drizzle tables stay **declarative** — the same data-shape exemption Zod schemas get. They are `pgTable` calls at module scope, not classes. **All access goes through repository classes**; nothing outside `packages/infrastructure/src` imports a table.
 
-**`packages/db/src/schema/rbac.schema.ts`**
+**`packages/infrastructure/src/pg/schema/rbac.schema.ts`**
 
 ```ts
 import { relations } from "drizzle-orm";
@@ -298,7 +335,7 @@ The consequence that catches people is **`roles_key_uq`**. Keyed on `(key)` alon
 
 ## Step 13.4 — The schema barrel
 
-**`packages/db/src/schema/index.ts`**
+**`packages/infrastructure/src/pg/schema/index.ts`**
 
 ```ts
 export * from "./activity.schema.js";
@@ -318,7 +355,7 @@ One file that drizzle-kit points at, and one file to edit when a slice adds tabl
 
 ## Step 13.5 — Drizzle Kit
 
-**`packages/db/drizzle.config.ts`**
+**`packages/infrastructure/drizzle.config.ts`**
 
 ```ts
 import { defineConfig } from "drizzle-kit";
@@ -335,7 +372,7 @@ export default defineConfig({
 
 > This file reads `process.env` and that is fine — it is a build-time tool config, not package runtime code. No extra ignore is needed: the base config's `"**/*.config.ts"` pattern already covers it.
 
-Add to **`packages/db/package.json`**:
+Add to **`packages/infrastructure/package.json`**:
 
 ```json
 "scripts": {
@@ -347,7 +384,7 @@ Add to **`packages/db/package.json`**:
 }
 ```
 
-**`packages/db/src/migrate/index.ts`**
+**`packages/infrastructure/src/pg/migrate/index.ts`**
 
 ```ts
 import "dotenv/config";
@@ -365,7 +402,7 @@ console.log("migrations applied");
 ```
 
 ```bash
-pnpm add --filter @loadbearing/db -D dotenv
+pnpm add --filter @loadbearing/infrastructure -D dotenv
 ```
 
 ### Generate, never push
@@ -383,7 +420,7 @@ Use `db:push` on a scratch database while iterating on a schema shape you have n
 ## Step 13.6 — First migration
 
 ```bash
-cd packages/db
+cd packages/infrastructure
 node -e "require('fs').writeFileSync('.env', 'DATABASE_URL=postgres://ratchet:ratchet@localhost:5432/ratchet\n')"
 ```
 > A package-local `.env` for drizzle-kit only. It is already covered by the root `.gitignore`.
@@ -439,7 +476,7 @@ pnpm db:studio
 
 ## Step 13.7 — Repositories
 
-**`packages/db/src/primitive/base.repository.ts`**
+**`packages/infrastructure/src/pg/primitive/base.repository.ts`**
 
 ```ts
 import type { OrganizationId, UserId } from "@loadbearing/contracts";
@@ -472,7 +509,7 @@ export abstract class BaseRepository {
 
 **The transaction handle.** `db` resolves to the open transaction when there is one. Without that, `UnitOfWork.run()` opens a transaction that the repositories inside it never join — every call site *reads* as atomic and none of it *is*.
 
-**`packages/db/src/rbac/pg-capability.repository.ts`**
+**`packages/infrastructure/src/pg/repository/pg-capability.repository.ts`**
 
 ```ts
 import { and, eq, isNull, or } from "drizzle-orm";
@@ -602,7 +639,7 @@ An N+1 caught by a failing assertion costs a minute. The same N+1 caught by a pr
 
 ## Step 13.8 — Seeds
 
-**`packages/db/src/seed/system-role.seed.ts`**
+**`packages/infrastructure/src/pg/seed/system-role.seed.ts`**
 
 ```ts
 import { and, eq } from "drizzle-orm";
@@ -610,7 +647,7 @@ import { Uuid } from "@loadbearing/core";
 import type { OrganizationId } from "@loadbearing/contracts";
 import { PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 import { BaseRepository } from "../base.repository.js";
-import { rolePermissions, roles } from "../rbac/rbac.schema.js";
+import { rolePermissions, roles } from "../schema/index.js";
 
 interface SystemRole {
   readonly key: string;
@@ -682,7 +719,7 @@ export class SystemRoleSeed extends BaseRepository {
 
 **The seed takes an organization, because system roles are per-tenant rows.** `owner` is not one row shared by every customer — it is one row per organization, which is what `roles_key_uq` on `(organization_id, key)` enforces. Creating an organization therefore means creating its four system roles, and this method is the thing that does it. Seeding a fresh database means seeding a first organization to hang them off.
 
-**`packages/db/src/seed/index.ts`**
+**`packages/infrastructure/src/pg/seed/index.ts`**
 
 ```ts
 import "dotenv/config";
@@ -713,7 +750,7 @@ This is also the staged-rollout mechanism: until the migration that grants a mod
 
 ## Step 13.9 — `PgUnitOfWork`
 
-**`packages/db/src/transaction/pg-unit-of-work.ts`** and **`transaction-scope.ts`**
+**`packages/infrastructure/src/pg/transaction/pg-unit-of-work.ts`** and **`transaction-scope.ts`**
 
 ```ts
 import { AsyncLocalStorage } from "node:async_hooks";

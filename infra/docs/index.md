@@ -37,6 +37,13 @@ Redis has no config file — every setting is a command-line flag in the compose
 service would be a path holding one thing. `docs/` is nested because there is genuinely a page's worth
 to say about each — which is what earns structure ([Simplicity](../../docs/opinions/simplicity.md)).
 
+This is the opposite answer from the one `packages/infrastructure/src/` gives, and the difference is
+what each directory holds. There, ClickHouse and Loki each got a folder, because each is several
+TypeScript modules and the folder is the unit of "what does this package depend on". Here, each is
+one mounted file — and `infra/clickhouse/clickhouse.init.sql` states nothing that
+`infra/clickhouse.init.sql` does not. **Structure is earned by contents, not by symmetry with another
+directory.**
+
 ---
 
 ## How the services connect
@@ -81,10 +88,17 @@ makes the log platform swappable — see [alloy](reference/alloy.md).
 stores its chunks and index in the `loki` bucket. They share a server and nothing else
 ([minio](reference/minio.md)).
 
-**Nothing in this stack reads the logs back.** Loki is storage plus a `query_range` HTTP API, and
-the reader is the super admin dashboard. Until that ships, use `docker compose logs` or curl the API
-directly ([loki](reference/loki.md)). Grafana used to fill this slot and was removed deliberately —
-see [compose](reference/compose.md#why-there-is-no-log-ui).
+**No container in this stack reads the logs back, and none will.** Loki is storage plus a
+`query_range` HTTP API; the reader is application code —
+[`LokiLogReader`](../../packages/infrastructure/docs/reference/loki.md), built when `LOKI_URL` is
+set — because the surface that matters is the super-admin dashboard, which already knows what an
+organization is. Grafana used to fill this slot and was removed deliberately: two consoles for one
+operator, and the query that mattered was the one it could not express
+([compose](reference/compose.md#why-there-is-no-log-ui)).
+
+`docker compose logs` and curl against the API stay the break-glass path regardless
+([loki](reference/loki.md)) — a log query that needs the application running is no use during the
+incident where the application is down.
 
 **Only Alloy touches the Docker socket**, read-only, and only to read container stdout.
 
@@ -136,7 +150,7 @@ goes looking for a code bug.
 | Capability and session cache | `CacheStore` | redis-cache | no — rebuilt from Postgres |
 | Queued jobs | `QueuePublisher` | redis-queue | **yes** — derived from nothing |
 | Diagnostic log lines | `JsonLogger` → stdout | Alloy → Loki → MinIO `loki` | no — 30 days, lossy |
-| Analytics aggregates | worker, from domain events | ClickHouse *(stopped)* | no — replayable |
+| Analytics aggregates | worker, replaying `activity_log` | ClickHouse *(stopped by default)* | no — replayable |
 
 The rule behind that column is [Data and scale](../../docs/opinions/data-and-scale.md): **Postgres
 owns anything a transaction depends on or a user reads immediately after writing; everything else is
@@ -160,6 +174,12 @@ pnpm infra:logs            # tail every service
 | *(none)* | `postgres`, `redis-cache`, `redis-queue`, `minio`, `minio-init` | always |
 | `observability` | `loki`, `alloy` | **on** — the diagnostic stream is live today |
 | `analytics` | `clickhouse` | **off** — see [clickhouse](reference/clickhouse.md) |
+
+**Starting the container and feeding it are two separate switches.** `pnpm infra:up:analytics` runs
+ClickHouse; `CLICKHOUSE_URL` in `.env` is what makes the application build a projector and the worker
+register the projection and reconciliation schedules. Both are off by default, and the adapters are
+written either way — a folder in `packages/infrastructure/src/` means the seam is implemented, not
+that the store is running.
 
 > `down`, `reset` and `logs` pass `--profile "*"`. Compose only acts on profiles it was given, so
 > without it a reset leaves ClickHouse running and `logs` omits it from the output you are reading to

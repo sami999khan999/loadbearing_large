@@ -71,9 +71,17 @@ one thing a generic log console cannot know. Grafana was in this stack and was r
 that reason: two consoles for one operator, and the query that matters — *these logs, for this
 tenant, joined to that tenant's audit rows* — was the one it could not express.
 
-Until that dashboard ships, reading logs is `docker compose logs` or curl against Loki's API. That
-gap is accepted knowingly, and both remain the break-glass path afterwards: a log query that needs
-the app running is no use during the incident where the app is down.
+**The seam for that dashboard exists: `LogReader`, implemented by `LokiLogReader`.** It is `fetch`
+against `query_range`, built only when `LOKI_URL` is set, and it changes nothing about the write path
+— `JsonLogger` still goes to stdout and still has never heard of Loki. That asymmetry is the design:
+the write path has no seam because it has no dependency.
+
+Its `LogQuery` type offers the four labels and a substring filter over the line body, and nothing
+else — so the cardinality rule below is enforced by the shape of the port rather than by convention.
+
+Until the dashboard ships, reading logs is `docker compose logs`, curl, or that port. All three remain
+the break-glass path afterwards: a log query that needs the app running is no use during the incident
+where the app is down.
 
 Deployment is Alloy tailing container stdout, storage on S3 or MinIO — both already running
 ([11](../setup/11-local-infrastructure.md)). Retention is a config line, literally
@@ -391,8 +399,8 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 2 | KPI snapshot tables | Dashboard over 1s on a warm cache | A day |
 | 3 | Read replica for dashboards | Reads competing with writes | A day; one adapter change |
 | 4 | pgBouncer, transaction mode | Past ~100 connections | Hours |
-| 5 | ClickHouse behind `AnalyticsReader` | Snapshots stop covering ad-hoc queries | A week |
-| 6 | Qdrant behind `VectorStore` | pgvector recall or latency degrades | Days |
+| 5 | ClickHouse behind `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **Two env vars** |
+| 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
 | 7 | Shard Postgres by `organization_id` | Writes past a single primary | Weeks — needs 4.1 |
 | 8 | Broker-backed event bus | In-process dispatch saturates | Days — needs §6 |
 
@@ -410,8 +418,25 @@ predictive analytics and ad-hoc KPI exploration are exactly what they cannot cov
 
 **At 100k DAU it is required.**
 
-Because the write path is event-driven from step 4.3, adopting it changes where events land and
-nothing else. **Build the port and the pipeline now; swap the destination later.**
+Because the write path is a replay of `activity_log` from step 4.3, adopting it changes where rows
+land and nothing else. **The port and the pipeline are built; the destination is a config change.**
+
+Move #5 in the table above says "two env vars" rather than "a week" because
+`ClickHouseAnalyticsReader`, `ClickHouseAnalyticsProjector`, the projection consumer and the nightly
+reconciliation are written, and the container is in the compose file behind a profile:
+
+1. `pnpm infra:up:analytics` — starts the container. Nothing writes to it.
+2. `CLICKHOUSE_URL=…` — the projection starts filling it and the reconciliation starts reporting.
+   Dashboards still read Postgres.
+3. `ANALYTICS_DRIVER=clickhouse` — reads move.
+
+**The two-variable arrangement is the design, not an accident.** One switch that moved reads and
+writes together would cut dashboards over to a store that is still filling. Step 2 without step 3 is
+the state you sit in for a few days while the reconciliation proves itself.
+
+What is still a week, if you want it, is what the store is *for*: the rollup job at move #2, which
+does not exist in either store, and the queries a real dashboard asks. The infrastructure is not the
+part that was ever going to take a week.
 
 ---
 
@@ -553,9 +578,9 @@ stdout → Alloy → Loki               diagnostics
 | Task status history | Postgres, partitioned monthly |
 | Audit trail | Postgres, partitioned monthly, **in-transaction** |
 | Auth sessions | Postgres + Redis cache |
-| Vectors | pgvector, behind `VectorStore` |
-| Analytics aggregates | Postgres snapshots → ClickHouse, behind `AnalyticsReader` |
-| System logs | stdout → **Loki**, 30-day retention, low-cardinality labels only |
+| Vectors | pgvector, behind `VectorStore` — `VECTOR_DRIVER` |
+| Analytics aggregates | Postgres snapshots → ClickHouse, behind `AnalyticsReader` — `ANALYTICS_DRIVER` |
+| System logs | stdout → **Loki**, 30-day retention, low-cardinality labels only; read back through `LogReader` |
 | Uploads | S3, presigned URLs, short TTL |
 
 **Derived stores — rebuildable, never authoritative:**
@@ -564,13 +589,25 @@ stdout → Alloy → Loki               diagnostics
 |---|---|---|
 | Redis — capability and session cache | Postgres | Read-through on miss |
 | Redis — BullMQ | **Nothing** | Separate instance; AOF; re-enqueue sweep |
-| ClickHouse | Activity log replay | Consumer-only writes; daily reconciliation |
-| pgvector / Qdrant | Source documents | Re-embed |
+| ClickHouse | Activity log replay | `AnalyticsProjector` is the only writer; nightly reconciliation |
+| pgvector or a dedicated store | Source documents | Re-embed |
 
 **Do this week:** `organization_id` everywhere · partition `activity_log` and `task_status_history` ·
 `AnalyticsReader` port with a Postgres implementation · index every FK · query-count assertions in
 integration tests · separate the Redis cache instance from the queue instance.
 
-**Do not do this week:** ClickHouse, Qdrant, sharding, a broker. Every one of them is a swap behind
-a seam that already exists, and building any of them before a real query is slow means building the
-wrong schema for a load pattern nobody has measured.
+**Do not do this week:** *starting* ClickHouse, a dedicated vector database, sharding, a broker. Every
+one is a swap behind a seam that already exists, and building any of them before a real query is slow
+means building the wrong schema for a load pattern nobody has measured.
+
+> [!NOTE]
+> **"The seam is implemented" and "the store is running" are two different decisions, and only the
+> second one costs anything to be wrong about.** The ClickHouse adapters are written and covered by
+> the smoke check; the container is stopped and `CLICKHOUSE_URL` is unset. That is not a
+> contradiction of the line above — writing an adapter costs a day once, while running a store you do
+> not need costs an operator forever, and a store that is running with nothing writing to it looks
+> like a decision somebody made.
+>
+> The same split applies to `VECTOR_DRIVER`, which has exactly one legal value and exists anyway: a
+> seam with one implementation is untested by construction, and a discriminated `driver` on
+> `ContainerConfig` is what turns "swap the implementation" from a claim into a compiler-checked edit.

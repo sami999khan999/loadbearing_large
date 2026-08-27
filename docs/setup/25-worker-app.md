@@ -30,11 +30,17 @@ apps/worker/
     ├── worker-bootstrap.ts           → WorkerBootstrap
     ├── system-principal.ts           → SystemPrincipal
     ├── consumer/
-    │   └── embedding.consumer.ts     → EmbeddingConsumer
+    │   ├── embedding.consumer.ts     → EmbeddingConsumer
+    │   ├── maintenance.consumer.ts   → MaintenanceConsumer
+    │   └── analytics.consumer.ts     → AnalyticsConsumer   (registered only when configured)
     ├── notification/
     │   └── digest.composer.ts        → DigestComposer  (the only email-namespace reader)
     └── schedule/
-        └── cleanup.schedule.ts       → CleanupSchedule
+        ├── cleanup.schedule.ts       → CleanupSchedule
+        ├── partitions.schedule.ts    → PartitionsSchedule
+        ├── archive.schedule.ts       → ArchiveSchedule
+        ├── projection.schedule.ts    → ProjectionSchedule  (analytics)
+        └── reconcile.schedule.ts     → ReconcileSchedule   (analytics)
 ```
 
 ---
@@ -327,16 +333,25 @@ await queue.add(
 
 **Never run cron in the web process.** Two web instances means every schedule fires twice, and nothing in the code will tell you.
 
-### The four schedules this kit ships with
+### The schedules this kit ships with
 
 Each one exists because something else in the architecture assumed it would.
 
-| Schedule | Pattern | Why it exists |
-|---|---|---|
-| `cleanup-daily` | `0 3 * * *` | Expired sessions, orphaned uploads, stale verification rows |
-| `partitions-monthly` | `0 2 1 * *` | Creates the next few months of `activity_log` and `task_status_history` partitions |
-| `recovery-sweep-daily` | `0 4 * * *` | Re-enqueues work that was never processed |
-| `analytics-reconcile-daily` | `0 5 * * *` | Compares snapshot row counts against the activity log |
+| Schedule | Queue | Pattern | Why it exists |
+|---|---|---|---|
+| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions, orphaned uploads, stale verification rows |
+| `partitions-monthly` | maintenance | `0 2 1 * *` | Creates the next few months of `activity_log` partitions |
+| `archive-monthly` | maintenance | `0 4 1 * *` | Detaches the month that aged out, ships it to S3, records it |
+| `analytics-projection` | analytics | `*/5 * * * *` | Replays `activity_log` into the derived store |
+| `analytics-reconcile` | analytics | `0 5 * * *` | Compares derived row counts against the activity log |
+
+**The last two register only when `container.hasProjector` is true** — that is, only when
+`CLICKHOUSE_URL` is set. The rest always do.
+
+That branch is the whole point. A schedule with no consumer accumulates jobs silently, which is what
+left `cleanup-daily` broken for a while. A consumer with no *store* is worse: it succeeds silently, so
+five minutes of nothing looks exactly like five minutes of work, and the first sign is a report that
+comes out wrong months later. **Absent beats no-op.**
 
 **`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. Create three months out and the job can fail twice before anything breaks.
 
@@ -346,7 +361,31 @@ Each one exists because something else in the architecture assumed it would.
 
 This is what makes rule 1 above load-bearing rather than good practice: **the sweep re-enqueues work that may well have already been done.** A handler that is not idempotent turns a recovery mechanism into a duplicate-notification incident.
 
-**`analytics-reconcile-daily` is how a dead consumer gets noticed.** The realistic failure for a derived store is not an outage — it is a projection consumer that died quietly on a Tuesday and a quarterly report that looks wrong in March. Comparing per-day row counts against the activity log catches it in a day, and the drift is repaired by replaying rather than by writing to the analytics store directly, which is what keeps it derived.
+**`analytics-projection` is where the derived store comes from, and it holds no cursor of its own.**
+It asks the destination what its last row was, walks `activity_log` forward in keyset batches on
+`(occurred_at, id)`, and stops when a batch comes back short. A checkpoint kept beside the store — in
+Postgres, in Redis — can disagree with what actually landed, and the disagreement is silent.
+
+Batches are 5,000 rows and a run is capped at 20 of them. ClickHouse merges on write, so a thousand
+single-row inserts create a thousand parts the background merge never catches up with; the run cap
+bounds how long one job holds a Postgres connection, and the checkpoint means the next tick resumes
+exactly where this one stopped.
+
+**`analytics-reconcile` is how a dead consumer gets noticed.** The realistic failure for a derived
+store is not an outage — it is a projection that died quietly on a Tuesday and a quarterly report that
+looks wrong in March. It asks both stores for per-day row counts over the last week and diffs them;
+neither store reaches into the other, which is what keeps each adapter single-store. Today is excluded
+because it is still being written to, and a check that cries wolf daily is a check nobody reads.
+
+Drift is repaired by replaying, never by writing to the analytics store directly — that is what keeps
+it derived. It logs at **error**, one line per drifting day, because every number a dashboard has
+shown since that day is wrong and the replay only works while `activity_log` still covers the window.
+**The alert has a deadline attached.**
+
+> [!NOTE]
+> **`recovery-sweep-daily` is described above and is not yet built.** It is the one schedule in this
+> section without a file, and the gap is deliberate: nothing publishes the kind of job it would
+> re-enqueue yet. The reasoning stands for whenever the first one lands.
 
 ---
 
