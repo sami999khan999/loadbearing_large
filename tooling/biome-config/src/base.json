@@ -81,7 +81,6 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@loadbearing/db": "Server-only. Cross the boundary via @loadbearing/contracts.",
                   "@loadbearing/infrastructure": "Server-only. Cross the boundary via @loadbearing/contracts.",
                   "@loadbearing/auth": "Server-only. Cross the boundary via @loadbearing/contracts.",
                   "@loadbearing/composition": "Server-only. Cross the boundary via @loadbearing/contracts.",
@@ -122,8 +121,8 @@
       "includes": [
         "**/*.config.ts",
         "packages/auth/src/tables/**",
-        "packages/db/src/migrate/**",
-        "packages/db/src/seed/**",
+        "packages/infrastructure/src/pg/migrate/**",
+        "packages/infrastructure/src/pg/seed/**",
         "packages/*/src/smoke/**"
       ],
       "linter": {
@@ -135,7 +134,7 @@
       }
     },
     {
-      "includes": ["packages/db/src/schema/index.ts"],
+      "includes": ["packages/infrastructure/src/pg/schema/index.ts"],
       "linter": {
         "rules": {
           "performance": {
@@ -158,8 +157,8 @@
       "includes": [
         "**/*.mjs",
         "packages/auth/src/tables/**",
-        "packages/db/src/migrate/**",
-        "packages/db/src/seed/**",
+        "packages/infrastructure/src/pg/migrate/**",
+        "packages/infrastructure/src/pg/seed/**",
         "packages/*/src/smoke/**",
         "packages/observability/src/logger/json.logger.ts"
       ],

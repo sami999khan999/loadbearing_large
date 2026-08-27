@@ -21,6 +21,12 @@ export const coreEvents = {
   "queue.job.stalled": { level: "warn" },
   "queue.schedule.registered": { level: "info" },
 
+  // Platform housekeeping. `partitions.ensured` is the one to alert on when `created`
+  // stays 0 for a month — that means the job ran and the runway is not being extended.
+  "maintenance.sweep.completed": { level: "info" },
+  "maintenance.partitions.ensured": { level: "info" },
+  "maintenance.partition.archived": { level: "info" },
+
   // The sweep that turns a lost job into a delay. It reconciles against Postgres
   // rather than job history, which ages out long before a nightly run.
   "queue.sweep.completed": { level: "info" },

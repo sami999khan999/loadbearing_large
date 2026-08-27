@@ -27,7 +27,7 @@ Four directories, and the split between them is the architecture:
 | `apps/` | Framework code — TanStack Start, the worker's Node entrypoint, the Tauri desktop shell | The only place `process.env` is read. The only place `@tanstack/react-router` appears. Deliberately thin enough to delete and rewrite in a week. |
 | `packages/` | Everything that matters — primitives, permissions, contracts, use-cases, adapters, React components | Knows nothing about which web framework you use. Never reads its own configuration. |
 | `tooling/` | Shared `tsconfig`, Biome, and ESLint configs, published as workspace packages | Changed rarely, by whoever owns the platform. |
-| `infra/` | `docker-compose.yml`, plus the config files the services read — Postgres init SQL, Loki's storage and retention, Alloy's log pipeline, Grafana's data sources | No application code, and nothing here is imported by a package. |
+| `infra/` | `docker-compose.yml`, plus the config files the services read — Postgres init SQL, Loki's storage and retention, Alloy's log pipeline | No application code, and nothing here is imported by a package. |
 
 `packages/` gets subdirectories in [06](06-package-anatomy.md) — leave it empty for now.
 
@@ -195,7 +195,7 @@ pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgve
     pnpm db:migrate && pnpm db:seed
     pnpm dev
 
-Web: http://localhost:3000 · Grafana: http://localhost:3001 · MinIO console: http://localhost:9001
+Web: http://localhost:3000 · Loki API: http://localhost:3100 · MinIO console: http://localhost:9001
 
 See `docs/` for the architecture and the build order.
 ```

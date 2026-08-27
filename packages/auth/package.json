@@ -37,7 +37,6 @@
     "@loadbearing/application": "workspace:*",
     "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
-    "@loadbearing/db": "workspace:*",
     "@loadbearing/infrastructure": "workspace:*",
     "@loadbearing/permissions": "workspace:*",
     "better-auth": "catalog:"

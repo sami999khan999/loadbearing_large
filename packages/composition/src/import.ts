@@ -6,8 +6,10 @@
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 export {
+  ActivityArchiveGateway,
   ActivityLogger,
   AnalyticsReader,
+  type ArchivedPartition,
   Authorizer,
   CacheStore,
   type DateRange,
@@ -17,6 +19,7 @@ export {
   EventBus,
   IndexDocumentUseCase,
   type JobOptions,
+  MaintenanceGateway,
   type Principal,
   QueuePublisher,
   type RequestHeaders,
@@ -26,6 +29,7 @@ export {
   SessionResolver,
   StorageGateway,
   type StoredObject,
+  type SweepOutcome,
   type TrendPoint,
   UnitOfWork,
   VectorStore,
@@ -53,26 +57,26 @@ export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { type Clock, FixedClock, ServerOnly, SystemClock } from "@loadbearing/core";
 
-// ── @loadbearing/db ──────────────────────────────────────────────────────────
+// ── @loadbearing/infrastructure ──────────────────────────────────────────────
+// Every concrete adapter, Postgres included. One import block, because there is now
+// one package holding the whole outside-world side of the ports below.
 export {
+  BullMqQueuePublisher,
   Database,
+  OpenAiEmbeddingProvider,
+  PgActivityArchiveGateway,
   PgActivityLogger,
   PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
+  PgMaintenanceGateway,
   PgMembershipReader,
   PgUnitOfWork,
   PgVectorStore,
-  TransactionScope,
-} from "@loadbearing/db";
-
-// ── @loadbearing/infrastructure ──────────────────────────────────────────────
-export {
-  BullMqQueuePublisher,
-  OpenAiEmbeddingProvider,
   RedisCacheStore,
   RedisConnection,
   S3StorageGateway,
+  TransactionScope,
 } from "@loadbearing/infrastructure";
 
 // ── @loadbearing/observability ───────────────────────────────────────────────

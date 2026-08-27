@@ -85,6 +85,8 @@ catalog:
   bullmq: ^5.81.3
   "@aws-sdk/client-s3": ^3.1107.0
   "@aws-sdk/s3-request-presigner": ^3.1107.0
+  # Multipart upload for a body that will not fit in memory — an archived partition.
+  "@aws-sdk/lib-storage": ^3.1107.0
 
   # ════════════════════════════════════════════════════════════════════════════
   # Tier 3 — framework-scoped

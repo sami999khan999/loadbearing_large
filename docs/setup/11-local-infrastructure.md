@@ -2,7 +2,7 @@
 
 > Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, and the log platform the diagnostic stream ships to. One command.
 
-**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki and Grafana, so the log stream has somewhere to land and something to read it with.
+**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki, so the log stream has somewhere to land.
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 
@@ -146,26 +146,6 @@ services:
       timeout: 3s
       retries: 10
 
-  grafana:
-    image: grafana/grafana:11.4.0
-    profiles: ["observability"]
-    restart: unless-stopped
-    # 3001, because the web app owns 3000.
-    ports: ["${GRAFANA_PORT:-3001}:3000"]
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
-      GF_USERS_DEFAULT_THEME: light
-    volumes:
-      - ./grafana.datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - grafanadata:/var/lib/grafana
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health | grep -q ok"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-
   # ── analytics, opt-in ─────────────────────────────────────
   # Not started by `pnpm infra:up`. Nothing writes to it until the
   # projection consumer exists — see the note below.
@@ -199,13 +179,12 @@ volumes:
   redisqueuedata:
   miniodata:
   lokidata:
-  grafanadata:
   clickhousedata:
 ```
 
 > The cache has no volume on purpose. A named volume for something explicitly disposable invites someone to treat it as durable.
 
-> **Every host port is overridable, and every container port is not.** `${GRAFANA_PORT:-3001}:3000`
+> **Every host port is overridable, and every container port is not.** `${MINIO_CONSOLE_PORT:-9001}:9001`
 > keeps the documented default while letting one developer move it. Port collisions on a developer
 > machine are not hypothetical — this stack met one on the first run, where `9001` was already held
 > by an unrelated tool — and the fix should be a line in `infra/.env` rather than an edit to a file
@@ -241,7 +220,12 @@ Running one instance forces one eviction policy onto both. `allkeys-lru` silentl
 
 Pointing Loki at MinIO rather than a local volume also means the local topology matches production, where it is S3. One fewer thing that behaves differently on the day you deploy.
 
-**Grafana is one UI, not three.** It reads Loki now and Postgres immediately; when ClickHouse arrives it reads that too. Anonymous admin with the login form disabled, because a local observability stack behind a password is a local observability stack nobody opens.
+**There is no log UI in this stack, deliberately.** Loki is storage and a query API; reading it is
+the super admin dashboard's job, and until that exists the fallbacks are `docker compose logs` and
+`curl` against Loki's HTTP API (Step 11.7). Grafana used to sit here and was removed: a second
+console meant two places to look, and the one query an operator actually needs — *these logs, for
+this tenant, joined to that tenant's audit rows* — is one Grafana cannot express, because it has no
+idea what an organization is.
 
 **Two profiles, and the split is a decision rather than a convenience.**
 
@@ -403,7 +387,7 @@ loki.process "stream" {
     }
   }
 
-  // Loki, Grafana and Alloy emit logfmt with a `level` key. Same extracted key
+  // Loki and Alloy emit logfmt with a `level` key. Same extracted key
   // as above, so whichever stage understood the line is the one that wins.
   //
   // Gated by a selector, unlike stage.json: a JSON stage that cannot parse a
@@ -411,7 +395,7 @@ loki.process "stream" {
   // not understand — and Alloy collects its own stdout, so ungated it spends the
   // whole pipeline reporting that Postgres does not speak logfmt.
   stage.match {
-    selector = "{app=~\"loki|grafana|alloy\"}"
+    selector = "{app=~\"loki|alloy\"}"
 
     stage.logfmt {
       mapping = { level = "" }
@@ -469,7 +453,7 @@ regex per vendor to maintain.
 | Service | `app` | `env` | `level` | `event_code` | Parsed as |
 |---|---|---|---|---|---|
 | `web`, `worker` (or `dev` via the file tail) | from body | from body | from body | ✅ | our JSON |
-| `loki`, `grafana`, `alloy` | service name | static | from body | — | logfmt |
+| `loki`, `alloy` | service name | static | from body | — | logfmt |
 | `postgres`, `redis-cache`, `redis-queue`, `minio`, `clickhouse` | service name | static | — | — | plain text |
 
 **Only our own applications get all four**, which is the intended asymmetry: `event_code` exists
@@ -527,54 +511,7 @@ rather than decorative.
 
 ---
 
-## Step 11.4 — Grafana's data sources
-
-**`infra/grafana.datasources.yml`**
-
-```yaml
-apiVersion: 1
-
-datasources:
-  - name: Loki
-    type: loki
-    uid: loki
-    access: proxy
-    url: http://loki:3100
-    isDefault: true
-    jsonData:
-      # Follow a traceId from a log line into whatever traces you add later.
-      derivedFields:
-        - name: TraceID
-          matcherRegex: '"traceId":"([^"]+)"'
-          url: '$${__value.raw}'
-
-  - name: Postgres
-    type: grafana-postgresql-datasource
-    uid: postgres
-    access: proxy
-    url: postgres:5432
-    user: ratchet
-    jsonData:
-      database: ratchet
-      sslmode: disable
-    secureJsonData:
-      password: ratchet
-```
-
-**Provisioned as a file, never clicked in.** A data source configured through the UI lives in
-Grafana's volume and disappears on `infra:reset`, which is exactly when somebody is already debugging
-something else.
-
-The Postgres data source is here from day one because the activity log is a Postgres table. *"Who
-changed this"* is a Grafana query against Postgres; *"what did the system do"* is a Grafana query
-against Loki. Same UI, two stores, which is the argument for Grafana over a Loki-specific viewer.
-
-> `$${__value.raw}` is escaped for Compose, which expands `$`. Written `${__value.raw}` it silently
-> becomes an empty string.
-
----
-
-## Step 11.5 — ClickHouse's schema, for later
+## Step 11.4 — ClickHouse's schema, for later
 
 Only read when you start the `analytics` profile. It exists so the profile is runnable rather than a
 stub.
@@ -616,7 +553,7 @@ the column store keeps aggregates for as long as the business needs a trend.
 
 ---
 
-## Step 11.6 — Start it
+## Step 11.5 — Start it
 
 ```bash
 pnpm infra:up
@@ -625,7 +562,7 @@ pnpm infra:up
 ```bash
 docker compose -f infra/docker-compose.yml ps
 ```
-> Seven services should read `healthy`: postgres, redis-cache, redis-queue, minio, loki, alloy, grafana. `minio-init` should read `exited (0)` — that is success, not a failure. `clickhouse` should not be listed at all; it is behind the `analytics` profile.
+> Six services should read `healthy`: postgres, redis-cache, redis-queue, minio, loki, alloy. `minio-init` should read `exited (0)` — that is success, not a failure. `clickhouse` should not be listed at all; it is behind the `analytics` profile.
 
 Loki takes longer to report healthy than the rest, because it waits for `minio-init` to create its bucket. Twenty retries at ten seconds is generous on purpose — a cold image pull on a slow connection is the usual cause, not a misconfiguration.
 
@@ -644,7 +581,7 @@ docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratc
 
 ---
 
-## Step 11.7 — Verify each service
+## Step 11.6 — Verify each service
 
 ```bash
 docker compose -f infra/docker-compose.yml exec postgres psql -U ratchet -d ratchet -c "SELECT extname FROM pg_extension;"
@@ -672,15 +609,19 @@ curl -s -G http://localhost:3100/loki/api/v1/labels | jq -r '.data[]'
 ```
 > Once anything has logged, this is the whole point of the exercise: it should print `app`, `env`, `event_code`, `level` — **and nothing else**. A fifth label here means the Alloy pipeline promoted something it should not have, and it is far cheaper to notice now than at a hundred thousand streams.
 
-Open `http://localhost:3001` for Grafana. It signs you in automatically, and both data sources are already configured. Try a query in Explore:
+There is no log UI to open. Query Loki over HTTP instead — the same `query_range` endpoint the super
+admin dashboard will call:
 
-```logql
-{app="postgres"} | json
+```bash
+curl -s -G http://localhost:3100/loki/api/v1/query_range   --data-urlencode 'query={app="postgres"} | json'   --data-urlencode "start=$(date -d '15 minutes ago' +%s)000000000"   | jq -r '.data.result[].values[][1]'
 ```
+> Worth keeping as a shell alias. It is the break-glass path for as long as the dashboard is the
+> only reader, and it stays the break-glass path afterwards — a log query that depends on the app
+> being up is no use during the incident where the app is down.
 
 ---
 
-## Step 11.8 — Useful operations
+## Step 11.7 — Useful operations
 
 ```bash
 pnpm infra:down
@@ -704,7 +645,8 @@ docker compose -f infra/docker-compose.yml exec redis-cache redis-cli flushall
 ```bash
 docker compose -f infra/docker-compose.yml logs -f postgres
 ```
-> Raw container logs, when Grafana is the thing that is broken.
+> Raw container stdout, straight from the daemon. The shortest path when Loki, Alloy, or the
+> dashboard reading them is itself the thing that is broken.
 
 ```bash
 pnpm dev | tee infra/logs/dev.log
@@ -724,7 +666,6 @@ The application code does not change between the two columns. These containers a
 | `redis-queue` container | A **separate** managed Redis with `noeviction` and AOF. Never the same instance as the cache |
 | MinIO | S3, R2, or any S3-compatible store. Set `S3_FORCE_PATH_STYLE=false` for AWS |
 | `loki` + `alloy` containers | Self-hosted Loki with S3 storage, or Grafana Cloud — the same config, a different `url`. Alloy runs as a DaemonSet on Kubernetes |
-| `grafana` container | Self-hosted Grafana or Grafana Cloud. The provisioning files are the same either way |
 | `clickhouse` container, stopped | ClickHouse Cloud or a managed instance — and only once the trigger in [Data and scale](../opinions/data-and-scale.md) §5 has actually fired |
 
 The full path from here to a rented box, and from there to managed services, is
@@ -739,7 +680,7 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
 
 ## ✅ Gate
 
-- `docker compose -f infra/docker-compose.yml ps` shows postgres, redis-cache, redis-queue, minio, loki, alloy, and grafana all `healthy`, and does **not** list clickhouse.
+- `docker compose -f infra/docker-compose.yml ps` shows postgres, redis-cache, redis-queue, minio, loki, and alloy all `healthy`, and does **not** list clickhouse.
 - `redis-cache` reports `maxmemory_policy:allkeys-lru` and `redis-queue` reports `noeviction`:
   `docker compose -f infra/docker-compose.yml exec redis-queue redis-cli config get maxmemory-policy`
 - `SELECT extname FROM pg_extension;` includes `vector`.
@@ -760,9 +701,9 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
   ```bash
   curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
   ```
-  Expect `alloy`, `grafana`, `loki`, `minio`, `postgres`, `redis-cache`, `redis-queue`. A missing entry means that container has logged nothing yet, not that it is being skipped — restart it and look again.
+  Expect `alloy`, `loki`, `minio`, `postgres`, `redis-cache`, `redis-queue`. A missing entry means that container has logged nothing yet, not that it is being skipped — restart it and look again.
 - **Nothing from other projects leaked in.** No value above belongs to a container outside this compose file. If one does, the `com.docker.compose.project` filter is wrong.
-- Grafana at `http://localhost:3001` opens without a login and lists Loki and Postgres under Connections.
+- Loki answers a `query_range` curl with lines from at least one container.
 - `pnpm infra:up:analytics` starts clickhouse, `curl -s http://localhost:8123/ping` returns `Ok`, and the table is in the **`ratchet`** database rather than `default`:
   ```bash
   curl -s "http://localhost:8123/?user=ratchet&password=ratchet"     --data-binary "SELECT database, name FROM system.tables WHERE name = 'activity_events' FORMAT TSV"

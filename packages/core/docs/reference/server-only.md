@@ -30,9 +30,9 @@ This is the one import in `@loadbearing/core`, and the reason the package declar
 Four barrels, on their first line, before any other import has a chance to run side effects:
 
 ```ts
-// packages/db/src/index.ts
+// packages/infrastructure/src/index.ts
 import { ServerOnly } from "@loadbearing/core";
-ServerOnly.assert("@loadbearing/db");
+ServerOnly.assert("@loadbearing/infrastructure");
 ```
 
 | Package | Why |
@@ -92,7 +92,7 @@ Adding `"DOM"` to `lib` would fix the error and destroy the property being relie
 
 ## What it does not catch
 
-- **A type-only import.** `import type { Db } from "@loadbearing/db"` emits nothing, so the barrel
+- **A type-only import.** `import type { Db } from "@loadbearing/infrastructure"` emits nothing, so the barrel
   never runs. That is correct — nothing leaked.
 - **A tree-shaken import.** If a bundler drops the barrel's side effect, the assert never fires.
   Defence 3 exists for this.
@@ -105,9 +105,9 @@ Adding `"DOM"` to `lib` would fix the error and destroy the property being relie
 ## What it throws, and where the words went
 
 ```ts
-ServerOnly.assert("@loadbearing/db");
+ServerOnly.assert("@loadbearing/infrastructure");
 // ServerOnlyError: SERVER_ONLY
-//   context: { package: "@loadbearing/db" }
+//   context: { package: "@loadbearing/infrastructure" }
 ```
 
 `Error.message` is `"SERVER_ONLY"`. There is no sentence on the error, because
@@ -125,7 +125,7 @@ The sentence still exists, in the only package allowed to hold sentences:
 
 ```ts
 ErrorCopy.message(translator, error.toJSON());
-// "@loadbearing/db was imported into a client bundle. This is a leak, not a …"
+// "@loadbearing/infrastructure was imported into a client bundle. This is a leak, not a …"
 ```
 
 `{package}` comes from the error's context — which is why the context key is `package` and not
@@ -148,11 +148,11 @@ What the stack trace gives up is nothing:
 ```
 ServerOnlyError: SERVER_ONLY
     at ServerOnly.assert (…)
-    at packages/db/src/index.ts:2:12
+    at packages/infrastructure/src/index.ts:2:12
 ```
 
 The class names the fault; the frame below it names the package that leaked. And
-`{ package: "@loadbearing/db" }` is a field a log query can filter on, which a sentence is not.
+`{ package: "@loadbearing/infrastructure" }` is a field a log query can filter on, which a sentence is not.
 
 > [!NOTE]
 > An earlier revision of this page argued the opposite and told you not to invert `core` and

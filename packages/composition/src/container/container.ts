@@ -1,4 +1,5 @@
 import {
+  type ActivityArchiveGateway,
   type ActivityLogger,
   type AnalyticsReader,
   ApiKeyResolver,
@@ -16,12 +17,15 @@ import {
   IndexDocumentUseCase,
   JsonLogger,
   type Logger,
+  type MaintenanceGateway,
   type MembershipReader,
   OpenAiEmbeddingProvider,
+  PgActivityArchiveGateway,
   PgActivityLogger,
   PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
+  PgMaintenanceGateway,
   PgMembershipReader,
   PgUnitOfWork,
   PgVectorStore,
@@ -65,6 +69,10 @@ export class Container {
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
+  // Platform housekeeping, carrying no principal because it owns no tenant's rows.
+  // Reachable only from the worker's schedules, never from a request path.
+  public readonly maintenance: MaintenanceGateway;
+  public readonly activityArchive: ActivityArchiveGateway;
 
   // ── auth, absent in a process that never authenticates ────
   private readonly authInstance: AuthInstance | undefined;
@@ -102,6 +110,7 @@ export class Container {
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
+    this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
 
     // ── the three swap points ──
     this.vectors = new PgVectorStore(this.database, this.transactions);
@@ -146,6 +155,14 @@ export class Container {
     // Shares the transaction scope, which is what makes the audit row commit
     // with the state change rather than beside it.
     this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
+
+    // Takes the storage gateway, because archiving a partition is a database read and
+    // an object write in one operation — the only place those two ports meet.
+    this.activityArchive = new PgActivityArchiveGateway(
+      this.database,
+      this.transactions,
+      this.storage,
+    );
 
     this.ai = {
       indexDocument: new IndexDocumentUseCase(

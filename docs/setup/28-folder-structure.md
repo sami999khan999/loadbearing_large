@@ -50,7 +50,6 @@ ratchet/
 │   ├── postgres.init.sql                      ← extensions
 │   ├── loki.config.yml                        ← MinIO-backed, 30-day retention
 │   ├── alloy.config.alloy                     ← the four-label pipeline
-│   ├── grafana.datasources.yml                ← Loki + Postgres
 │   ├── clickhouse.init.sql                    ← analytics profile only
 │   ├── logs/                                  (ignored)
 │   └── docs/                                  ← index.md + reference/, one page per file

@@ -27,6 +27,9 @@ const Schema = z.object({
   // SIGKILL timer — a value above it just means the platform kills you mid-drain.
   WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
   WORKER_EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  // Serial by default. Maintenance jobs take table-level locks and run nightly; two
+  // overlapping buys nothing and can deadlock on the same partition.
+  WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
 
   // The same block the web app parses. A worker with no log output is a worker you
   // cannot operate.
@@ -62,6 +65,10 @@ export class Env {
   // in-flight jobs, each of which may hold a Postgres connection.
   public static get embeddingConcurrency(): number {
     return Env.parsed.WORKER_EMBEDDING_CONCURRENCY;
+  }
+
+  public static get maintenanceConcurrency(): number {
+    return Env.parsed.WORKER_MAINTENANCE_CONCURRENCY;
   }
 
   // The boundary where environment becomes `ContainerConfig` (17). No `auth` block:

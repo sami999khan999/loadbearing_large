@@ -2,8 +2,11 @@ import type { Container } from "@loadbearing/composition";
 import type { RedisConnection } from "@loadbearing/infrastructure";
 import type { Worker } from "bullmq";
 import { EmbeddingConsumer } from "./consumer/embedding.consumer.js";
+import { MaintenanceConsumer } from "./consumer/maintenance.consumer.js";
 import { Env } from "./env.js";
+import { ArchiveSchedule } from "./schedule/archive.schedule.js";
 import { CleanupSchedule } from "./schedule/cleanup.schedule.js";
+import { PartitionsSchedule } from "./schedule/partitions.schedule.js";
 
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
@@ -23,7 +26,20 @@ export class WorkerBootstrap {
       ).start(),
     );
 
+    // Started before the schedules register, so a repeatable entry that fires the
+    // instant it lands has somewhere to run. Registering a schedule onto a queue with
+    // no consumer is what left `cleanup-daily` silently accumulating.
+    this.workers.push(
+      new MaintenanceConsumer(
+        this.container,
+        this.redis.queueClient(),
+        Env.maintenanceConcurrency,
+      ).start(),
+    );
+
+    await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
+    await new ArchiveSchedule(this.container, this.redis.queueClient()).register();
 
     this.container.logger.emit("process.started", {
       service: "worker",

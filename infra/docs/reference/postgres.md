@@ -88,11 +88,10 @@ pnpm infra:reset
 | Consumer | Reaches it at | For |
 |---|---|---|
 | `apps/web`, `apps/worker` (host) | `localhost:5432` | everything, via `DATABASE_URL` |
-| `grafana` (container) | `postgres:5432` | reading the audit trail — [grafana](grafana.md) |
 | `drizzle-kit` (host) | `localhost:5432` | migrations, via `packages/db/.env` |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
-the client is on. Grafana using `localhost:5432` would reach *Grafana's own* loopback and find
+the client is on. A container using `localhost:5432` would reach *its own* loopback and find
 nothing.
 
 Connections are pooled per process at `max: 10` ([13](../../../docs/setup/13-db-package.md)), so

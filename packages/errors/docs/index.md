@@ -70,8 +70,8 @@ developer reading a console, and never crosses a wire. It throws `ServerOnlyErro
 `content` as `error.serverOnly`, with `{package}` interpolated from that context.
 
 ```ts
-new ServerOnlyError("@loadbearing/db").message;   // "SERVER_ONLY"
-ErrorCopy.message(translator, error.toJSON());    // "@loadbearing/db was imported into a client …"
+new ServerOnlyError("@loadbearing/infrastructure").message;   // "SERVER_ONLY"
+ErrorCopy.message(translator, error.toJSON());    // "@loadbearing/infrastructure was imported into a client …"
 ```
 
 Nothing was lost — the words are identical, and now translatable. What the throw site keeps is a

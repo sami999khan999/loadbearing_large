@@ -136,11 +136,11 @@ package can see the other's half, so both halves are pinned.
 ## `error.serverOnly`, and the exception that stopped existing
 
 ```ts
-ServerOnly.assert("@loadbearing/db");
-// ServerOnlyError: SERVER_ONLY   context: { package: "@loadbearing/db" }
+ServerOnly.assert("@loadbearing/infrastructure");
+// ServerOnlyError: SERVER_ONLY   context: { package: "@loadbearing/infrastructure" }
 
 ErrorCopy.message(t, error.toJSON());
-// "@loadbearing/db was imported into a client bundle. This is a leak, not a bundle-size
+// "@loadbearing/infrastructure was imported into a client bundle. This is a leak, not a bundle-size
 //  problem — it means database or credential code is reachable from the browser."
 ```
 

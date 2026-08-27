@@ -67,10 +67,10 @@ describe("ErrorCopy", () => {
   // string literal inside `ServerOnly.assert`; it is copy now.
   it("renders the sentence ServerOnly.assert used to carry inline", async () => {
     const t = await translator();
-    const envelope = new ServerOnlyError("@loadbearing/db").toJSON();
+    const envelope = new ServerOnlyError("@loadbearing/infrastructure").toJSON();
 
     expect(ErrorCopy.message(t, envelope)).toBe(
-      "@loadbearing/db was imported into a client bundle. This is a leak, not a bundle-size " +
+      "@loadbearing/infrastructure was imported into a client bundle. This is a leak, not a bundle-size " +
         "problem — it means database or credential code is reachable from the browser.",
     );
   });

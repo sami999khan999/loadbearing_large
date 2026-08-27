@@ -11,7 +11,6 @@ export default {
         "permissions",
         "contracts",
         "application",
-        "db",
         "infrastructure",
         "auth",
         "composition",

@@ -5,11 +5,11 @@ import { ErrorNormalizer } from "../../src/normalizer/error-normalizer.js";
 
 describe("ServerOnlyError", () => {
   it("carries the code as its message and the package as context", () => {
-    const error = new ServerOnlyError("@loadbearing/db");
+    const error = new ServerOnlyError("@loadbearing/infrastructure");
 
     expect(error.message).toBe("SERVER_ONLY");
     expect(error.name).toBe("ServerOnlyError");
-    expect(error.context).toEqual({ package: "@loadbearing/db" });
+    expect(error.context).toEqual({ package: "@loadbearing/infrastructure" });
   });
 
   // The context key is the placeholder name in `error.serverOnly`. Renaming it
@@ -30,9 +30,12 @@ describe("ServerOnlyError", () => {
   });
 
   it("serialises to a prose-free envelope", () => {
-    const envelope = new ServerOnlyError("@loadbearing/db").toJSON();
+    const envelope = new ServerOnlyError("@loadbearing/infrastructure").toJSON();
 
-    expect(envelope).toEqual({ code: "SERVER_ONLY", context: { package: "@loadbearing/db" } });
+    expect(envelope).toEqual({
+      code: "SERVER_ONLY",
+      context: { package: "@loadbearing/infrastructure" },
+    });
     expect(JSON.stringify(envelope)).not.toMatch(/bundle|leak|browser/i);
   });
 });

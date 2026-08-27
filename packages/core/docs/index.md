@@ -106,9 +106,9 @@ tradeoff — IDs leak creation time — is documented rather than hidden.
 ### [`ServerOnly`](reference/server-only.md) — a runtime bundle-leak tripwire
 
 ```ts
-// packages/db/src/index.ts
+// packages/infrastructure/src/index.ts
 import { ServerOnly } from "@loadbearing/core";
-ServerOnly.assert("@loadbearing/db");
+ServerOnly.assert("@loadbearing/infrastructure");
 ```
 
 Called on the first line of four barrels: `db`, `infrastructure`, `auth`, `composition`. It is the

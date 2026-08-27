@@ -125,8 +125,8 @@ assert("`application` does not log", (failures) => {
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
-  /^packages\/db\/src\/migrate\//,
-  /^packages\/db\/src\/seed\//,
+  /^packages\/infrastructure\/src\/pg\/migrate\//,
+  /^packages\/infrastructure\/src\/pg\/seed\//,
   /^packages\/[^/]+\/src\/smoke\//,
   // Schema inspection, run by hand against a throwaway URL and never built. See 16.
   /^packages\/auth\/src\/tables\//,
@@ -329,8 +329,8 @@ const TENANT_EXEMPT = new Set([
 ]);
 
 assert("every domain table declares `organization_id`", (failures) => {
-  const dir = join(ROOT, "packages/db/src");
-  if (!existsSync(dir)) return "packages/db has no src/ yet";
+  const dir = join(ROOT, "packages/infrastructure/src");
+  if (!existsSync(dir)) return "packages/infrastructure has no src/ yet";
 
   const files = walk(dir, [".ts"]).filter((f) => f.endsWith(".schema.ts"));
   if (files.length === 0) return "no *.schema.ts files yet";
@@ -383,12 +383,12 @@ assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
 // table it can no longer see. That happened once. This is the guard.
 
 assert("the schema barrel names every `*.schema.ts`", (failures) => {
-  const dir = join(ROOT, "packages/db/src/schema");
-  if (!existsSync(dir)) return "packages/db has no schema/ yet";
+  const dir = join(ROOT, "packages/infrastructure/src/pg/schema");
+  if (!existsSync(dir)) return "packages/infrastructure has no schema/ yet";
 
   const barrel = join(dir, "index.ts");
   if (!existsSync(barrel)) {
-    failures.push("packages/db/src/schema/index.ts is missing");
+    failures.push("packages/infrastructure/src/pg/schema/index.ts is missing");
     return null;
   }
 
@@ -396,7 +396,7 @@ assert("the schema barrel names every `*.schema.ts`", (failures) => {
   const files = walk(dir, [".ts"]).filter((file) => file.endsWith(".schema.ts"));
 
   if (files.length === 0) {
-    failures.push("packages/db/src/schema holds no *.schema.ts files");
+    failures.push("packages/infrastructure/src/pg/schema holds no *.schema.ts files");
     return null;
   }
 

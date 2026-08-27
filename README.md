@@ -10,10 +10,10 @@ pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgve
     pnpm db:migrate && pnpm db:seed
     pnpm dev
 
-Web: http://localhost:3000 · Grafana: http://localhost:3001 · MinIO console: http://localhost:9001
+Web: http://localhost:3000 · Loki API: http://localhost:3100 · MinIO console: http://localhost:9001
 
 `pnpm infra:up` starts Postgres, two Redis instances (cache and queue, deliberately separate), MinIO,
-and the Loki/Alloy/Grafana log stack. ClickHouse sits behind `pnpm infra:up:analytics` and is not
+and the Loki/Alloy log pipeline. ClickHouse sits behind `pnpm infra:up:analytics` and is not
 started by default. See [docs/setup/11](docs/setup/11-local-infrastructure.md).
 
 ## Documentation

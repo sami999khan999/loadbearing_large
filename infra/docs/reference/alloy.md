@@ -150,7 +150,7 @@ later stages read. Nothing is a label yet.
 
 ```alloy
   stage.match {
-    selector = "{app=~\"loki|grafana|alloy\"}"
+    selector = "{app=~\"loki|alloy\"}"
 
     stage.logfmt {
       mapping = { level = "" }
@@ -158,7 +158,7 @@ later stages read. Nothing is a label yet.
   }
 ```
 
-Loki, Grafana and Alloy emit logfmt with a `level` key. It writes the **same extracted key** as
+Loki and Alloy emit logfmt with a `level` key. It writes the **same extracted key** as
 `stage.json`, so whichever stage understood the line is the one that wins — no coalescing logic
 needed.
 
@@ -235,7 +235,7 @@ is unreachable, which is why an outage does not amplify into a log storm.
 | Service | `app` | `env` | `level` | `event_code` | Parsed as |
 |---|---|---|---|---|---|
 | `web`, `worker`, `dev` | body | body | body | ✅ | our JSON |
-| `loki`, `grafana`, `alloy` | service name | static | body | — | logfmt |
+| `loki`, `alloy` | service name | static | body | — | logfmt |
 | `postgres`, `redis-*`, `minio`, `clickhouse` | service name | static | — | — | plain text |
 
 **Only our own applications get all four.** `event_code` exists because we have a closed catalog, and

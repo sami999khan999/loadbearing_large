@@ -140,11 +140,11 @@ desktop app running in a different language than the server is correct for free.
 The sharpest case is the one that used to be an exception:
 
 ```ts
-ServerOnly.assert("@loadbearing/db");
-// ServerOnlyError: SERVER_ONLY   context: { package: "@loadbearing/db" }
+ServerOnly.assert("@loadbearing/infrastructure");
+// ServerOnlyError: SERVER_ONLY   context: { package: "@loadbearing/infrastructure" }
 
 ErrorCopy.message(t, error.toJSON());
-// "@loadbearing/db was imported into a client bundle. This is a leak, not a bundle-size
+// "@loadbearing/infrastructure was imported into a client bundle. This is a leak, not a bundle-size
 //  problem — it means database or credential code is reachable from the browser."
 ```
 

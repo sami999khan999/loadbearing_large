@@ -12,7 +12,7 @@ import { MembershipReader } from "../session/membership.reader.js";
 // the CLI calls, taken from the version actually installed.
 //
 // Run it after any Better Auth upgrade and diff the output against
-// `packages/db/src/schema/auth.schema.ts`. Every field below needs a matching property
+// `packages/infrastructure/src/schema/auth.schema.ts`. Every field below needs a matching property
 // **under Better Auth's own name** — the Drizzle adapter resolves a column by looking up
 // `schema[model][field]`, so the property keys are load-bearing and the SQL column names
 // are not.

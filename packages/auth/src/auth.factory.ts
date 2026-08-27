@@ -51,7 +51,7 @@ export class AuthFactory {
 
       // ── model naming ───────────────────────────────────────────────────────
       // `modelName` is what the Drizzle adapter looks up in the schema object, so these
-      // five names *are* the export names in `packages/db/src/schema/auth.schema.ts`.
+      // five names *are* the export names in `packages/infrastructure/src/schema/auth.schema.ts`.
       // Renamed to the repository's plural convention — `users` beside `organizations`,
       // `roles`, `memberships` — rather than Better Auth's singular defaults. Field names
       // need no mapping: Better Auth's are already camelCase, which is the convention

@@ -56,7 +56,7 @@ loki.process "stream" {
     }
   }
 
-  // Loki, Grafana and Alloy emit logfmt with a `level` key. Same extracted key
+  // Loki and Alloy emit logfmt with a `level` key. Same extracted key
   // as above, so whichever stage understood the line is the one that wins.
   //
   // Gated by a selector, unlike stage.json: a JSON stage that cannot parse a
@@ -64,7 +64,7 @@ loki.process "stream" {
   // not understand — and Alloy collects its own stdout, so ungated it spends the
   // whole pipeline reporting that Postgres does not speak logfmt.
   stage.match {
-    selector = "{app=~\"loki|grafana|alloy\"}"
+    selector = "{app=~\"loki|alloy\"}"
 
     stage.logfmt {
       mapping = { level = "" }

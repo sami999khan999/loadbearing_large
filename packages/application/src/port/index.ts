@@ -1,4 +1,5 @@
 export { ActivityLogger } from "./activity.logger.js";
+export { ActivityArchiveGateway, type ArchivedPartition } from "./activity-archive.gateway.js";
 export {
   AnalyticsReader,
   type DateRange,
@@ -8,6 +9,7 @@ export {
 export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type DomainEvent, EventBus } from "./event.bus.js";
+export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export {
   type RequestHeaders,

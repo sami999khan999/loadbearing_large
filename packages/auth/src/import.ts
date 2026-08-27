@@ -17,8 +17,8 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { ServerOnly, Uuid } from "@loadbearing/core";
 
-// ── @loadbearing/db ──────────────────────────────────────────────────────────
-export { Database } from "@loadbearing/db";
+// ── @loadbearing/infrastructure ──────────────────────────────────────────────
+export { Database } from "@loadbearing/infrastructure";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export {

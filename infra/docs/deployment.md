@@ -28,11 +28,11 @@ postgres      0.0.0.0:5432->5432/tcp
 redis-cache   0.0.0.0:6379->6379/tcp     ← no password
 redis-queue   0.0.0.0:6380->6379/tcp     ← no password
 minio         0.0.0.0:9000->9000/tcp
-grafana       0.0.0.0:3001->3000/tcp     ← anonymous admin
+loki          0.0.0.0:3100->3100/tcp     ← no auth, accepts writes
 ```
 
 On a laptop behind NAT that is convenient and harmless. **On a VPS with a public IP it is a database,
-two unauthenticated caches, an object store and an admin UI on the open internet.** Scanners find
+two unauthenticated caches, an object store and an unauthenticated log API on the open internet.** Scanners find
 port 5432 in minutes.
 
 > [!CAUTION]
@@ -120,14 +120,6 @@ services:
   alloy:
     ports: !override []
 
-  grafana:
-    ports: !override []
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_AUTH_DISABLE_LOGIN_FORM: "false"
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?required}
-      GF_SERVER_ROOT_URL: https://grafana.example.com
-
   # ── the applications, which are containers here ───────────
   web:
     build: { context: .., dockerfile: apps/web/Dockerfile }
@@ -192,10 +184,6 @@ the pipeline reads that label from the log body rather than from the container n
 example.com {
     reverse_proxy web:3000
 }
-
-grafana.example.com {
-    reverse_proxy grafana:3000
-}
 ```
 
 Caddy obtains and renews Let's Encrypt certificates automatically, and `caddydata` persists them —
@@ -250,7 +238,6 @@ what cannot be rebuilt:
 | `miniodata` — `ratchet` bucket | **yes** | uploaded bytes are a second source of truth |
 | `redisqueuedata` | **yes** | a queued job is derived from nothing |
 | `miniodata` — `loki` bucket | no | 30 days of diagnostics, lossy by design |
-| `grafanadata` | no | the data sources are a provisioned file |
 | redis-cache | no volume | rebuilt from Postgres on a miss |
 | `clickhousedata` | no | replay the activity log |
 
@@ -297,7 +284,7 @@ is one or two lines in `.env.production` and a restart.
 
 | # | Service | Becomes | Config change | Risk |
 |---|---|---|---|---|
-| 1 | Loki + Grafana | Grafana Cloud | `loki.write` url + basic auth | none — derived, 30 days |
+| 1 | Loki | Grafana Cloud (or any Loki-compatible host) | `loki.write` url + basic auth | none — derived, 30 days |
 | 2 | MinIO | S3 / R2 | `S3_*`, `S3_FORCE_PATH_STYLE=false` | low — copy, then flip |
 | 3 | redis-cache | Upstash / ElastiCache | `REDIS_CACHE_URL` | none — it is a cache |
 | 4 | redis-queue | a **separate** managed Redis | `REDIS_QUEUE_URL` | medium — drain first |
@@ -321,7 +308,7 @@ loki.write "default" {
 }
 ```
 
-Drop `loki` and `grafana` from the overlay and keep Alloy. **The pipeline, the four labels, and the
+Drop `loki` from the overlay and keep Alloy. **The pipeline, the four labels, and the
 event catalog are unchanged** — this is the payoff for never letting a package import a Loki client
 ([Dependencies](../../docs/opinions/dependencies.md) Tier 0).
 
@@ -339,7 +326,7 @@ mc mirror --watch local/ratchet s3/your-bucket    # runs until you stop it
 Then change five values and restart. `S3_FORCE_PATH_STYLE=false` is the one that is easy to miss and
 produces DNS errors that name a bucket-prefixed host.
 
-**The `loki` bucket does not need moving** — if step 1 is done, Grafana Cloud owns that storage.
+**The `loki` bucket does not need moving** — if step 1 is done, the managed log host owns that storage.
 
 ### 3 and 4. The two Redis instances, separately
 

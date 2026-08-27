@@ -26,7 +26,6 @@ on a VPS, and the order to move them to managed services in when one box stops f
 | `postgres.init.sql` | Postgres, on first boot only | [postgres](reference/postgres.md) |
 | `loki.config.yml` | Loki, at startup | [loki](reference/loki.md) |
 | `alloy.config.alloy` | Alloy, at startup | [alloy](reference/alloy.md) |
-| `grafana.datasources.yml` | Grafana, at startup | [grafana](reference/grafana.md) |
 | `clickhouse.init.sql` | ClickHouse, on first boot only | [clickhouse](reference/clickhouse.md) |
 | `logs/` | Alloy, tailed continuously | [alloy](reference/alloy.md) |
 | `.env` | `docker compose` | [compose](reference/compose.md#host-ports) |
@@ -50,7 +49,7 @@ network **a container reaches another by its service name** — Docker's embedde
                     ┌──────────────────────────── host ────────────────────────────┐
                     │                                                              │
    pnpm dev ────────┼──→ :5432 postgres      :6379 redis-cache   :6380 redis-queue │
-   (apps on host)   │    :9000 minio (S3)    :3001 grafana                         │
+   (apps on host)   │    :9000 minio (S3)    :3100 loki (query API)                │
                     │                                                              │
                     └──────────────────────────────────────────────────────────────┘
                                               │
@@ -60,12 +59,12 @@ network **a container reaches another by its service name** — Docker's embedde
      │ postgres │   │ redis-cache │  │ redis-queue │   │ minio │
      └────┬─────┘   └─────────────┘  └─────────────┘   └───┬───┘
           │                                                │
-          │  grafana queries                     chunks +  │  bucket `loki`
-          │  postgres:5432                        index    │
+          │                                      chunks +  │  bucket `loki`
+          │                                       index    │
           │                                                │
-     ┌────┴─────┐         ┌──────┐  ────────────────────────┘
-     │ grafana  │────────→│ loki │
-     └──────────┘  :3100  └──▲───┘
+                            ┌──────┐  ────────────────────────┘
+     query_range ──────────→│ loki │
+            :3100           └──▲───┘
                              │ push  loki:3100/loki/api/v1/push
                           ┌──┴────┐
                           │ alloy │──── reads /var/run/docker.sock (every container's stdout)
@@ -82,9 +81,10 @@ makes the log platform swappable — see [alloy](reference/alloy.md).
 stores its chunks and index in the `loki` bucket. They share a server and nothing else
 ([minio](reference/minio.md)).
 
-**Grafana talks to two stores, not one.** Loki answers *what did the system do*; Postgres answers
-*who did what*, because the audit trail is a Postgres table. Same UI, two sources
-([grafana](reference/grafana.md)).
+**Nothing in this stack reads the logs back.** Loki is storage plus a `query_range` HTTP API, and
+the reader is the super admin dashboard. Until that ships, use `docker compose logs` or curl the API
+directly ([loki](reference/loki.md)). Grafana used to fill this slot and was removed deliberately —
+see [compose](reference/compose.md#why-there-is-no-log-ui).
 
 **Only Alloy touches the Docker socket**, read-only, and only to read container stdout.
 
@@ -100,15 +100,13 @@ Two numbers per service, and confusing them is the usual source of "connection r
 | minio | `minio:9000` | `localhost:9000`, console `:9001` |
 | loki | `loki:3100` | `localhost:3100` |
 | alloy | `alloy:12345` | `localhost:12345` |
-| grafana | `grafana:3000` | `localhost:3001` |
 | clickhouse | `clickhouse:8123` | `localhost:8123`, native `:9002` |
 
 **Both Redis instances listen on 6379 inside.** They are different containers, so there is no
 collision; only the host mapping differs. `redis-queue:6380` from inside the network is wrong and
 will refuse.
 
-Grafana is 3000 inside and 3001 outside because the web app owns 3000 on the host. ClickHouse's
-native port maps to 9002 because MinIO owns 9000.
+ClickHouse's native port maps to 9002 because MinIO owns 9000.
 
 ---
 
@@ -121,8 +119,7 @@ minio ──healthy──→ minio-init ──completed──→ loki ──heal
 ```
 
 Loki cannot start until its bucket exists; Alloy has nowhere to push until Loki accepts writes.
-Everything else starts in parallel — Postgres, Redis and MinIO have no dependencies on each other,
-and Grafana will simply show a data source as down until Loki answers.
+Everything else starts in parallel — Postgres, Redis and MinIO have no dependencies on each other.
 
 **`minio-init` is a one-shot container.** It creates both buckets and exits, so `exited (0)` in
 `docker compose ps` is success. Without it the first upload fails with `NoSuchBucket` and everyone
@@ -161,7 +158,7 @@ pnpm infra:logs            # tail every service
 | Profile | Services | Default |
 |---|---|---|
 | *(none)* | `postgres`, `redis-cache`, `redis-queue`, `minio`, `minio-init` | always |
-| `observability` | `loki`, `alloy`, `grafana` | **on** — the diagnostic stream is live today |
+| `observability` | `loki`, `alloy` | **on** — the diagnostic stream is live today |
 | `analytics` | `clickhouse` | **off** — see [clickhouse](reference/clickhouse.md) |
 
 > `down`, `reset` and `logs` pass `--profile "*"`. Compose only acts on profiles it was given, so

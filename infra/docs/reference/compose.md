@@ -56,7 +56,22 @@ container that is supposed to stop cannot be "unhealthy".
 |---|---|---|
 | `loki` | `grafana/loki:3.3.2` | [loki](loki.md) |
 | `alloy` | `grafana/alloy:v1.5.1` | [alloy](alloy.md) |
-| `grafana` | `grafana/grafana:11.4.0` | [grafana](grafana.md) |
+
+#### Why there is no log UI
+
+Two services, not three: this profile collects and stores, and nothing in it reads back. A `grafana`
+container used to sit here and was removed deliberately.
+
+The reasoning is that a log console and the super admin dashboard are the same job for the same
+person, and running both means two places to look. The query an operator actually needs — *these
+logs, for this tenant, joined to that tenant's audit rows* — is one Grafana cannot express, because
+it has no concept of an organization. Grafana also carried the ad-hoc Postgres surface, which the
+dashboard absorbs for the same reason.
+
+The cost is accepted knowingly: **until the dashboard ships there is no log viewer**, and the
+fallbacks are `docker compose logs -f <service>` and curl against Loki's `query_range` endpoint
+([loki](loki.md)). Both stay useful afterwards — a log query that needs the app running is no use
+during the incident where the app is down.
 
 ### Analytics, profile `analytics`
 
@@ -93,7 +108,6 @@ Six named volumes, and which are disposable is the whole point.
 | `redisqueuedata` | redis-queue | **nothing** |
 | `miniodata` | minio | uploads are a second source of truth; Loki chunks are not |
 | `lokidata` | loki | index only — chunks live in MinIO |
-| `grafanadata` | grafana | the provisioning file |
 | `clickhousedata` | clickhouse | replaying the activity log |
 
 **`redis-cache` has no volume, on purpose.** A named volume for something explicitly disposable
@@ -111,7 +125,7 @@ Every config file is mounted individually, read-only:
 ```yaml
 - ./loki.config.yml:/etc/loki/config.yml:ro
 - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
-- ./grafana.datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+- ./clickhouse.init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 ```
 
 Docker creates the target's parent directories if they do not exist, so a single file can be placed
@@ -136,7 +150,7 @@ Two exceptions are directory mounts, and both have to be:
 Every host port is a variable with the documented default; every container port is fixed.
 
 ```yaml
-ports: ["${GRAFANA_PORT:-3001}:3000"]
+ports: ["${MINIO_CONSOLE_PORT:-9001}:9001"]
 ```
 
 Port collisions on a developer machine are not hypothetical — this stack met one on its first run,
@@ -152,15 +166,14 @@ MINIO_CONSOLE_PORT=9003
 |---|---|---|---|
 | `POSTGRES_PORT` | 5432 | `LOKI_PORT` | 3100 |
 | `REDIS_CACHE_PORT` | 6379 | `ALLOY_PORT` | 12345 |
-| `REDIS_QUEUE_PORT` | 6380 | `GRAFANA_PORT` | 3001 |
+| `REDIS_QUEUE_PORT` | 6380 | — | — |
 | `S3_PORT` | 9000 | `CLICKHOUSE_HTTP_PORT` | 8123 |
 | `MINIO_CONSOLE_PORT` | 9001 | `CLICKHOUSE_NATIVE_PORT` | 9002 |
 
 **Nothing inside the network changes when you override one**, because only the left-hand side moves.
 `alloy.config.alloy` still says `loki:3100` regardless of `LOKI_PORT`.
 
-Two defaults are already non-obvious: Grafana is 3001 because the web app owns 3000, and ClickHouse's
-native port is 9002 because MinIO owns 9000.
+One default is already non-obvious: ClickHouse's native port is 9002 because MinIO owns 9000.
 
 ---
 

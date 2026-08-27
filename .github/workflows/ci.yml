@@ -41,7 +41,7 @@ jobs:
       REDIS_CACHE_URL: redis://localhost:6379
       REDIS_QUEUE_URL: redis://localhost:6380
       # Read by every `env.ts` like any other config, so a missing one is a startup
-      # crash. Loki, Alloy and Grafana are Tier 0 and deliberately absent.
+      # crash. Loki and Alloy are Tier 0 and deliberately absent.
       APP: ci
       ENV: test
       PGPASSWORD: ratchet
