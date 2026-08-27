@@ -40,12 +40,17 @@
     "db:migrate": "pnpm --filter @loadbearing/db run db:migrate",
     "db:seed": "pnpm --filter @loadbearing/db run db:seed",
     "db:studio": "pnpm --filter @loadbearing/db run db:studio",
-    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate"
+    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@loadbearing/eslint-config": "workspace:*",
     "@biomejs/biome": "catalog:",
+    "@commitlint/cli": "catalog:",
+    "@commitlint/config-conventional": "catalog:",
     "eslint": "catalog:",
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
     "rimraf": "catalog:",
     "sherif": "catalog:",
     "syncpack": "catalog:",

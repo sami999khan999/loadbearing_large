@@ -22,10 +22,10 @@
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf dist",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate/index.ts",
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/migrate/index.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/seed/index.ts"
+    "db:seed": "tsx --env-file-if-exists=../../.env src/seed/index.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",

@@ -3,6 +3,11 @@ import { ServerOnly } from "./import.js";
 ServerOnly.assert("@loadbearing/application");
 
 export {
+  type IndexDocumentInput,
+  type IndexDocumentResult,
+  IndexDocumentUseCase,
+} from "./ai/index.js";
+export {
   ActivityLogger,
   AnalyticsReader,
   CacheStore,

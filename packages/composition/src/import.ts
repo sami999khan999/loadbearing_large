@@ -15,6 +15,7 @@ export {
   type DomainEvent,
   EmbeddingProvider,
   EventBus,
+  IndexDocumentUseCase,
   type JobOptions,
   type Principal,
   QueuePublisher,
@@ -42,7 +43,7 @@ export {
 } from "@loadbearing/auth";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────
-export { type ContentSource, StaticContentSource } from "@loadbearing/content";
+export { type ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ─────────────────────────────────────────────
 // Only the branded ids two port signatures name. `test-container.ts` cannot override

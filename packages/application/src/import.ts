@@ -5,10 +5,10 @@
 export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
-export { ServerOnly } from "@loadbearing/core";
+export { ServerOnly, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { ForbiddenError } from "@loadbearing/errors";
+export { ForbiddenError, ValidationError } from "@loadbearing/errors";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";

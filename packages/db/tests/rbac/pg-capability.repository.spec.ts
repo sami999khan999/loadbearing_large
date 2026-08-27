@@ -1,3 +1,5 @@
+import { Identifiers } from "@loadbearing/contracts";
+import { Uuid } from "@loadbearing/core";
 import type { Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/primitive/index.js";
@@ -30,8 +32,13 @@ describe("PgCapabilityRepository", () => {
     const organizationId = await seedOrganizationId(database);
     const repository = new PgCapabilityRepository(database, new TransactionScope());
 
+    // A well-formed uuid that was never seeded, not a readable placeholder — all
+    // three columns are `uuid`, so a string like "no-such-user" is a 22P02 from
+    // Postgres rather than the empty result the assertion is about.
+    const absentUser = Identifiers.userId.parse(Uuid.v7());
+
     counter.count = 0;
-    await repository.resolveFor(organizationId, "no-such-user");
+    await repository.resolveFor(organizationId, absentUser);
 
     expect(counter.count).toBe(3);
   });

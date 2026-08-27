@@ -45,6 +45,15 @@ catalog:
   sherif: ^1.13.0
   syncpack: ^15.3.2
 
+  # ── hooks & commit messages ──
+  #    Root devDependencies only. `husky` installs the git hooks, `lint-staged` runs
+  #    Biome over the staged set, and commitlint holds the closed scope enum — see
+  #    docs/setup/26.
+  husky: ^9.1.7
+  lint-staged: ^17.3.0
+  "@commitlint/cli": ^21.2.2
+  "@commitlint/config-conventional": ^21.2.2
+
   # ── generators & CLIs ──
   dotenv: ^17.4.2
   drizzle-kit: ^0.31.0
