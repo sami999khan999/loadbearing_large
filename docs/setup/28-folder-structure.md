@@ -377,8 +377,9 @@ packages/application/tests/
 
 ### `packages/infrastructure`
 
-Every concrete adapter the system owns, in one server-only package. `packages/db` was folded in here:
-the two were siblings with no edge between them, and the split put one seam in two places.
+Every concrete adapter the system owns, in one server-only package. The separate database package the
+architecture docs describe was folded in here: the two were siblings with no edge between them, and
+the split put one seam in two places.
 
 ```
 packages/infrastructure/

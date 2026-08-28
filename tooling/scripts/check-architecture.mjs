@@ -122,6 +122,10 @@ assert("`application` does not log", (failures) => {
 // Must stay in step with Biome's `noProcessEnv` overrides in
 // tooling/biome-config/src/base.json. A path exempted in one and not the other is either
 // a gate that passes while the rule is broken, or a build that fails for no reason.
+// Kept byte-for-byte in step with the `noProcessEnv` override in
+// tooling/biome-config/src/base.json. Doc 26 assertion 3 calls drift between the two
+// out by name: a gate that passes while the rule is broken, or a build that fails for
+// no reason. Change one, change the other.
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
@@ -136,7 +140,9 @@ assert("only `env.ts` reads `process.env`", (failures) => {
   const roots = [join(ROOT, "packages"), join(ROOT, "apps")];
 
   for (const root of roots) {
-    for (const file of walk(root, [".ts", ".tsx"])) {
+    // Every extension Biome lints and the exemption list names — walking only
+    // `.ts` would leave `*.config.mjs` unchecked here but still checked by Biome.
+    for (const file of walk(root, [".ts", ".tsx", ".mts", ".js", ".mjs"])) {
       const path = rel(file);
       if (ENV_EXEMPT.some((pattern) => pattern.test(path))) continue;
 
@@ -245,7 +251,10 @@ assert('`"use client"` only in ui, query, feature', (failures) => {
 // ── 8 — no server code in the client bundle ──────────────────────────────────
 
 const SERVER_FINGERPRINTS = ["drizzle-orm", "pg-pool", "@aws-sdk/client-s3", "ioredis", "bullmq"];
-const EMAIL_FINGERPRINTS = ["email.digest."];
+// One per key group in the `email` namespace, which `SERVER_CATALOG` alone can reach.
+// Enumerated rather than the bare prefix `"email."`, which is a common enough substring
+// in minified output to make this assertion fail on something unrelated.
+const EMAIL_FINGERPRINTS = ["email.digest.", "email.verify.", "email.reset."];
 
 // Field names from the `env.ts` schemas, which no adapter drags in on its own — they
 // arrive only when a route file or `router.tsx` imports `Env` for one accessor. That

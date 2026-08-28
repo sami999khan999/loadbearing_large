@@ -240,7 +240,7 @@ export class ServerOnlyError extends AppError {
 
 The sentence that used to be inline was worth keeping:
 
-> `@loadbearing/db` was imported into a client bundle. This is a leak, not a bundle-size problem — it means database or credential code is reachable from the browser.
+> `@loadbearing/infrastructure` was imported into a client bundle. This is a leak, not a bundle-size problem — it means database or credential code is reachable from the browser.
 
 It is still worth keeping, and it is still exactly that. It lives in `content` as `error.serverOnly` ([20](20-content-package.md#step-201--messages)), `{package}` is interpolated from the context above, and `ERROR_COPY.SERVER_ONLY` points at it — so a console reader, an error boundary and a dev overlay all render the same words, and a developer who reads Bengali can have them in Bengali. Nothing was lost; the string moved to the only place in the repository that owns strings.
 
@@ -249,10 +249,10 @@ What the throw site keeps is what a throw site is good at:
 ```
 ServerOnlyError: SERVER_ONLY
     at ServerOnly.assert (…)
-    at packages/db/src/index.ts:2:12
+    at packages/infrastructure/src/index.ts:2:12
 ```
 
-The class names the fault, the frame below names the package. `{ package: "@loadbearing/db" }` is the field a log query filters on, which a sentence is not.
+The class names the fault, the frame below names the package. `{ package: "@loadbearing/infrastructure" }` is the field a log query filters on, which a sentence is not.
 
 **The reason to refuse the exception is the base class, not this call site.** Grant a `message` field for the honest case and it exists for every other one — and a field that exists gets rendered, by a toast, by a `<pre>` in an error boundary, by a log line someone screenshots into a ticket. "No prose in errors" is enforceable only while it has no exceptions, and the cost of holding it here turned out to be zero.
 
@@ -411,11 +411,11 @@ The five that matter:
 - `pnpm --filter @loadbearing/errors build` emits `dist/index.d.ts`.
 - The package has **no `dependencies`** — only `devDependencies`. Like `permissions`, it is a leaf. `core` now depends on *it*, which is the direction that keeps this true.
 - `rg "message" packages/errors/src` finds the `message` getter and nothing that assigns prose.
-- `new ServerOnlyError("@loadbearing/db").message === "SERVER_ONLY"`, and `JSON.stringify(…toJSON())` contains none of the words *leak*, *bundle* or *browser*. The sentence is `content`'s job from here on.
+- `new ServerOnlyError("@loadbearing/infrastructure").message === "SERVER_ONLY"`, and `JSON.stringify(…toJSON())` contains none of the words *leak*, *bundle* or *browser*. The sentence is `content`'s job from here on.
 - `pnpm build:packages` builds `errors` **before** `core`. That is the proof the new edge is declared; if the order is reversed, `packages/core/package.json` is missing `@loadbearing/errors`.
 
 Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/permissions`](08-permissions-package.md) · [`@loadbearing/contracts` →](10-contracts-package.md)
+[← `@loadbearing/permissions`](08-permissions-package.md) · [`@loadbearing/observability` →](09b-observability-package.md)

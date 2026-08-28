@@ -15,7 +15,7 @@ grep -rn "drizzle-orm\|ioredis\|@aws-sdk\|bullmq\|from \"pg\"" packages --includ
 
 Returns nothing. Every one of them appears in exactly one package, which is the whole claim.
 
-**`packages/db` used to be separate and was folded in here.** The two were siblings with no edge
+**A separate database package used to sit beside this one, and was folded in.** The two were siblings with no edge
 between them, and the split put one seam in two places — `PgAnalyticsReader` on the `db` side,
 `ClickHouseAnalyticsReader` on this one. Merging in this direction rather than the other keeps the
 name honest: an S3 client in a package called `db` would be a lie, but Postgres genuinely is

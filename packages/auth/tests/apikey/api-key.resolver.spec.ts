@@ -1,0 +1,138 @@
+import { Identifiers } from "@loadbearing/contracts";
+import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
+import { describe, expect, it } from "vitest";
+import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
+import { type ApiKeyRecord, ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
+import { CapabilityCache } from "../../src/principal/capability.cache.js";
+import {
+  MapCacheStore,
+  RecordingCapabilityRepository,
+  StubApiKeyRepository,
+} from "../support/doubles.js";
+
+const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
+const ISSUER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
+
+const TOKEN = "rk_1111111111111111111111111111111111111111111111111111111111111111";
+
+function record(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
+  return {
+    id: "key-1",
+    organizationId: ORG,
+    issuerId: ISSUER,
+    tokenHash: "",
+    scopes: ["rbac.role.read", "rbac.role.manage"],
+    expiresAt: null,
+    revokedAt: null,
+    ...overrides,
+  };
+}
+
+function issuerHolding(...grants: readonly PermissionKey[]): CapabilitySet {
+  return CapabilitySet.from({ wildcard: false, org: { grants, denies: [] }, goals: {} });
+}
+
+function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet) {
+  const repository = new StubApiKeyRepository(records);
+  const capabilities = new CapabilityCache(
+    new RecordingCapabilityRepository(new Map([[`${ORG}:${ISSUER}`, issuer]])),
+    new MapCacheStore(),
+  );
+
+  return { repository, resolver: new ApiKeyResolver(repository, capabilities) };
+}
+
+describe("ApiKeyResolver", () => {
+  it("resolves a live key to a principal scoped to the intersection", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    const { resolver, repository } = resolverFor(
+      [record({ tokenHash: hash })],
+      issuerHolding("rbac.role.read", "rbac.role.manage", "member.read"),
+    );
+
+    const principal = await resolver.resolve(TOKEN);
+
+    expect(principal?.kind).toBe("api_key");
+    expect(principal?.organizationId).toBe(ORG);
+    // The key declared two scopes and the issuer holds three. The principal gets the two
+    // — never the issuer's third, which the key never asked for.
+    expect(principal?.can("rbac.role.read")).toBe(true);
+    expect(principal?.can("rbac.role.manage")).toBe(true);
+    expect(principal?.can("member.read")).toBe(false);
+    expect(repository.touched).toEqual([{ id: "key-1", at: expect.any(Date) }]);
+  });
+
+  it("re-intersects with the issuer's live capabilities rather than the scopes frozen at creation", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    // The key still declares `rbac.role.manage`. The issuer has since lost it.
+    const { resolver } = resolverFor(
+      [record({ tokenHash: hash })],
+      issuerHolding("rbac.role.read"),
+    );
+
+    const principal = await resolver.resolve(TOKEN);
+
+    // This is the behaviour the whole class exists for: revoking a person narrows every
+    // key they ever issued, in the same request. With frozen scopes the key keeps
+    // working and nothing anywhere reports it.
+    expect(principal?.can("rbac.role.read")).toBe(true);
+    expect(principal?.can("rbac.role.manage")).toBe(false);
+  });
+
+  it("drops a scope the permission registry does not know", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    const { resolver } = resolverFor(
+      [record({ tokenHash: hash, scopes: ["rbac.role.read", "finance.invent.everything"] })],
+      issuerHolding("rbac.role.read"),
+    );
+
+    const principal = await resolver.resolve(TOKEN);
+
+    expect(principal?.can("rbac.role.read")).toBe(true);
+    // A row written before a permission was renamed, or by hand. It cannot become a
+    // grant of anything, and it must not throw either — a stale key is a 401, not a 500.
+    expect(principal?.capabilities.toJSON().org.grants).toEqual(["rbac.role.read"]);
+  });
+
+  it("refuses a revoked key", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    const { resolver, repository } = resolverFor(
+      [record({ tokenHash: hash, revokedAt: new Date("2026-01-01T00:00:00Z") })],
+      issuerHolding("rbac.role.read"),
+    );
+
+    expect(await resolver.resolve(TOKEN)).toBeNull();
+    // And does not record a use for a credential it refused.
+    expect(repository.touched).toEqual([]);
+  });
+
+  it("refuses an expired key and accepts one expiring in the future", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    const past = new Date(Date.now() - 60_000);
+    const future = new Date(Date.now() + 60_000);
+
+    const expired = resolverFor(
+      [record({ tokenHash: hash, expiresAt: past })],
+      issuerHolding("rbac.role.read"),
+    );
+    expect(await expired.resolver.resolve(TOKEN)).toBeNull();
+
+    const live = resolverFor(
+      [record({ tokenHash: hash, expiresAt: future })],
+      issuerHolding("rbac.role.read"),
+    );
+    expect(await live.resolver.resolve(TOKEN)).not.toBeNull();
+  });
+
+  it("refuses a token whose hash matches nothing the prefix returned", async () => {
+    // The repository narrows by prefix and hands back candidates; several keys share a
+    // prefix. Returning the first candidate rather than comparing hashes would
+    // authenticate one integration as another.
+    const { resolver } = resolverFor(
+      [record({ tokenHash: await ApiKeyHasher.hash("rk_someothertoken") })],
+      issuerHolding("rbac.role.read"),
+    );
+
+    expect(await resolver.resolve(TOKEN)).toBeNull();
+  });
+});

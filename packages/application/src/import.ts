@@ -2,7 +2,13 @@
 // re-exports live here — that is what keeps it cycle-free.
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
+export type {
+  GoalId,
+  OrganizationId,
+  PaginationQuery,
+  RoleId,
+  UserId,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { ServerOnly, Uuid } from "@loadbearing/core";

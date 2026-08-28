@@ -446,31 +446,27 @@ pnpm add --filter @loadbearing/application @loadbearing/core@workspace:* @loadbe
 >
 > If a third-party runtime dependency ever needs adding here, stop and look hard — it almost always means infrastructure leaked into the domain.
 
-### `@loadbearing/db`
-```bash
-pnpm add --filter @loadbearing/db @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* @loadbearing/application@workspace:* drizzle-orm@catalog: pg@catalog:
-```
-> **Why `db` depends on `application`:** the ports are abstract classes living in `application`, and this package's concrete classes extend them. Adapters depend inward on the domain; the domain depends on nothing. `application` never imports `db`, so there is no cycle.
->
-> `drizzle-kit`, `tsx`, and `@types/pg` arrived as devDependencies from the scaffold — build-time only, they must not ship. Server-only package.
-
 ### `@loadbearing/infrastructure`
 ```bash
-pnpm add --filter @loadbearing/infrastructure @loadbearing/core@workspace:* @loadbearing/application@workspace:* ioredis@catalog: bullmq@catalog: @aws-sdk/client-s3@catalog: @aws-sdk/s3-request-presigner@catalog:
+pnpm add --filter @loadbearing/infrastructure @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* @loadbearing/application@workspace:* @loadbearing/errors@workspace:* drizzle-orm@catalog: pg@catalog: ioredis@catalog: bullmq@catalog: nodemailer@catalog: @aws-sdk/client-s3@catalog: @aws-sdk/lib-storage@catalog: @aws-sdk/s3-request-presigner@catalog:
 ```
-> The non-Postgres adapters: Redis cache, S3 storage gateway, BullMQ queue publisher. Same inward dependency as `db` — it implements ports declared in `application`. Server-only.
+> **Every concrete adapter, one package.** Postgres and Drizzle in `src/pg/`, Redis in `src/redis/`, S3 in `src/s3/`, BullMQ in `src/bullmq/`, SMTP in `src/smtp/` — one folder per external system, and `ls src/` answers "what does this depend on?".
 >
-> This is a departure from the architecture docs; see the note in [00](00-README.md) and the rationale in [15](15-infrastructure-package.md).
+> **Why it depends on `application`:** the ports are abstract classes living there, and every concrete class here extends one. Adapters depend inward on the domain; the domain depends on nothing. `application` never imports this package, so there is no cycle.
+>
+> `drizzle-kit`, `tsx`, `@types/pg` and `@types/nodemailer` arrived as devDependencies from the scaffold — build-time only, they must not ship. Server-only package.
+>
+> This is a departure from the architecture docs, which split Postgres into a package of its own; see the note in [00](00-README.md) and the rationale in [15](15-infrastructure-package.md).
 
 ### `@loadbearing/auth`
 ```bash
-pnpm add --filter @loadbearing/auth @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* @loadbearing/application@workspace:* @loadbearing/db@workspace:* @loadbearing/infrastructure@workspace:* better-auth@catalog:
+pnpm add --filter @loadbearing/auth @loadbearing/core@workspace:* @loadbearing/contracts@workspace:* @loadbearing/permissions@workspace:* @loadbearing/application@workspace:* @loadbearing/infrastructure@workspace:* better-auth@catalog:
 ```
-> Better Auth's instance, the session resolver, `PrincipalBuilder`, the capability cache, and API keys. It needs `db` for the Drizzle adapter and `infrastructure` for the Redis cache. Server-only, and never imported by `apps/web`'s component tree.
+> Better Auth's instance, the session resolver, `PrincipalBuilder`, the capability cache, and API keys. It needs `infrastructure` for both halves it touches: the Drizzle client the adapter wraps, and the Redis cache behind the capability cache. Server-only, and never imported by `apps/web`'s component tree.
 
 ### `@loadbearing/composition`
 ```bash
-pnpm add --filter @loadbearing/composition @loadbearing/core@workspace:* @loadbearing/application@workspace:* @loadbearing/observability@workspace:* @loadbearing/contracts@workspace:* @loadbearing/db@workspace:* @loadbearing/infrastructure@workspace:* @loadbearing/auth@workspace:* @loadbearing/content@workspace:*
+pnpm add --filter @loadbearing/composition @loadbearing/core@workspace:* @loadbearing/application@workspace:* @loadbearing/observability@workspace:* @loadbearing/contracts@workspace:* @loadbearing/infrastructure@workspace:* @loadbearing/auth@workspace:* @loadbearing/content@workspace:*
 ```
 > The DI root. It is the only package that knows both the abstract ports and every concrete implementation, because wiring them together is its entire job. Server-only.
 >

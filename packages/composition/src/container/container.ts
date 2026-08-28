@@ -18,13 +18,16 @@ import {
   type Clock,
   type ContentSource,
   Database,
+  type EmailSender,
   type EmbeddingProvider,
   IndexDocumentUseCase,
   JsonLogger,
+  ListRolesUseCase,
   type Logger,
   type LogReader,
   LokiLogReader,
   type MaintenanceGateway,
+  type MembershipEnroller,
   type MembershipReader,
   OpenAiEmbeddingProvider,
   PgActivityArchiveGateway,
@@ -34,7 +37,9 @@ import {
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,
+  PgMembershipEnroller,
   PgMembershipReader,
+  PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
   PrincipalBuilder,
@@ -44,6 +49,7 @@ import {
   S3StorageGateway,
   SERVER_CATALOG,
   type SessionResolver,
+  SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
   SystemClock,
@@ -51,7 +57,19 @@ import {
   type UnitOfWork,
   type VectorStore,
 } from "../import.js";
+import { ContentAuthMailer } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
+
+// What a readiness probe returns. One field per dependency the deployment cannot serve
+// requests without, plus the roll-up the probe's status code is derived from.
+export interface HealthReport {
+  readonly healthy: boolean;
+  readonly database: boolean;
+  readonly cache: boolean;
+  readonly queue: boolean;
+  // `null` when this deployment runs no ClickHouse — absent, rather than passing.
+  readonly analytics: boolean | null;
+}
 
 // The only class in the repository that knows both an abstract port and the concrete
 // class behind it. That is the entire job, and it is why a swap is one line here.
@@ -80,6 +98,10 @@ export class Container {
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
+  // Built unconditionally, unlike the derived stores below. A missing analytics store
+  // means a feature is not deployed; a missing mail transport means every sign-up on a
+  // default configuration is a dead end, so it is required configuration instead.
+  public readonly email: EmailSender;
   // Platform housekeeping, carrying no principal because it owns no tenant's rows.
   // Reachable only from the worker's schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
@@ -108,6 +130,7 @@ export class Container {
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
   public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
+  public readonly rbac: { readonly listRoles: ListRolesUseCase };
 
   public constructor(config: ContainerConfig) {
     this.database = new Database(config.database);
@@ -181,6 +204,7 @@ export class Container {
     // The server catalog, which is the only one carrying the `email` namespace the
     // worker's digests read. A client bundle cannot reach it — 05 bans the import.
     this.content = new StaticContentSource(SERVER_CATALOG);
+    this.email = new SmtpEmailSender(config.email);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
@@ -196,11 +220,25 @@ export class Container {
         this.database,
         this.transactions,
       );
+      // The write half, bound the same way and for the same reason. It is what puts
+      // the very first row in `memberships` — without it a fresh database can never
+      // produce a session, because the hook above correctly refuses one to a user
+      // with no membership and nothing else in the repository writes that table.
+      const membershipEnroller: MembershipEnroller = new PgMembershipEnroller(
+        this.database,
+        this.transactions,
+      ).withOrganizationSlug(config.auth.bootstrapOrganizationSlug);
+
       this.authInstance = AuthFactory.create(
         config.auth,
         this.database,
         this.cache,
         membershipReader,
+        membershipEnroller,
+        // The copy and the transport, joined here and nowhere else. `auth` owes no
+        // words and `content` owes no transport, which is the whole reason this line
+        // is in the wiring package.
+        new ContentAuthMailer(this.content, this.email),
       );
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
@@ -226,6 +264,13 @@ export class Container {
     );
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
+
+    this.rbac = {
+      listRoles: new ListRolesUseCase(
+        this.authorizer,
+        new PgRoleRepository(this.database, this.transactions),
+      ),
+    };
 
     this.ai = {
       indexDocument: new IndexDocumentUseCase(
@@ -287,21 +332,33 @@ export class Container {
 
   // Postgres and both Redis instances. A cache that is down degrades; a queue
   // that is down silently stops accepting work, which is worth knowing about.
-  public async healthy(): Promise<boolean> {
+  //
+  // A breakdown rather than one boolean, because the only consumer is a readiness probe
+  // and the body of a failing probe is what an operator reads at three in the morning.
+  // `false` alone says the deployment is unhealthy; it does not say whether to restart
+  // the pod or page whoever owns Redis.
+  public async health(): Promise<HealthReport> {
     const [database, cache, queue, analytics] = await Promise.all([
       this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
-      // Only when it is part of this deployment. A container with no ClickHouse
-      // reports healthy without it, which is correct — it is not degraded, it is
-      // not running one.
+      // Only when it is part of this deployment. `null` rather than `true` for a
+      // container with no ClickHouse: it is not healthy and it is not degraded, it is
+      // not running one, and a probe body saying `true` claims otherwise.
       //
       // The log platform is deliberately absent from this list. Loki being down
       // loses diagnostics and nothing else, and failing a readiness probe over it
       // takes the application down in order to protect its logs.
-      this.clickhouse?.healthy() ?? Promise.resolve(true),
+      this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
     ]);
-    return database && cache && queue && analytics;
+
+    return {
+      healthy: database && cache && queue && analytics !== false,
+      database,
+      cache,
+      queue,
+      analytics,
+    };
   }
 
   // Reverse construction order. Closing Redis while BullMQ still holds blocking

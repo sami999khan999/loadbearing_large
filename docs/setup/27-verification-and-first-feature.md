@@ -38,8 +38,8 @@ Anything that needed a manual fix is a bug in one of these documents. Fix the do
 
 These are the checks a green build does not give you. Run them by hand once now, and again whenever the repo feels like it is drifting.
 
-- [ ] **Topological build.** `pnpm build` from clean builds `core → permissions → contracts → application → db → infrastructure → auth → composition → …` in dependency order, with no config anywhere declaring that order. pnpm derives it from `workspace:*`.
-- [ ] **Server-only boundary.** Importing `@loadbearing/db` from a React component is a Biome error; importing it from `apps/web/src/server/**` is fine.
+- [ ] **Topological build.** `pnpm build` from clean builds `errors → core → permissions → contracts → application → infrastructure → auth → composition → …` in dependency order, with no config anywhere declaring that order. pnpm derives it from `workspace:*`.
+- [ ] **Server-only boundary.** Importing `@loadbearing/infrastructure` from a React component is a Biome error; importing it from `apps/web/src/server/**` is fine.
 - [ ] **Framework-free domain.** `grep -r "@orpc\|@tanstack\|drizzle-orm\|ioredis" packages/application/src` returns nothing.
 - [ ] **OOP rule.** An exported free function in `packages/contracts/src` is an ESLint error (the `no-restricted-syntax` selectors, which Biome cannot express).
 - [ ] **Typed permissions.** A misspelled `PermissionKey` is a compile error in *both* the oRPC router and the React component.
@@ -47,7 +47,7 @@ These are the checks a green build does not give you. Run them by hand once now,
 - [ ] **One decision, four surfaces.** Removing a permission from a role removes the nav item **and** returns `FORBIDDEN` from the API — without touching the frontend.
 - [ ] **Clean client bundle.** The built client output contains no Drizzle, no ioredis, no AWS SDK.
 - [ ] **Naming.** Every file under `packages/*/src` matches the rules in [29](29-naming-and-boundaries.md): one class, filename derived from it, kebab-case, role suffix.
-- [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two *packages*: `packages/db/src/vector/`, and `packages/composition` — where it appears twice, in `src/import.ts` and `src/container/container.ts`, because every external symbol enters a package through its one outside surface. What matters is that no third package names it: if it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
+- [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two *packages*: `packages/infrastructure`, where it is defined and named by three barrels, and `packages/composition`, where it appears twice — in `src/import.ts` and `src/container/container.ts` — because every external symbol enters a package through its one outside surface. What matters is that no third package names it: if it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
 - [ ] **The analytics seam.** `grep -rn "PgAnalyticsReader" packages/ apps/` returns hits in exactly two places, for the same reason. A use-case that names it has turned a config change into a rewrite.
 - [ ] **Tenant scoping.** `pnpm check:architecture` reports every domain table carrying `organization_id`, and no repository method queries without narrowing by it. The grep covers the schema; the query side is a review habit.
 - [ ] **Query counts.** The integration tests assert a fixed number of queries for `resolveFor` and every repository method that loops. An N+1 is invisible at fifty rows and fatal at fifty thousand.
@@ -103,18 +103,22 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
     packages/content/src/message/error-copy.ts             copy for each new code — a compile error until it exists
 
  3. packages/contracts/src/lead/                           lead.contract.ts, lead.entity.ts, lead.procedures.ts
- 4. packages/contracts/src/contract-router.ts              register the procedures
- 5. packages/contracts/src/permission/lead.permissions.ts  map each procedure path → permission
+ 4. packages/contracts/src/procedure/index.ts              register the procedures
+ 5. packages/contracts/src/catalog/lead.permissions.ts     map each procedure path → permission
+    packages/contracts/src/catalog/index.ts                register the fragment
 
- 6. packages/db/src/lead/lead.schema.ts                    tables + migration
+ 6. packages/infrastructure/src/pg/schema/lead.schema.ts   tables + migration
                                                            organization_id on every table
                                                            an index on every FK and filtered column
                                                            append-only? partition it in this migration
-    packages/db/src/lead/pg-lead.repository.ts             implements the port, scoped by tenant
+    packages/infrastructure/src/pg/schema/index.ts         register the tables in the drizzle-kit barrel
+    packages/infrastructure/src/pg/repository/pg-lead.repository.ts
+                                                           implements the port, scoped by tenant
 
  7. packages/application/src/lead/                         use-cases + LeadRepository port
- 8. packages/api-client/src/lead/                          transport methods, if not generic
-    packages/query/src/lead/                               LeadQueries, LeadMutations, keys
+ 8. packages/api-client/src/client/api-client.ts           one `get lead()` accessor, if not generic
+    packages/query/src/lead/                               LeadQueries, LeadMutations
+    packages/query/src/key/query-key.ts                    the slice's keys, mirroring its procedure paths
 
  9. packages/content/src/message/namespace.ts              register "lead" in NamespaceShape + ClientNamespace
     packages/content/src/message/catalog.ts                one loader per locale — total, so a missing cell will not compile
@@ -122,10 +126,18 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
 10. packages/feature/src/lead/                             LeadPipelineBoard
 
 11. apps/web/src/server/orpc/lead.router.ts                three lines per procedure
+    apps/web/src/server/orpc/app.router.ts                 mount it — the shape mirrors `contract`
 12. apps/web/src/route/lead/                               compose the components
 
     packages/composition/src/container/container.ts        expose the new use-cases
 ```
+
+**The kit ships one slice built exactly this way.** `role` — a read-only list of the organization's
+roles and what each grants — walks all twelve steps, reuses `rbac.role.read` rather than adding a
+permission, and lands at `/permissions` behind a `RouteGuard`. Read it as the worked example: the
+same key gates the procedure in `PROCEDURE_PERMISSIONS`, the use-case through `Authorizer.assert()`,
+the route through `RouteGuard.requirePermission`, and the nav through `<Can>`. Steps 1 and 2 are
+empty for it, which is the common case rather than a shortcut.
 
 **Plus a migration seeding the new permission rows and granting them to the right system roles** — which is what makes the module *appear*. Until that migration runs, the feature is invisible and uncallable for everyone. That is your staged-rollout mechanism working as designed, not a bug.
 
@@ -151,8 +163,11 @@ The kit ships as `@loadbearing/*`. Before real work starts:
 1. Find and replace `@loadbearing/` with `@yourscope/` across the repo.
 2. Rename the directory names only if you want to — package names and folder names are independent.
 3. Update `scope-enum` in `commitlint.config.js` if you renamed packages too.
-4. `rm -rf node_modules pnpm-lock.yaml && pnpm install`.
-5. Run Step 27.1 again.
+4. Work the full list in [00](00-README.md#renaming-the-scope), which includes the three runtime
+   defaults a find-and-replace on the scope cannot reach — the auth cookie prefix, the Redis key
+   prefix, and the ClickHouse credentials in both `env.ts` schemas.
+5. `rm -rf node_modules pnpm-lock.yaml && pnpm install`.
+6. Run Step 27.1 again.
 
 Do this once, early. Doing it after twenty features is a merge-conflict festival.
 

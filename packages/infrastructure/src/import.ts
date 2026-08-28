@@ -40,6 +40,8 @@ export {
   type DailyCount,
   type DateRange,
   type DocumentChunk,
+  type EmailMessage,
+  EmailSender,
   EmbeddingProvider,
   type JobOptions,
   type LogEntry,
@@ -50,6 +52,9 @@ export {
   type ProjectionCheckpoint,
   QueuePublisher,
   type RiskScore,
+  type RolePage,
+  type RoleRecord,
+  type RoleRepository,
   type SearchHit,
   StorageGateway,
   type StoredObject,
@@ -64,6 +69,8 @@ export {
   type GoalId,
   Identifiers,
   type OrganizationId,
+  type PaginationQuery,
+  type RoleId,
   type UserId,
 } from "@loadbearing/contracts";
 
@@ -121,6 +128,12 @@ export {
 
 // ── ioredis ──────────────────────────────────────────────────────────────────
 export { Redis, type RedisOptions } from "ioredis";
+
+// ── nodemailer ───────────────────────────────────────────────────────────────
+// The only mail client in the repository. Its types ship separately, and the two are
+// pinned to the same major in the catalog — a `@types/nodemailer` a major behind
+// describes a `sendMail` that is *almost* the one being called.
+export { createTransport, type Transporter } from "nodemailer";
 
 // ── pg ───────────────────────────────────────────────────────────────────────
 export { Pool } from "pg";

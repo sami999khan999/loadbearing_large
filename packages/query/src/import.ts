@@ -9,6 +9,11 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 export type { ApiClient, AuthClient } from "@loadbearing/api-client";
 
+// ── @loadbearing/contracts ───────────────────────────────────────────────────
+// The shapes a defined query takes and returns. Types only: this package caches what
+// the contract describes and has no opinion about it.
+export type { PaginationQuery, RoleDto } from "@loadbearing/contracts";
+
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 // Retryability is a fact about the code, declared once in the catalog and read here.
 export { ERROR_CATALOG, ErrorNormalizer } from "@loadbearing/errors";

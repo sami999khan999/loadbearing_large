@@ -1,6 +1,6 @@
 # 11 · Local Infrastructure
 
-> Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, and the log platform the diagnostic stream ships to. One command.
+> Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, Mailpit as the mail stand-in, and the log platform the diagnostic stream ships to. One command.
 
 **Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki, so the log stream has somewhere to land.
 
@@ -8,7 +8,7 @@
 
 > **[`infra/docs/`](../../infra/docs/index.md) is the reference for the stack this step builds.** This page is the build order, walked once; that one is what you consult afterwards when something is wrong.
 
-> **Read [Data and scale](../opinions/data-and-scale.md) before this step.** It is why there are two Redis containers here rather than one, and it decides the partitioning and tenant column that [13](13-db-package.md) builds on.
+> **Read [Data and scale](../opinions/data-and-scale.md) before this step.** It is why there are two Redis containers here rather than one, and it decides the partitioning and tenant column that [13](13-infrastructure-postgres.md) builds on.
 
 ---
 
@@ -202,7 +202,7 @@ volumes:
 
 ### Why each choice
 
-**`pgvector/pgvector:pg17`** is stock Postgres 17 with the vector extension available to enable. Using the official image and installing pgvector yourself works, but pins you to building an image on every developer machine and every CI runner. Postgres 17 rather than 16 for the improved `VACUUM` memory behaviour, which matters on the activity log more than anywhere else — though the real answer for that table is monthly partitioning and a retention policy, which [13](13-db-package.md) sets up in the first migration.
+**`pgvector/pgvector:pg17`** is stock Postgres 17 with the vector extension available to enable. Using the official image and installing pgvector yourself works, but pins you to building an image on every developer machine and every CI runner. Postgres 17 rather than 16 for the improved `VACUUM` memory behaviour, which matters on the activity log more than anywhere else — though the real answer for that table is monthly partitioning and a retention policy, which [13](13-infrastructure-postgres.md) sets up in the first migration.
 
 **Two Redis containers, because the three jobs Redis does are not equally disposable.** Cache and session storage are cache-aside: both rebuild from Postgres on a miss, so evicting them costs a slow minute. A BullMQ job is derived from nothing — it is work somebody asked for and has not happened yet, and losing it is a gap rather than a delay.
 
@@ -229,7 +229,7 @@ idea what an organization is.
 
 **Two profiles, and the split is a decision rather than a convenience.**
 
-`observability` is on by default because the diagnostic stream is not hypothetical — `JsonLogger` exists, `EVENT_CATALOG` exists, and every adapter written from [13](13-db-package.md) onward emits into it. A stream with no sink is a stream nobody checks.
+`observability` is on by default because the diagnostic stream is not hypothetical — `JsonLogger` exists, `EVENT_CATALOG` exists, and every adapter written from [13](13-infrastructure-postgres.md) onward emits into it. A stream with no sink is a stream nobody checks.
 
 `analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. `AnalyticsReader` is the seam, `PgAnalyticsReader` is the implementation, and snapshot tables in Postgres answer every question this kit will ask for years. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics` and a consumer, not an infrastructure project.
 
@@ -665,6 +665,7 @@ The application code does not change between the two columns. These containers a
 | `redis-cache` container | Managed Redis with `allkeys-lru` — ElastiCache, Upstash, Redis Cloud. Sized for working set; no persistence needed |
 | `redis-queue` container | A **separate** managed Redis with `noeviction` and AOF. Never the same instance as the cache |
 | MinIO | S3, R2, or any S3-compatible store. Set `S3_FORCE_PATH_STYLE=false` for AWS |
+| Mailpit | Any SMTP endpoint — SES, Postmark, Resend, your own relay. One `SMTP_URL`, and `smtps://` for implicit TLS on 465 |
 | `loki` + `alloy` containers | Self-hosted Loki with S3 storage, or Grafana Cloud — the same config, a different `url`. Alloy runs as a DaemonSet on Kubernetes |
 | `clickhouse` container, stopped | ClickHouse Cloud or a managed instance — and only once the trigger in [Data and scale](../opinions/data-and-scale.md) §5 has actually fired |
 

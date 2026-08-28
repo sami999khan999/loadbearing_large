@@ -297,12 +297,12 @@ export class ServerOnly {
 }
 ```
 
-Four packages call this on their first line: `db`, `infrastructure`, `auth`, `composition`.
+Three packages call this on their first line: `infrastructure`, `auth`, `composition`.
 
 ```ts
-// packages/db/src/index.ts
+// packages/infrastructure/src/index.ts
 import { ServerOnly } from "@loadbearing/core";
-ServerOnly.assert("@loadbearing/db");
+ServerOnly.assert("@loadbearing/infrastructure");
 ```
 
 Note the check goes through `globalThis` rather than naming `window` directly. `library.json` sets `lib: ["ES2024"]` with no DOM, so `window` is not a known identifier in this package.
@@ -336,7 +336,7 @@ So `ServerOnly.assert` throws `ServerOnlyError` — code `SERVER_ONLY`, context 
 ```
 ServerOnlyError: SERVER_ONLY
     at ServerOnly.assert (…)
-    at packages/db/src/index.ts:2:12
+    at packages/infrastructure/src/index.ts:2:12
 ```
 
 That is a legible stack trace: it names the guard, and the frame below it names the package that leaked. The sentence is one `ERROR_COPY` lookup away.
@@ -527,7 +527,7 @@ afterEach(() => {
 describe("ServerOnly", () => {
   it("is silent on a server, where there is no window", () => {
     expect(() => {
-      ServerOnly.assert("@loadbearing/db");
+      ServerOnly.assert("@loadbearing/infrastructure");
     }).not.toThrow();
   });
 

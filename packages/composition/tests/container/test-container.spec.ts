@@ -13,6 +13,7 @@ describe("TestContainer", () => {
     expect(harness.analytics).toBeDefined();
     expect(harness.cache).toBeDefined();
     expect(harness.content).toBeDefined();
+    expect(harness.email).toBeDefined();
     expect(harness.embeddings).toBeDefined();
     expect(harness.events).toBeDefined();
     expect(harness.queue).toBeDefined();

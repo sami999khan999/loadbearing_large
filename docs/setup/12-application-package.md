@@ -258,7 +258,7 @@ export abstract class ActivityLogger {
 
 **The actor and the clock supply the rest.** `record()` takes no `occurredAt` and no tenant, because both are derivable at the adapter: `PgActivityLogger` stamps the time from the injected `Clock` and reads the organization from `actor`. A caller that could pass its own timestamp is a caller that can backdate an audit row.
 
-**This write happens inside the caller's transaction.** `PgActivityLogger` participates in whatever `UnitOfWork` is open, so the state change and its audit row commit together or neither does. That is the whole reason audit lives in Postgres rather than in the log stream, and it is a claim about the implementation rather than about intent — see the enrolment note in [13](13-db-package.md).
+**This write happens inside the caller's transaction.** `PgActivityLogger` participates in whatever `UnitOfWork` is open, so the state change and its audit row commit together or neither does. That is the whole reason audit lives in Postgres rather than in the log stream, and it is a claim about the implementation rather than about intent — see the enrolment note in [13](13-infrastructure-postgres.md).
 
 ### `CacheStore`
 
@@ -440,7 +440,7 @@ export abstract class EmbeddingProvider {
 }
 ```
 
-**`VectorStore` is declared here, not in `db`.** This is the departure flagged in [00](00-README.md). The architecture docs place it in `packages/db/src/vector/`, which works only while the implementation is Postgres — and the stated requirement is to move to a dedicated vector database later without rewrites. A use-case cannot import `db`, so the abstraction has to live where every other port lives. `PgVectorStore` still lives in `db/src/vector/`; see [14](14-vector-store.md).
+**`VectorStore` is declared here, not beside its implementation.** This is the departure flagged in [00](00-README.md). The architecture docs place it in the database package, which works only while the implementation is Postgres — and the stated requirement is to move to a dedicated vector database later without rewrites. A use-case cannot import an adapter package, so the abstraction has to live where every other port lives. `PgVectorStore` still lives in `packages/infrastructure/src/pg/repository/`; see [14](14-vector-store.md).
 
 **`goalIds` being a required parameter is the whole security design.** Filtering after retrieval means the model has already seen documents the actor cannot access, and "we filter the output" is not a defence you want to explain after an incident. Putting the permitted scope in the method signature means it cannot be forgotten — a caller must produce it, and `CapabilitySet.goalsWith()` is how:
 
@@ -476,7 +476,7 @@ export abstract class AnalyticsReader {
 }
 ```
 
-Aggregate reads over time — the questions a dashboard asks, as opposed to the questions a screen asks. `PgAnalyticsReader` answers them from snapshot tables in [13](13-db-package.md); the reason the seam exists before a second implementation does is that a column store becomes necessary at a volume this kit will not reach for years, and by then every call site would otherwise have to change.
+Aggregate reads over time — the questions a dashboard asks, as opposed to the questions a screen asks. `PgAnalyticsReader` answers them from snapshot tables in [13](13-infrastructure-postgres.md); the reason the seam exists before a second implementation does is that a column store becomes necessary at a volume this kit will not reach for years, and by then every call site would otherwise have to change.
 
 **`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. That is even more true once the implementation is not Postgres: there is no join back to `goal_members` from ClickHouse.
 
@@ -496,7 +496,7 @@ export abstract class UnitOfWork {
 ```
 > Transactional boundaries as a domain concept. "Write the activity entry in the same transaction as the state change, then enqueue the notification" is a rule about correctness, and it needs somewhere to be expressed that is not `db.transaction(...)` inside a use-case.
 >
-> **The implementation must genuinely enrol the repositories that run inside `work()`.** A `run()` that opens a transaction the repositories never join is worse than no `UnitOfWork` at all: every call site reads as atomic and none of it is, and the first symptom is a state change with no audit row after a restart. [13](13-db-package.md) is where that is made real.
+> **The implementation must genuinely enrol the repositories that run inside `work()`.** A `run()` that opens a transaction the repositories never join is worse than no `UnitOfWork` at all: every call site reads as atomic and none of it is, and the first symptom is a state change with no audit row after a restart. [13](13-infrastructure-postgres.md) is where that is made real.
 
 ### `EventBus`
 
@@ -516,7 +516,7 @@ export abstract class EventBus {
 ```
 > The seam for cross-slice side effects. A finance use-case should not import a notification use-case; it publishes `invoice.approved` and the notification slice subscribes. Without this, slice ownership decays into a call graph where every team's code reaches into every other team's.
 
-The analytics projection is the second consumer class: the worker subscribes to domain events and writes snapshot rows, which is what keeps the analytics store derived rather than written to directly ([13](13-db-package.md)).
+The analytics projection is the second consumer class: the worker subscribes to domain events and writes snapshot rows, which is what keeps the analytics store derived rather than written to directly ([13](13-infrastructure-postgres.md)).
 
 **Keep this interface broker-shaped**, even while dispatch is in-process. Four properties, and each one is a thing a Kafka or Redis Streams implementation cannot give back later:
 
@@ -553,7 +553,7 @@ Repository ports are **not** here — each lives in its feature slice, `applicat
 
 ## Step 12.5 — What a repository port looks like
 
-The starter kit ships none, but the shape is fixed. When feature 01 arrives:
+The kit ships one — `RoleRepository` in `src/rbac/`, read by `ListRolesUseCase` ([27](27-verification-and-first-feature.md) Step 27.4). The shape is fixed; a richer slice looks like this:
 
 ```ts
 // packages/application/src/task/task.repository.ts
@@ -639,4 +639,4 @@ Do not proceed until this passes.
 
 ---
 
-[← Local Infrastructure](11-local-infrastructure.md) · [`@loadbearing/db` →](13-db-package.md)
+[← Local Infrastructure](11-local-infrastructure.md) · [`@loadbearing/infrastructure` — Postgres →](13-infrastructure-postgres.md)

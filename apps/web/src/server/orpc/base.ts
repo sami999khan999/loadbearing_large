@@ -1,9 +1,9 @@
 import type { Principal } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
-import { ProcedurePermissions } from "@loadbearing/contracts";
+import { contract, ProcedurePermissions } from "@loadbearing/contracts";
 import { ForbiddenError, UnauthorizedError } from "@loadbearing/errors";
 import { Correlation, type Logger, type TraceId } from "@loadbearing/observability";
-import { os } from "@orpc/server";
+import { implement, os } from "@orpc/server";
 import { ErrorInterceptor } from "./error.interceptor.js";
 
 // Initial context: environment-shaped, injected once by the adapter.
@@ -64,4 +64,14 @@ export const errorMiddleware = os
 //
 // This is not the real gate — `Authorizer.assert()` inside the use-case is. The worker
 // bypasses this entirely, and so does any SSR call that skipped the adapter.
-export const authed = base.use(correlationMiddleware).use(errorMiddleware).use(principalMiddleware);
+//
+// Built from `implement(contract)` rather than from `base`, so it carries the contract's
+// own shape: a router writes `authed.role.list.handler(…)` and gets the procedure's
+// input and output types with no annotation. `implement(contract.role.list).use(authed)`
+// looks like the same thing and is not — `.use()` takes a *middleware*, and a builder
+// passed there fails with several hundred characters of inference rather than a sentence.
+export const authed = implement(contract)
+  .$context<{ container: Container; headers: Headers }>()
+  .use(correlationMiddleware)
+  .use(errorMiddleware)
+  .use(principalMiddleware);

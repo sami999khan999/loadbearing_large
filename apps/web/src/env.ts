@@ -35,6 +35,21 @@ const Schema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
+  // Which organization a brand-new user is enrolled into on their first session, by
+  // slug — the same slug `pnpm db:seed` creates. Unset means no enrolment at all: an
+  // unaffiliated sign-up gets no membership, and `MembershipReader` refuses the
+  // session. That is the production posture, and it is why there is no default here.
+  BOOTSTRAP_ORGANIZATION_SLUG: z.string().min(1).optional(),
+
+  // Transactional mail. One URL rather than five fields, so the same variable points at
+  // Mailpit locally and at SES, Postmark or Resend's SMTP endpoint in production —
+  // `smtps://` for implicit TLS on 465. Required, because
+  // `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on and a process that cannot send is
+  // a process whose sign-ups can never complete.
+  SMTP_URL: z.string().min(1),
+  // The envelope sender. Never defaulted: an address the sending domain does not
+  // authorise bounces or lands in spam, and a wrong default fails that way silently.
+  EMAIL_FROM: z.string().min(1),
 
   EMBEDDING_MODEL: z.string().min(1),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
@@ -51,8 +66,11 @@ const Schema = z.object({
   // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
   // runs and the reconciliation reports, while reads still come from Postgres.
   CLICKHOUSE_URL: z.url().optional(),
-  CLICKHOUSE_DATABASE: z.string().min(1).default("ratchet"),
-  CLICKHOUSE_USER: z.string().min(1).default("ratchet"),
+  // ClickHouse's own out-of-the-box database and user. A default naming the project
+  // would be a credential baked into shipped code, and would keep pointing at the old
+  // name after a rename — `.env` is where the real stack's values belong.
+  CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
+  CLICKHOUSE_USER: z.string().min(1).default("default"),
   CLICKHOUSE_PASSWORD: z.string().default(""),
   // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
   // written to stdout and still shipped by Alloy, and reading them is
@@ -120,7 +138,9 @@ export class Env {
         sessionMaxAgeSeconds: e.AUTH_SESSION_MAX_AGE_SECONDS,
         cookieCacheMaxAgeSeconds: e.AUTH_COOKIE_CACHE_MAX_AGE_SECONDS,
         requireEmailVerification: e.AUTH_REQUIRE_EMAIL_VERIFICATION,
+        bootstrapOrganizationSlug: e.BOOTSTRAP_ORGANIZATION_SLUG,
       },
+      email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,

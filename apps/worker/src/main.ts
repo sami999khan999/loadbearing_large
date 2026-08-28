@@ -17,9 +17,27 @@ const redis = new RedisConnection({
 
 const bootstrap = new WorkerBootstrap(container, redis);
 
+// Registered before `start()`, so a throw during boot lands in the same log stream as
+// a throw during work. Node's default handler prints a bare stack to stderr, which no
+// collector can key on — the same argument the shutdown `.catch` below already makes.
+process.on("unhandledRejection", (reason: unknown) => {
+  container.logger.failure(reason, { service: "worker", phase: "unhandledRejection" });
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error: unknown) => {
+  container.logger.failure(error, { service: "worker", phase: "uncaughtException" });
+  process.exit(1);
+});
+
 // Top-level await works because the package is ESM and the tsconfig targets ES2024
 // under NodeNext resolution.
-await bootstrap.start();
+try {
+  await bootstrap.start();
+} catch (error: unknown) {
+  container.logger.failure(error, { service: "worker", phase: "start" });
+  process.exit(1);
+}
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {

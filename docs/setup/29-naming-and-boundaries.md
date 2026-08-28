@@ -187,34 +187,37 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 
 ---
 
-## 1.10 Inside `packages/db`
+## 1.10 Inside `packages/infrastructure/src/pg`
 
-- **`drizzle.config.ts` and `migrations/`** sit **above** `src/` because they are build-time artefacts, not shipped code. Migrations are generated and committed; `db:push` is never used.
-- **`src/` root files** — `database.ts` (the pool), `schema.ts` (a barrel re-exporting every `*.schema.ts`, which is what Drizzle Kit reads), `base.repository.ts` (the tenant `WHERE` clause and the transaction handle every repository inherits), `unit-of-work.ts`.
-- **`rbac/`** — the permission tables, the Better Auth CLI output, the API-key tables, and `PgCapabilityRepository`. Subject folder for the auth domain.
-- **`activity/`** — the audit tables and `PgActivityLogger`. `activity_log` and `task_status_history` are partitioned by month and written inside the caller's transaction, which is what makes an audit row and its state change commit together ([13](13-db-package.md)).
-- **`vector/`** — the embeddings table and `PgVectorStore`. **This is infrastructure, not a feature slice**, which is why it sits alongside `rbac/` rather than inside one.
-- **`seed/`** — idempotent seeds, run after migration. The owner role's grants come from `PermissionRegistry.all()` so they cannot fall behind the catalog.
-- **`<slice>/`** — one folder per feature, holding that slice's schema and its `Pg<Slice>Repository`.
-- **The layout is by subject, not by layer.** No `schema/` folder holding twenty schemas and a `repository/` folder holding twenty repositories — a feature's schema and repository sit together, so a team owns one directory.
+The Postgres side gets its own section because it is the largest folder in the package and the only one with sub-structure. It is a peer of `redis/` and `s3/`, not a package — see [13](13-infrastructure-postgres.md) for why the two were merged.
+
+- **`drizzle.config.ts` and `migrations/`** sit at the **package** root, above `src/`, because they are build-time artefacts rather than shipped code. Migrations are generated and committed; `db:push` is never used.
+- **`primitive/`** — `database.ts` (the pool, `Database`, `DrizzleClient`) and `base.repository.ts` (the tenant `WHERE` clause and the transaction handle every repository inherits).
+- **`schema/`** — every table, one `*.schema.ts` per subject, plus the `index.ts` barrel that is the single Drizzle Kit entry. `check-architecture.mjs` asserts every domain table declares `organization_id`, and that the barrel names every file beside it.
+- **`repository/`** — every concrete adapter, one file each, **flat**. They sit together rather than in a folder per subject because they are all the same kind of thing: a class extending `BaseRepository`, reading `schema/`, running inside `TransactionScope`. A folder holding one file is a path, not a subject ([Simplicity](../opinions/simplicity.md)).
+- **`transaction/`** — `TransactionScope`, the `AsyncLocalStorage` every repository reads, and `PgUnitOfWork`.
+- **`migrate/` and `seed/`** — scripts, not module code. Neither is exported from a barrel, both are exempt from `noConsole`, and the seed is idempotent: the owner role's grants come from `PermissionRegistry.all()` so they cannot fall behind the catalog.
+- **The tables are grouped by subject and the adapters are not**, and the asymmetry is deliberate: two tools require one entry naming every table, and nothing requires one naming every repository. A slice's files therefore land in two directories — `schema/lead.schema.ts` and `repository/pg-lead.repository.ts` — so a `CODEOWNERS` line per team needs both globs. `activity_log` is partitioned by month and written inside the caller's transaction, which is what makes an audit row and its state change commit together ([13](13-infrastructure-postgres.md)).
 - **Repositories fetch and persist. They never decide.** A `capabilities.can()` call in this package means an authorization decision escaped the use-case.
 - **Scoping by `organization_id` is not deciding.** The tenant filter is the boundary permissions are evaluated *inside*, not a permission check, so it belongs here — inherited from `BaseRepository` rather than written per method. A repository query with no tenant predicate is the bug; a repository asking `can()` is the other bug.
-- **Smell:** a permission check, or a folder for a non-Postgres concern.
+- **Smell:** a permission check, or a non-Postgres concern inside `pg/`.
 
 ---
 
 ## 1.11 Inside `packages/infrastructure`
 
 - **`redis/`** — the connections. **Two instances, not one**: the cache evicts under pressure and everything on it rebuilds from Postgres; the queue never evicts, because a queued job is derived from nothing. One class owns which is which, and they are configured differently besides (`maxRetriesPerRequest: null` for BullMQ, a key prefix only for the cache).
-- **`cache/`** — `RedisCacheStore`, implementing the `CacheStore` port.
-- **`storage/`** — `S3StorageGateway` and `StorageKey`. The gateway never takes a bucket in a method signature; the bucket is configuration.
-- **`queue/`** — `QueueName` (a closed union) and `BullMqQueuePublisher`.
-- **`embedding/`** — `OpenAiEmbeddingProvider`.
-- **One folder per external system this package imports a client for**, named after the capability, with files named after the technology. That pairing is what makes a vendor swap visibly local: you delete `s3-storage.gateway.ts` and write `azure-storage.gateway.ts`, and `storage/index.ts` is the only other file that changes.
+- **`pg/`** — Postgres and Drizzle, covered in §1.10 above. The one folder here with sub-structure.
+- **`s3/`** — `S3StorageGateway` and `StorageKey`. The gateway never takes a bucket in a method signature; the bucket is configuration.
+- **`bullmq/`** — `QueueName` (a closed union) and `BullMqQueuePublisher`.
+- **`openai/`** — `OpenAiEmbeddingProvider`.
+- **`smtp/`** — `SmtpEmailSender`, behind the `EmailSender` port. SMTP rather than a provider's HTTP API, so swapping vendors is a URL rather than a new adapter.
+- **`clickhouse/` and `loki/`** — adapters for services behind an opt-in compose profile. A folder here says the seam is implemented, not that the container is started.
+- **One folder per external system this package speaks to**, named after the technology, so `ls src/` answers the question “what does this depend on?”. That is what makes a vendor swap visibly local: you delete `s3.storage-gateway.ts` and write `azure.storage-gateway.ts`, and `s3/index.ts` is the only other file that changes.
 - **A system nothing reaches from code gets no folder.** Alloy is real infrastructure and has no home here: it is a separate process that tails stdout, and nothing in `packages/` addresses it. It lives in `infra/` alone. **Loki is the instructive near-miss** — the write path still has no client, but `LokiLogReader` reads back over `query_range`, so `src/loki/` exists and holds a reader and no writer ([15](15-infrastructure-package.md)).
 - **Smell:** a folder for something that is not an npm dependency.
 - **Contains no business logic.** These are adapters: translate a port call into a vendor call, translate the response back.
-- **Smell:** a domain noun in a method name, or an import of `db`.
+- **Smell:** a domain noun in a method name, or one folder reaching into another's files.
 
 ---
 
@@ -225,7 +228,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **`principal/`** — `PrincipalBuilder` (any credential → a `Principal`) and `CapabilityCache` (Redis, short TTL, invalidated explicitly on every grant change — the TTL is a backstop, not the mechanism).
 - **`apikey/`** — hashing and resolution. The resolver re-intersects a key's grants with the *issuer's current* capabilities on every request, so revoking a person's access revokes their keys' access at the same instant.
 - **The rest of the system never sees Better Auth.** Transport calls `PrincipalBuilder`; use-cases receive a `Principal`. Swapping the auth library rewrites this package and nothing else.
-- **`tables/`** — a script, not module code: it prints the schema the pinned Better Auth version expects, to be diffed against `packages/db` after an upgrade. Never exported, never built into `dist/`.
+- **`tables/`** — a script, not module code: it prints the schema the pinned Better Auth version expects, to be diffed against `packages/infrastructure/src/pg/schema/auth.schema.ts` after an upgrade. Never exported, never built into `dist/`.
 - **Smell:** `better-auth` imported from any other package. Also `@better-auth/cli` in any `package.json` — it trails the library's release line, and a generator behind the runtime writes a schema that is wrong where it matters.
 
 ---
@@ -384,9 +387,11 @@ packages/application/src/task/task.repository.ts            TaskRepository      
 packages/application/src/task/reactivate-task.use-case.ts   ReactivateTaskUseCase.execute()
 packages/application/src/task/overdue-lock.policy.ts        OverdueLockPolicy
 
-packages/db/src/task/task.schema.ts                         tasks.reactivated_at
-packages/db/src/task/pg-task.repository.ts                  PgTaskRepository
-packages/db/migrations/0004_task_reactivation.sql           ← + seeds the permission row
+packages/infrastructure/src/pg/schema/task.schema.ts        tasks.reactivated_at
+packages/infrastructure/src/pg/repository/pg-task.repository.ts
+                                                            PgTaskRepository
+packages/infrastructure/migrations/0004_task_reactivation.sql
+                                                            ← + seeds the permission row
 
 packages/query/src/task/task.mutations.ts                   TaskMutations.reactivate()
 packages/query/src/task/task.queries.ts                     TaskQueries.detail(taskId)

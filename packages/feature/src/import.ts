@@ -10,7 +10,6 @@
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
 // no read can bypass a defined query.
 export type { AuthClient } from "@loadbearing/api-client";
-
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 export type {
   ClientNamespace,
@@ -20,6 +19,10 @@ export type {
   ShellNamespace,
   Translator,
 } from "@loadbearing/content";
+// ── @loadbearing/contracts ───────────────────────────────────────────────────
+// The shapes the server returns. Types only — this package renders them and has no
+// opinion about how they arrived.
+export type { RoleDto } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { ErrorNormalizer } from "@loadbearing/errors";
@@ -33,10 +36,18 @@ export {
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
-export { SessionMutations } from "@loadbearing/query";
+// Defined queries and the two runtime hooks, never the cache library itself. A
+// component that named `useQuery` directly would be a read outside the seam, which is
+// what the ban on importing the transport package one block up already prevents.
+export {
+  RoleQueries,
+  SessionMutations,
+  useApiClient,
+  useAppQuery,
+} from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
-export { Button, Can, Field, Input, StatusBadge } from "@loadbearing/ui";
+export { Button, Can, EmptyState, Field, Input, StatusBadge } from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export {

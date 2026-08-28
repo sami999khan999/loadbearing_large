@@ -16,7 +16,9 @@ export {
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,
+  PgMembershipEnroller,
   PgMembershipReader,
+  PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";
 export { PgUnitOfWork, TransactionScope } from "./transaction/index.js";

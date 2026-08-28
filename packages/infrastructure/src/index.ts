@@ -32,7 +32,9 @@ export {
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,
+  PgMembershipEnroller,
   PgMembershipReader,
+  PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
   TransactionScope,
@@ -44,3 +46,4 @@ export {
   type RedisRole,
 } from "./redis/index.js";
 export { type S3Config, S3StorageGateway, StorageKey } from "./s3/index.js";
+export { type SmtpConfig, SmtpEmailSender } from "./smtp/index.js";

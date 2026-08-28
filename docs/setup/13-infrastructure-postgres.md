@@ -3,7 +3,7 @@
 > Drizzle schema, the connection class, repository implementations, migrations, and seeds.
 > Server-only.
 >
-> **This document used to build `@loadbearing/db`.** That package was folded into
+> **This document used to build a separate database package.** It was folded into
 > `@loadbearing/infrastructure` — the two were siblings with no edge between them, and the split put
 > one seam in two places. Everything below is now `packages/infrastructure/src/pg/`; the other stores
 > are [15](15-infrastructure-package.md).

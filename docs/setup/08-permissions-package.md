@@ -587,7 +587,7 @@ The round-trip test is the one that protects the architecture. If it ever fails,
 Two details in that listing are not stylistic:
 
 - **The cast on `JSON.parse` is required.** It returns `any`, and `@typescript-eslint/no-unsafe-argument` — on via `recommendedTypeChecked` in [05](05-lint-and-format.md) — rejects passing it straight into `from()`.
-- **`treatEveryKeyAsGoalScoped` exists because rule 3 is otherwise untestable.** Every key in the shipped catalog is org-scoped, so the original listing's "denies a goal-scoped permission asked without a goalId" asserted `can("rbac.role.read") === true` on an org-scoped key — it tested the opposite of its name and left the fail-closed branch unverified. Stubbing the one method `can()` consults reaches the real branch without inventing catalog keys that belong to [13](13-db-package.md).
+- **`treatEveryKeyAsGoalScoped` exists because rule 3 is otherwise untestable.** Every key in the shipped catalog is org-scoped, so the original listing's "denies a goal-scoped permission asked without a goalId" asserted `can("rbac.role.read") === true` on an org-scoped key — it tested the opposite of its name and left the fail-closed branch unverified. Stubbing the one method `can()` consults reaches the real branch without inventing catalog keys that belong to [13](13-infrastructure-postgres.md).
 
 `tests/permission-registry.spec.ts` and `tests/module-registry.spec.ts` are worth the same treatment — `isKnown()` is a security boundary and `visibleModules()` is what the whole navigation renders from. Twenty-three tests total.
 

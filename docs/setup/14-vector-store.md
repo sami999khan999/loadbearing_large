@@ -4,7 +4,7 @@
 
 **Delivers:** `PgVectorStore` implementing the `VectorStore` port, an `EmbeddingProvider`, and a migration path to a dedicated vector database that is one new folder, one `case`, and one environment variable.
 
-**Prerequisite:** [13 · `@loadbearing/infrastructure` — the Postgres side](13-db-package.md)
+**Prerequisite:** [13 · `@loadbearing/infrastructure` — the Postgres side](13-infrastructure-postgres.md)
 
 ---
 
@@ -384,4 +384,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/db`](13-db-package.md) · [`@loadbearing/infrastructure` →](15-infrastructure-package.md)
+[← `@loadbearing/infrastructure` — Postgres](13-infrastructure-postgres.md) · [`@loadbearing/infrastructure` — the rest →](15-infrastructure-package.md)

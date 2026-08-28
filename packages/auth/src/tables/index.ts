@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { AuthFactory } from "../auth.factory.js";
 import { type CacheStore, Database, getSchema, type OrganizationId } from "../import.js";
+import { AuthMailer } from "../mail/auth.mailer.js";
+import { MembershipEnroller } from "../session/membership.enroller.js";
 import { MembershipReader } from "../session/membership.reader.js";
 
 // What Better Auth's own tables must look like, printed from the pinned runtime.
@@ -39,6 +41,22 @@ class UnusedMembershipReader extends MembershipReader {
   }
 }
 
+class UnusedMembershipEnroller extends MembershipEnroller {
+  public override enrol(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+}
+
+class UnusedAuthMailer extends AuthMailer {
+  public override sendVerification(): Promise<void> {
+    return unreachable();
+  }
+
+  public override sendPasswordReset(): Promise<void> {
+    return unreachable();
+  }
+}
+
 // Through `AuthFactory`, never a second copy of the options: a restated `plugins` or
 // `additionalFields` would describe an auth instance that does not exist.
 const auth = AuthFactory.create(
@@ -53,6 +71,8 @@ const auth = AuthFactory.create(
   new Database({ url }),
   cache,
   new UnusedMembershipReader(),
+  new UnusedMembershipEnroller(),
+  new UnusedAuthMailer(),
 );
 
 for (const [model, table] of Object.entries(getSchema(auth.options))) {

@@ -22,11 +22,16 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
   const { t } = useMessages("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Distinct from `signIn.isError`, and it has to be: the second-factor fork arrives as
+  // a rejection so that both legs share one path, but it is not a failed sign-in and
+  // must not render "sign-in failed" underneath the form that is about to be replaced.
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   const signIn = SessionMutations.useSignIn(auth);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    setNeedsTwoFactor(false);
     signIn.mutate(
       { email, password },
       {
@@ -36,6 +41,7 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
         // rewords it, and is already broken in every locale but English.
         onError: (error) => {
           if (ErrorNormalizer.normalize(error).code === "TWO_FACTOR_REQUIRED") {
+            setNeedsTwoFactor(true);
             onNeedsTwoFactor?.();
           }
         },
@@ -71,7 +77,7 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 
       {/* Deliberately generic — never "no account with that email" or "incorrect
           password". Distinguishing them is an account-enumeration oracle. */}
-      {signIn.isError ? (
+      {signIn.isError && !needsTwoFactor ? (
         <p role="alert" className="ui-field__error">
           {t("auth.signInFailed")}
         </p>

@@ -55,7 +55,7 @@ export class EmbeddingConsumer {
 
   // Let it throw. BullMQ's retry and backoff are driven by rejection, so catching and
   // logging here turns a retryable failure into permanent, silent data loss.
-  private async handle(job: Job<EmbeddingJobData>): Promise<void> {
+  public async handle(job: Job<EmbeddingJobData>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
 
     await this.container.ai.indexDocument.execute(principal, {

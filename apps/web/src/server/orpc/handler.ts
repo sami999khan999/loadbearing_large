@@ -1,4 +1,3 @@
-import type { Container } from "@loadbearing/composition";
 import { RPCHandler } from "@orpc/server/fetch";
 import { container } from "../container.js";
 import { Cors } from "../cors.js";
@@ -7,9 +6,9 @@ import { appRouter } from "./app.router.js";
 // One handler for the process, like the container. Building it per request would
 // rebuild the router's match table on every call.
 //
-// The context type is stated rather than inferred, because an empty `appRouter` gives
-// oRPC nothing to infer it from. It disappears the moment the first slice lands.
-const handler = new RPCHandler<{ container: Container; headers: Headers }>(appRouter, {});
+// No context annotation: the router is no longer empty, so oRPC infers the initial
+// context from the procedures it holds. Restating it here would let the two drift.
+const handler = new RPCHandler(appRouter, {});
 
 // Error shaping is **not** here. `errorMiddleware` in `base.ts` does it, inside the
 // chain, because an adapter-level interceptor sees only the initial context — it has

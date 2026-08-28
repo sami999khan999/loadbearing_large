@@ -145,8 +145,6 @@ import {
   PgUnitOfWork,
   PgVectorStore,
   TransactionScope,
-} from "@loadbearing/db";
-import {
   BullMqQueuePublisher,
   OpenAiEmbeddingProvider,
   RedisCacheStore,
@@ -301,7 +299,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 ---
 
 > [!NOTE]
-> **Fourteen of the fifteen ports are wired here. `EventBus` is not.** `application` declares it for
+> **Fifteen of the sixteen ports are wired here. `EventBus` is not.** `application` declares it for
 > cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
 > notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
 > adapter in `db` or `infrastructure` and no field on this class. Adding one is a field plus a
@@ -423,7 +421,7 @@ No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test build
 
 **`RecordingEventBus` exists even though `Container` wires no `EventBus`.** That is the point of the file rather than an inconsistency: the first use-case that publishes a domain event is testable on the day it is written.
 
-**Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-db-package.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
+**Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-infrastructure-postgres.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
 
 ---
 

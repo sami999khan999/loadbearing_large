@@ -4,7 +4,7 @@
 
 **Delivers:** One schema per boundary, entities that carry their own rules, and a contract implementable by oRPC today or NestJS later.
 
-**Prerequisite:** [09 · `@loadbearing/errors`](09-errors-package.md)
+**Prerequisite:** [09b · `@loadbearing/observability`](09b-observability-package.md)
 
 ---
 
@@ -450,9 +450,11 @@ class ContractWalker {
   }
 }
 
-// A stand-in for the first real slice. The kit ships none, so without this the two
-// coverage tests below would pass over an empty contract and prove nothing about
-// the walker that enforces them.
+// A second, fixed router the walker is exercised against directly. The two coverage
+// tests below run over the real `contract`, which carries the `role` slice; this
+// fixture is what proves the walker itself — nesting, a procedure recognised as a
+// leaf, and an empty router — and it names a slice the kit does not ship so the
+// “undeclared path” test stays honest.
 const fixture = {
   task: {
     list: oc.route({ method: "GET", path: "/goals/{goalId}/tasks" })
@@ -582,4 +584,4 @@ Do not proceed until this passes.
 
 ---
 
-[← `@loadbearing/errors`](09-errors-package.md) · [Local Infrastructure →](11-local-infrastructure.md)
+[← `@loadbearing/observability`](09b-observability-package.md) · [Local Infrastructure →](11-local-infrastructure.md)

@@ -20,4 +20,6 @@ export {
   type MatrixSubject,
   PermissionMatrix,
   type PermissionMatrixProps,
+  RoleMatrix,
+  type RoleMatrixProps,
 } from "./rbac/index.js";

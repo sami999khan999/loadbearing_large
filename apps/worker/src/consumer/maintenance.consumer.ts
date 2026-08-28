@@ -60,7 +60,11 @@ export class MaintenanceConsumer {
   // One queue, several jobs, dispatched on the job name the schedule published under.
   // An unknown name throws rather than succeeding quietly: a schedule renamed on one
   // side and not the other should be loud.
-  private async handle(job: Job): Promise<void> {
+  //
+  // Public, like every other consumer's, because this — not `start()` — is the
+  // consumer's unit of work. `start()` is the BullMQ binding around it, and it needs a
+  // live Redis, so a private handler is a handler no test can reach.
+  public async handle(job: Job): Promise<void> {
     switch (job.name) {
       case "cleanup":
         return this.cleanup();

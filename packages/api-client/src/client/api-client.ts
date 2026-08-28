@@ -38,8 +38,14 @@ export class ApiClient {
     return new ApiClient(rpc);
   }
 
-  // One accessor per contract namespace joins here as slices arrive — `get task()`
-  // returning `this.rpc.task`. `raw` is what a caller uses until then.
+  // One accessor per contract namespace, added as slices arrive. It exists so callers
+  // name a subject rather than reaching through a field called `raw` — and so the day a
+  // namespace needs a wrapper, the call sites already go through a method.
+  public get role(): AppClient["role"] {
+    return this.rpc.role;
+  }
+
+  // The escape hatch for a namespace with no accessor yet.
   public get raw(): AppClient {
     return this.rpc;
   }

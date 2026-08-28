@@ -15,5 +15,7 @@ export { PgAnalyticsReader } from "./pg-analytics.reader.js";
 export { type ApiKeyRow, PgApiKeyRepository } from "./pg-api-key.repository.js";
 export { PgCapabilityRepository } from "./pg-capability.repository.js";
 export { PgMaintenanceGateway } from "./pg-maintenance.gateway.js";
+export { PgMembershipEnroller } from "./pg-membership.enroller.js";
 export { PgMembershipReader } from "./pg-membership.reader.js";
+export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgVectorStore } from "./pg-vector.store.js";

@@ -66,7 +66,7 @@ throws a typed error. That is its entire vocabulary. Diagnostics are an adapter 
 
 That one rule dissolves every hard problem at once:
 
-- `application` keeps its three workspace dependencies and its fifteen ports.
+- `application` keeps its three workspace dependencies and its sixteen ports.
 - Nothing threads a third argument into `execute(actor, input)`.
 - No `AsyncLocalStorage`, and no request-scoped state on the `Container`.
 - A `ForbiddenError` is logged **once**, at the boundary that catches it, with its full structured

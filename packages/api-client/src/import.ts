@@ -8,6 +8,12 @@
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export type { AppContract } from "@loadbearing/contracts";
 
+// ── @loadbearing/errors ──────────────────────────────────────────────────────
+// The transport is where a foreign error shape becomes one of ours, and this is the
+// only package positioned to do it for the auth endpoints. It costs nothing to load:
+// `errors` carries no runtime dependency of its own and no prose.
+export { TwoFactorRequiredError, UnauthorizedError } from "@loadbearing/errors";
+
 // ── @orpc/client ─────────────────────────────────────────────────────────────
 export { createORPCClient } from "@orpc/client";
 export { RPCLink } from "@orpc/client/fetch";

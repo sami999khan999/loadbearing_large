@@ -1,4 +1,5 @@
-import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
+import type { SessionUser } from "@loadbearing/feature";
+import { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
 import { redirect } from "@tanstack/react-router";
 
 // The third of four enforcement surfaces (23). It stops the page rendering at all,
@@ -10,16 +11,18 @@ export class RouteGuard {
   private constructor() {}
 
   public static requirePermission(permission: PermissionKey, goalId?: string) {
-    // Same `CapabilitySet.can()` the server calls. That identity is the entire point.
-    return ({ context }: { context: { capabilities: CapabilitySet } }): void => {
-      if (!context.capabilities.can(permission, goalId)) {
+    return ({ context }: { context: { capabilities: CapabilitySetDto } }): void => {
+      // Same `CapabilitySet.can()` the server calls. That identity is the entire point,
+      // and it is why the DTO is rebuilt here rather than a shape-check being written
+      // against the JSON — a second implementation of `can()` is a second answer.
+      if (!CapabilitySet.from(context.capabilities).can(permission, goalId)) {
         throw redirect({ to: "/forbidden" });
       }
     };
   }
 
   public static requireSession() {
-    return ({ context }: { context: { user: { id: string } | null } }): void => {
+    return ({ context }: { context: { user: SessionUser | null } }): void => {
       if (!context.user) throw redirect({ to: "/sign-in" });
     };
   }

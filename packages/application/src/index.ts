@@ -20,6 +20,8 @@ export {
   type DateRange,
   type DocumentChunk,
   type DomainEvent,
+  type EmailMessage,
+  EmailSender,
   EmbeddingProvider,
   EventBus,
   type JobOptions,
@@ -42,4 +44,11 @@ export {
   VectorStore,
 } from "./port/index.js";
 export { Authorizer, Principal, type PrincipalKind } from "./primitive/index.js";
-export { CapabilityRepository } from "./rbac/index.js";
+export {
+  CapabilityRepository,
+  type ListRolesResult,
+  ListRolesUseCase,
+  type RolePage,
+  type RoleRecord,
+  RoleRepository,
+} from "./rbac/index.js";

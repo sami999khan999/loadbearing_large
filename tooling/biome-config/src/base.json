@@ -120,6 +120,9 @@
     {
       "includes": [
         "**/*.config.ts",
+        "**/*.config.mts",
+        "**/*.config.js",
+        "**/*.config.mjs",
         "packages/auth/src/tables/**",
         "packages/infrastructure/src/pg/migrate/**",
         "packages/infrastructure/src/pg/seed/**",

@@ -51,15 +51,15 @@ export cannot say which of its names are types.
 **Ordering is not yours to choose.** `biome check --write` sorts the statements by module specifier
 and the specifiers inside each brace alphabetically, ignoring the `type` keyword.
 
-**One exemption: `packages/db/src/schema.ts`.** It exists so `drizzle-kit` and
+**One exemption: `packages/infrastructure/src/pg/schema/index.ts`.** It exists so `drizzle-kit` and
 `drizzle(pool, { schema })` receive every table, relation, and enum; hand-enumerating them would add
 no API-surface safety, because the file is not an entrypoint. The Biome rule is switched off for
 that one path and nowhere else. The namespace re-export itself is two statements, because
 `export * as schema from` is a star export too:
 
 ```ts
-// packages/db/src/index.ts
-import * as schema from "./schema.js";
+// packages/infrastructure/src/pg/index.ts
+import * as schema from "./schema/index.js";
 
 export { schema };
 ```

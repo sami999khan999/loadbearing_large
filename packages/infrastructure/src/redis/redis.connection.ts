@@ -5,6 +5,10 @@ export interface RedisConfig {
   readonly cacheUrl: string;
   // Never evicts. A queued job is derived from nothing.
   readonly queueUrl: string;
+  // Namespaces this application's keys on a Redis someone else may also be using.
+  // Deliberately not the project name: a literal here survives a rename and comes back
+  // as a cache that reads nothing, so the default stays generic and the real value is
+  // a deployment decision. See 27.5.
   readonly keyPrefix?: string;
 }
 
@@ -48,7 +52,7 @@ export class RedisConnection {
 
     const created =
       role === "cache"
-        ? this.create(this.config.cacheUrl, { keyPrefix: this.config.keyPrefix ?? "ratchet:" })
+        ? this.create(this.config.cacheUrl, { keyPrefix: this.config.keyPrefix ?? "app:" })
         : this.create(this.config.queueUrl, {
             maxRetriesPerRequest: null,
             enableReadyCheck: false,

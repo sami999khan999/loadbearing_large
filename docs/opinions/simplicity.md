@@ -81,7 +81,7 @@ conflict, say so explicitly rather than letting the simpler one win by default.
 Most of the time they do not conflict, and this repository is full of the proof:
 
 **Three queries instead of one join.** `CapabilityRepository.resolveFor()` runs three targeted
-queries rather than one three-way left join ([13](../setup/13-db-package.md)). Fewer queries sounds
+queries rather than one three-way left join ([13](../setup/13-infrastructure-postgres.md)). Fewer queries sounds
 simpler; the join produces a cartesian product across role permissions, goal memberships, and
 overrides, and needs deduplication in application code. The three-query version is both easier to
 read and faster.

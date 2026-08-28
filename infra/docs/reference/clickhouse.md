@@ -131,7 +131,7 @@ One partition per month. **Dropping old data becomes a metadata operation** rath
 query with a date range reads only the partitions it needs.
 
 This is the same reasoning as the monthly partitioning on Postgres's `activity_log`
-([13](../../../docs/setup/13-db-package.md)) — the difference is that ClickHouse does it natively
+([13](../../../docs/setup/13-infrastructure-postgres.md)) — the difference is that ClickHouse does it natively
 rather than needing hand-written DDL.
 
 ### `ORDER BY (organization_id, occurred_at, id)`

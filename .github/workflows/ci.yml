@@ -15,9 +15,9 @@ jobs:
         env:
           POSTGRES_USER: ratchet
           POSTGRES_PASSWORD: ratchet
-          # `ratchet`, not `ratchet_test`: packages/db/tests/support/database.ts pins
-          # the local scratch URL, so a differently-named database fails every db spec
-          # with a connection error rather than an assertion.
+          # `ratchet`, not `ratchet_test`: packages/infrastructure/tests/support/database.ts
+          # pins the local scratch URL, so a differently-named database fails every
+          # infrastructure spec with a connection error rather than an assertion.
           POSTGRES_DB: ratchet
         ports: ["5432:5432"]
         options: >-
@@ -45,6 +45,10 @@ jobs:
       APP: ci
       ENV: test
       PGPASSWORD: ratchet
+      # Required by both `env.ts` schemas, and no container answers them: nothing in
+      # this job sends a message. A shape that parses is the whole requirement.
+      SMTP_URL: smtp://localhost:1025
+      EMAIL_FROM: ci@localhost
 
     steps:
       - uses: actions/checkout@v4
@@ -63,13 +67,22 @@ jobs:
       - name: Create Postgres extensions
         run: psql -h localhost -U ratchet -d ratchet -f infra/postgres.init.sql
 
+      # Before the build, because both are pure file reads and both fail in seconds.
+      # syncpack catches one dependency on two version lines across packages; sherif
+      # catches a workspace directory with no `package.json` and a package with no
+      # version. Neither is caught by anything else in this job, and dependency drift
+      # that nothing checks is dependency drift nobody finds until an install breaks.
+      - run: pnpm deps:check
+      - run: pnpm repo:check
+
       - run: pnpm build:packages
       - run: pnpm typecheck
       - run: pnpm lint
 
-      # packages/db's specs are integration tests against a real Postgres, and they
-      # read the seeded organization rather than creating one. Without both steps
-      # every one of them fails on "run `pnpm db:seed` first".
+      # packages/infrastructure's specs are integration tests against a real Postgres,
+      # and they read the seeded organization rather than creating one. Without both
+      # steps every one of them fails on "run `pnpm db:seed` first". The URL they use
+      # is pinned in packages/infrastructure/tests/support/database.ts.
       - run: pnpm db:migrate
       - run: pnpm db:seed
 
@@ -80,3 +93,22 @@ jobs:
       # assertion has no directory to read and reports `○ skipped`, not a pass.
       - run: pnpm --filter @loadbearing/web build
       - run: pnpm check:architecture
+
+  # Deliberately its own job, and deliberately not required. Blocking a merge on a
+  # transitive advisory nobody can fix today is how people learn to ignore a red build —
+  # and once they do, the advisories that *are* actionable are ignored with them.
+  # Advisories are filtered by GHSA id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
+  audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high

@@ -22,7 +22,7 @@ named). Nothing between.
 | --- | --- |
 | **Package** | `@loadbearing/composition` (private, never published) |
 | **Entrypoint** | `src/index.ts` — two exports, `Container` and `ContainerConfig` |
-| **Depends on** | `application`, `auth`, `content`, `core`, `db`, `infrastructure`, `observability` |
+| **Depends on** | `application`, `auth`, `content`, `contracts`, `core`, `infrastructure`, `observability` |
 | **Used by** | `apps/web`, `apps/worker`. **Never** `apps/desktop` — it holds no container ([30](../../../docs/setup/30-desktop-app.md)) |
 | **Environment** | server-only; `ServerOnly.assert()` in `src/index.ts` is the runtime tripwire |
 
@@ -117,10 +117,9 @@ as eagerly-constructed `public readonly` fields, grouped by slice — the shape 
 [20](../../../docs/setup/20-content-package.md); until then a server catalog would be a copy of the
 client one, and the line becomes `new StaticContentSource(SERVER_CATALOG)`.
 
-**`EventBus` has no implementation, so `Container` wires fourteen of the fifteen ports.** `application`
+**`EventBus` has no implementation, so `Container` wires fifteen of the sixteen ports.** `application`
 declares it for cross-slice side effects — a finance use-case publishes `invoice.approved` rather
-than importing the notification slice — and nothing publishes one yet. It has no adapter in `db` or
-`infrastructure` and no field here. `RecordingEventBus` exists anyway, so the first use-case that
+than importing the notification slice — and nothing publishes one yet. It has no adapter in `infrastructure` and no field here. `RecordingEventBus` exists anyway, so the first use-case that
 does publish is testable the day it is written. **This is a gap in the setup docs**, not a decision:
 [12](../../../docs/setup/12-application-package.md) says the barrel lists "every port the composition
 root must supply an implementation for", and [17](../../../docs/setup/17-composition-container.md)'s

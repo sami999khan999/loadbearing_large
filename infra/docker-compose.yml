@@ -46,6 +46,24 @@ services:
       timeout: 3s
       retries: 10
 
+  # The local approximation of a transactional mail provider. It accepts every message,
+  # delivers none of them, and serves what it caught at http://localhost:8025 — so a
+  # sign-up's verification link is readable without a real mailbox or a real domain.
+  # 11's mapping table replaces it with SES, Postmark, or your provider's SMTP endpoint.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      # The image ships neither wget nor curl; `mailpit` itself answers this subcommand
+      # against its own readiness endpoint, which is the probe the project documents.
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   minio:
     image: minio/minio:latest
     restart: unless-stopped

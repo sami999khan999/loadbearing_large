@@ -91,7 +91,7 @@ use-case is responsible for, not queue configuration.
 
 ## `EventBus` is faked but never wired
 
-`Container` constructs fourteen of the fifteen ports. `EventBus` has no implementation in `db` or
+`Container` constructs fifteen of the sixteen ports. `EventBus` has no implementation in
 `infrastructure` and no field on the container, because nothing publishes a domain event yet.
 `RecordingEventBus` exists regardless — the fake is what makes the first publishing use-case testable
 on the day it is written, and its absence from `Container` is a gap in

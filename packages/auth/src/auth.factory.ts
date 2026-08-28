@@ -10,6 +10,8 @@ import {
   type UserId,
   Uuid,
 } from "./import.js";
+import type { AuthMailer } from "./mail/auth.mailer.js";
+import type { MembershipEnroller } from "./session/membership.enroller.js";
 import type { MembershipReader } from "./session/membership.reader.js";
 
 // The webview origins the Tauri shell serves from — `tauri://localhost` on macOS and
@@ -34,6 +36,8 @@ export class AuthFactory {
     database: Database,
     cache: CacheStore,
     memberships: MembershipReader,
+    enroller: MembershipEnroller,
+    mailer: AuthMailer,
   ) {
     const options = {
       secret: config.secret,
@@ -47,6 +51,18 @@ export class AuthFactory {
         requireEmailVerification: config.requireEmailVerification,
         // The difference between "changed my password" and "actually locked them out".
         revokeSessionsOnPasswordReset: true,
+        // Without this, `revokeSessionsOnPasswordReset` above guards a flow no user can
+        // start: Better Auth's reset endpoint mints a token and has nowhere to send it,
+        // so "forgot password" is a dead end that returns 200.
+        sendResetPassword: async ({ user, url }) => mailer.sendPasswordReset(user.email, url),
+      },
+
+      // Paired with `requireEmailVerification`, which defaults to `true` in
+      // `.env.example`. With the flag on and no sender, a fresh clone could complete a
+      // sign-up and then never sign in — the account existed and the only thing that
+      // could unlock it was never sent.
+      emailVerification: {
+        sendVerificationEmail: async ({ user, url }) => mailer.sendVerification(user.email, url),
       },
 
       // ── model naming ───────────────────────────────────────────────────────
@@ -113,7 +129,10 @@ export class AuthFactory {
       },
 
       advanced: {
-        cookiePrefix: "ratchet",
+        // User-visible in the browser, so it is on the 27.5 rename checklist. Kept
+        // generic rather than named after the project for exactly that reason —
+        // changing it later invalidates every cookie already issued.
+        cookiePrefix: "app",
         // Time-ordered uuids, so `user.id` is the same shape as every other primary key
         // here and `UserId` — declared `z.uuid().brand<"UserId">()` in contracts — is
         // finally true rather than aspirational. Better Auth's default is an opaque
@@ -151,9 +170,17 @@ export class AuthFactory {
             // the session: a user with no membership gets a failed sign-in, not an
             // unscoped principal.
             before: async (session, context) => {
-              const organizationId = await memberships.activeOrganizationFor(
-                session.userId as UserId,
-              );
+              const userId = session.userId as UserId;
+
+              // The reader first, and it answers on every session after the first —
+              // enrolment is not on the sign-in path. Deliberately *not* a
+              // `user.create.after` hook: Better Auth queues those until the whole
+              // sign-up endpoint has finished, which is after this hook has already
+              // run and refused the session. This is the first moment a membership
+              // can exist and still be seen by the code that needs it.
+              const organizationId =
+                (await memberships.activeOrganizationFor(userId)) ?? (await enroller.enrol(userId));
+
               if (!organizationId) return false;
 
               const origin = context?.request?.headers.get("origin") ?? null;

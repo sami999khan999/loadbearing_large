@@ -31,6 +31,7 @@
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "@types/nodemailer": "catalog:",
     "@types/pg": "catalog:",
     "dotenv": "catalog:",
     "drizzle-kit": "catalog:",
@@ -52,6 +53,7 @@
     "bullmq": "catalog:",
     "drizzle-orm": "catalog:",
     "ioredis": "catalog:",
+    "nodemailer": "catalog:",
     "pg": "catalog:"
   }
 }

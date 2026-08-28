@@ -185,10 +185,10 @@ What belongs here is the pnpm mechanics and the three entries with a history.
     "infra:reset": "docker compose -f infra/docker-compose.yml --profile \"*\" down -v",
     "infra:logs": "docker compose -f infra/docker-compose.yml --profile \"*\" logs -f",
 
-    "db:generate": "pnpm --filter @loadbearing/db run db:generate",
-    "db:migrate": "pnpm --filter @loadbearing/db run db:migrate",
-    "db:seed": "pnpm --filter @loadbearing/db run db:seed",
-    "db:studio": "pnpm --filter @loadbearing/db run db:studio",
+    "db:generate": "pnpm --filter @loadbearing/infrastructure run db:generate",
+    "db:migrate": "pnpm --filter @loadbearing/infrastructure run db:migrate",
+    "db:seed": "pnpm --filter @loadbearing/infrastructure run db:seed",
+    "db:studio": "pnpm --filter @loadbearing/infrastructure run db:studio",
 
     "auth:tables": "pnpm --filter @loadbearing/auth run auth:tables"
   },

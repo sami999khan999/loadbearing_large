@@ -8,7 +8,10 @@ export class Envelope {
 
   public static paginated<T extends z.ZodType>(item: T) {
     return z.object({
-      items: z.array(item),
+      // `.readonly()` so the inferred type is `readonly T[]`, which is what every port
+      // and use-case in `application` already returns. Without it every handler in the
+      // transport layer has to copy the array to widen it, once per procedure, forever.
+      items: z.array(item).readonly(),
       total: z.number().int().nonnegative(),
       limit: z.number().int().positive(),
       offset: z.number().int().nonnegative(),

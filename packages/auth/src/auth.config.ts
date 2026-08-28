@@ -15,4 +15,10 @@ export interface AuthConfig {
   // for when someone asks why removed access still works (16.9).
   readonly cookieCacheMaxAgeSeconds: number;
   readonly requireEmailVerification: boolean;
+  // The organization a brand-new user is enrolled into on their first session, by slug.
+  // Undefined switches enrolment off, which is the default and the right production
+  // posture: open sign-up then produces unaffiliated users whose sign-in is refused,
+  // and membership becomes something an invitation grants. `.env.example` sets it to
+  // the slug `pnpm db:seed` creates, so a fresh clone can sign up and get in.
+  readonly bootstrapOrganizationSlug?: string;
 }

@@ -1166,8 +1166,8 @@ The error slice, which is what exists:
   This is the assertion that catches a code pointed at a lazily loaded namespace, which the
   compiler cannot catch once `ShellMessageKey` widens.
 - **The `errors` seam round-trips.**
-  `ErrorCopy.message(t, new ServerOnlyError("@loadbearing/db").toJSON())` returns the full sentence
-  with `@loadbearing/db` substituted for `{package}`. That single assertion covers the whole
+  `ErrorCopy.message(t, new ServerOnlyError("@loadbearing/infrastructure").toJSON())` returns the
+  full sentence with `@loadbearing/infrastructure` substituted for `{package}`. That single assertion covers the whole
   redesign in [09](09-errors-package.md) Step 9.3: the code carries no prose, and the prose is here.
 - `grep -rn "PermissionKey" packages/content/src` returns nothing. **Including comments** — the
   obvious comment on `nav.schema.ts` explaining why the field is a module key fails this gate by

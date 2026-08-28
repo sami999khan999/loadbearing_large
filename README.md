@@ -25,8 +25,9 @@ to be wrong about. See
 
 ## Documentation
 
-- **[`docs/setup/`](docs/setup/00-README.md)** — the build order, walked once. Thirty-one steps from
-  an empty directory to a running app.
+- **[`docs/setup/`](docs/setup/00-README.md)** — the build order, walked once. Thirty-one documents
+  from an empty directory to a running app: `01`–`27` build the kit (`09b` included), `28` and `29`
+  are reference, and `30` adds the desktop shell.
 - **[`docs/opinions/`](docs/opinions/index.md)** — the reference, consulted continually. Every rule
   for what to call a thing, where to put it, and which store owns it.
 - **`packages/*/docs/`** — one reference set per package: what it is for, and why each export is

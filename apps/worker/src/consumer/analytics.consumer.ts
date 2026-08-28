@@ -70,7 +70,7 @@ export class AnalyticsConsumer {
     return worker;
   }
 
-  private async handle(job: Job): Promise<void> {
+  public async handle(job: Job): Promise<void> {
     switch (job.name) {
       case "project":
         return this.project();

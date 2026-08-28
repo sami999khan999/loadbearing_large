@@ -5,7 +5,11 @@ import { organizations } from "../schema/index.js";
 import { TransactionScope } from "../transaction/index.js";
 import { SystemRoleSeed } from "./system-role.seed.js";
 
-const SEED_SLUG = "loadbearing";
+// The same variable `apps/web/src/env.ts` reads. Naming it in both places is what
+// keeps the organization the seed creates and the organization new users are enrolled
+// into the same organization — a drift between the two is a sign-up that succeeds and
+// a sign-in that fails, with nothing in either log saying why.
+const SEED_SLUG = process.env.BOOTSTRAP_ORGANIZATION_SLUG ?? "loadbearing";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required.");

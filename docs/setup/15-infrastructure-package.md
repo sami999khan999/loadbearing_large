@@ -35,7 +35,8 @@ nothing.
 |---|---|---|
 | Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
 | **ClickHouse** | **here** | `AnalyticsReader` and `AnalyticsProjector` — the same shape as Redis |
-| **Postgres** | **here**, in `src/pg/` | Folded in from `packages/db` — see [13](13-db-package.md) |
+| **Postgres** | **here**, in `src/pg/` | Folded in from the separate database package — see [13](13-infrastructure-postgres.md) |
+| **SMTP** | **here**, in `src/smtp/` | `EmailSender`. SMTP rather than a provider's HTTP API, so a vendor swap is a URL |
 | **Loki** | **here, the read side only** | `LogReader`. Nothing in `packages/` writes to it |
 | **Alloy** | **nowhere in `packages/`** | A separate process that tails stdout. No client, no port |
 
@@ -93,6 +94,9 @@ packages/infrastructure/src/
 ├── loki/                                 ← opt-in: built only when LOKI_URL is set
 │   ├── index.ts
 │   └── loki.log-reader.ts                → LokiLogReader
+├── smtp/
+│   ├── index.ts
+│   └── smtp.email-sender.ts               → SmtpEmailSender  ← behind the EmailSender port
 └── smoke/
     └── index.ts                          ← the wiring check, run against live containers
 ```

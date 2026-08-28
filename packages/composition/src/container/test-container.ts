@@ -8,6 +8,7 @@ import {
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
+  RecordingEmailSender,
   RecordingEventBus,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
@@ -24,6 +25,7 @@ import {
   Authorizer,
   type CacheStore,
   type ContentSource,
+  type EmailSender,
   type EmbeddingProvider,
   type EventBus,
   FixedClock,
@@ -53,6 +55,7 @@ export interface TestPorts {
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
   readonly content: ContentSource;
+  readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
   readonly events: EventBus;
   readonly logs: LogReader;
@@ -99,6 +102,7 @@ export class TestContainer {
       // Already in-memory — its catalog is a map of dynamic imports, so there is
       // nothing to fake. The one port whose real implementation is the test double.
       content: overrides.content ?? new StaticContentSource(),
+      email: overrides.email ?? new RecordingEmailSender(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       events: overrides.events ?? new RecordingEventBus(),
       logs: overrides.logs ?? new InMemoryLogReader(),

@@ -14,6 +14,7 @@ export {
   type TrendPoint,
 } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
+export { type EmailMessage, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";

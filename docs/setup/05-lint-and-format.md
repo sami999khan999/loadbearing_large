@@ -126,7 +126,7 @@ The configuration lives in a `tooling/*` package alongside the other two, so it 
 
 **`noReExportAll` turns "the barrel is the public API" into a checked claim.** It bans `export * from "./clock.js"` and `export * as schema from "./schema.js"`, so every `index.ts` names what it publishes ([Opinions · Imports](../opinions/imports.md)). The rule ships at `warn` and is not in `recommended` — verified with `pnpm exec biome explain noReExportAll` — so it has to be listed here to have any effect. Its one exemption comes in Step 5.2.
 
-**`noConsole` is what keeps the log stream one stream.** Once `@loadbearing/observability` exists, a stray `console.log` is a line nobody can filter, level, sample, or redact — and it is the single easiest thing to add under deadline. The exemptions are enumerated, never a wildcard, and every one of them is a *script* rather than package code: `**/*.mjs`, `packages/db/src/migrate/**`, `packages/db/src/seed/**`, `packages/*/src/smoke/**` ([15](15-infrastructure-package.md)), `packages/auth/src/tables/**` ([16](16-auth-package.md)), and `packages/observability/src/logger/json.logger.ts` — the sink this rule exists to funnel everything into.
+**`noConsole` is what keeps the log stream one stream.** Once `@loadbearing/observability` exists, a stray `console.log` is a line nobody can filter, level, sample, or redact — and it is the single easiest thing to add under deadline. The exemptions are enumerated, never a wildcard, and every one of them is a *script* rather than package code: `**/*.mjs`, `packages/infrastructure/src/pg/migrate/**`, `packages/infrastructure/src/pg/seed/**`, `packages/*/src/smoke/**` ([15](15-infrastructure-package.md)), `packages/auth/src/tables/**` ([16](16-auth-package.md)), and `packages/observability/src/logger/json.logger.ts` — the sink this rule exists to funnel everything into.
 
 **That list is the reason scripts live in a folder rather than loose at `src/` root.** `smoke/`, `migrate/`, `seed/` and `tables/` are each one path in this config; a `smoke.ts` and a `tables.ts` beside `index.ts` would each need their own entry, and the next one would be added by whoever noticed the lint error — which is how a wildcard eventually appears here.
 
@@ -154,7 +154,6 @@ This is the rule that keeps database code out of the browser, and it lives entir
             "level": "error",
             "options": {
               "paths": {
-                "@loadbearing/db": "Server-only. Cross the boundary via @loadbearing/contracts.",
                 "@loadbearing/infrastructure": "Server-only. Cross the boundary via @loadbearing/contracts.",
                 "@loadbearing/auth": "Server-only. Cross the boundary via @loadbearing/contracts.",
                 "@loadbearing/composition": "Server-only. Cross the boundary via @loadbearing/contracts.",
@@ -180,7 +179,7 @@ This is the rule that keeps database code out of the browser, and it lives entir
     "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
   },
   {
-    "includes": ["packages/db/src/schema.ts"],
+    "includes": ["packages/infrastructure/src/pg/schema/index.ts"],
     "linter": { "rules": { "performance": { "noReExportAll": "off" } } }
   }
 ]
@@ -200,7 +199,7 @@ ban list as `apps/web` and, unlike `apps/web`, no escape hatch at all — there 
 > [!CAUTION]
 > **Biome replaces rule options across overrides; it does not merge them.** If two `overrides` blocks both match a file and both set `noRestrictedImports`, only the last one's `paths` apply — the earlier map is discarded.
 >
-> Verified directly: adding a second `packages/feature/**` override that lists only that package's own bans makes `import { Database } from "@loadbearing/db"` **pass** inside `feature`, with a green lint run. Any override you add for a package already covered above must restate every path it still needs.
+> Verified directly: adding a second `packages/feature/**` override that lists only that package's own bans makes `import { Database } from "@loadbearing/infrastructure"` **pass** inside `feature`, with a green lint run. Any override you add for a package already covered above must restate every path it still needs.
 >
 > This kit sidesteps the problem: there is exactly one `noRestrictedImports` override, and `feature`'s two extra bans live in ESLint instead (Step 5.3) — which they have to, for the reason below.
 
@@ -215,7 +214,7 @@ ban list as `apps/web` and, unlike `apps/web`, no escape hatch at all — there 
 
 **The `env.ts` exemption.** Two files in the entire repository may read `process.env`. That is what makes "config arrives through `ContainerConfig`" a checkable claim rather than a convention.
 
-**The last override is the single `export *` exemption**, and it is one filename, not a glob: `packages/db/src/schema.ts` exists so `drizzle-kit` and `drizzle(pool, { schema })` see every table, relation, and enum in the package. It is not an entrypoint — `packages/db/src/index.ts` republishes it as one namespace — so naming each table there would buy no API-surface control and would reliably drift out of date ([13](13-db-package.md)). Every other barrel in the repository names its exports.
+**The last override is the single `export *` exemption**, and it is one filename, not a glob: `packages/infrastructure/src/pg/schema/index.ts` exists so `drizzle-kit` and `drizzle(pool, { schema })` see every table, relation, and enum in the package. It is not an entrypoint — `packages/infrastructure/src/pg/index.ts` republishes it as one namespace — so naming each table there would buy no API-surface control and would reliably drift out of date ([13](13-infrastructure-postgres.md)). Every other barrel in the repository names its exports.
 
 ### This is defence one of three
 
@@ -437,7 +436,7 @@ export { default } from "@loadbearing/eslint-config";
 pnpm add -Dw @loadbearing/eslint-config@workspace:*
 ```
 
-**The root declares `@loadbearing/eslint-config` because the root genuinely imports it.** That one-line re-export is a real module resolution, so the symlink has to exist. This is not an exception to "the root declares no workspace packages" — it is the rule, which is **declare what you import**. The root imports this config and nothing else. It must never declare `@loadbearing/core` or `@loadbearing/db`, because a root declaration hoists a package into the root `node_modules` where every package can reach it regardless of what it declared, which silently dissolves the boundary in Step 5.2.
+**The root declares `@loadbearing/eslint-config` because the root genuinely imports it.** That one-line re-export is a real module resolution, so the symlink has to exist. This is not an exception to "the root declares no workspace packages" — it is the rule, which is **declare what you import**. The root imports this config and nothing else. It must never declare `@loadbearing/core` or `@loadbearing/infrastructure`, because a root declaration hoists a package into the root `node_modules` where every package can reach it regardless of what it declared, which silently dissolves the boundary in Step 5.2.
 
 > [!NOTE]
 > ESLint 9 resolves flat config from the **working directory**, not per file — a nearer config is ignored. That is a problem in a per-package setup and a non-issue here: there is exactly one config, at the root, and both `eslint .` and the pre-push hook run from there.

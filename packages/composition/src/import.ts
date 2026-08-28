@@ -19,10 +19,13 @@ export {
   type DateRange,
   type DocumentChunk,
   type DomainEvent,
+  type EmailMessage,
+  EmailSender,
   EmbeddingProvider,
   EventBus,
   IndexDocumentUseCase,
   type JobOptions,
+  ListRolesUseCase,
   type LogEntry,
   type LogQuery,
   LogReader,
@@ -33,6 +36,8 @@ export {
   type RequestHeaders,
   type ResolvedSession,
   type RiskScore,
+  type RoleRecord,
+  RoleRepository,
   type SearchHit,
   SessionResolver,
   StorageGateway,
@@ -48,14 +53,21 @@ export {
   ApiKeyResolver,
   AuthFactory,
   type AuthInstance,
+  AuthMailer,
   BetterAuthSessionResolver,
   CapabilityCache,
+  type MembershipEnroller,
   type MembershipReader,
   PrincipalBuilder,
 } from "@loadbearing/auth";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────
-export { type ContentSource, SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
+export {
+  type ContentSource,
+  Locales,
+  SERVER_CATALOG,
+  StaticContentSource,
+} from "@loadbearing/content";
 
 // ── @loadbearing/contracts ─────────────────────────────────────────────
 // Only the branded ids two port signatures name. `test-container.ts` cannot override
@@ -83,12 +95,15 @@ export {
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,
+  PgMembershipEnroller,
   PgMembershipReader,
+  PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
   RedisCacheStore,
   RedisConnection,
   S3StorageGateway,
+  SmtpEmailSender,
   TransactionScope,
 } from "@loadbearing/infrastructure";
 

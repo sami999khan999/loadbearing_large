@@ -27,7 +27,7 @@ an image on every developer machine and every CI runner.
 
 **Postgres 17 rather than 16** for the improved `VACUUM` memory behaviour, which matters on the
 activity log more than anywhere else — though the real answer for that table is monthly partitioning
-and a retention policy, which [13](../../../docs/setup/13-db-package.md) sets up in the first
+and a retention policy, which [13](../../../docs/setup/13-infrastructure-postgres.md) sets up in the first
 migration.
 
 ---
@@ -88,13 +88,13 @@ pnpm infra:reset
 | Consumer | Reaches it at | For |
 |---|---|---|
 | `apps/web`, `apps/worker` (host) | `localhost:5432` | everything, via `DATABASE_URL` |
-| `drizzle-kit` (host) | `localhost:5432` | migrations, via `packages/db/.env` |
+| `drizzle-kit` (host) | `localhost:5432` | migrations, via `DATABASE_URL` in the repository-root `.env` |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
 the client is on. A container using `localhost:5432` would reach *its own* loopback and find
 nothing.
 
-Connections are pooled per process at `max: 10` ([13](../../../docs/setup/13-db-package.md)), so
+Connections are pooled per process at `max: 10` ([13](../../../docs/setup/13-infrastructure-postgres.md)), so
 count processes against `max_connections`: three web replicas and two workers is fifty, which is
 fine; forty replicas is not, and is the point pgBouncer stops being optional.
 

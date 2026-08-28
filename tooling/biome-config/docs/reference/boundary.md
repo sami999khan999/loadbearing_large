@@ -22,8 +22,7 @@ and it is the first of three independent defences.
   "includes": ["packages/ui/**", "packages/feature/**", "packages/query/**", "apps/web/src/**"],
   "linter": { "rules": { "style": { "noRestrictedImports": { "level": "error", "options": {
     "paths": {
-      "@loadbearing/db":             "Server-only. Cross the boundary via @loadbearing/contracts.",
-      "@loadbearing/infrastructure": "…",
+      "@loadbearing/infrastructure": "Server-only. Cross the boundary via @loadbearing/contracts.",
       "@loadbearing/auth":           "…",
       "@loadbearing/composition":    "…",
       "@loadbearing/application":    "…",
@@ -109,7 +108,7 @@ one's `paths` apply. The earlier map is **discarded**, not concatenated.
 
 > [!CAUTION]
 > Verified by adding a second `packages/feature/**` override listing only that package's own
-> two bans. `import { Database } from "@loadbearing/db"` inside `feature` then **passed**.
+> two bans. `import { Database } from "@loadbearing/infrastructure"` inside `feature` then **passed**.
 >
 > Any override you add for a package already covered by Block 1 must restate every path it
 > still needs.
@@ -140,11 +139,11 @@ Do not trust the config; test it. Each of these takes seconds:
 
 ```bash
 # must ERROR
-echo 'import { Database } from "@loadbearing/db";' > packages/feature/src/probe.ts
+echo 'import { Database } from "@loadbearing/infrastructure";' > packages/feature/src/probe.ts
 pnpm exec biome lint packages/feature/src/probe.ts
 
 # must PASS — escape hatch
-echo 'import { Database } from "@loadbearing/db";' > apps/web/src/server/probe.ts
+echo 'import { Database } from "@loadbearing/infrastructure";' > apps/web/src/server/probe.ts
 pnpm exec biome lint apps/web/src/server/probe.ts
 
 # must ERROR, then PASS

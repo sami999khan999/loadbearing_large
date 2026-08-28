@@ -61,9 +61,12 @@ const optional = (name: string): string | undefined => process.env[name] || unde
 // idempotency depends on. `FINAL` is why the count is visible before a merge.
 const clickhouseUrl = optional("CLICKHOUSE_URL");
 if (clickhouseUrl) {
+  // The local scratch stack's credentials, which are `ratchet` everywhere on purpose
+  // — this script only ever runs against `infra/docker-compose.yml`.
+  const database = process.env.CLICKHOUSE_DATABASE ?? "ratchet";
   const clickhouse = new ClickHouseConnection({
     url: clickhouseUrl,
-    database: process.env.CLICKHOUSE_DATABASE ?? "ratchet",
+    database,
     username: process.env.CLICKHOUSE_USER ?? "ratchet",
     password: process.env.CLICKHOUSE_PASSWORD ?? "",
   });
@@ -83,12 +86,12 @@ if (clickhouseUrl) {
 
   await clickhouse.insert("activity_events", [row, row]);
   const counted = await clickhouse.query<{ readonly n: number }>(
-    "SELECT toUInt32(count()) AS n FROM ratchet.activity_events FINAL WHERE id = {id:UUID}",
+    `SELECT toUInt32(count()) AS n FROM ${database}.activity_events FINAL WHERE id = {id:UUID}`,
     { id: probeId },
   );
   console.log("clickhouse dedup (expect 1):", counted[0]?.n);
 
-  await clickhouse.command("DELETE FROM ratchet.activity_events WHERE id = {id:UUID}", {
+  await clickhouse.command(`DELETE FROM ${database}.activity_events WHERE id = {id:UUID}`, {
     id: probeId,
   });
   await clickhouse.close();

@@ -374,7 +374,7 @@ SELECT * FROM pg_available_extensions WHERE name IN ('vector', 'pg_trgm', 'uuid-
 Also confirm the partitioned tables arrived as partitioned rather than as one flat table — a
 `pg_dump`/`restore` preserves partitioning, but a naive `COPY`-based migration does not, and
 `activity_log` silently becomes a table that will need the painful conversion later
-([13](../../docs/setup/13-db-package.md)).
+([13](../../docs/setup/13-infrastructure-postgres.md)).
 
 ---
 

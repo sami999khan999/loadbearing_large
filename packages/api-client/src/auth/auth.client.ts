@@ -1,4 +1,9 @@
-import { createAuthClient, twoFactorClient } from "../import.js";
+import {
+  createAuthClient,
+  TwoFactorRequiredError,
+  twoFactorClient,
+  UnauthorizedError,
+} from "../import.js";
 
 export interface AuthClientConfig {
   readonly baseUrl: string;
@@ -27,11 +32,22 @@ export class AuthClient {
     this.client = createClient(config);
   }
 
-  // Throws rather than returning `{ data, error }`. Normalising at the boundary means a
-  // `SignInForm` uses the same error handling as every other mutation (23).
+  // Throws rather than returning `{ data, error }`, and throws an `AppError` rather than
+  // a bare `Error`. That second half is not cosmetic: `ErrorNormalizer` recognises an
+  // `AppError` structurally and maps everything else to `INTERNAL`, so a plain `Error`
+  // here made every branch a caller could write on the code unreachable (23).
   public async signIn(email: string, password: string): Promise<void> {
-    const { error } = await this.client.signIn.email({ email, password });
-    if (error) throw new Error(error.message ?? "Sign-in failed.");
+    const { data, error } = await this.client.signIn.email({ email, password });
+    if (error) throw new UnauthorizedError();
+
+    // **The fork is a success, not a failure.** With a second factor enrolled, Better
+    // Auth answers `200 { twoFactorRedirect: true }` and no `error` — so a client that
+    // only inspects `error` resolves, `onSuccess` fires, and the app navigates away from
+    // a sign-in that never completed. Turning it into a throw is what puts both legs of
+    // the flow on one path: the caller branches on the code, exactly once.
+    if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect === true) {
+      throw new TwoFactorRequiredError();
+    }
   }
 
   public async signOut(): Promise<void> {
@@ -42,7 +58,7 @@ export class AuthClient {
   // code, like every other method here, so a form uses one error path rather than two.
   public async verifyTwoFactor(code: string): Promise<void> {
     const { error } = await this.client.twoFactor.verifyTotp({ code });
-    if (error) throw new Error(error.message ?? "That code did not match.");
+    if (error) throw new UnauthorizedError();
   }
 
   public async session() {

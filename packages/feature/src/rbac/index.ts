@@ -7,3 +7,4 @@ export {
   PermissionMatrix,
   type PermissionMatrixProps,
 } from "./permission-matrix.js";
+export { RoleMatrix, type RoleMatrixProps } from "./role-matrix.js";

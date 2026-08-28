@@ -580,7 +580,7 @@ Returns nothing.
   **That last line failing is the whole feature.** If it compiles, the mapped type has been
   replaced with a template-literal `Extract` somewhere and the constraint is doing nothing.
 - The `packages/feature/src/**` block from [05](05-lint-and-format.md) Step 5.3 is in place and errors on a **value** import of either package, while allowing `import type`.
-- **Adding `import { Database } from "@loadbearing/db"` to a component in this package is a Biome error**, from the single server-only override. If it is not, some later `overrides` block has replaced that rule's `paths` instead of restating them — see the caution in [05](05-lint-and-format.md) Step 5.2.
+- **Adding `import { Database } from "@loadbearing/infrastructure"` to a component in this package is a Biome error**, from the single server-only override. If it is not, some later `overrides` block has replaced that rule's `paths` instead of restating them — see the caution in [05](05-lint-and-format.md) Step 5.2.
 
 Do not proceed until this passes.
 

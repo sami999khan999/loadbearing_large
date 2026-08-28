@@ -32,6 +32,19 @@ export interface ContainerConfig {
     readonly sessionMaxAgeSeconds: number;
     readonly cookieCacheMaxAgeSeconds: number;
     readonly requireEmailVerification: boolean;
+    // Undefined means no automatic enrolment: an unaffiliated sign-up is refused a
+    // session, which is what `MembershipReader` returning null already does. Set it
+    // and a user's first session enrols them into that organization — the first one
+    // in as `owner`, everyone after as `member`.
+    readonly bootstrapOrganizationSlug?: string;
+  };
+  // Transactional mail. Not optional: `requireEmailVerification` defaults to on, and a
+  // container that cannot send is a container whose sign-ups can never complete. SMTP
+  // rather than a provider block, because every managed sender speaks it — swapping
+  // vendors is this URL and nothing else.
+  readonly email: {
+    readonly url: string;
+    readonly from: string;
   };
   readonly embedding: {
     readonly apiKey: string;

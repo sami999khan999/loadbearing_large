@@ -31,7 +31,7 @@
 
 **It does not own authorization.** Better Auth ships an organization plugin with its own `createAccessControl` and role definitions. **Do not use it.** The architecture's strongest claim is that there is no second security model to keep in sync; adopting its roles gives you exactly that — one permission model in `PermissionRegistry`, another in the auth library, drifting apart the first time someone edits only one.
 
-**Skip the organization plugin entirely.** `memberships` and `goal_members` already exist ([13](13-db-package.md)) and point at your own `roles` table. The plugin would add a parallel `member.role` string column meaning something different, and reconciling the two is worse than not having it.
+**Skip the organization plugin entirely.** `memberships` and `goal_members` already exist ([13](13-infrastructure-postgres.md)) and point at your own `roles` table. The plugin would add a parallel `member.role` string column meaning something different, and reconciling the two is worse than not having it.
 
 **Do not use the API-key plugin's session mocking.** It mints a session for a key, which means a leaked key impersonates a full user with that user's live permissions. The model in Step 16.6 is strictly better: a key is a principal with its own capability set that cannot exceed its issuer's, re-intersected on every request.
 
@@ -101,16 +101,16 @@ for (const [model, table] of Object.entries(getSchema(auth.options))) {
 pnpm --filter @loadbearing/auth run auth:tables
 ```
 
-Run it after every Better Auth upgrade and diff the output against `packages/db/src/schema/auth.schema.ts`. That is the whole maintenance procedure.
+Run it after every Better Auth upgrade and diff the output against `packages/infrastructure/src/pg/schema/auth.schema.ts`. That is the whole maintenance procedure.
 
 ### What goes in the schema
 
-Five models — `users`, `sessions`, `accounts`, `verifications`, `twoFactors` — written like every other table here: plural, snake_case columns, `uuid` primary keys, in `packages/db/src/schema/auth.schema.ts` and exported from `schema/index.ts`. Step 16.2 configures the library to accept those names.
+Five models — `users`, `sessions`, `accounts`, `verifications`, `twoFactors` — written like every other table here: plural, snake_case columns, `uuid` primary keys, in `packages/infrastructure/src/pg/schema/auth.schema.ts` and exported from `schema/index.ts`. Step 16.2 configures the library to accept those names.
 
 > [!IMPORTANT]
 > **The Drizzle export names and property keys are load-bearing; the SQL names are not.** The adapter resolves a column by looking up `schema[modelName][fieldName]`, so each export must match a `modelName` from Step 16.2 and each property must match a Better Auth field name. Rename an export and authentication fails at runtime with a message about a missing Drizzle schema. Rename a *column* and nothing happens at all — which is why the columns are snake_case and the properties are not.
 
-**The foreign keys are declared in the schema, never in a hand-authored migration.** drizzle-kit generates by diffing the schema against the migration history, so a constraint it cannot see is a constraint the next generated migration drops — silently, inside a migration that was supposed to be about something else. `memberships`, `goal_members`, `permission_overrides` and `api_keys.issuer_id` all carry `.references(() => users.id, { onDelete: "cascade" })` in [13](13-db-package.md), and that is the only place they exist.
+**The foreign keys are declared in the schema, never in a hand-authored migration.** drizzle-kit generates by diffing the schema against the migration history, so a constraint it cannot see is a constraint the next generated migration drops — silently, inside a migration that was supposed to be about something else. `memberships`, `goal_members`, `permission_overrides` and `api_keys.issuer_id` all carry `.references(() => users.id, { onDelete: "cascade" })` in [13](13-infrastructure-postgres.md), and that is the only place they exist.
 
 ```bash
 pnpm db:generate && pnpm db:migrate
@@ -281,7 +281,7 @@ export type AuthInstance = ReturnType<typeof AuthFactory.create>;
 
 ### The rest of the configuration
 
-**Identifiers are `Uuid.v7()`, not Better Auth's default.** `advanced.database.generateId` is what makes `user_id` a real `uuid` foreign key throughout [13](13-db-package.md) rather than a `text` column shaped around a foreign format — and it is what makes the branded `UserId` in `contracts`, declared `z.uuid()`, true rather than aspirational.
+**Identifiers are `Uuid.v7()`, not Better Auth's default.** `advanced.database.generateId` is what makes `user_id` a real `uuid` foreign key throughout [13](13-infrastructure-postgres.md) rather than a `text` column shaped around a foreign format — and it is what makes the branded `UserId` in `contracts`, declared `z.uuid()`, true rather than aspirational.
 
 **`AuthInstance` is read back off the factory, never annotated.** `ReturnType<typeof betterAuth>` is `Auth<BetterAuthOptions>` — the *unconfigured* instance — and the two-factor plugin widens the user type, so annotating `create()` with it fails to assign. The type has to be inferred from these options and exported afterwards.
 
@@ -483,7 +483,7 @@ export class PrincipalBuilder {
 
 ## Step 16.6 — API keys
 
-**`packages/db/src/schema/api-key.schema.ts`**
+**`packages/infrastructure/src/pg/schema/api-key.schema.ts`**
 
 ```ts
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
@@ -671,7 +671,7 @@ Four surfaces, one `Principal`, one `Authorizer.assert()`.
 
 ## Step 16.9 — Session lifetime, and the revocation chain
 
-**Multi-organisation was the other open question here, and it is now decided.** `organization_id` is on every domain table from the first migration, and it is the sharding key ([13](13-db-package.md), [Data and scale](../opinions/data-and-scale.md) §4.1). The reasoning is unchanged — retrofitting a tenant column across two dozen feature modules is a genuinely large migration discovered when the first customer asks — but it is no longer conditional on whether you expect a second tenant. It costs a column now and it is the one thing on this page that cannot be added cheaply later.
+**Multi-organisation was the other open question here, and it is now decided.** `organization_id` is on every domain table from the first migration, and it is the sharding key ([13](13-infrastructure-postgres.md), [Data and scale](../opinions/data-and-scale.md) §4.1). The reasoning is unchanged — retrofitting a tenant column across two dozen feature modules is a genuinely large migration discovered when the first customer asks — but it is no longer conditional on whether you expect a second tenant. It costs a column now and it is the one thing on this page that cannot be added cheaply later.
 
 What that leaves for this step is session lifetime, which interacts with something the scale work made concrete: **there are three caches between a permission change and a request seeing it.**
 
@@ -733,7 +733,7 @@ export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js"
 
 ## ✅ Gate
 
-- `pnpm --filter @loadbearing/auth run auth:tables` runs, and every field it prints has a matching property in `packages/db/src/schema/auth.schema.ts` under Better Auth's own name.
+- `pnpm --filter @loadbearing/auth run auth:tables` runs, and every field it prints has a matching property in `packages/infrastructure/src/pg/schema/auth.schema.ts` under Better Auth's own name.
 - `pnpm db:migrate` created `users`, `sessions`, `accounts`, `verifications`, `two_factors`, and `api_keys`.
 - `sessions` has both `active_organization_id` and `surface`, each `NOT NULL`.
 - `api_keys` carries `organization_id`, and `api_keys_issuer_idx` covers the `issuer_id` foreign key.
@@ -741,7 +741,7 @@ export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js"
 - `grep -rn "better-auth" packages --include=*.ts` matches only `packages/auth/` and (later) `packages/api-client/src/auth/`.
 
 ```bash
-grep -rn 'text("user_id")\|text("actor_id")\|text("issuer_id")' packages/db/src
+grep -rn 'text("user_id")\|text("actor_id")\|text("issuer_id")' packages/infrastructure/src/pg
 ```
 
 Returns nothing. A `text` user reference left anywhere means the `generateId` configuration in Step 16.2 was skipped, and the foreign keys above silently did not apply.

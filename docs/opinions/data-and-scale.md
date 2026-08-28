@@ -48,7 +48,7 @@ failure a compliance review finds. **Audit is Postgres, at every scale on this p
 > **In-transaction is a claim about the code, not about intent.** `UnitOfWork` has to actually
 > enrol the repositories that run inside it, or this guarantee is decorative — the audit row and
 > the state change commit separately and the failure above is live. See
-> [13](../setup/13-db-package.md).
+> [13](../setup/13-infrastructure-postgres.md).
 
 ### Why diagnostics are not a database
 
@@ -322,7 +322,7 @@ Create partitions ahead of time with a scheduled job, or use `pg_partman`.
   insert time.
 - **Drizzle cannot express `PARTITION BY`.** The schema declares an ordinary table and the generated
   DDL is hand-edited — which the workflow already accommodates, because migrations are generated,
-  read, and committed rather than pushed ([13](../setup/13-db-package.md)).
+  read, and committed rather than pushed ([13](../setup/13-infrastructure-postgres.md)).
 
 **`session` is deliberately not on this list.** It looks like the third append-only table and is not
 one: Better Auth updates it on refresh, deletes it on sign-out, and looks rows up by id — a
@@ -381,7 +381,7 @@ something, a rebuild becomes data loss.
 
 Postgres does not auto-index foreign keys, which surprises people.
 `memberships_user_idx` and `goal_members_user_idx` are already called out as non-optional
-([13](../setup/13-db-package.md)) because `CapabilityRepository.resolveFor()` runs on essentially
+([13](../setup/13-infrastructure-postgres.md)) because `CapabilityRepository.resolveFor()` runs on essentially
 every request. The same reasoning applies to every FK added after.
 
 **Add query-count assertions to integration tests now.** N+1 queries hit at 50 users, not 5,000, and

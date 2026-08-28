@@ -342,7 +342,7 @@ Shipping database driver code to the browser is not just a 400KB regression. It 
 ### 9 — Every domain table declares `organization_id`
 
 ```js
-// fail on any pgTable(...) in packages/db/src/** whose body has no organization_id,
+// fail on any pgTable(...) in packages/infrastructure/src/pg/schema/** whose body has no organization_id,
 // unless its table name is on the exemption list
 const TENANT_EXEMPT = new Set([
   "organizations",                                   // it is the tenant
@@ -355,7 +355,7 @@ const TENANT_EXEMPT = new Set([
 ]);
 ```
 
-`organization_id` is the sharding key and the tenant boundary ([13](13-db-package.md)). A table that ships without it is not a style problem — it is a table that has to be migrated under load later, and a query that cannot be scoped to a tenant in the meantime.
+`organization_id` is the sharding key and the tenant boundary ([13](13-infrastructure-postgres.md)). A table that ships without it is not a style problem — it is a table that has to be migrated under load later, and a query that cannot be scoped to a tenant in the meantime.
 
 **The exemption list is the point of the check, not a weakness in it.** Every entry is a decision someone had to write down: Better Auth's tables are exempt because a login is global, and `organizations` is exempt because it *is* the tenant. Adding another entry means arguing for it in review, which is exactly the conversation that should happen before a global table exists.
 

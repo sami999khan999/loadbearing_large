@@ -1,6 +1,7 @@
 "use client";
 
 export { QueryKeys } from "./key/index.js";
+export { RoleQueries } from "./rbac/index.js";
 export {
   ApiClientProvider,
   type ApiClientProviderProps,

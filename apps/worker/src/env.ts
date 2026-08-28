@@ -18,6 +18,12 @@ const Schema = z.object({
   S3_SECRET_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
 
+  // Transactional mail. Present in both processes because both build a `Container`, and
+  // the worker is where a scheduled digest will send from — `DigestComposer` already
+  // holds the copy for one. Same URL shape as the web app's.
+  SMTP_URL: z.string().min(1),
+  EMAIL_FROM: z.string().min(1),
+
   EMBEDDING_MODEL: z.string().min(1),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
   OPENAI_API_KEY: z.string().default(""),
@@ -48,8 +54,11 @@ const Schema = z.object({
   // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
   // runs and the reconciliation reports, while reads still come from Postgres.
   CLICKHOUSE_URL: z.url().optional(),
-  CLICKHOUSE_DATABASE: z.string().min(1).default("ratchet"),
-  CLICKHOUSE_USER: z.string().min(1).default("ratchet"),
+  // ClickHouse's own out-of-the-box database and user. A default naming the project
+  // would be a credential baked into shipped code, and would keep pointing at the old
+  // name after a rename — `.env` is where the real stack's values belong.
+  CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
+  CLICKHOUSE_USER: z.string().min(1).default("default"),
   CLICKHOUSE_PASSWORD: z.string().default(""),
   // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
   // written to stdout and still shipped by Alloy, and reading them is
@@ -116,6 +125,7 @@ export class Env {
         secretKey: e.S3_SECRET_KEY,
         forcePathStyle: e.S3_FORCE_PATH_STYLE,
       },
+      email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,

@@ -1,5 +1,6 @@
 {
   "name": "loadbearing",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "devEngines": {
@@ -40,7 +41,8 @@
     "db:migrate": "pnpm --filter @loadbearing/infrastructure run db:migrate",
     "db:seed": "pnpm --filter @loadbearing/infrastructure run db:seed",
     "db:studio": "pnpm --filter @loadbearing/infrastructure run db:studio",
-    "auth:generate": "pnpm --filter @loadbearing/auth run auth:generate",
+    "auth:tables": "pnpm --filter @loadbearing/auth run auth:tables",
+    "smoke": "pnpm --filter @loadbearing/infrastructure run smoke",
     "prepare": "husky"
   },
   "devDependencies": {
