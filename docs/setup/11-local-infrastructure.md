@@ -6,7 +6,7 @@
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 
-> **[`infra/docs/`](../../infra/docs/index.md) is the reference for the stack this step builds.** This page is the build order, walked once; that one is what you consult afterwards when something is wrong.
+> **[`docs/infra/`](../infra/index.md) is the reference for the stack this step builds.** This page is the build order, walked once; that one is what you consult afterwards when something is wrong.
 
 > **Read [Data and scale](../opinions/data-and-scale.md) before this step.** It is why there are two Redis containers here rather than one, and it decides the partitioning and tenant column that [13](13-infrastructure-postgres.md) builds on.
 
@@ -670,7 +670,7 @@ The application code does not change between the two columns. These containers a
 | `clickhouse` container, stopped | ClickHouse Cloud or a managed instance — and only once the trigger in [Data and scale](../opinions/data-and-scale.md) §5 has actually fired |
 
 The full path from here to a rented box, and from there to managed services, is
-[`infra/docs/deployment.md`](../../infra/docs/deployment.md) — including the one thing about this
+[`docs/infra/deployment.md`](../infra/deployment.md) — including the one thing about this
 compose file that is safe on a laptop and dangerous on a public IP.
 
 That last row is the reason MinIO is here rather than a local filesystem stand-in: the AWS SDK talks to MinIO unchanged, so the code path exercised in development is the code path that runs in production. A filesystem adapter would mean the S3 path is first executed on the day you deploy.

@@ -48,6 +48,31 @@ the surfaces that reach them are `ImageManifest` (which imports the files by pat
 map (which publishes `./font.css`, `./sprite.svg`, `./token.css` and `./theme.css` directly). The
 rule is about folders of code.
 
+## Every folder under `docs/` has an `index.md`
+
+The same rule one level up, for the same reason. A folder with no index can only be navigated by
+listing it, and a reader who lands in one has to guess which file is the entry point. The index is
+also what lets a page move within a folder without every link *to* the folder breaking.
+
+```
+docs/index.md                 the four trees and what each is for
+docs/ai/index.md              the task router
+docs/ai/rules/index.md        the rulebook's contents
+docs/ai/skills/index.md       the run books
+docs/opinions/index.md        these pages
+docs/setup/index.md           the build order, 00-30
+```
+
+**The `reference/` folders are deliberately exempt**, and it is worth saying why rather than leaving
+it to look like an oversight. `packages/<name>/docs/reference/` and `docs/infra/reference/` are
+reached from their parent `index.md`, which names every page in them, and `meta.json` carries the
+ordering. An index inside would restate the parent and rot the first time a page was added to one
+and not the other.
+
+A folder holding no Markdown at all needs no index — there is nothing for it to name.
+
+Enforced by `check-architecture.mjs` §13 ([26](../setup/26-hygiene-and-ci.md)).
+
 ## A folder is named after its role, and the vocabulary is shared
 
 **The default is a role folder: the folder name says what kind of thing is inside.** The same kind

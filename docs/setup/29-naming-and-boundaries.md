@@ -77,7 +77,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 - **Is development-shaped.** It is not your production deployment; it is the local approximation of it. The mapping table in [11](11-local-infrastructure.md) says which managed service replaces each container.
 - **Never holds** application code of any kind. Nothing in `packages/` or `apps/` imports anything from here — these are [Tier 0](../opinions/dependencies.md) dependencies, provided by the deployment and reached over a protocol the code was going to speak anyway.
 - **Two profiles.** `observability` is on by default because the diagnostic stream is live; `analytics` is opt-in because [Data and scale](../opinions/data-and-scale.md) says not to *run* ClickHouse yet. Its adapters are written either way — the seam being implemented and the store being started are two separate decisions.
-- **Documented in [`infra/docs/`](../../infra/docs/index.md)** — one reference page per file and the service it configures.
+- **Documented in [`docs/infra/`](../infra/index.md)** — one reference page per file and the service it configures.
 - **Smell:** a `.ts` file, or a `LOKI_URL` in `.env.example` — the moment application code names the log platform, the platform stops being swappable by config.
 
 ---

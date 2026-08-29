@@ -90,6 +90,9 @@ See [Comments](comments.md).
 | No server code in the client bundle | `check-architecture.mjs` §8 |
 | Every domain table declares `organization_id` | `check-architecture.mjs` §9 |
 | The audit port is `ActivityLogger`, never `AuditTrail` | `check-architecture.mjs` §10 |
+| The schema barrel names every `*.schema.ts` | `check-architecture.mjs` §11 |
+| Every page on this index is cited by a `docs/ai/rules/` file | `check-architecture.mjs` §12 |
+| Every folder under `docs/` has an `index.md` | `check-architecture.mjs` §13 |
 | One range per dependency across packages | `syncpack lint` |
 | Loki labels stay within `app, env, level, event_code` | `infra/alloy.config.alloy` — the pipeline promotes exactly four |
 | A query that cannot be scoped to a tenant | Review |

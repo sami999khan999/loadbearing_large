@@ -25,6 +25,12 @@ to be wrong about. See
 
 ## Documentation
 
+- **[`AGENTS.md`](AGENTS.md)** — what a coding agent reads first. A router and nothing else: one
+  row per task, pointing at the file that answers it. `CLAUDE.md` imports it.
+- **[`docs/ai/`](docs/ai/index.md)** — everything written for agents rather than for people.
+  [`rules/`](docs/ai/rules/index.md) is the rulebook, one file per topic and none over ~650 tokens;
+  [`skills/`](docs/ai/skills/add-slice.md) holds the run books, reached through `.claude/skills/`
+  and `.agents/`.
 - **[`docs/setup/`](docs/setup/00-README.md)** — the build order, walked once. Thirty-one documents
   from an empty directory to a running app: `01`–`27` build the kit (`09b` included), `28` and `29`
   are reference, and `30` adds the desktop shell.
@@ -32,5 +38,5 @@ to be wrong about. See
   for what to call a thing, where to put it, and which store owns it.
 - **`packages/*/docs/`** — one reference set per package: what it is for, and why each export is
   shaped the way it is.
-- **[`infra/docs/`](infra/docs/index.md)** — the running stack: what each container is for, how the
+- **[`docs/infra/`](docs/infra/index.md)** — the running stack: what each container is for, how the
   log pipeline works, and what to check when it is wrong.

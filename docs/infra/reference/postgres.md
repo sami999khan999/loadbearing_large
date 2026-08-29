@@ -27,7 +27,7 @@ an image on every developer machine and every CI runner.
 
 **Postgres 17 rather than 16** for the improved `VACUUM` memory behaviour, which matters on the
 activity log more than anywhere else — though the real answer for that table is monthly partitioning
-and a retention policy, which [13](../../../docs/setup/13-infrastructure-postgres.md) sets up in the first
+and a retention policy, which [13](../../setup/13-infrastructure-postgres.md) sets up in the first
 migration.
 
 ---
@@ -45,7 +45,7 @@ the entrypoint sorts by — irrelevant with one file, and the reason to keep the
 ever appears.
 
 **`vector`** is the extension the image exists for. The column type `vector(1536)` in
-[14](../../../docs/setup/14-vector-store.md) does not exist without it, and the migration fails on
+[14](../../setup/14-vector-store.md) does not exist without it, and the migration fails on
 stock Postgres with an error that reads like a typo.
 
 **`pg_trgm`** is trigram indexing for fuzzy text search. Every product ends up wanting
@@ -94,7 +94,7 @@ pnpm infra:reset
 the client is on. A container using `localhost:5432` would reach *its own* loopback and find
 nothing.
 
-Connections are pooled per process at `max: 10` ([13](../../../docs/setup/13-infrastructure-postgres.md)), so
+Connections are pooled per process at `max: 10` ([13](../../setup/13-infrastructure-postgres.md)), so
 count processes against `max_connections`: three web replicas and two workers is fifty, which is
 fine; forty replicas is not, and is the point pgBouncer stops being optional.
 

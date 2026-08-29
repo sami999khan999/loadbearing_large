@@ -419,6 +419,154 @@ assert("the schema barrel names every `*.schema.ts`", (failures) => {
   return null;
 });
 
+// ── 12 — the rule files route to every opinions page ────────────────────────
+//
+// docs/ai/rules/*.md is a digest of docs/opinions/, and a digest is a second copy of
+// every rule it states. The failure is not that it is wrong on the day it is written —
+// it is that a tenth opinions page lands months later, no rule file mentions it, and
+// every agent works from a rulebook missing a chapter while nothing says so.
+//
+// Three links, all checked. A page nothing cites is the missing chapter. A rule file
+// nothing routes to is the same failure from the other end — it exists, it is correct,
+// and no agent will ever open it. And a route to a renamed page sends a reader nowhere.
+
+const RULES_DIR = "docs/ai/rules";
+
+assert("the rule files route to every opinions page", (failures) => {
+  const brief = join(ROOT, "AGENTS.md");
+  const rulesDir = join(ROOT, RULES_DIR);
+
+  if (!existsSync(brief)) {
+    failures.push("AGENTS.md is missing — it is the router every agent reads first");
+    return null;
+  }
+  if (!existsSync(rulesDir)) {
+    failures.push(`${RULES_DIR} is missing — AGENTS.md is a router with nothing to route to`);
+    return null;
+  }
+
+  const ruleFiles = readdirSync(rulesDir).filter((f) => f.endsWith(".md"));
+  if (ruleFiles.length === 0) {
+    failures.push(`${RULES_DIR} holds no rule files`);
+    return null;
+  }
+
+  // Three files may route to a rule file: the root brief, the docs/ai task router, and
+  // the rulebook's own contents page. A file reachable from none of them exists, is
+  // correct, and will never be opened.
+  const briefSource = readFileSync(brief, "utf8");
+  const routerPaths = [join(ROOT, "docs/ai/index.md"), join(rulesDir, "index.md")];
+  const routers = [briefSource, ...routerPaths.filter(existsSync).map((f) => readFileSync(f, "utf8"))].join(" ");
+
+  // Every rule file is reachable. `index.md` is a router itself, so it is exempt from
+  // needing a route into it beyond AGENTS.md, which is checked immediately after.
+  for (const file of ruleFiles) {
+    if (file === "index.md") continue;
+    if (!routers.includes(file)) {
+      failures.push(
+        `${RULES_DIR}/${file} is routed to from none of AGENTS.md, docs/ai/index.md, or ${RULES_DIR}/index.md`,
+      );
+    }
+  }
+
+  if (!briefSource.includes("docs/ai/index.md") && !briefSource.includes(`${RULES_DIR}/index.md`)) {
+    failures.push("AGENTS.md points at neither docs/ai/index.md nor the rulebook contents");
+  }
+
+  // Every opinions page is cited by at least one rule file — the drift guard.
+  const opinions = join(ROOT, "docs/opinions");
+  if (!existsSync(opinions)) return "docs/opinions does not exist";
+
+  // `index.md` is the human reading order, not a rule page — the digest replaces it
+  // rather than pointing at it, so requiring a citation would be noise.
+  const pages = readdirSync(opinions).filter((f) => f.endsWith(".md") && f !== "index.md");
+  if (pages.length === 0) return "docs/opinions holds no pages";
+
+  const digest = ruleFiles.map((f) => readFileSync(join(rulesDir, f), "utf8")).join("\n");
+
+  for (const page of pages) {
+    if (!digest.includes(`docs/opinions/${page}`)) {
+      failures.push(`no file in ${RULES_DIR} cites docs/opinions/${page}`);
+    }
+  }
+
+  // A route to a page that has been moved or renamed sends a reader somewhere that does
+  // not exist, which is worse than no route at all. Both forms count: a backticked path
+  // and a Markdown link target. Matching only the first is how deleting a rule file used
+  // to pass — AGENTS.md links it as `](docs/ai/rules/folders.md)`, which the backtick
+  // pattern never saw, and a second file citing the same opinions page hid the gap.
+  const sources = [
+    [rel(brief), briefSource, dirname(brief)],
+    ...routerPaths
+      .filter(existsSync)
+      .map((f) => [rel(f), readFileSync(f, "utf8"), dirname(f)]),
+    ...ruleFiles.map((f) => [`${RULES_DIR}/${f}`, readFileSync(join(rulesDir, f), "utf8"), rulesDir]),
+  ];
+
+  for (const [name, text, base] of sources) {
+    const routed = new Set();
+
+    for (const match of text.matchAll(/`(docs\/[A-Za-z0-9._/-]+\.md)`/g)) {
+      routed.add(join(ROOT, match[1]));
+    }
+    for (const match of text.matchAll(/\]\(([^)]+\.md)\)/g)) {
+      const target = match[1];
+      if (target.startsWith("http")) continue;
+      routed.add(target.startsWith("docs/") ? join(ROOT, target) : resolve(base, target));
+    }
+
+    for (const path of routed) {
+      if (!existsSync(path)) {
+        failures.push(`${name} routes to ${rel(path)}, which does not exist`);
+      }
+    }
+  }
+
+  return null;
+});
+
+// ── 13 — every folder under docs/ has an index.md ───────────────────────────
+//
+// A folder with no index is a folder you can only navigate by listing it, and a reader
+// who lands in one has to guess which file is the entry point. The same reasoning as
+// the index.ts rule one level down: the index is what lets a page move within a folder
+// without every link to the folder breaking.
+//
+// `reference/` folders are exempt by name. Their parent index.md names every page and
+// meta.json carries the ordering, so an index inside would restate the parent and rot
+// the first time a page landed in one and not the other. The exemption is by name
+// rather than by location because docs/infra/reference/ now sits inside docs/ — the
+// same folder role, and the same reason.
+
+assert("every folder under `docs/` has an `index.md`", (failures) => {
+  const root = join(ROOT, "docs");
+  if (!existsSync(root)) return "docs/ does not exist";
+
+  const folders = [root];
+
+  for (let i = 0; i < folders.length; i += 1) {
+    for (const entry of readdirSync(folders[i])) {
+      if (SKIP_DIRS.has(entry)) continue;
+      const full = join(folders[i], entry);
+      if (statSync(full).isDirectory()) folders.push(full);
+    }
+  }
+
+  for (const folder of folders) {
+    if (basename(folder) === "reference") continue;
+
+    // A folder holding no Markdown holds nothing an index could name.
+    const pages = readdirSync(folder).filter((f) => f.endsWith(".md"));
+    if (pages.length === 0) continue;
+
+    if (!existsSync(join(folder, "index.md"))) {
+      failures.push(`${rel(folder)} has ${pages.length} page(s) and no index.md`);
+    }
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;

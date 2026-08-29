@@ -9,7 +9,7 @@ The same nine services, on a machine you rent. Then, service by service, on mach
 operates.
 
 **The application code does not change between any of the stages on this page.** Every store is
-behind a port ([Dependencies](../../docs/opinions/dependencies.md)), every credential is a value in
+behind a port ([Dependencies](../opinions/dependencies.md)), every credential is a value in
 `.env`, and no package reads `process.env` at all. That is what makes each move below a config change
 rather than a migration — and it is the whole return on the architecture.
 
@@ -61,7 +61,7 @@ ssh -L 5432:localhost:5432 you@vps    # then psql against localhost:5432
 ## Phase 1 — one VPS
 
 Everything on one box, Compose, no orchestrator. This is the correct shape for a long time, and
-[Data and scale](../../docs/opinions/data-and-scale.md) is explicit that most products never outgrow
+[Data and scale](../opinions/data-and-scale.md) is explicit that most products never outgrow
 it.
 
 ### Sizing
@@ -266,7 +266,7 @@ In rough order, and none of them is the database:
 | Deploys have visible downtime | Two `web` replicas behind Caddy, drain on stop |
 | The box is memory-bound at idle | Managed Loki (Grafana Cloud) — it is the largest non-Postgres consumer |
 | Disk fills | S3 for uploads; MinIO on the same disk as `pgdata` is the trap |
-| Postgres CPU spikes on dashboards | A read replica, or KPI snapshot tables — [Data and scale](../../docs/opinions/data-and-scale.md) §5 |
+| Postgres CPU spikes on dashboards | A read replica, or KPI snapshot tables — [Data and scale](../opinions/data-and-scale.md) §5 |
 | A bad deploy loses queued jobs | Managed Redis for the queue, with real persistence |
 | One machine is a single point of failure | Everything below |
 
@@ -310,7 +310,7 @@ loki.write "default" {
 
 Drop `loki` from the overlay and keep Alloy. **The pipeline, the four labels, and the
 event catalog are unchanged** — this is the payoff for never letting a package import a Loki client
-([Dependencies](../../docs/opinions/dependencies.md) Tier 0).
+([Dependencies](../opinions/dependencies.md) Tier 0).
 
 Start here because it is free to reverse and it removes the largest memory consumer after Postgres.
 
@@ -374,7 +374,7 @@ SELECT * FROM pg_available_extensions WHERE name IN ('vector', 'pg_trgm', 'uuid-
 Also confirm the partitioned tables arrived as partitioned rather than as one flat table — a
 `pg_dump`/`restore` preserves partitioning, but a naive `COPY`-based migration does not, and
 `activity_log` silently becomes a table that will need the painful conversion later
-([13](../../docs/setup/13-infrastructure-postgres.md)).
+([13](../setup/13-infrastructure-postgres.md)).
 
 ---
 
@@ -385,7 +385,7 @@ Everything in Phase 2 is *the same capability, operated by somebody else*. This 
 ClickHouse on the original VPS or reach ClickHouse Cloud from a fully-managed stack; the two
 decisions do not interact.
 
-**Do not start here.** [Data and scale](../../docs/opinions/data-and-scale.md) is explicit that
+**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that
 `PgAnalyticsReader` reading snapshot tables covers every question this kit will ask for years, and
 the container in the compose file is deliberately stopped.
 
@@ -419,7 +419,7 @@ this.analytics = new ClickHouseAnalyticsReader(config.analytics);
 
 `@clickhouse/client` joins the node-only tier in the catalog, `AnalyticsReader` is unchanged, and no
 use-case, contract or component knows anything happened. That is the entire point of building the
-port years before the store ([15](../../docs/setup/15-infrastructure-package.md)).
+port years before the store ([15](../setup/15-infrastructure-package.md)).
 
 `ContainerConfig` gains an `analytics` block, and `apps/*/src/env.ts` gains the variables to fill it —
 still the only two files in the repository that read `process.env`.

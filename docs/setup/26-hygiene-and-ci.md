@@ -191,9 +191,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The ten architectural assertions
+## Step 26.4 — The thirteen architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Ten greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Thirteen greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -207,7 +207,7 @@ Types cannot express "this package must not import that one across a bundle boun
 > [!IMPORTANT]
 > **A skipped assertion prints `○`, never `✓`.** Two of these depend on artefacts that may not exist yet — a built `dist/`, a built client bundle — and an assertion that quietly passes when it did not run is worse than no assertion, because it converts an unknown into a false guarantee. The same reason the bundle check fails rather than passes when it finds zero asset files.
 >
-> **Write the failing case before you trust any of them.** Each of the nine runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
+> **Write the failing case before you trust any of them.** Each of the eleven runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
 
 ### 1 — `application` imports no framework
 
@@ -375,6 +375,49 @@ Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTa
 Cheap, and it exists because the name drifted once already: the observability docs said `AuditTrail` while eleven other files said `ActivityLogger`, and nothing caught it because both are prose in Markdown until the class exists.
 
 Two names for the audit port is worse than an ugly name. The whole point of [Data and scale](../opinions/data-and-scale.md) §1 is that a business fact and a diagnostic go to different places for different reasons, and a reader who sees two names reasonably assumes there are two things.
+
+### 11 — The schema barrel names every `*.schema.ts`
+
+```js
+// fail if packages/infrastructure/src/pg/schema/index.ts omits any sibling *.schema.ts
+```
+
+**An incomplete barrel passes typecheck, lint, build, and every test.** `import * as schema` from a module that re-exports nothing is legal and yields `{}`. The only tool that notices is drizzle-kit, and it notices by generating `DROP TABLE` for every table it can no longer see. That happened once; this is the guard.
+
+It is the one assertion whose failure mode is a destructive migration rather than a broken build, which is why it greps the barrel rather than trusting the [`noReExportAll` exemption](../opinions/imports.md) that makes the star export legal there in the first place.
+
+### 12 — The rule files route to every opinions page
+
+```js
+// fail if a docs/opinions/*.md page is cited by no file in docs/ai/rules/,
+// if a rule file is routed to from neither AGENTS.md nor docs/ai/rules/index.md,
+// or if any of them routes to a path that does not exist
+```
+
+[`docs/ai/rules/`](../ai/rules/index.md) is a digest of [`docs/opinions/`](../opinions/index.md) — the rules an agent must know *unprompted*, one file per topic, none over ~650 tokens. `AGENTS.md` at the repository root is a router and nothing else: one row per task, pointing at the file that answers it.
+
+A digest is a second copy of every rule it states, and the failure is not that it is wrong the day it is written. It is that a tenth opinions page lands months later, no rule file mentions it, and every agent works from a rulebook missing a chapter while nothing says so. Citing the path is the cheapest thing that cannot be forgotten silently.
+
+**Three links, all checked.** A page nothing cites is the missing chapter. A rule file nothing routes to is the same failure from the other end — it exists, it is correct, and no agent will ever open it. And a route to a renamed page sends a reader nowhere.
+
+> [!WARNING]
+> **Match Markdown link targets, not just backticked paths.** The first version of this assertion greped only for `` `docs/…md` `` and a deleted rule file passed clean: `AGENTS.md` links its rule files as Markdown targets rather than backticked paths, which that pattern never saw, and a second file citing the same opinions page hid the gap. Verified against six break shapes — an uncited page, an orphaned file, a renamed target, a deleted rule file, a root file that stops pointing, and a broken relative link inside a rule file.
+
+**This is [Simplicity](../opinions/simplicity.md) applied to documentation.** The split is a real cost — twelve files to keep in step instead of one — and it is paid so that nothing loads what a task does not need. What is *not* negotiable is that the copy stays in step, and "stays in step" is a promise no reviewer reliably keeps.
+
+It does **not** check that a rule file's summary of its page is still *accurate*. That is why every file in `rules/` ends with the line saying `docs/opinions/` wins any disagreement.
+
+### 13 — Every folder under `docs/` has an `index.md`
+
+```js
+// fail if a folder under docs/ holds Markdown pages and no index.md
+```
+
+The same rule as `index.ts` one level down, for the same reason. A folder with no index can only be navigated by listing it, and a reader who lands in one has to guess which file is the entry point. The index is also what lets a page move within a folder without every link *to* the folder breaking — the identical argument [Folders](../opinions/folders.md) makes about barrels.
+
+**The `reference/` folders are exempt, and the exemption is a decision rather than an oversight.** `packages/<name>/docs/reference/` and `docs/infra/reference/` are reached from their parent `index.md`, which names every page in them, with `meta.json` carrying the order. An index inside would restate the parent and rot the first time a page landed in one and not the other. The exemption is **by folder name**, not by location — `docs/infra/reference/` sits inside `docs/` and earns it for the identical reason. A folder holding no Markdown is skipped too; there is nothing for an index to name.
+
+Cheap, and it caught three gaps the moment it was written: `docs/` itself, `docs/ai/skills/`, and `docs/setup/`, which had thirty-one numbered documents and no contents page.
 
 ---
 

@@ -25,7 +25,7 @@ service.
 
 ## Why it exists and why it is stopped
 
-[Data and scale](../../../docs/opinions/data-and-scale.md) commits to ClickHouse eventually and is
+[Data and scale](../../opinions/data-and-scale.md) commits to ClickHouse eventually and is
 explicit about when: *"do not do this week."* Its five-thousand-employee topology has no ClickHouse
 in it at all.
 
@@ -131,7 +131,7 @@ One partition per month. **Dropping old data becomes a metadata operation** rath
 query with a date range reads only the partitions it needs.
 
 This is the same reasoning as the monthly partitioning on Postgres's `activity_log`
-([13](../../../docs/setup/13-infrastructure-postgres.md)) — the difference is that ClickHouse does it natively
+([13](../../setup/13-infrastructure-postgres.md)) — the difference is that ClickHouse does it natively
 rather than needing hand-written DDL.
 
 ### `ORDER BY (organization_id, occurred_at, id)`

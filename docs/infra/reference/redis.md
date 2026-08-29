@@ -33,7 +33,7 @@ Redis does three jobs here and they are not equally disposable.
 
 **A BullMQ job is derived from nothing.** It is work somebody asked for that has not happened yet.
 There is no table to rebuild it from, which is why the [derived-store
-test](../../../docs/opinions/data-and-scale.md) puts it in a different category from everything else
+test](../../opinions/data-and-scale.md) puts it in a different category from everything else
 on this page.
 
 One instance forces one eviction policy onto both:
@@ -77,14 +77,14 @@ failed request, where a silently evicted job surfaces as a customer asking why n
 
 > **AOF covers a crash. It does not cover `FLUSHALL`.** That is why the queue also wants a nightly
 > sweep that re-enqueues unprocessed work, reconciling against Postgres rather than against BullMQ's
-> own job records — which age out after an hour ([15](../../../docs/setup/15-infrastructure-package.md)).
+> own job records — which age out after an hour ([15](../../setup/15-infrastructure-package.md)).
 
 ---
 
 ## How the application picks one
 
 `RedisConnection` takes both URLs and hands out the right client per job
-([15](../../../docs/setup/15-infrastructure-package.md)):
+([15](../../setup/15-infrastructure-package.md)):
 
 ```ts
 redis.client()       // cacheUrl  — prefixed, for RedisCacheStore

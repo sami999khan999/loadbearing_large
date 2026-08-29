@@ -31,7 +31,7 @@ S3_FORCE_PATH_STYLE=true    # MinIO: endpoint/bucket/key
 S3_FORCE_PATH_STYLE=false   # AWS:   bucket.endpoint/key
 ```
 
-That switch has been in `.env.example` since [02](../../../docs/setup/02-repo-skeleton.md) precisely
+That switch has been in `.env.example` since [02](../../setup/02-repo-skeleton.md) precisely
 so the production difference is one line in an environment file.
 
 ---
@@ -48,7 +48,7 @@ server.
 
 **`ratchet` holds a genuine second source of truth.** Postgres holds the metadata row and the object
 key; MinIO holds the bytes. That is why deleting a resource is two operations, and why the two can
-disagree if one half fails ([12](../../../docs/setup/12-application-package.md)).
+disagree if one half fails ([12](../../setup/12-application-package.md)).
 
 **`loki` is Loki's storage backend**, configured in [loki.config.yml](loki.md). Pointing Loki at
 object storage rather than a local volume is what makes retention a config line and what makes the

@@ -1,0 +1,56 @@
+---
+title: Working in this repo
+description: The commands, what to run before claiming a change is done, the commit convention, and where the feature run book lives.
+---
+
+# Working in this repo
+
+```bash
+pnpm dev                  # builds packages, then web + worker in parallel
+pnpm build                # topological, derived from workspace:* — no order declared anywhere
+pnpm typecheck
+pnpm lint                 # biome check . && eslint .
+pnpm test
+pnpm check:architecture   # 13 greps that no linter expresses
+pnpm infra:up             # postgres, 2x redis, minio, loki + alloy
+pnpm db:generate | db:migrate | db:seed | db:studio
+```
+
+Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a package.
+
+## Before you claim a change is done
+
+Run **`pnpm check:architecture`** — thirteen assertions in `tooling/scripts/check-architecture.mjs`
+that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
+domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
+`await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
+`organization_id`, the audit port renamed, a schema file missing from the drizzle barrel, these rule
+files drifting from `docs/opinions/`, and a `docs/` folder with no `index.md`.
+
+**Two assertions need artefacts first** — `pnpm build:packages` for the barrel check and
+`pnpm --filter @loadbearing/web build` for the bundle check. They print `○ skipped` otherwise.
+**Treat a skip as unverified, not as a pass.** Then `pnpm typecheck && pnpm lint && pnpm test`.
+
+Four things rot quietly and no green build catches them: the client bundle staying clean, a concrete
+adapter escaping `infrastructure` + `composition`, naming drift, and a repository query that forgot
+its tenant scope.
+
+## Commits
+
+Conventional commits with a **closed scope list** in `commitlint.config.js`. Scope is never empty. A
+rejected scope means you added a package and forgot the enum. One commit per layer reads best.
+
+## Adding a feature
+
+Every feature touches the same twelve places in a fixed order, and the order is not arbitrary — each
+step compiles against the one before it. **The run book is
+[`docs/ai/skills/add-slice.md`](../skills/add-slice.md).** Follow it rather than working from memory.
+
+---
+
+**The argument.**
+[`docs/setup/26-hygiene-and-ci.md`](../../setup/26-hygiene-and-ci.md) — every assertion, what it
+greps for, and the failure that put it there.
+
+When this file and `docs/opinions/` disagree, **`docs/opinions/` wins and this file is stale;
+say so.**

@@ -136,7 +136,7 @@ Reads four fields out of the JSON body into the **extracted map** — a per-line
 later stages read. Nothing is a label yet.
 
 `app` and `env` are bound onto every line by `Container`
-([17](../../../docs/setup/17-composition-container.md)); `level` and `event` come from
+([17](../../setup/17-composition-container.md)); `level` and `event` come from
 `EVENT_CATALOG`. That contract is asserted in
 `packages/observability/tests/logger/wire-contract.spec.ts`, because no compiler spans this file and
 `JsonLogger`.

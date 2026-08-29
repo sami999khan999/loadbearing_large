@@ -78,7 +78,7 @@ ratchet/
 │   │       ├── index.js                       ← typed rules + OOP shape rules
 │   │       └── types/index.d.ts               ← hand-written; no build to emit it
 │   └── scripts/
-│       └── check-architecture.mjs             ← the ten CI greps
+│       └── check-architecture.mjs             ← the thirteen CI greps
 │
 ├── packages/                                  ← everything that matters
 │   ├── core/

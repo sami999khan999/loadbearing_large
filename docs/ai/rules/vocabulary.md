@@ -1,0 +1,46 @@
+---
+title: Vocabulary
+description: Four grammars that look alike and mean different things, plus the naming rules whose violation is silent.
+---
+
+# Vocabulary
+
+Four vocabularies that look alike and mean different things. Getting the tense wrong is the silent
+failure — a permission is a right you hold, an activity is a fact that happened.
+
+| Kind | Grammar | Example |
+|---|---|---|
+| Permission key | `<module>.<subject>.<action>`, **imperative** | `task.reactivate` |
+| Procedure path | `<subject>.<action>`, mirrors its permission | `task.reactivate` |
+| Activity / event name | `<subject>.<action>`, **past tense** | `task.reactivated` |
+| Log event code | `<subject>.<thing>.<state>`, **past tense** | `queue.job.failed` |
+
+- **The qualifier vocabulary is closed:** `.self`, `.goal`, `.global`, `.org`. Never `.own`/`.mine`.
+- **An activity name is not a log event code.** A business fact in stdout is lost on restart; a
+  diagnostic in Postgres is a retention bill.
+- **Log labels are a fixed set of four:** `app`, `env`, `level`, `event_code`. Everything else —
+  `trace_id`, `user_id`, `organization_id` — lives in the line body. A label creates one stream per
+  distinct value; promoting a high-cardinality field looks like an optimisation and is the fastest
+  way to make the log platform unusable.
+- **Error codes are `SCREAMING_SNAKE_CASE` and the union is closed.** `Error.message` **is** the code;
+  every word a user reads lives in `@loadbearing/content`. A new code cannot ship without copy — the
+  `Record<ErrorCode, ShellMessageKey>` will not compile.
+- **`organization_id` on every domain table, and every unique index on one leads with it.**
+  `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role. Spell it
+  `organization`, never `organisation`.
+- **Tables are `snake_case` plural; append-only tables are singular** (`activity_log`). **Zod enums
+  mirror the DB enum values exactly** — `in_progress`, never `IN_PROGRESS`.
+- **Env vars are prefixed by purpose, not technology:** `REDIS_CACHE_URL` and `REDIS_QUEUE_URL`,
+  never one `REDIS_URL` — the two have different durability guarantees and mixing them loses queued
+  work. Read once in `apps/*/src/env.ts` and passed down; `process.env` appears nowhere else.
+
+Full naming tables — database objects, React, contract members, query keys — in
+`docs/opinions/vocabulary.md`.
+
+---
+
+**The argument.**
+[`docs/opinions/vocabulary.md`](../../opinions/vocabulary.md) — permissions, procedures, events, queues, database, env, React.
+
+When this file and `docs/opinions/` disagree, **`docs/opinions/` wins and this file is stale;
+say so.**

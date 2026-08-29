@@ -154,6 +154,13 @@ than throwing, which is what makes the omission visible in review instead of at 
 
 **If a feature needs a step outside this list, stop and look again.** It almost always means logic landed in the wrong layer — business rules in a router, a permission decision in middleware, a Drizzle query in a use-case. The checklist is a diagnostic as much as a recipe.
 
+> [!TIP]
+> **The same twelve steps as a run book:** [`docs/ai/skills/add-slice.md`](../ai/skills/add-slice.md) — what to write,
+> what to check, what to commit, without the reasoning. This section is why the order is what it
+> is; that page is the checklist you work from. `.claude/skills/add-slice/` points at it so Claude
+> Code surfaces it as a skill, `.agents/add-slice.md` does the same for other tools, and there is
+> still only one copy.
+
 ---
 
 ## Step 27.5 — Renaming the scope
