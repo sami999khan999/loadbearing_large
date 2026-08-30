@@ -1,0 +1,26 @@
+/* The only rules here that are not scoped to a ui-* class. A design system that cannot
+   set the page background is one every consuming app has to re-implement. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One focus rule for the whole system, and :focus-visible rather than :focus so a mouse
+   click does not leave a ring behind. Every control below inherits this and none of
+   them restate it. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

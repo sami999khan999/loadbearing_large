@@ -93,6 +93,9 @@ jobs:
       # assertion has no directory to read and reports `○ skipped`, not a pass.
       - run: pnpm --filter @loadbearing/web build
       - run: pnpm check:architecture
+      # Every palette against every text pairing. With one theme this is judgement; with
+      # fifteen it is the only thing between a contributor and an unreadable one.
+      - run: pnpm check:contrast
 
   # Deliberately its own job, and deliberately not required. Blocking a merge on a
   # transitive advisory nobody can fix today is how people learn to ignore a red build —

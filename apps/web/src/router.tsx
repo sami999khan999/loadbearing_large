@@ -2,6 +2,7 @@ import { ApiClient, CookieAuthStrategy } from "@loadbearing/api-client";
 import { type MessageSnapshot, MessageStore, StaticContentSource } from "@loadbearing/content";
 import { createQueryClient } from "@loadbearing/query";
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
+import { type AppearanceSnapshot, AppearanceStore } from "./appearance-store.js";
 import { Endpoint } from "./endpoint.js";
 import { routeTree } from "./route-tree.gen";
 import { type SessionSnapshot, SessionStore } from "./session-store.js";
@@ -12,6 +13,9 @@ export interface RouterDehydrated {
   // on the server, complete before the first client render. Without it the root's
   // `beforeLoad` would re-fetch during hydration and every gated element would flash.
   readonly session: SessionSnapshot;
+  // Rides the payload for the same reason the other two do. Without it the client would
+  // re-read the cookie during hydration and the picker would flash its default.
+  readonly appearance: AppearanceSnapshot;
 }
 
 // Start calls this per request on the server and once in the browser, which is exactly
@@ -24,6 +28,7 @@ export function getRouter() {
   const content = new StaticContentSource();
   const messages = new MessageStore(content, MessageStore.empty("en"));
   const session = new SessionStore();
+  const appearance = new AppearanceStore();
   const { queryClient, apiClient } = createQueryClient({
     transport: ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()),
   });
@@ -44,11 +49,13 @@ export function getRouter() {
       queryClient,
       api: apiClient,
       session,
+      appearance,
       // Seeded signed-out. `__root.tsx` resolves the real pair for every route beneath
       // it; an empty capability set denies everything, and there is no loading state
       // that grants access (23).
       user: session.user,
       capabilities: session.dto,
+      appearanceSnapshot: appearance.current,
     },
     // Runs after every matched route's loader has resolved, so the snapshot is already
     // the union of the shell plus every namespace on the entry path. `hydrate` runs
@@ -57,10 +64,12 @@ export function getRouter() {
     dehydrate: (): RouterDehydrated => ({
       messages: messages.dehydrate(),
       session: session.dehydrate(),
+      appearance: appearance.dehydrate(),
     }),
     hydrate: (payload: RouterDehydrated) => {
       messages.restore(payload.messages);
       session.restore(payload.session);
+      appearance.restore(payload.appearance);
     },
   });
 }

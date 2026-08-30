@@ -2,38 +2,32 @@ import { ContentSource } from "@loadbearing/content";
 import { MessageProvider, SessionProvider } from "@loadbearing/feature";
 import { ApiClientProvider } from "@loadbearing/query";
 import { ThemeRegistry } from "@loadbearing/ui";
+import classCss from "@loadbearing/ui/class.css?url";
 import themeCss from "@loadbearing/ui/theme.css?url";
-import tokenCss from "@loadbearing/ui/token.css?url";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { fetchAppearance } from "~/server/appearance.fn.js";
 import { fetchSession } from "~/server/session.fn.js";
 import type { RouterContext } from "./-context.js";
 
-// Applied before hydration, or a dark-theme user gets a white flash on every load.
-// Inline and synchronous for exactly that reason — a `useEffect` runs too late.
-const THEME_SCRIPT = `(()=>{try{const t=localStorage.getItem("theme");const k=t==="dark"||t==="light"?t:"${ThemeRegistry.DEFAULT}";document.documentElement.dataset.theme=k;document.documentElement.style.colorScheme=k;}catch{}})()`;
+// The one case the cookie cannot answer: the user asked for "system" and the request
+// carried no client hint, so the server had to guess light. Synchronous and in <head>,
+// or the correction lands after first paint and the user watches it happen.
+const SYSTEM_MODE_SCRIPT = `(()=>{try{if(matchMedia("(prefers-color-scheme:dark)").matches){const r=document.documentElement;r.dataset.mode="dark";r.style.colorScheme="dark";}}catch{}})()`;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // The session, resolved server-side and put on the context every child route reads.
-  // `beforeLoad` rather than `loader`, because `RouteGuard` runs in a child's
-  // `beforeLoad` and only a parent `beforeLoad`'s return value is in scope by then.
-  //
-  // `SessionStore.ensure()` is what keeps this to one round trip: on the server it calls
-  // the function in-process, and by the time the browser runs this pass the store has
-  // already been restored from the SSR payload, so the client does no fetch at all.
   beforeLoad: async ({ context }) => {
-    await context.session.ensure(fetchSession);
-    return { user: context.session.user, capabilities: context.session.dto };
+    await Promise.all([
+      context.session.ensure(fetchSession),
+      context.appearance.ensure(fetchAppearance),
+    ]);
+    return {
+      user: context.session.user,
+      capabilities: context.session.dto,
+      appearanceSnapshot: context.appearance.current,
+    };
   },
-  // The shell namespaces, on the one route every match has under it. `MessageStore.empty()`
-  // starts at `namespaces: []`, and `ensure()` returns early when nothing is missing — so
-  // a route that declares none of its own (`/`, `/forbidden`) reached `t()` with an empty
-  // catalog and rendered raw keys. A route that declares its own namespaces never showed
-  // it, because `ContentSource.resolve()` unions the shell into that fetch.
-  //
-  // This runs before every child loader, and `dehydrate()` runs after all of them, so the
-  // snapshot in the SSR payload is still the union of the shell plus the entry path (24.10).
   loader: ({ context }) => context.messages.ensure(ContentSource.SHELL),
   head: () => ({
     meta: [
@@ -42,40 +36,40 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { title: "Loadbearing" },
     ],
     links: [
-      { rel: "stylesheet", href: tokenCss },
+      // Tokens and colours first, the default look second: class.css reads the names
+      // theme.css defines, and an app supplying its own design drops the second link.
       { rel: "stylesheet", href: themeCss },
+      { rel: "stylesheet", href: classCss },
     ],
-    scripts: [{ children: THEME_SCRIPT }],
   }),
   shellComponent: RootDocument,
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
-  const { messages, queryClient, api, user, capabilities } = Route.useRouteContext();
+  const { messages, queryClient, api, user, capabilities, appearanceSnapshot } =
+    Route.useRouteContext();
+  const { theme, mode, preference } = appearanceSnapshot;
+
+  // Only when the server had to guess, and only for a palette that has a dark block —
+  // the script can upgrade light to dark and never the other way, so it cannot fight
+  // an explicit choice or strand a dark-only theme.
+  const correctsMode = preference === "system" && ThemeRegistry.supports(theme, "dark");
 
   return (
-    // `lang` from the negotiated locale: screen readers switch voice on it, and
-    // browsers pick hyphenation and quote rules from it.
-    <html lang={messages.translator.locale}>
+    <html
+      lang={messages.translator.locale}
+      data-theme={theme}
+      data-mode={mode}
+      style={{ colorScheme: mode }}
+    >
       <head>
         <HeadContent />
+        {correctsMode ? <script dangerouslySetInnerHTML={{ __html: SYSTEM_MODE_SCRIPT }} /> : null}
       </head>
       <body>
         <QueryClientProvider client={queryClient}>
           <ApiClientProvider client={api}>
-            {/* The store, not a bare `Translator` — client-side navigation adds
-                namespaces after this provider has mounted (23). */}
             <MessageProvider messages={messages}>
-              {/* The DTO off the store, not the reconstructed class: this is what
-                  crosses the SSR boundary as JSON, and `SessionProvider` rebuilding it
-                  is the round-trip property `permissions` exists for. Resolved during
-                  SSR by the `beforeLoad` above, so the first rendered HTML already gates
-                  correctly — fetched client-side instead, every gated element flashes.
-
-                  `children` **is** the matched subtree, so there is no `<Outlet />` here.
-                  A `shellComponent` wraps the root match rather than sitting inside it,
-                  and the router hands it what it would otherwise have rendered; adding an
-                  `<Outlet />` beside it draws every page twice. */}
               <SessionProvider user={user} capabilities={capabilities}>
                 {children}
               </SessionProvider>

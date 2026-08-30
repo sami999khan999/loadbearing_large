@@ -997,7 +997,7 @@ providers inside `<body>` instead of around it.
 In order:
 
 1. `<html lang={locale}>` from the negotiated locale. Screen readers switch voice on it, and browsers pick hyphenation and quote rules from it.
-2. Import `@loadbearing/ui/token.css` and `@loadbearing/ui/theme.css`.
+2. Import `@loadbearing/ui/theme.css` and `@loadbearing/ui/class.css`.
 3. An inline script in `<head>` applying the stored theme **before** hydration, or dark-mode users get a white flash on every load.
 4. `ApiClientProvider` with the environment-appropriate client.
 5. `QueryClientProvider` with the per-request or singleton `QueryClient`.

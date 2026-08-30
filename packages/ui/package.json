@@ -11,8 +11,8 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./token.css": "./src/token/token.css",
-    "./theme.css": "./src/theme/theme.css"
+    "./theme.css": "./src/theme/theme.css",
+    "./class.css": "./src/theme/class.css"
   },
   "files": [
     "dist"

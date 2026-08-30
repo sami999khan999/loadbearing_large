@@ -42,11 +42,27 @@ them into one chunk per locale × namespace. A barrel there would be dead weight
 accidentally import and collapse the split. See [20](../setup/20-content-package.md).
 
 **A second exemption: directories that hold no modules.** In `packages/asset`, `icon/svg/`,
-`image/file/` and `font/` hold `.svg`, `.webp` and `.woff2`; in `packages/ui`, `token/` holds one
-stylesheet. None of them hold modules. There is nothing for a barrel to name, and
+`image/file/` and `font/` hold `.svg`, `.webp` and `.woff2`; in `packages/ui`, `theme/token/`,
+`theme/color/` and `theme/class/` hold stylesheets only. None of them hold modules. There is nothing for a barrel to name, and
 the surfaces that reach them are `ImageManifest` (which imports the files by path) and the `exports`
-map (which publishes `./font.css`, `./sprite.svg`, `./token.css` and `./theme.css` directly). The
+map (which publishes `./font.css`, `./sprite.svg`, `./theme.css` and `./class.css` directly). The
 rule is about folders of code.
+
+**`ui` keeps one folder for appearance, and divides it inside.** `theme/` is the subject; the
+three folders under it are the kinds of thing appearance is made of, and each answers a different
+question:
+
+- **`token/`** — the sizes. Type scale, spacing, radii, elevation, motion. Theme-invariant: a dark
+  theme is not a different spacing system.
+- **`color/`** — one file per theme, each declaring the same twelve names. The set is the contract.
+- **`class/`** — one file per component, styling the `ui-*` hooks that component already emits.
+
+The line between them is what each may reference. `token/` names no colour. `color/` names no
+component. `class/` declares no value of its own — every number and every colour in it is a `var()`
+reaching back into the other two. A rule that breaks that direction is in the wrong folder.
+
+`token/` and `color/` ship together as `./theme.css`; `class/` ships as `./class.css`, separately,
+so an app that wants the tokens and its own design drops one link and keeps the rest.
 
 ## Every folder under `docs/` has an `index.md`
 

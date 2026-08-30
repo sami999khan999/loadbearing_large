@@ -674,13 +674,15 @@ packages/query/src/
 ```
 packages/ui/src/
 ├── index.ts
-├── token/
-│   ├── index.ts
-│   └── token.css                  ← spacing, radii, motion; imports @loadbearing/asset/font.css
 ├── theme/
 │   ├── index.ts
-│   ├── theme-registry.ts          → ThemeRegistry, ThemeKey
-│   ├── theme.css                  ← [data-theme="…"] custom properties
+│   ├── theme.css                  ← entry: @imports token/ and color/
+│   ├── class.css                  ← entry: @imports class/
+│   ├── token/                     ← sizes: typography, space, radius, shadow, motion
+│   ├── color/                     ← one .css per theme; the twelve names, in oklch
+│   ├── class/                     ← one .css per component; styles the ui-* hooks
+│   ├── theme-registry.ts          → ThemeRegistry, ThemeKey, ThemeMeta
+│   ├── mode-registry.ts           → ModeRegistry, ModeKey, ModePreference
 │   └── font-registry.ts           → FontRegistry, FontKey
 ├── icon/
 │   ├── index.ts
@@ -697,7 +699,7 @@ packages/ui/src/
 └── status-badge/
 ```
 
-**Colours live in `theme.css`, not `token.css`** — that separation is what makes a second theme a file rather than a refactor.
+**Colours live in `color/`, never in `token/`, and `class/` declares no value of its own** — that separation is what makes a second theme a file rather than a refactor.
 
 **No domain nouns and no router.** A `TaskCard` here is a bug; it belongs in `feature`.
 
@@ -758,7 +760,7 @@ apps/web/
     │       ├── app.router.ts           → appRouter  (mirrors `contract` exactly)
     │       └── <subject>.router.ts     → <Subject>Router  (three lines per procedure)
     └── route/                          ← pages, plus 2 files that MOUNT the handlers
-        ├── __root.tsx                  ← token.css, theme.css, all four providers
+        ├── __root.tsx                  ← theme.css, class.css, all four providers
         ├── -context.ts                 → RouterContext
         ├── -guard.ts                   → RouteGuard   (hyphen = not a route)
         ├── -messages.ts                ← StaticDataRouteOption augmentation

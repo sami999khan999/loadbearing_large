@@ -19,7 +19,7 @@ different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/ui` (private, never published) |
-| **Entrypoint** | `src/index.tsx` (opens with `"use client"`), plus `./token.css` and `./theme.css` |
+| **Entrypoint** | `src/index.tsx` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
 | **Depends on** | `@loadbearing/asset` — **the only runtime workspace dependency** |
 | **Type-only** | `@loadbearing/permissions`, a `devDependency` because both imports are erased |
 | **Peers** | `react`, `react-dom` |
@@ -38,10 +38,14 @@ packages/ui/
 └── src/
     ├── index.tsx              ← "use client" on line 1
     ├── import.ts              ← two workspace entries, both type-only but one
-    ├── token/token.css        ← structural tokens. No index.ts: no modules to name
     ├── theme/
-    │   ├── theme.css          ← [data-theme="…"] colour custom properties
+    │   ├── theme.css          ← entry: @imports token/ and color/
+    │   ├── class.css          ← entry: @imports class/. A separate export
+    │   ├── token/*.css        ← typography, space, radius, shadow, motion
+    │   ├── color/*.css        ← one per theme; the twelve names, in oklch
+    │   ├── class/*.css        ← one per component; styles the ui-* hooks
     │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
+    │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
     │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
     ├── icon/icon.tsx          → Icon
     ├── can/can.tsx            → Can
@@ -53,11 +57,44 @@ packages/ui/
 One folder per exported component, which is the third folder shape in the repository —
 `ui` is neither role-organised nor subject-organised ([Folders](../../../docs/opinions/folders.md)).
 
-## Tokens are structural; themes are colour
+## Three folders, and one rule about which is which
 
-That split is the whole design. `token.css` holds the type scale, spacing, radii and motion.
-`theme.css` holds colours under `[data-theme]` selectors. **A dark theme is not a different spacing
-system**, so nothing structural varies per theme.
+`theme/` divides by what a file is allowed to reference, and the rule reads in one direction:
+
+| Folder | Holds | May reference |
+|---|---|---|
+| `token/` | sizes — type, space, radius, shadow, motion | nothing |
+| `color/` | one file per theme; the twelve colour names | nothing |
+| `class/` | one file per component; the `ui-*` rules | `token/` and `color/`, only as `var()` |
+
+`token/` names no colour — **a dark theme is not a different spacing system**. `color/` names no
+component. `class/` declares no literal value of its own: a hex or a pixel appearing there is a
+token that was never added. A rule in the wrong folder is visible from its content alone.
+
+`token/` and `color/` ship together as `./theme.css`; `class/` ships as `./class.css`, so an app
+that wants the tokens and its own design drops one link and keeps the rest.
+
+## A theme and a mode are two axes
+
+`<html data-theme="ocean" data-mode="dark">`. The palette is one attribute and light-or-dark is
+another, so a mode toggle keeps the palette and a palette that ships only one mode declares only one
+block. `ThemeMeta.modes` says which, and `ThemeRegistry.resolveMode` is what stops a dark-only
+palette being asked for a light block it does not have — a pair that matches no selector is a page
+with every colour undefined.
+
+## Twelve names, and every theme declares all twelve
+
+```css
+--bg  --surface  --muted  --border  --fg  --fg-muted
+--primary  --primary-fg  --success  --warning  --danger  --ring
+```
+
+The set is the contract rather than a starting point: a theme that omits one inherits whatever the
+`:root` seed left behind, which is a colour from a different theme. Every value is `oklch()`, which
+makes a hue rotation a real operation — the other themes are slate's lightness ladder at another
+hue, with chroma capped to what sRGB can hold there.
+
+See [Palette](reference/palette.md) for the twelve, the gamut trap, and how to add a theme.
 
 Adding a theme is one CSS block and one registry entry — no re-render, no provider, no class-name
 churn. And because every icon uses `currentColor` ([`asset`](../../asset/docs/index.md)), a theme
