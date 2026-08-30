@@ -1,29 +1,18 @@
-/* Colours, and only colours. Applied by a data-theme attribute on <html>, so adding a
-   theme is one block here plus one registry entry — no re-render, no provider, no
-   class-name churn. Every icon uses currentColor, so the whole set recolours with it. */
+/* The tokens and the colour themes: everything a design pass builds on, and nothing
+   that decides how a component looks. That is class.css, which is a separate export
+   precisely so it can be dropped.
 
-[data-theme="light"] {
-  --color-surface: #ffffff;
-  --color-surface-raised: #f7f7f8;
-  --color-border: #e4e4e7;
-  --color-text: #18181b;
-  --color-text-muted: #71717a;
-  --color-accent: #2563eb;
-  --color-accent-text: #ffffff;
-  --color-danger: #dc2626;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-}
+   @import lines come first because CSS requires it. Vite inlines them at build, so this
+   whole tree ships as one stylesheet and one request. */
 
-[data-theme="dark"] {
-  --color-surface: #18181b;
-  --color-surface-raised: #27272a;
-  --color-border: #3f3f46;
-  --color-text: #fafafa;
-  --color-text-muted: #a1a1aa;
-  --color-accent: #60a5fa;
-  --color-accent-text: #0b1120;
-  --color-danger: #f87171;
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-}
+@import "./token/typography.css";
+@import "./token/space.css";
+@import "./token/radius.css";
+@import "./token/shadow.css";
+@import "./token/motion.css";
+
+@import "./color/slate.css";
+@import "./color/ocean.css";
+@import "./color/forest.css";
+@import "./color/plum.css";
+@import "./color/midnight.css";

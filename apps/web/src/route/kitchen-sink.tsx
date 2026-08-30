@@ -1,0 +1,257 @@
+import {
+  type BadgeTone,
+  Button,
+  type ButtonVariant,
+  DataTable,
+  EmptyState,
+  Field,
+  Icon,
+  Input,
+  type ModePreference,
+  StatusBadge,
+  type ThemeKey,
+  ThemeRegistry,
+} from "@loadbearing/ui";
+import { createFileRoute } from "@tanstack/react-router";
+import type { CSSProperties, ReactNode } from "react";
+
+// The one surface that renders every theme against every primitive. Without it a theme
+// is reviewed on whichever screen happens to use the component, and an unreadable
+// pairing ships because nobody looked at it directly.
+export const Route = createFileRoute("/kitchen-sink")({ component: KitchenSink });
+
+// The twelve names every theme declares. This list is the contract, so a theme that
+// omits one shows up here as a swatch of whatever leaked through rather than silently.
+const TOKENS = [
+  "bg",
+  "surface",
+  "muted",
+  "border",
+  "fg",
+  "fg-muted",
+  "primary",
+  "primary-fg",
+  "success",
+  "warning",
+  "danger",
+  "ring",
+] as const;
+
+const VARIANTS: readonly ButtonVariant[] = ["primary", "secondary", "ghost", "danger"];
+const TONES: readonly BadgeTone[] = ["neutral", "accent", "success", "warning", "danger"];
+const PREFERENCES: readonly ModePreference[] = ["light", "dark", "system"];
+
+interface SampleRow {
+  readonly id: string;
+  readonly name: string;
+  readonly count: number;
+}
+
+const ROWS: readonly SampleRow[] = [
+  { id: "1", name: "Alpha", count: 12 },
+  { id: "2", name: "Beta", count: 48 },
+  { id: "3", name: "Gamma", count: 7 },
+];
+
+// Layout only. Every colour on this page comes from class.css or from a token read by
+// name below, so nothing written here can make a broken theme look fine.
+const page: CSSProperties = {
+  maxWidth: "72rem",
+  margin: "0 auto",
+  padding: "var(--space-8) var(--space-6)",
+};
+
+const card: CSSProperties = {
+  background: "var(--surface)",
+  border: "var(--border-width) solid var(--border)",
+  borderRadius: "var(--radius-lg)",
+  padding: "var(--space-6)",
+  marginBottom: "var(--space-6)",
+};
+
+const row: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "var(--space-2)" };
+const gap: CSSProperties = { height: "var(--space-4)" };
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section style={card}>
+      <h2
+        style={{
+          fontSize: "var(--text-lg)",
+          fontWeight: "var(--weight-semibold)",
+          margin: "0 0 var(--space-4)",
+        }}
+      >
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Swatch({ name }: { name: string }) {
+  return (
+    <div style={{ minWidth: "7rem" }}>
+      <div
+        style={{
+          background: `var(--${name})`,
+          border: "var(--border-width) solid var(--border)",
+          borderRadius: "var(--radius-sm)",
+          height: "2.75rem",
+        }}
+      />
+      <code
+        style={{
+          color: "var(--fg-muted)",
+          display: "block",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          marginTop: "var(--space-1)",
+        }}
+      >
+        {`--${name}`}
+      </code>
+    </div>
+  );
+}
+
+function Pair({ fg, bg, label }: { fg: string; bg: string; label: string }) {
+  return (
+    <div
+      style={{
+        background: `var(--${bg})`,
+        border: "var(--border-width) solid var(--border)",
+        borderRadius: "var(--radius-md)",
+        color: `var(--${fg})`,
+        fontSize: "var(--text-sm)",
+        padding: "var(--space-3) var(--space-4)",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function KitchenSink() {
+  const { appearance, appearanceSnapshot } = Route.useRouteContext();
+  const { theme, mode, preference } = appearanceSnapshot;
+
+  // No state and no re-render: the picker writes two attributes on <html> and the
+  // cascade does the rest. Holding it in React would make a colour change an update.
+  const choose = (next: ThemeKey, wanted: ModePreference): void => {
+    const prefersDark =
+      typeof matchMedia === "function" && matchMedia("(prefers-color-scheme:dark)").matches;
+    appearance.choose(next, wanted, prefersDark);
+  };
+
+  return (
+    <main style={page}>
+      <h1 style={{ fontSize: "var(--text-2xl)", marginTop: 0 }}>Kitchen sink</h1>
+
+      <Section title="Appearance">
+        <div style={row}>
+          {ThemeRegistry.all().map((key) => (
+            <Button
+              key={key}
+              variant={key === theme ? "primary" : "secondary"}
+              onClick={() => choose(key, preference)}
+            >
+              {`${ThemeRegistry.meta(key).label} (${ThemeRegistry.meta(key).modes.join("/")})`}
+            </Button>
+          ))}
+        </div>
+        <div style={gap} />
+        <div style={row}>
+          {PREFERENCES.map((key) => (
+            <Button
+              key={key}
+              variant={key === preference ? "primary" : "secondary"}
+              onClick={() => choose(theme, key)}
+            >
+              {key}
+            </Button>
+          ))}
+        </div>
+        <p style={{ color: "var(--fg-muted)", fontSize: "var(--text-sm)" }}>
+          {`rendering ${theme} / ${mode}, preference ${preference}`}
+        </p>
+      </Section>
+
+      <Section title="Tokens">
+        <div style={row}>
+          {TOKENS.map((name) => (
+            <Swatch key={name} name={name} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Contrast pairs">
+        <div style={row}>
+          <Pair fg="fg" bg="bg" label="fg on bg" />
+          <Pair fg="fg-muted" bg="muted" label="fg-muted on muted" />
+          <Pair fg="primary-fg" bg="primary" label="primary-fg on primary" />
+          <Pair fg="primary-fg" bg="danger" label="primary-fg on danger" />
+          <Pair fg="danger" bg="bg" label="danger on bg" />
+        </div>
+      </Section>
+
+      <Section title="Primitives">
+        <div style={row}>
+          {VARIANTS.map((variant) => (
+            <Button key={variant} variant={variant}>
+              {variant}
+            </Button>
+          ))}
+          <Button disabled>disabled</Button>
+        </div>
+        <div style={gap} />
+        <div style={row}>
+          {TONES.map((tone) => (
+            <StatusBadge key={tone} tone={tone}>
+              {tone}
+            </StatusBadge>
+          ))}
+        </div>
+        <div style={gap} />
+        <div style={row}>
+          <Icon name="check" label="check" />
+          <Icon name="user" label="user" />
+          <Icon name="chevron-down" label="chevron down" />
+        </div>
+        <div style={gap} />
+        <div style={{ display: "grid", gap: "var(--space-4)", maxWidth: "24rem" }}>
+          <Field label="Email" htmlFor="ks-email" hint="A hint sits under the control.">
+            <Input id="ks-email" placeholder="you@example.com" />
+          </Field>
+          <Field
+            label="Broken"
+            htmlFor="ks-broken"
+            error="An error adds a line, never replaces one."
+          >
+            <Input id="ks-broken" defaultValue="not an address" />
+          </Field>
+        </div>
+      </Section>
+
+      <Section title="Composites">
+        <DataTable
+          caption="A table with three rows"
+          columns={[
+            { key: "name", header: "Name", cell: (r: SampleRow) => r.name },
+            { key: "count", header: "Count", cell: (r: SampleRow) => r.count, align: "end" },
+          ]}
+          rows={ROWS}
+        />
+        <div style={gap} />
+        <DataTable.Skeleton rows={3} columns={2} />
+        <div style={gap} />
+        <EmptyState
+          icon="check"
+          title="Nothing here yet"
+          description="An empty state is an invitation to act."
+          action={<Button>Do the thing</Button>}
+        />
+      </Section>
+    </main>
+  );
+}

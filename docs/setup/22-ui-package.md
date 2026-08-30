@@ -28,12 +28,20 @@ packages/ui/
 └── src/
     ├── index.tsx              ← "use client" on line 1
     ├── import.ts              ← every external symbol. Two workspace entries, both type-only
-    ├── token/
-    │   └── token.css          ← imports @loadbearing/asset/font.css. No index.ts: no modules
     ├── theme/
     │   ├── index.ts
-    │   ├── theme.css          ← [data-theme="…"] custom properties
+    │   ├── theme.css          ← entry: @imports token/ and color/
+    │   ├── class.css          ← entry: @imports class/. Exported separately
+    │   ├── token/             ← the sizes. No index.ts: no modules
+    │   │   └── typography.css · space.css · radius.css · shadow.css · motion.css
+    │   ├── color/             ← one file per theme; the twelve names, in oklch
+    │   │   ├── slate.css      ← the default; also seeds :root
+    │   │   ├── ocean.css · forest.css · plum.css
+    │   │   └── midnight.css   ← dark only
+    │   ├── class/             ← one file per component; styles the ui-* hooks
+    │   │   └── base.css · button.css · input.css · field.css · …
     │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
+    │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
     │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
     ├── icon/
     │   ├── index.ts
@@ -52,9 +60,9 @@ packages/ui/
     └── dialog/ …              ☐ needs a headless library — see Step 22.5
 ```
 
-**`token/` has no `index.ts`.** It holds one stylesheet and no modules, so there is nothing for a
-barrel to name — the same exemption the binary directories in `asset` have
-([Folders](../opinions/folders.md)).
+**`theme/token/`, `theme/color/` and `theme/class/` have no `index.ts`.** They hold stylesheets and
+no modules, so there is nothing for a barrel to name — the same exemption the binary directories in
+`asset` have ([Folders](../opinions/folders.md)).
 
 ---
 
@@ -67,7 +75,7 @@ barrel to name — the same exemption the binary directories in `asset` have
 
 ## Step 22.1 — Tokens
 
-**`packages/ui/src/token/token.css`**
+**`packages/ui/src/theme/token/`**
 
 ```css
 @import "@loadbearing/asset/font.css";
@@ -99,7 +107,7 @@ barrel to name — the same exemption the binary directories in `asset` have
   --radius-lg: 0.75rem;
 
   --border-width: 1px;
-  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
 
   /* ── motion ────────────────────────────────────────── */
   --duration-fast: 120ms;
@@ -115,7 +123,11 @@ barrel to name — the same exemption the binary directories in `asset` have
 }
 ```
 
-**Colours are not here.** They live in `theme.css` under `[data-theme]` selectors, because they are the thing that varies. Type scale, spacing, and radii are structural and stay constant across themes — a dark theme is not a different spacing system.
+**Shown as one block for reading; on disk it is five files** — `typography.css`, `space.css`, `radius.css`, `shadow.css`, `motion.css` — under `token/`, and `theme.css` `@import`s them. Vite inlines the imports, so the split costs nothing at runtime.
+
+**Colours are not here.** They live in `color/*.css` under `[data-theme][data-mode]` selectors, because they are the thing that varies. Type scale, spacing, and radii are structural and stay constant across themes — a dark theme is not a different spacing system.
+
+**The focus ring is two shadows, not an outline.** The inner one punches a gap in `--bg` so the ring stays visible against a control of any fill. It reads colour names, which is why it resolves per theme.
 
 **The reduced-motion override sets the duration variables to zero** rather than each component checking the media query. One block, and every transition in the system respects it.
 
@@ -123,35 +135,39 @@ barrel to name — the same exemption the binary directories in `asset` have
 
 ## Step 22.2 — Themes
 
-**`packages/ui/src/theme/theme.css`**
+**`packages/ui/src/theme/color/slate.css`** — one file per theme, twelve names, twice.
 
 ```css
-[data-theme="light"] {
-  --color-surface: #ffffff;
-  --color-surface-raised: #f7f7f8;
-  --color-border: #e4e4e7;
-  --color-text: #18181b;
-  --color-text-muted: #71717a;
-  --color-accent: #2563eb;
-  --color-accent-text: #ffffff;
-  --color-danger: #dc2626;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
+:root,
+[data-theme="slate"][data-mode="light"] {
+  --bg: oklch(0.985 0.002 260);         /* page */
+  --surface: oklch(1 0 0);              /* cards, popovers, modals */
+  --muted: oklch(0.960 0.004 260);      /* subtle fills, hover, inputs */
+  --border: oklch(0.920 0.004 260);
+  --fg: oklch(0.210 0.010 260);         /* primary text */
+  --fg-muted: oklch(0.535 0.012 260);   /* secondary text, placeholders */
+  --primary: oklch(0.550 0.190 260);
+  --primary-fg: oklch(0.990 0 0);
+  --success: oklch(0.600 0.140 155);
+  --warning: oklch(0.700 0.145 75);
+  --danger: oklch(0.580 0.210 27);
+  --ring: oklch(0.550 0.190 260);
 }
 
-[data-theme="dark"] {
-  --color-surface: #18181b;
-  --color-surface-raised: #27272a;
-  --color-border: #3f3f46;
-  --color-text: #fafafa;
-  --color-text-muted: #a1a1aa;
-  --color-accent: #60a5fa;
-  --color-accent-text: #0b1120;
-  --color-danger: #f87171;
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
+[data-theme="slate"][data-mode="dark"] {
+  --bg: oklch(0.170 0.008 260);
+  /* … the same twelve, at the dark end of the ladder … */
 }
 ```
+
+**Two attributes, not one key.** `data-theme` picks the palette and `data-mode` picks light or dark, so the two stay independent: a mode toggle keeps your theme, and a theme that ships only one mode declares only one block. A flat `light | dark | ocean-dark` union grows *n × m* and makes "does this theme have a light variant" a question you answer with string surgery.
+
+**`slate`'s light block also claims `:root`.** A document with no attributes — the state of any page rendered before the cookie is read — still resolves all twelve. `:root` is `(0,1,0)` against a theme block's `(0,2,0)`, so it never interferes with a real choice.
+
+**`oklch()`, and not for taste.** Lightness tracks perceived lightness, so the other themes are this ladder at another hue and inherit its contrast. It also makes state derivation honest: there is no `--primary-hover` token because `color-mix(in oklch, var(--primary) 88%, var(--fg))` darkens by an even step in every theme.
+
+> [!WARNING]
+> **sRGB does not hold the same chroma at every hue, and the browser clips silently.** At `L 0.54` blue reaches chroma 0.228 and azure only 0.094 — ask for more and the colour on screen is not the one in the file, so any contrast computed from the file is wrong. `pnpm check:contrast` converts every value to linear sRGB without clamping and fails on a channel outside `[0, 1]`.
 
 **`packages/ui/src/theme/theme-registry.ts`**
 
@@ -415,14 +431,14 @@ export {
 **No `Dialog` line yet** — see the note under Step 22.5. Adding it is one export and one wrapper
 once the headless library is chosen.
 
-**`token/` is absent on purpose** — it ships CSS, not JavaScript, and reaches the app through the `./token.css` export below rather than through this file.
+**`token/`, `color/` and `class/` are absent on purpose** — they ship CSS, not JavaScript, and reach the app through the `./theme.css` and `./class.css` exports below rather than through this file.
 
 CSS is imported by the app, not re-exported here:
 
 ```ts
 // apps/web/src/route/__root.tsx
-import "@loadbearing/ui/token.css";
 import "@loadbearing/ui/theme.css";
+import "@loadbearing/ui/class.css";
 ```
 
 Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does

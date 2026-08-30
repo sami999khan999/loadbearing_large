@@ -300,8 +300,8 @@ The Postgres side gets its own section because it is the largest folder in the p
 
 ## 1.18 Inside `packages/ui`
 
-- **`token/`** — spacing, radii, type scale, motion durations. **Deliberately no colours.**
-- **`theme/`** — colours, as `[data-theme="…"]` custom properties, plus the registry. Splitting these two is what makes a second theme a file instead of a refactor.
+- **`theme/`** — everything about appearance, divided by what a file may reference. `token/` holds the sizes — type scale, spacing, radii, elevation, motion — and **deliberately no colours**. `color/` holds one file per theme, each declaring the same twelve names under `[data-theme][data-mode]`. `class/` holds one file per component and declares **no value of its own**: every number in it is a `var()` reaching back into the other two. A rule that breaks that direction is in the wrong folder.
+- **Two attributes, not one key.** `data-theme` selects the palette and `data-mode` selects light or dark, so the two axes stay independent and a palette may declare either or both.
 - **`icon/`, `can/`, `data-table/`, `dialog/`, `empty-state/`, `status-badge/`** — one folder per component, each with its `index.ts` and optionally a `.stories.tsx`.
 - **No domain nouns.** `DataTable`, never `TaskTable`. The test is mechanical and has no judgement call in it: if the name contains a domain word, the component belongs in `feature`.
 - **No router import.** Navigation arrives as an `onNavigate` prop or an `href` string.

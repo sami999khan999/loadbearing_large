@@ -1,0 +1,11 @@
+/* The default look: one file per component, each styling the ui-* hooks that component
+   already emits. Separate from theme.css and separately exported, so an app that wants
+   the tokens and its own design drops this one link and keeps everything else. */
+
+@import "./class/base.css";
+@import "./class/button.css";
+@import "./class/input.css";
+@import "./class/field.css";
+@import "./class/status-badge.css";
+@import "./class/empty-state.css";
+@import "./class/data-table.css";

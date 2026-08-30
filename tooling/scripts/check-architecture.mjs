@@ -456,7 +456,10 @@ assert("the rule files route to every opinions page", (failures) => {
   // correct, and will never be opened.
   const briefSource = readFileSync(brief, "utf8");
   const routerPaths = [join(ROOT, "docs/ai/index.md"), join(rulesDir, "index.md")];
-  const routers = [briefSource, ...routerPaths.filter(existsSync).map((f) => readFileSync(f, "utf8"))].join(" ");
+  const routers = [
+    briefSource,
+    ...routerPaths.filter(existsSync).map((f) => readFileSync(f, "utf8")),
+  ].join(" ");
 
   // Every rule file is reachable. `index.md` is a router itself, so it is exempt from
   // needing a route into it beyond AGENTS.md, which is checked immediately after.
@@ -497,10 +500,12 @@ assert("the rule files route to every opinions page", (failures) => {
   // pattern never saw, and a second file citing the same opinions page hid the gap.
   const sources = [
     [rel(brief), briefSource, dirname(brief)],
-    ...routerPaths
-      .filter(existsSync)
-      .map((f) => [rel(f), readFileSync(f, "utf8"), dirname(f)]),
-    ...ruleFiles.map((f) => [`${RULES_DIR}/${f}`, readFileSync(join(rulesDir, f), "utf8"), rulesDir]),
+    ...routerPaths.filter(existsSync).map((f) => [rel(f), readFileSync(f, "utf8"), dirname(f)]),
+    ...ruleFiles.map((f) => [
+      `${RULES_DIR}/${f}`,
+      readFileSync(join(rulesDir, f), "utf8"),
+      rulesDir,
+    ]),
   ];
 
   for (const [name, text, base] of sources) {
