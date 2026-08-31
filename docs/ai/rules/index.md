@@ -23,7 +23,7 @@ page is the rulebook's own contents.
 | [`vocabulary.md`](vocabulary.md) | Permission vs procedure vs activity vs log code, and the naming that bites |
 | [`data.md`](data.md) | Which store owns which data, and what every new schema must carry |
 | [`simplicity.md`](simplicity.md) | The tie-breaker when two designs satisfy every other rule |
-| [`workflow.md`](workflow.md) | Commands, what to run before claiming done, commits, adding a feature |
+| [`workflow.md`](workflow.md) | Commands, what to run before claiming done, commits and who authors them, adding a feature |
 
 ## What is in these files and what is not
 

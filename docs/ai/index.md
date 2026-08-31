@@ -28,6 +28,7 @@ None of the rule files is longer than ~650 tokens. Read one or two, not all of t
 | Write a comment | [`rules/comments.md`](rules/comments.md) |
 | Decide how much structure to build | [`rules/simplicity.md`](rules/simplicity.md) |
 | Run, verify, or commit a change | [`rules/workflow.md`](rules/workflow.md) |
+| Write a commit message, a PR body, or a branch name | [`rules/workflow.md`](rules/workflow.md) — and never name yourself as author, co-author, or contributor |
 | Add a feature slice | [`skills/add-slice.md`](skills/add-slice.md) |
 | Write or extend a package's `docs/` | [`skills/add-docs.md`](skills/add-docs.md) |
 | Get the whole rulebook, not one topic | [`rules/index.md`](rules/index.md) |

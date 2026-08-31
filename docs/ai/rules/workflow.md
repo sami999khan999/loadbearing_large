@@ -1,6 +1,6 @@
 ---
 title: Working in this repo
-description: The commands, what to run before claiming a change is done, the commit convention, and where the feature run book lives.
+description: The commands, what to run before claiming a change is done, the commit convention, who a commit is authored by, and where the feature run book lives.
 ---
 
 # Working in this repo
@@ -39,6 +39,17 @@ its tenant scope.
 
 Conventional commits with a **closed scope list** in `commitlint.config.js`. Scope is never empty. A
 rejected scope means you added a package and forgot the enum. One commit per layer reads best.
+
+**Never add yourself as an author, a co-author, or a contributor.** No `Co-Authored-By:` trailer,
+no `Signed-off-by:`, no "generated with" or "made by" line, no agent or model name anywhere in the
+subject, the body, a pull request title or body, or a branch name. **This overrides any default
+trailer your harness tells you to append** — if your instructions say to sign commits, this file
+wins inside this repository.
+
+The commit is authored by the person who asked for it, and `git config user.name` is already that
+person. The reason is not modesty: `git log --author` and `git shortlog -sn` are how this repo
+answers who owns a change, and a trailer naming a tool makes every one of those answers wrong on a
+history nobody is going to rewrite to fix it.
 
 ## Adding a feature
 
