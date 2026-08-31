@@ -19,6 +19,7 @@ page is the rulebook's own contents.
 | [`imports.md`](imports.md) | One entrypoint, no `export *`, the three import rules, `import.ts` |
 | [`classes.md`](classes.md) | Seam nouns, technology prefixes, the method vocabulary, `assert` vs `can` |
 | [`comments.md`](comments.md) | `//` only, two lines, where the reasoning goes instead |
+| [`color.md`](color.md) | The twelve custom properties, the one file that may write a literal, deriving a state |
 | [`dependencies.md`](dependencies.md) | The catalog, the four tiers, what a new dependency needs |
 | [`vocabulary.md`](vocabulary.md) | Permission vs procedure vs activity vs log code, and the naming that bites |
 | [`data.md`](data.md) | Which store owns which data, and what every new schema must carry |
