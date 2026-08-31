@@ -183,7 +183,7 @@ packages/contracts/src/task/
 ```
 
 Subject folders repeat across packages by design: `contracts/task/`, `application/task/`,
-`query/task/`, `feature/task/`, `web/route/task/`. One glob per team —
+`query/task/`, `feature/task/`, `web/route/(app)/_authenticated/task/`. One glob per team —
 `packages/*/src/<slice>/**`. In `infrastructure` a slice is split across
 `pg/schema/task.schema.ts` and `pg/repository/pg-task.repository.ts`, for the tooling reason above.
 

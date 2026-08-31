@@ -1,5 +1,5 @@
-import { Container } from "@loadbearing/composition";
 import { Env } from "~/env.js";
+import { Container } from "./import.js";
 
 // One per process, at module scope. Never per request: constructing per request opens
 // a connection pool per request, which exhausts Postgres in about four seconds under

@@ -1,8 +1,7 @@
-import { useMessages } from "@loadbearing/feature";
-import { EmptyState } from "@loadbearing/ui";
 import { createFileRoute } from "@tanstack/react-router";
+import { EmptyState, useMessages } from "~/import.js";
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/(shell)/")({ component: Home });
 
 function Home() {
   // No `staticData`/`loader` here: `common` is a shell namespace and `__root.tsx` ensures the

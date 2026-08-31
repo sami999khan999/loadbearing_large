@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { type Job, Worker } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
 // How many months of `activity_log` partitions to keep ahead of today. Three, not one:
 // a partitioned table with no partition for the current date rejects every insert, so

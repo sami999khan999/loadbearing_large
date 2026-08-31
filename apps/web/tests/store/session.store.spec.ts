@@ -1,6 +1,6 @@
 import { CapabilitySet } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
-import { type SessionSnapshot, SessionStore } from "../src/session-store.js";
+import { type SessionSnapshot, SessionStore } from "../../src/store/session.store.js";
 
 const OWNER: SessionSnapshot = {
   user: { id: "u1", email: "owner@example.com", name: "Owner" },

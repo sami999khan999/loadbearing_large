@@ -1,5 +1,4 @@
-import type { SessionUser } from "@loadbearing/feature";
-import { CapabilitySet, type CapabilitySetDto } from "@loadbearing/permissions";
+import { CapabilitySet, type CapabilitySetDto, type SessionUser } from "~/import.js";
 
 // What crosses the SSR boundary: the display fields the shell renders, and the
 // capability set as JSON. The DTO rather than the class, for the same reason

@@ -1,24 +1,25 @@
+import { createFileRoute } from "@tanstack/react-router";
 import {
   type BadgeTone,
   Button,
   type ButtonVariant,
+  type CSSProperties,
   DataTable,
   EmptyState,
   Field,
   Icon,
   Input,
   type ModePreference,
+  type ReactNode,
   StatusBadge,
   type ThemeKey,
   ThemeRegistry,
-} from "@loadbearing/ui";
-import { createFileRoute } from "@tanstack/react-router";
-import type { CSSProperties, ReactNode } from "react";
+} from "~/import.js";
 
 // The one surface that renders every theme against every primitive. Without it a theme
 // is reviewed on whichever screen happens to use the component, and an unreadable
 // pairing ships because nobody looked at it directly.
-export const Route = createFileRoute("/kitchen-sink")({ component: KitchenSink });
+export const Route = createFileRoute("/(dev)/kitchen-sink")({ component: KitchenSink });
 
 // The twelve names every theme declares. This list is the contract, so a theme that
 // omits one shows up here as a swatch of whatever leaked through rather than silently.

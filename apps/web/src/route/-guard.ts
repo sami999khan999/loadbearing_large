@@ -1,6 +1,10 @@
-import type { SessionUser } from "@loadbearing/feature";
-import { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
 import { redirect } from "@tanstack/react-router";
+import {
+  CapabilitySet,
+  type CapabilitySetDto,
+  type PermissionKey,
+  type SessionUser,
+} from "~/import.js";
 
 // The third of four enforcement surfaces (23). It stops the page rendering at all,
 // which the component-level `<Can>` cannot — but it is still not the real gate.

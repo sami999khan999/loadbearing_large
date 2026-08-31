@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { Queue } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
 // Detaches the month that has just aged out of the retention window, ships it to S3 as
 // gzipped NDJSON, and records it in `activity_archive`. That table is what makes a

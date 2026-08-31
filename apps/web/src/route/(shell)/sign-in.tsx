@@ -1,9 +1,13 @@
-import { AuthClient } from "@loadbearing/api-client";
-import type { ClientNamespace } from "@loadbearing/content";
-import { SignInForm, TwoFactorForm } from "@loadbearing/feature";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
 import { Endpoint } from "~/endpoint.js";
+import {
+  AuthClient,
+  type ClientNamespace,
+  SignInForm,
+  TwoFactorForm,
+  useMemo,
+  useState,
+} from "~/import.js";
 
 // One local const, referenced twice: `staticData` is what a prefetcher or a coverage
 // test can read without executing anything, and the loader is what resolves it.
@@ -11,7 +15,7 @@ import { Endpoint } from "~/endpoint.js";
 // version-sensitive in exactly the way this document keeps warning about.
 const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
 
-export const Route = createFileRoute("/sign-in")({
+export const Route = createFileRoute("/(shell)/sign-in")({
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
   component: SignInPage,

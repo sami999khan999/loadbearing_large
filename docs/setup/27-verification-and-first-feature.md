@@ -127,7 +127,7 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
 
 11. apps/web/src/server/orpc/lead.router.ts                three lines per procedure
     apps/web/src/server/orpc/app.router.ts                 mount it — the shape mirrors `contract`
-12. apps/web/src/route/lead/                               compose the components
+12. apps/web/src/route/(app)/_authenticated/lead/           compose the components
 
     packages/composition/src/container/container.ts        expose the new use-cases
 ```

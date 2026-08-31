@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { Queue } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
 // Every five minutes, not every second. The analytics queue is the one that is allowed
 // to fall behind — nobody waits on a dashboard row — and a five-minute cadence keeps

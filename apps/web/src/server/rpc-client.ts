@@ -1,5 +1,5 @@
-import { createRouterClient } from "@orpc/server";
 import { container } from "./container.js";
+import { createRouterClient } from "./import.js";
 import { appRouter } from "./orpc/app.router.js";
 
 // SSR without a network hop. `"/api/rpc"` resolves to this same server, so an HTTP

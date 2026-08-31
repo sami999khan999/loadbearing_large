@@ -24,7 +24,7 @@ what to write, what to check, what to commit.
 1. Read [Folders](../../opinions/folders.md) and [Files](../../opinions/files.md). They decide every path and
    filename below; do not infer conventions from surrounding code.
 2. Read the `role` slice end to end. It walks all twelve steps, reuses an existing permission rather
-   than adding one, and lands at `/permissions` behind a `RouteGuard`:
+   than adding one, and lands at `/settings/roles` behind a `RouteGuard`:
 
    | Layer | File |
    |---|---|
@@ -37,11 +37,12 @@ what to write, what to check, what to commit.
    | copy | `packages/content/src/message/{en,bn}/role.ts` |
    | components | `packages/feature/src/rbac/` |
    | router | `apps/web/src/server/orpc/role.router.ts` |
-   | route | `apps/web/src/route/permissions.tsx` |
+   | route | `apps/web/src/route/(app)/_authenticated/settings/roles.tsx` |
 
 3. Decide the subject noun. It is singular, kebab-case in paths, and the **same word in every
    package** — `contracts/src/lead/`, `application/src/lead/`, `query/src/lead/`,
-   `feature/src/lead/`, `apps/web/src/route/lead/`. One glob per team: `packages/*/src/lead/**`.
+   `feature/src/lead/`, `apps/web/src/route/(app)/_authenticated/lead/`. One glob per team:
+   `packages/*/src/lead/**`.
 
 ---
 
@@ -182,13 +183,20 @@ src/server/orpc/app.router.ts          mount it — the shape mirrors `contract`
 ### 12 — Route + wiring
 
 ```
-apps/web/src/route/<subject>/                    compose the components
+apps/web/src/route/(app)/_authenticated/<subject>/    compose the components
 packages/composition/src/container/container.ts  expose the new use-cases
 ```
 
 The route needs `staticData.messages` and its loader's `ensure(["<subject>"])` — see
 [24 · Web app](../../setup/24-web-app.md) §24.10. A route that forgets them renders raw keys rather than
 throwing, which is what makes the omission visible in review instead of at 3am.
+
+**Under `(app)/_authenticated/` the session check is already done** — the pathless layout runs
+`RouteGuard.requireSession()` for the whole subtree, so the page states only the capability it
+needs. **And its URL is whatever step 1 declared in `ROUTES.<subject>`**, spelled again as the
+`createFileRoute()` literal; the nav gate reads the same entry, so a page mounted somewhere else is
+a gate pointing at a 404. A page that needs no session goes in `(shell)/` instead; a design or QA
+surface goes in `(dev)/`.
 
 ### Plus: the permission migration
 

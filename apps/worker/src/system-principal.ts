@@ -1,6 +1,11 @@
-import { Principal } from "@loadbearing/application";
-import type { OrganizationId, UserId } from "@loadbearing/contracts";
-import { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";
+import {
+  CapabilitySet,
+  type OrganizationId,
+  type PermissionKey,
+  PermissionRegistry,
+  Principal,
+  type UserId,
+} from "./import.js";
 
 export class SystemPrincipal {
   private constructor() {}

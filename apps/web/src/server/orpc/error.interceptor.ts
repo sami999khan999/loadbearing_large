@@ -1,6 +1,4 @@
-import { ErrorNormalizer, HTTP_STATUS } from "@loadbearing/errors";
-import type { Logger } from "@loadbearing/observability";
-import { ORPCError } from "@orpc/server";
+import { ErrorNormalizer, HTTP_STATUS, type Logger, ORPCError } from "../import.js";
 
 export class ErrorInterceptor {
   private constructor() {}

@@ -1,4 +1,4 @@
-import type { ClientNamespace } from "@loadbearing/content";
+import type { ClientNamespace } from "~/import.js";
 
 declare module "@tanstack/react-router" {
   interface StaticDataRouteOption {

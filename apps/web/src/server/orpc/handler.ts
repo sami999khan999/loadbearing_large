@@ -1,6 +1,6 @@
-import { RPCHandler } from "@orpc/server/fetch";
 import { container } from "../container.js";
 import { Cors } from "../cors.js";
+import { RPCHandler } from "../import.js";
 import { appRouter } from "./app.router.js";
 
 // One handler for the process, like the container. Building it per request would

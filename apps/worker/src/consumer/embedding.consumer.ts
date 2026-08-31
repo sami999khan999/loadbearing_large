@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { type Job, Worker } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 import { SystemPrincipal } from "../system-principal.js";
 
 interface EmbeddingJobData {

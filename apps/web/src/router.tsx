@@ -1,11 +1,16 @@
-import { ApiClient, CookieAuthStrategy } from "@loadbearing/api-client";
-import { type MessageSnapshot, MessageStore, StaticContentSource } from "@loadbearing/content";
-import { createQueryClient } from "@loadbearing/query";
-import { createRouter as createTanStackRouter } from "@tanstack/react-router";
-import { type AppearanceSnapshot, AppearanceStore } from "./appearance-store.js";
 import { Endpoint } from "./endpoint.js";
+import {
+  ApiClient,
+  CookieAuthStrategy,
+  createQueryClient,
+  createRouter as createTanStackRouter,
+  type MessageSnapshot,
+  MessageStore,
+  StaticContentSource,
+} from "./import.js";
 import { routeTree } from "./route-tree.gen";
-import { type SessionSnapshot, SessionStore } from "./session-store.js";
+import { type AppearanceSnapshot, AppearanceStore } from "./store/appearance.store.js";
+import { type SessionSnapshot, SessionStore } from "./store/session.store.js";
 
 export interface RouterDehydrated {
   readonly messages: MessageSnapshot;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type AppearanceSnapshot, AppearanceStore } from "../src/appearance-store.js";
+import { type AppearanceSnapshot, AppearanceStore } from "../../src/store/appearance.store.js";
 
 // The function that decides what `__root.tsx` writes onto <html>. Every case below is a
 // request the server actually has to answer before the first byte.

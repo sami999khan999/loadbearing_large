@@ -133,6 +133,36 @@ The `no-restricted-imports` blocks in `tooling/eslint-config` match on the speci
 on `import.ts` and nowhere else. That is the right place: the ban on `application` importing
 `HTTP_STATUS` is checked at the one line that could introduce it.
 
+### Apps have one too, and `apps/web` has two
+
+The rule is not about packages, it is about a `src/` tree, so `apps/worker/src/import.ts` and
+`apps/web`'s pair are the same convention. The worker is the plain case — `@loadbearing/composition`
+in ten files, `bullmq` in nine, and eight of thirteen source files opening with the same four lines,
+all of it now one file.
+
+**`apps/web` has two surfaces, split on the server-only boundary it already defends.**
+`src/import.ts` is the client-safe one; `src/server/import.ts` is the server-only one, and it is the
+only one allowed to name `@loadbearing/composition` and the packages beneath it — `apps/web/src/**`
+is banned from those and `apps/web/src/server/**` is the single exemption. One surface would have to
+hand every route component an edge into the server graph and leave the client bundle's cleanliness
+resting on tree-shaking, which is what the three defences in [24](../setup/24-web-app.md) exist to
+avoid depending on. Read the second file and you have the whole transport surface; read the first
+and a server-only package appearing on it *is* the leak.
+
+**Three exemptions, each forced by tooling rather than chosen.** Every one of them is a case where
+routing the import through a surface makes the build wrong, so the comment saying why belongs at the
+line — an unexplained exemption is the one the next reader deletes.
+
+| Exemption | Why |
+|---|---|
+| `apps/*/src/env.ts` keeps its own imports | It carries `import "@tanstack/react-start/server-only"`, and a side-effect import cannot be re-exported. Stated for both apps so there is one rule, not two. |
+| `@tanstack/react-router` is direct inside `apps/web/src/route/**` | The route generator only inspects import declarations whose source is literally that specifier. Import `createFileRoute` from a surface and it finds none, then **prepends its own** — a duplicate binding, rewritten on every generation. |
+| `@tanstack/react-start` and `/server` are direct in `apps/web/src/server/*.fn.ts` | A server function is half client: the stub ships to the browser and only the handler body is stripped. A re-exported `/server` entry is therefore a live client-graph edge, and Start's import protection denies the build outright. |
+
+The last one is why the two `*.fn.ts` files read `~/import.ts` rather than the server surface beside
+them. They are the one place in `apps/web` whose module graph is genuinely both, and `container.js`
+reaches them as a relative import inside the handler, where the compiler removes it.
+
 ## `.js` extensions on every relative import
 
 `moduleResolution: "Bundler"` doesn't require them, but `NodeNext` in `apps/worker` does. Writing

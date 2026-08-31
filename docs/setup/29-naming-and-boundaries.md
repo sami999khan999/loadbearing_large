@@ -404,7 +404,7 @@ packages/feature/src/task/reactivate-task.dialog.tsx        <ReactivateTaskDialo
 
 apps/web/src/server/orpc/task.router.ts                     TaskRouter.reactivate
 apps/web/src/server/orpc/app.router.ts                      ← register
-apps/web/src/route/task/$taskId.tsx                         composes the dialog
+apps/web/src/route/(app)/_authenticated/task/$taskId.tsx     composes the dialog
 
 apps/worker/src/consumer/embedding.consumer.ts              ← already exists, no change
 
@@ -419,8 +419,8 @@ packages/composition/src/container/container.ts             ← expose the use-c
 Browser requests /task/abc123
         │
         ▼
-apps/web  route/task/$taskId.tsx
-        │  beforeLoad → RouteGuard.requireSession()
+apps/web  route/(app)/_authenticated/task/$taskId.tsx
+        │  beforeLoad → RouteGuard.requireSession(), in (app)/_authenticated.tsx above
         │  loader     → ApiClient (in-process on SSR, HTTP in the browser)
         ▼
 apps/web  server/orpc/base.ts

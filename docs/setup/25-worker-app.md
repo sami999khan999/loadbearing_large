@@ -25,7 +25,8 @@ apps/worker/
 ├── package.json
 ├── tsconfig.json
 └── src/
-    ├── env.ts                        → Env  (the second and last process.env reader)
+    ├── import.ts                     ← the outside surface: every external symbol, once
+    ├── env.ts                        → Env  ★ the second process.env reader; keeps its own imports
     ├── main.ts                       ← entrypoint
     ├── worker-bootstrap.ts           → WorkerBootstrap
     ├── system-principal.ts           → SystemPrincipal

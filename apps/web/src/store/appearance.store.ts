@@ -4,7 +4,7 @@ import {
   ModeRegistry,
   type ThemeKey,
   ThemeRegistry,
-} from "@loadbearing/ui";
+} from "~/import.js";
 
 // What crosses the SSR boundary. `preference` is what the user chose and `mode` is what
 // renders — they differ only while the choice is "system", which nothing can style.

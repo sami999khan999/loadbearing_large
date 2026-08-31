@@ -1,10 +1,12 @@
-import type { ApiClient } from "@loadbearing/api-client";
-import type { MessageStore } from "@loadbearing/content";
-import type { SessionUser } from "@loadbearing/feature";
-import type { CapabilitySetDto } from "@loadbearing/permissions";
-import type { QueryClient } from "@tanstack/react-query";
-import type { AppearanceSnapshot, AppearanceStore } from "~/appearance-store.js";
-import type { SessionStore } from "~/session-store.js";
+import type {
+  ApiClient,
+  CapabilitySetDto,
+  MessageStore,
+  QueryClient,
+  SessionUser,
+} from "~/import.js";
+import type { AppearanceSnapshot, AppearanceStore } from "~/store/appearance.store.js";
+import type { SessionStore } from "~/store/session.store.js";
 
 // What every route sees. Built per request in `router.tsx`, never at module scope.
 export interface RouterContext {

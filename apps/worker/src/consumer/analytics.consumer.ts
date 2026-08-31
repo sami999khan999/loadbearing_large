@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { type Job, Worker } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
 // How many activity rows move per round trip. Large enough that ClickHouse merges a
 // small number of big parts rather than a large number of small ones — a thousand

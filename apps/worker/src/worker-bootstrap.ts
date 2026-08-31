@@ -1,10 +1,8 @@
-import type { Container } from "@loadbearing/composition";
-import type { RedisConnection } from "@loadbearing/infrastructure";
-import type { Worker } from "bullmq";
 import { AnalyticsConsumer } from "./consumer/analytics.consumer.js";
 import { EmbeddingConsumer } from "./consumer/embedding.consumer.js";
 import { MaintenanceConsumer } from "./consumer/maintenance.consumer.js";
 import { Env } from "./env.js";
+import type { Container, RedisConnection, Worker } from "./import.js";
 import { ArchiveSchedule } from "./schedule/archive.schedule.js";
 import { CleanupSchedule } from "./schedule/cleanup.schedule.js";
 import { PartitionsSchedule } from "./schedule/partitions.schedule.js";

@@ -1,6 +1,5 @@
-import { Container } from "@loadbearing/composition";
-import { RedisConnection } from "@loadbearing/infrastructure";
 import { Env } from "./env.js";
+import { Container, RedisConnection } from "./import.js";
 import { WorkerBootstrap } from "./worker-bootstrap.js";
 
 const config = Env.containerConfig();

@@ -1,9 +1,16 @@
-import type { Principal } from "@loadbearing/application";
-import type { Container } from "@loadbearing/composition";
-import { contract, ProcedurePermissions } from "@loadbearing/contracts";
-import { ForbiddenError, UnauthorizedError } from "@loadbearing/errors";
-import { Correlation, type Logger, type TraceId } from "@loadbearing/observability";
-import { implement, os } from "@orpc/server";
+import {
+  type Container,
+  Correlation,
+  contract,
+  ForbiddenError,
+  implement,
+  type Logger,
+  os,
+  type Principal,
+  ProcedurePermissions,
+  type TraceId,
+  UnauthorizedError,
+} from "../import.js";
 import { ErrorInterceptor } from "./error.interceptor.js";
 
 // Initial context: environment-shaped, injected once by the adapter.

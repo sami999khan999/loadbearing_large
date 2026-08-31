@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { Queue } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
 export class CleanupSchedule {
   // Fixed, which is what makes registration idempotent. Without it every deploy adds

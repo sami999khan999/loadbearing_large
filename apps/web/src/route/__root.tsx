@@ -1,12 +1,15 @@
-import { ContentSource } from "@loadbearing/content";
-import { MessageProvider, SessionProvider } from "@loadbearing/feature";
-import { ApiClientProvider } from "@loadbearing/query";
-import { ThemeRegistry } from "@loadbearing/ui";
-import classCss from "@loadbearing/ui/class.css?url";
-import themeCss from "@loadbearing/ui/theme.css?url";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import {
+  ApiClientProvider,
+  ContentSource,
+  classCss,
+  MessageProvider,
+  QueryClientProvider,
+  type ReactNode,
+  SessionProvider,
+  ThemeRegistry,
+  themeCss,
+} from "~/import.js";
 import { fetchAppearance } from "~/server/appearance.fn.js";
 import { fetchSession } from "~/server/session.fn.js";
 import type { RouterContext } from "./-context.js";

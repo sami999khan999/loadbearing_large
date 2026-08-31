@@ -1,4 +1,4 @@
-import type { ContentSource, Locale } from "@loadbearing/content";
+import type { ContentSource, Locale } from "../import.js";
 
 // The only reader of the `email` namespace in the repository. It reads copy the way
 // every other consumer does — through `ContentSource` — so a subject line and a button

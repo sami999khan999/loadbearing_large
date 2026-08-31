@@ -1,7 +1,4 @@
-import type { Container } from "@loadbearing/composition";
-import { QueueName } from "@loadbearing/infrastructure";
-import { Queue } from "bullmq";
-import type { Redis } from "ioredis";
+import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
 // Creates the next few months of `activity_log` partitions. The deadline is real:
 // migration 0000 created partitions through 2027-01, and the day after the last one
