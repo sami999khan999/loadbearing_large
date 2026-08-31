@@ -26,6 +26,7 @@ None of the rule files is longer than ~650 tokens. Read one or two, not all of t
 | Add a dependency | [`rules/dependencies.md`](rules/dependencies.md) |
 | Decide which package something belongs in | [`rules/layering.md`](rules/layering.md) |
 | Write a comment | [`rules/comments.md`](rules/comments.md) |
+| Style anything — a colour, a component, a stylesheet | [`rules/color.md`](rules/color.md) |
 | Decide how much structure to build | [`rules/simplicity.md`](rules/simplicity.md) |
 | Run, verify, or commit a change | [`rules/workflow.md`](rules/workflow.md) |
 | Write a commit message, a PR body, or a branch name | [`rules/workflow.md`](rules/workflow.md) — and never name yourself as author, co-author, or contributor |
