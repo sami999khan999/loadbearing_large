@@ -14,9 +14,11 @@ export { default as spriteUrl } from "@loadbearing/asset/sprite.svg";
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  Ref,
-} from "react";
+export type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react";
+export { useMemo } from "react";
+
+// ── uqr ──────────────────────────────────────────────────────────────────────
+// The only runtime dependency in this package other than the sprite. Zero deps of its
+// own, ESM, and it computes a module matrix rather than drawing — so `QrCode` renders
+// during SSR like everything else here.
+export { encode } from "uqr";
