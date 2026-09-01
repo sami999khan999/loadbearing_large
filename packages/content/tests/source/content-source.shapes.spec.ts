@@ -31,12 +31,21 @@ describe("lazy namespaces", () => {
     expect(t.loaded("nav")).toBe(false);
   });
 
+  // English rides along beneath a *lazy* namespace, not only beneath the shell — which
+  // is what makes a Partial bundle safe for a namespace a route loads on demand.
+  //
+  // Asserted on the two layers rather than on a key that happens to be untranslated:
+  // pinning it to one meant this test failed the day somebody finished translating that
+  // key, which is the wrong thing to punish. `translator.spec.ts` covers the resolution
+  // itself over a fixture, where a missing key can be guaranteed.
   it("falls back to English inside a lazy namespace too", async () => {
+    const snapshot = await source.messages("bn", ["auth"]);
     const t = await source.translator("bn", ["auth"]);
 
     expect(t.t("auth.signIn")).toBe("সাইন ইন");
-    // Untranslated in bn/auth.ts, so the fallback layer answers.
-    expect(t.t("auth.signingIn")).toBe("Signing in…");
+    expect(snapshot.overrides["auth.signIn"]).toBe("সাইন ইন");
+    // The layer that answers whenever the override above is absent.
+    expect(snapshot.base["auth.signIn"]).toBe("Sign in");
   });
 
   it("keeps error copy working on a route that declared something else", async () => {
