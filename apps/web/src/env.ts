@@ -8,88 +8,120 @@ import { z } from "zod";
 
 // One of exactly two `process.env` readers in the repository — the other is
 // `apps/worker/src/env.ts` (25). Everything else receives configuration.
-const Schema = z.object({
-  DATABASE_URL: z.url(),
-  REDIS_CACHE_URL: z.url(),
-  REDIS_QUEUE_URL: z.url(),
+const Schema = z
+  .object({
+    DATABASE_URL: z.url(),
+    REDIS_CACHE_URL: z.url(),
+    REDIS_QUEUE_URL: z.url(),
 
-  S3_ENDPOINT: z.url(),
-  S3_REGION: z.string().min(1),
-  S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY: z.string().min(1),
-  S3_SECRET_KEY: z.string().min(1),
-  S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
+    S3_ENDPOINT: z.url(),
+    S3_REGION: z.string().min(1),
+    S3_BUCKET: z.string().min(1),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
 
-  // A short secret is a real weakness, and this schema is the only place anyone will
-  // ever check.
-  AUTH_SECRET: z.string().min(32),
-  AUTH_URL: z.url(),
-  AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
-  AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-  AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-  // The revocation window. Capped in the schema, not by convention — a deploy that
-  // raises it to "improve cache hit rate" fails at boot instead of quietly widening
-  // the gap between removing access and access stopping (16.9).
-  AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),
-  AUTH_REQUIRE_EMAIL_VERIFICATION: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((v) => v === "true"),
-  // Which organization a brand-new user is enrolled into on their first session, by
-  // slug — the same slug `pnpm db:seed` creates. Unset means no enrolment at all: an
-  // unaffiliated sign-up gets no membership, and `MembershipReader` refuses the
-  // session. That is the production posture, and it is why there is no default here.
-  BOOTSTRAP_ORGANIZATION_SLUG: z.string().min(1).optional(),
+    // A short secret is a real weakness, and this schema is the only place anyone will
+    // ever check.
+    AUTH_SECRET: z.string().min(32),
+    AUTH_URL: z.url(),
+    AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
+    AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+    AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
+    // The revocation window. Capped in the schema, not by convention — a deploy that
+    // raises it to "improve cache hit rate" fails at boot instead of quietly widening
+    // the gap between removing access and access stopping (16.9).
+    AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),
+    AUTH_REQUIRE_EMAIL_VERIFICATION: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((v) => v === "true"),
+    // What an authenticator app shows beside a TOTP code, and the product name on every
+    // transactional message. On the 27.5 rename checklist — changing it after anyone has
+    // enrolled leaves their authenticator naming a product that no longer exists.
+    AUTH_APP_NAME: z.string().min(1).default("Loadbearing"),
+    // How a brand-new user acquires the membership without which no session is issued.
+    // `personal` is the default because it is the only one that works against an empty
+    // database — a fresh clone can sign up and get in with no seed run.
+    AUTH_ENROLMENT_MODE: z.enum(["personal", "bootstrap", "invite"]).default("personal"),
+    // Which organization a brand-new user is enrolled into on their first session, by
+    // slug — the same slug `pnpm db:seed` creates. Unset means no enrolment at all: an
+    // unaffiliated sign-up gets no membership, and `MembershipReader` refuses the
+    // session. That is the production posture, and it is why there is no default here.
+    BOOTSTRAP_ORGANIZATION_SLUG: z.string().min(1).optional(),
 
-  // Transactional mail. One URL rather than five fields, so the same variable points at
-  // Mailpit locally and at SES, Postmark or Resend's SMTP endpoint in production —
-  // `smtps://` for implicit TLS on 465. Required, because
-  // `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on and a process that cannot send is
-  // a process whose sign-ups can never complete.
-  SMTP_URL: z.string().min(1),
-  // The envelope sender. Never defaulted: an address the sending domain does not
-  // authorise bounces or lands in spam, and a wrong default fails that way silently.
-  EMAIL_FROM: z.string().min(1),
+    // Google sign-in. Both optional, and the container only builds a provider when both
+    // are present — a half-filled pair is rejected at Google's consent screen, which is a
+    // failure the user sees and nobody can diagnose from a log line.
+    //
+    // The authorised redirect URI on the Google Cloud client must be
+    // `${AUTH_URL}/api/auth/callback/google`. Better Auth owns that path; nothing here
+    // routes it.
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
-  EMBEDDING_MODEL: z.string().min(1),
-  EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
-  OPENAI_API_KEY: z.string().default(""),
+    // Transactional mail. One URL rather than five fields, so the same variable points at
+    // Mailpit locally and at SES, Postmark or Resend's SMTP endpoint in production —
+    // `smtps://` for implicit TLS on 465. Required, because
+    // `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on and a process that cannot send is
+    // a process whose sign-ups can never complete.
+    SMTP_URL: z.string().min(1),
+    // The envelope sender. Never defaulted: an address the sending domain does not
+    // authorise bounces or lands in spam, and a wrong default fails that way silently.
+    EMAIL_FROM: z.string().min(1),
 
-  // ── the swappable stores ──
-  //
-  // Each is a driver plus the connection detail that driver needs. `Container` reads
-  // the driver and builds the class behind the port, so adopting a store is these
-  // variables and nothing else — no code change, no migration, no call site touched.
-  VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
-  ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-  // Optional, and their absence is what keeps ClickHouse stopped. Present without
-  // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
-  // runs and the reconciliation reports, while reads still come from Postgres.
-  CLICKHOUSE_URL: z.url().optional(),
-  // ClickHouse's own out-of-the-box database and user. A default naming the project
-  // would be a credential baked into shipped code, and would keep pointing at the old
-  // name after a rename — `.env` is where the real stack's values belong.
-  CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
-  CLICKHOUSE_USER: z.string().min(1).default("default"),
-  CLICKHOUSE_PASSWORD: z.string().default(""),
-  // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
-  // written to stdout and still shipped by Alloy, and reading them is
-  // `docker compose logs` or curl against Loki, which stays the break-glass path
-  // regardless.
-  LOKI_URL: z.url().optional(),
-  LOKI_TENANT_ID: z.string().optional(),
+    EMBEDDING_MODEL: z.string().min(1),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
+    OPENAI_API_KEY: z.string().default(""),
 
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  LOG_PRETTY: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((v) => v === "true"),
-  // Two of the four log labels. Low-cardinality by construction.
-  APP: z.string().default("web"),
-  ENV: z.string().default("development"),
+    // ── the swappable stores ──
+    //
+    // Each is a driver plus the connection detail that driver needs. `Container` reads
+    // the driver and builds the class behind the port, so adopting a store is these
+    // variables and nothing else — no code change, no migration, no call site touched.
+    VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
+    ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
+    // Optional, and their absence is what keeps ClickHouse stopped. Present without
+    // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
+    // runs and the reconciliation reports, while reads still come from Postgres.
+    CLICKHOUSE_URL: z.url().optional(),
+    // ClickHouse's own out-of-the-box database and user. A default naming the project
+    // would be a credential baked into shipped code, and would keep pointing at the old
+    // name after a rename — `.env` is where the real stack's values belong.
+    CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
+    CLICKHOUSE_USER: z.string().min(1).default("default"),
+    CLICKHOUSE_PASSWORD: z.string().default(""),
+    // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
+    // written to stdout and still shipped by Alloy, and reading them is
+    // `docker compose logs` or curl against Loki, which stays the break-glass path
+    // regardless.
+    LOKI_URL: z.url().optional(),
+    LOKI_TENANT_ID: z.string().optional(),
 
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-});
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+    LOG_PRETTY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    // Two of the four log labels. Low-cardinality by construction.
+    APP: z.string().default("web"),
+    ENV: z.string().default("development"),
+
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  })
+  // The one cross-field rule in this schema, and it earns the exception. `bootstrap`
+  // with no slug is a mode that silently enrols nobody: every sign-up succeeds, every
+  // first sign-in is refused, and nothing in either log says why. Failing at boot with
+  // a field path is the whole reason this file parses eagerly.
+  .superRefine((env, ctx) => {
+    if (env.AUTH_ENROLMENT_MODE === "bootstrap" && !env.BOOTSTRAP_ORGANIZATION_SLUG) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["BOOTSTRAP_ORGANIZATION_SLUG"],
+        message: 'Required when AUTH_ENROLMENT_MODE is "bootstrap".',
+      });
+    }
+  });
 
 export class Env {
   private constructor() {}
@@ -117,6 +149,12 @@ export class Env {
     return Env.parsed.AUTH_TRUSTED_ORIGINS;
   }
 
+  // Read by `session.fn.ts` and put on the session snapshot, because the sign-in page
+  // has to decide whether to render a Google button and cannot see this schema.
+  public static get googleEnabled(): boolean {
+    return Boolean(Env.parsed.GOOGLE_CLIENT_ID && Env.parsed.GOOGLE_CLIENT_SECRET);
+  }
+
   // The boundary where environment becomes `ContainerConfig` (17).
   public static containerConfig() {
     const e = Env.parsed;
@@ -138,7 +176,16 @@ export class Env {
         sessionMaxAgeSeconds: e.AUTH_SESSION_MAX_AGE_SECONDS,
         cookieCacheMaxAgeSeconds: e.AUTH_COOKIE_CACHE_MAX_AGE_SECONDS,
         requireEmailVerification: e.AUTH_REQUIRE_EMAIL_VERIFICATION,
+        appName: e.AUTH_APP_NAME,
+        enrolmentMode: e.AUTH_ENROLMENT_MODE,
         bootstrapOrganizationSlug: e.BOOTSTRAP_ORGANIZATION_SLUG,
+        // Both halves or neither. Spreading a partly-filled pair here would build a
+        // provider pointed at a client Google rejects — the same argument the
+        // `analytics.clickhouse` block one field down already makes.
+        google:
+          e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET
+            ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
+            : undefined,
       },
       email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
       embedding: {

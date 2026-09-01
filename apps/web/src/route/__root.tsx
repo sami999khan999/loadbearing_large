@@ -28,6 +28,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     return {
       user: context.session.user,
       capabilities: context.session.dto,
+      googleEnabled: context.session.googleEnabled,
       appearanceSnapshot: context.appearance.current,
     };
   },

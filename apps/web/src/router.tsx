@@ -60,6 +60,7 @@ export function getRouter() {
       // that grants access (23).
       user: session.user,
       capabilities: session.dto,
+      googleEnabled: session.googleEnabled,
       appearanceSnapshot: appearance.current,
     },
     // Runs after every matched route's loader has resolved, so the snapshot is already

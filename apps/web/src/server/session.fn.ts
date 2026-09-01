@@ -1,10 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import { Env } from "~/env.js";
 import { CapabilitySet, type OrganizationId, type UserId } from "~/import.js";
 import type { SessionSnapshot } from "~/store/session.store.js";
 import { container } from "./container.js";
 
-const ANONYMOUS: SessionSnapshot = { user: null, capabilities: CapabilitySet.empty().toJSON() };
+// Not a module constant any more: `googleEnabled` is read from the environment, and
+// freezing it at module load would be correct but would hide where it comes from.
+const anonymous = (): SessionSnapshot => ({
+  user: null,
+  capabilities: CapabilitySet.empty().toJSON(),
+  googleEnabled: Env.googleEnabled,
+});
 
 // A server function, and one of the few things doc 24 says one is *for*: it carries no
 // business logic and makes no authorization decision. It resolves who is asking and what
@@ -19,7 +26,7 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
     const request = getRequest();
     const result = await container.auth.api.getSession({ headers: request.headers });
 
-    if (!result?.session) return ANONYMOUS;
+    if (!result?.session) return anonymous();
 
     // Pinned by the session-create hook in `AuthFactory`. A session without it is a
     // session with no tenant, and `BetterAuthSessionResolver` already treats that as no
@@ -27,7 +34,7 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
     // shell that renders a user the server would refuse is worse than one that renders
     // nobody.
     const { activeOrganizationId } = result.session as { activeOrganizationId?: string };
-    if (!activeOrganizationId) return ANONYMOUS;
+    if (!activeOrganizationId) return anonymous();
 
     // The same cache `PrincipalBuilder` reads, keyed on `organization:user`, so the
     // client's `can()` and the server's `assert()` are answering off one set.
@@ -43,6 +50,7 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
         name: result.user.name,
       },
       capabilities: capabilities.toJSON(),
+      googleEnabled: Env.googleEnabled,
     };
   },
 );
