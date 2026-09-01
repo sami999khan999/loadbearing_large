@@ -55,6 +55,14 @@ class UnusedAuthMailer extends AuthMailer {
   public override sendPasswordReset(): Promise<void> {
     return unreachable();
   }
+
+  public override sendTwoFactorOtp(): Promise<void> {
+    return unreachable();
+  }
+
+  public override sendEmailChangeConfirmation(): Promise<void> {
+    return unreachable();
+  }
 }
 
 // Through `AuthFactory`, never a second copy of the options: a restated `plugins` or
@@ -67,6 +75,12 @@ const auth = AuthFactory.create(
     sessionMaxAgeSeconds: 604_800,
     cookieCacheMaxAgeSeconds: 60,
     requireEmailVerification: true,
+    appName: "Inspect",
+    // The mode changes nothing about the schema — no enroller runs here — but the type
+    // is closed, so stating it is how this script keeps compiling against the real config.
+    enrolmentMode: "invite" as const,
+    // Google deliberately absent: the provider adds no table, and supplying credentials
+    // to a script anyone runs by hand is how a secret ends up in a shell history.
   },
   new Database({ url }),
   cache,

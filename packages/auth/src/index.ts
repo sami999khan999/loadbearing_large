@@ -17,4 +17,5 @@ export {
   BetterAuthSessionResolver,
   MembershipEnroller,
   MembershipReader,
+  NullMembershipEnroller,
 } from "./session/index.js";

@@ -43,6 +43,9 @@ export class AuthFactory {
       secret: config.secret,
       baseURL: config.baseUrl,
       trustedOrigins: [...config.trustedOrigins],
+      // Read by the two-factor plugin as the TOTP issuer, which is the label an
+      // authenticator app shows beside the code. On the 27.5 rename checklist.
+      appName: config.appName,
 
       database: drizzleAdapter(database.client, { provider: "pg" }),
 
@@ -55,6 +58,19 @@ export class AuthFactory {
         // start: Better Auth's reset endpoint mints a token and has nowhere to send it,
         // so "forgot password" is a dead end that returns 200.
         sendResetPassword: async ({ user, url }) => mailer.sendPasswordReset(user.email, url),
+        // Better Auth defaults to 8. Twelve, because the only defence a password rule
+        // actually buys is length — and this is the one place the number can be stated.
+        minPasswordLength: 12,
+        // A ceiling, not a policy. Hashing is deliberately slow, so an unbounded input
+        // is a CPU exhaustion vector on an unauthenticated endpoint.
+        maxPasswordLength: 128,
+        // No session from the sign-up response. With verification required the account
+        // cannot be used yet anyway, and issuing one would hand a session to an address
+        // nobody has proved they can read.
+        autoSignIn: false,
+        // One hour. A reset link is a bearer credential for the account; the default
+        // leaves it live far longer than the person who asked for it needs.
+        resetPasswordTokenExpiresIn: 3600,
       },
 
       // Paired with `requireEmailVerification`, which defaults to `true` in
@@ -63,6 +79,14 @@ export class AuthFactory {
       // could unlock it was never sent.
       emailVerification: {
         sendVerificationEmail: async ({ user, url }) => mailer.sendVerification(user.email, url),
+        // The sign-up endpoint sends it. Without this the account exists, the flag is
+        // false, and the only thing that could clear it is never dispatched.
+        sendOnSignUp: true,
+        // Verifying an address proves the mailbox was reachable, not that the person
+        // reading it is at that browser. A link followed from a shared inbox must not
+        // put a session in whatever client opened it.
+        autoSignInAfterVerification: false,
+        expiresIn: 3600,
       },
 
       // ── model naming ───────────────────────────────────────────────────────
@@ -85,9 +109,51 @@ export class AuthFactory {
           // row and always will. `input: false` keeps it off every registration payload.
           deactivatedAt: { type: "date", required: false, input: false },
         },
+
+        changeEmail: {
+          enabled: true,
+          // Delivered to `user.email` — the address being moved *away from*. Better
+          // Auth hands us the new one in the same payload and it is deliberately not
+          // used: confirming at the destination means a session someone else is holding
+          // can move the account to an address its owner cannot reach.
+          sendChangeEmailConfirmation: async ({ user, url }) =>
+            mailer.sendEmailChangeConfirmation(user.email, url),
+        },
       },
 
-      account: { modelName: "accounts" },
+      account: {
+        modelName: "accounts",
+        accountLinking: {
+          enabled: true,
+          // Google asserts a verified address, so a Google sign-in matching an existing
+          // account is the same person and linking is the right answer — the
+          // alternative is a dead end where a real user is told the email is taken by
+          // themselves. Untrusted providers still require an explicit link from the
+          // settings page.
+          //
+          // `requireLocalEmailVerified` defaults to true and is deliberately left
+          // alone: it is what stops someone pre-registering an unverified account at a
+          // victim's address and having the victim's Google identity linked into it.
+          trustedProviders: ["google"],
+        },
+      },
+
+      // Absent rather than half-configured when no credentials were supplied. An empty
+      // client id is rejected at Google's consent screen, which is a failure the user
+      // sees and nobody can diagnose from a log line here. It is also what lets the
+      // sign-in page decide whether to render the button at all.
+      socialProviders: config.google
+        ? {
+            google: {
+              clientId: config.google.clientId,
+              clientSecret: config.google.clientSecret,
+              // Without this Google silently reuses whichever account the browser is
+              // already signed into, which makes "sign in as someone else" impossible
+              // on a shared machine and looks like a bug in this application.
+              prompt: "select_account",
+            },
+          }
+        : {},
 
       session: {
         modelName: "sessions",
@@ -152,6 +218,19 @@ export class AuthFactory {
         // Same Redis instance as the cache. A lost counter means a few extra attempts,
         // never a lockout — which is why eviction is acceptable here and not for sessions.
         storage: "secondary-storage",
+
+        // Twenty a minute is right for the endpoints nobody attacks. It is far too
+        // loose for the five below, each of which is either a guess against a
+        // credential or an email this server pays to send. Paths are Better Auth's
+        // own, relative to `basePath` — verified against the pinned runtime, because a
+        // rule keyed on a path that does not exist silently rate-limits nothing.
+        customRules: {
+          "/sign-in/email": { window: 60, max: 10 },
+          "/sign-up/email": { window: 60, max: 5 },
+          "/request-password-reset": { window: 60, max: 3 },
+          "/send-verification-email": { window: 60, max: 3 },
+          "/two-factor/send-otp": { window: 60, max: 3 },
+        },
       },
 
       // Redis in FRONT of Postgres, never instead of it. Anything here can vanish under
@@ -199,7 +278,25 @@ export class AuthFactory {
       // Bearer is not optional: the Tauri webview runs on `tauri://localhost`
       // (`http://tauri.localhost` on Windows) and a session cookie is never sent
       // cross-origin. One array element here, versus every endpoint and guard later.
-      plugins: [bearer(), twoFactor({ schema: { twoFactor: { modelName: "twoFactors" } } })],
+      plugins: [
+        bearer(),
+        twoFactor({
+          schema: { twoFactor: { modelName: "twoFactors" } },
+          // Defaults to `appName` already; stated so the coupling is visible at the
+          // line that depends on it rather than forty lines up.
+          issuer: config.appName,
+          // Ten codes of ten characters, each single-use. The recovery path for a lost
+          // phone, and the reason enabling 2FA here cannot lock someone out.
+          backupCodeOptions: { amount: 10, length: 10 },
+          otpOptions: {
+            // **Minutes, not seconds** — Better Auth's default is 3. Five is a
+            // compromise with mail delivery latency; anything much longer widens the
+            // window in which a forwarded message is still a valid second factor.
+            period: 5,
+            sendOTP: async ({ user, otp }) => mailer.sendTwoFactorOtp(user.email, otp),
+          },
+        }),
+      ],
     } satisfies BetterAuthOptions;
 
     return betterAuth(options);
