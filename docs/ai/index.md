@@ -14,7 +14,10 @@ deliberately separate), S3, stdout → Loki, ClickHouse behind a driver flag.
 
 ## Open the row that matches what you are about to do
 
-None of the rule files is longer than ~650 tokens. Read one or two, not all of them.
+**In Claude Code you already have all of these** — `CLAUDE.md` `@`-imports every rule file, so the
+table below is a map of what is in your context, not a list of things to go and fetch. It is the
+entry point for any agent that reads `AGENTS.md` and not `CLAUDE.md`; none of the files is longer
+than ~850 tokens, so read the one or two a task needs.
 
 | About to | Read |
 |---|---|
@@ -51,31 +54,53 @@ convention you infer will be wrong in the ways that matter.
 ## How an agent reaches this
 
 ```
-AGENTS.md                       ← the only file loaded unprompted (~180 tok)
+CLAUDE.md                       ← Claude Code: loaded unprompted, ~7,000 tok
+  ├── @AGENTS.md                ← the brief (~170 tok)
+  └── @docs/ai/rules/*.md       ← all twelve rule files, inlined at session start
+
+AGENTS.md                       ← every other tool: the only file loaded unprompted (~170 tok)
   └── docs/ai/index.md          ← this file: routes by task
         ├── rules/<topic>.md    ← open the one or two a task needs
         └── skills/<name>.md    ← the run book for a procedure
 
-CLAUDE.md                       ← Claude Code only; imports AGENTS.md
 .claude/skills/<name>/          ← Claude Code only; user-invoked, points at skills/<name>.md
 ```
 
-**Nothing loads that a task does not need.** Between `AGENTS.md` and `CLAUDE.md` that is under 300
-tokens holding no rules at all — only where to look. A task that adds a dependency then reads ~470
-tokens; one that places a file reads ~980. The whole rulebook is ~6,500 and nothing reads all of it.
+**The rulebook loads whole, and that is a deliberate reversal.** This file used to argue the
+opposite — nothing loads that a task does not need, under 300 tokens unprompted, ~470 for a task
+that adds a dependency. The argument was sound while context was scarce and it stopped being sound
+when the window reached seven figures: twelve rule files is **~6,800 tokens**, and a session that
+needs *any* rule was already paying ~1,200 for this router plus 500–850 for the file it names, so
+the true saving was never the headline number.
+
+What lazy loading actually cost is the thing the rulebook exists to prevent. Every file here is in
+`rules/` because **not knowing it causes a silent violation** — code that compiles, lints and passes
+review while being wrong. That is exactly the class of rule an agent cannot know to go and look for,
+because nothing in the task signals the gap. A rule that loads only when someone thinks to load it
+is a rule that holds by luck.
+
+Skill run books stay on demand. They are procedures you execute on request, not rules you must hold,
+and `skills/` is another ~4,800 tokens for something a task either invokes by name or does not need
+at all.
 
 **One copy of every document, and the rest are pointers.** `skills/<name>.md` is the run book;
 `.claude/skills/<name>/SKILL.md` exists so Claude Code can surface it as `/<name>` without a second
-copy drifting from the first.
+copy drifting from the first. `CLAUDE.md` imports rather than restates for the same reason — an
+`@` line inlines the rule file itself, so there is nothing to keep in sync.
 
 ## What keeps it honest
 
 `rules/` is a digest of `docs/opinions/`, which means it is a second copy of every rule it states.
 `check-architecture.mjs` §12 closes that loop. It fails when an opinions page exists that no rule
 file cites, when a rule file is routed to from none of `AGENTS.md`, this file, or `rules/index.md`,
-or when any of them routes to a path that does not exist — backticked or as a Markdown link. A tenth
-opinions page cannot land while the digest silently omits it, and a rule file cannot be orphaned or
-deleted without the build noticing.
+when `CLAUDE.md` does not `@`-import a rule file, and when any route or import points at a path that
+does not exist — backticked, as a Markdown link, or as an `@` line. A tenth opinions page cannot land
+while the digest silently omits it, and a rule file cannot be orphaned, deleted, or left out of the
+session load without the build noticing.
+
+That last one is the failure this reversal would otherwise introduce. Loading the rulebook from a
+hand-written list of twelve imports means the thirteenth rule is one someone forgot to add — routed
+to correctly, read by nobody, and indistinguishable from a rule that is simply being ignored.
 
 It does **not** check that a rule file's summary of its page is still *accurate*. That is why every
 file in `rules/` ends with the line saying `docs/opinions/` wins any disagreement.

@@ -1,15 +1,32 @@
 # CLAUDE.md
 
-`loadbearing` — pnpm workspace, TanStack Start web app + standalone worker, layered
-port-and-adapter package graph.
+@AGENTS.md
 
-**Every rule lives in `docs/ai/`. Read one of these before writing code here.**
+## The rulebook, loaded in full
 
-- **[`docs/ai/rules/index.md`](docs/ai/rules/index.md)** — the rules. Start here. It routes by task:
-  one row per thing you might be about to do, pointing at the one file that answers it. None is
-  over ~650 tokens.
-- **[`docs/ai/index.md`](docs/ai/index.md)** — everything written for agents: the rules above, and
-  the skill run books beside them.
+Every file in `docs/ai/rules/` is imported below, so an agent working in Claude Code holds the
+whole rulebook before it reads a line of code and never has to know to go looking. The router in
+[`docs/ai/index.md`](docs/ai/index.md) and the contents page in
+[`docs/ai/rules/index.md`](docs/ai/rules/index.md) are deliberately **not** imported — once every
+rule is present, both are tables pointing at things already in context. They stay for agents that
+do not read this file.
 
-Do not work from the surrounding code's example. This repository's conventions are stated, and a
-convention you infer will be wrong in the ways that matter.
+This list is checked: `check-architecture.mjs` §12 fails if a file lands in `docs/ai/rules/` and no
+`@` line here imports it.
+
+@docs/ai/rules/layering.md
+@docs/ai/rules/files.md
+@docs/ai/rules/folders.md
+@docs/ai/rules/imports.md
+@docs/ai/rules/classes.md
+@docs/ai/rules/comments.md
+@docs/ai/rules/color.md
+@docs/ai/rules/dependencies.md
+@docs/ai/rules/vocabulary.md
+@docs/ai/rules/data.md
+@docs/ai/rules/simplicity.md
+@docs/ai/rules/workflow.md
+
+The skill run books in [`docs/ai/skills/`](docs/ai/skills/index.md) are **not** imported. They are
+procedures you execute on request, not rules you must hold — reach them by name (`/add-slice`,
+`/add-docs`) or open the file.
