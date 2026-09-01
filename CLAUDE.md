@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-@AGENTS.md
-
 ## The rulebook, loaded in full
 
 Every file in `docs/ai/rules/` is imported below, so an agent working in Claude Code holds the
