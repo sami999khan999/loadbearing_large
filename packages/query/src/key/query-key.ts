@@ -8,6 +8,17 @@ export class QueryKeys {
 
   // `all()` on every namespace, because TanStack matches by prefix — one call catches
   // every list and detail below it, and that is what makes invalidation trustworthy.
+
+  // The signed-in person's own account. Not under `session`, because these outlive a
+  // single session record — the linked-account list is a property of the user, and
+  // invalidating it every time a session is refreshed would refetch three lists a minute.
+  public static readonly account = {
+    all: () => ["account"] as const,
+    twoFactor: () => ["account", "two-factor"] as const,
+    accounts: () => ["account", "linked", "list"] as const,
+    sessions: () => ["account", "session", "list"] as const,
+  };
+
   public static readonly rbac = {
     all: () => ["rbac"] as const,
     roles: () => ["rbac", "role", "list"] as const,
