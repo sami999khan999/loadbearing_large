@@ -24,6 +24,23 @@ export class ContentAuthMailer extends AuthMailer {
     await this.send(to, url, "email.reset.subject", "email.reset.body", "email.reset.action");
   }
 
+  public override async sendEmailChangeConfirmation(to: string, url: string): Promise<void> {
+    await this.send(to, url, "email.change.subject", "email.change.body", "email.change.action");
+  }
+
+  // Not routed through `send` below: that method's whole shape is "one sentence and a
+  // link", and a one-time code is neither. Rendering a code as a URL is how a second
+  // factor ends up clickable in a mail client on a device the sign-in is not happening on.
+  public override async sendTwoFactorOtp(to: string, code: string): Promise<void> {
+    const t = await this.content.translator(Locales.DEFAULT, ["email"]);
+
+    await this.email.send({
+      to,
+      subject: t.t("email.otp.subject"),
+      text: [t.t("email.otp.body", { code }), t.t("email.otp.expiry")].join("\n\n"),
+    });
+  }
+
   // The default locale, not a negotiated one. Better Auth calls these from a token
   // endpoint that carries no request in `sendResetPassword`'s signature and no stored
   // preference — and `users.locale` exists precisely so this becomes a lookup rather
@@ -31,9 +48,9 @@ export class ContentAuthMailer extends AuthMailer {
   private async send(
     to: string,
     url: string,
-    subject: "email.verify.subject" | "email.reset.subject",
-    body: "email.verify.body" | "email.reset.body",
-    action: "email.verify.action" | "email.reset.action",
+    subject: "email.verify.subject" | "email.reset.subject" | "email.change.subject",
+    body: "email.verify.body" | "email.reset.body" | "email.change.body",
+    action: "email.verify.action" | "email.reset.action" | "email.change.action",
   ): Promise<void> {
     const t = await this.content.translator(Locales.DEFAULT, ["email"]);
 

@@ -32,10 +32,16 @@ export interface ContainerConfig {
     readonly sessionMaxAgeSeconds: number;
     readonly cookieCacheMaxAgeSeconds: number;
     readonly requireEmailVerification: boolean;
-    // Undefined means no automatic enrolment: an unaffiliated sign-up is refused a
-    // session, which is what `MembershipReader` returning null already does. Set it
-    // and a user's first session enrols them into that organization — the first one
-    // in as `owner`, everyone after as `member`.
+    readonly appName: string;
+    // Which of the three `MembershipEnroller`s this container binds. The one place in
+    // the system that branches on it is `Container`, which is what a DI root is for.
+    readonly enrolmentMode: "personal" | "bootstrap" | "invite";
+    // Absent switches Google sign-in off. `apps/web` only builds this block when both
+    // halves of the credential are present, so a half-filled `.env` disables the
+    // provider rather than shipping one that fails at the consent screen.
+    readonly google?: { readonly clientId: string; readonly clientSecret: string };
+    // Read only under `enrolmentMode: "bootstrap"`. The organization every sign-up
+    // joins — first one in as `owner`, everyone after as `member`.
     readonly bootstrapOrganizationSlug?: string;
   };
   // Transactional mail. Not optional: `requireEmailVerification` defaults to on, and a
