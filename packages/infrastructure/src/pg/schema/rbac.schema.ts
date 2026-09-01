@@ -11,12 +11,20 @@ import {
 } from "../../import.js";
 import { users } from "./auth.schema.js";
 
-export const organizations = pgTable("organizations", {
-  id: uuid("id").$type<OrganizationId>().primaryKey(),
-  slug: text("slug").notNull(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").$type<OrganizationId>().primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Both the seed and every enroller resolve an organization by slug with `.limit(1)`,
+  // so without this a duplicate is not an error — it is a silent coin flip about which
+  // tenant a new member lands in. This is the tenant table, so it is the one place a
+  // unique index does not lead with `organization_id`.
+  (t) => [uniqueIndex("organizations_slug_uq").on(t.slug)],
+);
 
 export const roles = pgTable(
   "roles",

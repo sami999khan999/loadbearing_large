@@ -22,7 +22,12 @@ function lockKey(organizationId: string): number {
 // Satisfies `MembershipEnroller` from `@loadbearing/auth` structurally, for the same
 // reason `PgMembershipReader` satisfies `MembershipReader`: `auth` already depends on
 // this package, so the binding is checked in `Container` (17) rather than here.
-export class PgMembershipEnroller extends BaseRepository {
+//
+// The `bootstrap` enrolment mode: everyone who signs up joins one named organization,
+// first in as `owner` and everyone after as `member`. Right for a demo, a single-tenant
+// deployment, and local work against `pnpm db:seed` — and wrong for anything reachable
+// from the internet, because the sign-up form then hands out membership of your tenant.
+export class PgBootstrapMembershipEnroller extends BaseRepository {
   // `undefined` switches enrolment off entirely, which is the default. A deployment
   // that has built invitations wants exactly that: an unaffiliated sign-up gets no
   // membership, `MembershipReader` returns null, and the session is refused.
