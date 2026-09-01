@@ -125,7 +125,7 @@
         "**/*.config.mjs",
         "packages/auth/src/tables/**",
         "packages/infrastructure/src/pg/migrate/**",
-        "packages/infrastructure/src/pg/seed/**",
+        "packages/infrastructure/seed.ts",
         "packages/*/src/smoke/**"
       ],
       "linter": {
@@ -161,7 +161,7 @@
         "**/*.mjs",
         "packages/auth/src/tables/**",
         "packages/infrastructure/src/pg/migrate/**",
-        "packages/infrastructure/src/pg/seed/**",
+        "packages/infrastructure/seed.ts",
         "packages/*/src/smoke/**",
         "packages/observability/src/logger/json.logger.ts"
       ],
