@@ -5,11 +5,14 @@ description: The rules an agent must know unprompted, one file per topic. A dige
 
 # Repository rules
 
-One file per topic, none longer than ~650 tokens. Procedures that touch many files in a fixed order
-are run books instead, in [`../skills/`](../skills/index.md) — adding a feature slice, writing a
-package's docs. **If you know what you are about to do, go through the task router in
-[`docs/ai/index.md`](../index.md)** — it names the one or two files that answer a given task. This
-page is the rulebook's own contents.
+One file per topic, none longer than ~850 tokens, ~6,800 for all twelve. Procedures that touch many
+files in a fixed order are run books instead, in [`../skills/`](../skills/index.md) — adding a
+feature slice, writing a package's docs.
+
+**In Claude Code every file below is already loaded** — `CLAUDE.md` `@`-imports the lot, so this page
+is an index of what you are holding rather than a fetch list. Any other agent starts at
+[`AGENTS.md`](../../../AGENTS.md) and routes through [`docs/ai/index.md`](../index.md), which names
+the one or two files that answer a given task.
 
 | File | Decides |
 |---|---|
@@ -56,4 +59,5 @@ page.
 
 **This is checked** — `check-architecture.mjs` §12 fails if an opinions page exists that no rule
 file cites, if a rule file is routed to from none of `AGENTS.md`, [`docs/ai/index.md`](../index.md),
-or here, or if any route points at a path that does not exist.
+or here, if `CLAUDE.md` does not `@`-import a rule file, or if any route or import points at a path
+that does not exist. Adding a file to this folder without adding its import fails the build.

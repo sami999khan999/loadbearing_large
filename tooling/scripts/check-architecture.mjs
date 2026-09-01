@@ -476,6 +476,36 @@ assert("the rule files route to every opinions page", (failures) => {
     failures.push("AGENTS.md points at neither docs/ai/index.md nor the rulebook contents");
   }
 
+  // CLAUDE.md `@`-imports every rule file, which is what makes the rulebook load at the
+  // start of a session instead of when an agent thinks to go looking. A rule nobody
+  // imports is the failure this whole assertion exists for, one layer up: it is routed
+  // to, it is correct, and it silently stops being loaded. Skipped when CLAUDE.md is
+  // absent — it is Claude Code's file, and deleting it is a supported choice that leaves
+  // the routers above as the only path in.
+  const claudeMd = join(ROOT, "CLAUDE.md");
+
+  if (existsSync(claudeMd)) {
+    const claudeSource = readFileSync(claudeMd, "utf8");
+    const imported = new Set(
+      [...claudeSource.matchAll(/^@(\S+\.md)\s*$/gm)].map((match) => match[1]),
+    );
+
+    for (const file of ruleFiles) {
+      if (file === "index.md") continue;
+      if (!imported.has(`${RULES_DIR}/${file}`)) {
+        failures.push(`CLAUDE.md does not @-import ${RULES_DIR}/${file}, so it never loads`);
+      }
+    }
+
+    // An import naming a moved or deleted file fails silently — Claude Code inlines
+    // nothing and says nothing, which is the same missing chapter from the other side.
+    for (const target of imported) {
+      if (!existsSync(join(ROOT, target))) {
+        failures.push(`CLAUDE.md @-imports ${target}, which does not exist`);
+      }
+    }
+  }
+
   // Every opinions page is cited by at least one rule file — the drift guard.
   const opinions = join(ROOT, "docs/opinions");
   if (!existsSync(opinions)) return "docs/opinions does not exist";
