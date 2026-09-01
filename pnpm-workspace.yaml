@@ -78,6 +78,11 @@ catalog:
   # Keep every @orpc/* entry on one version line; see Tier 3 for why.
   "@orpc/contract": ^1.15.0
   "@orpc/client": ^1.15.0
+  # QR rendering for two-factor enrolment. Zero dependencies, ESM, and it emits an SVG
+  # string rather than drawing to a canvas — which is what makes it isomorphic and lets
+  # the QR render during SSR like everything else. The alternative is asking people to
+  # hand-type a base32 secret into an authenticator app.
+  uqr: ^0.1.2
 
   # ── node-only, framework-neutral — behind a port, never imported by the domain ──
   drizzle-orm: ^0.44.7

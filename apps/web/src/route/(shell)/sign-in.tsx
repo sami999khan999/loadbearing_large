@@ -1,11 +1,13 @@
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { Endpoint } from "~/endpoint.js";
 import {
   AuthClient,
   type ClientNamespace,
   SignInForm,
+  SocialSignIn,
   TwoFactorForm,
   useMemo,
+  useMessages,
   useState,
 } from "~/import.js";
 
@@ -22,9 +24,10 @@ export const Route = createFileRoute("/(shell)/sign-in")({
 });
 
 function SignInPage() {
+  const { t } = useMessages("auth");
   const navigate = useNavigate();
   const router = useRouter();
-  const { session } = Route.useRouteContext();
+  const { session, googleEnabled } = Route.useRouteContext();
   // Which leg of the flow is on screen. A second factor turns one form into two, and
   // the state lives here rather than in either form because neither of them owns the
   // transition — this route does.
@@ -48,11 +51,27 @@ function SignInPage() {
       {needsTwoFactor ? (
         <TwoFactorForm auth={auth} onSuccess={complete} />
       ) : (
-        <SignInForm
-          auth={auth}
-          onSuccess={complete}
-          onNeedsTwoFactor={() => setNeedsTwoFactor(true)}
-        />
+        <>
+          {/* Rendered above the form and hidden entirely when no credentials were
+              configured — `googleEnabled` rides the session snapshot because `Env` is
+              server-only and a button leading to an unconfigured provider is worse than
+              no button. */}
+          <SocialSignIn
+            auth={auth}
+            enabled={googleEnabled}
+            callbackUrl="/"
+            errorCallbackUrl="/sign-in"
+          />
+          <SignInForm
+            auth={auth}
+            onSuccess={complete}
+            onNeedsTwoFactor={() => setNeedsTwoFactor(true)}
+          />
+          <nav>
+            <Link to="/forgot-password">{t("auth.forgotPassword")}</Link>
+            <Link to="/sign-up">{t("auth.noAccount")}</Link>
+          </nav>
+        </>
       )}
     </main>
   );

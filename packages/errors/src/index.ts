@@ -13,6 +13,7 @@ export {
   ForbiddenError,
   InternalError,
   NotFoundError,
+  RateLimitedError,
   type SchemaIssue,
   ServerOnlyError,
   TransportError,

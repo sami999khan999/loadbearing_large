@@ -91,13 +91,25 @@ probe, and documentation that names directories which exist.
 
 ## 📋 Backlog
 
-*(empty — every task moved to Done on 2026-08-29)*
+- [ ] `T-026` **Make the activity-replay spec independent of how many rows are already in the table** `@sami` `P2` `~30m` `#api`
+  - **Goal:** `pg-activity-replay.reader.spec.ts` walks the table from the start in ten batches of two, so it can only reach its own rows while fewer than twenty older ones exist. `activity_log` is append-only and the other specs never clean up, so the suite goes red after roughly twenty runs against one database and stays red.
+  - **Done when:** The spec passes with several hundred unrelated rows already in `activity_log`.
+  - **Files:** `packages/infrastructure/tests/analytics/pg-activity-replay.reader.spec.ts`
+  - **Depends on:** none
+  - **Notes:** Pre-existing, and unrelated to `T-025` — found while running the suite against a database this machine had been using for a while. Reproduced by counting rows (24 older than the spec’s 2031 window, against a walk of 20) and confirmed by truncating `activity_log`, after which it passes. The spec drops its own partition in `afterAll`, so it is other specs that accumulate; one full suite run adds one row.
 
 ## ⛔ Blocked
 
 *(nothing blocked)*
 
 ## ✅ Done
+
+- [x] `T-025` **Complete the authentication flow** `@sami` `P1` `~16h` `#api` `done: 2026-09-01`
+  - **Goal:** Sign-in and two-factor *verification* worked; sign-up, two-factor *enrolment*, forgot/reset, change password, change email, Google, and sign-out were either configured with no client path or missing outright.
+  - **Done when:** Every flow works end to end against the live stack, and `pnpm check:architecture` reports 13/13 with no skips.
+  - **Files:** `packages/auth/src/auth.factory.ts`, `packages/api-client/src/auth/`, `packages/feature/src/{auth,account}/`, `apps/web/src/route/(shell)/`, `apps/web/src/route/(app)/_authenticated/settings/`
+  - **Done:** Verified against live Postgres, Redis and Mailpit rather than only in CI. Sign-up issues no session (`autoSignIn: false`) and mails a link; verification redirects to `/verify-email`; reset is enumeration-safe (byte-identical responses for a real and an absent address) and revokes every session; two-factor enrols through a three-step wizard and completes sign-in by TOTP, backup code (single-use, 401 on reuse) or emailed OTP; change-email confirms at the **old** address; change-password took 6 sessions to 1 and left the calling tab alive. Google proven to the authorization URL with placeholder credentials — the consent round trip needs real ones.
+  - **Notes:** Enrolment became three modes behind `AUTH_ENROLMENT_MODE`, resolved to one of three `MembershipEnroller`s in `Container` — `personal` (default, own organization, reuses `SystemRoleSeed`), `bootstrap` (the old behaviour), `invite` (`NullMembershipEnroller`). All three exercised, including the `superRefine` that refuses to boot on `bootstrap` with no slug. One migration, and it is a latent bug rather than a feature: `organizations.slug` had no unique index while two code paths resolved by it with `.limit(1)`. One new runtime dependency, `uqr`, for the TOTP QR.
 
 - [x] `T-001` **Create a membership row so sign-in can succeed** `@sami` `P0` `~3h` `#db` `done: 2026-08-29`
   - **Goal:** Nothing in the repository ever inserts into `memberships`, so every sign-in is aborted before a session exists.
@@ -263,3 +275,4 @@ probe, and documentation that names directories which exist.
 | ---------- | ------- | ----------------------------------------------------------- |
 | 2026-08-28 | @sami   | Created the list from a full audit of the tree at `c681449` |
 | 2026-08-29 | @agent  | Closed `T-001`–`T-024`. Three acceptance criteria need a live stack and are covered by CI |
+| 2026-09-01 | @sami   | Closed `T-025`. Every auth flow verified against a live stack on this machine, not deferred to CI |

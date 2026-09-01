@@ -58,6 +58,7 @@ export {
   CapabilityCache,
   type MembershipEnroller,
   type MembershipReader,
+  NullMembershipEnroller,
   PrincipalBuilder,
 } from "@loadbearing/auth";
 
@@ -93,10 +94,11 @@ export {
   PgActivityReplayReader,
   PgAnalyticsReader,
   PgApiKeyRepository,
+  PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgMaintenanceGateway,
-  PgMembershipEnroller,
   PgMembershipReader,
+  PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,

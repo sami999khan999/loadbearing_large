@@ -38,6 +38,7 @@ client-only breaks SSR of translated copy and authorization inside a server comp
 ---
 
 **The argument.**
+
 - [`docs/opinions/folders.md`](../../opinions/folders.md) — role vs subject folders, and which package is which kind.
 - [`docs/opinions/dependencies.md`](../../opinions/dependencies.md) — which layer may name a framework.
 

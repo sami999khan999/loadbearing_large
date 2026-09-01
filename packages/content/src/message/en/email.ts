@@ -21,4 +21,15 @@ export const email = {
   "email.reset.body":
     "Open the link below to choose a new password. It expires in an hour, and signing in with your existing password will cancel it. If you did not ask for this, nothing has changed.",
   "email.reset.action": "Choose a new password",
+  "email.change.subject": "Confirm the change to your email address",
+  "email.change.body":
+    "Someone asked to move this account to a different email address. Open the link below to approve it. This message goes to your current address on purpose — if it was not you, do not open the link, and change your password.",
+  "email.change.action": "Approve the change",
+
+  // A second factor, not a link. Nothing here is clickable, because the person reading
+  // it is signing in on a different device from the one holding this mailbox.
+  "email.otp.subject": "Your sign-in code",
+  "email.otp.body": "Your sign-in code is {code}.",
+  "email.otp.expiry":
+    "It expires in five minutes. If you did not try to sign in, someone has your password — change it.",
 } as const;

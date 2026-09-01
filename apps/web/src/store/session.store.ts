@@ -7,6 +7,11 @@ import { CapabilitySet, type CapabilitySetDto, type SessionUser } from "~/import
 export interface SessionSnapshot {
   readonly user: SessionUser | null;
   readonly capabilities: CapabilitySetDto;
+  // Whether this deployment configured Google. Not about the user at all, and it rides
+  // here anyway: `Env` is server-only and this is the one payload the root route
+  // already awaits on every request, so the alternative is a second server function
+  // and a second round trip to answer a boolean that never changes.
+  readonly googleEnabled: boolean;
 }
 
 // Signed out, denying everything. There is no loading state that grants access (23),
@@ -14,6 +19,9 @@ export interface SessionSnapshot {
 const ANONYMOUS: SessionSnapshot = {
   user: null,
   capabilities: CapabilitySet.empty().toJSON(),
+  // Off until the server says otherwise, so a store that has not resolved renders no
+  // button rather than one that leads nowhere.
+  googleEnabled: false,
 };
 
 // The session half of the per-request state, shaped exactly like `MessageStore` and for
@@ -66,6 +74,10 @@ export class SessionStore {
   // methods on it is rejected there at the type level.
   public get dto(): CapabilitySetDto {
     return this.snapshot.capabilities;
+  }
+
+  public get googleEnabled(): boolean {
+    return this.snapshot.googleEnabled;
   }
 
   public dehydrate(): SessionSnapshot {

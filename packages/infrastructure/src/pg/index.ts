@@ -14,10 +14,11 @@ export {
   PgActivityReplayReader,
   PgAnalyticsReader,
   PgApiKeyRepository,
+  PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgMaintenanceGateway,
-  PgMembershipEnroller,
   PgMembershipReader,
+  PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";

@@ -1,6 +1,26 @@
 "use client";
 
 export {
+  ActiveSessionList,
+  type ActiveSessionListProps,
+  ChangeEmailForm,
+  type ChangeEmailFormProps,
+  ChangePasswordForm,
+  type ChangePasswordFormProps,
+  LinkedAccountList,
+  type LinkedAccountListProps,
+  ProfileForm,
+  type ProfileFormProps,
+  TwoFactorPanel,
+  type TwoFactorPanelProps,
+  TwoFactorSetup,
+  type TwoFactorSetupProps,
+} from "./account/index.js";
+export {
+  ForgotPasswordForm,
+  type ForgotPasswordFormProps,
+  ResetPasswordForm,
+  type ResetPasswordFormProps,
   SessionGuard,
   type SessionGuardProps,
   SessionProvider,
@@ -8,10 +28,18 @@ export {
   type SessionUser,
   SignInForm,
   type SignInFormProps,
+  SignOutButton,
+  type SignOutButtonProps,
+  SignUpForm,
+  type SignUpFormProps,
+  SocialSignIn,
+  type SocialSignInProps,
   TwoFactorForm,
   type TwoFactorFormProps,
   useCapabilities,
   useSession,
+  VerifyEmailNotice,
+  type VerifyEmailNoticeProps,
 } from "./auth/index.js";
 export { MessageProvider, type MessageProviderProps, useMessages } from "./i18n/index.js";
 export {

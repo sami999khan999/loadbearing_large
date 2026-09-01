@@ -9,7 +9,7 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
 // no read can bypass a defined query.
-export type { AuthClient } from "@loadbearing/api-client";
+export type { AccountClient, AuthClient } from "@loadbearing/api-client";
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 export type {
   ClientNamespace,
@@ -40,6 +40,8 @@ export {
 // component that named `useQuery` directly would be a read outside the seam, which is
 // what the ban on importing the transport package one block up already prevents.
 export {
+  AccountMutations,
+  AccountQueries,
   RoleQueries,
   SessionMutations,
   useApiClient,
@@ -47,7 +49,17 @@ export {
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
-export { Button, Can, EmptyState, Field, Input, StatusBadge } from "@loadbearing/ui";
+export {
+  Button,
+  Callout,
+  Can,
+  CodeList,
+  EmptyState,
+  Field,
+  Input,
+  QrCode,
+  StatusBadge,
+} from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export {

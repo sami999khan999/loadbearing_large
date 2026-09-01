@@ -1,3 +1,4 @@
+import { accountRoutes } from "./account.routes.js";
 import { rbacRoutes } from "./rbac.routes.js";
 import { shellRoutes } from "./shell.routes.js";
 
@@ -8,6 +9,7 @@ export type RoutePath = `/${string}`;
 // one fragment. Add them here — `task: taskRoutes`.
 export const ROUTES = {
   shell: shellRoutes,
+  account: accountRoutes,
   rbac: rbacRoutes,
 } as const;
 

@@ -15,10 +15,27 @@ export interface AuthConfig {
   // for when someone asks why removed access still works (16.9).
   readonly cookieCacheMaxAgeSeconds: number;
   readonly requireEmailVerification: boolean;
-  // The organization a brand-new user is enrolled into on their first session, by slug.
-  // Undefined switches enrolment off, which is the default and the right production
-  // posture: open sign-up then produces unaffiliated users whose sign-in is refused,
-  // and membership becomes something an invitation grants. `.env.example` sets it to
-  // the slug `pnpm db:seed` creates, so a fresh clone can sign up and get in.
+  // What an authenticator app displays beside a TOTP code, and the product name in
+  // transactional mail. On the 27.5 rename checklist: changing it after anyone has
+  // enrolled leaves their authenticator naming a product that no longer exists.
+  readonly appName: string;
+  // How a brand-new user acquires the membership without which no session is issued.
+  //
+  // `personal` — they become the owner of an organization of their own. The default,
+  // and the only one that works on an empty database.
+  // `bootstrap` — they join the organization named by `bootstrapOrganizationSlug`.
+  // `invite` — they acquire none, and their first sign-in is refused.
+  //
+  // `Container` reads this and binds one of three `MembershipEnroller`s; nothing else
+  // in the system branches on it.
+  readonly enrolmentMode: "personal" | "bootstrap" | "invite";
+  // Undefined switches Google sign-in off entirely rather than half-configuring it: an
+  // empty client id reaches Google as a request it rejects at the consent screen, which
+  // is a failure the user sees and nobody can diagnose from the logs.
+  readonly google?: { readonly clientId: string; readonly clientSecret: string };
+  // Read only when `enrolmentMode` is `bootstrap`, and required in that case — the env
+  // schema refuses to boot without it rather than leaving a mode that silently enrols
+  // nobody. Ignored entirely under `personal` and `invite`. It is the same slug
+  // `pnpm db:seed` creates, which is what stops the two drifting.
   readonly bootstrapOrganizationSlug?: string;
 }

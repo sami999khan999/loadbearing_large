@@ -29,16 +29,18 @@ import {
   type MaintenanceGateway,
   type MembershipEnroller,
   type MembershipReader,
+  NullMembershipEnroller,
   OpenAiEmbeddingProvider,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
   PgAnalyticsReader,
   PgApiKeyRepository,
+  PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgMaintenanceGateway,
-  PgMembershipEnroller,
   PgMembershipReader,
+  PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
@@ -224,10 +226,17 @@ export class Container {
       // the very first row in `memberships` — without it a fresh database can never
       // produce a session, because the hook above correctly refuses one to a user
       // with no membership and nothing else in the repository writes that table.
-      const membershipEnroller: MembershipEnroller = new PgMembershipEnroller(
+      //
+      // Three implementations, one env var, and this is the only line in the system
+      // that knows which is which. Tenancy is the decision a starter kit is most
+      // likely to be forked over, so it is a binding rather than a policy baked into
+      // the enroller — which is exactly what a DI root is for.
+      const membershipEnroller: MembershipEnroller = Container.enroller(
+        config.auth.enrolmentMode,
+        config.auth.bootstrapOrganizationSlug,
         this.database,
         this.transactions,
-      ).withOrganizationSlug(config.auth.bootstrapOrganizationSlug);
+      );
 
       this.authInstance = AuthFactory.create(
         config.auth,
@@ -281,6 +290,31 @@ export class Container {
         this.unitOfWork,
       ),
     };
+  }
+
+  // The three enrolment modes, resolved to the one adapter that implements each.
+  //
+  // `personal` is the default because it is the only one that works against an empty
+  // database: a fresh clone can sign up and be signed in without `pnpm db:seed` having
+  // run. `bootstrap` is the demo and single-tenant posture. `invite` is what a
+  // deployment that has built invitations wants — nobody enrols themselves, and an
+  // unaffiliated sign-up is refused a session by `MembershipReader` exactly as before.
+  private static enroller(
+    mode: "personal" | "bootstrap" | "invite",
+    bootstrapOrganizationSlug: string | undefined,
+    database: Database,
+    transactions: TransactionScope,
+  ): MembershipEnroller {
+    switch (mode) {
+      case "personal":
+        return new PgPersonalOrganizationEnroller(database, transactions);
+      case "bootstrap":
+        return new PgBootstrapMembershipEnroller(database, transactions).withOrganizationSlug(
+          bootstrapOrganizationSlug,
+        );
+      case "invite":
+        return new NullMembershipEnroller();
+    }
   }
 
   // Getters rather than optional fields, so `apps/web` still reads `container.auth`

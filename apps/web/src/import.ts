@@ -20,7 +20,7 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // `AuthClient` is constructed per component, never a module singleton: the instance
 // differs per environment, and the desktop shell supplies absolute URLs of its own (23).
-export { ApiClient, AuthClient, CookieAuthStrategy } from "@loadbearing/api-client";
+export { AccountClient, ApiClient, AuthClient, CookieAuthStrategy } from "@loadbearing/api-client";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 // The client catalog by way of `StaticContentSource`, never `SERVER_CATALOG` — the
@@ -40,14 +40,27 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
+  ActiveSessionList,
+  ChangeEmailForm,
+  ChangePasswordForm,
   EffectivePermissionsInspector,
+  ForgotPasswordForm,
+  LinkedAccountList,
   MessageProvider,
+  ProfileForm,
+  ResetPasswordForm,
   RoleMatrix,
   SessionProvider,
   type SessionUser,
   SignInForm,
+  SignOutButton,
+  SignUpForm,
+  SocialSignIn,
   TwoFactorForm,
+  TwoFactorPanel,
+  TwoFactorSetup,
   useMessages,
+  VerifyEmailNotice,
 } from "@loadbearing/feature";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
@@ -63,6 +76,7 @@ export {
   type BadgeTone,
   Button,
   type ButtonVariant,
+  Callout,
   DataTable,
   EmptyState,
   Field,
@@ -93,3 +107,9 @@ export { createRouter } from "@tanstack/react-router";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export { type CSSProperties, type ReactNode, useMemo, useState } from "react";
+
+// ── zod ──────────────────────────────────────────────────────────────────────
+// Search-parameter schemas for `validateSearch`, and nothing else on this side. The
+// wire shapes are `@loadbearing/contracts`' business; a route only validates what a
+// browser put in its own URL bar.
+export { z } from "zod";

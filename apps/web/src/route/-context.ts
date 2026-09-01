@@ -30,6 +30,10 @@ export interface RouterContext {
   // round trip `SessionProvider` already does, and `can()` stays the one decision.
   readonly user: SessionUser | null;
   readonly capabilities: CapabilitySetDto;
+  // Whether this deployment configured Google. Resolved server-side with the session,
+  // because `Env` is server-only and the sign-in page has to decide whether to render
+  // the button before the first painted byte.
+  readonly googleEnabled: boolean;
   // What `__root.tsx` writes onto <html>. A plain object, not the store: TanStack Router
   // dehydrates a `beforeLoad` return value and rejects anything carrying a method.
   readonly appearanceSnapshot: AppearanceSnapshot;

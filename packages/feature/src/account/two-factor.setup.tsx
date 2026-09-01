@@ -1,0 +1,141 @@
+import { useMessages } from "../i18n/index.js";
+import {
+  type AccountClient,
+  AccountMutations,
+  Button,
+  Callout,
+  CodeList,
+  Field,
+  type FormEvent,
+  Input,
+  QrCode,
+  useState,
+} from "../import.js";
+
+// Password, then scan, then prove it scanned. The third step is not ceremony: Better
+// Auth does not switch two-factor on until a code from the secret comes back, and
+// enabling it on the strength of a QR nobody scanned is how someone locks themselves
+// out at their next sign-in.
+type Step = "password" | "verify" | "done";
+
+export interface TwoFactorSetupProps {
+  readonly account: AccountClient;
+  readonly onEnabled: () => void;
+}
+
+export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
+  const { t } = useMessages("auth");
+  const [step, setStep] = useState<Step>("password");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [totpUri, setTotpUri] = useState("");
+  const [backupCodes, setBackupCodes] = useState<readonly string[]>([]);
+
+  const enable = AccountMutations.useEnableTwoFactor(account);
+  const verify = AccountMutations.useVerifyTotpEnrolment(account);
+
+  const start = (event: FormEvent) => {
+    event.preventDefault();
+    enable.mutate(
+      { password },
+      {
+        onSuccess: (enrolment) => {
+          setTotpUri(enrolment.totpUri);
+          setBackupCodes(enrolment.backupCodes);
+          // Dropped as soon as it has been spent. Holding it in state for the rest of
+          // the wizard is a password sitting in a React tree for no further reason.
+          setPassword("");
+          setStep("verify");
+        },
+      },
+    );
+  };
+
+  const finish = (event: FormEvent) => {
+    event.preventDefault();
+    verify.mutate({ code }, { onSuccess: () => setStep("done") });
+  };
+
+  if (step === "password") {
+    return (
+      <form onSubmit={start} noValidate>
+        {/* The password is what stops a stolen session enrolling its own authenticator
+            and locking the real owner out permanently. */}
+        <Field label={t("auth.twoFactorConfirmPassword")} htmlFor="enable-password">
+          <Input
+            id="enable-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </Field>
+
+        {enable.isError ? <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout> : null}
+
+        <Button type="submit" disabled={enable.isPending || password.length === 0}>
+          {t("auth.twoFactorEnable")}
+        </Button>
+      </form>
+    );
+  }
+
+  if (step === "verify") {
+    return (
+      <form onSubmit={finish} noValidate>
+        <QrCode value={totpUri} label={t("auth.twoFactorScan")} />
+        <p className="ui-field__hint">{t("auth.twoFactorScan")}</p>
+
+        {/* The secret in text, for anyone whose authenticator cannot use a camera. The
+            same string the QR encodes, so there is nothing to keep in step. */}
+        <Field label={t("auth.twoFactorManual")} htmlFor="totp-uri">
+          <Input id="totp-uri" readOnly value={totpUri} />
+        </Field>
+
+        <Field
+          label={t("auth.twoFactorCode")}
+          htmlFor="enrolment-code"
+          hint={t("auth.twoFactorVerifyPrompt")}
+        >
+          <Input
+            id="enrolment-code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            required
+          />
+        </Field>
+
+        {verify.isError ? (
+          <p role="alert" className="ui-field__error">
+            {t("auth.twoFactorFailed")}
+          </p>
+        ) : null}
+
+        <Button type="submit" disabled={verify.isPending || code.length === 0}>
+          {t("auth.saveChanges")}
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <>
+      <Callout tone="success">{t("auth.twoFactorEnabled")}</Callout>
+
+      {/* Shown once and never again — Better Auth stores these encrypted and the
+          endpoint that reads them back is server-only on purpose. The warning has to
+          carry its whole weight here, because there is no second chance to explain it. */}
+      <Callout tone="warning" title={t("auth.backupCodes")}>
+        {t("auth.backupCodesHint")}
+      </Callout>
+      <CodeList values={backupCodes} label={t("auth.backupCodes")} />
+
+      <Button onClick={onEnabled}>{t("auth.saveChanges")}</Button>
+    </>
+  );
+}

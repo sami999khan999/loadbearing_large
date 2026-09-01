@@ -7,7 +7,12 @@
 // The gate in 21 greps this tree for that specifier, comments included.
 
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
-export type { ApiClient, AuthClient } from "@loadbearing/api-client";
+export type {
+  AccountClient,
+  ApiClient,
+  AuthClient,
+  TwoFactorEnrolment,
+} from "@loadbearing/api-client";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes a defined query takes and returns. Types only: this package caches what

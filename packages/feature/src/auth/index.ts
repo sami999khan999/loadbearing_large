@@ -1,3 +1,5 @@
+export { ForgotPasswordForm, type ForgotPasswordFormProps } from "./forgot-password.form.js";
+export { ResetPasswordForm, type ResetPasswordFormProps } from "./reset-password.form.js";
 export {
   SessionProvider,
   type SessionProviderProps,
@@ -7,4 +9,8 @@ export {
 } from "./session.context.js";
 export { SessionGuard, type SessionGuardProps } from "./session.guard.js";
 export { SignInForm, type SignInFormProps } from "./sign-in.form.js";
+export { SignOutButton, type SignOutButtonProps } from "./sign-out.button.js";
+export { SignUpForm, type SignUpFormProps } from "./sign-up.form.js";
+export { SocialSignIn, type SocialSignInProps } from "./social-sign-in.js";
 export { TwoFactorForm, type TwoFactorFormProps } from "./two-factor.form.js";
+export { VerifyEmailNotice, type VerifyEmailNoticeProps } from "./verify-email.notice.js";

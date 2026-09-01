@@ -130,7 +130,9 @@ const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
   /^packages\/infrastructure\/src\/pg\/migrate\//,
-  /^packages\/infrastructure\/src\/pg\/seed\//,
+  // The runnable seed sits above `src/` so its folder barrel can be imported without
+  // executing it — see packages/infrastructure/seed.ts.
+  /^packages\/infrastructure\/seed\.ts$/,
   /^packages\/[^/]+\/src\/smoke\//,
   // Schema inspection, run by hand against a throwaway URL and never built. See 16.
   /^packages\/auth\/src\/tables\//,
@@ -254,7 +256,13 @@ const SERVER_FINGERPRINTS = ["drizzle-orm", "pg-pool", "@aws-sdk/client-s3", "io
 // One per key group in the `email` namespace, which `SERVER_CATALOG` alone can reach.
 // Enumerated rather than the bare prefix `"email."`, which is a common enough substring
 // in minified output to make this assertion fail on something unrelated.
-const EMAIL_FINGERPRINTS = ["email.digest.", "email.verify.", "email.reset."];
+const EMAIL_FINGERPRINTS = [
+  "email.digest.",
+  "email.verify.",
+  "email.reset.",
+  "email.change.",
+  "email.otp.",
+];
 
 // Field names from the `env.ts` schemas, which no adapter drags in on its own — they
 // arrive only when a route file or `router.tsx` imports `Env` for one accessor. That
@@ -265,6 +273,11 @@ const ENV_FINGERPRINTS = [
   "REDIS_QUEUE_URL",
   "S3_FORCE_PATH_STYLE",
   "AUTH_COOKIE_CACHE_MAX_AGE_SECONDS",
+  // The OAuth client secret. It reaches `Env` and nothing else, and the sign-in page
+  // deliberately learns whether Google is configured from the session snapshot rather
+  // than from this schema — so its name in the bundle means that boundary was crossed.
+  "GOOGLE_CLIENT_SECRET",
+  "AUTH_ENROLMENT_MODE",
 ];
 const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 
