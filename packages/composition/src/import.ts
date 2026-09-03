@@ -56,9 +56,12 @@ export {
   AuthMailer,
   BetterAuthSessionResolver,
   CapabilityCache,
+  type InvitationClaimer,
+  InvitationClaimingEnroller,
   type MembershipEnroller,
   type MembershipReader,
   NullMembershipEnroller,
+  type OrganizationFounder,
   PrincipalBuilder,
 } from "@loadbearing/auth";
 
@@ -96,8 +99,10 @@ export {
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
+  PgInvitationClaimer,
   PgMaintenanceGateway,
   PgMembershipReader,
+  PgOrganizationFounder,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,

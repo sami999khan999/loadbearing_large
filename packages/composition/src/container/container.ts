@@ -21,6 +21,8 @@ import {
   type EmailSender,
   type EmbeddingProvider,
   IndexDocumentUseCase,
+  type InvitationClaimer,
+  InvitationClaimingEnroller,
   JsonLogger,
   ListRolesUseCase,
   type Logger,
@@ -31,6 +33,7 @@ import {
   type MembershipReader,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
+  type OrganizationFounder,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
@@ -38,8 +41,10 @@ import {
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
+  PgInvitationClaimer,
   PgMaintenanceGateway,
   PgMembershipReader,
+  PgOrganizationFounder,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
@@ -128,6 +133,14 @@ export class Container {
   private readonly principalBuilder: PrincipalBuilder | undefined;
   public readonly capabilities: CapabilityCache;
 
+  // ── membership, built in every process ────────────────────
+  // The web session function reads `memberships` for the switcher and the
+  // organization plugin reads all three; the worker reads none, and building them
+  // there costs nothing because none opens a connection until called.
+  public readonly memberships: MembershipReader;
+  public readonly invitationClaimer: InvitationClaimer;
+  public readonly organizationFounder: OrganizationFounder;
+
   // ── use-cases, one field each, constructed eagerly ────────
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
@@ -211,38 +224,52 @@ export class Container {
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
 
+    // Shares the transaction scope, which is what makes the audit row commit
+    // with the state change rather than beside it. Built before the membership
+    // adapters below, which write audit rows of their own.
+    this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
+
+    // The membership side of authentication. These are the places `infrastructure`'s
+    // adapters are bound to the ports `auth` declares — `PgMembershipReader` cannot
+    // implement `MembershipReader` nominally, because `auth` already depends on
+    // `infrastructure`, so these lines are where a signature drift is caught.
+    this.memberships = new PgMembershipReader(this.database, this.transactions);
+    // Held concretely too: the personal enroller calls `found` with a slug the port
+    // does not expose, so it takes the class rather than the seam.
+    const founder = new PgOrganizationFounder(this.database, this.transactions, this.activity);
+    this.organizationFounder = founder;
+    this.invitationClaimer = new PgInvitationClaimer(
+      this.database,
+      this.transactions,
+      this.activity,
+    );
+
     // Everything below is skipped when `config.auth` is absent — `apps/worker` builds a
     // `SystemPrincipal` from a named grant list and never resolves a credential (25.3).
     if (config.auth) {
-      // The fourth argument is what pins a tenant onto every session at sign-in. It is
-      // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
-      // `auth` declares — `db` cannot implement it nominally, because `auth` already
-      // depends on `db`, so this line is where a signature drift is caught.
-      const membershipReader: MembershipReader = new PgMembershipReader(
-        this.database,
-        this.transactions,
-      );
-      // The write half, bound the same way and for the same reason. It is what puts
-      // the very first row in `memberships` — without it a fresh database can never
-      // produce a session, because the hook above correctly refuses one to a user
-      // with no membership and nothing else in the repository writes that table.
+      // The write half of membership. It is what puts the very first row in
+      // `memberships` — without it a fresh database can never produce a session,
+      // because the hook correctly refuses one to a user with no membership and
+      // nothing else in the repository writes that table.
       //
-      // Three implementations, one env var, and this is the only line in the system
-      // that knows which is which. Tenancy is the decision a starter kit is most
-      // likely to be forked over, so it is a binding rather than a policy baked into
-      // the enroller — which is exactly what a DI root is for.
+      // Three modes, one env var, one decorator around all of them, and this is the
+      // only line in the system that knows which is which. Tenancy is the decision a
+      // starter kit is most likely to be forked over, so it is a binding rather than a
+      // policy baked into the enroller — which is exactly what a DI root is for.
       const membershipEnroller: MembershipEnroller = Container.enroller(
         config.auth.enrolmentMode,
         config.auth.bootstrapOrganizationSlug,
         this.database,
         this.transactions,
+        founder,
+        this.invitationClaimer,
       );
 
       this.authInstance = AuthFactory.create(
         config.auth,
         this.database,
         this.cache,
-        membershipReader,
+        this.memberships,
         membershipEnroller,
         // The copy and the transport, joined here and nowhere else. `auth` owes no
         // words and `content` owes no transport, which is the whole reason this line
@@ -259,10 +286,6 @@ export class Container {
         this.capabilities,
       );
     }
-
-    // Shares the transaction scope, which is what makes the audit row commit
-    // with the state change rather than beside it.
-    this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
 
     // Takes the storage gateway, because archiving a partition is a database read and
     // an object write in one operation — the only place those two ports meet.
@@ -292,29 +315,37 @@ export class Container {
     };
   }
 
-  // The three enrolment modes, resolved to the one adapter that implements each.
+  // The three enrolment modes, resolved to the one adapter that implements each, and
+  // every one of them wrapped so an invited address joins the organization that
+  // invited it before the mode is consulted at all.
   //
   // `personal` is the default because it is the only one that works against an empty
   // database: a fresh clone can sign up and be signed in without `pnpm db:seed` having
-  // run. `bootstrap` is the demo and single-tenant posture. `invite` is what a
-  // deployment that has built invitations wants — nobody enrols themselves, and an
-  // unaffiliated sign-up is refused a session by `MembershipReader` exactly as before.
+  // run. `bootstrap` is the demo and single-tenant posture. `invite` is the production
+  // posture — the decorator is the only door, and an address nobody invited is refused
+  // a session by `MembershipReader` exactly as before.
   private static enroller(
     mode: "personal" | "bootstrap" | "invite",
     bootstrapOrganizationSlug: string | undefined,
     database: Database,
     transactions: TransactionScope,
+    founder: PgOrganizationFounder,
+    claimer: InvitationClaimer,
   ): MembershipEnroller {
-    switch (mode) {
-      case "personal":
-        return new PgPersonalOrganizationEnroller(database, transactions);
-      case "bootstrap":
-        return new PgBootstrapMembershipEnroller(database, transactions).withOrganizationSlug(
-          bootstrapOrganizationSlug,
-        );
-      case "invite":
-        return new NullMembershipEnroller();
-    }
+    const inner = ((): MembershipEnroller => {
+      switch (mode) {
+        case "personal":
+          return new PgPersonalOrganizationEnroller(database, transactions, founder);
+        case "bootstrap":
+          return new PgBootstrapMembershipEnroller(database, transactions).withOrganizationSlug(
+            bootstrapOrganizationSlug,
+          );
+        case "invite":
+          return new NullMembershipEnroller();
+      }
+    })();
+
+    return new InvitationClaimingEnroller(claimer, inner);
   }
 
   // Getters rather than optional fields, so `apps/web` still reads `container.auth`
