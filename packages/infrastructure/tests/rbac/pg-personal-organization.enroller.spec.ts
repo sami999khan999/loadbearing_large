@@ -1,8 +1,10 @@
 import { Identifiers } from "@loadbearing/contracts";
-import { Uuid } from "@loadbearing/core";
+import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
+import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { PgPersonalOrganizationEnroller } from "../../src/pg/repository/pg-personal-organization.enroller.js";
 import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
@@ -52,7 +54,17 @@ afterAll(async () => {
 });
 
 describe("PgPersonalOrganizationEnroller", () => {
-  const enroller = () => new PgPersonalOrganizationEnroller(database, new TransactionScope());
+  // One scope shared by the enroller and the founder it delegates to — the founder's
+  // savepoint has to open inside the enroller's locked transaction, not on the pool.
+  const enroller = () => {
+    const scope = new TransactionScope();
+    const activity = new PgActivityLogger(database, scope, new SystemClock());
+    return new PgPersonalOrganizationEnroller(
+      database,
+      scope,
+      new PgOrganizationFounder(database, scope, activity),
+    );
+  };
 
   // The whole `personal` mode in one assertion: an account with nothing behind it ends
   // up owning a tenant with the same four system roles `pnpm db:seed` would have made.
