@@ -48,27 +48,32 @@ packages/auth/
 │   │   └── capability.cache.ts           → CapabilityCache
 │   ├── session/
 │   │   ├── better-auth.session-resolver.ts → BetterAuthSessionResolver
-│   │   ├── membership.reader.ts          → MembershipReader                  (port)
-│   │   └── membership.enroller.ts        → MembershipEnroller                (port)
+│   │   ├── membership.reader.ts          → MembershipReader, OrganizationSummary   (port)
+│   │   ├── membership.enroller.ts        → MembershipEnroller                (port)
+│   │   ├── invitation.claimer.ts         → InvitationClaimer, InvitationPreview   (port)
+│   │   ├── organization.founder.ts       → OrganizationFounder               (port)
+│   │   ├── invitation-claiming.enroller.ts → InvitationClaimingEnroller      (decorator)
+│   │   └── null-membership.enroller.ts   → NullMembershipEnroller
 │   └── tables/
 │       └── index.ts                      ← a script. Never exported, never built
 └── tests/
     ├── support/doubles.ts
     ├── apikey/{api-key.hasher,api-key.resolver}.spec.ts
     ├── principal/{capability.cache,principal.builder}.spec.ts
-    └── session/better-auth.session-resolver.spec.ts
+    └── session/{better-auth.session-resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
 ```
 
 ---
 
-## The three ports declared here, not in `application`
+## The ports declared here, not in `application`
 
-`MembershipReader`, `MembershipEnroller` and `AuthMailer` are abstract classes in this package, and
-`ApiKeyRepository` is a fourth. They break the usual rule — ports live in
-`packages/application/src/port/` — and the reason is the same for all four: **they exist to populate
-an authentication artifact, and no use-case should learn that any of them exists.** A use-case must
-not know that sessions have an organization column, that a password reset is an email rather than a
-code read over the phone, or that API keys exist at all.
+`MembershipReader`, `MembershipEnroller`, `InvitationClaimer`, `OrganizationFounder` and
+`AuthMailer` are abstract classes in this package, and `ApiKeyRepository` is a sixth. They break the
+usual rule — ports live in `packages/application/src/port/` — and the reason is the same for all of
+them: **they exist to populate an authentication artifact, and no use-case should learn that any of
+them exists.** A use-case must not know that sessions have an organization column, that a first
+session can be granted by an invitation, that a password reset is an email rather than a code read
+over the phone, or that API keys exist at all.
 
 Their implementations live in `packages/infrastructure` and `packages/composition`, neither of which
 can import this package's types — `auth` already depends on `infrastructure`, and `composition`
@@ -76,7 +81,7 @@ depends on both. So the binding is **structural**, and it is checked exactly whe
 
 ```ts
 // packages/composition/src/container/container.ts
-const membershipReader: MembershipReader = new PgMembershipReader(…);
+this.memberships = new PgMembershipReader(…);          // declared as MembershipReader
 ```
 
 A signature drift fails `composition`'s typecheck, on that line, rather than at runtime.
@@ -117,14 +122,14 @@ correctly refuses one, forever. Enrolment runs from the same hook rather than fr
 `user.create.after`, and that is not a preference — Better Auth queues `create.after` hooks until the
 whole sign-up endpoint has finished, which is *after* the session hook has already run and refused.
 
-It is off unless `BOOTSTRAP_ORGANIZATION_SLUG` names an organization, which is the right production
-posture: with it unset, an unaffiliated sign-up gets no membership and no session, and joining
-becomes something an invitation grants. With it set, the first user into that organization is enrolled
-as `owner` and everyone after as `member`, behind a Postgres advisory lock — losing that race would
-mint a second account holding every permission in the registry.
+Which enroller runs is `AUTH_ENROLMENT_MODE`'s decision, and every mode is wrapped so that an
+invited address joins the organization that invited it before the mode is consulted at all. The
+three modes, the decorator, the claim rules and the locks are
+[the enrolment reference](reference/enrolment.md).
 
-**A user who belongs to two organizations gets two sessions**, which is also what makes switching
-organizations an explicit act rather than an ambient one.
+**A user who belongs to two organizations is in exactly one per session.** The session row pins it
+at sign-in — the last one they switched to, else the oldest membership — and moving is an explicit
+act through the organization endpoints, never an ambient one.
 
 ---
 
@@ -147,6 +152,8 @@ organizations an explicit act rather than an ambient one.
   revocation window rather than a performance dial.
 - [The API-key model](reference/api-key.md) — hash-only storage, prefix lookup, and re-intersection
   with the issuer's live capabilities on every request.
+- [Membership enrolment](reference/enrolment.md) — the tenancy gate, the three modes, the invitation
+  claim that runs before them, and the locks.
 
 ---
 
