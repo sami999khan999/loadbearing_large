@@ -17,7 +17,13 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes a defined query takes and returns. Types only: this package caches what
 // the contract describes and has no opinion about it.
-export type { PaginationQuery, RoleDto } from "@loadbearing/contracts";
+export type {
+  InvitationDto,
+  InviteMemberInput,
+  PaginationQuery,
+  RevokeInvitationInput,
+  RoleDto,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 // Retryability is a fact about the code, declared once in the catalog and read here.

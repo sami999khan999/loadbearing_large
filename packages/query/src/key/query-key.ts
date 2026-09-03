@@ -24,4 +24,12 @@ export class QueryKeys {
     roles: () => ["rbac", "role", "list"] as const,
     effective: (userId: string) => ["rbac", "effective", userId] as const,
   };
+
+  // The members page. Inviting and revoking both invalidate `all()` — an invitation
+  // becoming a membership changes both lists at once.
+  public static readonly member = {
+    all: () => ["member"] as const,
+    list: () => ["member", "list"] as const,
+    invitations: () => ["member", "invitation", "list"] as const,
+  };
 }
