@@ -12,4 +12,5 @@ export {
   BetterAuthErrorNormalizer,
 } from "./better-auth-error-normalizer.js";
 export { CookieAuthStrategy } from "./cookie-auth.strategy.js";
+export { OrganizationClient, type OrganizationSwitch } from "./organization.client.js";
 export { TokenProvider } from "./token.provider.js";

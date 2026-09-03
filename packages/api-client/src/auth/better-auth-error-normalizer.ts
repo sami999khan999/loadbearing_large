@@ -1,7 +1,9 @@
 import {
   type AppError,
   ConflictError,
+  ForbiddenError,
   InternalError,
+  NotFoundError,
   RateLimitedError,
   UnauthorizedError,
   ValidationError,
@@ -29,6 +31,11 @@ const BY_CODE: Readonly<Record<string, () => AppError>> = {
   INVALID_OR_EXPIRED_TOKEN: () => new ValidationError([{ field: "token", rule: "invalid" }]),
   PASSWORD_TOO_SHORT: () => new ValidationError([{ field: "password", rule: "tooShort" }]),
   PASSWORD_TOO_LONG: () => new ValidationError([{ field: "password", rule: "tooLong" }]),
+  // The organization plugin's own two codes. `NOT_FOUND` rather than `FORBIDDEN` for a
+  // dead invitation, because that is the code the landing page already has copy for,
+  // and a 403 here would otherwise read as "please sign in" — which they just did.
+  NOT_A_MEMBER: () => new ForbiddenError("organization.switch"),
+  INVITATION_NOT_CLAIMABLE: () => new NotFoundError("invitation", "token"),
 };
 
 // The transport is where a foreign error shape becomes one of ours, and this package is
