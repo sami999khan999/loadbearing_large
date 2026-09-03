@@ -87,21 +87,9 @@ probe, and documentation that names directories which exist.
 
 ## 🔥 In Progress
 
-- [~] `T-028` **Member slice: invite, list members, list and revoke invitations, members page** `@sami` `P1` `~8h` `#api` `#ui`
-  - **Goal:** `member.invite` is a permission key with nothing behind it and `ROUTES.rbac.members` is a declared route with no page. An owner or admin cannot bring anyone into their organization.
-  - **Done when:** `/settings/members` lists members and pending invitations, an `admin` can invite an address at a role and revoke a pending invitation, the invited address receives a link in Mailpit, and `member.invited` / `member.invitation.revoked` land in `activity_log`. The four procedures are in `PROCEDURE_PERMISSIONS` and gated in their use-cases.
-  - **Files:** `packages/contracts/src/member/`, `packages/application/src/member/`, `packages/infrastructure/src/pg/repository/pg-{member,invitation}.repository.ts`, `packages/composition/src/mail/content.invitation-mailer.ts`, `packages/query/src/member/`, `packages/content/src/message/{en,bn}/member.ts`, `packages/feature/src/member/`, `apps/web/src/server/orpc/member.router.ts`, `apps/web/src/route/(app)/_authenticated/settings/members.tsx`
-  - **Depends on:** `T-027`
-  - **Notes:** The twelve steps of `docs/ai/skills/add-slice.md`, subject `member`. Mail is sent *after* the unit of work commits, never inside it. The use-cases assert only `member.read` / `member.invite` — not `core.activity.write`, see `T-030`.
+*(nothing in progress)*
 
 ## 📋 Backlog
-
-- [ ] `T-029` **Organization plugin: switch, create, accept; switcher; invitation landing page** `@sami` `P1` `~8h` `#api` `#ui`
-  - **Goal:** A user in two organizations can reach only the one the session was pinned to, nothing lets anyone create a second organization, and an existing account holding an invitation link has no way to accept it.
-  - **Done when:** `POST /api/auth/organization/{switch,create}` and `/api/auth/invitation/accept` rebind the session and re-issue the cookie cache so the very next RPC resolves the new tenant; the header switcher lists every membership; `/organization/new` founds and switches; `/invitation/$token` previews for an anonymous visitor and accepts for a signed-in one; `/sign-in?redirect=` returns there; a sign-in lands in the last-used organization.
-  - **Files:** `packages/auth/src/plugin/organization.plugin.ts`, `packages/api-client/src/auth/organization.client.ts`, `packages/query/src/organization/`, `packages/feature/src/organization/`, `apps/web/src/server/{session,invitation}.fn.ts`, `apps/web/src/route/(shell)/invitation/$token.tsx`, `apps/web/src/route/(app)/_authenticated/organization/new.tsx`
-  - **Depends on:** `T-027`, `T-028`
-  - **Notes:** A Better Auth plugin rather than oRPC, for two verified reasons: these actions are identity-gated and no permission a non-owner holds could gate them, and only an endpoint with Better Auth's `ctx` can call `setSessionCookie` — without that, `session.cookieCache` keeps resolving the old tenant for up to sixty seconds after a switch.
 
 - [ ] `T-030` **`core.activity.write` is unreachable for anyone but `owner`** `@sami` `P2` `~1h` `#api`
   - **Goal:** `core.permissions.ts` says the key is "held by every principal … a property of acting at all", but `PgCapabilityRepository.resolveFor` grants only through roles and only `owner`'s wildcard carries it. `IndexDocumentUseCase` asserts it, so a `member` cannot index a document.
@@ -122,6 +110,20 @@ probe, and documentation that names directories which exist.
 *(nothing blocked)*
 
 ## ✅ Done
+
+- [x] `T-029` **Organization plugin: switch, create, accept; switcher; invitation landing page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
+  - **Goal:** A user in two organizations could reach only the one the session was pinned to, nothing let anyone create a second organization, and an existing account holding an invitation link had no way to accept it.
+  - **Done when:** `POST /api/auth/organization/{switch,create}` and `/api/auth/invitation/accept` rebind the session and re-issue the cookie cache so the very next RPC resolves the new tenant; the header switcher lists every membership; `/organization/new` founds and switches; `/invitation/$token` previews for an anonymous visitor and accepts for a signed-in one; `/sign-in?redirect=` returns there; a sign-in lands in the last-used organization.
+  - **Files:** `packages/auth/src/plugin/organization.plugin.ts`, `packages/api-client/src/auth/organization.client.ts`, `packages/query/src/organization/`, `packages/feature/src/organization/`, `apps/web/src/server/{session,invitation}.fn.ts`, `apps/web/src/route/-redirect.ts`, `apps/web/src/route/(shell)/invitation/$token.tsx`, `apps/web/src/route/(app)/_authenticated/organization/new.tsx`
+  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The ten-step manual pass in the plan (`~/.claude/plans/sprightly-kindling-dongarra.md`, "Verification") is still owed, in particular step 5 — a switch followed immediately by an RPC that must answer for the new tenant.
+  - **Notes:** A Better Auth plugin rather than oRPC, for two verified reasons: these actions are identity-gated and no permission a non-owner holds could gate them, and only an endpoint with Better Auth's `ctx` can call `setSessionCookie` — without that, `session.cookieCache` keeps resolving the old tenant for up to sixty seconds after a switch. `rebind` does what Better Auth's own organization plugin does for `setActiveOrganization`, plus writes `users.last_active_organization_id`. `SessionUser` now carries `activeOrganizationId` and `organizations`, resolved in `fetchSession` in one extra indexed query. The sign-in page's `?redirect=` is validated to a rooted single-slash path. `auth` gained a `zod` dependency for the plugin's request bodies.
+
+- [x] `T-028` **Member slice: invite, list members, list and revoke invitations, members page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
+  - **Goal:** `member.invite` was a permission key with nothing behind it and `ROUTES.rbac.members` a declared route with no page. An owner or admin could not bring anyone into their organization.
+  - **Done when:** `/settings/members` lists members and pending invitations, an `admin` can invite an address at a role and revoke a pending invitation, the invited address receives a link in Mailpit, and `member.invited` / `member.invitation.revoked` land in `activity_log`. The four procedures are in `PROCEDURE_PERMISSIONS` and gated in their use-cases.
+  - **Files:** `packages/contracts/src/member/`, `packages/application/src/member/`, `packages/infrastructure/src/pg/repository/pg-{member,invitation}.repository.ts`, `packages/composition/src/mail/content.invitation-mailer.ts`, `packages/query/src/member/`, `packages/content/src/message/{en,bn}/member.ts`, `packages/feature/src/member/`, `apps/web/src/server/orpc/member.router.ts`, `apps/web/src/route/(app)/_authenticated/settings/members.tsx`
+  - **Done:** All twelve steps, subject `member`. Typecheck, lint, `check:architecture` 13/13 with a fresh web bundle, and every unit suite green (contracts 34, application 22 incl. four new use-case specs, composition 17, feature, query, content, web). **The two Postgres specs — `pg-member.repository` and `pg-invitation.repository` — were not run here: Docker was down. CI runs them.** Not exercised against Mailpit for the same reason.
+  - **Notes:** The mail goes out only after the unit of work commits, and the invite spec pins that a failed commit sends nothing. `InvitationRecord` never carries the token — the contract spec asserts the wire shape has no such key. `admin` can invite because the use-cases assert only `member.invite`, never `core.activity.write` (`T-030`). `composition` now depends on `permissions`, solely so the mail's link is built from `ROUTES.shell.invitation`. The nav gained gated links to members and roles; neither existed before.
 
 - [x] `T-027` **Invitations foundation: schema, claim and found adapters, claiming enroller** `@sami` `P1` `~6h` `#db` `#api` `done: 2026-09-03`
   - **Goal:** Nothing could turn an invitation into a membership, nothing could create an organization except the personal enroller, and `activeOrganizationFor` pinned a user in two organizations to the oldest one forever.
