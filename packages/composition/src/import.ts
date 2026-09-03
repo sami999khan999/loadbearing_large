@@ -24,7 +24,12 @@ export {
   EmbeddingProvider,
   EventBus,
   IndexDocumentUseCase,
+  type InvitationMail,
+  InvitationMailer,
+  InviteMemberUseCase,
   type JobOptions,
+  ListInvitationsUseCase,
+  ListMembersUseCase,
   ListRolesUseCase,
   type LogEntry,
   type LogQuery,
@@ -35,6 +40,7 @@ export {
   QueuePublisher,
   type RequestHeaders,
   type ResolvedSession,
+  RevokeInvitationUseCase,
   type RiskScore,
   type RoleRecord,
   RoleRepository,
@@ -100,7 +106,9 @@ export {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgInvitationClaimer,
+  PgInvitationRepository,
   PgMaintenanceGateway,
+  PgMemberRepository,
   PgMembershipReader,
   PgOrganizationFounder,
   PgPersonalOrganizationEnroller,
@@ -116,3 +124,8 @@ export {
 
 // ── @loadbearing/observability ───────────────────────────────────────────────
 export { JsonLogger, type Logger, type LogLevel, SilentLogger } from "@loadbearing/observability";
+
+// ── @loadbearing/permissions ─────────────────────────────────────────────────
+// Only the route table, and only so the invitation mail's link is built from the same
+// entry the landing page's `createFileRoute` spells.
+export { ROUTES } from "@loadbearing/permissions";

@@ -732,6 +732,9 @@ importers:
       '@loadbearing/observability':
         specifier: workspace:*
         version: link:../observability
+      '@loadbearing/permissions':
+        specifier: workspace:*
+        version: link:../permissions
     devDependencies:
       '@loadbearing/tsconfig':
         specifier: workspace:*

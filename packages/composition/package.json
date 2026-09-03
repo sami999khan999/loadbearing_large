@@ -36,6 +36,7 @@
     "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
     "@loadbearing/infrastructure": "workspace:*",
-    "@loadbearing/observability": "workspace:*"
+    "@loadbearing/observability": "workspace:*",
+    "@loadbearing/permissions": "workspace:*"
   }
 }

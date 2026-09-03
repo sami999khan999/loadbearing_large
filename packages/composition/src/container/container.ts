@@ -23,7 +23,10 @@ import {
   IndexDocumentUseCase,
   type InvitationClaimer,
   InvitationClaimingEnroller,
+  InviteMemberUseCase,
   JsonLogger,
+  ListInvitationsUseCase,
+  ListMembersUseCase,
   ListRolesUseCase,
   type Logger,
   type LogReader,
@@ -42,7 +45,9 @@ import {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgInvitationClaimer,
+  PgInvitationRepository,
   PgMaintenanceGateway,
+  PgMemberRepository,
   PgMembershipReader,
   PgOrganizationFounder,
   PgPersonalOrganizationEnroller,
@@ -53,6 +58,7 @@ import {
   type QueuePublisher,
   RedisCacheStore,
   RedisConnection,
+  RevokeInvitationUseCase,
   S3StorageGateway,
   SERVER_CATALOG,
   type SessionResolver,
@@ -64,8 +70,17 @@ import {
   type UnitOfWork,
   type VectorStore,
 } from "../import.js";
-import { ContentAuthMailer } from "../mail/index.js";
+import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
+
+// The member slice's use-cases, reachable as `container.member`. Named so the getter
+// below can say what is absent rather than handing out `undefined`.
+export interface MemberUseCases {
+  readonly listMembers: ListMembersUseCase;
+  readonly listInvitations: ListInvitationsUseCase;
+  readonly inviteMember: InviteMemberUseCase;
+  readonly revokeInvitation: RevokeInvitationUseCase;
+}
 
 // What a readiness probe returns. One field per dependency the deployment cannot serve
 // requests without, plus the roll-up the probe's status code is derived from.
@@ -146,6 +161,9 @@ export class Container {
   // docs/reference/container.md.
   public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
   public readonly rbac: { readonly listRoles: ListRolesUseCase };
+  // Present only with an auth config: the invitation mail needs `auth.baseUrl` for its
+  // link, and the process with no auth config is the worker, which never invites.
+  private readonly memberUseCases: MemberUseCases | undefined;
 
   public constructor(config: ContainerConfig) {
     this.database = new Database(config.database);
@@ -244,6 +262,12 @@ export class Container {
       this.activity,
     );
 
+    // Repositories shared between the slices below. One instance each: they hold no
+    // state beyond the pool and the scope, so a second copy would be a second name.
+    const roles = new PgRoleRepository(this.database, this.transactions);
+    const members = new PgMemberRepository(this.database, this.transactions);
+    const invitations = new PgInvitationRepository(this.database, this.transactions);
+
     // Everything below is skipped when `config.auth` is absent — `apps/worker` builds a
     // `SystemPrincipal` from a named grant list and never resolves a credential (25.3).
     if (config.auth) {
@@ -285,6 +309,29 @@ export class Container {
         apiKeyResolver,
         this.capabilities,
       );
+
+      // Inside the auth block because the mail's link is `auth.baseUrl`. The use-cases
+      // themselves know nothing about that — they hand a token to a port.
+      this.memberUseCases = {
+        listMembers: new ListMembersUseCase(this.authorizer, members),
+        listInvitations: new ListInvitationsUseCase(this.authorizer, invitations),
+        inviteMember: new InviteMemberUseCase(
+          this.authorizer,
+          roles,
+          members,
+          invitations,
+          new ContentInvitationMailer(this.content, this.email, config.auth.baseUrl),
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
+        revokeInvitation: new RevokeInvitationUseCase(
+          this.authorizer,
+          invitations,
+          this.activity,
+          this.unitOfWork,
+        ),
+      };
     }
 
     // Takes the storage gateway, because archiving a partition is a database read and
@@ -297,12 +344,7 @@ export class Container {
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
 
-    this.rbac = {
-      listRoles: new ListRolesUseCase(
-        this.authorizer,
-        new PgRoleRepository(this.database, this.transactions),
-      ),
-    };
+    this.rbac = { listRoles: new ListRolesUseCase(this.authorizer, roles) };
 
     this.ai = {
       indexDocument: new IndexDocumentUseCase(
@@ -353,6 +395,13 @@ export class Container {
   public get auth(): AuthInstance {
     if (!this.authInstance) throw new Error("This container was built without an auth config.");
     return this.authInstance;
+  }
+
+  public get member(): MemberUseCases {
+    if (!this.memberUseCases) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.memberUseCases;
   }
 
   public get sessions(): SessionResolver {
