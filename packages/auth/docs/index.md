@@ -43,6 +43,8 @@ packages/auth/
 │   │   └── api-key.resolver.ts           → ApiKeyResolver, ApiKeyRepository, ApiKeyRecord
 │   ├── mail/
 │   │   └── auth.mailer.ts                → AuthMailer                        (port)
+│   ├── plugin/
+│   │   └── organization.plugin.ts        → OrganizationPlugin   (switch · create · accept)
 │   ├── principal/
 │   │   ├── principal.builder.ts          → PrincipalBuilder
 │   │   └── capability.cache.ts           → CapabilityCache
@@ -133,11 +135,34 @@ act through the organization endpoints, never an ambient one.
 
 ---
 
+## Switching, founding, accepting
+
+`OrganizationPlugin` mounts three `POST` endpoints on Better Auth — `/organization/switch`,
+`/organization/create`, `/invitation/accept` — and every one of them ends the same way: the
+session row is rebound to the new tenant, the Redis copy with it, `users.last_active_organization_id`
+is written, and **the session cookie cache is re-issued**. That last step is the reason these are
+endpoints here rather than oRPC procedures. `session.cookieCache` is what most requests resolve the
+tenant from, and only a handler holding Better Auth's `ctx` can call `setSessionCookie`; a switch
+that updated the row and not the cookie would have every RPC for the next sixty seconds answering
+for the tenant just left.
+
+The other reason is that they are identity-gated. "May I switch to a tenant I belong to", "may I
+found one", "may I accept an invitation sent to my address" are answered by membership and by the
+verified mailbox — never by a role held in some *other* organization — so nothing in
+`PROCEDURE_PERMISSIONS` could gate them, and every procedure must be gated there.
+
+The client half is `OrganizationClient` in `packages/api-client`: three thin posts over Better
+Auth's own `$fetch`, no client plugin. After any of them the call site does what sign-out does —
+clear the query cache, invalidate the session store, re-run the root loader — because every cached
+row belongs to the tenant just left.
+
+---
+
 ## What is deliberately *not* used
 
 | | |
 |---|---|
-| The organization plugin | No. `organizations`, `memberships` and `goal_members` are yours, and they point at your own `roles` table. The plugin would add a parallel `member.role` string meaning something else, and reconciling the two is worse than not having it. |
+| The organization plugin | No. `organizations`, `memberships` and `goal_members` are yours, and they point at your own `roles` table. The plugin would add a parallel `member.role` string meaning something else, and reconciling the two is worse than not having it. The one thing it does that nothing else can — rebind a session and re-issue its cookie — is sixty lines in `plugin/organization.plugin.ts`, against your tables. |
 | `better-auth/react` | No, and not in `api-client` either. It keeps its own cache with its own invalidation rules, which puts two caching systems in one app — and they disagree on sign-out, showing a signed-in shell around a run of 401s. |
 | `@better-auth/cli` | No. It trails the library's release line, and a generator behind the runtime writes a schema that is wrong exactly where it matters. `src/tables/` prints the truth from the pinned runtime instead. |
 | Secondary storage for sessions | Redis in **front** of Postgres, never instead of it. `storeSessionInDatabase: true` and `verification.storeInDatabase: true` are both non-default and both load-bearing: without them an ordinary cache eviction is a random sign-out, or a reset link that stops working with no error on either side. |
