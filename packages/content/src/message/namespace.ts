@@ -4,6 +4,7 @@ import type { email } from "./en/email.js";
 import type { error } from "./en/error.js";
 import type { member } from "./en/member.js";
 import type { nav } from "./en/nav.js";
+import type { organization } from "./en/organization.js";
 import type { role } from "./en/role.js";
 
 // Type-only. `verbatimModuleSyntax` erases the imports above, so the key union stays
@@ -14,6 +15,7 @@ interface NamespaceShape {
   readonly auth: typeof auth;
   readonly role: typeof role;
   readonly member: typeof member;
+  readonly organization: typeof organization;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -21,7 +23,7 @@ interface NamespaceShape {
 // Always present, in every snapshot, from every ContentSource. Never lazy.
 export type ShellNamespace = "common" | "error";
 // Everything a browser or desktop bundle may load. Lazy: a route declares what it needs.
-export type ClientNamespace = ShellNamespace | "nav" | "auth" | "role" | "member";
+export type ClientNamespace = ShellNamespace | "nav" | "auth" | "role" | "member" | "organization";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -51,4 +53,5 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "auth",
   "role",
   "member",
+  "organization",
 ];

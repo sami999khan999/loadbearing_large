@@ -101,6 +101,12 @@ export const auth = {
   "auth.changeEmailSent":
     "We sent a confirmation to your current address. The change takes effect once you approve it there.",
 
+  // ── organization ──
+  // In `auth` rather than `organization` because the switcher sits in the header of
+  // every signed-in page, and this namespace is the one that layout already loads.
+  "auth.organization": "Organization",
+  "auth.organizationNew": "New organization",
+
   // ── linked accounts ──
   "auth.linkedAccounts": "Linked accounts",
   "auth.linkedAccountsHint": "Other ways to sign in to this account.",

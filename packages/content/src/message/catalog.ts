@@ -21,6 +21,7 @@ export const CLIENT_CATALOG: Readonly<
     auth: async () => (await import("./en/auth.js")).auth,
     role: async () => (await import("./en/role.js")).role,
     member: async () => (await import("./en/member.js")).member,
+    organization: async () => (await import("./en/organization.js")).organization,
   },
   bn: {
     common: async () => (await import("./bn/common.js")).common,
@@ -29,5 +30,6 @@ export const CLIENT_CATALOG: Readonly<
     auth: async () => (await import("./bn/auth.js")).auth,
     role: async () => (await import("./bn/role.js")).role,
     member: async () => (await import("./bn/member.js")).member,
+    organization: async () => (await import("./bn/organization.js")).organization,
   },
 };
