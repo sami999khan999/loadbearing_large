@@ -32,4 +32,11 @@ export const email = {
   "email.otp.body": "Your sign-in code is {code}.",
   "email.otp.expiry":
     "It expires in five minutes. If you did not try to sign in, someone has your password — change it.",
+
+  // Sent to an address that may have no account yet, so it says what to do in either
+  // case and promises nothing about what the link will show.
+  "email.invitation.subject": "{inviter} invited you to {organization}",
+  "email.invitation.body":
+    "{inviter} has invited you to join {organization}. Open the link below to accept. If you do not have an account yet you will be asked to create one with this address — the invitation is tied to it. It expires in seven days, and if you were not expecting this you can ignore it.",
+  "email.invitation.action": "Join {organization}",
 } as const;
