@@ -7,10 +7,21 @@ import {
   useMemo,
 } from "../import.js";
 
+// One tenant the signed-in person may switch to, as the switcher renders it.
+export interface SessionOrganization {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface SessionUser {
   readonly id: string;
   readonly email: string;
   readonly name: string;
+  // The tenant this session is pinned to, and every tenant it could be pinned to.
+  // Both ride the SSR snapshot so the switcher is right on the first painted byte
+  // rather than after a second round trip.
+  readonly activeOrganizationId: string;
+  readonly organizations: readonly SessionOrganization[];
 }
 
 interface SessionValue {

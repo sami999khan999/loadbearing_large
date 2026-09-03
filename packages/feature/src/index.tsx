@@ -23,6 +23,7 @@ export {
   type ResetPasswordFormProps,
   SessionGuard,
   type SessionGuardProps,
+  type SessionOrganization,
   SessionProvider,
   type SessionProviderProps,
   type SessionUser,
@@ -49,6 +50,15 @@ export {
   MemberList,
   type MemberListProps,
 } from "./member/index.js";
+export {
+  CreateOrganizationForm,
+  type CreateOrganizationFormProps,
+  InvitationAccept,
+  type InvitationAcceptProps,
+  type InvitationPreview,
+  OrganizationSwitcher,
+  type OrganizationSwitcherProps,
+} from "./organization/index.js";
 export {
   EffectivePermissionsInspector,
   type EffectivePermissionsInspectorProps,

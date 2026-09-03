@@ -9,7 +9,7 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
 // no read can bypass a defined query.
-export type { AccountClient, AuthClient } from "@loadbearing/api-client";
+export type { AccountClient, AuthClient, OrganizationClient } from "@loadbearing/api-client";
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 export type {
   ClientNamespace,
@@ -44,6 +44,7 @@ export {
   AccountQueries,
   MemberMutations,
   MemberQueries,
+  OrganizationMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,
