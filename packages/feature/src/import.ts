@@ -22,7 +22,7 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes the server returns. Types only — this package renders them and has no
 // opinion about how they arrived.
-export type { RoleDto } from "@loadbearing/contracts";
+export type { InvitationDto, MemberDto, RoleDto } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { ErrorNormalizer } from "@loadbearing/errors";
@@ -42,6 +42,8 @@ export {
 export {
   AccountMutations,
   AccountQueries,
+  MemberMutations,
+  MemberQueries,
   RoleQueries,
   SessionMutations,
   useApiClient,
@@ -54,11 +56,13 @@ export {
   Callout,
   Can,
   CodeList,
+  DataTable,
   EmptyState,
   Field,
   Input,
   QrCode,
   StatusBadge,
+  type TableColumn,
 } from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────

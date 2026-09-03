@@ -43,6 +43,13 @@ export {
 } from "./auth/index.js";
 export { MessageProvider, type MessageProviderProps, useMessages } from "./i18n/index.js";
 export {
+  InvitationList,
+  type InvitationListProps,
+  InviteMemberForm,
+  MemberList,
+  type MemberListProps,
+} from "./member/index.js";
+export {
   EffectivePermissionsInspector,
   type EffectivePermissionsInspectorProps,
   type MatrixSubject,
