@@ -3,7 +3,7 @@ import { AuthFactory } from "../auth.factory.js";
 import { type CacheStore, Database, getSchema, type OrganizationId } from "../import.js";
 import { AuthMailer } from "../mail/auth.mailer.js";
 import { MembershipEnroller } from "../session/membership.enroller.js";
-import { MembershipReader } from "../session/membership.reader.js";
+import { MembershipReader, type OrganizationSummary } from "../session/membership.reader.js";
 
 // What Better Auth's own tables must look like, printed from the pinned runtime.
 //
@@ -37,6 +37,14 @@ const cache: CacheStore = {
 class UnusedMembershipReader extends MembershipReader {
   // Not `async`: there is nothing to await, and `never` satisfies the port's return type.
   public override activeOrganizationFor(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+
+  public override isMember(): Promise<boolean> {
+    return unreachable();
+  }
+
+  public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return unreachable();
   }
 }

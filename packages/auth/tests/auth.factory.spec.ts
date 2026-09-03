@@ -4,7 +4,7 @@ import { AuthFactory } from "../src/auth.factory.js";
 import type { CacheStore, Database, OrganizationId } from "../src/import.js";
 import { AuthMailer } from "../src/mail/auth.mailer.js";
 import { MembershipEnroller } from "../src/session/membership.enroller.js";
-import { MembershipReader } from "../src/session/membership.reader.js";
+import { MembershipReader, type OrganizationSummary } from "../src/session/membership.reader.js";
 
 // Nothing here connects. No option below is exercised — this spec reads `auth.options`
 // back, which is what `src/tables/` already does and the only way to assert on
@@ -22,6 +22,14 @@ const cache: CacheStore = {
 
 class StubMembershipReader extends MembershipReader {
   public override activeOrganizationFor(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+
+  public override isMember(): Promise<boolean> {
+    return unreachable();
+  }
+
+  public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return unreachable();
   }
 }

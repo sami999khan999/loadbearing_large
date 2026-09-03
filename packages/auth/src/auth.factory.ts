@@ -108,6 +108,10 @@ export class AuthFactory {
           // Deactivation is a state, not a delete: the activity log still points at this
           // row and always will. `input: false` keeps it off every registration payload.
           deactivatedAt: { type: "date", required: false, input: false },
+          // Where the last organization switch left this person. Written by the
+          // organization plugin through `internalAdapter.updateUser`, which is why it
+          // must be declared here and not only in the Drizzle schema.
+          lastActiveOrganizationId: { type: "string", required: false, input: false },
         },
 
         changeEmail: {
