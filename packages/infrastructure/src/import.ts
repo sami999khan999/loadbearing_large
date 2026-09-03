@@ -43,11 +43,18 @@ export {
   type EmailMessage,
   EmailSender,
   EmbeddingProvider,
+  type InvitationPage,
+  type InvitationRecord,
+  type InvitationRepository,
   type JobOptions,
   type LogEntry,
   type LogQuery,
   type LogReader,
   type MaintenanceGateway,
+  type MemberPage,
+  type MemberRecord,
+  type MemberRepository,
+  type NewInvitation,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
@@ -70,6 +77,7 @@ export {
 export {
   type GoalId,
   Identifiers,
+  type InvitationId,
   type OrganizationId,
   type PaginationQuery,
   type RoleId,

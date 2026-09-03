@@ -1,4 +1,5 @@
 import {
+  and,
   asc,
   eq,
   inArray,
@@ -77,5 +78,44 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
     }));
 
     return { items, total: counted?.total ?? 0 };
+  }
+
+  // Two queries for one row. The grants come along because `RoleRecord` carries them,
+  // and a second, thinner record type would be a second shape to keep in step.
+  public async findById(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+  ): Promise<RoleRecord | null> {
+    const [row] = await this.db
+      .select({
+        id: roles.id,
+        key: roles.key,
+        name: roles.name,
+        description: roles.description,
+        scope: roles.scope,
+        isSystem: roles.isSystem,
+      })
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.id, roleId)))
+      .limit(1);
+
+    if (!row) return null;
+
+    const grants = await this.db
+      .select({ permission: rolePermissions.permission })
+      .from(rolePermissions)
+      .where(
+        and(eq(rolePermissions.roleId, roleId), eq(rolePermissions.organizationId, organizationId)),
+      );
+
+    return {
+      id: row.id as RoleId,
+      key: row.key,
+      name: row.name,
+      description: row.description,
+      scope: row.scope,
+      isSystem: row.isSystem,
+      permissions: grants.map((grant) => grant.permission).sort(),
+    };
   }
 }

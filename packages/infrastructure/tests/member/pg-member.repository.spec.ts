@@ -1,0 +1,108 @@
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
+import { SystemClock, Uuid } from "@loadbearing/core";
+import type { Logger } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Database } from "../../src/pg/primitive/index.js";
+import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
+import { PgMemberRepository } from "../../src/pg/repository/pg-member.repository.js";
+import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
+import { organizations, roles, users } from "../../src/pg/schema/index.js";
+import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { openDatabase } from "../support/database.js";
+
+class CountingLogger implements Logger {
+  public count = 0;
+  public logQuery(): void {
+    this.count += 1;
+  }
+}
+
+const counter = new CountingLogger();
+let database: Database;
+const created: UserId[] = [];
+const founded: OrganizationId[] = [];
+
+let ada: UserId;
+let grace: UserId;
+let acme: OrganizationId;
+let other: OrganizationId;
+
+const makeUser = async (name: string) => {
+  const id = Identifiers.userId.parse(Uuid.v7());
+  await database.client
+    .insert(users)
+    .values({ id, name, email: `${id}@example.test`, emailVerified: true });
+  created.push(id);
+  return id;
+};
+
+const found = async (userId: UserId, name: string) => {
+  const scope = new TransactionScope();
+  const founder = new PgOrganizationFounder(
+    database,
+    scope,
+    new PgActivityLogger(database, scope, new SystemClock()),
+  );
+  const id = await founder.found(userId, name);
+  founded.push(id);
+  return id;
+};
+
+const repository = () => new PgMemberRepository(database, new TransactionScope());
+
+beforeAll(async () => {
+  database = openDatabase(counter);
+  ada = await makeUser("Ada");
+  grace = await makeUser("Grace");
+  acme = await found(ada, "Acme");
+  other = await found(grace, "Other");
+});
+
+afterAll(async () => {
+  await database.client.delete(users).where(inArray(users.id, created));
+  for (const organizationId of founded) {
+    await database.client.delete(roles).where(eq(roles.organizationId, organizationId));
+    await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+  }
+  await database.close();
+});
+
+describe("PgMemberRepository", () => {
+  it("lists a tenant's members with their role, and only that tenant's", async () => {
+    const page = await repository().list(acme, { limit: 25, offset: 0 });
+
+    expect(page.total).toBe(1);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({
+      userId: ada,
+      name: "Ada",
+      email: `${ada}@example.test`,
+      roleKey: "owner",
+      roleName: "Owner",
+      deactivated: false,
+    });
+    expect(page.items[0]?.joinedAt).toBeInstanceOf(Date);
+
+    const elsewhere = await repository().list(other, { limit: 25, offset: 0 });
+    expect(elsewhere.items.map((m) => m.userId)).toEqual([grace]);
+  });
+
+  // "Two queries" decays silently — someone adds a lookup inside the map and it becomes
+  // 2 + N, invisible at one member and the whole request at four hundred.
+  it("lists in exactly two queries", async () => {
+    counter.count = 0;
+
+    await repository().list(acme, { limit: 25, offset: 0 });
+
+    expect(counter.count).toBe(2);
+  });
+
+  it("answers membership by address, case-insensitively and per tenant", async () => {
+    const email = `${ada}@example.test`;
+
+    expect(await repository().existsByEmail(acme, email.toUpperCase())).toBe(true);
+    expect(await repository().existsByEmail(other, email)).toBe(false);
+    expect(await repository().existsByEmail(acme, "nobody@example.test")).toBe(false);
+  });
+});
