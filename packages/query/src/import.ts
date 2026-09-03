@@ -11,6 +11,8 @@ export type {
   AccountClient,
   ApiClient,
   AuthClient,
+  OrganizationClient,
+  OrganizationSwitch,
   TwoFactorEnrolment,
 } from "@loadbearing/api-client";
 
