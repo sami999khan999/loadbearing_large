@@ -299,6 +299,8 @@ export class Container {
         // words and `content` owes no transport, which is the whole reason this line
         // is in the wiring package.
         new ContentAuthMailer(this.content, this.email),
+        this.invitationClaimer,
+        founder,
       );
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
