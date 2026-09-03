@@ -4,6 +4,8 @@ import {
   AuthClient,
   Can,
   type ClientNamespace,
+  OrganizationClient,
+  OrganizationSwitcher,
   SignOutButton,
   useCapabilities,
   useMemo,
@@ -38,6 +40,7 @@ function AuthenticatedLayout() {
   const { session, queryClient } = Route.useRouteContext();
 
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
+  const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
   // The mirror image of `/sign-in`'s `complete()`. Three things have to happen and the
   // order matters: clear the whole query cache, because the next person to sign in on
@@ -50,9 +53,22 @@ function AuthenticatedLayout() {
     void router.invalidate().then(() => navigate({ to: "/sign-in" }));
   };
 
+  // The same three steps, and not by coincidence: after a switch every cached row
+  // belongs to the tenant just left, and the session snapshot names the old one.
+  const switched = () => {
+    queryClient.clear();
+    session.invalidate();
+    void router.invalidate().then(() => navigate({ to: "/" }));
+  };
+
   return (
     <>
       <header>
+        <OrganizationSwitcher
+          organization={organization}
+          onSwitched={switched}
+          onCreate={() => void navigate({ to: "/organization/new" })}
+        />
         <nav>
           <Link to="/settings/account">{t("auth.account")}</Link>
           <Link to="/settings/security">{t("auth.security")}</Link>

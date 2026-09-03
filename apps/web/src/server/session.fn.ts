@@ -36,18 +36,24 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
     const { activeOrganizationId } = result.session as { activeOrganizationId?: string };
     if (!activeOrganizationId) return anonymous();
 
+    const userId = result.session.userId as UserId;
+
     // The same cache `PrincipalBuilder` reads, keyed on `organization:user`, so the
-    // client's `can()` and the server's `assert()` are answering off one set.
-    const capabilities = await container.capabilities.forUser(
-      activeOrganizationId as OrganizationId,
-      result.session.userId as UserId,
-    );
+    // client's `can()` and the server's `assert()` are answering off one set. The
+    // membership list rides along for the switcher — one indexed query, once per
+    // tab, rather than a second round trip after the first paint.
+    const [capabilities, organizations] = await Promise.all([
+      container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
+      container.memberships.organizationsFor(userId),
+    ]);
 
     return {
       user: {
         id: result.user.id,
         email: result.user.email,
         name: result.user.name,
+        activeOrganizationId,
+        organizations: organizations.map((entry) => ({ id: entry.id, name: entry.name })),
       },
       capabilities: capabilities.toJSON(),
       googleEnabled: Env.googleEnabled,
