@@ -2,8 +2,10 @@ import "dotenv/config";
 import { AuthFactory } from "../auth.factory.js";
 import { type CacheStore, Database, getSchema, type OrganizationId } from "../import.js";
 import { AuthMailer } from "../mail/auth.mailer.js";
+import { InvitationClaimer, type InvitationPreview } from "../session/invitation.claimer.js";
 import { MembershipEnroller } from "../session/membership.enroller.js";
 import { MembershipReader, type OrganizationSummary } from "../session/membership.reader.js";
+import { OrganizationFounder } from "../session/organization.founder.js";
 
 // What Better Auth's own tables must look like, printed from the pinned runtime.
 //
@@ -73,6 +75,26 @@ class UnusedAuthMailer extends AuthMailer {
   }
 }
 
+class UnusedInvitationClaimer extends InvitationClaimer {
+  public override preview(): Promise<InvitationPreview | null> {
+    return unreachable();
+  }
+
+  public override claimByToken(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+
+  public override claimPending(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+}
+
+class UnusedOrganizationFounder extends OrganizationFounder {
+  public override found(): Promise<OrganizationId> {
+    return unreachable();
+  }
+}
+
 // Through `AuthFactory`, never a second copy of the options: a restated `plugins` or
 // `additionalFields` would describe an auth instance that does not exist.
 const auth = AuthFactory.create(
@@ -95,6 +117,8 @@ const auth = AuthFactory.create(
   new UnusedMembershipReader(),
   new UnusedMembershipEnroller(),
   new UnusedAuthMailer(),
+  new UnusedInvitationClaimer(),
+  new UnusedOrganizationFounder(),
 );
 
 for (const [model, table] of Object.entries(getSchema(auth.options))) {
