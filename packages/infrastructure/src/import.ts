@@ -43,12 +43,21 @@ export {
   type EmailMessage,
   EmailSender,
   EmbeddingProvider,
+  type InvitationPage,
+  type InvitationRecord,
+  type InvitationRepository,
   type JobOptions,
   type LogEntry,
   type LogQuery,
   type LogReader,
   type MaintenanceGateway,
-  type Principal,
+  type MemberPage,
+  type MemberRecord,
+  type MemberRepository,
+  type NewInvitation,
+  // A value, not a type: the founder and the invitation claimer construct one to write
+  // an audit row as the tenant being created or joined.
+  Principal,
   type ProjectionCheckpoint,
   QueuePublisher,
   type RiskScore,
@@ -68,6 +77,7 @@ export {
 export {
   type GoalId,
   Identifiers,
+  type InvitationId,
   type OrganizationId,
   type PaginationQuery,
   type RoleId,
@@ -78,7 +88,7 @@ export {
 export { type Clock, ServerOnly, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { NotFoundError, UnavailableError } from "@loadbearing/errors";
+export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export {
@@ -106,6 +116,7 @@ export {
   type Logger,
   lt,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 export { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";

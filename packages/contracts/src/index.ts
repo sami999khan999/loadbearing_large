@@ -1,8 +1,18 @@
 export {
+  type InvitationDto,
+  type InviteMemberInput,
+  MemberContract,
+  type MemberDto,
+  MemberEntity,
+  MemberProcedures,
+  type RevokeInvitationInput,
+} from "./member/index.js";
+export {
   type ApiKeyId,
   Envelope,
   type GoalId,
   Identifiers,
+  type InvitationId,
   type OrganizationId,
   Pagination,
   type PaginationQuery,

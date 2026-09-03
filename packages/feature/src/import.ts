@@ -9,7 +9,7 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
 // no read can bypass a defined query.
-export type { AccountClient, AuthClient } from "@loadbearing/api-client";
+export type { AccountClient, AuthClient, OrganizationClient } from "@loadbearing/api-client";
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 export type {
   ClientNamespace,
@@ -22,7 +22,7 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes the server returns. Types only — this package renders them and has no
 // opinion about how they arrived.
-export type { RoleDto } from "@loadbearing/contracts";
+export type { InvitationDto, MemberDto, RoleDto } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { ErrorNormalizer } from "@loadbearing/errors";
@@ -42,6 +42,9 @@ export {
 export {
   AccountMutations,
   AccountQueries,
+  MemberMutations,
+  MemberQueries,
+  OrganizationMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,
@@ -54,11 +57,13 @@ export {
   Callout,
   Can,
   CodeList,
+  DataTable,
   EmptyState,
   Field,
   Input,
   QrCode,
   StatusBadge,
+  type TableColumn,
 } from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────

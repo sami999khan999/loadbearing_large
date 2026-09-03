@@ -11,8 +11,11 @@ import {
   Uuid,
 } from "./import.js";
 import type { AuthMailer } from "./mail/auth.mailer.js";
+import { OrganizationPlugin } from "./plugin/index.js";
+import type { InvitationClaimer } from "./session/invitation.claimer.js";
 import type { MembershipEnroller } from "./session/membership.enroller.js";
 import type { MembershipReader } from "./session/membership.reader.js";
+import type { OrganizationFounder } from "./session/organization.founder.js";
 
 // The webview origins the Tauri shell serves from — `tauri://localhost` on macOS and
 // Linux, `http://tauri.localhost` on Windows. Both, because the scheme genuinely differs
@@ -38,6 +41,10 @@ export class AuthFactory {
     memberships: MembershipReader,
     enroller: MembershipEnroller,
     mailer: AuthMailer,
+    // The two write paths the organization plugin's endpoints need. Both are ports of
+    // this package, bound structurally in `Container` like the two above.
+    claimer: InvitationClaimer,
+    founder: OrganizationFounder,
   ) {
     const options = {
       secret: config.secret,
@@ -108,6 +115,10 @@ export class AuthFactory {
           // Deactivation is a state, not a delete: the activity log still points at this
           // row and always will. `input: false` keeps it off every registration payload.
           deactivatedAt: { type: "date", required: false, input: false },
+          // Where the last organization switch left this person. Written by the
+          // organization plugin through `internalAdapter.updateUser`, which is why it
+          // must be declared here and not only in the Drizzle schema.
+          lastActiveOrganizationId: { type: "string", required: false, input: false },
         },
 
         changeEmail: {
@@ -230,6 +241,12 @@ export class AuthFactory {
           "/request-password-reset": { window: 60, max: 3 },
           "/send-verification-email": { window: 60, max: 3 },
           "/two-factor/send-otp": { window: 60, max: 3 },
+          // The organization plugin's own paths. Creating a tenant seeds a role set,
+          // and accepting is a guess against a token; neither is something a person
+          // does five times a minute.
+          "/organization/create": { window: 60, max: 5 },
+          "/invitation/accept": { window: 60, max: 5 },
+          "/organization/switch": { window: 60, max: 20 },
         },
       },
 
@@ -296,6 +313,9 @@ export class AuthFactory {
             sendOTP: async ({ user, otp }) => mailer.sendTwoFactorOtp(user.email, otp),
           },
         }),
+        // Switch, create, accept — the three ways a session ends up pointing at a
+        // different tenant. See the class for why they are endpoints and not procedures.
+        OrganizationPlugin.create(memberships, claimer, founder),
       ],
     } satisfies BetterAuthOptions;
 

@@ -88,8 +88,13 @@ export const memberships = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("memberships_uq").on(t.userId, t.roleId),
-    index("memberships_user_idx").on(t.organizationId, t.userId),
+    // One membership per person per tenant, leading with the tenant column. The old
+    // `(user_id, role_id)` let one person hold two roles in an organization, which a
+    // switcher would render as the same tenant twice.
+    uniqueIndex("memberships_uq").on(t.organizationId, t.userId),
+    // The `user_id` foreign key's own index. Every by-user read — `activeOrganizationFor`,
+    // `organizationsFor`, the claimers' idempotency checks — starts from here.
+    index("memberships_user_idx").on(t.userId),
     index("memberships_role_idx").on(t.roleId),
   ],
 );

@@ -3,8 +3,10 @@ import type { AuthConfig } from "../src/auth.config.js";
 import { AuthFactory } from "../src/auth.factory.js";
 import type { CacheStore, Database, OrganizationId } from "../src/import.js";
 import { AuthMailer } from "../src/mail/auth.mailer.js";
+import { InvitationClaimer, type InvitationPreview } from "../src/session/invitation.claimer.js";
 import { MembershipEnroller } from "../src/session/membership.enroller.js";
-import { MembershipReader } from "../src/session/membership.reader.js";
+import { MembershipReader, type OrganizationSummary } from "../src/session/membership.reader.js";
+import { OrganizationFounder } from "../src/session/organization.founder.js";
 
 // Nothing here connects. No option below is exercised — this spec reads `auth.options`
 // back, which is what `src/tables/` already does and the only way to assert on
@@ -24,10 +26,38 @@ class StubMembershipReader extends MembershipReader {
   public override activeOrganizationFor(): Promise<OrganizationId | null> {
     return unreachable();
   }
+
+  public override isMember(): Promise<boolean> {
+    return unreachable();
+  }
+
+  public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
+    return unreachable();
+  }
 }
 
 class StubMembershipEnroller extends MembershipEnroller {
   public override enrol(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+}
+
+class StubInvitationClaimer extends InvitationClaimer {
+  public override preview(): Promise<InvitationPreview | null> {
+    return unreachable();
+  }
+
+  public override claimByToken(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+
+  public override claimPending(): Promise<OrganizationId | null> {
+    return unreachable();
+  }
+}
+
+class StubOrganizationFounder extends OrganizationFounder {
+  public override found(): Promise<OrganizationId> {
     return unreachable();
   }
 }
@@ -69,6 +99,8 @@ const optionsFor = (config: AuthConfig = BASE, mailer: AuthMailer = new StubAuth
     new StubMembershipReader(),
     new StubMembershipEnroller(),
     mailer,
+    new StubInvitationClaimer(),
+    new StubOrganizationFounder(),
   ).options;
 
 describe("AuthFactory — social providers", () => {
@@ -124,6 +156,9 @@ describe("AuthFactory — credential endpoints", () => {
     const rules = optionsFor().rateLimit?.customRules ?? {};
 
     expect(Object.keys(rules).sort()).toEqual([
+      "/invitation/accept",
+      "/organization/create",
+      "/organization/switch",
       "/request-password-reset",
       "/send-verification-email",
       "/sign-in/email",
@@ -179,6 +214,36 @@ describe("AuthFactory — two-factor", () => {
 
     expect(ids).toContain("two-factor");
     expect(ids).toContain("bearer");
+  });
+});
+
+describe("AuthFactory — organization plugin", () => {
+  // The three paths the client calls and the rate-limit rules name. Read off the
+  // plugin's endpoints so a renamed path fails here rather than as a 404 in the browser.
+  it("mounts switch, create and accept as POST endpoints", () => {
+    const plugin = (optionsFor().plugins ?? []).find(
+      (candidate) => candidate.id === "organization",
+    );
+    const endpoints = Object.values(plugin?.endpoints ?? {}) as {
+      path: string;
+      options: { method: string };
+    }[];
+
+    expect(
+      endpoints.map((endpoint) => `${endpoint.options.method} ${endpoint.path}`).sort(),
+    ).toEqual([
+      "POST /invitation/accept",
+      "POST /organization/create",
+      "POST /organization/switch",
+    ]);
+  });
+
+  // Written by the plugin through `internalAdapter.updateUser`, which only knows the
+  // fields declared here — a column that exists only in the Drizzle schema is invisible.
+  it("declares the last-active organization as a user field the client cannot set", () => {
+    const field = optionsFor().user?.additionalFields?.lastActiveOrganizationId;
+
+    expect(field?.input).toBe(false);
   });
 });
 

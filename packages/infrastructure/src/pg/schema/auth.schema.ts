@@ -25,29 +25,40 @@ import { organizations } from "./rbac.schema.js";
 // `pnpm --filter @loadbearing/auth run auth:tables` prints exactly what the pinned version
 // expects, including whatever the enabled plugins contribute. Diff it against what is here.
 
-export const users = pgTable("users", {
-  // Not Better Auth's opaque string: `advanced.database.generateId` is set to `Uuid.v7()`,
-  // which is what lets `user_id` be a real uuid foreign key on the domain tables and makes
-  // the branded `UserId` in contracts — declared `z.uuid()` — actually true.
-  id: uuid("id").$type<UserId>().primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").notNull().default(false),
-  image: text("image"),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+export const users = pgTable(
+  "users",
+  {
+    // Not Better Auth's opaque string: `advanced.database.generateId` is set to `Uuid.v7()`,
+    // which is what lets `user_id` be a real uuid foreign key on the domain tables and makes
+    // the branded `UserId` in contracts — declared `z.uuid()` — actually true.
+    id: uuid("id").$type<UserId>().primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    image: text("image"),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false),
 
-  // ── ours, not Better Auth's ──
-  // Read on the first server render of every request, which is why it is here rather than
-  // in a preferences table that would need a join before anything can be rendered.
-  locale: text("locale").notNull().default("en"),
-  timezone: text("timezone"),
-  // Deactivation is a state, not a delete — the activity log points at this row forever.
-  // A deactivated user keeps their rows and loses their capabilities.
-  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    // ── ours, not Better Auth's ──
+    // Read on the first server render of every request, which is why it is here rather than
+    // in a preferences table that would need a join before anything can be rendered.
+    locale: text("locale").notNull().default("en"),
+    timezone: text("timezone"),
+    // Deactivation is a state, not a delete — the activity log points at this row forever.
+    // A deactivated user keeps their rows and loses their capabilities.
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    // Where the last switch left them, so the next sign-in lands there rather than in the
+    // oldest membership. `set null` because a tenant being deleted must not take the
+    // account with it; `PgMembershipReader` re-checks membership before honouring it.
+    lastActiveOrganizationId: uuid("last_active_organization_id").references(
+      () => organizations.id,
+      { onDelete: "set null" },
+    ),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("users_last_active_organization_idx").on(t.lastActiveOrganizationId)],
+);
 
 // Not partitioned, deliberately. It looks like a third append-only table next to
 // `activity_log` and `task_status_history` and is not one: rows are updated on refresh,

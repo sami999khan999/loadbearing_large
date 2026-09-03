@@ -17,4 +17,8 @@ export const shellRoutes = {
   // an unverified sign-up is told to go and look in its inbox.
   verifyEmail: "/verify-email",
   forbidden: "/forbidden",
+  // Where an invitation link lands, with the token appended. Needs no session: the
+  // person holding it may have no account yet. The mailer in `composition` builds the
+  // link from this entry, so the two agree by construction.
+  invitation: "/invitation",
 } as const satisfies Record<string, RoutePath>;

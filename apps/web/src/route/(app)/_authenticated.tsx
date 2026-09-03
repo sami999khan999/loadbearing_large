@@ -1,9 +1,20 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { Endpoint } from "~/endpoint.js";
-import { AuthClient, type ClientNamespace, SignOutButton, useMemo, useMessages } from "~/import.js";
+import {
+  AuthClient,
+  Can,
+  type ClientNamespace,
+  OrganizationClient,
+  OrganizationSwitcher,
+  SignOutButton,
+  useCapabilities,
+  useMemo,
+  useMessages,
+} from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
-const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
+// `nav` for the gated destinations below; `auth` for everything else the header says.
+const MESSAGES = ["auth", "nav"] as const satisfies readonly ClientNamespace[];
 
 // Every page under `(app)` needs a session, and this is the one place that says so. A
 // leaf below states only the capability it needs — repeating `requireSession()` in each
@@ -22,11 +33,14 @@ export const Route = createFileRoute("/(app)/_authenticated")({
 
 function AuthenticatedLayout() {
   const { t } = useMessages("auth");
+  const nav = useMessages("nav");
+  const capabilities = useCapabilities();
   const navigate = useNavigate();
   const router = useRouter();
   const { session, queryClient } = Route.useRouteContext();
 
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
+  const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
   // The mirror image of `/sign-in`'s `complete()`. Three things have to happen and the
   // order matters: clear the whole query cache, because the next person to sign in on
@@ -39,12 +53,33 @@ function AuthenticatedLayout() {
     void router.invalidate().then(() => navigate({ to: "/sign-in" }));
   };
 
+  // The same three steps, and not by coincidence: after a switch every cached row
+  // belongs to the tenant just left, and the session snapshot names the old one.
+  const switched = () => {
+    queryClient.clear();
+    session.invalidate();
+    void router.invalidate().then(() => navigate({ to: "/" }));
+  };
+
   return (
     <>
       <header>
+        <OrganizationSwitcher
+          organization={organization}
+          onSwitched={switched}
+          onCreate={() => void navigate({ to: "/organization/new" })}
+        />
         <nav>
           <Link to="/settings/account">{t("auth.account")}</Link>
           <Link to="/settings/security">{t("auth.security")}</Link>
+          {/* The same keys the two pages' guards and their use-cases check — a link
+              that is hidden here still answers FORBIDDEN if typed by hand. */}
+          <Can permission="member.read" capabilities={capabilities}>
+            <Link to="/settings/members">{nav.t("nav.members")}</Link>
+          </Can>
+          <Can permission="rbac.role.read" capabilities={capabilities}>
+            <Link to="/settings/roles">{nav.t("nav.roles")}</Link>
+          </Can>
         </nav>
         <SignOutButton auth={auth} onSignedOut={signedOut} />
       </header>

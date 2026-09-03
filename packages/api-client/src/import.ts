@@ -15,7 +15,9 @@ export type { AppContract } from "@loadbearing/contracts";
 export {
   type AppError,
   ConflictError,
+  ForbiddenError,
   InternalError,
+  NotFoundError,
   RateLimitedError,
   TwoFactorRequiredError,
   UnauthorizedError,

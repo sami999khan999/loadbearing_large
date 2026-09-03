@@ -9,6 +9,8 @@ export {
   BetterAuthErrorNormalizer,
   CookieAuthStrategy,
   type LinkedAccount,
+  OrganizationClient,
+  type OrganizationSwitch,
   type RequestCredentials,
   TokenProvider,
   type TwoFactorEnrolment,

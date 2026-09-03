@@ -45,6 +45,10 @@ export class ApiClient {
     return this.rpc.role;
   }
 
+  public get member(): AppClient["member"] {
+    return this.rpc.member;
+  }
+
   // The escape hatch for a namespace with no accessor yet.
   public get raw(): AppClient {
     return this.rpc;

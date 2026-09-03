@@ -1,0 +1,247 @@
+import { Identifiers, type InvitationId, type RoleId } from "@loadbearing/contracts";
+import { FixedClock } from "@loadbearing/core";
+import { ConflictError, ForbiddenError, NotFoundError } from "@loadbearing/errors";
+import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
+import { describe, expect, it } from "vitest";
+import type { InvitationMail, InvitationMailer } from "../../src/member/invitation.mailer.js";
+import type {
+  InvitationPage,
+  InvitationRecord,
+  InvitationRepository,
+  NewInvitation,
+} from "../../src/member/invitation.repository.js";
+import { InviteMemberUseCase } from "../../src/member/invite-member.use-case.js";
+import type { MemberPage, MemberRepository } from "../../src/member/member.repository.js";
+import type { ActivityLogger, UnitOfWork } from "../../src/port/index.js";
+import { Authorizer } from "../../src/primitive/authorizer.js";
+import { Principal } from "../../src/primitive/principal.js";
+import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
+
+const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
+const OTHER_ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000b0");
+const USER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
+const ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c1");
+const NOW = new Date("2026-09-03T12:00:00.000Z");
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function actorHolding(...grants: readonly PermissionKey[]): Principal {
+  return new Principal(
+    ORG,
+    USER,
+    CapabilitySet.from({ wildcard: false, org: { grants, denies: [] }, goals: {} }),
+  );
+}
+
+const memberRole = (organizationId: string): RoleRecord => ({
+  id: ROLE,
+  key: "member",
+  name: "Member",
+  description: null,
+  scope: "org",
+  isSystem: true,
+  permissions: ["member.read"],
+  ...(organizationId === ORG ? {} : {}),
+});
+
+// Answers only for the tenant it was built with, which is what the "wrong tenant"
+// test below depends on.
+class StubRoleRepository implements RoleRepository {
+  public constructor(private readonly organizationId: string) {}
+
+  public list(): Promise<RolePage> {
+    throw new Error("not under test");
+  }
+
+  public findById(organizationId: string, roleId: RoleId): Promise<RoleRecord | null> {
+    const found = organizationId === this.organizationId && roleId === ROLE;
+    return Promise.resolve(found ? memberRole(organizationId) : null);
+  }
+}
+
+class StubMemberRepository implements MemberRepository {
+  public constructor(private readonly existing: readonly string[] = []) {}
+
+  public list(): Promise<MemberPage> {
+    throw new Error("not under test");
+  }
+
+  public existsByEmail(_organizationId: string, email: string): Promise<boolean> {
+    return Promise.resolve(this.existing.includes(email));
+  }
+}
+
+class RecordingInvitationRepository implements InvitationRepository {
+  public readonly saved: NewInvitation[] = [];
+
+  public list(): Promise<InvitationPage> {
+    throw new Error("not under test");
+  }
+
+  public findById(organizationId: string, id: InvitationId): Promise<InvitationRecord | null> {
+    const row = this.saved.find((i) => i.id === id && i.organizationId === organizationId);
+    if (!row) return Promise.resolve(null);
+    return Promise.resolve({
+      id: row.id,
+      email: row.email,
+      roleId: row.roleId,
+      roleName: "Member",
+      invitedBy: row.invitedBy,
+      inviterName: "Ada",
+      organizationName: "Acme",
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
+    });
+  }
+
+  public save(invitation: NewInvitation): Promise<void> {
+    this.saved.push(invitation);
+    return Promise.resolve();
+  }
+
+  public delete(): Promise<void> {
+    throw new Error("not under test");
+  }
+}
+
+class RecordingMailer implements InvitationMailer {
+  public readonly sent: InvitationMail[] = [];
+
+  public send(mail: InvitationMail): Promise<void> {
+    this.sent.push(mail);
+    return Promise.resolve();
+  }
+}
+
+class RecordingActivityLogger implements ActivityLogger {
+  public readonly records: { action: string; payload: Record<string, unknown> }[] = [];
+
+  public record(
+    _actor: Principal,
+    action: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    this.records.push({ action, payload: { ...payload } });
+    return Promise.resolve();
+  }
+}
+
+class DirectUnitOfWork implements UnitOfWork {
+  public run<T>(work: () => Promise<T>): Promise<T> {
+    return work();
+  }
+}
+
+class FailingUnitOfWork implements UnitOfWork {
+  public run<T>(): Promise<T> {
+    return Promise.reject(new Error("commit failed"));
+  }
+}
+
+interface Harness {
+  readonly useCase: InviteMemberUseCase;
+  readonly invitations: RecordingInvitationRepository;
+  readonly mailer: RecordingMailer;
+  readonly activity: RecordingActivityLogger;
+}
+
+function harness(
+  options: { existing?: readonly string[]; roleTenant?: string; unitOfWork?: UnitOfWork } = {},
+): Harness {
+  const invitations = new RecordingInvitationRepository();
+  const mailer = new RecordingMailer();
+  const activity = new RecordingActivityLogger();
+  const useCase = new InviteMemberUseCase(
+    new Authorizer(),
+    new StubRoleRepository(options.roleTenant ?? ORG),
+    new StubMemberRepository(options.existing),
+    invitations,
+    mailer,
+    activity,
+    options.unitOfWork ?? new DirectUnitOfWork(),
+    new FixedClock(NOW),
+  );
+  return { useCase, invitations, mailer, activity };
+}
+
+describe("InviteMemberUseCase", () => {
+  it("refuses a principal without member.invite before touching anything", async () => {
+    const h = harness();
+
+    await expect(
+      h.useCase.execute(actorHolding("member.read"), { email: "b@example.test", roleId: ROLE }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    expect(h.invitations.saved).toEqual([]);
+    expect(h.mailer.sent).toEqual([]);
+  });
+
+  // A role id from another organization parses just as well; the lookup under the
+  // actor's tenant is what stops it being handed out.
+  it("refuses a role that belongs to another tenant", async () => {
+    const h = harness({ roleTenant: OTHER_ORG });
+
+    await expect(
+      h.useCase.execute(actorHolding("member.invite"), { email: "b@example.test", roleId: ROLE }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("refuses an address that already belongs to a member", async () => {
+    const h = harness({ existing: ["b@example.test"] });
+
+    await expect(
+      h.useCase.execute(actorHolding("member.invite"), { email: "B@Example.test", roleId: ROLE }),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("saves a lowercased row expiring in seven days, audits it, then mails the link", async () => {
+    const h = harness();
+
+    const result = await h.useCase.execute(actorHolding("member.invite"), {
+      email: "  B@Example.test ",
+      roleId: ROLE,
+    });
+
+    expect(h.invitations.saved).toHaveLength(1);
+    const saved = h.invitations.saved[0];
+    expect(saved).toMatchObject({
+      organizationId: ORG,
+      email: "b@example.test",
+      roleId: ROLE,
+      invitedBy: USER,
+      createdAt: NOW,
+      expiresAt: new Date(NOW.getTime() + WEEK_MS),
+    });
+    expect(saved?.token).toMatch(/^[0-9a-f]{64}$/);
+
+    expect(h.activity.records).toEqual([
+      { action: "member.invited", payload: { email: "b@example.test", roleId: ROLE } },
+    ]);
+
+    // The mail carries the same token the row stores and the names the row joins to.
+    expect(h.mailer.sent).toEqual([
+      {
+        to: "b@example.test",
+        organizationName: "Acme",
+        inviterName: "Ada",
+        token: saved?.token,
+      },
+    ]);
+
+    expect(result.email).toBe("b@example.test");
+    expect(result.roleName).toBe("Member");
+    // The token never reaches the caller.
+    expect(Object.keys(result)).not.toContain("token");
+  });
+
+  // A message saying "you have been invited" about a row that rolled back is a link
+  // to nothing — so the send waits for the commit, and a failed commit sends nothing.
+  it("sends no mail when the unit of work does not commit", async () => {
+    const h = harness({ unitOfWork: new FailingUnitOfWork() });
+
+    await expect(
+      h.useCase.execute(actorHolding("member.invite"), { email: "b@example.test", roleId: ROLE }),
+    ).rejects.toThrow("commit failed");
+
+    expect(h.mailer.sent).toEqual([]);
+  });
+});

@@ -1,22 +1,61 @@
-import { asc, eq, type OrganizationId, type UserId } from "../../import.js";
+import { and, asc, eq, type OrganizationId, sql, type UserId } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { memberships } from "../schema/index.js";
+import { memberships, organizations, users } from "../schema/index.js";
+
+// One tenant a user may switch to. The same shape `MembershipReader` in `auth`
+// declares, restated here because this package cannot import that one.
+export interface OrganizationSummary {
+  readonly id: OrganizationId;
+  readonly name: string;
+  readonly slug: string;
+}
 
 // Satisfies `MembershipReader` from `@loadbearing/auth` structurally — it cannot import it,
 // because `auth` already depends on this package. The binding is checked where the two
 // meet, in `Container` (17); a signature drift fails composition's typecheck, not this one.
 export class PgMembershipReader extends BaseRepository {
   // Runs once per sign-in, not per request — the answer is pinned onto the session row.
-  // Ordered by creation so a user in two organizations lands in the same one every time
-  // rather than wherever the planner happened to look first.
+  // The organization the user last switched to wins while they are still a member of
+  // it; otherwise the oldest membership, so a user in two organizations lands in the
+  // same one every time rather than wherever the planner happened to look first.
   public async activeOrganizationFor(userId: UserId): Promise<OrganizationId | null> {
     const [row] = await this.db
       .select({ organizationId: memberships.organizationId })
       .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
       .where(eq(memberships.userId, userId))
-      .orderBy(asc(memberships.createdAt))
+      // `true` sorts first under `desc`. A user with no preference compares as null on
+      // every row, and `nulls last` makes that a tie rather than a winner.
+      .orderBy(
+        sql`(${memberships.organizationId} = ${users.lastActiveOrganizationId}) desc nulls last`,
+        asc(memberships.createdAt),
+      )
       .limit(1);
 
     return (row?.organizationId as OrganizationId | undefined) ?? null;
+  }
+
+  // The switch endpoint's whole authorization. Indexed by `memberships_uq`.
+  public async isMember(userId: UserId, organizationId: OrganizationId): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
+      .limit(1);
+
+    return row !== undefined;
+  }
+
+  // Oldest first, matching the fallback order above, so the switcher's list and the
+  // sign-in default agree about which tenant is "first".
+  public async organizationsFor(userId: UserId): Promise<readonly OrganizationSummary[]> {
+    const rows = await this.db
+      .select({ id: organizations.id, name: organizations.name, slug: organizations.slug })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
+      .where(eq(memberships.userId, userId))
+      .orderBy(asc(memberships.createdAt));
+
+    return rows;
   }
 }

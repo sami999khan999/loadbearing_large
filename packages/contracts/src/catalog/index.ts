@@ -1,4 +1,5 @@
 import type { PermissionKey } from "../import.js";
+import { memberProcedurePermissions } from "./member.permissions.js";
 import { roleProcedurePermissions } from "./role.permissions.js";
 
 // Merged from team-owned fragments, one `<subject>.permissions.ts` per slice. Add
@@ -9,4 +10,5 @@ import { roleProcedurePermissions } from "./role.permissions.js";
 // and to the coverage test, and nothing outside this package may read it.
 export const PROCEDURE_PERMISSIONS: Readonly<Record<string, PermissionKey>> = {
   ...roleProcedurePermissions,
+  ...memberProcedurePermissions,
 };

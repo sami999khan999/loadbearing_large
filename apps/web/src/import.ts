@@ -20,7 +20,13 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // `AuthClient` is constructed per component, never a module singleton: the instance
 // differs per environment, and the desktop shell supplies absolute URLs of its own (23).
-export { AccountClient, ApiClient, AuthClient, CookieAuthStrategy } from "@loadbearing/api-client";
+export {
+  AccountClient,
+  ApiClient,
+  AuthClient,
+  CookieAuthStrategy,
+  OrganizationClient,
+} from "@loadbearing/api-client";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 // The client catalog by way of `StaticContentSource`, never `SERVER_CATALOG` — the
@@ -43,10 +49,16 @@ export {
   ActiveSessionList,
   ChangeEmailForm,
   ChangePasswordForm,
+  CreateOrganizationForm,
   EffectivePermissionsInspector,
   ForgotPasswordForm,
+  InvitationAccept,
+  InvitationList,
+  InviteMemberForm,
   LinkedAccountList,
+  MemberList,
   MessageProvider,
+  OrganizationSwitcher,
   ProfileForm,
   ResetPasswordForm,
   RoleMatrix,
@@ -59,6 +71,7 @@ export {
   TwoFactorForm,
   TwoFactorPanel,
   TwoFactorSetup,
+  useCapabilities,
   useMessages,
   VerifyEmailNotice,
 } from "@loadbearing/feature";
@@ -77,6 +90,7 @@ export {
   Button,
   type ButtonVariant,
   Callout,
+  Can,
   DataTable,
   EmptyState,
   Field,

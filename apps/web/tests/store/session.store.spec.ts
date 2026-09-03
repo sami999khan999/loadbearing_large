@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { type SessionSnapshot, SessionStore } from "../../src/store/session.store.js";
 
 const OWNER: SessionSnapshot = {
-  user: { id: "u1", email: "owner@example.com", name: "Owner" },
+  user: {
+    id: "u1",
+    email: "owner@example.com",
+    name: "Owner",
+    activeOrganizationId: "o1",
+    organizations: [{ id: "o1", name: "Owner Org" }],
+  },
   capabilities: CapabilitySet.from({
     wildcard: false,
     org: { grants: ["rbac.role.read"], denies: [] },

@@ -1,0 +1,27 @@
+import type { NamespaceBundle } from "../namespace.js";
+
+// Partial by design — anything missing falls back to English.
+export const member: NamespaceBundle<"member"> = {
+  "member.title": "সদস্য",
+  "member.subtitle": "এই প্রতিষ্ঠানে কারা আছেন, এবং কাদের যোগ দিতে বলা হয়েছে।",
+  "member.column.name": "নাম",
+  "member.column.email": "ইমেল",
+  "member.column.role": "ভূমিকা",
+  "member.column.joined": "যোগদান",
+  "member.badge.owner": "মালিক",
+  "member.badge.deactivated": "নিষ্ক্রিয়",
+  "member.empty": "এখনও কেউ নেই।",
+
+  "member.invitation.title": "অপেক্ষমাণ আমন্ত্রণ",
+  "member.invitation.empty": "কোনো অপেক্ষমাণ আমন্ত্রণ নেই।",
+  "member.invitation.invitedBy": "{name} আমন্ত্রণ জানিয়েছেন",
+  "member.invitation.expires": "মেয়াদ শেষ {date}",
+  "member.invitation.revoke": "প্রত্যাহার",
+
+  "member.invite.title": "কাউকে আমন্ত্রণ জানান",
+  "member.invite.email": "ইমেল ঠিকানা",
+  "member.invite.role": "ভূমিকা",
+  "member.invite.submit": "আমন্ত্রণ পাঠান",
+  "member.invite.sent": "{email}-এ আমন্ত্রণ পাঠানো হয়েছে। এটি সাত দিন পরে মেয়াদোত্তীর্ণ হবে।",
+  "member.invite.alreadyMember": "এই ঠিকানাটি ইতিমধ্যে এই প্রতিষ্ঠানের একজন সদস্যের।",
+};

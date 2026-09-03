@@ -1,6 +1,7 @@
 export { ForgotPasswordForm, type ForgotPasswordFormProps } from "./forgot-password.form.js";
 export { ResetPasswordForm, type ResetPasswordFormProps } from "./reset-password.form.js";
 export {
+  type SessionOrganization,
   SessionProvider,
   type SessionProviderProps,
   type SessionUser,

@@ -1,6 +1,6 @@
 ---
 title: TODO — loadbearing starter kit
-updated: 2026-08-29
+updated: 2026-09-03
 owner: sami
 schema: todo/v1
 ---
@@ -91,6 +91,13 @@ probe, and documentation that names directories which exist.
 
 ## 📋 Backlog
 
+- [ ] `T-030` **`core.activity.write` is unreachable for anyone but `owner`** `@sami` `P2` `~1h` `#api`
+  - **Goal:** `core.permissions.ts` says the key is "held by every principal … a property of acting at all", but `PgCapabilityRepository.resolveFor` grants only through roles and only `owner`'s wildcard carries it. `IndexDocumentUseCase` asserts it, so a `member` cannot index a document.
+  - **Done when:** Either every resolved principal holds the `core.*` keys or no use-case asserts one; the decision is recorded in `packages/permissions/docs/`.
+  - **Files:** `packages/infrastructure/src/pg/repository/pg-capability.repository.ts`, `packages/application/src/ai/index-document.use-case.ts`, `packages/permissions/src/catalog/core.permissions.ts`
+  - **Depends on:** none
+  - **Notes:** Found while planning `T-028`. The member use-cases deliberately assert only their own permission so `admin` — which holds `member.invite` and not `core.activity.write` — can invite. A capability-model change, so out of scope for the invitation work.
+
 - [ ] `T-026` **Make the activity-replay spec independent of how many rows are already in the table** `@sami` `P2` `~30m` `#api`
   - **Goal:** `pg-activity-replay.reader.spec.ts` walks the table from the start in ten batches of two, so it can only reach its own rows while fewer than twenty older ones exist. `activity_log` is append-only and the other specs never clean up, so the suite goes red after roughly twenty runs against one database and stays red.
   - **Done when:** The spec passes with several hundred unrelated rows already in `activity_log`.
@@ -103,6 +110,27 @@ probe, and documentation that names directories which exist.
 *(nothing blocked)*
 
 ## ✅ Done
+
+- [x] `T-029` **Organization plugin: switch, create, accept; switcher; invitation landing page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
+  - **Goal:** A user in two organizations could reach only the one the session was pinned to, nothing let anyone create a second organization, and an existing account holding an invitation link had no way to accept it.
+  - **Done when:** `POST /api/auth/organization/{switch,create}` and `/api/auth/invitation/accept` rebind the session and re-issue the cookie cache so the very next RPC resolves the new tenant; the header switcher lists every membership; `/organization/new` founds and switches; `/invitation/$token` previews for an anonymous visitor and accepts for a signed-in one; `/sign-in?redirect=` returns there; a sign-in lands in the last-used organization.
+  - **Files:** `packages/auth/src/plugin/organization.plugin.ts`, `packages/api-client/src/auth/organization.client.ts`, `packages/query/src/organization/`, `packages/feature/src/organization/`, `apps/web/src/server/{session,invitation}.fn.ts`, `apps/web/src/route/-redirect.ts`, `apps/web/src/route/(shell)/invitation/$token.tsx`, `apps/web/src/route/(app)/_authenticated/organization/new.tsx`
+  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The ten-step manual pass in the plan (`~/.claude/plans/sprightly-kindling-dongarra.md`, "Verification") is still owed, in particular step 5 — a switch followed immediately by an RPC that must answer for the new tenant.
+  - **Notes:** A Better Auth plugin rather than oRPC, for two verified reasons: these actions are identity-gated and no permission a non-owner holds could gate them, and only an endpoint with Better Auth's `ctx` can call `setSessionCookie` — without that, `session.cookieCache` keeps resolving the old tenant for up to sixty seconds after a switch. `rebind` does what Better Auth's own organization plugin does for `setActiveOrganization`, plus writes `users.last_active_organization_id`. `SessionUser` now carries `activeOrganizationId` and `organizations`, resolved in `fetchSession` in one extra indexed query. The sign-in page's `?redirect=` is validated to a rooted single-slash path. `auth` gained a `zod` dependency for the plugin's request bodies.
+
+- [x] `T-028` **Member slice: invite, list members, list and revoke invitations, members page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
+  - **Goal:** `member.invite` was a permission key with nothing behind it and `ROUTES.rbac.members` a declared route with no page. An owner or admin could not bring anyone into their organization.
+  - **Done when:** `/settings/members` lists members and pending invitations, an `admin` can invite an address at a role and revoke a pending invitation, the invited address receives a link in Mailpit, and `member.invited` / `member.invitation.revoked` land in `activity_log`. The four procedures are in `PROCEDURE_PERMISSIONS` and gated in their use-cases.
+  - **Files:** `packages/contracts/src/member/`, `packages/application/src/member/`, `packages/infrastructure/src/pg/repository/pg-{member,invitation}.repository.ts`, `packages/composition/src/mail/content.invitation-mailer.ts`, `packages/query/src/member/`, `packages/content/src/message/{en,bn}/member.ts`, `packages/feature/src/member/`, `apps/web/src/server/orpc/member.router.ts`, `apps/web/src/route/(app)/_authenticated/settings/members.tsx`
+  - **Done:** All twelve steps, subject `member`. Typecheck, lint, `check:architecture` 13/13 with a fresh web bundle, and every unit suite green (contracts 34, application 22 incl. four new use-case specs, composition 17, feature, query, content, web). **The two Postgres specs — `pg-member.repository` and `pg-invitation.repository` — were not run here: Docker was down. CI runs them.** Not exercised against Mailpit for the same reason.
+  - **Notes:** The mail goes out only after the unit of work commits, and the invite spec pins that a failed commit sends nothing. `InvitationRecord` never carries the token — the contract spec asserts the wire shape has no such key. `admin` can invite because the use-cases assert only `member.invite`, never `core.activity.write` (`T-030`). `composition` now depends on `permissions`, solely so the mail's link is built from `ROUTES.shell.invitation`. The nav gained gated links to members and roles; neither existed before.
+
+- [x] `T-027` **Invitations foundation: schema, claim and found adapters, claiming enroller** `@sami` `P1` `~6h` `#db` `#api` `done: 2026-09-03`
+  - **Goal:** Nothing could turn an invitation into a membership, nothing could create an organization except the personal enroller, and `activeOrganizationFor` pinned a user in two organizations to the oldest one forever.
+  - **Done when:** `invitations` exists, `memberships_uq` is `(organization_id, user_id)`, `users.last_active_organization_id` exists, `PgInvitationClaimer` claims only against a verified matching address, `PgOrganizationFounder` is the one place a tenant is created, and `InvitationClaimingEnroller` wraps every enrolment mode so an invited address never gets a personal organization.
+  - **Files:** `packages/infrastructure/src/pg/schema/invitation.schema.ts`, `packages/infrastructure/migrations/0004_awesome_wraith.sql`, `packages/infrastructure/src/pg/repository/pg-{invitation.claimer,organization.founder,membership.reader,personal-organization.enroller}.ts`, `packages/auth/src/session/{invitation.claimer,organization.founder,invitation-claiming.enroller}.ts`, `packages/composition/src/container/container.ts`, `packages/core/src/primitive/token.ts`
+  - **Done:** Typecheck, lint, `check:architecture` 13/13 and the unit suites (auth 45, composition 17, core 19) green locally. **The three new Postgres specs — founder, claimer, reader — plus the updated enroller spec were not run on this machine: Docker was down. CI runs them.** Migration reviewed by hand: the `memberships_uq` swap fails on any existing database where one person holds two roles in one organization, which a fresh kit cannot have.
+  - **Notes:** Tenancy decision recorded in `packages/auth/docs/reference/enrolment.md`: an invited address joins the inviting organization *instead of* getting a personal one; the other model is the two lines of `InvitationClaimingEnroller.enrol` swapped. The claim's only security property is the verified-address match, so invitations require `AUTH_REQUIRE_EMAIL_VERIFICATION`. `PgPersonalOrganizationEnroller` now delegates to the founder, whose transaction is a savepoint inside the enroller's lock.
 
 - [x] `T-025` **Complete the authentication flow** `@sami` `P1` `~16h` `#api` `done: 2026-09-01`
   - **Goal:** Sign-in and two-factor *verification* worked; sign-up, two-factor *enrolment*, forgot/reset, change password, change email, Google, and sign-out were either configured with no client path or missing outright.

@@ -29,4 +29,11 @@ export abstract class RoleRepository {
   // authorization happens, and a repository that could read a principal would sooner or
   // later decide something with it.
   public abstract list(organizationId: OrganizationId, page: PaginationQuery): Promise<RolePage>;
+
+  // Under the tenant, so a role id from another organization is null rather than a
+  // role — which is what lets an invitation trust the id it was handed.
+  public abstract findById(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+  ): Promise<RoleRecord | null>;
 }

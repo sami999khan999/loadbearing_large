@@ -43,32 +43,39 @@ packages/auth/
 │   │   └── api-key.resolver.ts           → ApiKeyResolver, ApiKeyRepository, ApiKeyRecord
 │   ├── mail/
 │   │   └── auth.mailer.ts                → AuthMailer                        (port)
+│   ├── plugin/
+│   │   └── organization.plugin.ts        → OrganizationPlugin   (switch · create · accept)
 │   ├── principal/
 │   │   ├── principal.builder.ts          → PrincipalBuilder
 │   │   └── capability.cache.ts           → CapabilityCache
 │   ├── session/
 │   │   ├── better-auth.session-resolver.ts → BetterAuthSessionResolver
-│   │   ├── membership.reader.ts          → MembershipReader                  (port)
-│   │   └── membership.enroller.ts        → MembershipEnroller                (port)
+│   │   ├── membership.reader.ts          → MembershipReader, OrganizationSummary   (port)
+│   │   ├── membership.enroller.ts        → MembershipEnroller                (port)
+│   │   ├── invitation.claimer.ts         → InvitationClaimer, InvitationPreview   (port)
+│   │   ├── organization.founder.ts       → OrganizationFounder               (port)
+│   │   ├── invitation-claiming.enroller.ts → InvitationClaimingEnroller      (decorator)
+│   │   └── null-membership.enroller.ts   → NullMembershipEnroller
 │   └── tables/
 │       └── index.ts                      ← a script. Never exported, never built
 └── tests/
     ├── support/doubles.ts
     ├── apikey/{api-key.hasher,api-key.resolver}.spec.ts
     ├── principal/{capability.cache,principal.builder}.spec.ts
-    └── session/better-auth.session-resolver.spec.ts
+    └── session/{better-auth.session-resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
 ```
 
 ---
 
-## The three ports declared here, not in `application`
+## The ports declared here, not in `application`
 
-`MembershipReader`, `MembershipEnroller` and `AuthMailer` are abstract classes in this package, and
-`ApiKeyRepository` is a fourth. They break the usual rule — ports live in
-`packages/application/src/port/` — and the reason is the same for all four: **they exist to populate
-an authentication artifact, and no use-case should learn that any of them exists.** A use-case must
-not know that sessions have an organization column, that a password reset is an email rather than a
-code read over the phone, or that API keys exist at all.
+`MembershipReader`, `MembershipEnroller`, `InvitationClaimer`, `OrganizationFounder` and
+`AuthMailer` are abstract classes in this package, and `ApiKeyRepository` is a sixth. They break the
+usual rule — ports live in `packages/application/src/port/` — and the reason is the same for all of
+them: **they exist to populate an authentication artifact, and no use-case should learn that any of
+them exists.** A use-case must not know that sessions have an organization column, that a first
+session can be granted by an invitation, that a password reset is an email rather than a code read
+over the phone, or that API keys exist at all.
 
 Their implementations live in `packages/infrastructure` and `packages/composition`, neither of which
 can import this package's types — `auth` already depends on `infrastructure`, and `composition`
@@ -76,7 +83,7 @@ depends on both. So the binding is **structural**, and it is checked exactly whe
 
 ```ts
 // packages/composition/src/container/container.ts
-const membershipReader: MembershipReader = new PgMembershipReader(…);
+this.memberships = new PgMembershipReader(…);          // declared as MembershipReader
 ```
 
 A signature drift fails `composition`'s typecheck, on that line, rather than at runtime.
@@ -117,14 +124,37 @@ correctly refuses one, forever. Enrolment runs from the same hook rather than fr
 `user.create.after`, and that is not a preference — Better Auth queues `create.after` hooks until the
 whole sign-up endpoint has finished, which is *after* the session hook has already run and refused.
 
-It is off unless `BOOTSTRAP_ORGANIZATION_SLUG` names an organization, which is the right production
-posture: with it unset, an unaffiliated sign-up gets no membership and no session, and joining
-becomes something an invitation grants. With it set, the first user into that organization is enrolled
-as `owner` and everyone after as `member`, behind a Postgres advisory lock — losing that race would
-mint a second account holding every permission in the registry.
+Which enroller runs is `AUTH_ENROLMENT_MODE`'s decision, and every mode is wrapped so that an
+invited address joins the organization that invited it before the mode is consulted at all. The
+three modes, the decorator, the claim rules and the locks are
+[the enrolment reference](reference/enrolment.md).
 
-**A user who belongs to two organizations gets two sessions**, which is also what makes switching
-organizations an explicit act rather than an ambient one.
+**A user who belongs to two organizations is in exactly one per session.** The session row pins it
+at sign-in — the last one they switched to, else the oldest membership — and moving is an explicit
+act through the organization endpoints, never an ambient one.
+
+---
+
+## Switching, founding, accepting
+
+`OrganizationPlugin` mounts three `POST` endpoints on Better Auth — `/organization/switch`,
+`/organization/create`, `/invitation/accept` — and every one of them ends the same way: the
+session row is rebound to the new tenant, the Redis copy with it, `users.last_active_organization_id`
+is written, and **the session cookie cache is re-issued**. That last step is the reason these are
+endpoints here rather than oRPC procedures. `session.cookieCache` is what most requests resolve the
+tenant from, and only a handler holding Better Auth's `ctx` can call `setSessionCookie`; a switch
+that updated the row and not the cookie would have every RPC for the next sixty seconds answering
+for the tenant just left.
+
+The other reason is that they are identity-gated. "May I switch to a tenant I belong to", "may I
+found one", "may I accept an invitation sent to my address" are answered by membership and by the
+verified mailbox — never by a role held in some *other* organization — so nothing in
+`PROCEDURE_PERMISSIONS` could gate them, and every procedure must be gated there.
+
+The client half is `OrganizationClient` in `packages/api-client`: three thin posts over Better
+Auth's own `$fetch`, no client plugin. After any of them the call site does what sign-out does —
+clear the query cache, invalidate the session store, re-run the root loader — because every cached
+row belongs to the tenant just left.
 
 ---
 
@@ -132,7 +162,7 @@ organizations an explicit act rather than an ambient one.
 
 | | |
 |---|---|
-| The organization plugin | No. `organizations`, `memberships` and `goal_members` are yours, and they point at your own `roles` table. The plugin would add a parallel `member.role` string meaning something else, and reconciling the two is worse than not having it. |
+| The organization plugin | No. `organizations`, `memberships` and `goal_members` are yours, and they point at your own `roles` table. The plugin would add a parallel `member.role` string meaning something else, and reconciling the two is worse than not having it. The one thing it does that nothing else can — rebind a session and re-issue its cookie — is sixty lines in `plugin/organization.plugin.ts`, against your tables. |
 | `better-auth/react` | No, and not in `api-client` either. It keeps its own cache with its own invalidation rules, which puts two caching systems in one app — and they disagree on sign-out, showing a signed-in shell around a run of 401s. |
 | `@better-auth/cli` | No. It trails the library's release line, and a generator behind the runtime writes a schema that is wrong exactly where it matters. `src/tables/` prints the truth from the pinned runtime instead. |
 | Secondary storage for sessions | Redis in **front** of Postgres, never instead of it. `storeSessionInDatabase: true` and `verification.storeInDatabase: true` are both non-default and both load-bearing: without them an ordinary cache eviction is a random sign-out, or a reset link that stops working with no error on either side. |
@@ -147,6 +177,8 @@ organizations an explicit act rather than an ambient one.
   revocation window rather than a performance dial.
 - [The API-key model](reference/api-key.md) — hash-only storage, prefix lookup, and re-intersection
   with the issuer's live capabilities on every request.
+- [Membership enrolment](reference/enrolment.md) — the tenancy gate, the three modes, the invitation
+  claim that runs before them, and the locks.
 
 ---
 

@@ -1,0 +1,46 @@
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { Endpoint } from "~/endpoint.js";
+import {
+  AuthClient,
+  type ClientNamespace,
+  CreateOrganizationForm,
+  OrganizationClient,
+  useMemo,
+  useMessages,
+} from "~/import.js";
+
+const MESSAGES = ["organization"] as const satisfies readonly ClientNamespace[];
+
+// Session-gated only, like `/settings/account`: founding a tenant of your own is not a
+// capability anyone in another tenant can grant or deny. The path is
+// `ROUTES.organization.create`, spelled again for the generator.
+export const Route = createFileRoute("/(app)/_authenticated/organization/new")({
+  staticData: { messages: MESSAGES },
+  loader: ({ context }) => context.messages.ensure(MESSAGES),
+  component: NewOrganizationPage,
+});
+
+function NewOrganizationPage() {
+  const { t } = useMessages("organization");
+  const { session, queryClient } = Route.useRouteContext();
+  const navigate = useNavigate();
+  const router = useRouter();
+
+  const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
+  const organization = useMemo(() => new OrganizationClient(auth), [auth]);
+
+  // The session now points at the new tenant, so everything cached belongs to the old
+  // one — the same three steps a switch and a sign-out take.
+  const created = () => {
+    queryClient.clear();
+    session.invalidate();
+    void router.invalidate().then(() => navigate({ to: "/" }));
+  };
+
+  return (
+    <main>
+      <h1>{t("organization.create.title")}</h1>
+      <CreateOrganizationForm organization={organization} onCreated={created} />
+    </main>
+  );
+}

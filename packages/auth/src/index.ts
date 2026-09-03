@@ -15,7 +15,12 @@ export { AuthMailer } from "./mail/index.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export {
   BetterAuthSessionResolver,
+  InvitationClaimer,
+  InvitationClaimingEnroller,
+  type InvitationPreview,
   MembershipEnroller,
   MembershipReader,
   NullMembershipEnroller,
+  OrganizationFounder,
+  type OrganizationSummary,
 } from "./session/index.js";

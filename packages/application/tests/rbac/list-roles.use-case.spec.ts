@@ -45,6 +45,10 @@ class RecordingRoleRepository implements RoleRepository {
       total: 4,
     });
   }
+
+  public findById(): Promise<null> {
+    throw new Error("not under test");
+  }
 }
 
 describe("ListRolesUseCase", () => {
