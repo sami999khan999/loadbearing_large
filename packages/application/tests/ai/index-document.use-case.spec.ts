@@ -85,7 +85,9 @@ const build = (embeddings: EmbeddingProvider, vectors = new RecordingVectorStore
   return { useCase, vectors, activity };
 };
 
-const grants: readonly PermissionKey[] = ["ai.embedding.write", "core.activity.write"];
+// `core.activity.write` is not here: every resolved principal holds it, and the use-case
+// asserting it made the audit port's own permission a feature permission.
+const grants: readonly PermissionKey[] = ["ai.embedding.write"];
 
 describe("IndexDocumentUseCase", () => {
   it("chunks the text and writes one embedding per chunk", async () => {
