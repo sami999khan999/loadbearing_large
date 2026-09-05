@@ -41,8 +41,11 @@ export class ErrorCopy {
     return (envelope.fields ?? []).map((violation) => ErrorCopy.field(translator, violation));
   }
 
-  // `field` is merged into the params here — every `error.field.*` template opens with it.
+  // Every `error.field.*` template opens with `{field}`, so a violation naming none gets
+  // the generic sentence rather than " is not valid." — a sentence starting on a space.
   public static field(translator: Translator, violation: FieldViolation): string {
+    if (violation.field.length === 0) return translator.t("error.unexpected");
+
     return translator.t(FIELD_RULE_COPY[violation.rule] ?? "error.unexpected", {
       field: violation.field,
       ...violation.params,

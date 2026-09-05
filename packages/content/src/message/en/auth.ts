@@ -4,6 +4,9 @@ export const auth = {
   // ── sign-in ──
   "auth.signIn": "Sign in",
   "auth.signOut": "Sign out",
+  // Shown when the server refuses the sign-out: the session is still live, so the shell
+  // must not act as though it is gone.
+  "auth.signOutFailed": "Could not sign out. Please try again.",
   "auth.signingIn": "Signing in…",
   "auth.email": "Email",
   "auth.password": "Password",
