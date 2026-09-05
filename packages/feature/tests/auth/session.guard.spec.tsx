@@ -1,10 +1,9 @@
-import { PermissionRegistry } from "@loadbearing/permissions";
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SessionGuard } from "../../src/auth/session.guard.js";
-import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import { capabilitiesWith, GRANTABLE, renderWithFakes } from "../support/render-with-fakes.js";
 
-const FIRST = PermissionRegistry.instance.all()[0];
+const FIRST = GRANTABLE[0];
 
 describe("SessionGuard", () => {
   it("renders children for a signed-in user with no permission required", async () => {

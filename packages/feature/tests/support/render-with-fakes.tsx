@@ -1,5 +1,9 @@
 import { type ClientNamespace, MessageStore, StaticContentSource } from "@loadbearing/content";
-import type { CapabilitySetDto } from "@loadbearing/permissions";
+import {
+  type CapabilitySetDto,
+  type PermissionKey,
+  PermissionRegistry,
+} from "@loadbearing/permissions";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type RenderResult, render } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -50,3 +54,13 @@ export const renderWithFakes = async (
 
 export const capabilitiesWith = (grants: readonly string[]): CapabilitySetDto =>
   ({ wildcard: false, org: { grants: [...grants], denies: [] }, goals: {} }) as CapabilitySetDto;
+
+// The keys a grant can change the answer for. Not `all()`: every `core.*` key is held by
+// any resolved principal, so granting one tells two fixtures apart from nothing.
+export const GRANTABLE: readonly PermissionKey[] = PermissionRegistry.instance
+  .all()
+  .filter((key) => PermissionRegistry.instance.meta(key)?.module !== "core");
+
+export const CORE_KEYS: readonly PermissionKey[] = PermissionRegistry.instance
+  .all()
+  .filter((key) => PermissionRegistry.instance.meta(key)?.module === "core");
