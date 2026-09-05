@@ -1,8 +1,7 @@
 import type { ContentSource, Locale } from "../import.js";
 
-// The only reader of the `email` namespace in the repository. It reads copy the way
-// every other consumer does — through `ContentSource` — so a subject line and a button
-// label share one `Translator`, one interpolation implementation, and one typo fix.
+// The only reader of the `email` namespace, and it reads copy through `ContentSource`
+// like everything else, so a subject and a button label share one `Translator`.
 export class DigestComposer {
   public constructor(private readonly content: ContentSource) {}
 
@@ -18,8 +17,8 @@ export class DigestComposer {
     return t.t("email.digest.greeting", { name });
   }
 
-  // Rendering per recipient is cheap; resolving permissions per recipient is not. The
-  // caller groups recipients by capability shape and queries once per group (25.5).
+  // Rendering per recipient is cheap and resolving permissions per recipient is not, so
+  // the caller groups by capability shape.
   public async body(locale: Locale, organization: string, count: number): Promise<string> {
     const t = await this.content.translator(locale, ["email"]);
 

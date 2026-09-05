@@ -1,11 +1,7 @@
 import { z } from "zod";
 
-// The second and last `process.env` reader in the repository — the other is
-// `apps/web/src/env.ts` (24). Everything else receives configuration.
-//
-// Deliberately a smaller schema than the web app's, and deliberately not shared with
-// it: a common schema would force this process to carry an `AUTH_SECRET` it never
-// uses, which is one more secret in one more environment for no reason.
+// The second and last `process.env` reader, and deliberately not sharing the web app's
+// schema — see docs/reference/env.md.
 const Schema = z.object({
   DATABASE_URL: z.url(),
   REDIS_CACHE_URL: z.url(),
@@ -18,9 +14,8 @@ const Schema = z.object({
   S3_SECRET_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
 
-  // Transactional mail. Present in both processes because both build a `Container`, and
-  // the worker is where a scheduled digest will send from — `DigestComposer` already
-  // holds the copy for one. Same URL shape as the web app's.
+  // In both processes because both build a `Container`, which treats mail as required
+  // rather than optional.
   SMTP_URL: z.string().min(1),
   EMAIL_FROM: z.string().min(1),
 
@@ -28,42 +23,34 @@ const Schema = z.object({
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
   OPENAI_API_KEY: z.string().default(""),
 
-  // How long `worker.close()` is given to drain in-flight jobs before the process
-  // exits anyway. Longer than your longest job, shorter than your orchestrator's
-  // SIGKILL timer — a value above it just means the platform kills you mid-drain.
+  // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
+  // it just means the platform kills you mid-drain.
   WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
   WORKER_EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(4),
-  // Serial by default. Maintenance jobs take table-level locks and run nightly; two
-  // overlapping buys nothing and can deadlock on the same partition.
+  // Serial by default: these jobs take table-level locks and can deadlock on the same
+  // partition.
   WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
-  // Serial, and not a dial worth turning. Two projection runs read the same
-  // checkpoint, project the same rows, and turn one batch into two — correctness here
-  // rests on there being exactly one writer, not on the insert being idempotent.
+  // Serial, and not a dial worth turning: correctness rests on there being exactly one
+  // writer, not on the insert being idempotent.
   WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
 
-  // The same block the web app parses. A worker with no log output is a worker you
-  // cannot operate.
+  // The same block the web app parses: a worker with no log output cannot be operated.
+
   // ── the swappable stores ──
-  //
-  // Each is a driver plus the connection detail that driver needs. `Container` reads
-  // the driver and builds the class behind the port, so adopting a store is these
-  // variables and nothing else — no code change, no migration, no call site touched.
+  // A driver plus the connection detail it needs, so adopting a store is these variables
+  // and nothing else.
   VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
   ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-  // Optional, and their absence is what keeps ClickHouse stopped. Present without
-  // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
-  // runs and the reconciliation reports, while reads still come from Postgres.
+  // Their absence keeps ClickHouse stopped. Present without the driver is the supported
+  // half-way state: the projection runs while reads come from Postgres.
   CLICKHOUSE_URL: z.url().optional(),
-  // ClickHouse's own out-of-the-box database and user. A default naming the project
-  // would be a credential baked into shipped code, and would keep pointing at the old
-  // name after a rename — `.env` is where the real stack's values belong.
+  // ClickHouse's own out-of-the-box values: a default naming the project would be a
+  // credential baked into shipped code.
   CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
   CLICKHOUSE_USER: z.string().min(1).default("default"),
   CLICKHOUSE_PASSWORD: z.string().default(""),
-  // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
-  // written to stdout and still shipped by Alloy, and reading them is
-  // `docker compose logs` or curl against Loki, which stays the break-glass path
-  // regardless.
+  // Unset means no `LogReader`. Logs are still written to stdout and shipped by Alloy
+  // either way.
   LOKI_URL: z.url().optional(),
   LOKI_TENANT_ID: z.string().optional(),
 
@@ -109,9 +96,8 @@ export class Env {
     return Env.parsed.WORKER_ANALYTICS_CONCURRENCY;
   }
 
-  // The boundary where environment becomes `ContainerConfig` (17). No `auth` block:
-  // the worker never issues or validates a session, so `Container` builds no
-  // `AuthFactory` and this process holds no session secret.
+  // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds
+  // no session secret.
   public static containerConfig() {
     const e = Env.parsed;
     return {
@@ -131,9 +117,8 @@ export class Env {
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
       },
-      // Undefined unless a URL was given, which is what `Container` branches on.
-      // Spreading a partly-filled object here instead would build a ClickHouse
-      // connection pointed at nothing.
+      // Undefined unless a URL was given, which is what `Container` branches on: a
+      // partly-filled object builds a connection pointed at nothing.
       analytics: {
         driver: e.ANALYTICS_DRIVER,
         clickhouse: e.CLICKHOUSE_URL

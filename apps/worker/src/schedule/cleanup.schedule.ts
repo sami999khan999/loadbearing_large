@@ -1,8 +1,8 @@
 import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
 export class CleanupSchedule {
-  // Fixed, which is what makes registration idempotent. Without it every deploy adds
-  // another copy and the nightly job runs eleven times by Friday.
+  // Fixed, which is what makes registration idempotent: without it every deploy adds a
+  // copy and the nightly job runs eleven times by Friday.
   private static readonly JOB_ID = "cleanup-daily";
   private static readonly PATTERN = "0 3 * * *";
 
@@ -31,8 +31,8 @@ export class CleanupSchedule {
         jobId: CleanupSchedule.JOB_ID,
       });
     } finally {
-      // The `Queue` exists only to publish the repeatable entry. Left open it holds a
-      // second connection to the queue instance for the life of the process.
+      // Only to publish the repeatable entry: left open it holds a second connection for
+      // the life of the process.
       await queue.close();
     }
   }

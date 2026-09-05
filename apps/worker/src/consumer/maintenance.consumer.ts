@@ -1,19 +1,15 @@
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
-// How many months of `activity_log` partitions to keep ahead of today. Three, not one:
-// a partitioned table with no partition for the current date rejects every insert, so
-// running exactly one month ahead makes a single missed run a total write outage at
-// midnight on the first. At three, the job can fail twice before anything breaks.
+// Three, not one: a table with no partition for today rejects every insert, so one
+// month of runway makes a missed run an outage. See docs/reference/consumers.md.
 const MONTHS_AHEAD = 3;
 
-// How far back the archive job reaches. Thirteen months keeps a full year queryable in
-// Postgres and archives the month that has just fallen out of it.
+// Thirteen months keeps a full year queryable in Postgres and archives the month that
+// has just fallen out of it.
 const RETAIN_MONTHS = 13;
 
-// The consumer whose absence meant `cleanup-daily` registered every boot and never ran.
-// `CleanupSchedule` publishes onto MAINTENANCE and nothing was listening, so the jobs
-// accumulated silently — a schedule with no consumer looks identical to a working one
-// from the outside, which is the whole reason this file exists before the rest.
+// The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
+// accumulating silently. See docs/reference/consumers.md.
 export class MaintenanceConsumer {
   public constructor(
     private readonly container: Container,
@@ -25,9 +21,8 @@ export class MaintenanceConsumer {
     const worker = new Worker(
       QueueName.MAINTENANCE,
       async (job: Job) => this.handle(job),
-      // Deliberately serial by default. These jobs take table-level locks and run
-      // nightly; two of them overlapping buys nothing and can deadlock on the same
-      // partition.
+      // Serial by default: these jobs take table-level locks and can deadlock on the
+      // same partition.
       { connection: this.connection, concurrency: this.concurrency },
     );
 
@@ -54,13 +49,8 @@ export class MaintenanceConsumer {
     return worker;
   }
 
-  // One queue, several jobs, dispatched on the job name the schedule published under.
-  // An unknown name throws rather than succeeding quietly: a schedule renamed on one
-  // side and not the other should be loud.
-  //
-  // Public, like every other consumer's, because this — not `start()` — is the
-  // consumer's unit of work. `start()` is the BullMQ binding around it, and it needs a
-  // live Redis, so a private handler is a handler no test can reach.
+  // An unknown job name throws rather than succeeding quietly. Public, because this and
+  // not `start()` is the unit of work — a private handler no test can reach.
   public async handle(job: Job): Promise<void> {
     switch (job.name) {
       case "cleanup":
@@ -83,9 +73,8 @@ export class MaintenanceConsumer {
     });
   }
 
-  // The month that has just aged out. Computed from the clock rather than passed in
-  // the job payload, so a redelivered job archives the same month rather than one
-  // relative to whenever the retry happened.
+  // From the clock rather than the job payload, so a redelivered job archives the same
+  // month rather than one relative to the retry.
   private async archive(): Promise<void> {
     const now = this.container.clock.now();
     const period = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - RETAIN_MONTHS, 1));

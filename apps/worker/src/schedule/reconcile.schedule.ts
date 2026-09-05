@@ -1,12 +1,7 @@
 import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
-// The daily count check between the audit trail and the derived store. It is the
-// second of the two guards that keep ClickHouse derived, and the one that catches the
-// realistic failure: not an outage, but a projection that stopped quietly and was
-// noticed a quarter later when a report looked wrong.
-//
-// 05:00, after `archive-monthly` at 04:00 on the first — so on that one morning of the
-// month the reconciliation reads a window the archive job has already finished with.
+// The daily count check between the audit trail and the derived store, at 05:00 so it
+// reads a window the archive job has finished with. See docs/reference/schedules.md.
 export class ReconcileSchedule {
   private static readonly JOB_ID = "analytics-reconcile";
   private static readonly PATTERN = "0 5 * * *";

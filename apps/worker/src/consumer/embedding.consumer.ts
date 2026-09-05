@@ -9,8 +9,8 @@ interface EmbeddingJobData {
   readonly sourceType?: string;
 }
 
-// A thin adapter, exactly like an oRPC router: deserialise the job, build a principal,
-// call a use-case. Everything worth testing lives in `IndexDocumentUseCase`.
+// A thin adapter, exactly like an oRPC router. Everything worth testing lives in
+// `IndexDocumentUseCase`.
 export class EmbeddingConsumer {
   public constructor(
     private readonly container: Container,
@@ -25,8 +25,8 @@ export class EmbeddingConsumer {
       { connection: this.connection, concurrency: this.concurrency },
     );
 
-    // Observed from the event, never from a `catch` inside the handler. The listener
-    // does not swallow, so BullMQ still sees the rejection and still retries.
+    // From the event, never a `catch` in the handler: the listener does not swallow, so
+    // BullMQ still sees the rejection and still retries.
     worker.on("failed", (job, error) => {
       this.container.logger.failure(error, {
         queue: QueueName.EMBEDDING,
@@ -50,8 +50,8 @@ export class EmbeddingConsumer {
     return worker;
   }
 
-  // Let it throw. BullMQ's retry and backoff are driven by rejection, so catching and
-  // logging here turns a retryable failure into permanent, silent data loss.
+  // Let it throw: BullMQ's retry is driven by rejection, so catching here turns a
+  // retryable failure into permanent, silent data loss.
   public async handle(job: Job<EmbeddingJobData>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
 

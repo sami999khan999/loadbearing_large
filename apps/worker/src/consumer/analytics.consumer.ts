@@ -1,39 +1,27 @@
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
-// How many activity rows move per round trip. Large enough that ClickHouse merges a
-// small number of big parts rather than a large number of small ones — a thousand
-// single-row inserts create a thousand parts and the background merge never catches
-// up, which is the classic way a ClickHouse table gets slow.
+// Large enough that ClickHouse merges a few big parts rather than many small ones —
+// see docs/reference/consumers.md.
 const BATCH_SIZE = 5_000;
 
-// A ceiling on one job, not on the backlog. Without it the first run after a long
-// outage holds a Postgres connection for however long a full replay takes; with it,
-// the job stops, the schedule fires again in five minutes, and the checkpoint means
-// the next run resumes exactly where this one ended.
+// A ceiling on one job, not on the backlog: the checkpoint means the next run resumes
+// exactly where this one ended.
 const MAX_BATCHES_PER_RUN = 20;
 
-// How far behind the projection may fall before it is worth saying so. Two runs of
-// the schedule: one late run is a slow batch, two is a consumer that has stopped.
+// Two runs of the schedule: one late run is a slow batch, two is a consumer that has
+// stopped.
 const LAG_WARNING_MS = 10 * 60 * 1_000;
 
-// How many days back the reconciliation compares. Long enough to catch a consumer
-// that died over a weekend, short enough that the comparison is two cheap aggregates.
+// Long enough to catch a consumer that died over a weekend, short enough that the
+// comparison is two cheap aggregates.
 const RECONCILE_DAYS = 7;
 
-// The `projection` label on every line this file emits. One projection today; the
-// field exists so a second one does not have to change the event shape, and so a
-// dashboard filters on it rather than on the queue name.
+// The label on every line this file emits, so a second projection does not change the
+// event shape and a dashboard filters on it rather than on the queue name.
 const PROJECTION = "activity_events";
 
-// The consumer that makes ClickHouse derived rather than authoritative.
-//
-// Both jobs exist because of the same failure, and it is not an outage: it is a
-// projection that stopped quietly on a Tuesday and was noticed a quarter later when a
-// report looked wrong. `project` moves the rows; `reconcile` is what notices when it
-// has not been.
-//
-// Registered only when the container was built with a ClickHouse config — a consumer
-// polling a store that is not running looks identical to a working one.
+// What makes ClickHouse derived rather than authoritative: `project` moves the rows and
+// `reconcile` notices when it has not. See docs/reference/consumers.md.
 export class AnalyticsConsumer {
   public constructor(
     private readonly container: Container,
@@ -45,10 +33,8 @@ export class AnalyticsConsumer {
     const worker = new Worker(
       QueueName.ANALYTICS,
       async (job: Job) => this.handle(job),
-      // Serial regardless of what is configured elsewhere: two overlapping runs read
-      // the same checkpoint, project the same rows, and turn one batch into two.
-      // Correctness here rests on there being one writer, not on the insert being
-      // idempotent — though it is that too.
+      // Serial regardless of what is configured elsewhere: correctness rests on there
+      // being one writer, not on the insert being idempotent.
       { connection: this.connection, concurrency: this.concurrency },
     );
 
@@ -78,10 +64,8 @@ export class AnalyticsConsumer {
     }
   }
 
-  // Read the checkpoint out of the destination, walk forward in keyset batches, stop
-  // when a batch comes back short. The checkpoint advances because rows landed, never
-  // because a batch was acknowledged — a projector that failed mid-insert resumes
-  // from what is actually in the table.
+  // The checkpoint advances because rows landed, never because a batch was acknowledged,
+  // so a projector that failed mid-insert resumes from what is in the table.
   private async project(): Promise<void> {
     const projector = this.container.projector;
     const startedAt = this.container.clock.now();
@@ -101,8 +85,8 @@ export class AnalyticsConsumer {
       if (!last) break;
       checkpoint = { lastOccurredAt: last.occurredAt, lastId: last.id };
 
-      // A short batch means the replay has caught up. Continuing would issue one more
-      // query to learn what this length already said.
+      // A short batch means caught up: continuing issues one more query to learn what
+      // this length already said.
       if (records.length < BATCH_SIZE) break;
     }
 
@@ -120,9 +104,8 @@ export class AnalyticsConsumer {
       capped: batches >= MAX_BATCHES_PER_RUN,
     });
 
-    // Warned on separately, and at `warn` rather than `debug`, because this is the
-    // signal that matters. A projection that throws is already an error line; one
-    // that quietly falls further behind every run produces nothing at all.
+    // `warn`, not `debug`: a projection that throws is already an error line, and one
+    // falling quietly behind produces nothing at all.
     if (lagMs > LAG_WARNING_MS) {
       this.container.logger.emit("analytics.projection.lagged", {
         projection: PROJECTION,
@@ -132,12 +115,8 @@ export class AnalyticsConsumer {
     }
   }
 
-  // Counts per day on both sides and a diff. Neither store reaches into the other —
-  // each answers the same question in the same shape and this compares the answers,
-  // which is what keeps both adapters single-store.
-  //
-  // Today is excluded: it is still being written to, so a difference in it is timing
-  // rather than drift, and a check that cries wolf daily is a check nobody reads.
+  // Counts per day on both sides and a diff, with today excluded because a difference in
+  // it is timing rather than drift. See docs/reference/consumers.md.
   private async reconcile(): Promise<void> {
     const now = this.container.clock.now();
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -157,13 +136,8 @@ export class AnalyticsConsumer {
       }))
       .filter((row) => row.source !== row.derived);
 
-    // One line per drifting day, not one line listing them. A log field is something
-    // you filter and alert on, never a structure you read — and the day is exactly
-    // the grain an operator groups by when deciding how far back to replay.
-    //
-    // `error`, not `warn`: every number a dashboard has shown since the first
-    // drifting day is wrong, and the fix is a replay — which only works while the
-    // activity log still covers the window, so this has a deadline attached.
+    // One line per drifting day, at `error`: every number shown since the first drifting
+    // day is wrong, and the replay that fixes it has a deadline.
     for (const row of drift) {
       this.container.logger.emit("analytics.reconciliation.drifted", {
         day: row.day,

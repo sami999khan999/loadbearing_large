@@ -1,13 +1,11 @@
 import { type Container, Queue, QueueName, type Redis } from "../import.js";
 
-// Creates the next few months of `activity_log` partitions. The deadline is real:
-// migration 0000 created partitions through 2027-01, and the day after the last one
-// ends, every insert to `activity_log` fails — which under the analytics design is
-// also every analytics write.
+// The deadline is real: migration 0000 created partitions through 2027-01, and the day
+// after the last one ends every insert to `activity_log` fails.
 export class PartitionsSchedule {
   private static readonly JOB_ID = "partitions-monthly";
-  // 02:00 on the first. Ahead of the 03:00 cleanup, because a sweep that runs while
-  // the current month has no partition fails on a table it cannot write to.
+  // 02:00, ahead of the cleanup: a sweep that runs while the current month has no
+  // partition fails on a table it cannot write to.
   private static readonly PATTERN = "0 2 1 * *";
 
   public constructor(

@@ -28,9 +28,8 @@ describe("SystemPrincipal", () => {
     expect(principal.can("ai.embedding.read")).toBe(true);
     expect(principal.can("core.activity.write")).toBe(true);
 
-    // Never `PermissionRegistry.instance.all()`. A job that can do anything eventually
-    // does something it should not, and this is the assertion that keeps the list narrow
-    // as the catalog grows.
+    // Never `PermissionRegistry.instance.all()`: this is the assertion that keeps the
+    // list narrow as the catalog grows.
     const ungranted = PermissionRegistry.instance
       .all()
       .filter(

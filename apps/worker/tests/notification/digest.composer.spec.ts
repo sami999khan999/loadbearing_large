@@ -2,9 +2,8 @@ import { SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
 import { describe, expect, it } from "vitest";
 import { DigestComposer } from "../../src/notification/digest.composer.js";
 
-// `SERVER_CATALOG`, not the default client one. The `email` namespace is reachable
-// through this catalog and nothing else — which is what keeps it out of every browser
-// bundle — so a composer built on the client source renders raw keys instead of copy.
+// `SERVER_CATALOG`, not the client one: `email` is reachable through it and nothing
+// else, so a composer on the client source renders raw keys.
 const composer = new DigestComposer(new StaticContentSource(SERVER_CATALOG));
 
 describe("DigestComposer", () => {

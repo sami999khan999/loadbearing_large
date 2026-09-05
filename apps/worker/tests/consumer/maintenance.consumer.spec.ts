@@ -5,15 +5,8 @@ import { MaintenanceConsumer } from "../../src/consumer/maintenance.consumer.js"
 
 const NOW = new Date("2026-08-15T00:00:00Z");
 
-// A `Container` builds a Postgres pool, two Redis connections and an S3 client in its
-// constructor, so a spec cannot have one. The consumer touches four of its members; the
-// double supplies those four and the cast says so out loud, rather than a mocking
-// library saying it invisibly.
-//
-// `clock` and `logger` are literals rather than `FixedClock` and `SilentLogger`:
-// `@loadbearing/core` and `@loadbearing/observability` are not dependencies of this app,
-// and adding two for a test double would widen the app's dependency graph to narrow a
-// spec's.
+// A real `Container` opens a pool and three clients in its constructor, so the double
+// supplies the four members this consumer touches and the cast says so out loud.
 function containerDouble() {
   const calls: string[] = [];
   const swept: Date[] = [];
@@ -62,9 +55,8 @@ describe("MaintenanceConsumer", () => {
   it("throws on a job name it does not know", async () => {
     const { container, calls } = containerDouble();
 
-    // A schedule renamed on one side and not the other must be loud. Succeeding quietly
-    // here is indistinguishable from working, which is the exact failure that made
-    // `cleanup-daily` accumulate jobs nobody consumed.
+    // A schedule renamed on one side and not the other must be loud: succeeding quietly
+    // is indistinguishable from working.
     await expect(consumerFor(container).handle(job("cleanup-daily"))).rejects.toThrow(
       "Unknown maintenance job: cleanup-daily",
     );
@@ -94,9 +86,8 @@ describe("MaintenanceConsumer", () => {
     const { container, partitioned } = containerDouble();
     await consumerFor(container).handle(job("partitions"));
 
-    // A partitioned table with no partition for the current date rejects every insert,
-    // so running exactly one month ahead makes a single missed run a total write outage
-    // at midnight on the first.
+    // A table with no partition for the current date rejects every insert, so one month
+    // of runway makes a missed run an outage at midnight on the first.
     expect(partitioned[0]?.monthsAhead).toBeGreaterThan(1);
     expect(partitioned[0]?.from).toEqual(NOW);
   });
@@ -105,9 +96,8 @@ describe("MaintenanceConsumer", () => {
     const { container, archived } = containerDouble();
     await consumerFor(container).handle(job("archive"));
 
-    // Thirteen months back from 2026-08 is 2025-07. Deriving it from the clock rather
-    // than from the job means a redelivered job archives the same month rather than one
-    // relative to whenever the retry happened.
+    // From the clock rather than the job, so a redelivered job archives the same month
+    // rather than one relative to the retry.
     expect(archived).toEqual([new Date(Date.UTC(2025, 6, 1))]);
   });
 });

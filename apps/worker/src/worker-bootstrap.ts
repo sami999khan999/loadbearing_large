@@ -27,9 +27,8 @@ export class WorkerBootstrap {
       ).start(),
     );
 
-    // Started before the schedules register, so a repeatable entry that fires the
-    // instant it lands has somewhere to run. Registering a schedule onto a queue with
-    // no consumer is what left `cleanup-daily` silently accumulating.
+    // Before the schedules register, so an entry that fires the instant it lands has
+    // somewhere to run. See docs/reference/schedules.md.
     this.workers.push(
       new MaintenanceConsumer(
         this.container,
@@ -38,14 +37,8 @@ export class WorkerBootstrap {
       ).start(),
     );
 
-    // The derived-store pipeline, and the whole branch is the point. A container built
-    // without a ClickHouse config holds no `AnalyticsProjector`, so no consumer starts
-    // and no schedule registers — the analytics queue stays empty rather than filling
-    // with jobs that would each project into nothing.
-    //
-    // Same failure the maintenance consumer was written for, in the harder direction:
-    // a schedule with no consumer accumulates silently, and a consumer with no store
-    // succeeds silently, which is the one that survives a code review.
+    // The branch is the point: without a ClickHouse config no consumer starts and no
+    // schedule registers. See docs/reference/consumers.md.
     if (this.container.hasProjector) {
       this.workers.push(
         new AnalyticsConsumer(
@@ -67,15 +60,14 @@ export class WorkerBootstrap {
 
     this.container.logger.emit("process.started", {
       service: "worker",
-      // The projection consumer is counted here when it started and absent when it
-      // did not, which is the only difference on the wire between a worker running
-      // the analytics pipeline and one built without a store to project into.
+      // The only difference on the wire between a worker running the analytics pipeline
+      // and one built without a store to project into.
       consumers: this.workers.length,
     });
   }
 
-  // Idempotent: a SIGINT arriving during a SIGTERM drain must not close everything
-  // twice, which surfaces as an unhandled rejection from an already-closed client.
+  // Idempotent: closing twice surfaces as an unhandled rejection from an already-closed
+  // client. See docs/reference/shutdown.md.
   public async stop(signal: string): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
@@ -83,8 +75,8 @@ export class WorkerBootstrap {
     this.container.logger.emit("process.stopping", { service: "worker", signal });
     const startedAt = this.container.clock.now();
 
-    // `close()` waits for in-flight jobs to finish. The race is the backstop: a job
-    // that never returns must not hold the process past the platform's SIGKILL timer.
+    // `close()` drains; the race is the backstop, because a job that never returns must
+    // not hold the process past the platform's SIGKILL timer.
     await Promise.race([
       Promise.all(this.workers.map((w) => w.close())),
       WorkerBootstrap.after(Env.shutdownTimeoutMs),
@@ -103,8 +95,8 @@ export class WorkerBootstrap {
 
   private static after(ms: number): Promise<void> {
     return new Promise((resolve) => {
-      // Unreferenced, so a pending timer cannot be the thing keeping the loop alive
-      // once every worker has already drained.
+      // Unreferenced, so a pending timer cannot keep the loop alive once every worker
+      // has drained.
       setTimeout(resolve, ms).unref();
     });
   }
