@@ -24,9 +24,11 @@ export const invitations = pgTable(
     // Stored lowercased, and compared against the *verified* address on the user row —
     // which is what makes the token a locator rather than a credential.
     email: text("email").notNull(),
+    // Declared rather than left to the default, and `no action` for the same reason
+    // `memberships.role_id` is: a tenant delete cascades roles and invitations together.
     roleId: uuid("role_id")
       .notNull()
-      .references(() => roles.id),
+      .references(() => roles.id, { onDelete: "no action" }),
     // The digest, never the token: a dump of this table holds no usable credential.
     tokenHash: text("token_hash").notNull(),
     invitedBy: uuid("invited_by")

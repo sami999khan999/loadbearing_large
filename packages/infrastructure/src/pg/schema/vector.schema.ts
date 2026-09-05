@@ -10,12 +10,18 @@ import {
   uuid,
   vector,
 } from "../../import.js";
+import { organizations } from "./rbac.schema.js";
 
 export const documentChunks = pgTable(
   "document_chunks",
   {
     id: uuid("id").primaryKey(),
-    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    // The FK the other tenant tables have and this one did not, so a deleted tenant left
+    // its corpus behind — embeddings nothing can reach and nothing will remove.
+    organizationId: uuid("organization_id")
+      .$type<OrganizationId>()
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
 
     // The domain row this chunk was derived from — a document, receipt, note.
     sourceId: uuid("source_id").notNull(),
