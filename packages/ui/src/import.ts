@@ -11,8 +11,14 @@ export { default as spriteUrl } from "@loadbearing/asset/sprite.svg";
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react";
-export { useMemo } from "react";
+export type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactElement,
+  ReactNode,
+  Ref,
+} from "react";
+export { Children, cloneElement, isValidElement, useMemo } from "react";
 
 // ── uqr ──────────────────────────────────────────────────────────────────────
 // The only runtime dependency other than the sprite. It computes a module matrix rather
