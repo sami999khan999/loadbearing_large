@@ -1,7 +1,10 @@
-import { CacheStore, type Redis } from "../import.js";
+import { CacheStore, type Logger, type Redis } from "../import.js";
 
 export class RedisCacheStore extends CacheStore {
-  public constructor(private readonly redis: Redis) {
+  public constructor(
+    private readonly redis: Redis,
+    private readonly logger?: Logger,
+  ) {
     super();
   }
 
@@ -14,6 +17,7 @@ export class RedisCacheStore extends CacheStore {
     } catch {
       // A corrupt entry is a miss, never an error. Throwing turns a stale cache
       // after a DTO change into an outage; evicting turns it into a latency bump.
+      this.logger?.emit("cache.entry.corrupt", { key });
       await this.redis.del(key);
       return null;
     }

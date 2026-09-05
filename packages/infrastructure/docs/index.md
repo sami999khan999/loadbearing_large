@@ -190,9 +190,11 @@ a user keeps permissions after their role changed.
 
 ## Other decisions worth knowing
 
-**A corrupt cache entry is a miss, not a throw.** Deserialisation failures happen after a deploy that
-changed a DTO shape. Throwing turns a stale cache into an outage; evicting and falling through turns
-it into a latency bump.
+**A corrupt cache entry is a miss, not a throw — and a logged one.** Deserialisation failures happen
+after a deploy that changed a DTO shape. Throwing turns a stale cache into an outage; evicting and
+falling through turns it into a latency bump. Silently is the part that was wrong: a deploy that
+halves the hit rate looks exactly like one that does not, so the eviction emits
+`cache.entry.corrupt` with the key.
 
 **`SCAN` + `UNLINK`, never `KEYS` + `DEL`.** `KEYS` is O(n) over the whole keyspace and blocks the
 server while it runs; `UNLINK` frees memory off the main thread.
