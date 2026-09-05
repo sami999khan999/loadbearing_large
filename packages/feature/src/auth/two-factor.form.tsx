@@ -50,6 +50,9 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
     setMethod(next);
     setCode("");
     setFailed(false);
+    // The "we sent you a code" notice belongs to the OTP leg. The caller that switches
+    // *to* OTP sets it back in the same handler.
+    setOtpSent(false);
   };
 
   const backup = method === "backup";
@@ -88,16 +91,18 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
       </Button>
 
       {
-        // Both alternatives stay reachable from every method, so there is no order to
-        // get stuck in.
+        // One button per method that is not the current one. A ternary on `totp` left
+        // backup codes unreachable from the emailed one-time code.
       }
-      {method === "totp" ? (
-        <Button variant="ghost" onClick={() => switchTo("backup")}>
-          {t("auth.twoFactorUseBackup")}
-        </Button>
-      ) : (
+      {method === "totp" ? null : (
         <Button variant="ghost" onClick={() => switchTo("totp")}>
           {t("auth.twoFactorUseTotp")}
+        </Button>
+      )}
+
+      {method === "backup" ? null : (
+        <Button variant="ghost" onClick={() => switchTo("backup")}>
+          {t("auth.twoFactorUseBackup")}
         </Button>
       )}
 

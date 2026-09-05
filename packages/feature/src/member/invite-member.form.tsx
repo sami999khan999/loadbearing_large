@@ -30,14 +30,25 @@ export function InviteMemberForm() {
   // through two packages, and a break anywhere degrades to `any` silently.
   const options: readonly RoleDto[] = roles.data?.items ?? [];
   // `member` by default, never `owner`: the wildcard role should be a deliberate pick.
-  const selectedRole = roleId || (options.find((role) => role.key === "member")?.id ?? "");
+  // The first option and not `""`, so the value equals what the select paints.
+  const fallback = options.find((role) => role.key === "member")?.id ?? options[0]?.id ?? "";
+  // And the stored id counts only while it is still on offer, so a role that goes away
+  // between renders cannot be submitted from a select that stopped painting it.
+  const selectedRole = options.some((role) => role.id === roleId) ? roleId : fallback;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!selectedRole) return;
     invite.mutate(
       { email, roleId: selectedRole as RoleDto["id"] },
-      { onSuccess: () => setEmail("") },
+      // Both fields, not just the address: the next invitation is a fresh decision, and
+      // a role left selected is the previous one made silently.
+      {
+        onSuccess: () => {
+          setEmail("");
+          setRoleId("");
+        },
+      },
     );
   };
 

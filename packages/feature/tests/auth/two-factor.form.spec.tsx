@@ -88,6 +88,34 @@ describe("TwoFactorForm — switching between them", () => {
     expect(screen.getByLabelText("Authentication code")).toBeDefined();
   });
 
+  // The regression guard: a ternary on `totp` meant the emailed code offered only a way
+  // back to the authenticator — the one method someone without their phone cannot use.
+  it("offers backup codes from the emailed one-time code", async () => {
+    const auth = authDouble();
+    await renderWithFakes(<TwoFactorForm auth={auth} onSuccess={vi.fn()} />, NONE);
+
+    fireEvent.click(screen.getByRole("button", { name: "Email me a code instead" }));
+    await waitFor(() => expect(auth.sendTwoFactorOtp).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Use a backup code instead" }));
+    typeCode("Backup code", "abcd-efgh-ij");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(auth.verifyBackupCode).toHaveBeenCalledWith("abcd-efgh-ij"));
+  });
+
+  it("takes the sent-a-code notice away with the method it belongs to", async () => {
+    const auth = authDouble();
+    await renderWithFakes(<TwoFactorForm auth={auth} onSuccess={vi.fn()} />, NONE);
+
+    fireEvent.click(screen.getByRole("button", { name: "Email me a code instead" }));
+    expect(await screen.findByText(/We sent a code/i)).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use your authenticator app instead" }));
+
+    expect(screen.queryByText(/We sent a code/i)).toBeNull();
+  });
+
   it("clears a failure when the method changes", async () => {
     const auth = authDouble({
       verifyTwoFactor: vi.fn().mockRejectedValue(new UnauthorizedError()),

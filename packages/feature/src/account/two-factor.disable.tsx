@@ -29,7 +29,18 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
 
   const spend = (event: FormEvent) => {
     event.preventDefault();
-    disable.mutate({ password }, { onSuccess: () => setPassword("") });
+    disable.mutate(
+      { password },
+      {
+        onSuccess: () => {
+          setPassword("");
+          // Codes for a factor that no longer exists. They stayed on screen because
+          // `regenerate.isSuccess` is sticky and nothing cleared it.
+          setFresh([]);
+          regenerate.reset();
+        },
+      },
+    );
   };
 
   return (
@@ -55,7 +66,7 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
         // The new codes replace every previous one, which is the point rather than a
         // side effect.
       }
-      {regenerate.isSuccess ? (
+      {fresh.length > 0 ? (
         <>
           <Callout tone="warning" title={t("auth.backupCodesRegenerated")}>
             {t("auth.backupCodesHint")}
