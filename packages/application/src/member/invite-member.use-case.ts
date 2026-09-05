@@ -78,12 +78,18 @@ export class InviteMemberUseCase {
     const saved = await this.invitations.findById(actor.organizationId, id);
     if (!saved) throw new NotFoundError("invitation", id);
 
-    await this.mailer.send({
-      to: saved.email,
-      organizationName: saved.organizationName,
-      inviterName: saved.inviterName,
-      token,
-    });
+    // Swallowed on purpose: the row is committed and the audit written, so throwing
+    // here is a 5xx over a live invitation. The adapter records why the send failed.
+    try {
+      await this.mailer.send({
+        to: saved.email,
+        organizationName: saved.organizationName,
+        inviterName: saved.inviterName,
+        token,
+      });
+    } catch {
+      // The operator action is to invite again, which replaces the row.
+    }
 
     return saved;
   }
