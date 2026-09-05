@@ -191,9 +191,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The thirteen architectural assertions
+## Step 26.4 — The fourteen architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Thirteen greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Fourteen greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -207,7 +207,7 @@ Types cannot express "this package must not import that one across a bundle boun
 > [!IMPORTANT]
 > **A skipped assertion prints `○`, never `✓`.** Two of these depend on artefacts that may not exist yet — a built `dist/`, a built client bundle — and an assertion that quietly passes when it did not run is worse than no assertion, because it converts an unknown into a false guarantee. The same reason the bundle check fails rather than passes when it finds zero asset files.
 >
-> **Write the failing case before you trust any of them.** Each of the eleven runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
+> **Write the failing case before you trust any of them.** Each of the twelve runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
 
 ### 1 — `application` imports no framework
 
@@ -257,10 +257,14 @@ Worth writing because it already happened: the catalog shipped `@orpc/server` at
 ### 5 — Comments are `//`, never a block
 
 ```js
-// fail on any line in packages/*/{src,tests} whose trimmed form starts with /*
+// fail on any line in {packages,apps}/*/{src,tests} whose trimmed form starts with /* or {/*
 ```
 
 [Opinions · Comments](../opinions/comments.md) bans block comments outright, and neither Biome nor ESLint ships a rule that expresses it. Anchoring to the start of a trimmed line is what makes this safe: Biome always formats a block comment onto its own line, so a glob like `"**/dist/**"` inside a string cannot be mistaken for one.
+
+**It walks `apps/*` as well as `packages/*`, and it matches the JSX form.** Both were gaps rather than decisions: an assertion about how source is written has no reason to stop at `packages/`, and `{/* … */}` is the form a React file reaches for — twenty-two of them were invisible to this check until it named the shape. The JSX replacement is an expression container holding `//` lines.
+
+Generated files are skipped by name (`*.gen.ts`, `*.gen.tsx`). `apps/web/src/route-tree.gen.ts` asks in its own header to be excluded from every checker pointed at it, and it is written by the route generator rather than by anyone.
 
 ### 6 — No top-level `await` in a built barrel
 
@@ -418,6 +422,21 @@ The same rule as `index.ts` one level down, for the same reason. A folder with n
 **The `reference/` folders are exempt, and the exemption is a decision rather than an oversight.** `packages/<name>/docs/reference/` and `docs/infra/reference/` are reached from their parent `index.md`, which names every page in them, with `meta.json` carrying the order. An index inside would restate the parent and rot the first time a page landed in one and not the other. The exemption is **by folder name**, not by location — `docs/infra/reference/` sits inside `docs/` and earns it for the identical reason. A folder holding no Markdown is skipped too; there is nothing for an index to name.
 
 Cheap, and it caught three gaps the moment it was written: `docs/` itself, `docs/ai/skills/`, and `docs/setup/`, which had thirty-one numbered documents and no contents page.
+
+### 14 — No comment block over two lines
+
+```js
+// fail on three or more consecutive lines whose trimmed form starts with //
+```
+
+The other half of [Opinions · Comments](../opinions/comments.md), and the half nothing checked. The two-line ceiling was a convention for as long as it was unenforced, and the tree answered accordingly: 524 blocks over it across seventeen packages, one of them twenty-four blocks in a single file.
+
+**A run ends rather than extends at anything carrying no prose** — a `// ──` separator, and a `// biome-ignore`, `// eslint-disable` or `// @ts-` pragma. That is what lets an `import.ts` keep a one-line header above each of its separators without the whole file reading as one enormous block, and it is why the exemption is a property of the *line* rather than a per-file opt-out. There is no way to silence this assertion from inside a file, which is the point.
+
+Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generated files skipped.
+
+> [!NOTE]
+> **`pnpm check:comments` is the companion report, and it never fails.** `tooling/scripts/comment-density.mjs` prints per-package comment percentage, block count and the twenty-five files carrying the most comment lines. A package drifting toward the ceiling is visible there long before any single file trips §14 — and after the phase-1 sweep the tree sits at 13 % overall with zero blocks.
 
 ---
 

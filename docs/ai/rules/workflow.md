@@ -11,7 +11,8 @@ pnpm build                # topological, derived from workspace:* — no order d
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
 pnpm test
-pnpm check:architecture   # 13 greps that no linter expresses
+pnpm check:architecture   # 14 greps that no linter expresses
+pnpm check:comments       # comment density and block counts; reports, never fails
 pnpm infra:up             # postgres, 2x redis, minio, loki + alloy
 pnpm db:generate | db:migrate | db:seed | db:studio
 ```
@@ -20,12 +21,13 @@ Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a pack
 
 ## Before you claim a change is done
 
-Run **`pnpm check:architecture`** — thirteen assertions in `tooling/scripts/check-architecture.mjs`
+Run **`pnpm check:architecture`** — fourteen assertions in `tooling/scripts/check-architecture.mjs`
 that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
 domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
 `organization_id`, the audit port renamed, a schema file missing from the drizzle barrel, these rule
-files drifting from `docs/opinions/`, and a `docs/` folder with no `index.md`.
+files drifting from `docs/opinions/`, a `docs/` folder with no `index.md`, and a comment block over
+two lines.
 
 **Two assertions need artefacts first** — `pnpm build:packages` for the barrel check and
 `pnpm --filter @loadbearing/web build` for the bundle check. They print `○ skipped` otherwise.

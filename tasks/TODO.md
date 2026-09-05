@@ -304,3 +304,4 @@ probe, and documentation that names directories which exist.
 | 2026-08-28 | @sami   | Created the list from a full audit of the tree at `c681449` |
 | 2026-08-29 | @agent  | Closed `T-001`–`T-024`. Three acceptance criteria need a live stack and are covered by CI |
 | 2026-09-01 | @sami   | Closed `T-025`. Every auth flow verified against a live stack on this machine, not deferred to CI |
+| 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
