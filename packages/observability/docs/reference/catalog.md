@@ -95,7 +95,7 @@ one spread line here.
 ## The grammar
 
 `<subject>.<thing>.<state>`, state in the past tense — `queue.job.failed`, `http.request.completed`,
-`cache.entry.corrupt`. It mirrors the activity-name rule for the same reason: a log line records
+`cache.entry.corrupt`, `dependency.request.failed`. It mirrors the activity-name rule for the same reason: a log line records
 something that already happened. See [Opinions · Vocabulary](../../../../docs/opinions/vocabulary.md).
 
 ## `error.raised` is not in the catalog

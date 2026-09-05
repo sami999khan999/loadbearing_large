@@ -27,6 +27,10 @@ export const coreEvents = {
   // nightly run.
   "queue.sweep.completed": { level: "info" },
 
+  // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
+  // or Loki failure echoes the offending row, and the wire is not where that belongs.
+  "dependency.request.failed": { level: "warn" },
+
   "cache.entry.corrupt": { level: "warn" },
   "db.query.slow": { level: "warn" },
   "storage.upload.failed": { level: "error" },

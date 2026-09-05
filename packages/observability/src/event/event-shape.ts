@@ -56,6 +56,14 @@ export interface EventShape {
     readonly reEnqueued: number;
   };
 
+  readonly "dependency.request.failed": {
+    readonly dependency: string;
+    readonly status: number;
+    // Truncated at the call site. The one field here that is read rather than
+    // filtered on, because a vendor body is the whole diagnostic.
+    readonly detail: string;
+  };
+
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "db.query.slow": { readonly operation: string; readonly durationMs: number };
   readonly "storage.upload.failed": { readonly bucket: string; readonly key: string };
