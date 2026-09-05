@@ -246,7 +246,7 @@ variable came back undefined — which looks exactly like an unconfigured stack.
 - [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
   the `ORDER BY` that stops the index being used.
 - [The activity archive](reference/activity-archive.md) — detach, stream, record, verify, drop, and
-  the two defects the shipped implementation still has.
+  what the unwind has to put back.
 - [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
   adopted in.
 - [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to

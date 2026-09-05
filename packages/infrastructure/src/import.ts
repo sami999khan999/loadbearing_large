@@ -5,6 +5,7 @@
 export { AsyncLocalStorage } from "node:async_hooks";
 export { Buffer } from "node:buffer";
 export { createHash } from "node:crypto";
+export { once } from "node:events";
 export { Readable } from "node:stream";
 export { createGzip } from "node:zlib";
 
