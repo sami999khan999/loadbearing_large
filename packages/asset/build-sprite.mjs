@@ -92,7 +92,9 @@ console.log(`sprite: ${names.length} icons`);
 // Every `src: url(…)` in font.css, checked against the directory. A missing woff2 is a
 // 404 the browser silently falls back from — degraded rather than broken, which is why
 // this reports instead of exiting non-zero the way the icon checks do.
-const css = readFileSync(FONT_CSS, "utf8");
+// Comments stripped first: the file documents the block to add by showing one, and a
+// checker that reads its own instructions reports a face nobody declared.
+const css = readFileSync(FONT_CSS, "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
 const referenced = [...css.matchAll(/url\(["']?([^"')]+)["']?\)/g)].map((match) => match[1]);
 const missing = referenced.filter(
   (href) => !existsSync(resolve(dirname(FONT_CSS), href.split("?")[0])),
