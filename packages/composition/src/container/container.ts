@@ -194,7 +194,7 @@ export class Container {
     // Opt-in and stopped by default. Building the connection only when configured is
     // what keeps the seam honest rather than aspirational.
     this.clickhouse = config.analytics.clickhouse
-      ? new ClickHouseConnection(config.analytics.clickhouse)
+      ? new ClickHouseConnection(config.analytics.clickhouse, this.logger)
       : undefined;
 
     // Otherwise a `clickhouse` driver with no block degrades to Postgres silently, out
@@ -218,7 +218,7 @@ export class Container {
 
     // Its absence changes nothing about what is written: `JsonLogger` goes to stdout
     // either way.
-    this.logReader = config.logs ? new LokiLogReader(config.logs) : undefined;
+    this.logReader = config.logs ? new LokiLogReader(config.logs, this.logger) : undefined;
 
     // The only catalog carrying the `email` namespace the worker's digests read. A
     // client bundle cannot reach it.
