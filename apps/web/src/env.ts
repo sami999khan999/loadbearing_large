@@ -1,8 +1,5 @@
-// The marker that makes this file server-only to Vite as well as to the reader. Start's
-// import-protection plugin fails the build when a module carrying it is reachable from
-// the client graph, which is the one guarantee a naming convention cannot give: before
-// it was here, `Env` shipped in the browser bundle as `Schema.parse({})` and threw on
-// `DATABASE_URL` before the first render.
+// The marker that makes this file server-only to Vite as well as to the reader: Start
+// fails the build if it reaches the client graph. See docs/reference/env.md.
 import "@tanstack/react-start/server-only";
 import { z } from "zod";
 
@@ -28,46 +25,33 @@ const Schema = z
     AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
     AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
     AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-    // The revocation window. Capped in the schema, not by convention — a deploy that
-    // raises it to "improve cache hit rate" fails at boot instead of quietly widening
-    // the gap between removing access and access stopping (16.9).
+    // The revocation window, capped in the schema rather than by convention: a deploy
+    // that raises it fails at boot instead of widening the gap silently.
     AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),
     AUTH_REQUIRE_EMAIL_VERIFICATION: z
       .enum(["true", "false"])
       .default("true")
       .transform((v) => v === "true"),
-    // What an authenticator app shows beside a TOTP code, and the product name on every
-    // transactional message. On the 27.5 rename checklist — changing it after anyone has
+    // What an authenticator app shows beside a TOTP code. Changing it after anyone has
     // enrolled leaves their authenticator naming a product that no longer exists.
     AUTH_APP_NAME: z.string().min(1).default("Loadbearing"),
-    // How a brand-new user acquires the membership without which no session is issued.
-    // `personal` is the default because it is the only one that works against an empty
-    // database — a fresh clone can sign up and get in with no seed run.
+    // How a new user acquires the membership without which no session is issued.
+    // `personal` is the only mode that works against an empty database.
     AUTH_ENROLMENT_MODE: z.enum(["personal", "bootstrap", "invite"]).default("personal"),
-    // Which organization a brand-new user is enrolled into on their first session, by
-    // slug — the same slug `pnpm db:seed` creates. Unset means no enrolment at all: an
-    // unaffiliated sign-up gets no membership, and `MembershipReader` refuses the
-    // session. That is the production posture, and it is why there is no default here.
+    // The same slug `pnpm db:seed` creates. Unset means no enrolment at all, which is
+    // the production posture and why there is no default.
     BOOTSTRAP_ORGANIZATION_SLUG: z.string().min(1).optional(),
 
-    // Google sign-in. Both optional, and the container only builds a provider when both
-    // are present — a half-filled pair is rejected at Google's consent screen, which is a
-    // failure the user sees and nobody can diagnose from a log line.
-    //
-    // The authorised redirect URI on the Google Cloud client must be
-    // `${AUTH_URL}/api/auth/callback/google`. Better Auth owns that path; nothing here
-    // routes it.
+    // Both optional: the container builds a provider only when both are present. The
+    // authorised redirect URI is `${AUTH_URL}/api/auth/callback/google`.
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
-    // Transactional mail. One URL rather than five fields, so the same variable points at
-    // Mailpit locally and at SES, Postmark or Resend's SMTP endpoint in production —
-    // `smtps://` for implicit TLS on 465. Required, because
-    // `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on and a process that cannot send is
-    // a process whose sign-ups can never complete.
+    // One URL rather than five fields, and required: with verification on by default, a
+    // process that cannot send is one whose sign-ups never complete.
     SMTP_URL: z.string().min(1),
-    // The envelope sender. Never defaulted: an address the sending domain does not
-    // authorise bounces or lands in spam, and a wrong default fails that way silently.
+    // Never defaulted: an address the sending domain does not authorise bounces or lands
+    // in spam, silently.
     EMAIL_FROM: z.string().min(1),
 
     EMBEDDING_MODEL: z.string().min(1),
@@ -75,26 +59,20 @@ const Schema = z
     OPENAI_API_KEY: z.string().default(""),
 
     // ── the swappable stores ──
-    //
-    // Each is a driver plus the connection detail that driver needs. `Container` reads
-    // the driver and builds the class behind the port, so adopting a store is these
-    // variables and nothing else — no code change, no migration, no call site touched.
+    // A driver plus the connection detail it needs, so adopting a store is these
+    // variables and nothing else.
     VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
     ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-    // Optional, and their absence is what keeps ClickHouse stopped. Present without
-    // `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection
-    // runs and the reconciliation reports, while reads still come from Postgres.
+    // Present without `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the
+    // projection runs while reads still come from Postgres.
     CLICKHOUSE_URL: z.url().optional(),
-    // ClickHouse's own out-of-the-box database and user. A default naming the project
-    // would be a credential baked into shipped code, and would keep pointing at the old
-    // name after a rename — `.env` is where the real stack's values belong.
+    // ClickHouse's own out-of-the-box values: a default naming the project would be a
+    // credential baked into shipped code.
     CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
     CLICKHOUSE_USER: z.string().min(1).default("default"),
     CLICKHOUSE_PASSWORD: z.string().default(""),
-    // The read-back seam for diagnostics. Unset means no `LogReader` — logs are still
-    // written to stdout and still shipped by Alloy, and reading them is
-    // `docker compose logs` or curl against Loki, which stays the break-glass path
-    // regardless.
+    // Unset means no `LogReader`. Logs are still written to stdout and shipped by Alloy
+    // either way.
     LOKI_URL: z.url().optional(),
     LOKI_TENANT_ID: z.string().optional(),
 
@@ -109,10 +87,8 @@ const Schema = z
 
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   })
-  // The one cross-field rule in this schema, and it earns the exception. `bootstrap`
-  // with no slug is a mode that silently enrols nobody: every sign-up succeeds, every
-  // first sign-in is refused, and nothing in either log says why. Failing at boot with
-  // a field path is the whole reason this file parses eagerly.
+  // The one cross-field rule, and it earns the exception: `bootstrap` with no slug
+  // silently enrols nobody. See docs/reference/env.md.
   .superRefine((env, ctx) => {
     if (env.AUTH_ENROLMENT_MODE === "bootstrap" && !env.BOOTSTRAP_ORGANIZATION_SLUG) {
       ctx.addIssue({
@@ -126,25 +102,22 @@ const Schema = z
 export class Env {
   private constructor() {}
 
-  // Parsed at module load, not on first access. A missing `AUTH_SECRET` should crash
-  // the process at boot with a field path, not produce a 500 on the first sign-in an
-  // hour later.
+  // At module load, not on first access: a missing `AUTH_SECRET` should crash at boot
+  // with a field path, not 500 on the first sign-in an hour later.
   private static readonly parsed = Schema.parse(process.env);
 
   public static get isProduction(): boolean {
     return Env.parsed.NODE_ENV === "production";
   }
 
-  // The absolute base Better Auth signs cookies and builds callback URLs against. The
-  // browser never needs it — `Endpoint.auth` is the same-origin path — and asking for it
-  // from a component is what put this whole schema in the client bundle once already.
+  // The absolute base Better Auth signs cookies against. The browser never needs it, and
+  // asking for it from a component put this schema in the client bundle once already.
   public static get authUrl(): string {
     return `${Env.parsed.AUTH_URL}/api/auth`;
   }
 
-  // The one origin allowlist. Better Auth's CSRF check reads it through
-  // `containerConfig()`; the CORS layer reads it directly. Two consumers, one list —
-  // a second hardcoded copy is how one of them goes stale.
+  // The one origin allowlist, read by Better Auth's CSRF check and by the CORS layer.
+  // A second hardcoded copy is how one of them goes stale.
   public static get trustedOrigins(): readonly string[] {
     return Env.parsed.AUTH_TRUSTED_ORIGINS;
   }
@@ -179,9 +152,8 @@ export class Env {
         appName: e.AUTH_APP_NAME,
         enrolmentMode: e.AUTH_ENROLMENT_MODE,
         bootstrapOrganizationSlug: e.BOOTSTRAP_ORGANIZATION_SLUG,
-        // Both halves or neither. Spreading a partly-filled pair here would build a
-        // provider pointed at a client Google rejects — the same argument the
-        // `analytics.clickhouse` block one field down already makes.
+        // Both halves or neither: a partly-filled pair builds a provider pointed at a
+        // client Google rejects.
         google:
           e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET
             ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
@@ -193,9 +165,8 @@ export class Env {
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
       },
-      // Undefined unless a URL was given, which is what `Container` branches on.
-      // Spreading a partly-filled object here instead would build a ClickHouse
-      // connection pointed at nothing.
+      // Undefined unless a URL was given, which is what `Container` branches on: a
+      // partly-filled object builds a connection pointed at nothing.
       analytics: {
         driver: e.ANALYTICS_DRIVER,
         clickhouse: e.CLICKHOUSE_URL

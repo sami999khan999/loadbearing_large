@@ -1,25 +1,9 @@
-// Everything the client-safe half of this app takes from outside itself, in one place.
-// No relative re-exports live here — that is what keeps it cycle-free.
-//
-// **The first of this app's two outside surfaces.** The second is
-// `server/import.ts`, and the split is the server-only boundary made readable: nothing
-// below may appear in a browser bundle by accident, so a server-only package showing up
-// on this file is the leak, visible at one line rather than after a bundle grep.
-//
-// **Three things are deliberately not here.** `env.ts` keeps its own imports — it carries
-// the marker that makes Start fail the build if it ever becomes reachable from the
-// client graph, and a side-effect import cannot be re-exported. And `@tanstack/react-router`
-// is imported directly inside `route/`: the route generator only recognises
-// `createFileRoute` when it is imported from that specifier literally, and prepends its
-// own import when it is not. `createRouter` below is for `router.tsx`, which the
-// generator never reads. Third, `@tanstack/react-start` and its `/server` subpath: the
-// two `server/*.fn.ts` files import both directly, because a re-exported `/server`
-// entry is a client-graph edge that Start's import protection denies outright — a
-// server function's stub ships to the browser even though its handler body does not.
+// **The first of this app's two outside surfaces**, and the client-safe one: a
+// server-only package here is the leak. See docs/reference/import-surfaces.md.
 
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // `AuthClient` is constructed per component, never a module singleton: the instance
-// differs per environment, and the desktop shell supplies absolute URLs of its own (23).
+// differs per environment.
 export {
   AccountClient,
   ApiClient,
@@ -29,8 +13,8 @@ export {
 } from "@loadbearing/api-client";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────
-// The client catalog by way of `StaticContentSource`, never `SERVER_CATALOG` — the
-// `email` namespace is the worker's and the ESLint ban in 05 fires on this line.
+// The client catalog, never `SERVER_CATALOG`: the `email` namespace is the worker's, and
+// the ESLint ban fires on this line.
 export {
   type ClientNamespace,
   ContentSource,
@@ -40,8 +24,8 @@ export {
 } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-// The two branded ids `session.fn.ts` casts to. Types only — the shapes a component
-// renders arrive through `@loadbearing/query`, never from here directly.
+// The two branded ids `session.fn.ts` casts to. The shapes a component renders arrive
+// through `@loadbearing/query`.
 export type { OrganizationId, UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
@@ -77,8 +61,8 @@ export {
 } from "@loadbearing/feature";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
-// The same `can()` the server calls — that identity is the point, and it is why the
-// guard rebuilds the DTO rather than shape-checking the JSON (23).
+// The same `can()` the server calls, which is why the guard rebuilds the DTO rather than
+// shape-checking the JSON.
 export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
@@ -105,9 +89,8 @@ export {
 } from "@loadbearing/ui";
 
 // ── @loadbearing/ui — stylesheets ────────────────────────────────────────────
-// Two links, and the order they are written into <head> matters rather than the order
-// they are named here: `class.css` reads the token names `theme.css` defines, and an
-// app supplying its own design drops the second.
+// The order they are written into <head> matters, not the order here: `class.css` reads
+// the token names `theme.css` defines.
 export { default as classCss } from "@loadbearing/ui/class.css?url";
 export { default as themeCss } from "@loadbearing/ui/theme.css?url";
 
@@ -115,15 +98,13 @@ export { default as themeCss } from "@loadbearing/ui/theme.css?url";
 export { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── @tanstack/react-router ───────────────────────────────────────────────────
-// `router.tsx` only. Everything under `route/` imports this package directly — see the
-// note at the top of this file.
+// `router.tsx` only. Everything under `route/` imports this package directly.
 export { createRouter } from "@tanstack/react-router";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 
 // ── zod ──────────────────────────────────────────────────────────────────────
-// Search-parameter schemas for `validateSearch`, and nothing else on this side. The
-// wire shapes are `@loadbearing/contracts`' business; a route only validates what a
-// browser put in its own URL bar.
+// Search-parameter schemas only: a route validates what a browser put in its own URL
+// bar, and the wire shapes are `contracts`' business.
 export { z } from "zod";

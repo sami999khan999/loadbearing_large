@@ -22,10 +22,10 @@ function ForgotPasswordPage() {
 
   return (
     <main>
-      {/* `/reset-password` is where Better Auth redirects the browser once it has spent
-          the token from the email, carrying a fresh token on the query string. The path
-          is `ROUTES.shell.resetPassword`, spelled again for the same reason every
-          `createFileRoute` literal is. */}
+      {
+        // Where Better Auth redirects once it has spent the emailed token, carrying a
+        // fresh one on the query string.
+      }
       <ForgotPasswordForm auth={auth} resetUrl="/reset-password" />
       <Link to="/sign-in">{t("auth.signIn")}</Link>
     </main>

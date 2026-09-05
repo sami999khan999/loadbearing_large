@@ -66,8 +66,8 @@ describe("SessionStore", () => {
     store.restore(OWNER);
     await store.ensure(loader.load);
 
-    // This is what keeps the browser from re-fetching during hydration: `hydrate` runs
-    // before the first client render, so the root's `beforeLoad` pass is a no-op.
+    // What keeps the browser from re-fetching during hydration: `hydrate` runs before the
+    // first client render, so the root's `beforeLoad` is a no-op.
     expect(loader.calls()).toBe(0);
     expect(store.dehydrate()).toEqual(OWNER);
   });
@@ -79,9 +79,8 @@ describe("SessionStore", () => {
     await store.ensure(loader.load);
     store.invalidate();
 
-    // The cookie has changed and nothing else knows. Without this, a sign-in would
-    // leave the shell rendering signed-out for the rest of the tab's life — but the
-    // store must not flash anonymous in the meantime either.
+    // Without this a sign-in leaves the shell rendering signed-out for the life of the
+    // tab — and the store must not flash anonymous in the meantime either.
     expect(store.user?.email).toBe("owner@example.com");
 
     await store.ensure(loader.load);

@@ -2,11 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { container } from "~/server/container.js";
 import { Cors } from "~/server/cors.js";
 
-// Better Auth speaks the Fetch API, so it drops into any Fetch-based router — the four
-// lines below are the whole binding, and they are what a Nest controller replaces.
-//
-// The CORS layer is not optional on either entrypoint: a Tauri webview is cross-origin
-// against both, on every call (30).
+// Better Auth speaks the Fetch API, so these four lines are the whole binding. CORS is
+// not optional: a second shell is cross-origin against both entrypoints.
 export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {

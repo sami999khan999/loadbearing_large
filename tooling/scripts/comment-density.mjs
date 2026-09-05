@@ -108,7 +108,10 @@ const packages = [];
 const files = [];
 
 for (const { name, dir } of sourceRoots()) {
-  const found = [...walk(join(dir, "src"), [".ts", ".tsx"])];
+  // Generated files are written by nobody, and check-architecture §14 skips them too.
+  const found = walk(join(dir, "src"), [".ts", ".tsx"]).filter(
+    (file) => !/\.gen\.tsx?$/.test(file),
+  );
   if (found.length === 0) continue;
 
   const totals = { files: found.length, total: 0, comment: 0, blocks: 0 };
@@ -158,7 +161,7 @@ console.log("─".repeat(72));
 for (const file of files.slice(0, TOP_FILES)) {
   const share = percent(file.comment, file.total);
   console.log(
-    `${pad(file.comment, 5)} ${pad(share.toFixed(0) + "%", 5)} ${pad(file.blocks, 4)} blocks  ${file.path}`,
+    `${pad(file.comment, 5)} ${pad(`${share.toFixed(0)}%`, 5)} ${pad(file.blocks, 4)} blocks  ${file.path}`,
   );
 }
 

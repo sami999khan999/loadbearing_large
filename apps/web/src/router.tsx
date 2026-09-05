@@ -14,22 +14,18 @@ import { type SessionSnapshot, SessionStore } from "./store/session.store.js";
 
 export interface RouterDehydrated {
   readonly messages: MessageSnapshot;
-  // Rides the same payload as the message snapshot, for the same reason: resolved once
-  // on the server, complete before the first client render. Without it the root's
-  // `beforeLoad` would re-fetch during hydration and every gated element would flash.
+  // Resolved once on the server and complete before the first client render: without it
+  // the root's `beforeLoad` re-fetches during hydration and gated elements flash.
   readonly session: SessionSnapshot;
-  // Rides the payload for the same reason the other two do. Without it the client would
-  // re-read the cookie during hydration and the picker would flash its default.
+  // Rides the payload like the other two: without it the client re-reads the cookie
+  // during hydration and the picker flashes its default.
   readonly appearance: AppearanceSnapshot;
 }
 
-// Start calls this per request on the server and once in the browser, which is exactly
-// the lifetime every object below wants. A module-scope `QueryClient` or `MessageStore`
-// in a server bundle is shared across concurrent requests — under this permission model
-// a cross-tenant leak, not a caching bug (21).
+// Called per request on the server and once in the browser, which is the lifetime every
+// object below wants. A module-scope one would be a cross-tenant leak.
 export function getRouter() {
-  // The client catalog, never the server one: `email` is server-only and the ESLint ban
-  // in 05 is what keeps it that way.
+  // The client catalog, never the server one: `email` is server-only.
   const content = new StaticContentSource();
   const messages = new MessageStore(content, MessageStore.empty("en"));
   const session = new SessionStore();
@@ -41,32 +37,27 @@ export function getRouter() {
   return createTanStackRouter({
     routeTree,
     scrollRestoration: true,
-    // Load-bearing, not a nicety: without it the first navigation into a namespace
-    // nobody has needed yet resolves its dynamic import *during* the loader — a visible
-    // pause on a route that would otherwise be instant.
+    // Load-bearing: without it the first navigation into an unseen namespace resolves
+    // its dynamic import *during* the loader, which is a visible pause.
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
-    // `user` and `capabilities` are seeded signed-out. `__root.tsx` resolves them for
-    // every route beneath it; a guard that somehow ran before that sees `empty()`, which
-    // denies — there is no loading state that grants access (23).
+    // Seeded signed-out: a guard that somehow ran before `__root.tsx` resolved sees
+    // `empty()`, which denies.
     context: {
       messages,
       queryClient,
       api: apiClient,
       session,
       appearance,
-      // Seeded signed-out. `__root.tsx` resolves the real pair for every route beneath
-      // it; an empty capability set denies everything, and there is no loading state
-      // that grants access (23).
+      // Seeded signed-out: an empty capability set denies everything, and there is no
+      // loading state that grants access.
       user: session.user,
       capabilities: session.dto,
       googleEnabled: session.googleEnabled,
       appearanceSnapshot: appearance.current,
     },
-    // Runs after every matched route's loader has resolved, so the snapshot is already
-    // the union of the shell plus every namespace on the entry path. `hydrate` runs
-    // before the first client render, so that render sees a complete `Translator` —
-    // no fetch, no waterfall, no flash of English.
+    // After every matched loader has resolved, so the snapshot is the union of the shell
+    // and the entry path — and the first client render sees a complete `Translator`.
     dehydrate: (): RouterDehydrated => ({
       messages: messages.dehydrate(),
       session: session.dehydrate(),

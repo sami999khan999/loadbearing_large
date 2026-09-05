@@ -14,9 +14,8 @@ import {
 
 const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
 
-// No `requirePermission`. Managing your own credentials is not a capability anyone can
-// be denied, so `(app)/_authenticated.tsx`'s `requireSession()` is the whole gate — and
-// that is why this slice added no permission key and needs no seeding migration.
+// No `requirePermission`: managing your own credentials is not a capability anyone can
+// be denied, so the layout's `requireSession()` is the whole gate.
 export const Route = createFileRoute("/(app)/_authenticated/settings/security")({
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
@@ -32,8 +31,7 @@ function SecurityPage() {
   // share the same cookie handling and the same plugin set.
   const account = useMemo(() => new AccountClient(auth), [auth]);
 
-  // Read from the store rather than a query: the root route already resolved it during
-  // SSR, so the page knows on its first render whether two-factor is on.
+  // From the store rather than a query: the root already resolved it during SSR.
   const [enrolled, setEnrolled] = useState(session.user !== null && twoFactorOf(session.user));
 
   return (
@@ -54,8 +52,7 @@ function SecurityPage() {
         <LinkedAccountList
           account={account}
           googleEnabled={googleEnabled}
-          // Back to this page, so a link round trip through Google returns where it
-          // started rather than dumping the user on the home page.
+          // Back to this page, so a round trip through Google returns where it started.
           linkCallbackUrl="/settings/security"
         />
       </section>
@@ -63,10 +60,8 @@ function SecurityPage() {
   );
 }
 
-// `SessionUser` carries only the three fields the shell renders, so the flag is read
-// structurally rather than widening that type for one page. Absent means off, which is
-// the direction to fail in: it offers enrolment to someone already enrolled, and Better
-// Auth refuses that — where the inverse would hide the only way to turn it on.
+// Read structurally rather than widening `SessionUser` for one page. Absent means off,
+// which is the direction to fail in. **This never resolves true — see `P2.15`.**
 function twoFactorOf(user: unknown): boolean {
   return (user as { twoFactorEnabled?: boolean }).twoFactorEnabled === true;
 }

@@ -1,0 +1,80 @@
+---
+title: Enforcement surfaces
+description: The four places a permission is checked, in order of authority — and why the three weaker ones are worth having even though only the first one is the gate.
+---
+
+# Enforcement surfaces
+
+| # | Surface | Where | What it is |
+|---|---|---|---|
+| 1 | `Authorizer.assert()` | inside the use-case | **the gate** |
+| 2 | `principalMiddleware` | the oRPC chain | defence in depth, failing closed |
+| 3 | `RouteGuard` | a route's `beforeLoad` | stops the page rendering |
+| 4 | `<Can>` | a component | a UX affordance |
+
+**The rule they exist to serve:** removing a permission from a role must hide the affordance **and**
+return `FORBIDDEN`. One without the other is either security theatre or a UI full of buttons that
+error.
+
+Only the first is authoritative. The worker bypasses 2, 3 and 4 entirely, and so does any SSR call
+that skipped the adapter — which is exactly why the assertion lives in the use-case.
+
+## 1. `Authorizer.assert()`
+
+The only one that runs on every path. See
+[`application/docs/reference/authorizer.md`](../../../packages/application/docs/reference/authorizer.md).
+
+## 2. `principalMiddleware`
+
+Defence in depth, and it fails **closed**: a procedure with no entry in `PROCEDURE_PERMISSIONS` is
+denied, not allowed. Paired with the coverage test in `packages/contracts`, forgetting to map a new
+procedure is caught at test time and, failing that, here — never by shipping an ungated endpoint.
+
+`authed` is built from `implement(contract)` rather than from `base`, so a router writes
+`authed.role.list.handler(…)` and gets the procedure's input and output types with no annotation.
+`implement(contract.role.list).use(authed)` looks like the same thing and is not: `.use()` takes a
+*middleware*, and a builder passed there fails with several hundred characters of inference rather
+than a sentence.
+
+Anything built on `base` instead of `authed` is unauthenticated on purpose and obvious in review.
+
+### Why the error middleware is a middleware
+
+`errorMiddleware` sits **inside** the chain rather than at the adapter. An adapter-level interceptor
+sees only the initial context, so it has no `traceId` and no request-scoped logger to hand
+`ErrorInterceptor`.
+
+It wraps `principalMiddleware` too, so an unauthenticated call is logged and shaped like every other
+failure rather than short-circuiting past the one place that logs. It is declared against what it
+*requires* rather than derived from the chain above: `BuilderWithMiddlewares` has no `.middleware()`,
+so a middleware depending on an earlier one states its own context and oRPC checks the chain supplies
+it.
+
+### Correlation comes first
+
+`correlationMiddleware` runs before `principalMiddleware`, so a failure to resolve a principal is
+already correlated. `Correlation.fromHeaders` adopts an upstream `x-request-id` where a proxy set one
+— sanitised first, because it arrives from the network and then rides every line of the request — and
+mints a `Uuid.v7()` otherwise.
+
+## 3. `RouteGuard`
+
+Stops the page rendering at all, which `<Can>` cannot. It calls **the same `CapabilitySet.can()` the
+server calls**, which is why the guard rebuilds the DTO rather than shape-checking the JSON: a second
+implementation of `can()` is a second answer.
+
+The leading hyphen in `-guard.ts` keeps the file out of the route tree. Framework naming wins inside
+`src/route/`.
+
+## 4. `<Can>`
+
+Hiding a button is a courtesy. The check is `Authorizer.assert()` in the use-case, and it runs whether
+or not the button was ever rendered — which is what makes a link that is hidden here still answer
+`FORBIDDEN` when typed by hand.
+
+## No loading state grants access
+
+The session store is seeded **signed out**, denying everything, and resolution only ever widens it.
+A guard that somehow ran before `__root.tsx` resolved sees an empty capability set and denies.
+
+There is deliberately no third state where a not-yet-resolved store is treated as permissive.

@@ -28,9 +28,8 @@ function AccountPage() {
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
   const account = useMemo(() => new AccountClient(auth), [auth]);
 
-  // The layout above already ran `requireSession()`, so this is unreachable. Narrowing
-  // rather than asserting, because a `!` here would be a runtime crash the day someone
-  // moves this file out from under the guard.
+  // Unreachable: the layout already ran `requireSession()`. Narrowing rather than `!`,
+  // which would crash the day someone moves this file out from under the guard.
   if (!user) return null;
 
   return (
@@ -49,8 +48,10 @@ function AccountPage() {
 
       <section>
         <h2>{t("auth.changeEmail")}</h2>
-        {/* The confirmation goes to the *current* address — the server decides that.
-            This is only where the link lands once the token is spent. */}
+        {
+          // The server sends the confirmation to the *current* address. This is only
+          // where the link lands once the token is spent.
+        }
         <ChangeEmailForm account={account} callbackUrl="/settings/account" />
       </section>
 

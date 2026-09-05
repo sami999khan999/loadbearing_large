@@ -41,9 +41,8 @@ describe("Cors", () => {
   it("emits nothing at all for an origin that is not on the list", () => {
     const headers = preflightFrom(HOSTILE).headers;
 
-    // Not "reflected without credentials" — nothing. Reflecting whatever arrived
-    // alongside `Allow-Credentials: true` is a hole large enough to drive a CSRF
-    // through, and the two headers are specified never to be combined with `*`.
+    // Nothing, not "reflected without credentials": reflecting an arbitrary origin
+    // alongside `Allow-Credentials: true` is a CSRF hole.
     expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
     expect(headers.get("Access-Control-Allow-Credentials")).toBeNull();
     expect(headers.get("Vary")).toBeNull();

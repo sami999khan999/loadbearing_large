@@ -1,24 +1,5 @@
-// Everything the transport layer takes from outside itself, in one place. No relative
-// re-exports live here — that is what keeps it cycle-free.
-//
-// **The second of this app's two outside surfaces, and the reason there are two.**
-// `apps/web/src/**` is banned from naming `@loadbearing/composition`, `application`,
-// `auth`, `infrastructure` and the vendor SDKs beneath them; `apps/web/src/server/**` is
-// the one exemption, because nothing that reads this file reaches a browser. Merging it
-// into `~/import.ts` would hand every route component an edge into the server graph and
-// leave the client bundle's cleanliness resting on tree-shaking — which is exactly what
-// the three defences in 24 exist to avoid depending on.
-//
-// **The two `*.fn.ts` files beside it do not read this file, and that is the subtlety.**
-// A server function is half client: the stub ships to the browser and only the handler
-// body is stripped, so `session.fn.ts` is a live edge in the client graph. Importing
-// this surface from there put `@tanstack/react-start/server` one hop from `__root.tsx`
-// and Start's import protection denied the build, naming the whole chain. They take
-// `~/import.ts` and two direct imports instead; `container.js` stays a relative import
-// inside the handler, where the compiler removes it.
-//
-// Read as a list, this is the answer to "what does the transport layer touch?" — and a
-// server-only package appearing on `~/import.ts` instead of here is the leak.
+// **The second of this app's two outside surfaces**, and the only place under
+// `apps/web/src` allowed to name the server graph. See docs/reference/import-surfaces.md.
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 // Type-only. The principal is resolved by the container, never constructed here.

@@ -13,14 +13,8 @@ const anonymous = (): SessionSnapshot => ({
   googleEnabled: Env.googleEnabled,
 });
 
-// A server function, and one of the few things doc 24 says one is *for*: it carries no
-// business logic and makes no authorization decision. It resolves who is asking and what
-// they may do, so the first rendered byte is already gated correctly. The decision itself
-// still happens in `Authorizer.assert()` inside the use-case, where it always did.
-//
-// Not routed through `PrincipalBuilder`: that is the authorization path, it accepts an
-// `x-api-key` ahead of the cookie, and an integration key has no name or email to render.
-// This is the render path, and it reads a browser session or nothing at all.
+// Resolves who is asking and what they may do, and decides nothing. Not routed through
+// `PrincipalBuilder` — see docs/reference/server-functions.md.
 export const fetchSession = createServerFn({ method: "GET" }).handler(
   async (): Promise<SessionSnapshot> => {
     const request = getRequest();
@@ -28,20 +22,15 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
 
     if (!result?.session) return anonymous();
 
-    // Pinned by the session-create hook in `AuthFactory`. A session without it is a
-    // session with no tenant, and `BetterAuthSessionResolver` already treats that as no
-    // session at all rather than guessing — this agrees with it deliberately, because a
-    // shell that renders a user the server would refuse is worse than one that renders
-    // nobody.
+    // A session without a tenant is treated as no session, agreeing with
+    // `BetterAuthSessionResolver`: rendering a user the server would refuse is worse.
     const { activeOrganizationId } = result.session as { activeOrganizationId?: string };
     if (!activeOrganizationId) return anonymous();
 
     const userId = result.session.userId as UserId;
 
-    // The same cache `PrincipalBuilder` reads, keyed on `organization:user`, so the
-    // client's `can()` and the server's `assert()` are answering off one set. The
-    // membership list rides along for the switcher — one indexed query, once per
-    // tab, rather than a second round trip after the first paint.
+    // The same cache `PrincipalBuilder` reads, so client `can()` and server `assert()`
+    // answer off one set. The membership list rides along for the switcher.
     const [capabilities, organizations] = await Promise.all([
       container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
       container.memberships.organizationsFor(userId),

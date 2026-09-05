@@ -7,23 +7,21 @@ describe("Endpoint", () => {
   });
 
   it("addresses both entrypoints as same-origin paths", () => {
-    // The app is served by the process that answers these, so there is no host to
-    // configure. They are literals again in the route files, because the route
-    // generator reads those without executing anything.
+    // Same-origin, so there is no host to configure. Literals again in the route files,
+    // which the generator reads without executing.
     expect(Endpoint.rpc).toBe("/api/rpc");
     expect(Endpoint.authPath).toBe("/api/auth");
   });
 
   it("returns an absolute URL under SSR, because Better Auth's client cannot take a path", () => {
-    // `createAuthClient` resolves `baseURL` through `new URL()` in its constructor, so a
-    // relative value throws during SSR — where there is no `location` to resolve
-    // against — and blanks the sign-in page behind a failed Suspense boundary.
+    // `createAuthClient` resolves `baseURL` in its constructor, so a relative value
+    // throws during SSR and blanks the page behind a failed Suspense boundary.
     expect(() => new URL(Endpoint.auth)).not.toThrow();
   });
 
   it("points the SSR fallback at a host that is guaranteed never to resolve", () => {
-    // `.invalid` is reserved by RFC 2606. A call that does slip into an SSR pass fails
-    // loudly and names this line, rather than quietly reaching some other localhost.
+    // `.invalid` is reserved by RFC 2606, so a call that slips into SSR fails loudly
+    // rather than quietly reaching some other localhost.
     expect(new URL(Endpoint.auth).hostname.endsWith(".invalid")).toBe(true);
     expect(Endpoint.auth.endsWith(Endpoint.authPath)).toBe(true);
   });

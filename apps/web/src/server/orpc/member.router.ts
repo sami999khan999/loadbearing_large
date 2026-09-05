@@ -1,9 +1,7 @@
 import { authed } from "./base.js";
 
-// Three lines per procedure, as `RoleRouter`: pull the use-case off the container, call
-// `execute` with the principal and the validated input, return the result. The one
-// exception is `revokeInvitation`, whose use-case returns nothing and whose contract
-// promises `{ ok: true }` — the acknowledgement is the transport's word, not the domain's.
+// Three lines per procedure, as `RoleRouter`. `revokeInvitation` is the exception: its
+// `{ ok: true }` is the transport's word, not the domain's.
 export class MemberRouter {
   private constructor() {}
 

@@ -14,9 +14,8 @@ import { fetchAppearance } from "~/server/appearance.fn.js";
 import { fetchSession } from "~/server/session.fn.js";
 import type { RouterContext } from "./-context.js";
 
-// The one case the cookie cannot answer: the user asked for "system" and the request
-// carried no client hint, so the server had to guess light. Synchronous and in <head>,
-// or the correction lands after first paint and the user watches it happen.
+// The one case the cookie cannot answer: "system" with no client hint. Synchronous and
+// in <head>, or the correction lands after first paint.
 const SYSTEM_MODE_SCRIPT = `(()=>{try{if(matchMedia("(prefers-color-scheme:dark)").matches){const r=document.documentElement;r.dataset.mode="dark";r.style.colorScheme="dark";}}catch{}})()`;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -54,8 +53,7 @@ function RootDocument({ children }: { children: ReactNode }) {
     Route.useRouteContext();
   const { theme, mode, preference } = appearanceSnapshot;
 
-  // Only when the server had to guess, and only for a palette that has a dark block —
-  // the script can upgrade light to dark and never the other way, so it cannot fight
+  // Only when the server guessed, and only upgrading light to dark — so it cannot fight
   // an explicit choice or strand a dark-only theme.
   const correctsMode = preference === "system" && ThemeRegistry.supports(theme, "dark");
 

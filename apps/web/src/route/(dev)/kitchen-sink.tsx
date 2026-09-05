@@ -16,13 +16,12 @@ import {
   ThemeRegistry,
 } from "~/import.js";
 
-// The one surface that renders every theme against every primitive. Without it a theme
-// is reviewed on whichever screen happens to use the component, and an unreadable
-// pairing ships because nobody looked at it directly.
+// The one surface that renders every theme against every primitive, so an unreadable
+// pairing is looked at directly rather than found in production.
 export const Route = createFileRoute("/(dev)/kitchen-sink")({ component: KitchenSink });
 
-// The twelve names every theme declares. This list is the contract, so a theme that
-// omits one shows up here as a swatch of whatever leaked through rather than silently.
+// The twelve names every theme declares. A theme that omits one shows up here as a
+// swatch of whatever leaked through.
 const TOKENS = [
   "bg",
   "surface",
@@ -54,8 +53,8 @@ const ROWS: readonly SampleRow[] = [
   { id: "3", name: "Gamma", count: 7 },
 ];
 
-// Layout only. Every colour on this page comes from class.css or from a token read by
-// name below, so nothing written here can make a broken theme look fine.
+// Layout only: every colour comes from class.css or a token read by name, so nothing
+// here can make a broken theme look fine.
 const page: CSSProperties = {
   maxWidth: "72rem",
   margin: "0 auto",
@@ -138,7 +137,7 @@ function KitchenSink() {
   const { theme, mode, preference } = appearanceSnapshot;
 
   // No state and no re-render: the picker writes two attributes on <html> and the
-  // cascade does the rest. Holding it in React would make a colour change an update.
+  // cascade does the rest.
   const choose = (next: ThemeKey, wanted: ModePreference): void => {
     const prefersDark =
       typeof matchMedia === "function" && matchMedia("(prefers-color-scheme:dark)").matches;

@@ -22,13 +22,11 @@ export const Route = createFileRoute("/(shell)/sign-up")({
 function SignUpPage() {
   const { t } = useMessages("auth");
   const { googleEnabled } = Route.useRouteContext();
-  // Set once the form has submitted. The address is what the notice renders back, and
-  // it only exists in the form that is about to be replaced — which is why this state
-  // lives here rather than in either component.
+  // The address the notice renders back exists only in the form that is about to be
+  // replaced, which is why the state lives here.
   const [registered, setRegistered] = useState<string | null>(null);
 
-  // Memoised because a bare `new` in the body builds a fresh Better Auth client, and a
-  // fresh mutation identity, on every keystroke in the form (23).
+  // Memoised: a bare `new` in the body builds a fresh client on every keystroke.
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
 
   return (
@@ -37,8 +35,9 @@ function SignUpPage() {
         <VerifyEmailNotice auth={auth} email={registered} verifyCallbackUrl="/verify-email" />
       ) : (
         <>
-          {/* Google first. It is one click against a form with four fields, and a user
-              who has an account there should not have to read the form to find out. */}
+          {
+            // Google first: one click against a form with four fields.
+          }
           <SocialSignIn
             auth={auth}
             enabled={googleEnabled}

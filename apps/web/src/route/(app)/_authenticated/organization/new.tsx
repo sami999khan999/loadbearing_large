@@ -11,9 +11,8 @@ import {
 
 const MESSAGES = ["organization"] as const satisfies readonly ClientNamespace[];
 
-// Session-gated only, like `/settings/account`: founding a tenant of your own is not a
-// capability anyone in another tenant can grant or deny. The path is
-// `ROUTES.organization.create`, spelled again for the generator.
+// Session-gated only: founding a tenant of your own is not a capability anyone in
+// another tenant can grant or deny.
 export const Route = createFileRoute("/(app)/_authenticated/organization/new")({
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
@@ -30,7 +29,7 @@ function NewOrganizationPage() {
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
   // The session now points at the new tenant, so everything cached belongs to the old
-  // one — the same three steps a switch and a sign-out take.
+  // one. The same three steps a switch takes.
   const created = () => {
     queryClient.clear();
     session.invalidate();

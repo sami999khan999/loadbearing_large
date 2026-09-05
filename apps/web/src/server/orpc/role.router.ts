@@ -1,9 +1,7 @@
 import { authed } from "./base.js";
 
-// Three lines per procedure: pull the use-case off the container, call `execute` with
-// the principal and the validated input, return the result. No business logic, no
-// authorization decision, no error mapping — all three live one layer down, which is
-// what makes swapping to NestJS a rewrite of *this file* and nothing else.
+// Three lines per procedure and nothing else: no business logic, no authorization, no
+// error mapping — which is what makes a framework swap a rewrite of this file alone.
 export class RoleRouter {
   private constructor() {}
 
