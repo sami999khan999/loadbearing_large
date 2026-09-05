@@ -1,5 +1,5 @@
 import { useMessages } from "../i18n/index.js";
-import { type AuthClient, Button, SessionMutations } from "../import.js";
+import { type AuthClient, Button, Callout, SessionMutations } from "../import.js";
 
 export interface SignOutButtonProps {
   readonly auth: AuthClient;
@@ -13,8 +13,16 @@ export function SignOutButton({ auth, onSignedOut }: SignOutButtonProps) {
   const signOut = SessionMutations.useSignOut(auth, onSignedOut);
 
   return (
-    <Button variant="ghost" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
-      {t("auth.signOut")}
-    </Button>
+    <>
+      <Button variant="ghost" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+        {t("auth.signOut")}
+      </Button>
+
+      {
+        // A refused sign-out leaves the session live, so `onSignedOut` does not run and
+        // the shell would otherwise say nothing at all.
+      }
+      {signOut.isError ? <Callout tone="danger">{t("auth.signOutFailed")}</Callout> : null}
+    </>
   );
 }
