@@ -25,6 +25,9 @@ export interface ActiveSession {
   readonly createdAt: string;
   readonly userAgent: string | null;
   readonly ipAddress: string | null;
+  // The one the tab is holding. Revoking it signs the reader out of the page they are
+  // reading, which is what `revokeOtherSessions` exists to be instead.
+  readonly current: boolean;
 }
 
 // Everything a signed-in person can do to their own account. Takes the `AuthClient`
@@ -119,15 +122,28 @@ export class AccountClient {
 
   // ── sessions ──
 
+  // Two calls, because the endpoint flags nothing and the cookie holding the current
+  // token is httpOnly: this is the only place the two can be compared.
   public async listSessions(): Promise<readonly ActiveSession[]> {
-    const { data, error } = await this.client.listSessions();
+    const [listed, current] = await Promise.all([
+      this.client.listSessions(),
+      this.client.getSession(),
+    ]);
+
+    const { data, error } = listed;
     if (error || !data) throw BetterAuthErrorNormalizer.normalize(error);
+
+    const currentToken = current.data?.session.token;
+
     return data.map((session) => ({
       id: session.id,
       token: session.token,
       createdAt: new Date(session.createdAt).toISOString(),
       userAgent: session.userAgent ?? null,
       ipAddress: session.ipAddress ?? null,
+      // `undefined === token` is false for every row, so a session that cannot be
+      // resolved marks none rather than marking all of them.
+      current: session.token === currentToken,
     }));
   }
 
