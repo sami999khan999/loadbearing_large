@@ -286,6 +286,11 @@ Three consequences that are easy to miss:
   cross-tenant leak rather than an empty result set.
 - **Spell it `organization`, not `organisation`.** The column name fixes the spelling; a codebase
   that uses both will resolve it inconsistently per file.
+- **Every tenant foreign key is `ON DELETE CASCADE`, and a tenant-owned table has one.** The column
+  is the sharding key; it is also the only handle a tenant delete has. A table where five keys are
+  `NO ACTION` and three cascade has no delete at all — the statement fails, and `SET NULL` on
+  `users.last_active_organization_id` sits there waiting for a case that cannot arise. A tenant
+  table with no key at all is worse: the delete succeeds and leaves rows nothing can reach.
 
 ### 4.2 Partition the append-only tables
 
@@ -376,6 +381,18 @@ use-case → Postgres (source of truth) → domain event → worker consumer →
 Postgres stays authoritative. The analytics store is a derived read model that can be dropped and
 rebuilt by replaying the activity log. **Protect that property.** The moment it is the only copy of
 something, a rebuild becomes data loss.
+
+#### The two deletion rules that follow
+
+**Cascade from the tenant, `NO ACTION` between siblings.** `memberships.role_id` and
+`invitations.role_id` must stop a role that is in use from being deleted — but as `NO ACTION`, not
+`RESTRICT`. The difference is when the check runs: `NO ACTION` defers to the end of the statement,
+so `DELETE FROM organizations` may cascade the roles and the memberships together; `RESTRICT` is
+checked the moment the role row goes and would reject its own cascade.
+
+**The audit trail is the exception, deliberately.** `activity_log.actor_id` is not a foreign key at
+all: an audit row outlives the actor it names, and a cascade would erase the trail of a deleted
+account exactly when it matters. Retention removes those rows, not referential integrity.
 
 ### 4.4 Index every foreign key and every filtered column
 
