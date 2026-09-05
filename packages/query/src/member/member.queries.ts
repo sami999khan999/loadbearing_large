@@ -9,7 +9,7 @@ export class MemberQueries {
 
   public static list(client: ApiClient, params: PaginationQuery) {
     return queryOptions({
-      queryKey: QueryKeys.member.list(),
+      queryKey: QueryKeys.member.list(params),
       queryFn: () => client.member.list(params),
       // Changes when someone joins or is deactivated, and every path to that
       // invalidates `member.all()`. A minute is a backstop against a second tab.
@@ -21,7 +21,7 @@ export class MemberQueries {
   // at any moment, and a claimed row on screen lies about what it shows.
   public static invitations(client: ApiClient, params: PaginationQuery) {
     return queryOptions({
-      queryKey: QueryKeys.member.invitations(),
+      queryKey: QueryKeys.member.invitations(params),
       queryFn: () => client.member.listInvitations(params),
       staleTime: 10_000,
     });

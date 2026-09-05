@@ -1,5 +1,6 @@
 // Every key mirrors its procedure path, parameters last: `contract.task.list` becomes
-// `["task", "list", params]`. See docs/reference/mutations.md.
+// `["task", "list", params]`. A paged key that omits them serves page 1 for every page.
+// See docs/reference/mutations.md.
 export class QueryKeys {
   private constructor() {}
 
@@ -19,7 +20,7 @@ export class QueryKeys {
 
   public static readonly rbac = {
     all: () => ["rbac"] as const,
-    roles: () => ["rbac", "role", "list"] as const,
+    roles: (params: unknown) => ["rbac", "role", "list", params] as const,
     effective: (userId: string) => ["rbac", "effective", userId] as const,
   };
 
@@ -27,7 +28,7 @@ export class QueryKeys {
   // changes both lists at once.
   public static readonly member = {
     all: () => ["member"] as const,
-    list: () => ["member", "list"] as const,
-    invitations: () => ["member", "invitation", "list"] as const,
+    list: (params: unknown) => ["member", "list", params] as const,
+    invitations: (params: unknown) => ["member", "invitation", "list", params] as const,
   };
 }

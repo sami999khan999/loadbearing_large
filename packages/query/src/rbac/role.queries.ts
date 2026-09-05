@@ -11,7 +11,7 @@ export class RoleQueries {
     return queryOptions({
       // Mirrors the procedure path, so `QueryKeys.rbac.all()` invalidates this by prefix
       // along with everything else the slice caches.
-      queryKey: QueryKeys.rbac.roles(),
+      queryKey: QueryKeys.rbac.roles(params),
       queryFn: () => client.role.list(params),
       // A minute is a backstop against a second tab, not the mechanism: every edit goes
       // through a mutation that invalidates this key.
