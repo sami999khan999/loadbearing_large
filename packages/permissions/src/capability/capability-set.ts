@@ -2,6 +2,10 @@
 // which imports this folder back.
 import { type PermissionKey, PermissionRegistry } from "../registry/permission-registry.js";
 
+// Held by every resolved principal rather than granted through a role. Named once here
+// so the rule is a lookup against `PermissionMeta.module`, never a string prefix.
+const CORE_MODULE = "core";
+
 export interface ScopedSetDto {
   readonly grants: readonly PermissionKey[];
   readonly denies: readonly PermissionKey[];
@@ -90,7 +94,7 @@ export class CapabilitySet {
       const goal = this.goalSets.get(goalId);
       if (goal?.deniesPermission(permission)) return false;
       if (this.orgSet.deniesPermission(permission)) return false;
-      if (this.dto.wildcard) return true;
+      if (this.dto.wildcard || CapabilitySet.isCore(permission)) return true;
       return (
         (goal?.grantsPermission(permission) ?? false) || this.orgSet.grantsPermission(permission)
       );
@@ -151,7 +155,13 @@ export class CapabilitySet {
   // `can()` for an org-scoped permission — and the org half of a goal-scoped one.
   private allowsAtOrg(permission: PermissionKey): boolean {
     if (this.orgSet.deniesPermission(permission)) return false;
-    if (this.dto.wildcard) return true;
+    if (this.dto.wildcard || CapabilitySet.isCore(permission)) return true;
     return this.orgSet.grantsPermission(permission);
+  }
+
+  // The one exception to deny-by-default, and it is checked after denies like the
+  // wildcard is — see docs/reference/capability-set.md.
+  private static isCore(permission: PermissionKey): boolean {
+    return PermissionRegistry.instance.meta(permission)?.module === CORE_MODULE;
   }
 }

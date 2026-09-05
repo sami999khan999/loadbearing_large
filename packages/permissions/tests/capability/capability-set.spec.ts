@@ -20,6 +20,40 @@ describe("CapabilitySet", () => {
     expect(CapabilitySet.empty().can("rbac.role.read")).toBe(false);
   });
 
+  // The fifth rule. `core.activity.write` was asserted by one use-case and deliberately
+  // not by the others, so whether an audit row could be written depended on the caller.
+  it("holds every core permission without a grant", () => {
+    expect(CapabilitySet.empty().can("core.activity.write")).toBe(true);
+  });
+
+  // Deny still wins, because rule 2 is the one rule nothing is above.
+  it("lets an explicit deny beat the core exemption", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: ["core.activity.write"] },
+      goals: {},
+    });
+
+    expect(caps.can("core.activity.write")).toBe(false);
+  });
+
+  // `intersect()` unions denies and intersects grants, and the exemption is neither: it
+  // survives a narrowing that names it on no side.
+  it("survives a narrowing that names it on neither side", () => {
+    const wide = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+    const narrow = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["rbac.role.read"], denies: [] },
+      goals: {},
+    });
+
+    expect(wide.intersect(narrow).can("core.activity.write")).toBe(true);
+  });
+
   it("grants an org-scoped permission under the wildcard", () => {
     const caps = CapabilitySet.from({
       wildcard: true,

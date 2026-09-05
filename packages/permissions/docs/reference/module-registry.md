@@ -113,7 +113,7 @@ rbac: { permission: "rbac.role.read", route: "/settings/rolez" },
 
 ## `visibleModules()` is a filter, not a policy
 
-It delegates every decision to `CapabilitySet.can()`, so all four resolution rules apply unchanged —
+It delegates every decision to `CapabilitySet.can()`, so all five resolution rules apply unchanged —
 including a wildcard holder losing a module they have been explicitly denied:
 
 ```ts
