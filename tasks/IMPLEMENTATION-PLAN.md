@@ -370,19 +370,21 @@ line-by-line during the audit.
 - [x] `P2.19` done: 2026-09-05 · **open-redirect regex admits a backslash** `P2` `~15m`
   - **Files:** `apps/web/src/route/-redirect.ts:15` (`/^\/(?![\/\\])/` and reject `\`
     anywhere), `apps/web/tests/route/redirect.spec.ts` (add `/\evil.test`).
-- [ ] `P2.20` **`SessionGuard` navigates during render** `P3` `~30m`
+- [!] `P2.20` **`SessionGuard` navigates during render** `P3` `~30m`
   - **Goal:** `onUnauthenticated()` / `onForbidden()` are called in the render body.
   - **Done when:** moved into `useEffect`, or the component is deleted under `P5.15` (nothing
     consumes it). Decide in `P5.15` first. **Depends on:** `P5.15`.
+  - **Blocked by:** `P5.15`, by this item's own instruction. Fixing a component that phase
+    may delete is work either way, and the fix is thirty minutes once the decision exists.
   - **Files:** `packages/feature/src/auth/session.guard.tsx`.
-- [ ] `P2.21` **`Field` never associates hint and error with the input** `P2` `~1h`
+- [x] `P2.21` done: 2026-09-05 · **`Field` never associates hint and error with the input** `P2` `~1h`
   - **Goal:** `hintId`/`errorId` are computed and placed on the `<p>` elements, but no
     `aria-describedby` / `aria-invalid` is ever emitted; every form inherits this.
   - **Done when:** `Field` clones its child with both attributes (or `Input` accepts them);
     `ui/tests/field/field.spec.tsx` asserts the association.
   - **Files:** `packages/ui/src/field/field.tsx`, `packages/ui/src/input/input.tsx`.
   - **Docs:** `packages/ui/docs/index.md` (Field section).
-- [ ] `P2.22` **list components: loading, error, empty, current-session** `P2` `~2h`
+- [x] `P2.22` done: 2026-09-05 · **list components: loading, error, empty, current-session** `P2` `~2h`
   - **Goal:** `ActiveSessionList` lets you revoke the current session and renders the
     "current" badge detached from any row; `LinkedAccountList` shows the empty state while
     pending; `InvitationList` returns `null` while pending; `MemberList` has no error branch.
@@ -391,7 +393,7 @@ line-by-line during the audit.
     hidden. Specs for each (`P6.4`).
   - **Files:** `packages/feature/src/account/active-session.list.tsx`,
     `linked-account.list.tsx`, `packages/feature/src/member/{invitation-list,member-list}.tsx`.
-- [ ] `P2.23` **form state defects** `P2` `~2h`
+- [x] `P2.23` done: 2026-09-05 · **form state defects** `P2` `~2h`
   - **Goal:** `TwoFactorForm` cannot reach backup codes from OTP mode (`totp→backup`,
     everything else `→totp`); `ChangeEmailForm` never resets and allows a second submit;
     `TwoFactorPanel` keeps showing regenerated codes after a disable; `InviteMemberForm`'s
@@ -403,7 +405,7 @@ line-by-line during the audit.
 - [x] `P2.24` done: 2026-09-05 · **`AuthClient.signOut()` ignores the error** `P3` `~15m`
   - **Files:** `packages/api-client/src/auth/auth.client.ts:81-83` — throw through the
     normalizer so `onDone` does not clear a cache the server still honours.
-- [ ] `P2.25` **`font.css` references two missing `.woff2` files** `P3` `~30m`
+- [x] `P2.25` done: 2026-09-05 · **`font.css` references two missing `.woff2` files** `P3` `~30m`
   - **Files:** `packages/asset/src/font/font.css:6,14`. Either commit the variable fonts or
     remove the `@font-face` blocks; update `asset/docs/index.md:114-122` either way.
 
@@ -423,6 +425,25 @@ line-by-line during the audit.
 
 **Exit.** `pnpm test` green including `packages/infrastructure` against a live Postgres, with no
 unhandled errors beside a passing suite; every item's spec file named in its commit message.
+
+**Closed 2026-09-05**, with `P2.20` left `[!]` on `P5.15` by its own instruction. Every other item
+is done and every one ships a spec that fails before and passes after — each was run against the
+reverted source to prove it. 14/14 architecture assertions, `pnpm typecheck`, `pnpm lint` and
+`pnpm test` green, the infrastructure suite included, against a live Postgres 16 with pgvector.
+
+**Three things the work turned up that the audit had not.**
+
+1. `P2.26`, above: the archive's row stream kept paging a partition after the upload that was
+   reading it had failed. It surfaced as vitest's "1 error" beside a green suite — the shape of
+   report that gets read as noise, which is why `P2.6`'s exit line missed it.
+2. `commitlint.config.js` has no `observability` scope, so no commit could name a package that has
+   shipped since `09b`. Filed and fixed as `P8.23`, out of phase order, because it blocked `P2.7`.
+3. `docs/setup/08-permissions-package.md` listed five resolution rules under a heading that said
+   four. Corrected with `P2.14`'s sixth rather than filed.
+
+Two items grew a second half the audit had not named, and both are in the same commit as the first:
+`P2.24` (a refused sign-out now says so, rather than re-enabling a button in silence) and `P2.25`
+(the wrong `font.css` import path, which `P4.9` also names).
 
 ---
 
@@ -1022,4 +1043,5 @@ grep hits exactly `infrastructure` and `composition`; no repository method queri
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-05 | @sami | Created from a full audit of the tree at `6463935` |
+| 2026-09-05 | @sami | Phase 2 closed but for `P2.20`, blocked on `P5.15` by its own instruction. 25 of 26 items done, each with a spec proven to fail before the fix. `P2.26` filed and fixed from a defect the work surfaced; `P8.23` taken out of phase order because it blocked a commit. `T-030` and `T-026` closed in `TODO.md`, whose backlog is now empty |
 | 2026-09-05 | @sami | Phase 1 closed. §14 shipped and §5 widened; 524 blocks to 0, density 18.8 % → 13.0 %; eleven reference pages and two app `docs/` trees written. Phase 1's density target revised — see the note under its exit line. `P8.21` and `P8.22` filed from defects the work surfaced |
