@@ -327,7 +327,7 @@ line-by-line during the audit.
     is still returned; the claimer compares the column directly. Specs for both.
   - **Files:** `packages/application/src/member/invite-member.use-case.ts`,
     `packages/infrastructure/src/pg/repository/pg-invitation.claimer.ts`.
-- [ ] `P2.14` **`core.activity.write` is asserted inconsistently — closes `T-030`** `P2` `~1h`
+- [x] `P2.14` done: 2026-09-05 · **`core.activity.write` is asserted inconsistently — closes `T-030`** `P2` `~1h`
   - **Goal:** `IndexDocumentUseCase` asserts it; the member use-cases deliberately do not.
     Only `owner` holds it.
   - **Done when:** `CapabilitySet.can()` treats every `core.*` key as held by any resolved
@@ -356,18 +356,18 @@ line-by-line during the audit.
     `query/docs/index.md:118`; `query/tests/key/query-key.spec.ts` covers it.
   - **Files:** `packages/query/src/key/query-key.ts`, `src/member/member.queries.ts`,
     `src/rbac/role.queries.ts`.
-- [ ] `P2.17` **(verified) 403 renders as "please sign in"; 400 renders " is not valid"** `P2` `~30m`
+- [x] `P2.17` done: 2026-09-05 · **(verified) 403 renders as "please sign in"; 400 renders " is not valid"** `P2` `~30m`
   - **Files:** `packages/api-client/src/auth/better-auth-error-normalizer.ts:57-67` — 403 →
     `ForbiddenError`; 400 → a `ValidationError` with no field entries (or a `rule` without
     `field`), and `ErrorCopy.field` must not emit a leading space.
   - **Docs:** `api-client/docs/reference/better-auth.md`.
-- [ ] `P2.18` **(verified) `requireSession()` drops the destination** `P2` `~30m`
+- [x] `P2.18` done: 2026-09-05 · **(verified) `requireSession()` drops the destination** `P2` `~30m`
   - **Goal:** `throw redirect({ to: "/sign-in" })` without `search: { redirect }`, although
     `RedirectSearch` and `complete()` already honour it. Deep links land on `/`.
   - **Done when:** the guard passes the current `location.href` as `redirect`; a `RouteGuard`
     spec exists (none today).
   - **Files:** `apps/web/src/route/-guard.ts`, new `apps/web/tests/route/guard.spec.ts`.
-- [ ] `P2.19` **open-redirect regex admits a backslash** `P2` `~15m`
+- [x] `P2.19` done: 2026-09-05 · **open-redirect regex admits a backslash** `P2` `~15m`
   - **Files:** `apps/web/src/route/-redirect.ts:15` (`/^\/(?![\/\\])/` and reject `\`
     anywhere), `apps/web/tests/route/redirect.spec.ts` (add `/\evil.test`).
 - [ ] `P2.20` **`SessionGuard` navigates during render** `P3` `~30m`
@@ -400,7 +400,7 @@ line-by-line during the audit.
   - **Files:** `packages/feature/src/auth/two-factor.form.tsx:95-103`,
     `packages/feature/src/account/change-email.form.tsx`, `two-factor.disable.tsx:58-65`,
     `packages/feature/src/member/invite-member.form.tsx:34-38`.
-- [ ] `P2.24` **`AuthClient.signOut()` ignores the error** `P3` `~15m`
+- [x] `P2.24` done: 2026-09-05 · **`AuthClient.signOut()` ignores the error** `P3` `~15m`
   - **Files:** `packages/api-client/src/auth/auth.client.ts:81-83` — throw through the
     normalizer so `onDone` does not clear a cache the server still honours.
 - [ ] `P2.25` **`font.css` references two missing `.woff2` files** `P3` `~30m`
