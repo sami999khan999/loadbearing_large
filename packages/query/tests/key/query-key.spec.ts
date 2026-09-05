@@ -12,9 +12,8 @@ describe("QueryKeys", () => {
     expect(QueryKeys.member.invitations(page)).toEqual(["member", "invitation", "list", page]);
   });
 
-  // The regression guard. These three took no argument while the fetch beside them
-  // passed `params`, so every page of a list resolved to one cache entry and page 2
-  // rendered page 1.
+  // The regression guard: these three took no argument while the fetch beside them
+  // passed `params`, so page 2 rendered page 1 out of cache.
   it("gives two pages of one list two different keys", () => {
     expect(QueryKeys.member.list(page)).not.toEqual(QueryKeys.member.list(second));
     expect(QueryKeys.member.invitations(page)).not.toEqual(QueryKeys.member.invitations(second));

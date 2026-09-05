@@ -1,6 +1,5 @@
-// Every key mirrors its procedure path, parameters last: `contract.task.list` becomes
-// `["task", "list", params]`. A paged key that omits them serves page 1 for every page.
-// See docs/reference/mutations.md.
+// Every key mirrors its procedure path, parameters last — a paged key that omits them
+// serves page 1 for every page. See docs/reference/mutations.md.
 export class QueryKeys {
   private constructor() {}
 
