@@ -16,11 +16,8 @@ let logger: PgActivityLogger;
 // cannot separate them, and the bug that hides is invisible against spread-out data.
 const INSTANT = new Date("2031-03-01T00:00:00.000Z");
 
-// Where every read here starts. `since()` walks the whole table by design, so a walk from
-// the table start spends its batches on rows the seed and other specs wrote.
-//
-// Both halves, because the port takes both or neither: a checkpoint carrying only a
-// timestamp is treated as no checkpoint at all, which is the whole-table walk again.
+// Where every read starts, because `since()` walks the whole table by design. Both
+// halves: a checkpoint carrying only a timestamp is treated as none at all.
 const BEFORE = {
   lastOccurredAt: new Date(INSTANT.getTime() - 1),
   lastId: "00000000-0000-0000-0000-000000000000",
@@ -69,10 +66,8 @@ describe("PgActivityReplayReader", () => {
     const all = await mine();
     expect(all).toHaveLength(5);
 
-    // The projection's loop, at a batch size that forces three round trips. Started at
-    // `BEFORE` rather than at the table start: a walk from null is bounded by how many
-    // rows the seed happens to have written, which is what made this spec fail once the
-    // seeded organization existed.
+    // The projection's loop. From `BEFORE` rather than the table start: a walk from null
+    // is bounded by how many rows the seed happens to have written.
     const seen: string[] = [];
     let checkpoint: { lastOccurredAt: Date | null; lastId: string | null } = { ...BEFORE };
 

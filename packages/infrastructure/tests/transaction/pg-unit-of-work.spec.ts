@@ -52,10 +52,8 @@ describe("PgUnitOfWork", () => {
     expect(await findByAction(action)).toEqual([]);
   });
 
-  // The regression guard for a nested `run()` opening a second connection. It used to
-  // call `database.client.transaction` unconditionally, so the inner unit committed on a
-  // connection the outer one could not roll back — and the two could deadlock on rows
-  // the outer had locked.
+  // The regression guard for a nested `run()` opening a second connection: the inner unit
+  // committed on a connection the outer one could not roll back.
   it("joins the outer transaction rather than opening a second one", async () => {
     const actor = await actorFor();
     const uow = new PgUnitOfWork(database, scope);
