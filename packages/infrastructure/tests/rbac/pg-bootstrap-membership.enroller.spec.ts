@@ -80,9 +80,8 @@ describe("PgBootstrapMembershipEnroller", () => {
     expect(await membershipsOf(userId)).toEqual([{ organizationId: target.id }]);
   });
 
-  // The regression guard. The idempotency check read `where(userId)` with no tenant
-  // predicate, so a user holding a membership anywhere was handed *that* organization
-  // back — a cross-tenant answer from a lookup that looks like a retry guard.
+  // The regression guard: with no tenant predicate, a user holding a membership anywhere
+  // was handed *that* organization back.
   it("does not hand back an organization the user belongs to elsewhere", async () => {
     const other = await makeOrganization(`elsewhere-${Uuid.v7()}`);
     const target = await makeOrganization(`bootstrap-${Uuid.v7()}`);
