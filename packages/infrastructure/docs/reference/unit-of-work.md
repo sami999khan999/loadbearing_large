@@ -42,15 +42,40 @@ reading as though it is inside. Nothing fails; the audit row is simply not cover
 
 This is a wiring mistake that no type catches, so it is worth checking in `container.ts` by eye.
 
-## Nesting joins, it does not nest
+## Nesting joins, it does not open a second connection
 
-Postgres has no nested transactions. `storage.run` replaces the handle only for the duration of the
-inner callback, so a `run()` inside a `run()` sees the outer transaction and joins it. A use-case that
-calls another use-case therefore gets one atomic unit, which is what anyone reading `run()` expects.
+```ts
+public override async run<T>(work: () => Promise<T>): Promise<T> {
+  return this.db.transaction((tx) => this.scope.within(tx, work));
+}
 
-The consequence to know: **an inner failure rolls back the outer work too.** That is correct, and it is
-also why a use-case should not wrap an optional side effect in `run()` — put it after the commit, or
-publish an event.
+private get db(): DrizzleClient {
+  return this.scope.current() ?? this.database.client;
+}
+```
+
+**`this.db`, never `this.database.client`.** That accessor is the same one `BaseRepository` exposes:
+the open transaction handle when there is one, the pool otherwise. Inside an open transaction,
+drizzle's `tx.transaction()` issues a `SAVEPOINT` on the same connection, so a `run()` inside a
+`run()` is one atomic unit — which is what anyone reading `run()` expects.
+
+Off the pool it would be a **second connection and a second independent transaction**, and the
+symptoms are worth naming because none of them looks like a transaction bug:
+
+- the inner unit commits when the outer rolls back, so a failed operation leaves half its writes;
+- the two can deadlock on rows the outer has already locked, and the deadlock is timing-dependent;
+- every test that exercises one level passes.
+
+That was the shipped behaviour until it was fixed, and
+`tests/transaction/pg-unit-of-work.spec.ts` now pins both directions.
+
+The consequence to know: **an inner failure that propagates rolls back the outer work too.** That is
+correct, and it is why a use-case should not wrap an optional side effect in `run()` — put it after
+the commit, or publish an event. An inner failure the outer callback *catches* rolls back to the
+savepoint and leaves the outer work intact, which is the other assertion in that spec.
+
+`PgOrganizationFounder.found` reaches for the same accessor for the same reason: called inside the
+personal enroller's transaction it is a savepoint, called standalone it is a transaction of its own.
 
 ## What this makes true
 
@@ -66,8 +91,8 @@ the two-store atomicity problem the queue hop exists to avoid.
 
 ## The test is the only proof
 
-An assertion, not a code review. `tests/unit-of-work.spec.ts` runs both directions against the local
-stack:
+An assertion, not a code review. `tests/transaction/pg-unit-of-work.spec.ts` runs all four
+directions — commit, rollback, nesting, and the savepoint — against the local stack:
 
 ```ts
 await expect(

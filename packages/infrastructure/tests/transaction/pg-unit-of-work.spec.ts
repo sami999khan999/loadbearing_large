@@ -52,6 +52,58 @@ describe("PgUnitOfWork", () => {
     expect(await findByAction(action)).toEqual([]);
   });
 
+  // The regression guard for a nested `run()` opening a second connection. It used to
+  // call `database.client.transaction` unconditionally, so the inner unit committed on a
+  // connection the outer one could not roll back — and the two could deadlock on rows
+  // the outer had locked.
+  it("joins the outer transaction rather than opening a second one", async () => {
+    const actor = await actorFor();
+    const uow = new PgUnitOfWork(database, scope);
+    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const outer = `test.outer.${Uuid.v7()}`;
+    const inner = `test.inner.${Uuid.v7()}`;
+
+    await expect(
+      uow.run(async () => {
+        await logger.record(actor, outer, { probe: true });
+
+        await uow.run(async () => {
+          await logger.record(actor, inner, { probe: true });
+        });
+
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    // Both, or the inner write survived a rollback it was supposed to be part of.
+    expect(await findByAction(outer)).toEqual([]);
+    expect(await findByAction(inner)).toEqual([]);
+  });
+
+  // The savepoint has to be a savepoint rather than a no-op: an inner failure caught by
+  // the outer callback rolls back only the inner work.
+  it("rolls the inner work back to a savepoint without losing the outer", async () => {
+    const actor = await actorFor();
+    const uow = new PgUnitOfWork(database, scope);
+    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const outer = `test.kept.${Uuid.v7()}`;
+    const inner = `test.dropped.${Uuid.v7()}`;
+
+    await uow.run(async () => {
+      await logger.record(actor, outer, { probe: true });
+
+      await expect(
+        uow.run(async () => {
+          await logger.record(actor, inner, { probe: true });
+          throw new Error("inner");
+        }),
+      ).rejects.toThrow("inner");
+    });
+
+    expect(await findByAction(outer)).toHaveLength(1);
+    expect(await findByAction(inner)).toEqual([]);
+  });
+
   // A run() that rolled back on success too would pass the assertion above
   // perfectly, which is why both directions are asserted.
   it("commits when the callback returns", async () => {
