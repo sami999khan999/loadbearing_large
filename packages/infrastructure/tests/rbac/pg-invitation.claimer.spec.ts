@@ -53,7 +53,8 @@ const invite = async (
     organizationId: options.organizationId ?? home,
     email: email.toLowerCase(),
     roleId: memberRole,
-    token,
+    // What the row holds is the digest; the claimer hashes on the way in.
+    tokenHash: await Token.hash(token),
     invitedBy: Identifiers.userId.parse(inviter),
     expiresAt: new Date(Date.now() + (options.expiresIn ?? DAY)),
     ...(options.createdAt ? { createdAt: options.createdAt } : {}),
@@ -123,6 +124,24 @@ describe("PgInvitationClaimer", () => {
     expect(audit.some((row) => row.actorId === userId)).toBe(true);
   });
 
+  // The regression guard for a table that held bearer tokens in plaintext. The column
+  // holds a digest now, so a dump of `invitations` carries nothing anyone can accept with.
+  it("stores the digest and never the token", async () => {
+    const userId = await makeUser();
+    const { id, token } = await invite(emailOf(userId));
+
+    const [row] = await database.client
+      .select({ tokenHash: invitations.tokenHash })
+      .from(invitations)
+      .where(eq(invitations.id, id));
+
+    expect(row?.tokenHash).not.toBe(token);
+    expect(row?.tokenHash).toBe(await Token.hash(token));
+
+    // And the lookup still finds it, which is the half that would silently break.
+    expect(await withScope().claimer.claimByToken(userId, token)).toBe(home);
+  });
+
   // The security property. A token is a locator; the verified mailbox is the credential.
   it("refuses an address the invitation was not sent to, and leaves it pending", async () => {
     const userId = await makeUser();
@@ -187,7 +206,7 @@ describe("PgInvitationClaimer", () => {
       organizationId: other,
       email: emailOf(userId),
       roleId: otherMember?.id ?? memberRole,
-      token: Token.random(),
+      tokenHash: await Token.hash(Token.random()),
       invitedBy: Identifiers.userId.parse(inviter),
       expiresAt: new Date(Date.now() + DAY),
       createdAt: new Date(Date.now() - DAY),

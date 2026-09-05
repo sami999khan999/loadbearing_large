@@ -9,6 +9,7 @@ import {
   Principal,
   type SQL,
   sql,
+  Token,
   type UserId,
   Uuid,
 } from "../../import.js";
@@ -43,7 +44,11 @@ export class PgInvitationClaimer extends BaseRepository {
     super(database, scope);
   }
 
+  // Hashed on the way in, always: the column holds a digest, so a raw token matches
+  // nothing and a lookup written against it would silently find no invitation.
   public async preview(token: string): Promise<InvitationPreview | null> {
+    const tokenHash = await Token.hash(token);
+
     const [row] = await this.db
       .select({
         organizationName: organizations.name,
@@ -53,14 +58,14 @@ export class PgInvitationClaimer extends BaseRepository {
       })
       .from(invitations)
       .innerJoin(organizations, eq(organizations.id, invitations.organizationId))
-      .where(eq(invitations.token, token))
+      .where(eq(invitations.tokenHash, tokenHash))
       .limit(1);
 
     return row ?? null;
   }
 
-  public claimByToken(userId: UserId, token: string): Promise<OrganizationId | null> {
-    return this.claim(userId, eq(invitations.token, token));
+  public async claimByToken(userId: UserId, token: string): Promise<OrganizationId | null> {
+    return this.claim(userId, eq(invitations.tokenHash, await Token.hash(token)));
   }
 
   public claimPending(userId: UserId): Promise<OrganizationId | null> {

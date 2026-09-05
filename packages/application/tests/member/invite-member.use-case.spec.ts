@@ -1,5 +1,5 @@
 import { Identifiers, type InvitationId, type RoleId } from "@loadbearing/contracts";
-import { FixedClock } from "@loadbearing/core";
+import { FixedClock, Token } from "@loadbearing/core";
 import { ConflictError, ForbiddenError, NotFoundError } from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
@@ -211,26 +211,29 @@ describe("InviteMemberUseCase", () => {
       createdAt: NOW,
       expiresAt: new Date(NOW.getTime() + WEEK_MS),
     });
-    expect(saved?.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(saved?.tokenHash).toMatch(/^[0-9a-f]{64}$/);
 
     expect(h.activity.records).toEqual([
       { action: "member.invited", payload: { email: "b@example.test", roleId: ROLE } },
     ]);
 
-    // The mail carries the same token the row stores and the names the row joins to.
-    expect(h.mailer.sent).toEqual([
-      {
-        to: "b@example.test",
-        organizationName: "Acme",
-        inviterName: "Ada",
-        token: saved?.token,
-      },
-    ]);
+    // The mail carries the token; the row carries its digest. Neither is the other, and
+    // that pairing is the whole of the change that stopped storing bearer tokens.
+    const [mail] = h.mailer.sent;
+    expect(mail).toMatchObject({
+      to: "b@example.test",
+      organizationName: "Acme",
+      inviterName: "Ada",
+    });
+    expect(mail?.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(mail?.token).not.toBe(saved?.tokenHash);
+    expect(saved?.tokenHash).toBe(await Token.hash(mail?.token ?? ""));
 
     expect(result.email).toBe("b@example.test");
     expect(result.roleName).toBe("Member");
-    // The token never reaches the caller.
+    // Neither the token nor its digest reaches the caller.
     expect(Object.keys(result)).not.toContain("token");
+    expect(Object.keys(result)).not.toContain("tokenHash");
   });
 
   // A message saying "you have been invited" about a row that rolled back is a link

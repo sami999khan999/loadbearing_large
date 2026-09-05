@@ -34,7 +34,8 @@ const newInvitation = (email: string, overrides: { expiresAt?: Date } = {}) => (
   organizationId: acme,
   email,
   roleId: memberRole,
-  token: Token.random(),
+  // The digest. A repository is never handed a plaintext token to store.
+  tokenHash: Token.random(),
   invitedBy: ada,
   expiresAt: overrides.expiresAt ?? new Date(Date.now() + DAY),
   createdAt: new Date(),
@@ -94,6 +95,7 @@ describe("PgInvitationRepository", () => {
     // Never the token: the list is the administrator's view and the link is the
     // invited person's.
     expect(Object.keys(page.items[0] ?? {})).not.toContain("token");
+    expect(Object.keys(page.items[0] ?? {})).not.toContain("tokenHash");
   });
 
   // `invitations_email_uq` on (organization_id, email): a second invitation to the same
@@ -106,13 +108,13 @@ describe("PgInvitationRepository", () => {
     await repository().save(second);
 
     const rows = await database.client
-      .select({ id: invitations.id, token: invitations.token })
+      .select({ id: invitations.id, tokenHash: invitations.tokenHash })
       .from(invitations)
       .where(
         and(eq(invitations.organizationId, acme), eq(invitations.email, "again@example.test")),
       );
 
-    expect(rows).toEqual([{ id: second.id, token: second.token }]);
+    expect(rows).toEqual([{ id: second.id, tokenHash: second.tokenHash }]);
     expect(await repository().findById(acme, first.id)).toBeNull();
   });
 

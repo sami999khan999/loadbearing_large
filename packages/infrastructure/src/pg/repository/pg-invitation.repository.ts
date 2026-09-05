@@ -69,7 +69,7 @@ export class PgInvitationRepository extends BaseRepository implements Invitation
         set: {
           id: invitation.id,
           roleId: invitation.roleId,
-          token: invitation.token,
+          tokenHash: invitation.tokenHash,
           invitedBy: invitation.invitedBy,
           expiresAt: invitation.expiresAt,
           createdAt: invitation.createdAt,

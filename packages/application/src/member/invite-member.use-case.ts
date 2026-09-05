@@ -55,7 +55,10 @@ export class InviteMemberUseCase {
 
     const now = this.clock.now();
     const id = Uuid.v7() as InvitationId;
+    // The token goes to the mailbox and the digest goes to the table, so a dump of
+    // `invitations` holds nothing anyone can accept with.
     const token = Token.random();
+    const tokenHash = await Token.hash(token);
 
     await this.unitOfWork.run(async () => {
       await this.invitations.save({
@@ -63,7 +66,7 @@ export class InviteMemberUseCase {
         organizationId: actor.organizationId,
         email,
         roleId: input.roleId,
-        token,
+        tokenHash,
         invitedBy: actor.userId,
         expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
         createdAt: now,

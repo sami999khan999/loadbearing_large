@@ -1,13 +1,13 @@
 import type { InvitationId, OrganizationId, PaginationQuery, RoleId, UserId } from "../import.js";
 
-// The token appears here and nowhere else in this file: once stored it is read back only
-// by the claimer, never by anything that lists invitations.
+// The *digest* appears here and nowhere else in this file. The token itself never
+// reaches a repository: hashing is the use-case's job, and only the mail carries it.
 export interface NewInvitation {
   readonly id: InvitationId;
   readonly organizationId: OrganizationId;
   readonly email: string;
   readonly roleId: RoleId;
-  readonly token: string;
+  readonly tokenHash: string;
   readonly invitedBy: UserId;
   readonly expiresAt: Date;
   readonly createdAt: Date;

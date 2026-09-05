@@ -50,6 +50,20 @@
       "when": 1788604688509,
       "tag": "0006_slimy_mindworm",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788609005566,
+      "tag": "0007_flippant_bloodstorm",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788609031227,
+      "tag": "0008_dry_mattie_franklin",
+      "breakpoints": true
     }
   ]
 }

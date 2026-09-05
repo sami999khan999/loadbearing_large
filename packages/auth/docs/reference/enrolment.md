@@ -73,6 +73,11 @@ must never be relaxed:
 
 > The invitation's address equals the **verified** address on the user row.
 
+`invitations.token_hash` holds the **digest**, not the token. The plaintext exists in exactly two
+places — the mail that was sent, and the URL the recipient is holding — so a dump of the table
+carries nothing anyone can accept with. `PgInvitationClaimer` hashes on the way in, which is why a
+lookup written against a raw token would silently find no invitation rather than fail loudly.
+
 That is the whole security model. A token is only how the row is found; the mailbox the invitation
 was sent to is the credential. Without the verification check anyone could register as the invited
 email and walk into the tenant, which is why the check lives in `PgInvitationClaimer`'s query rather

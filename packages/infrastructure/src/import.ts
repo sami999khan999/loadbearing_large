@@ -82,7 +82,7 @@ export {
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
-export { type Clock, ServerOnly, Uuid } from "@loadbearing/core";
+export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";

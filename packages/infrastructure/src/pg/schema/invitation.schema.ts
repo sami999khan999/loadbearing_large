@@ -27,7 +27,8 @@ export const invitations = pgTable(
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id),
-    token: text("token").notNull(),
+    // The digest, never the token: a dump of this table holds no usable credential.
+    tokenHash: text("token_hash").notNull(),
     invitedBy: uuid("invited_by")
       .$type<UserId>()
       .notNull()
@@ -40,7 +41,7 @@ export const invitations = pgTable(
     uniqueIndex("invitations_email_uq").on(t.organizationId, t.email),
     // The landing page and the accept endpoint arrive holding a token and no tenant, so
     // this index cannot lead with `organization_id`.
-    uniqueIndex("invitations_token_uq").on(t.token),
+    uniqueIndex("invitations_token_uq").on(t.tokenHash),
     // `claimPending` finds a brand-new user's invitation by address alone.
     index("invitations_email_idx").on(t.email),
     index("invitations_role_idx").on(t.roleId),
