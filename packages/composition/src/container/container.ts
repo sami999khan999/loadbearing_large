@@ -223,7 +223,7 @@ export class Container {
     // The only catalog carrying the `email` namespace the worker's digests read. A
     // client bundle cannot reach it.
     this.content = new StaticContentSource(SERVER_CATALOG);
-    this.email = new SmtpEmailSender(config.email);
+    this.email = new SmtpEmailSender(config.email, this.logger);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
