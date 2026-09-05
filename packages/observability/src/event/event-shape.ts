@@ -64,6 +64,10 @@ export interface EventShape {
     readonly detail: string;
   };
 
+  // No recipient: the address is what the failing send was about, and a log line is
+  // not where it belongs. The reason is truncated at the call site.
+  readonly "email.send.failed": { readonly reason: string };
+
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "db.query.slow": { readonly operation: string; readonly durationMs: number };
   readonly "storage.upload.failed": { readonly bucket: string; readonly key: string };

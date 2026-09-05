@@ -31,6 +31,10 @@ export const coreEvents = {
   // or Loki failure echoes the offending row, and the wire is not where that belongs.
   "dependency.request.failed": { level: "warn" },
 
+  // The transport's own reason, which `UnavailableError("smtp")` deliberately does not
+  // carry. Without it a bounced invitation is a 200 and nothing else.
+  "email.send.failed": { level: "error" },
+
   "cache.entry.corrupt": { level: "warn" },
   "db.query.slow": { level: "warn" },
   "storage.upload.failed": { level: "error" },
