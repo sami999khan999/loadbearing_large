@@ -16,6 +16,16 @@ let logger: PgActivityLogger;
 // cannot separate them, and the bug that hides is invisible against spread-out data.
 const INSTANT = new Date("2031-03-01T00:00:00.000Z");
 
+// Where every read here starts. `since()` walks the whole table by design, so a walk from
+// the table start spends its batches on rows the seed and other specs wrote.
+//
+// Both halves, because the port takes both or neither: a checkpoint carrying only a
+// timestamp is treated as no checkpoint at all, which is the whole-table walk again.
+const BEFORE = {
+  lastOccurredAt: new Date(INSTANT.getTime() - 1),
+  lastId: "00000000-0000-0000-0000-000000000000",
+};
+
 beforeAll(async () => {
   database = openDatabase();
   const scope = new TransactionScope();
@@ -45,10 +55,10 @@ const write = async (count: number) => {
   return organizationId;
 };
 
-// Only this spec's rows. `since()` reads the whole table by design — a projection is
-// cross-tenant — so the assertions filter to the window rather than to a tenant.
+// Only this spec's rows: nothing else writes to 2031-03, and the partition is dropped
+// afterwards, so reading from `BEFORE` is exactly this window.
 const mine = async () =>
-  (await reader.since({ lastOccurredAt: null, lastId: null }, 1_000)).filter(
+  (await reader.since(BEFORE, 1_000)).filter(
     (record) => record.occurredAt.getTime() === INSTANT.getTime(),
   );
 
@@ -59,9 +69,12 @@ describe("PgActivityReplayReader", () => {
     const all = await mine();
     expect(all).toHaveLength(5);
 
-    // The projection's loop, at a batch size that forces four round trips.
+    // The projection's loop, at a batch size that forces three round trips. Started at
+    // `BEFORE` rather than at the table start: a walk from null is bounded by how many
+    // rows the seed happens to have written, which is what made this spec fail once the
+    // seeded organization existed.
     const seen: string[] = [];
-    let checkpoint = { lastOccurredAt: null as Date | null, lastId: null as string | null };
+    let checkpoint: { lastOccurredAt: Date | null; lastId: string | null } = { ...BEFORE };
 
     for (let i = 0; i < 10; i++) {
       const batch = await reader.since(checkpoint, 2);
