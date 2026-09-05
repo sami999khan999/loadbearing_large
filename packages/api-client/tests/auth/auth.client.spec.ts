@@ -56,6 +56,22 @@ describe("AuthClient.signIn", () => {
   });
 });
 
+describe("AuthClient.signOut", () => {
+  it("resolves when the server accepts it", async () => {
+    const { auth } = clientOver([{ status: 200, body: { success: true } }]);
+
+    await expect(auth.signOut()).resolves.toBeUndefined();
+  });
+
+  // The regression guard: the result was discarded, so `onDone` cleared the cache over a
+  // session the server still honours — a signed-out shell in front of a signed-in user.
+  it("throws when the server refuses", async () => {
+    const { auth } = clientOver([{ status: 401, body: { code: "INVALID_SESSION" } }]);
+
+    await expect(auth.signOut()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+});
+
 describe("AuthClient — the endpoints anyone can reach", () => {
   // Resolves on a rejection too: a failure a visitor can tell apart from a success is an
   // oracle for which addresses are registered.

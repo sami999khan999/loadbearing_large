@@ -68,14 +68,19 @@ English prose, and matching on it breaks on their next release and in every loca
 | Status | Becomes |
 |---|---|
 | 429 | `RateLimitedError("auth")` |
-| 400 | `ValidationError` with no field entry |
-| 401, 403 | `UnauthorizedError("rejected")` |
+| 400 | `ValidationError` with no violations at all |
+| 401 | `UnauthorizedError("rejected")` |
+| 403 | `ForbiddenError("rejected")` |
 | anything else | `InternalError()` |
 
-**403 sharing the 401 arm is a known defect** (`P2.17` in `tasks/IMPLEMENTATION-PLAN.md`): it
-renders "please sign in" to someone who is already signed in and merely lacks the permission. The
-400 arm has the matching problem — a `ValidationError` with an empty `field` renders as a leading
-space in front of the rule copy.
+**401 and 403 are different answers and get different arms.** A 401 is "we do not know who you
+are", whose copy is "please sign in"; a 403 is a signed-in user who may not, and telling them to
+sign in is advice that cannot help and reads as a broken session. They shared an arm until `P2.17`.
+
+**The 400 arm carries no violation, because it has no field to name.** It used to build one with an
+empty `field`, and every `error.field.*` template opens with `{field}` — so the sentence rendered as
+" is not valid.", opening on a space. `ErrorCopy.field` now falls back to the generic sentence for
+any violation naming no field, so a second producer cannot reintroduce it.
 
 ## Method-level decisions worth knowing
 
@@ -90,6 +95,7 @@ space in front of the rule copy.
 | `regenerateBackupCodes` | Invalidating every previous code is the point of the flow, not a side effect |
 | `unlinkAccount` | The caller decides whether it is allowed — only it can see the whole list. Better Auth's `allowUnlinkingAll` stays at its default `false` as the backstop |
 | `revokeOtherSessions` | Every session but this one, so it is usable from a settings page. `signOut` is the other button |
+| `signOut` | Throws like every other write. `useSignOut` clears the whole cache in `onSuccess`, and clearing it over a session the server still honours leaves a signed-out shell in front of a signed-in user |
 
 `listAccounts` and `listSessions` serialise dates with `toISOString()`. A `Date` dehydrates to a
 string and rehydrates as one through the TanStack Query cache, so the type would be a lie on the

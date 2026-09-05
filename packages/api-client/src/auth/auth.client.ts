@@ -60,8 +60,11 @@ export class AuthClient {
     if (error) throw BetterAuthErrorNormalizer.normalize(error);
   }
 
+  // Throws like every other write here: `onDone` clears the cache, and clearing it after
+  // a sign-out the server refused leaves a signed-in session behind a signed-out shell.
   public async signOut(): Promise<void> {
-    await this.client.signOut();
+    const { error } = await this.client.signOut();
+    if (error) throw BetterAuthErrorNormalizer.normalize(error);
   }
 
   // Deliberately resolves on a rejection too: an error distinguishable from success is an
