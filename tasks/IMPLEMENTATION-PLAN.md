@@ -217,7 +217,7 @@ line-by-line during the audit.
 
 ### Server
 
-- [ ] `P2.1` **(verified) `PgUnitOfWork` opens a second transaction on nested `run()`** `P0` `~1h`
+- [x] `P2.1` done: 2026-09-05 · **(verified) `PgUnitOfWork` opens a second transaction on nested `run()`** `P0` `~1h`
   - **Goal:** `run()` always calls `this.database.client.transaction` (the pool), never the
     scope's current handle, so a `run()` inside a `run()` is a second connection: the inner unit
     commits when the outer rolls back, and the two can deadlock on rows the outer locked.
@@ -228,7 +228,7 @@ line-by-line during the audit.
   - **Docs:** `packages/infrastructure/docs/reference/unit-of-work.md` — the section
     "Nesting joins, it does not nest" asserts the behaviour the code does not have; also fix
     the spec path it names.
-- [ ] `P2.2` **(verified) `permission_overrides_uq` cannot enforce uniqueness** `P0` `~2h`
+- [x] `P2.2` done: 2026-09-05 · **(verified) `permission_overrides_uq` cannot enforce uniqueness** `P0` `~2h`
   - **Goal:** `UNIQUE (user_id, goal_id, permission)` with a nullable `goal_id` accepts
     unlimited duplicate org-scope rows, so a `grant` and a `deny` for one `(user, permission)`
     coexist and `PgCapabilityRepository.resolveFor` decides authorization by row order. The
@@ -242,7 +242,7 @@ line-by-line during the audit.
   - **Docs:** `docs/opinions/vocabulary.md` and `docs/ai/rules/vocabulary.md` (exemption list:
     `organizations_slug_uq`, `api_keys_hash_uq`, `invitations_token_uq`, and the auth tables);
     `invitation.schema.ts` comment "second unique index" is wrong — delete it.
-- [ ] `P2.3` **(verified) `PgVectorStore.search` cannot use the HNSW index** `P1` `~1h`
+- [x] `P2.3` done: 2026-09-05 · **(verified) `PgVectorStore.search` cannot use the HNSW index** `P1` `~1h`
   - **Goal:** the query orders by `desc(1 - cosineDistance(...))`; pgvector serves the index
     only for `ORDER BY embedding <=> $1 ASC`. Every search is a tenant-wide sequential scan.
   - **Done when:** ordering is `asc(cosineDistance(...))` and the floor is
@@ -250,14 +250,14 @@ line-by-line during the audit.
     scan.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-vector.store.ts`.
   - **Docs:** new `infrastructure/docs/reference/pgvector.md` (from `P1.8`).
-- [ ] `P2.4` **(verified) bootstrap enroller returns another tenant's organization** `P1` `~30m`
+- [x] `P2.4` done: 2026-09-05 · **(verified) bootstrap enroller returns another tenant's organization** `P1` `~30m`
   - **Goal:** the idempotency check is `where(eq(memberships.userId, userId))` with no
     organization filter; a user already in any organization is handed that one back.
   - **Done when:** the check is scoped by `organizationId`; spec added to
     `tests/rbac/pg-bootstrap-membership.enroller.spec.ts`.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-bootstrap-membership.enroller.ts`.
   - **Docs:** `packages/auth/docs/reference/enrolment.md`.
-- [ ] `P2.5` **short embedding response wipes the corpus** `P1` `~1h`
+- [x] `P2.5` done: 2026-09-05 · **short embedding response wipes the corpus** `P1` `~1h`
   - **Goal:** `embedding: vectors[index] ?? []` — a provider returning fewer vectors than texts
     inserts empty vectors; `vector(1536)` rejects them after `deleteBySource` has run, so a
     re-index deletes and writes nothing back.
@@ -266,7 +266,7 @@ line-by-line during the audit.
     (the use-case has none today — see `P6.2`).
   - **Files:** `packages/infrastructure/src/openai/openai.embedding-provider.ts`,
     `packages/application/src/ai/index-document.use-case.ts`.
-- [ ] `P2.6` **activity archive counts before detach and never re-attaches** `P1` `~2h`
+- [x] `P2.6` done: 2026-09-05 · **activity archive counts before detach and never re-attaches** `P1` `~2h`
   - **Goal:** `countOf(name)` runs before `DETACH PARTITION`, so rows inserted in between are
     streamed to S3 but missing from `activity_archive.row_count` (permanent drift). A failed
     `putStream` or insert leaves the partition detached and invisible.
@@ -275,7 +275,7 @@ line-by-line during the audit.
     exists (none today) and covers both.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-activity-archive.gateway.ts`.
   - **Docs:** new `infrastructure/docs/reference/activity-archive.md`.
-- [ ] `P2.7` **vendor error bodies reach the wire** `P2` `~30m`
+- [x] `P2.7` done: 2026-09-05 · **vendor error bodies reach the wire** `P2` `~30m`
   - **Goal:** `new UnavailableError(\`ClickHouse request failed (...): ${detail}\`)` puts the
     response body (which echoes the offending row on a failed INSERT) into `ErrorContext`,
     which `AppError.toJSON()` serialises to the client. The `status` parameter is discarded.
@@ -283,7 +283,7 @@ line-by-line during the audit.
     `("loki", status)`, body logged at `warn`.
   - **Files:** `packages/infrastructure/src/clickhouse/clickhouse.connection.ts:106`,
     `packages/infrastructure/src/loki/loki.log-reader.ts:59`.
-- [ ] `P2.8` **invitation tokens stored in plaintext** `P1` `~2h`
+- [x] `P2.8` done: 2026-09-05 · **invitation tokens stored in plaintext** `P1` `~2h`
   - **Goal:** `invitations.token` is the raw bearer locator; `api_keys.token_hash` two files
     over stores a digest so a dump holds no credential.
   - **Done when:** column becomes `token_hash`, `Token.random()` output is hashed with the
@@ -294,16 +294,16 @@ line-by-line during the audit.
     `pg-invitation.claimer.ts`, `pg-invitation.repository.ts`,
     `packages/application/src/member/invite-member.use-case.ts`.
   - **Docs:** `packages/auth/docs/reference/enrolment.md`.
-- [ ] `P2.9` **`ValidationError.paramsFor` drops `max`** `P3` `~15m`
+- [x] `P2.9` done: 2026-09-05 · **`ValidationError.paramsFor` drops `max`** `P3` `~15m`
   - **Files:** `packages/errors/src/error/validation.error.ts:47-51`; spec in
     `tests/error/validation.error.spec.ts`.
-- [ ] `P2.10` **`RedisCacheStore.get` swallows corruption silently** `P3` `~30m`
+- [x] `P2.10` done: 2026-09-05 · **`RedisCacheStore.get` swallows corruption silently** `P3` `~30m`
   - **Goal:** deletes the key and returns null; `cache.entry.corrupt` is in `EVENT_CATALOG`
     with `{ key }` and is never emitted anywhere.
   - **Done when:** the store takes a `Logger` (or returns a `Result`) and the event is emitted.
   - **Files:** `packages/infrastructure/src/redis/redis.cache-store.ts`,
     `packages/composition/src/container/container.ts`.
-- [ ] `P2.11` **FK and cascade inconsistencies** `P2` `~1h`
+- [x] `P2.11` done: 2026-09-05 · **FK and cascade inconsistencies** `P2` `~1h`
   - **Goal:** `document_chunks.organization_id` has no FK; `invitations.role_id` has no
     `ON DELETE`; `roles`, `memberships`, `role_permissions`, `goal_members`,
     `permission_overrides` → `organizations` are `NO ACTION` while `api_keys`, `sessions`,
@@ -313,13 +313,13 @@ line-by-line during the audit.
     missing FK; a spec deletes an organization and asserts nothing is left.
   - **Files:** `packages/infrastructure/src/pg/schema/{vector,invitation,rbac}.schema.ts`.
   - **Docs:** `docs/opinions/data-and-scale.md` (deletion semantics).
-- [ ] `P2.12` **no index for the projection reader** `P1` `~30m`
+- [x] `P2.12` done: 2026-09-05 · **no index for the projection reader** `P1` `~30m`
   - **Goal:** `PgActivityReplayReader.since` and `dailyCounts` order by `(occurred_at, id)`
     across all tenants; the only index is `(organization_id, occurred_at DESC)`, so every
     projection batch scans every partition.
   - **Done when:** migration adds `activity_log (occurred_at, id)`; spec asserts an index scan.
   - **Files:** `packages/infrastructure/src/pg/schema/activity.schema.ts`.
-- [ ] `P2.13` **invite: mail failure after commit; `lower(email)` defeats the index** `P2` `~1h`
+- [x] `P2.13` done: 2026-09-05 · **invite: mail failure after commit; `lower(email)` defeats the index** `P2` `~1h`
   - **Goal:** `InviteMemberUseCase` commits, then `mailer.send` throws → 5xx with a live
     invitation. `PgInvitationClaimer.claim` compares `lower(invitations.email)` although the
     column is stored lowercased, so `invitations_email_idx` is unusable.
@@ -340,7 +340,7 @@ line-by-line during the audit.
 
 ### Client and web
 
-- [ ] `P2.15` **(verified) two-factor status never reaches the security page** `P1` `~1h`
+- [x] `P2.15` done: 2026-09-05 · **(verified) two-factor status never reaches the security page** `P1` `~1h`
   - **Goal:** `SessionUser` carries `id, email, name, activeOrganizationId, organizations`;
     `settings/security.tsx` reads `user.twoFactorEnabled` through a structural cast, so it is
     always `false`: an enrolled user sees the wizard and `TwoFactorPanel` (disable /
@@ -349,7 +349,7 @@ line-by-line during the audit.
     is deleted, and a route spec renders the panel for an enrolled user.
   - **Files:** `apps/web/src/store/session.store.ts`, `apps/web/src/server/session.fn.ts`,
     `apps/web/src/route/(app)/_authenticated/settings/security.tsx`.
-- [ ] `P2.16` **(verified) list query keys ignore their params** `P1` `~30m`
+- [x] `P2.16` done: 2026-09-05 · **(verified) list query keys ignore their params** `P1` `~30m`
   - **Goal:** `QueryKeys.member.list()`, `.invitations()`, `.rbac.roles()` take no argument
     while the fetch passes `params`; page 2 reads page 1 from cache.
   - **Done when:** keys take `params` last (`["member", "list", params]`), per
@@ -407,8 +407,22 @@ line-by-line during the audit.
   - **Files:** `packages/asset/src/font/font.css:6,14`. Either commit the variable fonts or
     remove the `@font-face` blocks; update `asset/docs/index.md:114-122` either way.
 
-**Exit.** `pnpm test` green including `packages/infrastructure` against a live Postgres;
-every item's spec file named in its commit message.
+### Found while executing
+
+- [x] `P2.26` done: 2026-09-05 · **the archive's row stream keeps querying a partition nobody is uploading** `P2` `~1h`
+  - **Goal:** `archive()` hands `gzip(this.rows(name))` to `putStream`, and `Readable.from` starts
+    pulling as soon as it is piped. A `putStream` that rejects leaves that generator paging the
+    detached partition with no consumer: in production a full scan of the month nothing reads, and
+    in `tests/analytics/pg-activity-archive.gateway.spec.ts` an unhandled rejection once the
+    partition is dropped — `pnpm test` reports "1 error" beside a green suite, which is what
+    P2.6's exit line missed.
+  - **Done when:** the source is destroyed and awaited before `reattach`, so no query is in flight
+    when the caller sees the failure; the spec's unhandled error is gone.
+  - **Files:** `packages/infrastructure/src/pg/repository/pg-activity-archive.gateway.ts`.
+  - **Docs:** `infrastructure/docs/reference/activity-archive.md`.
+
+**Exit.** `pnpm test` green including `packages/infrastructure` against a live Postgres, with no
+unhandled errors beside a passing suite; every item's spec file named in its commit message.
 
 ---
 
@@ -762,10 +776,10 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
   exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI).
-- [ ] `P5.14` **Event codes never emitted** — nine of twenty. Emit the ones with an obvious
-  site: `queue.job.failed` (every consumer's `failed` handler — today they call
-  `logger.failure`), `embedding.request.failed` (provider), `cache.entry.corrupt` (`P2.10`),
-  `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
+- [ ] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
+  been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
+  consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
+  (provider), `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
   (consumer catch). **Delete** `queue.sweep.completed`, `db.query.slow`,
   `storage.upload.failed` from `core.events.ts` and `event-shape.ts`.
   **Docs:** `observability/docs/reference/catalog.md`.
@@ -974,6 +988,11 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **Goal:** the glob is `*.{js,jsx,ts,tsx,json,jsonc,css}`. Every script in `tooling/scripts/` is
     `.mjs`, so none is formatted on commit — `pnpm lint` catches them, the hook does not.
   - **Done when:** `mjs` and `cjs` are in the glob.
+- [x] `P8.23` done: 2026-09-05 · **`scope-enum` has no `observability`** `P2` `~5m`
+  - **Goal:** the package has shipped since `09b` and no commit can name it; the enum still
+    carries `db`, which `P4.8` retires. Taken out of phase order because it blocked `P2.7`.
+  - **Done when:** `observability` is in `commitlint.config.js`. `db` leaves with `P4.8`, and
+    `docs/setup/26:81-85` is corrected by `P4.19`.
 
 **Exit.** `pnpm check:architecture` 17/17 with no skip; CI green with the MinIO service and
 both app builds; `infra:up` reports every container healthy on Linux and Windows.
