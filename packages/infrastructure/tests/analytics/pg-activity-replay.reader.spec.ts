@@ -1,13 +1,26 @@
 import { Uuid } from "@loadbearing/core";
+import type { Logger } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { openDatabase, seedOrganizationId } from "../support/database.js";
+import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
 
+// Captures the statement the reader issued, so the EXPLAIN below runs the query under
+// test rather than a copy of it.
+class RecordingLogger implements Logger {
+  public last: { query: string; params: unknown[] } | null = null;
+
+  public logQuery(query: string, params: unknown[]): void {
+    this.last = { query, params };
+  }
+}
+
+const recorder = new RecordingLogger();
 let database: Database;
 let reader: PgActivityReplayReader;
 let logger: PgActivityLogger;
@@ -24,7 +37,7 @@ const BEFORE = {
 };
 
 beforeAll(async () => {
-  database = openDatabase();
+  database = openDatabase(recorder);
   const scope = new TransactionScope();
   reader = new PgActivityReplayReader(database, scope);
   logger = new PgActivityLogger(database, scope, { now: () => INSTANT });
@@ -122,6 +135,31 @@ describe("PgActivityReplayReader", () => {
     // A number, not a string: `count(*)` comes back as text from `pg`, and a string here
     // makes the reconciliation diff every day forever.
     expect(typeof day?.rows).toBe("number");
+  });
+
+  // `since()` is cross-tenant by design, so `activity_log_org_time_idx` cannot serve it:
+  // without a `(occurred_at, id)` index every batch scans every partition.
+  it("walks on an index rather than scanning every partition", async () => {
+    await reader.since(BEFORE, 2);
+
+    const issued = recorder.last;
+    if (!issued) throw new Error("expected the walk above to have been logged");
+
+    const pool = new Pool({ connectionString: DATABASE_URL });
+    const client = await pool.connect();
+
+    try {
+      await client.query("begin");
+      await client.query("set local enable_seqscan = off");
+      const explained = await client.query(`explain ${issued.query}`, issued.params);
+      await client.query("rollback");
+
+      const plan = explained.rows.map((row) => Object.values(row).join(" ")).join(" | ");
+      expect(plan).toContain("occurred_at_id_idx");
+    } finally {
+      client.release();
+      await pool.end();
+    }
   });
 
   it("returns nothing for a window with no rows", async () => {

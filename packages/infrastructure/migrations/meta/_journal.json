@@ -43,6 +43,13 @@
       "when": 1788604203609,
       "tag": "0005_giant_famine",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788604688509,
+      "tag": "0006_slimy_mindworm",
+      "breakpoints": true
     }
   ]
 }

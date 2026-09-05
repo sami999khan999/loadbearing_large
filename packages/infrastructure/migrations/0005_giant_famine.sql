@@ -58,8 +58,4 @@ WHERE a."organization_id" = b."organization_id"
   AND a."permission" = b."permission"
   AND a."ctid" > b."ctid";--> statement-breakpoint
 
-CREATE UNIQUE INDEX "role_permissions_uq" ON "role_permissions" USING btree ("organization_id","role_id","permission");--> statement-breakpoint
-
--- Redundant now that `role_permissions_uq` leads with `organization_id`: a btree index
--- serves any leading-column prefix, so this one only costs write throughput.
-DROP INDEX "role_permissions_organization_idx";
+CREATE UNIQUE INDEX "role_permissions_uq" ON "role_permissions" USING btree ("organization_id","role_id","permission");

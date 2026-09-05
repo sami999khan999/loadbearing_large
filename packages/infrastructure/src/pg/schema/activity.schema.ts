@@ -28,5 +28,8 @@ export const activityLog = pgTable(
     // time-ordered, so the key and the partition column still increase together.
     primaryKey({ columns: [t.id, t.occurredAt] }),
     index("activity_log_org_time_idx").on(t.organizationId, t.occurredAt.desc()),
+    // The projection's keyset, which is cross-tenant by design: without it every batch
+    // scans every partition. Ascending, matching `since()`'s ORDER BY exactly.
+    index("activity_log_replay_idx").on(t.occurredAt, t.id),
   ],
 );
