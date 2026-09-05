@@ -1,4 +1,4 @@
-import { UnavailableError } from "../import.js";
+import { type Logger, UnavailableError } from "../import.js";
 
 export interface ClickHouseConfig {
   // The HTTP interface, not the native port. `http://clickhouse:8123` in compose,
@@ -16,7 +16,10 @@ export interface ClickHouseConfig {
 export class ClickHouseConnection {
   private static readonly DEFAULT_TIMEOUT_MS = 30_000;
 
-  public constructor(private readonly config: ClickHouseConfig) {}
+  public constructor(
+    private readonly config: ClickHouseConfig,
+    private readonly logger?: Logger,
+  ) {}
 
   // `JSONEachRow` rather than `JSON`: one object per line, so a large result streams.
   public async query<T>(sql: string, params: Readonly<Record<string, unknown>> = {}): Promise<T[]> {
@@ -87,10 +90,15 @@ export class ClickHouseConnection {
     });
 
     if (!response.ok) {
-      // ClickHouse puts the whole error in the body and a bare 500 in the status.
-      // Truncated: a failed INSERT echoes the offending row.
+      // ClickHouse puts the whole error in the body and a bare 500 in the status, and a
+      // failed INSERT echoes the offending row — so the body is logged, never thrown.
       const detail = (await response.text()).slice(0, 500);
-      throw new UnavailableError(`ClickHouse request failed (${response.status}): ${detail}`);
+      this.logger?.emit("dependency.request.failed", {
+        dependency: "clickhouse",
+        status: response.status,
+        detail,
+      });
+      throw new UnavailableError("clickhouse", response.status);
     }
 
     return response.text();

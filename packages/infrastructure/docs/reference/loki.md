@@ -89,6 +89,11 @@ what an operator opening a log view wanted.
 format; they are still diagnostics. The four labels come off the stream, everything else comes out of
 the parsed body, and an unparseable body yields an empty `fields` rather than an exception.
 
+**A failed query logs Loki's body and throws only the status.** The body echoes the LogQL Loki
+rejected, which is a selector over another tenant's labels; it goes to `dependency.request.failed` at
+**warn**, truncated at 300 characters, and the caller gets `UnavailableError("loki", status)`. The
+error context reaches the client, so nothing vendor-shaped may ride on it.
+
 ---
 
 ## The tenant header

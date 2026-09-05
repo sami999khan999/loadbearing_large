@@ -1,4 +1,4 @@
-import { drizzle, type Logger, type NodePgDatabase, Pool } from "../../import.js";
+import { type DrizzleLogger, drizzle, type NodePgDatabase, Pool } from "../../import.js";
 import * as schema from "../schema/index.js";
 
 export interface DatabaseConfig {
@@ -7,7 +7,7 @@ export interface DatabaseConfig {
   readonly statementTimeoutMs?: number;
   // Every statement, as drizzle issues it. This is the seam the query-count
   // assertions need — "three queries" is a claim that decays silently without one.
-  readonly logger?: Logger;
+  readonly logger?: DrizzleLogger;
 }
 
 // The handle every repository queries through, pool or open transaction alike.

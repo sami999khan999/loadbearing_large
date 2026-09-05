@@ -947,6 +947,9 @@ importers:
       '@loadbearing/errors':
         specifier: workspace:*
         version: link:../errors
+      '@loadbearing/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@loadbearing/permissions':
         specifier: workspace:*
         version: link:../permissions

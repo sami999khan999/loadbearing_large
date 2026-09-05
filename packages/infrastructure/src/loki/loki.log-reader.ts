@@ -1,4 +1,10 @@
-import { type LogEntry, type LogQuery, type LogReader, UnavailableError } from "../import.js";
+import {
+  type LogEntry,
+  type Logger,
+  type LogQuery,
+  type LogReader,
+  UnavailableError,
+} from "../import.js";
 
 export interface LokiConfig {
   // The query API, not the push endpoint: Alloy pushes by tailing stdout, which is what
@@ -27,7 +33,10 @@ export class LokiLogReader implements LogReader {
   // Loki's own ceiling is 5000. Asking for more is a 400, not a truncation.
   private static readonly MAX_LIMIT = 5_000;
 
-  public constructor(private readonly config: LokiConfig) {}
+  public constructor(
+    private readonly config: LokiConfig,
+    private readonly logger?: Logger,
+  ) {}
 
   public async query(query: LogQuery): Promise<readonly LogEntry[]> {
     const url = new URL("/loki/api/v1/query_range", this.config.url);
@@ -47,8 +56,15 @@ export class LokiLogReader implements LogReader {
     });
 
     if (!response.ok) {
+      // The body carries the LogQL Loki rejected, which is a query over another
+      // tenant's labels. It goes to the log, and the caller gets the status.
       const detail = (await response.text()).slice(0, 300);
-      throw new UnavailableError(`Loki query failed (${response.status}): ${detail}`);
+      this.logger?.emit("dependency.request.failed", {
+        dependency: "loki",
+        status: response.status,
+        detail,
+      });
+      throw new UnavailableError("loki", response.status);
     }
 
     const body = (await response.json()) as LokiResponse;

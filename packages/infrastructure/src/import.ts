@@ -87,6 +87,9 @@ export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
 
+// ── @loadbearing/observability ───────────────────────────────────────────────
+export { Logger } from "@loadbearing/observability";
+
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export {
   CapabilitySet,
@@ -110,7 +113,7 @@ export {
   gte,
   inArray,
   isNull,
-  type Logger,
+  type Logger as DrizzleLogger,
   lt,
   or,
   type SQL,

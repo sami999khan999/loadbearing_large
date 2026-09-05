@@ -49,6 +49,7 @@
     "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
     "@loadbearing/errors": "workspace:*",
+    "@loadbearing/observability": "workspace:*",
     "@loadbearing/permissions": "workspace:*",
     "bullmq": "catalog:",
     "drizzle-orm": "catalog:",
