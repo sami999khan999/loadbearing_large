@@ -7,9 +7,8 @@ export interface ApiClientProviderProps {
   readonly children: ReactNode;
 }
 
-// Context rather than a module singleton, for the same reason `createQueryClient` is a
-// factory: the SSR instance and the browser instance are different objects with
-// different transports.
+// Context rather than a module singleton: the SSR instance and the browser instance are
+// different objects with different transports.
 export function ApiClientProvider({ client, children }: ApiClientProviderProps): ReactNode {
   return <ApiClientContext.Provider value={client}>{children}</ApiClientContext.Provider>;
 }

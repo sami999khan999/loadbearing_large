@@ -4,9 +4,8 @@ import { useAppQuery } from "../../src/runtime/use-app-query.js";
 
 describe("useAppQuery", () => {
   it("is a function taking the object queryOptions produces", () => {
-    // A pass-through by design. It exists so `feature` can read through a defined query
-    // without naming the cache library — one package imports `@tanstack/*`, and this is
-    // what keeps that true once feature slices arrive.
+    // A pass-through by design, so `feature` can read through a defined query without
+    // naming the cache library.
     expect(typeof useAppQuery).toBe("function");
     expect(useAppQuery.length).toBe(1);
   });

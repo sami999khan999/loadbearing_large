@@ -1,10 +1,5 @@
-// Everything this package takes from outside itself, in one place. No relative
-// re-exports live here — that is what keeps it cycle-free.
-//
-// This is the only `import.ts` in the repository allowed to name the cache library.
-// The router package from the same vendor must never appear on it: routing lives in
-// `apps/web`, which is what lets the Tauri shell reuse everything above this package.
-// The gate in 21 greps this tree for that specifier, comments included.
+// The only `import.ts` allowed to name the cache library — and never the router from the
+// same vendor, which is what lets a second shell reuse this package.
 
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 export type {
@@ -17,8 +12,7 @@ export type {
 } from "@loadbearing/api-client";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-// The shapes a defined query takes and returns. Types only: this package caches what
-// the contract describes and has no opinion about it.
+// Types only: this package caches what the contract describes, with no opinion about it.
 export type {
   InvitationDto,
   InviteMemberInput,

@@ -2,9 +2,8 @@ import type { AccountClient } from "../import.js";
 import { queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
-// A defined query, never a raw client call from a component — the same rule
-// `RoleQueries` follows, and for the same reason: a raw call is an uncached read that
-// no invalidation touches.
+// A defined query, never a raw client call from a component: a raw call is an uncached
+// read that no invalidation touches.
 export class AccountQueries {
   private constructor() {}
 
@@ -20,9 +19,8 @@ export class AccountQueries {
     });
   }
 
-  // Deliberately shorter-lived than the list above. A session can end without this tab
-  // doing anything — it expires, or another device revokes it — so "where you are signed
-  // in" showing a minute-old answer is a screen that lies about the thing it exists for.
+  // Shorter-lived than the list above: a session can end without this tab doing anything,
+  // and a minute-old answer here lies about the thing the screen exists for.
   public static sessions(account: AccountClient) {
     return queryOptions({
       queryKey: QueryKeys.account.sessions(),

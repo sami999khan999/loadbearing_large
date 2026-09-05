@@ -2,9 +2,8 @@ import type { ApiClient, PaginationQuery } from "../import.js";
 import { queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
-// Defined queries, never a raw client call from a component — the same rule
-// `RoleQueries` follows, and for the same reason: a raw call is an uncached read that
-// no invalidation touches.
+// Defined queries, never a raw client call from a component: a raw call is an uncached
+// read that no invalidation touches.
 export class MemberQueries {
   private constructor() {}
 
@@ -18,9 +17,8 @@ export class MemberQueries {
     });
   }
 
-  // Shorter-lived than the member list: an invitation can be accepted from another
-  // device at any moment, and a pending row that was claimed a minute ago is a screen
-  // that lies about the thing it exists for.
+  // Shorter-lived than the member list: an invitation can be accepted from another device
+  // at any moment, and a claimed row on screen lies about what it shows.
   public static invitations(client: ApiClient, params: PaginationQuery) {
     return queryOptions({
       queryKey: QueryKeys.member.invitations(),

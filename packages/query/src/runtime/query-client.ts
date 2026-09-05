@@ -12,10 +12,8 @@ export interface QueryRuntime {
   readonly apiClient: ApiClient;
 }
 
-// A factory, never a module-scope instance. One `QueryClient` in a server bundle is
-// shared across every concurrent request, which under this permission model is a
-// cross-tenant leak rather than a caching bug — and it works perfectly in development,
-// where there is one user. See docs/reference/lifetime.md.
+// A factory, never a module-scope instance: one client shared across concurrent requests
+// is a cross-tenant leak. See docs/reference/lifetime.md.
 export function createQueryClient(options: QueryClientOptions): QueryRuntime {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -23,16 +21,14 @@ export function createQueryClient(options: QueryClientOptions): QueryRuntime {
         staleTime: options.staleTimeMs ?? 30_000,
         gcTime: 5 * 60_000,
         retry: (failureCount, error) => {
-          // Retryability is a fact about the code, declared once in the catalog. A
-          // `FORBIDDEN` retried twice with backoff turns an instant "you cannot do
-          // that" into a three-second wait for the same answer.
+          // Retryability is a fact about the code, declared once in the catalog: a retried
+          // `FORBIDDEN` is a three-second wait for the same answer.
           const normalized = ErrorNormalizer.normalize(error);
           if (!ERROR_CATALOG[normalized.code].retryable) return false;
           return failureCount < 2;
         },
-        // The default suits a dashboard left open all day. Here every refetch is an
-        // authenticated round trip carrying a capability resolution — so it is opt-in
-        // per query, where freshness genuinely matters.
+        // Every refetch is an authenticated round trip carrying a capability resolution,
+        // so freshness is opt-in per query.
         refetchOnWindowFocus: false,
       },
       mutations: { retry: false },

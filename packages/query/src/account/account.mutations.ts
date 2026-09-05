@@ -7,9 +7,8 @@ import { useAppMutation } from "../runtime/index.js";
 export class AccountMutations {
   private constructor() {}
 
-  // Invalidates the session list, not the session itself: `revokeOtherSessions` is set,
-  // so every other device is gone and the list on screen is now wrong. This tab's own
-  // session survives, which is why `QueryKeys.session` is absent.
+  // The session list, not the session: every other device is gone, but this tab's own
+  // session survives — which is why `QueryKeys.session` is absent.
   public static useChangePassword(account: AccountClient) {
     return useAppMutation<void, { currentPassword: string; newPassword: string }>({
       mutationFn: ({ currentPassword, newPassword }) =>
@@ -35,9 +34,8 @@ export class AccountMutations {
     });
   }
 
-  // Returns the enrolment, and invalidates nothing: two-factor is *not* on yet, and
-  // `useVerifyTotpEnrolment` below is what finishes it. Invalidating here would make
-  // the page claim protection the account does not have.
+  // Invalidates nothing: two-factor is not on yet, so invalidating would make the page
+  // claim protection the account does not have.
   public static useEnableTwoFactor(account: AccountClient) {
     return useAppMutation<TwoFactorEnrolment, { password: string }>({
       mutationFn: ({ password }) => account.enableTwoFactor(password),

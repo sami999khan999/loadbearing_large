@@ -1,10 +1,8 @@
 import { type AuthClient, queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
-// Session is the piece of state that gates everything else, so it lives in the same
-// cache as everything else. That is the whole reason 18 wraps Better Auth's *vanilla*
-// client — `better-auth/react` would be a second cache with its own invalidation rules,
-// and the two disagree on sign-out.
+// Session gates everything else, so it lives in the same cache as everything else — the
+// reason `api-client` wraps Better Auth's *vanilla* client.
 export class SessionQueries {
   private constructor() {}
 

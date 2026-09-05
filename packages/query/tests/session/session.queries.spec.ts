@@ -8,9 +8,8 @@ const authWith = (session: unknown): AuthClient =>
 
 describe("SessionQueries.current", () => {
   it("is a plain options object, so a loader can prefetch the same definition", () => {
-    // `queryOptions` rather than a useQuery wrapper: a route loader calls
-    // `ensureQueryData(...)` and the component calls `useQuery(...)` on the same object,
-    // which is what guarantees the cache hit.
+    // `queryOptions` rather than a `useQuery` wrapper: loader and component read the same
+    // object, which is what guarantees the cache hit.
     const options = SessionQueries.current(authWith(null));
 
     expect(options.queryKey).toEqual(QueryKeys.session);

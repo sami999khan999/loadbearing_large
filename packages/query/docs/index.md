@@ -201,6 +201,13 @@ Keys and options never name a transport, so all of it is `ApiClient`-internal.
 one is forbidden to import, so `query` exports the factory and the app wires it up. That asymmetry is
 deliberate: routing is the one thing the desktop shell replaces.
 
+## Reference
+
+- [Client lifetime](reference/lifetime.md) — why `createQueryClient` is a factory, and what one
+  module-scope instance costs under this permission model.
+- [Mutations and invalidation](reference/mutations.md) — invalidate-before-`onSuccess`, the three
+  states of `invalidates`, and why sign-out and switch declare none.
+
 ## Two things this package does not have yet
 
 **No feature slices.** `AppContract` is `{}` until the first one lands, so there are no procedures to
