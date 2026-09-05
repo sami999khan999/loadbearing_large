@@ -9,14 +9,14 @@ export interface RiskScore {
   readonly goalId: GoalId;
   // 0 (no risk) to 1 (certain). A ratio, not a percentage — display decides the format.
   readonly score: number;
-  // When the projection wrote the row, not a domain timestamp. Without it a dashboard
-  // cannot tell a live score from one whose consumer died quietly on a Tuesday.
+  // When the projection wrote the row, not a domain timestamp: without it a dashboard
+  // cannot tell a live score from a dead consumer's last one.
   readonly computedAt: Date;
 }
 
 export interface TrendPoint {
-  // ISO `YYYY-MM-DD`. A string, not a `Date`: Postgres `date_trunc` and ClickHouse
-  // `toYYYYMM` return different shapes, so each adapter normalises to one here.
+  // A string, not a `Date`: `date_trunc` and `toYYYYMM` return different shapes, so each
+  // adapter normalises here.
   readonly period: string;
   readonly value: number;
 }
@@ -24,8 +24,8 @@ export interface TrendPoint {
 // Aggregate reads over time — the questions a dashboard asks, not the ones a screen
 // asks. Read-only by construction: a write method makes a derived store authoritative.
 export abstract class AnalyticsReader {
-  // `goalIds` is the caller's already-resolved permitted scope. An analytics store has
-  // no `CapabilitySet` and no join back to goal membership, least of all a remote one.
+  // The caller's already-resolved permitted scope: an analytics store has no
+  // `CapabilitySet` and no join back to goal membership.
   public abstract goalRiskScores(goalIds: readonly GoalId[]): Promise<readonly RiskScore[]>;
 
   public abstract reliabilityTrend(

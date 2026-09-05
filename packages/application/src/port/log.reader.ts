@@ -10,12 +10,8 @@ export interface LogEntry {
   readonly fields: Readonly<Record<string, unknown>>;
 }
 
-// What a caller may filter on, and the list is closed on purpose.
-//
-// The four labels are the only fields the log platform indexes; everything else lives
-// in the line body and is filtered after the selector has narrowed the streams. A
-// `userId` promoted to a label creates one stream per user and is the single most
-// common way a Loki deployment falls over — so the port does not offer the shape.
+// Closed on purpose: the four labels are the only indexed fields, and a `userId`
+// promoted to one creates a stream per user. See docs/reference/ports.md.
 export interface LogQuery {
   readonly from: Date;
   readonly to: Date;
@@ -29,14 +25,8 @@ export interface LogQuery {
   readonly limit?: number;
 }
 
-// Reading diagnostics back. Deliberately read-only and deliberately not on the write
-// path: `JsonLogger` writes to stdout and has never heard of a log platform, which is
-// what keeps it a Tier 0 dependency and the platform swap a config change.
-//
-// This port exists for the operator surface — the one reader that knows what an
-// organization is, which is the one thing a generic log console cannot know. It is
-// absent from a container built without a log platform configured, because a reader
-// that silently returns nothing is worse than one that is honestly not there.
+// Read-only, and not on the write path: `JsonLogger` writes to stdout and has never
+// heard of a log platform. Absent when none is configured, rather than silent.
 export abstract class LogReader {
   public abstract query(query: LogQuery): Promise<readonly LogEntry[]>;
 

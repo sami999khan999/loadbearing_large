@@ -56,9 +56,8 @@ export class IndexDocumentUseCase {
       },
     }));
 
-    // Replace rather than merge: a re-index of shortened text must not leave the
-    // chunks it no longer has. Both writes commit together or neither does, which is
-    // what makes a redelivered job a no-op rather than a duplicate corpus.
+    // Replace rather than merge, in one transaction: a re-index of shortened text must
+    // not leave the chunks it no longer has.
     await this.unitOfWork.run(async () => {
       await this.vectors.deleteBySource(actor.organizationId, input.documentId);
       await this.vectors.upsert(actor.organizationId, chunks);
@@ -72,8 +71,7 @@ export class IndexDocumentUseCase {
   }
 
   // Fixed-width windows with an overlap, so a sentence straddling a boundary is
-  // retrievable from either side. Deliberately not sentence-aware — that is a
-  // language model's job, and this is the shape a provider swap must not change.
+  // retrievable from either side. Not sentence-aware: that is a model's job.
   private static split(text: string): readonly string[] {
     const trimmed = text.trim();
     if (trimmed.length === 0) return [];

@@ -26,9 +26,8 @@ class RecordingRoleRepository implements RoleRepository {
     organizationId: typeof ORG,
     page: { limit: number; offset: number },
   ): Promise<RolePage> {
-    // The three fields named one at a time, not `...page`: the last test below forces
-    // an extra `organizationId` onto the input, and spreading it here would record the
-    // forged value and make the assertion test this double instead of the use-case.
+    // Named one at a time, not `...page`: spreading would record the forged
+    // `organizationId` the last test sends and assert on this double instead.
     this.calls.push({ organizationId, limit: page.limit, offset: page.offset });
     return Promise.resolve({
       items: [
@@ -60,8 +59,8 @@ describe("ListRolesUseCase", () => {
       useCase.execute(actorHolding("member.read"), { limit: 25, offset: 0 }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
-    // And denies *before* reading. An authorization check after the query has already
-    // run is a check that leaks whatever the query returned into a log or a timing.
+    // And denies *before* reading: a check after the query leaks what it returned into a
+    // log or a timing.
     expect(repository.calls).toEqual([]);
   });
 
@@ -71,8 +70,8 @@ describe("ListRolesUseCase", () => {
     const result = await useCase.execute(actorHolding("rbac.role.read"), { limit: 10, offset: 20 });
 
     expect(result.items).toHaveLength(1);
-    // The total is the tenant's, not the page's — that is what a pager needs and what
-    // `items.length` cannot give it.
+    // The tenant's total, not the page's: what a pager needs and what `items.length`
+    // cannot give it.
     expect(result.total).toBe(4);
     expect(result.limit).toBe(10);
     expect(result.offset).toBe(20);
@@ -82,8 +81,8 @@ describe("ListRolesUseCase", () => {
     const repository = new RecordingRoleRepository();
     const useCase = new ListRolesUseCase(new Authorizer(), repository);
 
-    // There is deliberately no field on the input a caller could set to reach another
-    // organization. The cast is how a spec states that: even forced, it is ignored.
+    // No field on the input can reach another organization. The cast is how a spec states
+    // that: even forced, it is ignored.
     await useCase.execute(actorHolding("rbac.role.read"), {
       limit: 25,
       offset: 0,

@@ -7,9 +7,8 @@ export interface RevokeInvitationInput {
   readonly invitationId: InvitationId;
 }
 
-// The other half of inviting, gated on the same key. Deleting the row is the whole
-// revocation — a claim finds nothing, and the link in the inbox opens a page that says
-// so. The audit row is what remembers it happened.
+// Deleting the row is the whole revocation: a claim then finds nothing. The audit row is
+// what remembers it happened.
 export class RevokeInvitationUseCase {
   public constructor(
     private readonly authorizer: Authorizer,

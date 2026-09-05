@@ -25,8 +25,8 @@ export abstract class VectorStore {
 
   public abstract deleteBySource(organizationId: OrganizationId, sourceId: string): Promise<void>;
 
-  // `goalIds` is required so the permission filter runs on the input set, before
-  // retrieval — filtering results means the model already saw what the actor cannot.
+  // Required so the permission filter runs on the input set: filtering results means the
+  // model already saw what the actor cannot.
   public abstract search(
     organizationId: OrganizationId,
     embedding: readonly number[],

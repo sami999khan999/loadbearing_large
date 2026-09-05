@@ -1,8 +1,7 @@
 import type { InvitationId, OrganizationId, PaginationQuery, RoleId, UserId } from "../import.js";
 
-// What `save` takes: everything the row needs, decided by the use-case. The token is
-// here and nowhere else in this file — once stored it is read back only by the
-// claimer in `auth`, never by anything that lists invitations.
+// The token appears here and nowhere else in this file: once stored it is read back only
+// by the claimer, never by anything that lists invitations.
 export interface NewInvitation {
   readonly id: InvitationId;
   readonly organizationId: OrganizationId;
@@ -14,8 +13,8 @@ export interface NewInvitation {
   readonly createdAt: Date;
 }
 
-// What a read returns: the row joined to the names a list and a mail need. No token
-// and no tenant id — the tenant is the query's scope, and the token is not for reading.
+// The row joined to the names a list and a mail need. No token and no tenant: the tenant
+// is the query's scope, and the token is not for reading.
 export interface InvitationRecord {
   readonly id: InvitationId;
   readonly email: string;
@@ -47,8 +46,8 @@ export abstract class InvitationRepository {
     id: InvitationId,
   ): Promise<InvitationRecord | null>;
 
-  // Upserts on `(organization_id, email)`: inviting an address a second time replaces
-  // the pending invitation — new token, new role, new expiry — rather than failing.
+  // Upserts on `(organization_id, email)`: a second invitation replaces the pending one
+  // rather than failing.
   public abstract save(invitation: NewInvitation): Promise<void>;
 
   public abstract delete(organizationId: OrganizationId, id: InvitationId): Promise<void>;

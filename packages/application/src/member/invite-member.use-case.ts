@@ -23,13 +23,8 @@ export interface InviteMemberInput {
 // months later opens nothing.
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// LOAD → AUTHORIZE → WORK → PERSIST, then one thing *after* persist: the mail. It goes
-// out only once the row and its audit entry have committed, because a message that
-// says "you have been invited" about a row that rolled back is a link to nothing.
-//
-// Asserts `member.invite` and only that. `core.activity.write` is deliberately not
-// asserted here — see T-030 — because only `owner` holds it today, and an `admin` who
-// holds `member.invite` must be able to invite.
+// LOAD → AUTHORIZE → WORK → PERSIST, then the mail — after the commit, because an
+// invitation message about a row that rolled back is a link to nothing.
 export class InviteMemberUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
@@ -45,13 +40,13 @@ export class InviteMemberUseCase {
   public async execute(actor: Principal, input: InviteMemberInput): Promise<InvitationRecord> {
     this.authorizer.assert(actor, "member.invite");
 
-    // The role must be one of *this* tenant's. A role id from another organization
-    // parses just as well, and looking it up under the actor's tenant is what stops it.
+    // A role id from another organization parses just as well, so looking it up under
+    // the actor's tenant is what stops it.
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
 
-    // Lowercased once, here. The claimer compares case-insensitively regardless; this
-    // is so the unique index on `(organization_id, email)` sees one address as one row.
+    // Lowercased once, here, so the unique index on `(organization_id, email)` sees one
+    // address as one row.
     const email = input.email.trim().toLowerCase();
 
     if (await this.members.existsByEmail(actor.organizationId, email)) {
@@ -76,8 +71,7 @@ export class InviteMemberUseCase {
       await this.activity.record(actor, "member.invited", { email, roleId: input.roleId });
     });
 
-    // Read back rather than assembled: the names the mail carries are the row's joins,
-    // and the row is what an administrator will see in the pending list.
+    // Read back rather than assembled: the names the mail carries are the row's joins.
     const saved = await this.invitations.findById(actor.organizationId, id);
     if (!saved) throw new NotFoundError("invitation", id);
 

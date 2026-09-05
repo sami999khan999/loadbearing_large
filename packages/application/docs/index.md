@@ -139,3 +139,5 @@ from Qdrant, so a scope that is not in the argument list does not exist.
 ## Reference
 
 - [Authorizer](reference/authorizer.md) — the gate, the load-assert-work shape, and the one leak it accepts
+- [The ports](reference/ports.md) — one section per port whose reasoning outgrew a two-line comment:
+  the three that carry no `Principal`, the analytics split, and what each method refuses to offer

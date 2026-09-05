@@ -1,6 +1,5 @@
-// Everything the message needs and nothing about how it is worded or where the link
-// points. The implementation in `composition` owns the copy and builds the URL, which
-// keeps this package free of `@loadbearing/content` and of every route.
+// Everything the message needs and nothing about wording or routes — the implementation
+// owns both, which keeps this package free of copy.
 export interface InvitationMail {
   readonly to: string;
   readonly organizationName: string;

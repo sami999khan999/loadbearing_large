@@ -10,11 +10,8 @@ export interface StoredObject {
 export abstract class StorageGateway {
   public abstract put(key: string, body: Uint8Array, contentType: string): Promise<StoredObject>;
 
-  // The same write, for a body that must not be held in memory. An archived
-  // `activity_log` partition is tens of gigabytes at the scale this system plans for,
-  // so `put` cannot serve it — and buffering would fail only once the data is large
-  // enough that failing is expensive. The checksum on `StoredObject` is computed over
-  // the stream as it passes, which is what lets the archive be verified afterwards.
+  // The same write for a body that must not be held in memory. The checksum is computed
+  // over the stream as it passes, which is what lets an archive be verified.
   public abstract putStream(
     key: string,
     body: AsyncIterable<Uint8Array>,
@@ -24,8 +21,8 @@ export abstract class StorageGateway {
   public abstract delete(key: string): Promise<void>;
   public abstract exists(key: string): Promise<boolean>;
 
-  // In the port because "the browser uploads directly and the server never sees the
-  // bytes" is an architectural choice: the use-case authorizes, then issues the URL.
+  // In the port because "the browser uploads directly" is an architectural choice: the
+  // use-case authorizes, then issues the URL.
   public abstract presignUpload(
     key: string,
     contentType: string,
