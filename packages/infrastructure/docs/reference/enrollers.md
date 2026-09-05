@@ -42,6 +42,13 @@ In each, the whole read-decide-write runs in one transaction behind the lock, an
 check is **inside** it: a retried request must return the organization the first attempt chose
 rather than enrol the user twice.
 
+> [!IMPORTANT]
+> **That check is scoped to the organization being enrolled into, not just to the user.** Unscoped,
+> `PgBootstrapMembershipEnroller` handed back whichever tenant the user already belonged to — a
+> cross-tenant answer out of a lookup that reads like a retry guard. `PgPersonalOrganizationEnroller`
+> is the exception and is keyed on the user alone, correctly: the question there is "do they already
+> have one of their own", and no organization exists yet to scope by.
+
 ## `personal`, and why the slug comes from an id
 
 The default mode, and the only one that works against an empty database: a fresh clone can sign up

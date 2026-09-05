@@ -52,12 +52,14 @@ export class PgBootstrapMembershipEnroller extends BaseRepository {
           sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${lockKey(organizationId)})`,
         );
 
-        // Idempotent, and checked inside the lock: a retried request must return the
-        // organization the first attempt chose rather than enrol the user twice.
+        // Scoped to *this* organization, and checked inside the lock: unscoped, a user who
+        // already belongs to any other tenant is handed that one back instead.
         const [existing] = await this.db
           .select({ organizationId: memberships.organizationId })
           .from(memberships)
-          .where(eq(memberships.userId, userId))
+          .where(
+            and(eq(memberships.userId, userId), eq(memberships.organizationId, organizationId)),
+          )
           .limit(1);
 
         // Cast for the same reason `PgMembershipReader` casts: `memberships` declares
