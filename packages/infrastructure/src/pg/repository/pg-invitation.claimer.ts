@@ -98,7 +98,9 @@ export class PgInvitationClaimer extends BaseRepository {
           .from(invitations)
           .where(
             and(
-              eq(sql`lower(${invitations.email})`, user.email.toLowerCase()),
+              // The column, not `lower()` over it: `invitations.email` is stored
+              // lowercased, and wrapping it makes `invitations_email_idx` unusable.
+              eq(invitations.email, user.email.toLowerCase()),
               gt(invitations.expiresAt, sql`now()`),
               match,
             ),

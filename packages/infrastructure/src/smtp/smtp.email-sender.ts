@@ -2,6 +2,7 @@ import {
   createTransport,
   type EmailMessage,
   EmailSender,
+  type Logger,
   type Transporter,
   UnavailableError,
 } from "../import.js";
@@ -22,7 +23,10 @@ export class SmtpEmailSender extends EmailSender {
   // rebuilding it per message re-does that work on every send.
   private readonly transport: Transporter;
 
-  public constructor(private readonly config: SmtpConfig) {
+  public constructor(
+    private readonly config: SmtpConfig,
+    private readonly logger?: Logger,
+  ) {
     super();
     this.transport = createTransport(config.url);
   }
@@ -36,10 +40,19 @@ export class SmtpEmailSender extends EmailSender {
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
       });
-    } catch {
+    } catch (error: unknown) {
+      // The transport's reason, which the error below cannot carry: a caller that treats
+      // a failed send as recoverable would otherwise leave nothing to diagnose from.
+      this.logger?.emit("email.send.failed", { reason: SmtpEmailSender.reason(error) });
+
       // UNAVAILABLE, not INTERNAL: the catalog marks it retryable, which is what lets a
       // queued send be retried rather than dead-lettered.
       throw new UnavailableError("smtp");
     }
+  }
+
+  // Truncated, because a rejected recipient list comes back as the whole message.
+  private static reason(error: unknown): string {
+    return (error instanceof Error ? error.message : String(error)).slice(0, 300);
   }
 }

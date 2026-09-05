@@ -120,6 +120,12 @@ Expiry is compared against database time, the same clock the row was written by.
 idempotent under `memberships_uq (organization_id, user_id)`: someone who is already a member keeps
 the role they have, and the invitation is consumed either way.
 
+**The address predicate compares the column, never `lower()` over it.** `InviteMemberUseCase`
+lowercases once, on the way in, which is what makes `invitations_email_uq (organization_id, email)`
+see one address as one row. Wrapping the column in the query undoes that at read time: the predicate
+is then an expression, `invitations_email_idx` cannot serve it, and `claimPending` seq-scans every
+pending invitation in the deployment on every sign-up.
+
 `InvitationPreview` is restated here rather than imported for the same dependency-direction reason as
 the ports themselves.
 
