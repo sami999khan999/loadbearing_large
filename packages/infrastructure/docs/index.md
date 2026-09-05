@@ -236,3 +236,18 @@ fail on a service nobody started.
 It reads `.env` from the repository root explicitly rather than through a bare `dotenv/config`
 import. Under a pnpm filter the process cwd is this package, so the bare form found nothing and every
 variable came back undefined — which looks exactly like an unconfigured stack.
+
+## Reference
+
+- [`PgUnitOfWork`](reference/unit-of-work.md) — the transaction scope, and what enrolling a
+  repository in one actually means.
+- [Enrollers, the founder, and the claimer](reference/enrollers.md) — the advisory locks, the races
+  they protect against, and why every one of them binds structurally.
+- [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
+  the `ORDER BY` that stops the index being used.
+- [The activity archive](reference/activity-archive.md) — detach, stream, record, verify, drop, and
+  the two defects the shipped implementation still has.
+- [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
+  adopted in.
+- [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to
+  offer.

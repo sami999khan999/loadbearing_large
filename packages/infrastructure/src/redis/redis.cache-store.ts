@@ -28,10 +28,8 @@ export class RedisCacheStore extends CacheStore {
   }
 
   public override async deletePrefix(prefix: string): Promise<void> {
-    // ioredis applies `keyPrefix` to key arguments but not to SCAN, in either
-    // direction: the MATCH pattern needs it added, and the keys SCAN returns come
-    // back fully prefixed. Handing those straight to `unlink` prefixes them twice
-    // and deletes nothing, silently — UNLINK on a missing key is not an error.
+    // ioredis does not apply `keyPrefix` to SCAN in either direction, so handing its
+    // results to `unlink` prefixes them twice and silently deletes nothing.
     const keyPrefix = this.redis.options.keyPrefix ?? "";
     const pattern = `${keyPrefix}${prefix}*`;
     let cursor = "0";

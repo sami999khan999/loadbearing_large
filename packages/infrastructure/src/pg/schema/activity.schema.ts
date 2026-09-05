@@ -16,10 +16,8 @@ export const activityLog = pgTable(
   {
     id: uuid("id").notNull(),
     organizationId: uuid("organization_id").notNull(),
-    // A uuid now, not `text` — Better Auth is configured to mint `Uuid.v7()` ids (16), so
-    // there is no foreign id format left to accommodate. Deliberately *not* a foreign key:
-    // an audit row outlives the actor it names, and a cascade would erase the trail of a
-    // deleted account exactly when it matters most.
+    // Deliberately *not* a foreign key: an audit row outlives the actor it names, and a
+    // cascade would erase the trail of a deleted account when it matters most.
     actorId: uuid("actor_id").$type<UserId>().notNull(),
     action: text("action").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),

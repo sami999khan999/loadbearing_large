@@ -6,24 +6,15 @@ import type {
 } from "../import.js";
 import type { ClickHouseConnection } from "./clickhouse.connection.js";
 
-// The only writer to the analytics store, and the guard that keeps it derived.
-//
-// Everything here is a replay of `activity_log`: drop the whole database, run the
-// projection from an empty checkpoint, and the rows come back. That property is what
-// makes adopting ClickHouse a performance decision rather than a correctness one, and
-// it survives exactly as long as this stays the only class that inserts.
+// The only writer to the analytics store, which is what keeps it derived and rebuildable
+// from `activity_log`. See docs/reference/clickhouse.md.
 export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
   private static readonly TABLE = "activity_events";
 
   public constructor(private readonly connection: ClickHouseConnection) {}
 
-  // Read from the destination, never from a cursor kept beside it. A checkpoint in
-  // Postgres or Redis can disagree with what actually landed — the batch that was
-  // acknowledged and then failed to insert — and the disagreement is silent. Asking
-  // the table what its own last row is cannot be wrong in that direction.
-  //
-  // `max(occurred_at)` and the id that carries it, matching the `(occurredAt, id)`
-  // keyset the reader paginates on.
+  // Read from the destination, never a cursor kept beside it: one in Postgres or Redis
+  // can silently disagree with what actually landed.
   public async checkpoint(): Promise<ProjectionCheckpoint> {
     const rows = await this.connection.query<{
       readonly last_occurred_at: string | null;
@@ -36,8 +27,8 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     `);
 
     const row = rows[0];
-    // An empty table answers with ClickHouse's zero value rather than null, which is
-    // 1970 and would make a replay resume after every row ever written.
+    // An empty table answers with ClickHouse's zero value rather than null, which is 1970
+    // and would make a replay resume after every row ever written.
     if (!row?.last_occurred_at || row.last_occurred_at.startsWith("1970-01-01")) {
       return { lastOccurredAt: null, lastId: null };
     }
@@ -48,9 +39,8 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     };
   }
 
-  // Idempotent through `ReplacingMergeTree` keyed on the activity id: a redelivered
-  // batch overwrites rather than duplicates. `FINAL` on the read side is what makes
-  // the dedup visible before a background merge has run.
+  // Idempotent through `ReplacingMergeTree` keyed on the activity id, so a redelivered
+  // batch overwrites rather than duplicates.
   public async project(records: readonly ActivityRecord[]): Promise<number> {
     if (records.length === 0) return 0;
 
@@ -63,9 +53,8 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
         actor_id: record.actorId,
         action: record.action,
         subject_id: record.subjectId,
-        // The bag stays a string. Typing it as a ClickHouse `Map` or `JSON` column
-        // would make every new payload field a schema migration on a table holding
-        // years of rows, for data nothing groups by.
+        // The bag stays a string: a `Map` or `JSON` column makes every new payload field
+        // a migration on a table holding years of rows, for data nothing groups by.
         payload: JSON.stringify(record.payload),
       })),
     );
@@ -73,9 +62,8 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     return records.length;
   }
 
-  // `FINAL`, so a duplicate that has not merged yet is not counted twice. A
-  // reconciliation that reports drift because of an unmerged part is a false alarm,
-  // and a false alarm on this check is how a real one stops being read.
+  // `FINAL`, so an unmerged duplicate is not counted twice: a false alarm on this check
+  // is how a real one stops being read.
   public async dailyCounts(from: Date, to: Date): Promise<readonly DailyCount[]> {
     return this.connection.query<DailyCount>(
       `

@@ -4,28 +4,18 @@ import { memberships, users } from "../schema/index.js";
 import type { TransactionScope } from "../transaction/index.js";
 import type { PgOrganizationFounder } from "./pg-organization.founder.js";
 
-// The same fixed namespace the bootstrap enroller and the invitation claimer use for
-// `pg_advisory_xact_lock`'s two-argument form, so none can collide with a lock taken
-// for another reason — and so a claim and an enrolment for one user serialise.
+// The same fixed namespace the bootstrap enroller and the claimer use, so a claim and an
+// enrolment for one user serialise against each other.
 const LOCK_NAMESPACE = 0x6c62_0001 | 0;
 
-// Keyed on the *user*, not the organization, because the organization does not exist
-// yet. Two sign-ins racing on one brand-new user is the case this serialises, and
-// losing that race would mean two organizations and two owner memberships for one
-// person — with the session hook free to pick either.
+// Keyed on the *user*, because the organization does not exist yet: losing that race
+// means two organizations for one person and a hook free to pick either.
 function lockKey(userId: string): number {
   return Number.parseInt(userId.replaceAll("-", "").slice(0, 8), 16) | 0;
 }
 
-// Satisfies `MembershipEnroller` from `@loadbearing/auth` structurally, for the same
-// reason `PgBootstrapMembershipEnroller` does: `auth` already depends on this package,
-// so the binding is checked in `Container` (17) rather than here.
-//
-// The `personal` enrolment mode. A new user becomes the owner of an organization of
-// their own, which is what lets a fresh clone sign up and get in with no seed run and
-// no invitation — and what makes the kit multi-tenant on day one rather than after a
-// rewrite. The tenant itself is made by `PgOrganizationFounder`; this class owns only
-// the lock and the "not if they already have one" decision.
+// The `personal` mode: a new user owns an organization of their own, so a fresh clone
+// needs no seed and no invitation. See docs/reference/enrollers.md.
 export class PgPersonalOrganizationEnroller extends BaseRepository {
   // Must share this repository's `TransactionScope`, or the founder's savepoint opens
   // on the pool instead of inside the locked transaction below.
@@ -68,9 +58,8 @@ export class PgPersonalOrganizationEnroller extends BaseRepository {
         // there. Declining rather than inventing a name keeps that assumption visible.
         if (!user) return null;
 
-        // The person's own name, so this package writes no English and needs no locale
-        // to name a tenant; the slug from their id, because nothing routes by slug and a
-        // slug built from a name needs a collision strategy this table does not have.
+        // Their own name, so this package writes no English; the slug from their id,
+        // because a slug built from a name needs a collision strategy.
         return this.founder.found(userId, user.name, `u-${userId}`);
       }),
     );

@@ -12,11 +12,8 @@ let database: Database;
 let reader: PgActivityReplayReader;
 let logger: PgActivityLogger;
 
-// Every row this spec writes shares one instant, which is the whole point: a keyset
-// carrying only a timestamp cannot separate them, and the bug it hides — a dropped
-// row, or one replayed forever — is invisible against data that happens to be spread
-// out. The real system produces this shape whenever two writes land in the same
-// millisecond, which at any load at all is constantly.
+// Every row shares one instant, which is the point: a keyset carrying only a timestamp
+// cannot separate them, and the bug that hides is invisible against spread-out data.
 const INSTANT = new Date("2031-03-01T00:00:00.000Z");
 
 beforeAll(async () => {
@@ -25,17 +22,14 @@ beforeAll(async () => {
   reader = new PgActivityReplayReader(database, scope);
   logger = new PgActivityLogger(database, scope, { now: () => INSTANT });
 
-  // `activity_log` is partitioned by month, and a partitioned table with no partition
-  // for a row's date rejects the insert outright. Writing to a future month is what
-  // makes this spec's window its own — so it has to create the partition first, which
-  // is the same call `partitions-monthly` makes every month.
+  // A partitioned table with no partition for a row's date rejects the insert, so a spec
+  // that writes to a future month creates it first.
   await new PgMaintenanceGateway(database, scope).ensureActivityPartitions(INSTANT, 1);
 });
 
 afterAll(async () => {
-  // Drop the partition rather than delete the rows. The table is append-only and
-  // shared with the unit-of-work spec, so a predicate delete risks taking rows another
-  // test asserts on — and dropping the partition cannot, by construction.
+  // Drop the partition rather than delete rows: the table is shared with another spec, so
+  // a predicate delete risks taking rows it asserts on.
   await database.client.execute(sql`drop table if exists activity_log_2031_03`);
   await database.close();
 });
@@ -117,8 +111,8 @@ describe("PgActivityReplayReader", () => {
 
     // Six: five from the first test, one from the third.
     expect(day?.rows).toBe(6);
-    // A number, not a string. `count(*)` comes back as text from `pg` without the
-    // cast, and a string here makes the reconciliation diff every day forever.
+    // A number, not a string: `count(*)` comes back as text from `pg`, and a string here
+    // makes the reconciliation diff every day forever.
     expect(typeof day?.rows).toBe("number");
   });
 

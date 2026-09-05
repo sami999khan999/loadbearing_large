@@ -32,9 +32,8 @@ describe("PgCapabilityRepository", () => {
     const organizationId = await seedOrganizationId(database);
     const repository = new PgCapabilityRepository(database, new TransactionScope());
 
-    // A well-formed uuid that was never seeded, not a readable placeholder — all
-    // three columns are `uuid`, so a string like "no-such-user" is a 22P02 from
-    // Postgres rather than the empty result the assertion is about.
+    // A well-formed uuid that was never seeded: the columns are `uuid`, so
+    // "no-such-user" is a 22P02 rather than the empty result being asserted on.
     const absentUser = Identifiers.userId.parse(Uuid.v7());
 
     counter.count = 0;

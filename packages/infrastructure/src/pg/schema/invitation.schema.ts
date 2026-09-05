@@ -11,9 +11,8 @@ import {
 import { users } from "./auth.schema.js";
 import { organizations, roles } from "./rbac.schema.js";
 
-// Only *pending* invitations live here. Accepting one deletes the row and writes a
-// membership; revoking one deletes the row. The audit log carries the history, so the
-// table never needs a status column and a listing is never filtered by one.
+// Only *pending* invitations. Accepting or revoking deletes the row and the audit log
+// carries the history, so there is no status column to filter on.
 export const invitations = pgTable(
   "invitations",
   {
@@ -22,8 +21,8 @@ export const invitations = pgTable(
       .$type<OrganizationId>()
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    // Stored lowercased. The claim compares it against the *verified* address on the
-    // user row, which is what makes the token below a locator rather than a credential.
+    // Stored lowercased, and compared against the *verified* address on the user row —
+    // which is what makes the token a locator rather than a credential.
     email: text("email").notNull(),
     roleId: uuid("role_id")
       .notNull()
@@ -40,8 +39,7 @@ export const invitations = pgTable(
     // One pending invitation per address per tenant; a re-invite replaces it.
     uniqueIndex("invitations_email_uq").on(t.organizationId, t.email),
     // The landing page and the accept endpoint arrive holding a token and no tenant, so
-    // this is the second unique index in the schema that does not lead with
-    // `organization_id` — the same exemption `organizations_slug_uq` records.
+    // this index cannot lead with `organization_id`.
     uniqueIndex("invitations_token_uq").on(t.token),
     // `claimPending` finds a brand-new user's invitation by address alone.
     index("invitations_email_idx").on(t.email),

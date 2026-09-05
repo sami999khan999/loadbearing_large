@@ -10,27 +10,14 @@ import {
 } from "../../import.js";
 import { organizations } from "./rbac.schema.js";
 
-// Better Auth's models, on this repository's terms: plural tables beside `organizations`
-// and `memberships`, uuid primary keys like every other table, and three columns Better
-// Auth never heard of. Owned by these migrations from here on.
-//
-// **The export names and property keys are load-bearing.** The Drizzle adapter resolves a
-// column by looking up `schema[modelName][fieldName]`, so each export below must match a
-// `modelName` configured in `AuthFactory` and each property must match a Better Auth field
-// name. The SQL table and column names underneath are free, which is why they are
-// snake_case like everything else. Rename an export and authentication fails at runtime
-// with a message about a missing Drizzle schema; rename a column and nothing happens.
-//
-// Re-derive the field list after an auth upgrade rather than trusting this file:
-// `pnpm --filter @loadbearing/auth run auth:tables` prints exactly what the pinned version
-// expects, including whatever the enabled plugins contribute. Diff it against what is here.
+// **The export names and property keys are load-bearing**: the Drizzle adapter resolves a
+// column by `schema[modelName][fieldName]`. Re-derive after an upgrade with `pnpm auth:tables`.
 
 export const users = pgTable(
   "users",
   {
-    // Not Better Auth's opaque string: `advanced.database.generateId` is set to `Uuid.v7()`,
-    // which is what lets `user_id` be a real uuid foreign key on the domain tables and makes
-    // the branded `UserId` in contracts — declared `z.uuid()` — actually true.
+    // Not Better Auth's opaque string: `generateId` is `Uuid.v7()`, which is what lets
+    // `user_id` be a real uuid foreign key on the domain tables.
     id: uuid("id").$type<UserId>().primaryKey(),
     name: text("name").notNull(),
     email: text("email").notNull().unique(),
@@ -43,12 +30,11 @@ export const users = pgTable(
     // in a preferences table that would need a join before anything can be rendered.
     locale: text("locale").notNull().default("en"),
     timezone: text("timezone"),
-    // Deactivation is a state, not a delete — the activity log points at this row forever.
-    // A deactivated user keeps their rows and loses their capabilities.
+    // A state, not a delete: the activity log points at this row forever, so a deactivated
+    // user keeps their rows and loses their capabilities.
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
-    // Where the last switch left them, so the next sign-in lands there rather than in the
-    // oldest membership. `set null` because a tenant being deleted must not take the
-    // account with it; `PgMembershipReader` re-checks membership before honouring it.
+    // `set null`, because a tenant being deleted must not take the account with it.
+    // `PgMembershipReader` re-checks membership before honouring it.
     lastActiveOrganizationId: uuid("last_active_organization_id").references(
       () => organizations.id,
       { onDelete: "set null" },
@@ -60,10 +46,8 @@ export const users = pgTable(
   (t) => [index("users_last_active_organization_idx").on(t.lastActiveOrganizationId)],
 );
 
-// Not partitioned, deliberately. It looks like a third append-only table next to
-// `activity_log` and `task_status_history` and is not one: rows are updated on refresh,
-// deleted on sign-out, and looked up by id — a predicate carrying no partition key, so
-// every lookup would scan every partition. Bounded by expiry instead, swept nightly (25).
+// Not partitioned: rows are looked up by id, a predicate carrying no partition key, so
+// every lookup would scan every partition. Bounded by expiry and swept nightly.
 export const sessions = pgTable(
   "sessions",
   {
@@ -74,17 +58,14 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
 
-    // Pinned at sign-in by the session-create hook (16). It is the tenant every request
-    // downstream is scoped by, so it is `notNull` with a real foreign key rather than a
-    // loose string: a session pointing at a deleted organization is a principal with a
-    // tenant that no longer exists.
+    // The tenant every request downstream is scoped by, so a real foreign key rather than
+    // a loose string: otherwise a session can name a deleted organization.
     activeOrganizationId: uuid("active_organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
 
-    // Which shell opened this session. Desktop sessions are longer-lived and have to be
-    // revocable independently — "sign out all devices" has to reach a machine that may be
-    // offline (16.9) — and that query needs a column, not a user-agent guess.
+    // Desktop sessions are longer-lived and revocable independently, and that query needs
+    // a column rather than a user-agent guess.
     surface: text("surface", { enum: ["web", "desktop"] }).notNull(),
 
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -94,8 +75,8 @@ export const sessions = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // Every foreign key needs a covering index; Postgres does not create one, and without
-    // it each ON DELETE CASCADE scans the whole table.
+    // Postgres does not index a foreign key, and without one each ON DELETE CASCADE scans
+    // the whole table.
     index("sessions_user_idx").on(t.userId),
     index("sessions_organization_idx").on(t.activeOrganizationId),
     // What makes the nightly expiry sweep cheap, and the reason partitioning is not needed.
@@ -130,10 +111,8 @@ export const accounts = pgTable(
   (t) => [index("accounts_user_idx").on(t.userId)],
 );
 
-// Only exists because `verification.storeInDatabase` is set (16). With secondary storage
-// configured and that flag off, Better Auth does not create this table at all and keeps
-// email-verification and password-reset tokens in Redis alone — where an eviction is a
-// reset link that stops working, silently, on the LRU instance.
+// Exists only because `verification.storeInDatabase` is set: without it these tokens
+// live on the LRU instance, where an eviction silently breaks a reset link.
 export const verifications = pgTable(
   "verifications",
   {

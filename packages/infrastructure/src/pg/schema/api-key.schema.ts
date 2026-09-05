@@ -11,10 +11,8 @@ import {
 import { users } from "./auth.schema.js";
 import { organizations } from "./rbac.schema.js";
 
-// Your own table, not Better Auth's API-key plugin. The plugin mints a session for a key,
-// which means a leaked key impersonates a full user with that user's live permissions. A
-// key here is a principal with its own capability set that cannot exceed its issuer's,
-// re-intersected on every request (16.6).
+// Not Better Auth's plugin, which mints a session per key so a leak impersonates a full
+// user. See packages/auth/docs/reference/api-key.md.
 export const apiKeys = pgTable(
   "api_keys",
   {
@@ -35,9 +33,8 @@ export const apiKeys = pgTable(
     // dump contains no usable credential.
     tokenHash: text("token_hash").notNull(),
 
-    // Scopes as declared at creation, already intersected with the issuer's capabilities.
-    // Raw strings: `PermissionRegistry.isKnown()` filters them before they are trusted,
-    // so a stale row cannot grant a permission the registry no longer defines.
+    // Raw strings, filtered through `PermissionRegistry.isKnown()` before they are
+    // trusted, so a stale row cannot grant a permission the registry no longer defines.
     scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
 
     expiresAt: timestamp("expires_at", { withTimezone: true }),

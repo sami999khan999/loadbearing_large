@@ -15,9 +15,8 @@ import { BaseRepository } from "../primitive/index.js";
 import { rolePermissions, roles } from "../schema/index.js";
 
 export class PgRoleRepository extends BaseRepository implements RoleRepository {
-  // Three queries, fixed — never one per role. The grants are fetched for the whole
-  // page with a single `IN`, because a per-role query is an N+1 that is invisible at
-  // four seeded roles and is the whole cost of the request at four hundred.
+  // Three queries, fixed — never one per role: the grants come for the whole page with a
+  // single `IN`, because an N+1 here is invisible at four roles.
   public async list(organizationId: OrganizationId, page: PaginationQuery): Promise<RolePage> {
     const rows = await this.db
       .select({
@@ -31,14 +30,13 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
       .from(roles)
       // Every read narrows by tenant. There is no code path here that could omit it.
       .where(eq(roles.organizationId, organizationId))
-      // By creation, so a page boundary is stable between requests. Ordering by name
-      // would reshuffle the moment somebody renames a role mid-pagination.
+      // By creation, so a page boundary is stable: ordering by name reshuffles the moment
+      // somebody renames a role mid-pagination.
       .orderBy(asc(roles.createdAt))
       .limit(page.limit)
       .offset(page.offset);
 
-    // The total for the whole tenant, not for the page — that is what a pager needs,
-    // and it is why it cannot be derived from `rows.length`.
+    // The tenant's total, not the page's, which is why it cannot come from `rows.length`.
     const [counted] = await this.db
       .select({ total: sql<number>`count(*)::int` })
       .from(roles)
@@ -52,8 +50,7 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
             .select({ roleId: rolePermissions.roleId, permission: rolePermissions.permission })
             .from(rolePermissions)
             .where(
-              // Narrowed by role *and* by tenant. `role_permissions` carries its own
-              // `organization_id`, so the second predicate costs an index lookup and
+              // By role *and* by tenant: the second predicate costs an index lookup and
               // removes any chance of a cross-tenant row arriving through a role id.
               sql`${inArray(rolePermissions.roleId, ids)} and ${eq(rolePermissions.organizationId, organizationId)}`,
             );
@@ -72,16 +69,15 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
       description: row.description,
       scope: row.scope,
       isSystem: row.isSystem,
-      // Sorted, so two runs against the same data produce the same response and a
-      // snapshot test is not a coin toss.
+      // Sorted, so two runs against the same data produce the same response.
       permissions: (byRole.get(row.id) ?? []).sort(),
     }));
 
     return { items, total: counted?.total ?? 0 };
   }
 
-  // Two queries for one row. The grants come along because `RoleRecord` carries them,
-  // and a second, thinner record type would be a second shape to keep in step.
+  // Two queries for one row: `RoleRecord` carries its grants, and a thinner record type
+  // would be a second shape to keep in step.
   public async findById(
     organizationId: OrganizationId,
     roleId: RoleId,

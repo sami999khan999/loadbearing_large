@@ -1,8 +1,5 @@
-// The repository root, not this package. `dotenv/config` reads `.env` relative to
-// the process cwd, which is `packages/infrastructure` under a pnpm filter — so the
-// bare import found nothing and every variable came back undefined. The two other
-// runners avoid this with `--env-file-if-exists=../../.env`; this one says it here,
-// because `pnpm smoke` is also run from the package directory by hand.
+// The repository root, not this package: `dotenv/config` reads `.env` relative to the
+// process cwd, which under a pnpm filter is `packages/infrastructure`.
 import { config } from "dotenv";
 
 config({ path: new URL("../../../../.env", import.meta.url) });
@@ -50,15 +47,12 @@ console.log("presigned:", (await storage.presignDownload(key, 60)).slice(0, 80),
 await storage.delete(key);
 console.log("exists after delete:", await storage.exists(key));
 
-// Optional, in the same way the adapters are: these two stores are opt-in, and a
-// smoke run against a stack that does not include them should say so and pass rather
-// than fail on a service nobody started.
+// Optional in the same way the adapters are: a smoke run against a stack without them
+// should say so and pass rather than fail on a service nobody started.
 const optional = (name: string): string | undefined => process.env[name] || undefined;
 
-// The whole projection round trip, against the real table the init script created.
-// A UUID that no `activity_log` row will ever carry, inserted twice on purpose: the
-// second insert is what proves `ReplacingMergeTree` is doing the job the consumer's
-// idempotency depends on. `FINAL` is why the count is visible before a merge.
+// Inserted twice on purpose: the second insert is what proves `ReplacingMergeTree` does
+// the job the consumer's idempotency depends on.
 const clickhouseUrl = optional("CLICKHOUSE_URL");
 if (clickhouseUrl) {
   // The local scratch stack's credentials, which are `ratchet` everywhere on purpose
@@ -99,9 +93,8 @@ if (clickhouseUrl) {
   console.log("clickhouse: skipped, CLICKHOUSE_URL unset");
 }
 
-// Reads back whatever Alloy has already shipped. Asserting on a specific line would
-// make this depend on something having been logged in the last hour, which is a flaky
-// test rather than a wiring check — that the query returns and parses is the claim.
+// Reads back whatever Alloy has shipped: asserting on a specific line would depend on
+// something having been logged in the last hour. That it returns and parses is the claim.
 const lokiUrl = optional("LOKI_URL");
 if (lokiUrl) {
   const logs = new LokiLogReader({ url: lokiUrl, tenantId: optional("LOKI_TENANT_ID") });

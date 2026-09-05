@@ -16,17 +16,15 @@ import {
 import { BaseRepository } from "../primitive/index.js";
 import { invitations, organizations, roles, users } from "../schema/index.js";
 
-// The administrator's side of `invitations`. The claimer in `pg-invitation.claimer.ts`
-// is the other side, and the two never read the same column for the same reason: this
-// one never selects `token`, that one never lists.
+// The administrator's side of `invitations`: this one never selects `token`, and the
+// claimer beside it never lists.
 export class PgInvitationRepository extends BaseRepository implements InvitationRepository {
   public async list(
     organizationId: OrganizationId,
     page: PaginationQuery,
   ): Promise<InvitationPage> {
-    // Unexpired only. An expired row is still in the table until something sweeps it,
-    // but it is not something an administrator can act on except by revoking, and
-    // `findById` still reaches it for that.
+    // Unexpired only. An expired row is still there until something sweeps it, and
+    // `findById` still reaches it so it can be revoked.
     const pending = and(
       eq(invitations.organizationId, organizationId),
       gt(invitations.expiresAt, sql`now()`),
@@ -60,9 +58,8 @@ export class PgInvitationRepository extends BaseRepository implements Invitation
     return row ? PgInvitationRepository.toRecord(row) : null;
   }
 
-  // Upsert on `invitations_email_uq`. A second invitation to the same address replaces
-  // the first outright — including its id, so the old link stops working the moment
-  // the new one is sent.
+  // Upsert on `invitations_email_uq`, replacing the first outright — including its id, so
+  // the old link stops working the moment the new one is sent.
   public async save(invitation: NewInvitation): Promise<void> {
     await this.db
       .insert(invitations)

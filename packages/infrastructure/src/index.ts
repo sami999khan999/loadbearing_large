@@ -2,14 +2,8 @@ import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/infrastructure");
 
-// One folder per external system this package speaks to, so `ls src/` answers "what
-// does this depend on?". The filenames already led with the technology — the folders
-// now agree with them.
-//
-// Two of them hold a store the default deployment does not run. `clickhouse/` and
-// `loki/` are adapters for services behind an opt-in profile, and `Container` builds
-// neither unless its configuration block is present. A folder here is a statement
-// that the seam is implemented, not that the container is started.
+// One folder per external system, so `ls src/` answers "what does this depend on?". A
+// folder says the seam is implemented, not that the container is started.
 export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,

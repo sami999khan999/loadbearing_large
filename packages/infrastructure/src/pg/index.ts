@@ -1,5 +1,4 @@
-// Everything the Postgres side of this package publishes. `schema/`, `migrate/` and
-// `seed/` are deliberately absent: drizzle-kit and the two runners reach them by path,
+// `schema/`, `migrate/` and `seed/` are deliberately absent: they are reached by path,
 // and nothing outside this package may name a table.
 export {
   BaseRepository,

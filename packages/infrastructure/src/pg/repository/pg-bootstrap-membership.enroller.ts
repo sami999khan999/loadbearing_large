@@ -2,9 +2,8 @@ import { and, eq, type OrganizationId, sql, type UserId, Uuid } from "../../impo
 import { BaseRepository } from "../primitive/index.js";
 import { memberships, organizations, roles } from "../schema/index.js";
 
-// The role the first person through the door gets, and the role everyone after them
-// gets. Both are seeded by `SystemRoleSeed`; an organization missing either is an
-// organization the seed never ran against, and enrolment declines rather than guesses.
+// Both seeded by `SystemRoleSeed`. An organization missing either is one the seed never
+// ran against, and enrolment declines rather than guesses.
 const FOUNDER_ROLE = "owner";
 const JOINER_ROLE = "member";
 
@@ -12,25 +11,17 @@ const JOINER_ROLE = "member";
 // this lock can never collide with an advisory lock taken for some other reason.
 const LOCK_NAMESPACE = 0x6c62_0001 | 0;
 
-// Postgres advisory locks are keyed on integers, and an organization id is a uuid. The
-// first eight hex digits are enough — a collision costs two enrolments serialising
-// against each other, which is what they were going to do anyway.
+// Advisory locks are keyed on integers and an id is a uuid: eight hex digits are enough,
+// since a collision costs two enrolments serialising anyway.
 function lockKey(organizationId: string): number {
   return Number.parseInt(organizationId.replaceAll("-", "").slice(0, 8), 16) | 0;
 }
 
-// Satisfies `MembershipEnroller` from `@loadbearing/auth` structurally, for the same
-// reason `PgMembershipReader` satisfies `MembershipReader`: `auth` already depends on
-// this package, so the binding is checked in `Container` (17) rather than here.
-//
-// The `bootstrap` enrolment mode: everyone who signs up joins one named organization,
-// first in as `owner` and everyone after as `member`. Right for a demo, a single-tenant
-// deployment, and local work against `pnpm db:seed` — and wrong for anything reachable
-// from the internet, because the sign-up form then hands out membership of your tenant.
+// The `bootstrap` mode, and wrong for anything reachable from the internet: the sign-up
+// form hands out membership of your tenant. See docs/reference/enrollers.md.
 export class PgBootstrapMembershipEnroller extends BaseRepository {
-  // `undefined` switches enrolment off entirely, which is the default. A deployment
-  // that has built invitations wants exactly that: an unaffiliated sign-up gets no
-  // membership, `MembershipReader` returns null, and the session is refused.
+  // `undefined` switches enrolment off entirely, which is the default: an unaffiliated
+  // sign-up then gets no membership and the session is refused.
   private organizationSlug: string | undefined;
 
   public withOrganizationSlug(slug: string | undefined): this {
@@ -53,10 +44,8 @@ export class PgBootstrapMembershipEnroller extends BaseRepository {
     if (!organization) return null;
     const organizationId = organization.id;
 
-    // The whole read-decide-write in one transaction behind an advisory lock. Without
-    // it, two sign-ups racing on an empty organization both read "no members yet" and
-    // both land as `owner` — and `owner` is the wildcard role, so the cost of losing
-    // that race is a second account with every permission in the registry.
+    // Read-decide-write in one transaction behind an advisory lock: without it two racing
+    // sign-ups both land as `owner`, which is the wildcard role.
     return this.database.client.transaction(async (tx) =>
       this.scope.within(tx, async () => {
         await this.db.execute(

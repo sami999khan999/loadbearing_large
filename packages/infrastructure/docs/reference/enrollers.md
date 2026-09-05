@@ -1,0 +1,122 @@
+---
+title: Enrollers, the founder, and the claimer
+description: The four Postgres adapters that put the first row in memberships — the advisory locks they take, the races those locks are protecting, and why every one of them binds structurally rather than by name.
+---
+
+# Enrollers, the founder, and the claimer
+
+Four classes in `pg/repository/` write the artifact a session is refused without:
+
+| Class | Port in `auth` | Mode |
+|---|---|---|
+| `PgPersonalOrganizationEnroller` | `MembershipEnroller` | `personal` — the default |
+| `PgBootstrapMembershipEnroller` | `MembershipEnroller` | `bootstrap` |
+| `PgInvitationClaimer` | `InvitationClaimer` | wraps all three |
+| `PgOrganizationFounder` | `OrganizationFounder` | used by `personal` and by the create endpoint |
+
+Every one of them satisfies its port **structurally**, never nominally. `auth` already depends on
+this package, so it cannot import the port and this file cannot import back — the binding is checked
+where the two meet, in `Container`. Those constructor lines are where a signature drift is caught.
+
+Which mode is bound is `AUTH_ENROLMENT_MODE`; see
+[`auth/docs/reference/enrolment.md`](../../../auth/docs/reference/enrolment.md) and
+[`composition/docs/reference/container.md`](../../../composition/docs/reference/container.md).
+
+## One advisory-lock namespace, three keys
+
+`pg_advisory_xact_lock` takes two integers. All three lock-taking classes use **the same fixed
+namespace**, so an advisory lock taken here can never collide with one taken for another reason —
+and so a claim and an enrolment for one user serialise against each other.
+
+Postgres advisory locks are keyed on integers and an id here is a uuid, so the key is the first
+eight hex digits. A collision costs two enrolments serialising against each other, which is what
+they were going to do anyway.
+
+| Class | Locked on | The race it is protecting against |
+|---|---|---|
+| `PgBootstrapMembershipEnroller` | the **organization** | Two sign-ups on an empty organization both read "no members yet" and both land as `owner`. `owner` is the wildcard role, so losing that race is a second account holding every permission in the registry |
+| `PgPersonalOrganizationEnroller` | the **user** | The organization does not exist yet. Two sign-ins racing on one brand-new user would produce two organizations and two owner memberships for one person, with the session hook free to pick either |
+| `PgInvitationClaimer` | the **user** | A claim and an enrolment racing for one brand-new user would otherwise produce a membership *and* a personal organization |
+
+In each, the whole read-decide-write runs in one transaction behind the lock, and the idempotency
+check is **inside** it: a retried request must return the organization the first attempt chose
+rather than enrol the user twice.
+
+## `personal`, and why the slug comes from an id
+
+The default mode, and the only one that works against an empty database: a fresh clone can sign up
+and get in with no seed run and no invitation, which is what makes the kit multi-tenant on day one
+rather than after a rewrite.
+
+The enroller owns only the lock and the "not if they already have one" decision; the tenant itself
+is made by `PgOrganizationFounder`. It must share the repository's `TransactionScope`, or the
+founder's savepoint opens on the pool instead of inside the locked transaction.
+
+The organization is named after the person, so this package writes no English and needs no locale to
+name a tenant. **The slug is derived from the id, never from the name**: a slug built from user
+input needs a normalisation pass and a collision strategy, and nothing in this application routes by
+slug.
+
+## `bootstrap`, and what it is not for
+
+Everyone who signs up joins one named organization, first in as `owner` and everyone after as
+`member`. Right for a demo, a single-tenant deployment, and local work against `pnpm db:seed` —
+and **wrong for anything reachable from the internet**, because the sign-up form then hands out
+membership of your tenant.
+
+An undefined slug switches enrolment off entirely, which is the default. A deployment that has built
+invitations wants exactly that: an unaffiliated sign-up gets no membership, `MembershipReader`
+returns null, and the session is refused.
+
+Both roles are seeded by `SystemRoleSeed`. An organization missing either is one the seed never ran
+against, and **enrolment declines rather than guesses** — inventing a role here would be inventing a
+permission set.
+
+## `PgOrganizationFounder`: one implementation, two callers
+
+Called from the personal enroller at a first sign-in, and from the create endpoint behind the "New
+organization" button. Both must produce an organization indistinguishable from a seeded one, which
+is why `SystemRoleSeed` is reused rather than restated: it resolves `owner`'s wildcard through
+`PermissionRegistry.instance.all()`, so an organization created here holds exactly the grants
+`pnpm db:seed` would have given it.
+
+```ts
+return this.db.transaction(async (tx) => { … });
+```
+
+`this.db`, not `this.database.client` — called inside the enroller's open transaction this becomes a
+**savepoint** and commits with it; called standalone it is a transaction of its own. Either way the
+seed and the audit row land in the same unit as the organization.
+
+A missing `owner` role throws and rolls the whole tenant back, which beats a tenant nobody can
+administer.
+
+The audit row is written as the tenant that was just created, not the caller's current one, with an
+empty capability set: the logger reads only the organization and the actor off the principal.
+
+## `PgInvitationClaimer`: the verified address is the credential
+
+Deliberately **not** tenant-scoped. The caller arrives holding a token or a user id and no
+organization — the tenant is the *answer*, exactly as with
+`PgMembershipReader.activeOrganizationFor`.
+
+What scopes a claim instead is one predicate, and it is the one that must never be relaxed:
+
+> the invited address equals the user's **verified** address.
+
+Without it, anyone could register as the invited email and walk into the tenant. With it, the
+mailbox the invitation was sent to is the credential and the token is only a lookup key. Under
+`AUTH_REQUIRE_EMAIL_VERIFICATION=false` this never matches — **invitations fail closed there**, and
+that is the documented behaviour rather than an oversight.
+
+Expiry is compared against database time, the same clock the row was written by. The insert is
+idempotent under `memberships_uq (organization_id, user_id)`: someone who is already a member keeps
+the role they have, and the invitation is consumed either way.
+
+`InvitationPreview` is restated here rather than imported for the same dependency-direction reason as
+the ports themselves.
+
+## The uuid cast
+
+`memberships` declares its organization FK as a plain `uuid`; the brand lives on `organizations.id`.
+Every one of these classes casts at that boundary, as `PgMembershipReader` does.

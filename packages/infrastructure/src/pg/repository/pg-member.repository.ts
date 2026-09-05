@@ -14,9 +14,8 @@ import { BaseRepository } from "../primitive/index.js";
 import { memberships, roles, users } from "../schema/index.js";
 
 export class PgMemberRepository extends BaseRepository implements MemberRepository {
-  // Two queries, fixed: the page and the total. The joins are in the page query rather
-  // than fetched per row, because a per-member lookup is an N+1 that is invisible at
-  // four members and the whole cost of the request at four hundred.
+  // Two queries, fixed: the page and the total. A per-member join lookup is an N+1 that
+  // is invisible at four members and the whole request at four hundred.
   public async list(organizationId: OrganizationId, page: PaginationQuery): Promise<MemberPage> {
     const rows = await this.db
       .select({

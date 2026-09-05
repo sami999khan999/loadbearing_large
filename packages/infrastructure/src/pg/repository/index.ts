@@ -1,13 +1,5 @@
-// Every concrete Postgres adapter, one file each, flat. They sit together rather
-// than in a folder per subject because they are all the same kind of thing — a class
-// extending `BaseRepository`, reading `schema/`, running inside `TransactionScope` —
-// and a folder holding one file is a path, not a subject
-// ([Simplicity](../../../../../docs/opinions/simplicity.md)).
-//
-// The subject that *does* earn a folder is the external system, one level up: `pg/`
-// beside `clickhouse/`, `loki/`, `redis/`. Naming a subject twice is what made
-// `pg/analytics/` and a future `clickhouse/` read as two implementations of two
-// different things rather than two implementations of one port.
+// Every concrete Postgres adapter, one file each, flat: they are all the same kind of
+// thing, and the subject that earns a folder is the external system one level up.
 export { PgActivityLogger } from "./pg-activity.logger.js";
 export { PgActivityArchiveGateway } from "./pg-activity-archive.gateway.js";
 export { PgActivityReplayReader } from "./pg-activity-replay.reader.js";

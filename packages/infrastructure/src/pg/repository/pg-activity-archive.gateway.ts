@@ -19,12 +19,8 @@ const PAGE = 10_000;
 // formatting — naming it keeps a formatter from ever treating it as the latter.
 const NEWLINE = "\n";
 
-// `row_to_json` gives the NDJSON line; the two key columns come back beside it so the
-// next page's cursor costs no extra round trip.
-//
-// A type alias rather than an interface, and not by preference: drizzle's `execute<T>`
-// constrains `T` to `Record<string, unknown>`, which an interface does not satisfy
-// because only aliases get an implicit index signature.
+// An alias rather than an interface: drizzle's `execute<T>` constrains `T` to
+// `Record<string, unknown>`, and only aliases get an implicit index signature.
 type ArchiveRow = {
   occurred_at: string;
   id: string;
@@ -45,14 +41,8 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     super(database, scope);
   }
 
-  // The order below is the whole job, and it is the order rather than the steps that
-  // matters: dropping before verifying is unrecoverable loss of the audit trail, which
-  // is the highest-value record this system keeps.
-  //
-  //   detach → stream to S3 → record → verify → drop
-  //
-  // Detaching first is what makes the export consistent: the partition stops receiving
-  // rows the instant it is detached, so what gets uploaded is a closed set.
+  // detach → stream to S3 → record → verify → drop. The order is the job: dropping before
+  // verifying is unrecoverable. See docs/reference/activity-archive.md.
   public async archive(period: Date): Promise<ArchivedPartition> {
     const name = PgActivityArchiveGateway.partitionName(period);
     const key = PgActivityArchiveGateway.objectKey(period);
@@ -67,9 +57,7 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     );
 
     // ── 2. stream to S3 as gzipped NDJSON ──
-    // NDJSON and not CSV because ClickHouse reads it back with
-    // `s3(…, 'JSONEachRow', …)` directly, which is what makes a cold replay a query
-    // rather than an afternoon.
+    // NDJSON, so ClickHouse reads it back with `s3(…, 'JSONEachRow', …)` directly.
     const stored = await this.storage.putStream(
       key,
       PgActivityArchiveGateway.gzip(this.rows(name)),
@@ -109,17 +97,15 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     return [{ count: Number(result.rows[0]?.count ?? 0) }];
   }
 
-  // Keyset pagination on the partition's own primary key, so a month that does not fit
-  // in memory never has to. `OFFSET` would re-scan everything it already returned, and
-  // the cursor columns come back with the page rather than from a second query.
+  // Keyset on the partition's own primary key, so a month that does not fit in memory
+  // never has to. `OFFSET` would re-scan everything it already returned.
   private async *rows(name: string): AsyncGenerator<Uint8Array> {
     const encoder = new TextEncoder();
     let after: Cursor | null = null;
 
     for (;;) {
-      // The predicate is built first rather than inline: a ternary between two `sql`
-      // templates makes the row type infer through `after`, which `after` is then
-      // assigned from — a cycle the compiler reports as an implicit `any`.
+      // Built as a variable rather than inline: a ternary between two `sql` templates
+      // infers through `after` and back, which the compiler reports as an implicit `any`.
       const keyset =
         after === null
           ? sql``
@@ -147,9 +133,8 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
   }
 
   private static gzip(source: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
-    // Compression happens between the database and S3 rather than at either end, so
-    // neither ever holds the month. A `Gzip` stream is already an AsyncIterable of
-    // chunks, which is why no cast is needed to hand it to `putStream`.
+    // Between the database and S3 rather than at either end, so neither ever holds the
+    // month. A `Gzip` stream is already an AsyncIterable of chunks.
     return Readable.from(source).pipe(createGzip());
   }
 
@@ -158,8 +143,8 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     return `activity_log_${period.getUTCFullYear()}_${month}`;
   }
 
-  // `<subject>/<yyyy>/<mm>/…`, the same prefix layout every other object uses, so a
-  // lifecycle rule can move archives to cold storage without naming them individually.
+  // The same prefix layout every other object uses, so a lifecycle rule can move archives
+  // to cold storage without naming them individually.
   private static objectKey(period: Date): string {
     const month = String(period.getUTCMonth() + 1).padStart(2, "0");
     return `activity-archive/${period.getUTCFullYear()}/${month}/activity_log.ndjson.gz`;

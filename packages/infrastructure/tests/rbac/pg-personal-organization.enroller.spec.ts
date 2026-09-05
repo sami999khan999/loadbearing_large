@@ -12,9 +12,8 @@ import { openDatabase } from "../support/database.js";
 
 let database: Database;
 
-// Unlike the other specs here, this one must create rows: the whole behaviour under
-// test is what happens to a user who has no membership yet, and the seeded organization
-// has one by definition. Everything created is torn down at the end.
+// This spec must create rows: the behaviour under test is what happens to a user with no
+// membership, and the seeded organization has one. All of it is torn down.
 const created: string[] = [];
 
 const makeUser = async (name = "Ada") => {
@@ -34,9 +33,8 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
-  // Memberships and roles cascade from the organization; users cascade their own
-  // memberships. Ordering matters only for the organizations, which are found through
-  // the memberships that are about to be deleted.
+  // Ordering matters only for the organizations, which are found through the memberships
+  // that are about to be deleted.
   if (created.length > 0) {
     const owned = await database.client
       .select({ organizationId: memberships.organizationId })
@@ -87,9 +85,8 @@ describe("PgPersonalOrganizationEnroller", () => {
     expect(role?.key).toBe("owner");
   });
 
-  // `SystemRoleSeed` is reused rather than reimplemented, and this is what proves it:
-  // an organization created at sign-in has to be indistinguishable from a seeded one,
-  // or the second tenant in the system has a different permission model from the first.
+  // What proves `SystemRoleSeed` is reused: a tenant created at sign-in must be
+  // indistinguishable from a seeded one, or the second has a different permission model.
   it("seeds every system role into the organization it creates", async () => {
     const userId = await makeUser();
     const organizationId = await enroller().enrol(userId);
@@ -102,9 +99,8 @@ describe("PgPersonalOrganizationEnroller", () => {
     expect(seeded.map((role) => role.key).sort()).toEqual(["admin", "guest", "member", "owner"]);
   });
 
-  // The idempotency the advisory lock exists for. Better Auth retries a failed session
-  // create, and a second organization per retry would be a tenant nobody can reach and
-  // a membership row that decides which one the user actually gets.
+  // The idempotency the advisory lock exists for: Better Auth retries a failed session
+  // create, and a second organization per retry is a tenant nobody can reach.
   it("returns the same organization on a second call rather than making another", async () => {
     const userId = await makeUser();
 
@@ -121,9 +117,8 @@ describe("PgPersonalOrganizationEnroller", () => {
     expect(rows).toHaveLength(1);
   });
 
-  // Two sign-ins racing on one brand-new user. Losing this race means two organizations
-  // and two owner memberships for one person, with the session hook free to pick either
-  // — and `owner` is the wildcard role, so the cost of getting it wrong is not cosmetic.
+  // Two sign-ins racing on one new user. Losing means two organizations for one person,
+  // and `owner` is the wildcard role.
   it("serialises concurrent enrolments into exactly one organization", async () => {
     const userId = await makeUser();
 
@@ -155,15 +150,13 @@ describe("PgPersonalOrganizationEnroller", () => {
       .where(eq(organizations.id, organizationId ?? ""));
 
     expect(organization?.name).toBe("Grace Hopper");
-    // Derived from the id rather than the name: a slug built from user input needs a
-    // collision strategy and a normalisation pass, and `organizations_slug_uq` would
-    // turn the second "Grace Hopper" into a failed sign-in.
+    // From the id, not the name: `organizations_slug_uq` would turn the second
+    // "Grace Hopper" into a failed sign-in.
     expect(organization?.slug).toBe(`u-${userId}`);
   });
 
-  // Declining beats throwing: the caller turns a null into a refused session, which is
-  // the safe failure. A user row that does not exist is unreachable from the session
-  // hook, and stating that keeps the assumption visible.
+  // Declining beats throwing: the caller turns null into a refused session, which is the
+  // safe failure for a row the session hook cannot actually reach.
   it("declines rather than inventing a tenant for a user that does not exist", async () => {
     const absent = Identifiers.userId.parse(Uuid.v7());
 

@@ -8,9 +8,8 @@ import { openDatabase } from "../support/database.js";
 let database: Database;
 let gateway: PgMaintenanceGateway;
 
-// Far enough out that no migration and no scheduled run has been here. The point of
-// the spec is the CREATE path, and a month that already has a partition tests the
-// `to_regclass` probe instead.
+// Far enough out that nothing has been here: the spec is about the CREATE path, and a
+// month that already has a partition tests the `to_regclass` probe instead.
 const FROM = new Date("2032-07-01T00:00:00.000Z");
 const NAMES = ["activity_log_2032_07", "activity_log_2032_08"];
 
@@ -27,16 +26,8 @@ afterAll(async () => {
 });
 
 describe("PgMaintenanceGateway.ensureActivityPartitions", () => {
-  // This is the regression guard for a bug that ran green for months. Postgres
-  // accepts no bind parameters in DDL — not for identifiers and not for the range
-  // bounds — so the parameterised form failed at bind time on every single run:
-  //
-  //   bind message supplies 2 parameters, but prepared statement "" requires 0
-  //
-  // Nothing caught it. It type-checked, it linted, and a fake cannot reach it. The
-  // symptom would have been the one the schedule exists to prevent: `activity_log`
-  // rejecting every insert on the first of the month the pre-created partitions ran
-  // out, with a nightly job that had been "failing" invisibly since.
+  // The regression guard for the parameterised form, which failed at bind time on every
+  // run: Postgres accepts no bind parameters in DDL, and no fake can reach that.
   it("actually creates the partitions it reports", async () => {
     const created = await gateway.ensureActivityPartitions(FROM, 2);
     expect(created).toEqual(NAMES);
@@ -50,9 +41,8 @@ describe("PgMaintenanceGateway.ensureActivityPartitions", () => {
           order by c.relname`,
     );
 
-    // Attached to `activity_log`, not merely existing. A table created without the
-    // `PARTITION OF` clause would satisfy `to_regclass` on the next run and never be
-    // written to.
+    // Attached, not merely existing: a table created without `PARTITION OF` satisfies
+    // `to_regclass` on the next run and is never written to.
     expect(rows.rows.map((row) => row.relname)).toEqual(NAMES);
   });
 

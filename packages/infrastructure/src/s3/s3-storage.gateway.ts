@@ -72,10 +72,8 @@ export class S3StorageGateway extends StorageGateway {
     const hash = createHash("sha256");
     let size = 0;
 
-    // The digest is taken as the bytes go past, because the caller is a generator and
-    // there is no second pass to take it on. That is also why `ChecksumSHA256` is not
-    // sent here as it is in `put`: the value is not known until the upload is over.
-    // `Upload` checksums each part instead, so a corrupt transfer still fails.
+    // Taken as the bytes go past, because a generator has no second pass — which is also
+    // why `ChecksumSHA256` is not sent here: `Upload` checksums each part instead.
     async function* tapped(): AsyncGenerator<Uint8Array> {
       for await (const chunk of body) {
         hash.update(chunk);

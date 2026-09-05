@@ -8,20 +8,13 @@ import type {
 } from "../import.js";
 import type { ClickHouseConnection } from "./clickhouse.connection.js";
 
-// The other half of the swap. `PgAnalyticsReader` and this class implement the same
-// port over the same two questions, and `Container` picks one — which is the entire
-// payoff of having built the seam before there was a second implementation.
-//
-// The two are not required to store the same rows. Postgres answers from the nightly
-// rollup tables; this answers from rollups the projection maintains in ClickHouse,
-// and the aggregation happens at read time because that is what a column store is for.
+// The other half of the swap: same port, same two questions, and `Container` picks one.
+// See docs/reference/clickhouse.md.
 export class ClickHouseAnalyticsReader implements AnalyticsReader {
   public constructor(private readonly connection: ClickHouseConnection) {}
 
-  // `goalIds` arrives already resolved by `capabilities.goalsWith()`. An analytics
-  // store holds every tenant's rows and has no join back to goal membership, so the
-  // permission filter has to be a predicate on the input set — identical in shape and
-  // reasoning to `VectorStore.search()`.
+  // Already resolved by `capabilities.goalsWith()`: this store has no join back to goal
+  // membership, so the permission filter is a predicate on the input set.
   public async goalRiskScores(goalIds: readonly GoalId[]): Promise<readonly RiskScore[]> {
     if (goalIds.length === 0) return [];
 
@@ -49,10 +42,8 @@ export class ClickHouseAnalyticsReader implements AnalyticsReader {
     }));
   }
 
-  // Recomputed from the stored components, never averaged from the stored ratios.
-  // The mean of per-goal ratios is not the ratio across goals, and this is the
-  // implementation where that is easiest to get wrong — a column store makes
-  // `avg(score)` look like the obvious query.
+  // Recomputed from the components, never averaged from the ratios: the mean of per-goal
+  // ratios is not the ratio across goals, and `avg(score)` looks obvious here.
   public async reliabilityTrend(
     userId: UserId,
     goalIds: readonly GoalId[],
@@ -82,10 +73,8 @@ export class ClickHouseAnalyticsReader implements AnalyticsReader {
     );
   }
 
-  // `YYYY-MM-DD`, the shape the port returns and the shape a ClickHouse `Date`
-  // parameter parses. `TrendPoint.period` is a string for exactly this reason:
-  // `date_trunc` and `formatDateTime` return different shapes, so each adapter
-  // normalises to one here.
+  // `YYYY-MM-DD`, which the port returns and a ClickHouse `Date` parameter parses:
+  // `date_trunc` and `formatDateTime` differ, so each adapter normalises here.
   private static isoDate(value: Date): string {
     return value.toISOString().slice(0, 10);
   }

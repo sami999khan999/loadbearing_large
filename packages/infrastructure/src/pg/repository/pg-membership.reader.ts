@@ -10,14 +10,11 @@ export interface OrganizationSummary {
   readonly slug: string;
 }
 
-// Satisfies `MembershipReader` from `@loadbearing/auth` structurally — it cannot import it,
-// because `auth` already depends on this package. The binding is checked where the two
-// meet, in `Container` (17); a signature drift fails composition's typecheck, not this one.
+// Satisfies `MembershipReader` structurally, because `auth` already depends on this
+// package. See docs/reference/enrollers.md.
 export class PgMembershipReader extends BaseRepository {
-  // Runs once per sign-in, not per request — the answer is pinned onto the session row.
-  // The organization the user last switched to wins while they are still a member of
-  // it; otherwise the oldest membership, so a user in two organizations lands in the
-  // same one every time rather than wherever the planner happened to look first.
+  // Once per sign-in, not per request. Last switched to while still a member, oldest
+  // membership otherwise — so the answer is stable rather than planner-dependent.
   public async activeOrganizationFor(userId: UserId): Promise<OrganizationId | null> {
     const [row] = await this.db
       .select({ organizationId: memberships.organizationId })

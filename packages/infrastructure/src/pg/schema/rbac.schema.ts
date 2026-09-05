@@ -19,10 +19,8 @@ export const organizations = pgTable(
     name: text("name").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  // Both the seed and every enroller resolve an organization by slug with `.limit(1)`,
-  // so without this a duplicate is not an error — it is a silent coin flip about which
-  // tenant a new member lands in. This is the tenant table, so it is the one place a
-  // unique index does not lead with `organization_id`.
+  // The seed and every enroller resolve a slug with `.limit(1)`, so a duplicate is a
+  // silent coin flip about which tenant a new member lands in.
   (t) => [uniqueIndex("organizations_slug_uq").on(t.slug)],
 );
 
@@ -60,8 +58,8 @@ export const rolePermissions = pgTable(
   },
   (t) => [
     uniqueIndex("role_permissions_uq").on(t.roleId, t.permission),
-    // The org FK is not covered by the unique index, whose leading column is
-    // `role_id`. Without this, deleting an organization scans every grant.
+    // The unique index leads with `role_id`, so it does not cover this FK: without it,
+    // deleting an organization scans every grant.
     index("role_permissions_organization_idx").on(t.organizationId),
   ],
 );
@@ -73,11 +71,8 @@ export const memberships = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
-    // A real uuid foreign key, not the `text` placeholder of (13) — Better Auth is
-    // configured to mint `Uuid.v7()` ids, so there is no longer a foreign id format to
-    // accommodate. Declared here rather than in a hand-authored migration on purpose:
-    // drizzle-kit generates by diffing this file against the migration history, so a
-    // constraint it cannot see is a constraint the next generated migration drops.
+    // Declared here rather than in a hand-authored migration: drizzle-kit diffs this file
+    // against the history, so a constraint it cannot see is one the next migration drops.
     userId: uuid("user_id")
       .$type<UserId>()
       .notNull()
@@ -88,12 +83,10 @@ export const memberships = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // One membership per person per tenant, leading with the tenant column. The old
-    // `(user_id, role_id)` let one person hold two roles in an organization, which a
-    // switcher would render as the same tenant twice.
+    // One membership per person per tenant, leading with the tenant column: `(user_id,
+    // role_id)` let one person hold two roles and the switcher render a tenant twice.
     uniqueIndex("memberships_uq").on(t.organizationId, t.userId),
-    // The `user_id` foreign key's own index. Every by-user read — `activeOrganizationFor`,
-    // `organizationsFor`, the claimers' idempotency checks — starts from here.
+    // The `user_id` foreign key's own index: every by-user read starts from here.
     index("memberships_user_idx").on(t.userId),
     index("memberships_role_idx").on(t.roleId),
   ],

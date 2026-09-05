@@ -16,9 +16,8 @@ import { BaseRepository, type Database } from "../primitive/index.js";
 import { invitations, memberships, organizations, users } from "../schema/index.js";
 import type { TransactionScope } from "../transaction/index.js";
 
-// The same namespace and the same user-keyed lock the personal enroller takes, on
-// purpose: a claim and an enrolment racing for one brand-new user serialise against
-// each other rather than producing a membership and a personal organization both.
+// The same user-keyed lock the personal enroller takes, so a claim and an enrolment for
+// one new user cannot both succeed.
 const LOCK_NAMESPACE = 0x6c62_0001 | 0;
 
 function lockKey(userId: string): number {
@@ -33,13 +32,8 @@ export interface InvitationPreview {
   readonly expired: boolean;
 }
 
-// Satisfies `InvitationClaimer` from `@loadbearing/auth` structurally, for the same
-// reason every adapter beside it does.
-//
-// Deliberately not tenant-scoped: the caller arrives holding a token or a user id and
-// no organization, exactly as `PgMembershipReader.activeOrganizationFor` does. The
-// tenant is the *answer*. What scopes a claim instead is the verified-address check
-// in `claim`, which is the one predicate that must never be relaxed.
+// Deliberately not tenant-scoped — the tenant is the *answer*. What scopes a claim is the
+// verified-address check below. See docs/reference/enrollers.md.
 export class PgInvitationClaimer extends BaseRepository {
   public constructor(
     database: Database,
@@ -86,11 +80,8 @@ export class PgInvitationClaimer extends BaseRepository {
           .where(eq(users.id, userId))
           .limit(1);
 
-        // The security property, and the only one. Without a verified address anyone
-        // could register as the invited email and walk into the tenant; with it, the
-        // mailbox the invitation was sent to is the credential and the token is a
-        // lookup key. Under `AUTH_REQUIRE_EMAIL_VERIFICATION=false` this never
-        // matches — invitations fail closed there, and that is documented.
+        // The security property, and the only one: the mailbox is the credential and the
+        // token a lookup key. Under `AUTH_REQUIRE_EMAIL_VERIFICATION=false` it fails closed.
         if (!user?.emailVerified) return null;
 
         const [invitation] = await this.db
