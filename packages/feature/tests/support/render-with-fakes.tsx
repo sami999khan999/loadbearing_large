@@ -14,6 +14,7 @@ export const TEST_USER: SessionUser = {
   name: "Ada",
   activeOrganizationId: TEST_ORGANIZATION.id,
   organizations: [TEST_ORGANIZATION],
+  twoFactorEnabled: false,
 };
 
 // `StaticContentSource` gives the snapshot asynchronously, which is why this harness is

@@ -43,6 +43,8 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
         name: result.user.name,
         activeOrganizationId,
         organizations: organizations.map((entry) => ({ id: entry.id, name: entry.name })),
+        // Better Auth's own column, widened onto the user by the two-factor plugin.
+        twoFactorEnabled: (result.user as { twoFactorEnabled?: boolean }).twoFactorEnabled === true,
       },
       capabilities: capabilities.toJSON(),
       googleEnabled: Env.googleEnabled,

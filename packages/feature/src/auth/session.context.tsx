@@ -21,6 +21,9 @@ export interface SessionUser {
   // rather than after a second round trip.
   readonly activeOrganizationId: string;
   readonly organizations: readonly SessionOrganization[];
+  // The security page renders from this, so it rides the snapshot rather than being
+  // read back through a cast the type system cannot check.
+  readonly twoFactorEnabled: boolean;
 }
 
 interface SessionValue {

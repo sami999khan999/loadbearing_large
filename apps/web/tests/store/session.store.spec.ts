@@ -9,6 +9,7 @@ const OWNER: SessionSnapshot = {
     name: "Owner",
     activeOrganizationId: "o1",
     organizations: [{ id: "o1", name: "Owner Org" }],
+    twoFactorEnabled: false,
   },
   capabilities: CapabilitySet.from({
     wildcard: false,
@@ -29,6 +30,24 @@ function counting(snapshot: SessionSnapshot) {
 }
 
 describe("SessionStore", () => {
+  // The security page picks the wizard or the panel from this field, and it used to be
+  // read through a cast — `undefined` on every render, so the panel was unreachable.
+  it("carries the two-factor flag across the SSR boundary", async () => {
+    const store = new SessionStore();
+    if (!OWNER.user) throw new Error("the fixture above is signed in");
+    const enrolled: SessionSnapshot = {
+      ...OWNER,
+      user: { ...OWNER.user, twoFactorEnabled: true },
+    };
+
+    store.restore(enrolled);
+    expect(store.user?.twoFactorEnabled).toBe(true);
+
+    const fresh = new SessionStore();
+    await fresh.ensure(() => Promise.resolve(enrolled));
+    expect(fresh.user?.twoFactorEnabled).toBe(true);
+  });
+
   it("starts signed out and denying everything", () => {
     const store = new SessionStore();
 

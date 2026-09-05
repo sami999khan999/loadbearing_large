@@ -32,7 +32,7 @@ function SecurityPage() {
   const account = useMemo(() => new AccountClient(auth), [auth]);
 
   // From the store rather than a query: the root already resolved it during SSR.
-  const [enrolled, setEnrolled] = useState(session.user !== null && twoFactorOf(session.user));
+  const [enrolled, setEnrolled] = useState(session.user?.twoFactorEnabled === true);
 
   return (
     <main>
@@ -58,10 +58,4 @@ function SecurityPage() {
       </section>
     </main>
   );
-}
-
-// Read structurally rather than widening `SessionUser` for one page. Absent means off,
-// which is the direction to fail in. **This never resolves true — see `P2.15`.**
-function twoFactorOf(user: unknown): boolean {
-  return (user as { twoFactorEnabled?: boolean }).twoFactorEnabled === true;
 }
