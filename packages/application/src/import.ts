@@ -15,7 +15,13 @@ export type {
 export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@loadbearing/errors";
+export {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnavailableError,
+  ValidationError,
+} from "@loadbearing/errors";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";

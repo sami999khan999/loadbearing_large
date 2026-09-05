@@ -1,4 +1,4 @@
-import { Uuid, ValidationError } from "../import.js";
+import { UnavailableError, Uuid, ValidationError } from "../import.js";
 import type { ActivityLogger, EmbeddingProvider, UnitOfWork, VectorStore } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 
@@ -44,12 +44,18 @@ export class IndexDocumentUseCase {
     // re-index into a rate-limit incident.
     const vectors = await this.embeddings.embed(texts);
 
+    // Before the unit of work, because the write below deletes first: a short response
+    // padded with empty vectors deletes the corpus and inserts nothing back.
+    if (vectors.length !== texts.length) {
+      throw new UnavailableError("embedding.provider");
+    }
+
     const chunks = texts.map((content, index) => ({
       id: Uuid.v7(),
       sourceId: input.documentId,
       goalId: input.goalId ?? null,
       content,
-      embedding: vectors[index] ?? [],
+      embedding: vectors[index] as readonly number[],
       metadata: {
         sourceType: input.sourceType ?? "document",
         chunkIndex: index,

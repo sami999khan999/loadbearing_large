@@ -52,6 +52,12 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
 
       const body = (await response.json()) as EmbeddingResponse;
 
+      // One vector per text, or the alignment below is a lie. A short response would
+      // otherwise be padded with empties that `vector(1536)` rejects at insert time.
+      if (body.data.length !== batch.length) {
+        throw new UnavailableError("openai.embeddings", response.status);
+      }
+
       // Sorted by index. Batch endpoints do not guarantee response order, and a
       // shuffled batch attaches embeddings to the wrong text without ever throwing.
       for (const item of [...body.data].sort((a, b) => a.index - b.index)) {
