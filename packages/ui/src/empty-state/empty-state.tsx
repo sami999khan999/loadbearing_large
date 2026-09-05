@@ -10,8 +10,7 @@ export interface EmptyStateProps {
   readonly action?: ReactNode;
 }
 
-// Every string arrives as a prop. No literals anywhere in `ui` — copy lives in
-// `@loadbearing/content` and reaches here through `feature`, which is what keeps the
+// Every string arrives as a prop. No literals anywhere in `ui`, which is what keeps the
 // design system translatable and testable with props alone.
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (

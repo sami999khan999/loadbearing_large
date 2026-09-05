@@ -21,9 +21,8 @@ export interface LoggerOptions {
   readonly random?: () => number;
 }
 
-// The failure path's event code. Deliberately not in `EVENT_CATALOG`: its level
-// comes from `ERROR_CATALOG[code].severity`, and it is the only line in the system
-// whose level is decided by the thing being logged rather than by a table.
+// Deliberately not in `EVENT_CATALOG`: its level comes from `ERROR_CATALOG`, and it is
+// the only line whose level is decided by the thing being logged.
 export const ERROR_EVENT = "error.raised";
 
 // Enough frames to find the throw, short enough that a retry storm does not become
@@ -43,9 +42,8 @@ export abstract class Logger {
     this.random = options.random ?? Math.random;
   }
 
-  // The only method a sink implements. Level, sampling, bound fields, and redaction
-  // are already applied — the same reason `ContentSource.resolve()` is `protected
-  // static`: it is a property of the seam, not of each implementation.
+  // The only method a sink implements: level, sampling, bound fields and redaction are
+  // already applied, because they are properties of the seam.
   protected abstract write(entry: LogEntry): void;
 
   // A logger that merges `bound` into every line it writes.
@@ -55,8 +53,8 @@ export abstract class Logger {
     return this.level;
   }
 
-  // The call site says what happened. The catalog says how loudly, and whether the
-  // code is sampled — so one event cannot be `info` here and `error` there.
+  // The call site says what happened, the catalog how loudly — so one event cannot be
+  // `info` here and `error` there.
   public emit<C extends EventCode>(code: C, fields: EventFields<C>): void {
     // Annotated, not inferred. `as const satisfies` keeps the literal types, so an
     // entry that omits `sample` genuinely has no such property in the union.
@@ -64,9 +62,8 @@ export abstract class Logger {
     this.record(meta.level, code, fields, meta.sample);
   }
 
-  // Anything thrown. Normalised first, so an unrecognised throw becomes an
-  // `InternalError` and the raw original stays on the non-enumerable `cause` that
-  // `toJSON()` cannot reach — the one thing a logger may read and the wire may not.
+  // Normalised first, so the raw original stays on the non-enumerable `cause` —
+  // the one thing a logger may read and the wire may not.
   public failure(thrown: unknown, fields: LogFields = {}): void {
     const error = ErrorNormalizer.normalize(thrown);
     const severity = ERROR_CATALOG[error.code].severity;
@@ -113,8 +110,8 @@ export abstract class Logger {
     return { violations: fields.map((violation) => violation.field).join(",") };
   }
 
-  // The stack is attached only for `unexpected`. An expected failure is the system
-  // working, and its stack is noise on every 403 the product serves.
+  // Only for `unexpected`: an expected failure is the system working, and its stack is
+  // noise on every 403 the product serves.
   private static cause(cause: unknown, severity: ErrorSeverity): LogFields {
     if (cause === undefined || cause === null) return {};
 
@@ -125,9 +122,8 @@ export abstract class Logger {
     return stack ? { cause: described, stack: stack.slice(0, STACK_LIMIT) } : { cause: described };
   }
 
-  // `String(thrown)` on an object yields "[object Object]", which is the least
-  // useful line a 3am log can contain. Serialise instead, and let anything that
-  // resists — a circular structure, a symbol, a function — name its own type.
+  // `String(thrown)` yields "[object Object]". Serialise instead, and let anything that
+  // resists name its own type.
   private static describe(cause: unknown): string {
     if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
     if (typeof cause === "string") return cause;

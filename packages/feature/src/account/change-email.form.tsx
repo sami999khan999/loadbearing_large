@@ -41,8 +41,10 @@ export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) 
         />
       </Field>
 
-      {/* Nothing has changed yet, and the copy has to say so — a "saved" message here
-          would be a lie until the link in the old inbox is followed. */}
+      {
+        // Nothing has changed yet: a "saved" message here would be a lie until the link
+        // in the old inbox is followed.
+      }
       {change.isSuccess ? <Callout tone="info">{t("auth.changeEmailSent")}</Callout> : null}
 
       <Button type="submit" disabled={change.isPending}>

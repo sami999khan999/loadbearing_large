@@ -47,10 +47,10 @@ export function ForgotPasswordForm({ auth, resetUrl }: ForgotPasswordFormProps) 
         />
       </Field>
 
-      {/* No error branch, and that is the design. `requestPasswordReset` resolves
-          whether or not the address exists, because a failure a visitor can tell apart
-          from a success is an oracle for which addresses are registered — and this is
-          the one endpoint an anonymous caller can ask about any address at all. */}
+      {
+        // No error branch by design: a failure a visitor can tell apart from a success
+        // is an oracle for which addresses are registered.
+      }
 
       <Button type="submit" disabled={request.isPending}>
         {t("auth.resetRequest")}

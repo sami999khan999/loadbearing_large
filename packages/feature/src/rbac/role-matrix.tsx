@@ -13,49 +13,40 @@ import {
 import { type MatrixSubject, PermissionMatrix } from "./permission-matrix.js";
 
 export interface RoleMatrixProps {
-  // How many roles to show. Paged rather than unbounded because `Pagination.query` caps
-  // `limit` at 100 in the schema — a component asking for more gets a validation error
-  // from the contract rather than a slow page.
+  // Paged rather than unbounded: `Pagination.query` caps `limit` at 100, so asking for
+  // more is a validation error rather than a slow page.
   readonly limit?: number;
 }
 
-// The first component in the kit that reads from the server, and it reads through a
-// defined query — `RoleQueries.list` — rather than calling the client itself. The
-// difference is invalidation: a raw call is a read nothing can invalidate, and the ban
-// on importing `@loadbearing/api-client` here is what keeps that from happening quietly.
+// Reads through a defined query rather than calling the client: a raw call is a read
+// nothing can invalidate, which the ban on importing `api-client` here prevents.
 export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   const { t } = useMessages("role");
-  // `common` for the states every screen shares, `role` for this screen's own copy.
-  // Both are one `t()` over one `Translator`; the namespace is what makes the key type
-  // narrow enough for a typo to be a compile error.
+  // `common` for the shared states, `role` for this screen's copy. The namespace is what
+  // makes the key type narrow enough for a typo to be a compile error.
   const shell = useMessages("common");
   const client = useApiClient();
   const roles = useAppQuery(RoleQueries.list(client, { limit, offset: 0 }));
 
-  // Each role's grants become the `CapabilitySet` the matrix asks `can()` on — the same
-  // class, and the same method, the server runs inside `Authorizer.assert()`. That
-  // identity is the whole reason this screen can be trusted: it is not a second model of
-  // the rules, it is the rules.
+  // The same class and method the server runs inside `Authorizer.assert()`, which is why
+  // this screen is not a second model of the rules.
   const subjects = useMemo<readonly MatrixSubject[]>(() => {
     const registry = PermissionRegistry.instance;
 
-    // Annotated rather than inferred. `ApiClient`'s procedure types are reconstructed
-    // from the contract through two packages, and a break anywhere along that chain
-    // degrades to `any` silently — which is exactly the read this file must not do
-    // unchecked. Naming the type here turns that into a compile error.
+    // Annotated rather than inferred: `ApiClient`'s procedure types are reconstructed
+    // through two packages, and a break anywhere degrades to `any` silently.
     const items: readonly RoleDto[] = roles.data?.items ?? [];
 
     return items.map((role) => ({
       id: role.id,
       label: role.name,
       capabilities: CapabilitySet.from({
-        // Never a wildcard, even for `owner`. The seed writes out every permission as a
-        // real grant, so this shows what is actually stored rather than a claim the row
-        // would be making about itself.
+        // Never a wildcard, even for `owner`: the seed writes every permission as a real
+        // grant, so this shows what is stored.
         wildcard: false,
         org: {
-          // A permission the catalog no longer knows is a stale row, not a grant. The
-          // API returns it unfiltered on purpose; this is where it stops being trusted.
+          // A permission the catalog no longer knows is a stale row, not a grant. The API
+          // returns it unfiltered; this is where it stops being trusted.
           grants: role.permissions.filter((key) => registry.isKnown(key)),
           denies: [],
         },
@@ -71,9 +62,10 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   return (
     <section>
       <p>{t("role.subtitle")}</p>
-      {/* Read-only: no `onToggle`. Editing a grant is `rbac.permission.grant`, which is
-          a different permission and a different procedure — and a checkbox that silently
-          does nothing is worse than a word that is honest. */}
+      {
+        // Read-only: no `onToggle`. Editing a grant is a different permission and a
+        // different procedure, and a checkbox that does nothing is worse than honesty.
+      }
       <PermissionMatrix subjects={subjects} />
       {roles.data?.items.some((role) => role.key === "owner") ? (
         <StatusBadge tone="neutral">{t("role.hint.owner")}</StatusBadge>

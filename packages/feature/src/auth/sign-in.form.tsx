@@ -22,9 +22,8 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
   const { t } = useMessages("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // Distinct from `signIn.isError`, and it has to be: the second-factor fork arrives as
-  // a rejection so that both legs share one path, but it is not a failed sign-in and
-  // must not render "sign-in failed" underneath the form that is about to be replaced.
+  // Distinct from `signIn.isError`: the second-factor fork arrives as a rejection so both
+  // legs share one path, but it is not a failed sign-in.
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   const signIn = SessionMutations.useSignIn(auth);
@@ -36,9 +35,8 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
       { email, password },
       {
         onSuccess: () => onSuccess(),
-        // Branch on the code, never the message. `error.message` is the code and
-        // nothing else (09) — and matching prose would break the moment someone
-        // rewords it, and is already broken in every locale but English.
+        // Branch on the code, never the message: matching prose breaks the moment
+        // somebody rewords it, and is already broken in every locale but English.
         onError: (error) => {
           if (ErrorNormalizer.normalize(error).code === "TWO_FACTOR_REQUIRED") {
             setNeedsTwoFactor(true);
@@ -55,8 +53,8 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
         <Input
           id="email"
           type="email"
-          // What password managers key on. Omitting it is a real usability cost for a
-          // class of users who will not report it.
+          // What password managers key on: omitting it is a usability cost for users who
+          // will not report it.
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -75,8 +73,10 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
         />
       </Field>
 
-      {/* Deliberately generic — never "no account with that email" or "incorrect
-          password". Distinguishing them is an account-enumeration oracle. */}
+      {
+        // Deliberately generic: distinguishing "no such account" from "wrong password"
+        // is an account-enumeration oracle.
+      }
       {signIn.isError && !needsTwoFactor ? (
         <p role="alert" className="ui-field__error">
           {t("auth.signInFailed")}

@@ -17,9 +17,8 @@ describe("Callout", () => {
     expect(screen.getByRole("alert").className).toContain("ui-callout--danger");
   });
 
-  // `status` and not `alert` for the calm tones: an assertive live region interrupts
-  // whatever a screen reader is currently saying, and "we sent you a link" is not worth
-  // cutting somebody off mid-sentence.
+  // `status` and not `alert` for the calm tones: an assertive live region cuts a screen
+  // reader off mid-sentence.
   it("announces politely unless something actually went wrong", () => {
     render(<Callout tone="success">Your password is saved.</Callout>);
 

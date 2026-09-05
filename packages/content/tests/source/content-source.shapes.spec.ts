@@ -21,9 +21,8 @@ describe("lazy namespaces", () => {
     expect(snapshot.base["nav.roles"]).toBeUndefined();
   });
 
-  // The documented failure mode, and the reason it is the right one: `nav.roles` on
-  // screen names the exact string to grep for, and the bug is a route that forgot to
-  // declare a namespace — not a translation problem.
+  // The right failure mode: `nav.roles` on screen names the exact string to grep for,
+  // and the bug is a route that forgot to declare a namespace.
   it("renders the key itself for an undeclared namespace", async () => {
     const t = await source.translator("en", []);
 
@@ -31,13 +30,8 @@ describe("lazy namespaces", () => {
     expect(t.loaded("nav")).toBe(false);
   });
 
-  // English rides along beneath a *lazy* namespace, not only beneath the shell — which
-  // is what makes a Partial bundle safe for a namespace a route loads on demand.
-  //
-  // Asserted on the two layers rather than on a key that happens to be untranslated:
-  // pinning it to one meant this test failed the day somebody finished translating that
-  // key, which is the wrong thing to punish. `translator.spec.ts` covers the resolution
-  // itself over a fixture, where a missing key can be guaranteed.
+  // English rides beneath a *lazy* namespace, not only beneath the shell. Asserted on the
+  // two layers rather than on a key that happens to be untranslated today.
   it("falls back to English inside a lazy namespace too", async () => {
     const snapshot = await source.messages("bn", ["auth"]);
     const t = await source.translator("bn", ["auth"]);
@@ -65,15 +59,14 @@ describe("the other three shapes", () => {
     expect(await source.nav()).toEqual(navItems);
   });
 
-  // Not a stub that throws. There are no static documents — the shape exists to come
-  // from a database, and a missing slug is a 404 rather than an exception.
+  // Not a stub that throws: the shape exists to come from a database, and a missing slug
+  // is a 404.
   it("has no documents", async () => {
     expect(await source.document("terms-of-service")).toBeNull();
   });
 });
 
-// The split doc 20 promised, tested against the two real catalogs rather than a
-// hand-built empty one. That is the case that actually matters.
+// Tested against the two real catalogs rather than a hand-built empty one.
 describe("the server-only email namespace", () => {
   const server = new StaticContentSource(SERVER_CATALOG);
 
@@ -98,8 +91,8 @@ describe("the server-only email namespace", () => {
     expect(t.t("email.digest.unsubscribe")).toBe("Change how often you hear from us");
   });
 
-  // A client catalog has no email loader at all, so the lookup is skipped rather than
-  // thrown on and `t()` renders the key. A browser cannot obtain email copy by asking.
+  // A client catalog has no email loader, so the lookup is skipped and `t()` renders the
+  // key: a browser cannot obtain email copy by asking.
   it("yields nothing when a client source is asked for it by name", async () => {
     const t = await source.translator("en", ["email"]);
 

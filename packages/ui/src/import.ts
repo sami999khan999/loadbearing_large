@@ -1,8 +1,5 @@
-// Everything this package takes from outside itself, in one place. No relative
-// re-exports live here — that is what keeps it cycle-free.
-//
-// Read it as the boundary this package is defined by. Two workspace entries, both
-// type-only except the sprite URL, and no cache library, no router, no contracts.
+// The boundary this package is defined by: two workspace entries, both type-only except
+// the sprite URL, and no cache library, router or contracts.
 
 // ── @loadbearing/asset ───────────────────────────────────────────────────────
 export type { IconName } from "@loadbearing/asset";
@@ -18,7 +15,6 @@ export type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "
 export { useMemo } from "react";
 
 // ── uqr ──────────────────────────────────────────────────────────────────────
-// The only runtime dependency in this package other than the sprite. Zero deps of its
-// own, ESM, and it computes a module matrix rather than drawing — so `QrCode` renders
-// during SSR like everything else here.
+// The only runtime dependency other than the sprite. It computes a module matrix rather
+// than drawing, so `QrCode` renders during SSR.
 export { encode } from "uqr";

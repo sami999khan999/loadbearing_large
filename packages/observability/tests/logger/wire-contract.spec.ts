@@ -4,13 +4,8 @@ import { describe, expect, it } from "vitest";
 import { EVENT_CATALOG } from "../../src/catalog/index.js";
 import { JsonLogger } from "../../src/logger/json.logger.js";
 
-// The shape `infra/alloy/config.alloy` parses. Its `stage.json` reads `level` and
-// `event` from the top level of every line and promotes them to Loki labels; its
-// `external_labels` and relabel rules supply `env` and `app`. Nothing else may
-// become a label, so nothing else here is allowed to matter to the pipeline.
-//
-// This file is the only place that contract is checked. The Alloy config lives
-// outside the workspace and no compiler spans both — see docs/setup/11.
+// The shape `infra/alloy/config.alloy` parses, and the only place that contract is
+// checked: the Alloy config lives outside the workspace and no compiler spans both.
 
 const AT = new Date("2026-01-01T00:00:00.000Z");
 
@@ -34,8 +29,8 @@ describe("the wire contract Alloy depends on", () => {
     const { logger, lines } = capture();
     logger.emit("queue.job.failed", { queue: "embedding", jobId: "j1", attempt: 2 });
 
-    // Not `entry.level` or `fields.level` — the JSON stage addresses these by
-    // bare name, so nesting either one silently produces unlabelled streams.
+    // Not `entry.level` or `fields.level`: the JSON stage addresses these by bare name,
+    // so nesting either silently produces unlabelled streams.
     expect(lines[0]).toHaveProperty("level", "error");
     expect(lines[0]).toHaveProperty("event", "queue.job.failed");
   });
@@ -69,9 +64,8 @@ describe("the wire contract Alloy depends on", () => {
     const { logger, lines } = capture();
     logger.failure(new InternalError());
 
-    // `event_code` is a Loki label, so its cardinality budget is EVENT_CATALOG
-    // *plus this one*. The failure path takes its level from ERROR_CATALOG
-    // instead, which is why it is deliberately not a catalog entry.
+    // `event_code` is a Loki label, so its cardinality budget is EVENT_CATALOG *plus
+    // this one* — which takes its level from ERROR_CATALOG instead.
     expect(lines[0]).toHaveProperty("event", "error.raised");
     expect(Object.keys(EVENT_CATALOG)).not.toContain("error.raised");
   });
@@ -85,8 +79,8 @@ describe("the wire contract Alloy depends on", () => {
     });
     logger.emit("process.started", { service: "web" });
 
-    // The reason LOG_PRETTY must be false anywhere Alloy is reading. It is a
-    // terminal format, and `stage.json` drops what it cannot parse.
+    // Why LOG_PRETTY must be false anywhere Alloy is reading: it is a terminal format,
+    // and `stage.json` drops what it cannot parse.
     expect(() => JSON.parse(lines[0] ?? "")).toThrow();
   });
 });

@@ -21,18 +21,14 @@ export interface InvitationAcceptProps {
   readonly token: string;
   readonly organization: OrganizationClient;
   readonly onAccepted: () => void;
-  // Callbacks rather than hrefs, because `feature` may not import routing — and the
-  // sign-in one has to carry a redirect back here, which only the app knows how to spell.
+  // Callbacks rather than hrefs, because `feature` may not import routing: only the app
+  // knows how to spell the redirect back here.
   readonly onSignIn: () => void;
   readonly onSignUp: () => void;
 }
 
-// One component, four states, decided in order: no such invitation, expired, nobody
-// signed in, the wrong person signed in — and only then the button. The order matters
-// because each earlier state makes the later question moot.
-//
-// The email comparison here is a courtesy. The claimer compares the *verified* address
-// on the server, and a mismatch there is refused whether or not this rendered a button.
+// Four states in order, because each earlier one makes the later question moot. The
+// email comparison is a courtesy: the server compares the *verified* address.
 export function InvitationAccept({
   preview,
   token,
@@ -74,8 +70,8 @@ export function InvitationAccept({
     );
   }
 
-  // The server said no after the page said yes — revoked between the two, most likely.
-  // Everything the server refuses arrives as NOT_FOUND, and that copy already exists.
+  // The server said no after the page said yes — revoked in between, most likely. Every
+  // refusal arrives as NOT_FOUND, and that copy already exists.
   const failure = accept.error ? ErrorNormalizer.normalize(accept.error) : null;
   const failureCopy =
     failure?.code === "NOT_FOUND" ? t("organization.invitation.missing") : shell.t("state.error");

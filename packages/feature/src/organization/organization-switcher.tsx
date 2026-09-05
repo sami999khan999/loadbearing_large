@@ -4,16 +4,15 @@ import { Button, type OrganizationClient, OrganizationMutations } from "../impor
 
 export interface OrganizationSwitcherProps {
   readonly organization: OrganizationClient;
-  // Runs once the session points at the new tenant. The call site is what clears the
-  // query cache and re-runs the root loader — the same three steps sign-out takes, and
-  // for the same reason: every cached row belongs to the tenant just left.
+  // Runs once the session points at the new tenant. The call site clears the cache, for
+  // the reason sign-out does: every cached row belongs to the tenant just left.
   readonly onSwitched: () => void;
   // Where "New organization" goes. A callback, because `feature` may not import routing.
   readonly onCreate: () => void;
 }
 
-// The list comes off the session snapshot, not a query: `fetchSession` already carries
-// every membership so the switcher is right on the first painted byte.
+// Off the session snapshot, not a query: `fetchSession` already carries every membership,
+// so the switcher is right on the first painted byte.
 export function OrganizationSwitcher({
   organization,
   onSwitched,
@@ -30,7 +29,9 @@ export function OrganizationSwitcher({
       <label className="ui-field__label" htmlFor="organization-switcher">
         {t("auth.organization")}
       </label>{" "}
-      {/* A native select styled as an input, as the invite form's role picker is. */}
+      {
+        // A native select styled as an input, as the invite form's role picker is.
+      }
       <select
         id="organization-switcher"
         className="ui-input"

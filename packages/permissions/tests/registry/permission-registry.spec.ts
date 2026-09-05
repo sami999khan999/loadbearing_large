@@ -37,10 +37,8 @@ describe("PermissionRegistry", () => {
     expect(registry.meta("member.invite")?.label).toBe("Invite members");
   });
 
-  // `meta` and `scopeOf` are typed to take a `PermissionKey`, so this cannot happen
-  // through the type system. It happens at runtime — a cast, or a `CapabilitySetDto`
-  // still naming a permission that has since been deleted from the catalog. Blind
-  // indexing turned that into a `TypeError` inside `can()`, and a 403 into a 500.
+  // Reachable only at runtime — a cast, or a cached DTO naming a deleted permission.
+  // Blind indexing turned that into a `TypeError` inside `can()`, and a 403 into a 500.
   it("returns undefined rather than throwing for a key it does not define", () => {
     const gone = "task.archive" as PermissionKey;
 

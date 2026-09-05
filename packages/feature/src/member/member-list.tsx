@@ -21,9 +21,8 @@ interface MemberRow extends MemberDto {
   readonly id: string;
 }
 
-// ISO date, not a locale-formatted one. The server renders this first and the
-// browser hydrates it, and the two disagree about locale more often than not — a
-// mismatch here is a hydration warning on every members page.
+// ISO, not locale-formatted: the server renders it first and the browser hydrates it,
+// and a mismatch is a hydration warning on every members page.
 const day = (date: Date): string => date.toISOString().slice(0, 10);
 
 export function MemberList({ limit = 25 }: MemberListProps) {
@@ -32,9 +31,8 @@ export function MemberList({ limit = 25 }: MemberListProps) {
   const members = useAppQuery(MemberQueries.list(client, { limit, offset: 0 }));
 
   const rows = useMemo<readonly MemberRow[]>(() => {
-    // Annotated rather than inferred, for the reason `RoleMatrix` gives: the client's
-    // procedure types are reconstructed through two packages, and a break anywhere
-    // along that chain degrades to `any` silently.
+    // Annotated rather than inferred: the client's procedure types are reconstructed
+    // through two packages, and a break anywhere degrades to `any` silently.
     const items: readonly MemberDto[] = members.data?.items ?? [];
     return items.map((member) => ({ ...member, id: member.userId }));
   }, [members.data]);

@@ -28,9 +28,8 @@ describe("ValidationError", () => {
     expect(error.fields?.[0]?.field).toBe("assignee.email");
   });
 
-  // The requirement, asserted directly: Zod's own message is a built-in message
-  // and must not survive into the envelope. `content` renders the sentence from
-  // the rule name instead.
+  // Zod's own message must not survive into the envelope: `content` renders the
+  // sentence from the rule name instead.
   it("discards the library's default message", () => {
     const thrown = zodLike([
       {

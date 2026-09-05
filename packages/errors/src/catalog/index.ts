@@ -9,9 +9,8 @@ export interface ErrorMeta {
   readonly severity: ErrorSeverity;
 }
 
-// The closed vocabulary of failures, merged from team-owned fragments. Metadata is
-// transport-agnostic: `query` and the worker read the same `retryable` fact.
-// Add fragments here — `...billingErrors`.
+// The closed vocabulary of failures, merged from team-owned fragments — add them here.
+// Metadata is transport-agnostic: `query` and the worker read the same `retryable`.
 export const ERROR_CATALOG = {
   ...coreErrors,
 } as const;

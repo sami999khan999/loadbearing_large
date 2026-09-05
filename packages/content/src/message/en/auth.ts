@@ -1,6 +1,5 @@
-// The copy for the flows `@loadbearing/auth` (16) implements: email and password
-// sign-up and sign-in, email verification, password reset, two-factor in all three of
-// its forms, Google sign-in, and a signed-in user managing their own account.
+// The copy for every flow `@loadbearing/auth` implements, plus a signed-in user
+// managing their own account.
 export const auth = {
   // ── sign-in ──
   "auth.signIn": "Sign in",
@@ -22,9 +21,8 @@ export const auth = {
   "auth.confirmPassword": "Confirm password",
   "auth.passwordMismatch": "Those passwords do not match.",
   "auth.passwordTooShort": "Use at least 12 characters.",
-  // Sign-up is the one place this system cannot avoid confirming that an address is
-  // registered — the alternative is telling someone their account was created when it
-  // was not. Said plainly rather than hidden behind a generic failure.
+  // The one place this system cannot avoid confirming an address is registered: the
+  // alternative claims an account was created when it was not.
   "auth.emailTaken": "There is already an account with that email. Try signing in instead.",
   "auth.signUpFailed": "That account could not be created.",
 
@@ -102,8 +100,8 @@ export const auth = {
     "We sent a confirmation to your current address. The change takes effect once you approve it there.",
 
   // ── organization ──
-  // In `auth` rather than `organization` because the switcher sits in the header of
-  // every signed-in page, and this namespace is the one that layout already loads.
+  // In `auth` because the switcher sits in the header of every signed-in page, and this
+  // is the namespace that layout already loads.
   "auth.organization": "Organization",
   "auth.organizationNew": "New organization",
 
@@ -112,16 +110,15 @@ export const auth = {
   "auth.linkedAccountsHint": "Other ways to sign in to this account.",
   "auth.linkGoogle": "Link a Google account",
   "auth.unlink": "Unlink",
-  // The reason the button is absent rather than merely disabled: unlinking the only
-  // credential is how someone locks themselves out of their own account.
+  // Absent rather than disabled: unlinking the only credential is how someone locks
+  // themselves out of their own account.
   "auth.unlinkLast": "This is the only way you can sign in, so it cannot be unlinked.",
 
   // ── sessions ──
   "auth.sessions": "Where you are signed in",
   "auth.sessionCurrent": "This device",
   "auth.sessionRevoke": "Sign out",
-  // Deliberately does not promise immediacy — a desktop session is revoked when it next
-  // connects, and the cookie cache holds for up to a minute either way (16.9).
+  // Does not promise immediacy: the cookie cache holds for up to a minute either way.
   "auth.signOutEverywhere": "Sign out on all devices",
   "auth.signOutEverywhereDone": "Every other device has been signed out.",
 } as const;

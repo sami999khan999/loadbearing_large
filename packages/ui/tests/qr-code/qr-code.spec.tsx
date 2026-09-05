@@ -37,9 +37,8 @@ describe("QrCode", () => {
     expect(Number(width)).toBeGreaterThan(20);
   });
 
-  // The QR has to encode the URI verbatim — a re-encoded or trimmed one scans cleanly
-  // into an authenticator app that then generates codes the server rejects, which is
-  // the least diagnosable failure in this whole feature.
+  // Verbatim: a re-encoded or trimmed URI scans cleanly into an authenticator app that
+  // then generates codes the server rejects.
   it("encodes a longer URI into a larger grid rather than truncating", () => {
     const gridFor = (value: string) => {
       const { container } = render(<QrCode value={value} label="Scan" />);

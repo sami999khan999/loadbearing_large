@@ -9,14 +9,12 @@ export interface JsonLoggerOptions extends LoggerOptions {
   readonly pretty?: boolean;
 }
 
-// `console` is not declared under `lib: ["ES2024"]` — the same trap as `window` in
-// `ServerOnly` and `crypto` in `Uuid`. Reaching it as an optional property of
-// `globalThis` is the same runtime call, spelled so an isomorphic package compiles.
+// `console` is not declared under `lib: ["ES2024"]`, so it is reached as an optional
+// property of `globalThis` — the same call, spelled so this package compiles.
 type ConsoleLike = { log(line: string): void };
 
-// The default sink, and the one place in this repository allowed to call `console`.
-// It exists so that nothing else has to — which is why the lint rule banning
-// `console` everywhere else carries an exemption for exactly this file.
+// The one place allowed to call `console`, which is why the lint rule banning it
+// everywhere else exempts exactly this file.
 const stdout = (line: string): void => {
   (globalThis as { console?: ConsoleLike }).console?.log(line);
 };

@@ -1,10 +1,5 @@
-// Everything this package takes from outside itself, in one place. No relative
-// re-exports live here — that is what keeps it cycle-free.
-//
-// Read it as the two bans made visible. The transport package appears once and only as a
-// type; the router package does not appear at all. Both are enforced by the
-// `packages/feature/src/**` block in the root ESLint config (05), which is where they
-// have to live — Biome flags a type import identically and has no exemption for one.
+// The two bans made visible: the transport package appears once and only as a type, and
+// the router package not at all. Both are enforced in the root ESLint config.
 
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
@@ -36,9 +31,8 @@ export {
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
-// Defined queries and the two runtime hooks, never the cache library itself. A
-// component that named `useQuery` directly would be a read outside the seam, which is
-// what the ban on importing the transport package one block up already prevents.
+// Defined queries and the two runtime hooks, never the cache library: a component naming
+// `useQuery` directly would be a read outside the seam.
 export {
   AccountMutations,
   AccountQueries,

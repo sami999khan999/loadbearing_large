@@ -25,9 +25,8 @@ const render = (props: Partial<Parameters<typeof InvitationAccept>[0]>, user = T
     ["organization"],
   );
 
-// The four states, in the order the component decides them. Each earlier state makes
-// the later question moot, which is why none of these render an accept button but
-// the last.
+// The four states in the order the component decides them: each earlier one makes the
+// later question moot, so only the last renders a button.
 describe("InvitationAccept", () => {
   it("says the invitation is gone when there is no preview", async () => {
     await render({ preview: null });

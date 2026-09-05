@@ -23,9 +23,8 @@ describe("ServerOnly", () => {
     }).toThrow(ServerOnlyError);
   });
 
-  // The whole point of routing this through `errors`: a boundary switches on the
-  // code and `content` supplies the sentence. If prose ever comes back into the
-  // message, this is the test that catches it.
+  // Why this routes through `errors`: a boundary switches on the code and `content`
+  // supplies the sentence. Prose coming back into the message fails here.
   it("carries a code and the package name, and no prose at all", () => {
     global_.window = {};
 

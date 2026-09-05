@@ -12,9 +12,8 @@ import { StaticContentSource } from "../../src/source/static.content-source.js";
 const translator = (locale: "en" | "bn" = "en") => new StaticContentSource().translator(locale, []);
 
 describe("ERROR_COPY", () => {
-  // The compiler already makes this total. The test is here because the failure it
-  // guards against — a code with no copy — reaches a customer as a raw
-  // `SERVER_ONLY` on screen, so it is worth a runtime assertion too.
+  // The compiler already makes this total, but a code with no copy reaches a customer as
+  // a raw `SERVER_ONLY` on screen — worth a runtime assertion too.
   it("covers every error code", () => {
     for (const code of Object.keys(ERROR_CATALOG) as ErrorCode[]) {
       expect(ERROR_COPY[code], code).toBeTypeOf("string");
@@ -23,9 +22,8 @@ describe("ERROR_COPY", () => {
     expect(Object.keys(ERROR_COPY).sort()).toEqual(Object.keys(ERROR_CATALOG).sort());
   });
 
-  // Every value has to be a shell key. A code pointed at a lazily loaded namespace
-  // renders as its own raw key on any route that did not declare that namespace —
-  // which is exactly the case an error page cannot afford to get wrong.
+  // Every value has to be a shell key: one pointed at a lazy namespace renders as its own
+  // raw key on any route that did not declare it.
   it("resolves for every code against a snapshot that asked for nothing", async () => {
     const t = await translator();
 
@@ -62,9 +60,8 @@ describe("ErrorCopy", () => {
     );
   });
 
-  // The end-to-end shape of the split: `core` throws, `errors` carries the code and
-  // `{ package }`, and this package supplies the words. The sentence used to be a
-  // string literal inside `ServerOnly.assert`; it is copy now.
+  // The end-to-end split: `core` throws, `errors` carries the code and `{ package }`,
+  // and this package supplies the words.
   it("renders the sentence ServerOnly.assert used to carry inline", async () => {
     const t = await translator();
     const envelope = new ServerOnlyError("@loadbearing/infrastructure").toJSON();

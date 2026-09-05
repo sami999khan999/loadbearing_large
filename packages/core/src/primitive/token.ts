@@ -2,9 +2,8 @@ type WebCrypto = {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
 };
 
-// An opaque random string for anything that must be unguessable — invitation tokens
-// first. Here rather than beside `ApiKeyHasher` because `application` cannot reach
-// `auth`, and the invite use-case is the one that needs it.
+// An opaque random string for anything unguessable. Here rather than beside
+// `ApiKeyHasher` because `application` cannot reach `auth`.
 export class Token {
   private constructor() {}
 

@@ -41,9 +41,8 @@ export class StaticContentSource extends ContentSource {
     return new Translator(await this.messages(locale, namespaces));
   }
 
-  // The next three are genuinely synchronous work, so they return `Promise.resolve`
-  // rather than being `async` with no `await` — which `require-await` rejects, and
-  // which would claim an asynchrony these do not have. Only the two above really wait.
+  // Genuinely synchronous, so `Promise.resolve` rather than an `async` with no `await`
+  // claiming an asynchrony these do not have.
   public override media(key: ImageKey): Promise<ResolvedMedia> {
     return Promise.resolve(this.mediaResolver.resolve(key));
   }
@@ -52,14 +51,13 @@ export class StaticContentSource extends ContentSource {
     return Promise.resolve(navItems);
   }
 
-  // Always `null`. There are no static documents — long-form editorial is the shape
-  // that exists to come from a database, and a `DbContentSource` is where it lands.
+  // Always `null`: long-form editorial is the shape that exists to come from a database.
   public override document(_slug: string): Promise<string | null> {
     return Promise.resolve(null);
   }
 
-  // A catalog that cannot serve a namespace is skipped, never thrown on — that is how
-  // a client catalog structurally cannot obtain server-only copy.
+  // Skipped rather than thrown on, which is how a client catalog structurally cannot
+  // obtain server-only copy.
   private static async load(
     loaders: Partial<Record<Namespace, BundleLoader>>,
     namespaces: readonly Namespace[],

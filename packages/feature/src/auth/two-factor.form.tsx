@@ -10,8 +10,7 @@ import {
 } from "../import.js";
 
 // The three ways to finish a sign-in that answered `TWO_FACTOR_REQUIRED`. Alternatives,
-// not a sequence: the authenticator app, a backup code for the phone that is gone, or a
-// mailed code for the phone that is merely elsewhere.
+// not a sequence.
 type Method = "totp" | "backup" | "otp";
 
 export interface TwoFactorFormProps {
@@ -27,9 +26,8 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
   const [pending, setPending] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
-  // Plain promises rather than `useAppMutation`, as this form has always done: there is
-  // no session query to invalidate yet — the session does not exist until this succeeds,
-  // and the route's `complete()` is what refetches it.
+  // Plain promises rather than `useAppMutation`: there is no session to invalidate until
+  // this succeeds, and the route's `complete()` is what refetches it.
   const run = (work: Promise<void>, after?: () => void) => {
     setFailed(false);
     setPending(true);
@@ -46,8 +44,8 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
     return run(auth.verifyTwoFactor(code));
   };
 
-  // Switching method clears the code. Carrying a half-typed six-digit TOTP into the
-  // backup-code field submits something guaranteed to fail and burns a rate-limit slot.
+  // Switching method clears the code: a half-typed TOTP carried into the backup-code
+  // field submits a guaranteed failure and burns a rate-limit slot.
   const switchTo = (next: Method) => {
     setMethod(next);
     setCode("");
@@ -66,8 +64,8 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
         <Input
           id="code"
           autoComplete="one-time-code"
-          // A backup code is alphanumeric and longer; only the two numeric methods get
-          // the numeric keypad and the six-character ceiling.
+          // A backup code is alphanumeric and longer, so only the numeric methods get the
+          // keypad and the six-character ceiling.
           inputMode={backup ? "text" : "numeric"}
           pattern={backup ? undefined : "[0-9]*"}
           maxLength={backup ? 24 : 6}
@@ -89,9 +87,10 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
         {pending ? t("auth.signingIn") : t("auth.signIn")}
       </Button>
 
-      {/* The way out for someone who cannot produce the factor they enrolled. Both
-          alternatives stay reachable from every method, so there is no order to get
-          stuck in. */}
+      {
+        // Both alternatives stay reachable from every method, so there is no order to
+        // get stuck in.
+      }
       {method === "totp" ? (
         <Button variant="ghost" onClick={() => switchTo("backup")}>
           {t("auth.twoFactorUseBackup")}

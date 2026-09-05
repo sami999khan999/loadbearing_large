@@ -27,9 +27,10 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
       <ul>
         {rows.map((session) => (
           <li key={session.id}>
-            {/* The user agent, unparsed. Turning it into "Chrome on macOS" needs a
-                lookup table that is wrong for every browser released after it shipped,
-                and the raw string is what someone recognising their own device reads. */}
+            {
+              // Unparsed: "Chrome on macOS" needs a lookup table that is wrong for every
+              // browser released after it shipped.
+            }
             <span>{session.userAgent ?? session.ipAddress ?? session.id}</span>
 
             <Button
@@ -47,9 +48,10 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
         <Callout tone="success">{t("auth.signOutEverywhereDone")}</Callout>
       ) : null}
 
-      {/* Every session but this one, so the page you are reading stays usable. The copy
-          deliberately does not promise immediacy: a desktop session is revoked when it
-          next connects, and the cookie cache holds for up to a minute regardless (16.9). */}
+      {
+        // Every session but this one. The copy does not promise immediacy: the cookie
+        // cache holds for up to a minute regardless.
+      }
       <Button
         variant="danger"
         disabled={revokeOthers.isPending}

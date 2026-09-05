@@ -32,9 +32,8 @@ describe("ImageManifest", () => {
   });
 
   it("does not admit a prototype member", () => {
-    // `Object.hasOwn`, not `in`. `in` walks the prototype chain, so `"toString"` would
-    // pass the guard and `get()` would hand back a function — the same bug the
-    // permission catalog had.
+    // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `"toString"` would
+    // pass the guard and `get()` would hand back a function.
     expect(ImageManifest.isKnown("toString")).toBe(false);
     expect(ImageManifest.isKnown("constructor")).toBe(false);
   });

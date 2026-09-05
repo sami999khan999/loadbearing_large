@@ -1,8 +1,7 @@
 export interface FontMeta {
   readonly label: string;
-  // The full stack, fallbacks included. Written out rather than assembled, because a
-  // stack is one decision and splitting it into a family plus a fallback list invites
-  // a component to reassemble it differently.
+  // The full stack, written out rather than assembled: splitting it into a family plus a
+  // fallback list invites a component to reassemble it differently.
   readonly stack: string;
 }
 
@@ -33,9 +32,8 @@ export class FontRegistry {
     return Object.hasOwn(FONTS, value);
   }
 
-  // Overrides the `--font-sans` custom property on the root rather than restyling
-  // anything: every component already reads that variable, so one line changes the
-  // whole system and nothing re-renders.
+  // Overrides `--font-sans` on the root rather than restyling anything, so one line
+  // changes the whole system and nothing re-renders.
   public static apply(root: HTMLElement, key: FontKey): void {
     root.style.setProperty("--font-sans", FONTS[key].stack);
   }

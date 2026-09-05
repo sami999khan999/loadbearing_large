@@ -70,8 +70,9 @@ export function ResetPasswordForm({ auth, token, onSuccess }: ResetPasswordFormP
         />
       </Field>
 
-      {/* One message for expired and already-spent alike: the user cannot act on the
-          difference, and both mean "ask for another link". */}
+      {
+        // One message for expired and already-spent alike: both mean "ask for another".
+      }
       {reset.isError ? <Callout tone="danger">{t("auth.resetFailed")}</Callout> : null}
 
       <Button type="submit" disabled={reset.isPending || mismatch || tooShort}>

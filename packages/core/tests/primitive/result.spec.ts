@@ -40,10 +40,8 @@ describe("mapOk / mapErr", () => {
   });
 });
 
-// These pin the narrowing behaviour, which is the whole reason `Result` is a union
-// rather than an abstract class. They are compile-time assertions as much as runtime
-// ones: `tests/` is inside the package's tsconfig `include`, so if narrowing regresses,
-// `pnpm typecheck` fails here before any test runs.
+// Compile-time assertions as much as runtime ones: `tests/` is inside the tsconfig
+// `include`, so a narrowing regression fails `pnpm typecheck` before any test runs.
 describe("narrowing", () => {
   const widen = (r: Result<number, string>): Result<number, string> => r;
 

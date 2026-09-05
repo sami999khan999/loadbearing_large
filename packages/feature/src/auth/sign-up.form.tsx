@@ -10,9 +10,8 @@ import {
   useState,
 } from "../import.js";
 
-// Kept in step with `emailAndPassword.minPasswordLength` in `AuthFactory`. Checked here
-// too rather than only on the server, because a rejected sign-up that clears the form
-// is a worse way to learn this than a sentence under the field.
+// Kept in step with `minPasswordLength` in `AuthFactory`. Checked here too, because a
+// rejected sign-up that clears the form is a worse way to learn it.
 const MIN_PASSWORD_LENGTH = 12;
 
 export interface SignUpFormProps {
@@ -22,8 +21,8 @@ export interface SignUpFormProps {
   // Where the link in the verification email should land. The app owns its own routes,
   // so this package is told rather than deciding.
   readonly verifyCallbackUrl: string;
-  // Handed the address, because the next screen says "we sent a link to {email}" and
-  // this form is about to stop existing.
+  // Handed the address: the next screen renders it back, and this form is about to stop
+  // existing.
   readonly onSuccess: (email: string) => void;
 }
 
@@ -36,13 +35,13 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
   const signUp = SessionMutations.useSignUp(auth);
 
-  // Derived, not state. Storing a validity flag beside the fields it is derived from is
-  // how the two get out of step for one render.
+  // Derived, not state: a validity flag stored beside its own inputs gets out of step for
+  // one render.
   const mismatch = confirmation.length > 0 && confirmation !== password;
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
 
-  // Branch on the code, never the message. `error.message` is the code and nothing else
-  // (09), and matching prose is already broken in every locale but English.
+  // Branch on the code, never the message: matching prose is already broken in every
+  // locale but English.
   const failure = signUp.isError ? ErrorNormalizer.normalize(signUp.error).code : null;
 
   const submit = (event: FormEvent) => {
@@ -71,8 +70,8 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         <Input
           id="email"
           type="email"
-          // What password managers key on. Omitting it is a real usability cost for a
-          // class of users who will not report it.
+          // What password managers key on: omitting it is a usability cost for users who
+          // will not report it.
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -88,8 +87,8 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         <Input
           id="password"
           type="password"
-          // `new-password`, not `current-password`. It is what tells a password manager
-          // to offer to generate one rather than to fill the old one in.
+          // `new-password`, not `current-password`: it tells a password manager to offer
+          // to generate one rather than fill the old one in.
           autoComplete="new-password"
           minLength={MIN_PASSWORD_LENGTH}
           value={password}
@@ -113,9 +112,10 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         />
       </Field>
 
-      {/* Sign-up is the one flow that cannot hide whether an address is registered —
-          the alternative is telling someone their account was created when it was not.
-          Every other failure stays generic. */}
+      {
+        // The one flow that cannot hide whether an address is registered: the
+        // alternative claims an account was created when it was not.
+      }
       {failure ? (
         <p role="alert" className="ui-field__error">
           {failure === "CONFLICT" ? t("auth.emailTaken") : t("auth.signUpFailed")}

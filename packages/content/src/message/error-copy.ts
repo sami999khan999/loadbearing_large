@@ -2,9 +2,8 @@ import type { ErrorCode, ErrorEnvelope, FieldViolation } from "../import.js";
 import type { Translator } from "../translator/index.js";
 import type { ShellMessageKey } from "./namespace.js";
 
-// The only place in the repository where a failure gets words. `Record<ErrorCode, …>`
-// makes it total; the value type is `ShellMessageKey` so a code can never be mapped
-// into a lazily loaded namespace and render as its own raw key.
+// The only place a failure gets words. `ShellMessageKey` as the value type is what stops
+// a code being mapped into a lazy namespace and rendering as its own raw key.
 export const ERROR_COPY: Readonly<Record<ErrorCode, ShellMessageKey>> = {
   UNAUTHORIZED: "error.unauthorized",
   FORBIDDEN: "error.forbidden",

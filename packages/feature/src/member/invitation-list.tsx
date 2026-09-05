@@ -17,9 +17,8 @@ export interface InvitationListProps {
 
 const day = (date: Date): string => date.toISOString().slice(0, 10);
 
-// Pending invitations, each with a revoke button that only a holder of
-// `member.invite` sees. Hiding the button is a courtesy; the use-case asserts the same
-// key, so a request without it is FORBIDDEN whether or not the button was rendered.
+// Hiding the revoke button is a courtesy: the use-case asserts the same key, so a
+// request without it is FORBIDDEN whether or not the button rendered.
 export function InvitationList({ limit = 25 }: InvitationListProps) {
   const { t } = useMessages("member");
   const client = useApiClient();
@@ -27,9 +26,8 @@ export function InvitationList({ limit = 25 }: InvitationListProps) {
   const invitations = useAppQuery(MemberQueries.invitations(client, { limit, offset: 0 }));
   const revoke = MemberMutations.useRevokeInvitation(client);
 
-  // Annotated rather than inferred, for the reason `RoleMatrix` gives: the client's
-  // procedure types are reconstructed through two packages, and a break anywhere along
-  // that chain degrades to `any` silently. Naming the type turns it into a compile error.
+  // Annotated rather than inferred: the client's procedure types are reconstructed
+  // through two packages, and a break anywhere degrades to `any` silently.
   const rows: readonly InvitationDto[] = invitations.data?.items ?? [];
 
   if (invitations.isPending) return null;

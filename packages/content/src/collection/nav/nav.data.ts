@@ -2,10 +2,8 @@ import type { IconName, ModuleKey } from "../../import.js";
 import type { NamespaceKeys } from "../../message/index.js";
 import { NavContract, type NavItem } from "./nav.schema.js";
 
-// The authoring shape, narrower than `NavItem` on all three string fields. It is what
-// makes a menu entry naming a module that does not exist, an icon that is not in the
-// sprite, or a label key with no copy behind it a **compile** error — while the file is
-// still a literal. `NavItem` stays wide because a database row does not get that.
+// Narrower than `NavItem` on all three string fields, so an unknown module, icon or
+// label key is a **compile** error while this file is still a literal.
 interface NavRecord {
   readonly module: ModuleKey;
   readonly labelKey: NamespaceKeys["nav"];

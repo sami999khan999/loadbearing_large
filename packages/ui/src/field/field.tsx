@@ -2,9 +2,8 @@ import type { ReactNode } from "../import.js";
 
 export interface FieldProps {
   readonly label: string;
-  // Required, not optional. A label that is not tied to a control is decoration: a
-  // screen reader announces the input as unlabelled and a click on the text does
-  // nothing. Making it mandatory is what stops that shipping.
+  // Required, not optional: a label not tied to a control is decoration, and the input
+  // is announced as unlabelled.
   readonly htmlFor: string;
   readonly hint?: string;
   readonly error?: string;
@@ -26,8 +25,10 @@ export function Field({ label, htmlFor, hint, error, children }: FieldProps) {
           {hint}
         </p>
       ) : null}
-      {/* `role="alert"` so the message is announced when it appears, not only when the
-          input is next focused. */}
+      {
+        // `role="alert"` so the message is announced when it appears, not only when the
+        // input is next focused.
+      }
       {error ? (
         <p className="ui-field__error" id={errorId} role="alert">
           {error}

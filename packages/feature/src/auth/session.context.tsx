@@ -17,8 +17,7 @@ export interface SessionUser {
   readonly id: string;
   readonly email: string;
   readonly name: string;
-  // The tenant this session is pinned to, and every tenant it could be pinned to.
-  // Both ride the SSR snapshot so the switcher is right on the first painted byte
+  // Both ride the SSR snapshot, so the switcher is right on the first painted byte
   // rather than after a second round trip.
   readonly activeOrganizationId: string;
   readonly organizations: readonly SessionOrganization[];
@@ -33,9 +32,8 @@ const SessionContext = createContext<SessionValue | null>(null);
 
 export interface SessionProviderProps {
   readonly user: SessionUser | null;
-  // The DTO, not the class. This is what crosses the SSR boundary as JSON, and
-  // reconstructing it here is the round-trip property from `permissions` doing its
-  // actual job: `can()` on the client is the same `can()` the server ran.
+  // The DTO, not the class: this crosses the SSR boundary as JSON, and reconstructing it
+  // is what makes client `can()` the same `can()` the server ran.
   readonly capabilities: CapabilitySetDto;
   readonly children: ReactNode;
 }

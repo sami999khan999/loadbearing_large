@@ -8,9 +8,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly children: ReactNode;
 }
 
-// `type` is required by the DOM spec's default being wrong: an unset `type` inside a
-// form is `submit`, so every icon button in a form submits it. Defaulted here rather
-// than remembered at each call site.
+// An unset `type` inside a form is `submit`, so every icon button would submit it.
+// Defaulted here rather than remembered at each call site.
 export function Button({ variant = "primary", type = "button", className, ...rest }: ButtonProps) {
   return (
     <button

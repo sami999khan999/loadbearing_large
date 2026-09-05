@@ -94,9 +94,8 @@ describe("SignUpForm", () => {
     expect(signUp).not.toHaveBeenCalled();
   });
 
-  // Branch on the code, never the message. `error.message` is the code and nothing else
-  // (09) — matching prose breaks the moment somebody rewords it, and is already broken
-  // in every locale but English.
+  // Branch on the code, never the message: matching prose breaks the moment somebody
+  // rewords it, and is already broken in every locale but English.
   it("tells a returning user to sign in instead of reporting a failure", async () => {
     await renderWithFakes(
       <SignUpForm

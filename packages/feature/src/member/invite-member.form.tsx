@@ -14,8 +14,8 @@ import {
   useState,
 } from "../import.js";
 
-// The invite form: an address and a role. The roles come from the same query the
-// roles page reads, so a role created there is offered here with no second list.
+// The roles come from the same query the roles page reads, so a role created there is
+// offered here with no second list.
 export function InviteMemberForm() {
   const { t } = useMessages("member");
   const shell = useMessages("common");
@@ -26,9 +26,8 @@ export function InviteMemberForm() {
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState("");
 
-  // Annotated rather than inferred, for the reason `RoleMatrix` gives: the client's
-  // procedure types are reconstructed through two packages, and a break anywhere along
-  // that chain degrades to `any` silently.
+  // Annotated rather than inferred: the client's procedure types are reconstructed
+  // through two packages, and a break anywhere degrades to `any` silently.
   const options: readonly RoleDto[] = roles.data?.items ?? [];
   // `member` by default, never `owner`: the wildcard role should be a deliberate pick.
   const selectedRole = roleId || (options.find((role) => role.key === "member")?.id ?? "");
@@ -42,8 +41,7 @@ export function InviteMemberForm() {
     );
   };
 
-  // The one failure that deserves its own sentence. Everything else is the generic
-  // copy the error catalog already maps.
+  // The one failure that deserves its own sentence; everything else uses the catalog's.
   const failure = invite.error ? ErrorNormalizer.normalize(invite.error) : null;
   const failureCopy =
     failure?.code === "CONFLICT" ? t("member.invite.alreadyMember") : shell.t("state.error");
@@ -62,8 +60,9 @@ export function InviteMemberForm() {
       </Field>
 
       <Field label={t("member.invite.role")} htmlFor="invite-role">
-        {/* A native select styled as an input: the design system has no select yet, and
-            a role picker is the one place one is needed. */}
+        {
+          // A native select styled as an input: the design system has no select yet.
+        }
         <select
           id="invite-role"
           className="ui-input"

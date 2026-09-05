@@ -21,9 +21,10 @@ export function VerifyEmailNotice({ auth, email, verifyCallbackUrl }: VerifyEmai
         {t("auth.verifyEmailSent", { email })}
       </Callout>
 
-      {/* Resolves either way, like the reset request and for the same reason: this is
-          reachable with any address, so a distinguishable failure is an enumeration
-          oracle. The server allows three a minute. */}
+      {
+        // Resolves either way: reachable with any address, so a distinguishable failure
+        // is an enumeration oracle.
+      }
       {resend.isSuccess ? <Callout tone="info">{t("auth.verifyEmailResent")}</Callout> : null}
 
       <Button

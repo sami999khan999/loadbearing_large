@@ -8,10 +8,8 @@ const ALL = PermissionRegistry.instance.all();
 const FIRST = ALL[0];
 
 describe("PermissionMatrix", () => {
-  // The test doc 23 names as the one worth writing first: the same component, two
-  // capability fixtures, and a different answer. It exercises the DTO round-trip, the
-  // session context, and `CapabilitySet.can` at once — and fails loudly the day the
-  // client and server stop agreeing about permissions.
+  // The same component, two capability fixtures, a different answer — which exercises the
+  // DTO round-trip, the session context and `CapabilitySet.can` at once.
   it("answers differently for two different capability sets", async () => {
     if (!FIRST) throw new Error("the permission catalog is empty");
 

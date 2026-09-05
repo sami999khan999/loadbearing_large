@@ -15,9 +15,8 @@ export interface TwoFactorPanelProps {
   readonly account: AccountClient;
 }
 
-// Everything you can do to two-factor once it is already on: turn it off, or replace
-// the backup codes. Both take the password, for the same reason enrolment does — a
-// stolen session must not be able to remove the factor protecting the account.
+// Turning two-factor off, or replacing the backup codes. Both take the password: a
+// stolen session must not remove the factor protecting the account.
 export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
   const { t } = useMessages("auth");
   const [password, setPassword] = useState("");
@@ -52,9 +51,10 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
         <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout>
       ) : null}
 
-      {/* The new codes replace every previous one, which is the point rather than a
-          side effect: codes that have been printed or pasted somewhere are exactly the
-          reason to ask for a fresh set. */}
+      {
+        // The new codes replace every previous one, which is the point rather than a
+        // side effect.
+      }
       {regenerate.isSuccess ? (
         <>
           <Callout tone="warning" title={t("auth.backupCodesRegenerated")}>

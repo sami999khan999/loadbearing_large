@@ -8,10 +8,8 @@ export interface MatrixSubject {
 }
 
 export interface PermissionMatrixProps {
-  // Subjects arrive as a prop rather than being fetched here, and that is the one
-  // deliberate departure from the fetch-here pattern: the rows are the *catalog*, which
-  // is already in the bundle, and the columns are whatever the caller is comparing —
-  // roles on an admin screen, two users in a support tool.
+  // A prop rather than a fetch, deliberately: the rows are the bundled catalog and the
+  // columns are whatever the caller is comparing.
   readonly subjects: readonly MatrixSubject[];
   readonly goalId?: string;
   readonly onToggle?: (subjectId: string, permission: PermissionKey) => void;
@@ -30,7 +28,11 @@ export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatri
     <table className="ui-data-table">
       <thead>
         <tr>
-          <th scope="col">{/* the permission column has no heading of its own */}</th>
+          <th scope="col">
+            {
+              // The permission column has no heading of its own.
+            }
+          </th>
           {subjects.map((subject) => (
             <th key={subject.id} scope="col">
               {subject.label}
@@ -41,8 +43,10 @@ export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatri
       <tbody>
         {permissions.map((permission) => (
           <tr key={permission}>
-            {/* `scope="row"` so a screen reader announces which permission a cell is
-                about — without it every cell reads as a bare "yes" or "no". */}
+            {
+              // `scope="row"`, or a screen reader reads every cell as a bare "yes"
+              // or "no" with no permission attached.
+            }
             <th scope="row">
               <code>{permission}</code>
             </th>
@@ -58,9 +62,8 @@ export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatri
                       onChange={() => onToggle(subject.id, permission)}
                     />
                   ) : // A word, not a glyph. The row and column headers already say which
-                  // permission and which subject a cell is about, so the cell only has
-                  // to carry the answer — and "✓" announces as "check mark", which is
-                  // not one. A design pass can swap in an icon behind `data-allowed`.
+                  // permission and subject a cell is about, so the cell carries only the
+                  // answer. A design pass can swap in an icon behind `data-allowed`.
                   allowed ? (
                     t("state.allowed")
                   ) : (

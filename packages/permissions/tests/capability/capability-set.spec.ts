@@ -5,9 +5,8 @@ import { type PermissionKey, PermissionRegistry } from "../../src/registry/permi
 const GOAL = "018f8c00-0000-7000-8000-000000000001";
 const OTHER_GOAL = "018f8c00-0000-7000-8000-000000000002";
 
-// Every key the shipped catalog defines is org-scoped, so the goal-scoped branch
-// of `can()` is unreachable through it. Stubbing `scopeOf` tests that branch now
-// instead of leaving rule 3 unverified until a slice adds a goal-scoped key.
+// Every shipped key is org-scoped, so the goal-scoped branch of `can()` is unreachable
+// through the catalog. Stubbing `scopeOf` tests it now rather than never.
 const treatEveryKeyAsGoalScoped = (): void => {
   vi.spyOn(PermissionRegistry.instance, "scopeOf").mockReturnValue("goal");
 };
@@ -104,10 +103,8 @@ describe("CapabilitySet", () => {
     expect(caps.goalsWith("member.read", [GOAL, OTHER_GOAL])).toEqual([GOAL]);
   });
 
-  // The two shapes that hold a goal-scoped permission in goals their own DTO never
-  // names. Both answered `[]` before the candidate set became a parameter, which
-  // fed an empty permitted scope into `VectorStore.search()` — org-wide chunks
-  // only, with no error.
+  // The two shapes holding a goal-scoped permission in goals their DTO never names.
+  // Both answered `[]` before the candidate set became a parameter.
   it("resolves every candidate goal for a wildcard holder", () => {
     treatEveryKeyAsGoalScoped();
     const caps = CapabilitySet.from({
@@ -166,10 +163,8 @@ describe("CapabilitySet", () => {
   });
 });
 
-// A key the catalog does not define cannot arrive through the type system, but it
-// can arrive at runtime: from a cast, or from a `CapabilitySetDto` that outlived
-// the permission it names — a Redis entry written before the key was deleted and
-// still inside its sixty-second TTL.
+// An undefined key cannot arrive through the type system but can at runtime: from a
+// cast, or a cached DTO that outlived the permission it names.
 describe("CapabilitySet and unrecognised permissions", () => {
   const GONE = "task.archive" as PermissionKey;
 

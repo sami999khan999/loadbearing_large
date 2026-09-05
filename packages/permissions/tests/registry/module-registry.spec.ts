@@ -40,10 +40,8 @@ describe("ModuleRegistry", () => {
     expect(registry.visibleModules(caps)).toEqual(["member"]);
   });
 
-  // `visibleModules()` asks without a `goalId`, and rule 3 makes a goal-scoped
-  // permission `false` in that case — so a module gated on one would be invisible
-  // to everyone, forever, with nothing to indicate why. The docs say to gate on
-  // org-scoped keys; this is what makes that a checked claim.
+  // `visibleModules()` asks without a `goalId`, so a module gated on a goal-scoped key
+  // would be invisible to everyone, forever, with nothing to indicate why.
   it("gates every module on an org-scoped permission", () => {
     for (const [module, gate] of Object.entries(GATES)) {
       expect(PermissionRegistry.instance.scopeOf(gate.permission), module).toBe("org");

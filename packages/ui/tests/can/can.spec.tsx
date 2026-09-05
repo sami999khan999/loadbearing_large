@@ -44,9 +44,8 @@ describe("Can", () => {
   });
 
   it("calls the same CapabilitySet the server calls", () => {
-    // The identity is the whole point of the permissions package: one implementation
-    // used by both sides, not two that agree today. So the component's answer and a
-    // direct call have to be the same answer.
+    // One implementation used by both sides, not two that agree today: the component's
+    // answer and a direct call have to be the same answer.
     const capabilities = setFrom(["rbac.role.read"]);
     const { container } = render(
       <Can permission="member.read" capabilities={capabilities}>

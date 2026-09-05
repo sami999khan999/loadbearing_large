@@ -10,8 +10,7 @@ export interface ImageAsset {
 }
 
 // The bundler fingerprints each import, so `src` is a content-hashed URL that can be
-// cached forever and invalidates itself when the file changes. The Tauri bundle ships
-// the same files and serves them offline (30).
+// cached forever and invalidates itself when the file changes.
 const IMAGES = {
   "brand.logo": { src: brandLogo, width: 160, height: 40, alt: "Loadbearing" },
 } as const satisfies Record<string, ImageAsset>;

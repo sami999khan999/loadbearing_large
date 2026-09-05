@@ -88,9 +88,10 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
         />
       </Field>
 
-      {/* The success message says other devices were signed out, because they were —
-          `revokeOtherSessions` is set on the call, and a user who does not know that
-          will report it as a bug. */}
+      {
+        // The copy says other devices were signed out because they were:
+        // `revokeOtherSessions` is set on the call.
+      }
       {change.isSuccess ? <Callout tone="success">{t("auth.changePasswordDone")}</Callout> : null}
       {change.isError ? <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout> : null}
 

@@ -5,18 +5,14 @@ export interface SessionGuardProps {
   readonly permission?: PermissionKey;
   readonly goalId?: string;
   readonly children: ReactNode;
-  // Callbacks, never a `<Navigate>`. That is the router ban in practice: `apps/web`
-  // passes `() => navigate({ to: "/sign-in" })` and the desktop shell passes its own.
-  // The component knows *that* it should redirect, never *how*.
+  // Callbacks, never a `<Navigate>` — the router ban in practice. The component knows
+  // *that* it should redirect, never *how*.
   readonly onUnauthenticated: () => void;
   readonly onForbidden: () => void;
 }
 
-// The weakest of four enforcement surfaces, and the only one a user can see. The order
-// of authority is `Authorizer.assert()` in the use-case, then `principalMiddleware`,
-// then the route guard, then this. Removing a permission from a role must hide the
-// affordance **and** return FORBIDDEN — one without the other is either security
-// theatre or a UI full of buttons that error.
+// The weakest of four enforcement surfaces and the only one a user can see: the gate is
+// `Authorizer.assert()` in the use-case, which runs whether or not this rendered.
 export function SessionGuard({
   permission,
   goalId,

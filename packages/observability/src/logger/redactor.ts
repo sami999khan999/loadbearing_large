@@ -17,9 +17,8 @@ const DENIED: readonly string[] = [
 
 export const REDACTED = "[redacted]";
 
-// The backstop, not the defence. `EventShape` is what stops a token being logged in
-// the first place, by making an undeclared field a compile error. This catches what
-// a `child()` binding drags in, where the type is a bare `LogFields`.
+// The backstop, not the defence: `EventShape` is what stops a token being logged. This
+// catches what a `child()` binding drags in, where the type is a bare `LogFields`.
 export class Redactor {
   private constructor() {}
 
@@ -41,8 +40,8 @@ export class Redactor {
       }
     }
 
-    // Nothing to redact is the common case, so return the original rather than a
-    // copy — this runs on every line the process emits.
+    // Nothing to redact is the common case, so return the original rather than a copy:
+    // this runs on every line the process emits.
     return hit ? out : fields;
   }
 }

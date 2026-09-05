@@ -12,10 +12,8 @@ import {
   useState,
 } from "../import.js";
 
-// Password, then scan, then prove it scanned. The third step is not ceremony: Better
-// Auth does not switch two-factor on until a code from the secret comes back, and
-// enabling it on the strength of a QR nobody scanned is how someone locks themselves
-// out at their next sign-in.
+// Password, then scan, then prove it scanned. The third step is not ceremony: enabling
+// on the strength of a QR nobody scanned locks someone out at their next sign-in.
 type Step = "password" | "verify" | "done";
 
 export interface TwoFactorSetupProps {
@@ -42,8 +40,8 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
         onSuccess: (enrolment) => {
           setTotpUri(enrolment.totpUri);
           setBackupCodes(enrolment.backupCodes);
-          // Dropped as soon as it has been spent. Holding it in state for the rest of
-          // the wizard is a password sitting in a React tree for no further reason.
+          // Dropped as soon as it is spent: holding it is a password sitting in a React
+          // tree for no further reason.
           setPassword("");
           setStep("verify");
         },
@@ -59,8 +57,10 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
   if (step === "password") {
     return (
       <form onSubmit={start} noValidate>
-        {/* The password is what stops a stolen session enrolling its own authenticator
-            and locking the real owner out permanently. */}
+        {
+          // The password stops a stolen session enrolling its own authenticator and
+          // locking the owner out permanently.
+        }
         <Field label={t("auth.twoFactorConfirmPassword")} htmlFor="enable-password">
           <Input
             id="enable-password"
@@ -87,8 +87,10 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
         <QrCode value={totpUri} label={t("auth.twoFactorScan")} />
         <p className="ui-field__hint">{t("auth.twoFactorScan")}</p>
 
-        {/* The secret in text, for anyone whose authenticator cannot use a camera. The
-            same string the QR encodes, so there is nothing to keep in step. */}
+        {
+          // The same string the QR encodes, for an authenticator with no camera — so
+          // there is nothing to keep in step.
+        }
         <Field label={t("auth.twoFactorManual")} htmlFor="totp-uri">
           <Input id="totp-uri" readOnly value={totpUri} />
         </Field>
@@ -127,9 +129,9 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
     <>
       <Callout tone="success">{t("auth.twoFactorEnabled")}</Callout>
 
-      {/* Shown once and never again — Better Auth stores these encrypted and the
-          endpoint that reads them back is server-only on purpose. The warning has to
-          carry its whole weight here, because there is no second chance to explain it. */}
+      {
+        // Shown once and never again, so the warning carries its whole weight here.
+      }
       <Callout tone="warning" title={t("auth.backupCodes")}>
         {t("auth.backupCodesHint")}
       </Callout>

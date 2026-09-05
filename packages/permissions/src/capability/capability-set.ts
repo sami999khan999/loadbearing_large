@@ -1,6 +1,5 @@
-// The direct file, not `../registry/index.js`: that barrel also loads
-// `module-registry.ts`, which imports this folder back. Type-only today, so the
-// barrel would work — but this import is what would break the day it is not.
+// The direct file, not `../registry/index.js`: that barrel loads `module-registry.ts`,
+// which imports this folder back.
 import { type PermissionKey, PermissionRegistry } from "../registry/permission-registry.js";
 
 export interface ScopedSetDto {
@@ -108,16 +107,14 @@ export class CapabilitySet {
     return permissions.some((p) => this.can(p, goalId));
   }
 
-  // Which of `amongGoalIds` this principal holds `permission` in. The candidate set is
-  // required because this object cannot produce it: a wildcard or org-level grant holds
-  // the permission in goals its own DTO never names.
+  // The candidate set is required because this object cannot produce it: a wildcard or
+  // org-level grant holds the permission in goals its own DTO never names.
   public goalsWith(permission: PermissionKey, amongGoalIds: readonly string[]): readonly string[] {
     return [...new Set(amongGoalIds)].filter((id) => this.can(permission, id));
   }
 
-  // Narrow to the intersection with another set. Denies union, grants intersect, goal
-  // keys union, and both sides' grants are candidates — see docs/reference for why each
-  // is load-bearing. Org candidates use `allowsAtOrg`, not `can()`.
+  // Denies union, grants intersect, goal keys union — see docs/reference/capability-set.md.
+  // Org candidates use `allowsAtOrg`, not `can()`.
   public intersect(other: CapabilitySet): CapabilitySet {
     const goalIds = new Set([...Object.keys(this.dto.goals), ...Object.keys(other.dto.goals)]);
     const orgCandidates = CapabilitySet.union(this.dto.org.grants, other.dto.org.grants);

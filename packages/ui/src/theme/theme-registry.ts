@@ -30,9 +30,8 @@ export class ThemeRegistry {
     return THEMES[key];
   }
 
-  // `Object.hasOwn`, not `in` — `in` walks the prototype chain, so `"toString"` would
-  // pass this guard and `meta()` would hand back a function. This is the boundary an
-  // untrusted stored preference crosses, which is exactly where that matters.
+  // `Object.hasOwn`, not `in`: this is the boundary an untrusted stored preference
+  // crosses, and `"toString"` would otherwise pass the guard.
   public static isKnown(value: string): value is ThemeKey {
     return Object.hasOwn(THEMES, value);
   }

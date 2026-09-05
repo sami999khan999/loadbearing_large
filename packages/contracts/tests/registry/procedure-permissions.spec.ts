@@ -4,9 +4,8 @@ import { z } from "zod";
 import { contract } from "../../src/procedure/index.js";
 import { ProcedurePermissions } from "../../src/registry/procedure-permissions.js";
 
-// Flattens a contract router to the dotted paths a procedure is reachable at.
-// `isContractProcedure` is oRPC's own predicate — doc 10 walked the internal
-// `~orpc` marker instead, which is the kind of thing that changes in a minor.
+// Flattens a contract router to dotted paths. `isContractProcedure` is oRPC's own
+// predicate, rather than the internal `~orpc` marker a minor release can move.
 class ContractWalker {
   public static paths(node: unknown, prefix: readonly string[] = []): string[] {
     if (isContractProcedure(node)) return [prefix.join(".")];
@@ -17,12 +16,8 @@ class ContractWalker {
   }
 }
 
-// A second, fixed router the walker is exercised against directly. The two coverage
-// tests below run over the *real* `contract`, which now carries the `role` slice — but
-// those tests only prove the walker and the catalog agree. This fixture is what proves
-// the walker itself: nesting, a procedure recognised as a leaf, and an empty router.
-// It deliberately names a slice the kit does not ship, so the last test below stays
-// honest about an undeclared path.
+// A fixed router the walker is exercised against directly: the coverage tests below
+// only prove the walker and the catalog agree, not the walker itself.
 const fixture = {
   task: {
     list: oc
@@ -42,8 +37,8 @@ describe("ContractWalker", () => {
   });
 
   it("recognises an oRPC procedure as a leaf, not as a record to descend into", () => {
-    // The failure this guards: if the predicate stops matching, a procedure is
-    // walked as a plain object and yields its internal keys as paths instead.
+    // If the predicate stops matching, a procedure is walked as a plain object and
+    // yields its internal keys as paths.
     expect(ContractWalker.paths(fixture.task.list, ["task", "list"])).toEqual(["task.list"]);
   });
 

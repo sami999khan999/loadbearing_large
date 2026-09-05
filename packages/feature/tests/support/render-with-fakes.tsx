@@ -16,9 +16,8 @@ export const TEST_USER: SessionUser = {
   organizations: [TEST_ORGANIZATION],
 };
 
-// Doc 23 builds this on `BundledContentSource.snapshotSync`, which is a doc 30 item and
-// does not exist yet. `StaticContentSource` gives the same snapshot asynchronously, so
-// the harness is async and nothing else changes.
+// `StaticContentSource` gives the snapshot asynchronously, which is why this harness is
+// async.
 export const messageStore = async (namespaces: readonly ClientNamespace[] = []) => {
   const content = new StaticContentSource();
   return new MessageStore(content, await content.messages("en", namespaces));
@@ -28,8 +27,8 @@ export const renderWithFakes = async (
   ui: ReactNode,
   capabilities: CapabilitySetDto,
   user: SessionUser | null = TEST_USER,
-  // `auth` by default, because that is what most of the components under test read.
-  // A spec for a component in another namespace names it, as a route would.
+  // `auth` by default, because most components under test read it. A spec elsewhere names
+  // its own namespace, as a route would.
   namespaces: readonly ClientNamespace[] = ["auth"],
 ): Promise<RenderResult> => {
   const queryClient = new QueryClient({

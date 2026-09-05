@@ -1,8 +1,7 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design. `error.serverOnly` is deliberately absent: it is read by a
-// developer in a console, so English is the right answer and the fallback layer
-// is what supplies it.
+// Partial by design: `error.serverOnly` is read by a developer in a console, so English
+// is the right answer and the fallback layer supplies it.
 export const error: NamespaceBundle<"error"> = {
   "error.unauthorized": "চালিয়ে যেতে সাইন ইন করুন।",
   "error.forbidden": "এটি করার অনুমতি আপনার নেই।",

@@ -3,17 +3,13 @@ import { useMessages } from "../i18n/index.js";
 import { PermissionRegistry, StatusBadge } from "../import.js";
 
 export interface EffectivePermissionsInspectorProps {
-  // Scopes the answer for goal-scoped permissions. Without one, `can()` denies every
-  // goal-scoped key — which is correct, and worth showing rather than hiding.
+  // Without one, `can()` denies every goal-scoped key — correct, and worth showing
+  // rather than hiding.
   readonly goalId?: string;
 }
 
-// "What can this principal actually do, right now." Answered entirely from the catalog
-// and the session's `CapabilitySet` — no query, no round trip — because both halves are
-// already in the browser. That is what makes it useful for support: it is the client's
-// own view of the permissions the server will enforce.
-//
-// Doc 23 names this component and specifies no body.
+// "What can this principal actually do, right now", answered from the bundled catalog
+// and the session's own `CapabilitySet` — no query, no round trip.
 export function EffectivePermissionsInspector({ goalId }: EffectivePermissionsInspectorProps) {
   const capabilities = useCapabilities();
   const { t } = useMessages("common");
@@ -36,9 +32,10 @@ export function EffectivePermissionsInspector({ goalId }: EffectivePermissionsIn
                   <StatusBadge tone={allowed ? "success" : "neutral"}>
                     {allowed ? t("state.allowed") : t("state.denied")}
                   </StatusBadge>{" "}
-                  {/* The scope is shown beside the answer on purpose: a goal-scoped key
-                      reading "denied" with no goal selected is not a permission problem,
-                      and this is exactly where that gets misread. */}
+                  {
+                    // Beside the answer on purpose: a goal-scoped key reading "denied"
+                    // with no goal selected is not a permission problem.
+                  }
                   <small>{registry.scopeOf(permission)}</small>
                 </li>
               );

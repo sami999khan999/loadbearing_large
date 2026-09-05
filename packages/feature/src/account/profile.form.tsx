@@ -17,9 +17,8 @@ export interface ProfileFormProps {
 
 export function ProfileForm({ account, currentName }: ProfileFormProps) {
   const { t } = useMessages("auth");
-  // Seeded once from the session, then owned by this component. Re-syncing it to the
-  // prop on every render would discard what the user is typing the moment the session
-  // query refetches underneath them.
+  // Seeded once, then owned here: re-syncing to the prop would discard what the user is
+  // typing the moment the session query refetches.
   const [name, setName] = useState(currentName);
 
   const update = AccountMutations.useUpdateName(account);

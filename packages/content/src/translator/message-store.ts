@@ -3,18 +3,15 @@ import type { Locale } from "../primitive/index.js";
 import type { ContentSource } from "../source/index.js";
 import { type MessageSnapshot, Translator } from "./translator.js";
 
-// A snapshot is immutable, but client-side navigation adds namespaces after the page has
-// rendered. This is the mutable holder around it — React-free, so the same class works in
-// `apps/web`'s SSR pass, in `apps/desktop`, in `apps/worker`, and in a Node test.
+// The mutable holder around an immutable snapshot, because navigation adds namespaces
+// after render. React-free, so it works in every process.
 export class MessageStore {
   private snapshot: MessageSnapshot;
   private cached: Translator;
   private readonly listeners = new Set<() => void>();
 
-  // The starting point for a client store that will be filled by `hydrate` before the
-  // first render. Doc 24 calls this `MessageStore.EMPTY`; it has to be a factory rather
-  // than a constant because a snapshot carries its locale, and `namespaces: []` is what
-  // makes `ensure()` fetch everything the first navigation asks for.
+  // A factory rather than a constant, because a snapshot carries its locale — and
+  // `namespaces: []` is what makes `ensure()` fetch what the first navigation asks for.
   public static empty(locale: Locale): MessageSnapshot {
     return { locale, namespaces: [], base: {}, overrides: {} };
   }
@@ -27,9 +24,8 @@ export class MessageStore {
     this.cached = new Translator(initial);
   }
 
-  // Identity is stable until `ensure()` actually adds something. That is not an
-  // optimisation: `useSyncExternalStore` (23) re-renders forever if its read function
-  // returns a new object on every call.
+  // Stable identity until `ensure()` adds something: `useSyncExternalStore` re-renders
+  // forever if its read function returns a new object every call.
   public get translator(): Translator {
     return this.cached;
   }

@@ -6,8 +6,7 @@ export const error = {
   "error.rateLimited": "Too many attempts. Please wait a moment and try again.",
   "error.unexpected": "Something went wrong. Please try again.",
   "error.twoFactorRequired": "Enter the code from your authenticator app to continue.",
-  // The developer-facing sentence `ServerOnly.assert` used to carry inline. It is
-  // copy like any other now — keyed, interpolated, and translatable — which is why
+  // Copy like any other — keyed, interpolated, translatable — which is why
   // `@loadbearing/errors` has no message field at all.
   "error.serverOnly":
     "{package} was imported into a client bundle. This is a leak, not a bundle-size problem — it means database or credential code is reachable from the browser.",

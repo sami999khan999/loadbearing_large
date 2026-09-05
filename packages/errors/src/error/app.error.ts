@@ -60,12 +60,8 @@ export abstract class AppError extends Error {
   }
 }
 
-// What `AppError.from()` produces — code and context survive, the class does not.
-//
-// It carries the trace id because this is the client side of the wire: the server
-// stamps it onto the envelope from the request, and an error page shows it back so
-// a user reporting "it broke" hands over the string that finds the exact log line.
-// A server-thrown error has no trace id of its own — the id belongs to the request.
+// What `AppError.from()` produces — code and context survive, the class does not. It
+// carries the trace id because the id belongs to the request, not to the error.
 export class TransportError extends AppError {
   public constructor(
     code: ErrorCode,

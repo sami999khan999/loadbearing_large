@@ -17,15 +17,14 @@ export class RoleEntity {
     return this.dto.name;
   }
 
-  // Seeded roles are re-written by `SystemRoleSeed` on every deploy, so an edit to one
-  // survives until the next one and then silently disappears. Whether a UI offers the
-  // edit at all is this question, asked once.
+  // Seeded roles are re-written on every deploy, so an edit survives until the next one
+  // and then silently disappears.
   public get editable(): boolean {
     return !this.dto.isSystem;
   }
 
-  // `owner` is the only wildcard role the seed creates. It is worth naming because the
-  // answer to "why does this row show every permission" is otherwise a mystery.
+  // The only wildcard role the seed creates, named because "why does this row show every
+  // permission" is otherwise a mystery.
   public get grantsEverything(): boolean {
     return this.dto.key === "owner";
   }

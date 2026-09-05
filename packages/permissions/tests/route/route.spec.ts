@@ -17,10 +17,8 @@ describe("ROUTES", () => {
     }
   });
 
-  // The coverage half of the type narrowing on `ModuleGate.route`. The compiler
-  // already rejects a gate pointing at an undeclared path; this catches the case
-  // the type cannot see — a path removed from the table while a gate still names
-  // the same literal string.
+  // The compiler already rejects a gate pointing at an undeclared path. This catches
+  // what it cannot see: a path removed while a gate still names the same literal.
   it("declares a path for every gate", () => {
     const paths = declaredPaths();
     for (const gate of Object.values(GATES)) {

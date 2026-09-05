@@ -32,10 +32,8 @@ export function LinkedAccountList({
   const link = AccountMutations.useLinkGoogle(account);
 
   const linked = accounts.data ?? [];
-  // The last credential must not be removable — unlinking it is how someone locks
-  // themselves out of their own account with one click and no recovery path. Better
-  // Auth's `allowUnlinkingAll` defaults to false as the backstop; this is the half that
-  // can explain itself, because only the client can see the whole list.
+  // The last credential must not be removable. Better Auth's `allowUnlinkingAll` is the
+  // backstop; this is the half that can explain itself.
   const isLast = linked.length <= 1;
   const hasGoogle = linked.some((entry) => entry.providerId === "google");
 
@@ -73,8 +71,9 @@ export function LinkedAccountList({
         ))}
       </ul>
 
-      {/* Offered only when the deployment configured Google and this account has not
-          already linked one. */}
+      {
+        // Only when the deployment configured Google and this account has not linked one.
+      }
       {googleEnabled && !hasGoogle ? (
         <Button
           variant="secondary"

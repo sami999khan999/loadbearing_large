@@ -1,17 +1,13 @@
 import { z } from "../../import.js";
 
-// Shape 3: a repeating record an editor owns. Zod parses it at module load, so a
-// malformed entry is a startup error with a field path rather than `undefined.map is
-// not a function` in production — and the same schema is the validation boundary the
-// day these rows come from a database instead of a file.
+// Shape 3: a repeating record an editor owns, parsed at module load — so a malformed
+// entry is a startup error with a field path rather than a runtime one.
 export class NavContract {
   private constructor() {}
 
   public static readonly item = z.object({
-    // A `ModuleKey`, and never the thing that gates it: `ModuleRegistry` owns that
-    // mapping, and a content edit able to change it would be a privilege escalation.
-    // `nav.data.ts` pins the narrow type at authoring time; this stays `string` because
-    // a CMS row arrives unvalidated.
+    // A `ModuleKey`, never the thing that gates it: a content edit able to change that
+    // mapping would be a privilege escalation. Wide here, because a CMS row is.
     module: z.string(),
     labelKey: z.string(),
     icon: z.string(),

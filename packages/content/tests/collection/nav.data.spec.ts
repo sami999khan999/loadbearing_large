@@ -10,9 +10,8 @@ describe("navItems", () => {
     expect(() => NavContract.collection.parse(navItems)).not.toThrow();
   });
 
-  // The rule from 20.6, asserted from this side: content may name a module, and the
-  // module registry decides what gates it. A menu entry naming a module that does not
-  // exist is the failure this catches.
+  // Content may name a module; the registry decides what gates it. A menu entry naming
+  // a module that does not exist is what this catches.
   it("names only modules the registry knows", () => {
     for (const item of navItems) {
       expect(Object.hasOwn(GATES, item.module)).toBe(true);
