@@ -18,9 +18,8 @@ class StaticTokenProvider extends TokenProvider {
   }
 }
 
-// The contract is empty until the first slice lands, so there is no typed procedure to
-// call. The client is a proxy, so any path reaches the link — which is the part under
-// test here: what the strategy puts on the wire, not what the server answers.
+// The client is a proxy, so any path reaches the link. What the strategy puts on the
+// wire is the part under test, not what the server answers.
 interface ProbeClient {
   readonly probe: (input: unknown) => Promise<unknown>;
 }

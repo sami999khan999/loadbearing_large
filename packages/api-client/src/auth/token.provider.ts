@@ -1,6 +1,5 @@
-// Where the token lives differs by host: the OS keychain reached through a Tauri
-// command, a mobile keychain, an in-memory value in a test. None of those belong in
-// this package — and all three are asynchronous, which is why `get()` is a promise.
+// Where the token lives differs by host, and every such store is asynchronous — which
+// is why `get()` returns a promise.
 export abstract class TokenProvider {
   public abstract get(): Promise<string | null>;
 

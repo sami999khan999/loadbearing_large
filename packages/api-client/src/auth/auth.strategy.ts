@@ -1,6 +1,5 @@
-// `lib.dom`'s `RequestCredentials`, restated. This package deliberately does not load
-// the DOM lib — it has to typecheck in a plain Node script too — and the union is
-// three strings that have not changed since fetch shipped.
+// `lib.dom`'s `RequestCredentials`, restated: this package does not load the DOM lib,
+// because it has to typecheck in a plain Node script too.
 export type RequestCredentials = "omit" | "same-origin" | "include";
 
 // How a request proves who is making it. Web sends a cookie, desktop sends a bearer

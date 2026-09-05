@@ -1,9 +1,8 @@
 import type { AuthClient, BetterAuthClient } from "./auth.client.js";
 import { BetterAuthErrorNormalizer } from "./better-auth-error-normalizer.js";
 
-// What two-factor enrolment hands back, once, at the moment it is turned on. The
-// backup codes are not readable again afterwards — Better Auth stores them encrypted
-// and `viewBackupCodes` is a server-only endpoint deliberately not reachable from here.
+// Handed back once, when enrolment is turned on. The codes are not readable again:
+// `viewBackupCodes` is server-only and deliberately not reachable from here.
 export interface TwoFactorEnrolment {
   readonly totpUri: string;
   readonly backupCodes: readonly string[];
@@ -19,8 +18,7 @@ export interface LinkedAccount {
 }
 
 // A live session, as the "where you are signed in" list renders it. `token` is what
-// revoking one takes, which is why it is here and why this type never leaves the
-// browser tab that fetched it.
+// revoking takes, which is why this type never leaves the tab that fetched it.
 export interface ActiveSession {
   readonly id: string;
   readonly token: string;
@@ -29,13 +27,8 @@ export interface ActiveSession {
   readonly ipAddress: string | null;
 }
 
-// Everything a signed-in person can do to their own account. Separate from `AuthClient`
-// rather than bolted onto it, because the two are reached from different halves of the
-// app and only one of them is ever rendered to an anonymous visitor.
-//
-// Takes the `AuthClient` rather than a config: one Better Auth instance per component
-// tree, so a fetch here and a `getSession()` there share the same cookie handling and
-// the same plugin set.
+// Everything a signed-in person can do to their own account. Takes the `AuthClient`
+// rather than a config, so there is one instance per tree.
 export class AccountClient {
   private readonly client: BetterAuthClient;
 
@@ -45,10 +38,8 @@ export class AccountClient {
 
   // ── credentials ──
 
-  // `revokeOtherSessions` is not optional in practice. Changing a password because it
-  // may be known to someone else, and leaving their session alive, is the failure this
-  // whole flow exists to prevent — `revokeSessionsOnPasswordReset` makes the same call
-  // on the reset path.
+  // `revokeOtherSessions` is not optional: changing a password because someone else may
+  // know it, and leaving their session alive, is the failure this flow prevents.
   public async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     const { error } = await this.client.changePassword({
       currentPassword,
@@ -72,14 +63,8 @@ export class AccountClient {
 
   // ── two-factor ──
 
-  // The password is required and is not ceremony: without it, anyone holding a stolen
-  // session could enrol their own authenticator and lock the owner out of their account
-  // permanently. The same argument applies to every method below that asks for it.
-  //
-  // Two-factor is not on when this resolves. Better Auth waits for `verifyTotpEnrolment`
-  // to prove the secret actually reached an authenticator app — enabling it on the
-  // strength of a QR nobody scanned is how a user locks themselves out at the next
-  // sign-in.
+  // The password stops a stolen session enrolling its own authenticator. Two-factor is
+  // **not** on when this resolves — `verifyTotpEnrolment` is what turns it on.
   public async enableTwoFactor(password: string): Promise<TwoFactorEnrolment> {
     const { data, error } = await this.client.twoFactor.enable({ password });
     if (error || !data) throw BetterAuthErrorNormalizer.normalize(error);
@@ -96,9 +81,7 @@ export class AccountClient {
     if (error) throw BetterAuthErrorNormalizer.normalize(error);
   }
 
-  // Invalidates every previously issued code. The point of the flow, not a side effect:
-  // codes that have been printed, screenshotted or pasted somewhere are the reason to
-  // ask for new ones.
+  // Invalidates every previously issued code. The point of the flow, not a side effect.
   public async regenerateBackupCodes(password: string): Promise<readonly string[]> {
     const { data, error } = await this.client.twoFactor.generateBackupCodes({ password });
     if (error || !data) throw BetterAuthErrorNormalizer.normalize(error);
@@ -114,9 +97,8 @@ export class AccountClient {
       id: account.id,
       providerId: account.providerId,
       accountId: account.accountId,
-      // Serialised so the whole list survives a TanStack Query cache round trip. A
-      // `Date` here dehydrates to a string and rehydrates as one, so the type would be
-      // a lie on the second render.
+      // A `Date` dehydrates to a string and rehydrates as one, so the type would be a
+      // lie on the second render.
       createdAt: new Date(account.createdAt).toISOString(),
     }));
   }
@@ -128,9 +110,8 @@ export class AccountClient {
     if (error) throw BetterAuthErrorNormalizer.normalize(error);
   }
 
-  // The caller decides whether this is allowed — the last credential on an account must
-  // not be removable, and only the caller can see the whole list. Better Auth's own
-  // `allowUnlinkingAll` is left at its default `false` as the backstop.
+  // The caller decides whether this is allowed: only it can see the whole list. Better
+  // Auth's `allowUnlinkingAll` stays at its default `false` as the backstop.
   public async unlinkAccount(providerId: string, accountId: string): Promise<void> {
     const { error } = await this.client.unlinkAccount({ providerId, accountId });
     if (error) throw BetterAuthErrorNormalizer.normalize(error);

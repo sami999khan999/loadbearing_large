@@ -110,6 +110,14 @@ Wrapping the vanilla client here puts session state in the same cache as everyth
 pair; the rest of this codebase throws. Normalising at the boundary means a `SignInForm` uses the same
 error handling as every other mutation.
 
+## Reference
+
+- [The transport](reference/transport.md) — what crosses the wire, and what a backend swap touches.
+- [`AuthStrategy`](reference/auth-strategy.md) — cookie versus bearer, and what the specs pin at the
+  wire.
+- [The Better Auth boundary](reference/better-auth.md) — why both clients throw, the sign-in that
+  succeeds and is not one, and the code-then-status table the normalizer maps with.
+
 ## What a backend swap costs
 
 | Scenario | Changes here | Changes anywhere else |

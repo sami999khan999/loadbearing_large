@@ -5,11 +5,8 @@ export interface AuthClientConfig {
   readonly baseUrl: string;
 }
 
-// Not exported, and it exists for its return type. `ReturnType<typeof createAuthClient>`
-// is the **unconfigured** client — the two-factor plugin widens the instance, and
-// annotating with the unconfigured type erases that, so `client.twoFactor` does not exist.
-// The type has to be inferred from these options and read back out, which is the same
-// trap `AuthFactory.create` documents on the server side (16).
+// Exists for its return type: `ReturnType<typeof createAuthClient>` is the unconfigured
+// client, so annotating with it erases `client.twoFactor`.
 const createClient = (config: AuthClientConfig) =>
   createAuthClient({
     baseURL: config.baseUrl,
@@ -18,13 +15,8 @@ const createClient = (config: AuthClientConfig) =>
 
 export type BetterAuthClient = ReturnType<typeof createClient>;
 
-// Better Auth's **vanilla** client, never `better-auth/react`. That hook keeps its own
-// cache with its own invalidation rules, which would put two caching systems in one app
-// — and they disagree on sign-out, showing a signed-in shell around a run of 401s.
-//
-// Everything an anonymous visitor can do. The signed-in half — two-factor enrolment,
-// linked accounts, sessions, profile — is `AccountClient`, which shares this instance.
-// The split is the one the route groups already draw: `(shell)` and `_authenticated`.
+// Everything an anonymous visitor can do, over Better Auth's **vanilla** client — never
+// `better-auth/react`. See docs/reference/better-auth.md.
 export class AuthClient {
   private readonly client: BetterAuthClient;
 
@@ -32,29 +24,21 @@ export class AuthClient {
     this.client = createClient(config);
   }
 
-  // Every method here throws rather than returning `{ data, error }`, and throws an
-  // `AppError` rather than a bare `Error`. That second half is not cosmetic:
-  // `ErrorNormalizer` recognises an `AppError` structurally and maps everything else to
-  // `INTERNAL`, so a plain `Error` here made every branch a caller could write on the
-  // code unreachable (23).
+  // Throws an `AppError`, never a bare `Error`: `ErrorNormalizer` maps everything else to
+  // `INTERNAL`, which makes every branch a caller writes on the code unreachable.
   public async signIn(email: string, password: string): Promise<void> {
     const { data, error } = await this.client.signIn.email({ email, password });
     if (error) throw BetterAuthErrorNormalizer.normalize(error);
 
-    // **The fork is a success, not a failure.** With a second factor enrolled, Better
-    // Auth answers `200 { twoFactorRedirect: true }` and no `error` — so a client that
-    // only inspects `error` resolves, `onSuccess` fires, and the app navigates away from
-    // a sign-in that never completed. Turning it into a throw is what puts both legs of
-    // the flow on one path: the caller branches on the code, exactly once.
+    // **The fork is a success, not a failure**: Better Auth answers `200` with no `error`,
+    // so only a throw stops the app navigating away from an incomplete sign-in.
     if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect === true) {
       throw new TwoFactorRequiredError();
     }
   }
 
-  // `callbackURL` is where the verification link lands once the token is spent, and it
-  // is the caller's to choose because only the app knows its own routes. No session is
-  // issued here: `autoSignIn` is off and verification is required, so a successful
-  // sign-up means "go and read your email", not "you are in".
+  // No session is issued: `autoSignIn` is off and verification is required, so success
+  // means "go and read your email", not "you are in".
   public async signUp(
     name: string,
     email: string,
@@ -65,10 +49,8 @@ export class AuthClient {
     if (error) throw BetterAuthErrorNormalizer.normalize(error);
   }
 
-  // Returns nothing and resolves only if the redirect never happened: Better Auth
-  // navigates the browser to Google, so the normal path is that this call is still
-  // pending when the page unloads. An error here is a misconfiguration — a client id
-  // Google rejects — and not a user mistake.
+  // Resolves only if the redirect never happened, so an error here is a
+  // misconfiguration rather than a user mistake.
   public async signInWithGoogle(callbackURL: string, errorCallbackURL: string): Promise<void> {
     const { error } = await this.client.signIn.social({
       provider: "google",
@@ -82,13 +64,8 @@ export class AuthClient {
     await this.client.signOut();
   }
 
-  // `redirectTo` is where Better Auth sends the browser *after* it has consumed the
-  // token, carrying the token on the query string for the form there to submit.
-  //
-  // Deliberately resolves on a rejection too. The caller renders one message either
-  // way, because an error distinguishable from success is an oracle for which addresses
-  // are registered — and this is the one endpoint anonymous callers can ask about any
-  // address at all.
+  // Deliberately resolves on a rejection too: an error distinguishable from success is an
+  // oracle for which addresses are registered.
   public async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
     await this.client.requestPasswordReset({ email, redirectTo });
   }
@@ -106,11 +83,8 @@ export class AuthClient {
   }
 
   // ── the second leg of a sign-in that answered TWO_FACTOR_REQUIRED ──
-  //
-  // Three ways to finish it, and they are alternatives rather than a sequence: the
-  // authenticator app, a backup code for the phone that is gone, or a mailed code for
-  // the phone that is merely elsewhere. All three throw on a bad code, so a form uses
-  // one error path rather than three.
+  // Three alternatives, not a sequence, and all three throw on a bad code so a form uses
+  // one error path.
 
   public async verifyTwoFactor(code: string): Promise<void> {
     const { error } = await this.client.twoFactor.verifyTotp({ code });

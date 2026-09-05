@@ -2,9 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AccountClient } from "../../src/auth/account.client.js";
 import { AuthClient } from "../../src/auth/auth.client.js";
 
-// Better Auth's client is driven entirely by `fetch`, so a stub of that is the whole
-// double — no library internals are reached into, and the specs below stay true across
-// a patch upgrade. Each entry answers one request.
+// Better Auth's client is driven entirely by `fetch`, so a stub of it is the whole
+// double and these specs stay true across a patch upgrade.
 type Reply = { status?: number; body?: unknown };
 
 function clientOver(replies: readonly Reply[]) {
@@ -30,10 +29,8 @@ function clientOver(replies: readonly Reply[]) {
 }
 
 describe("AuthClient.signIn", () => {
-  // **The fork is a success, not a failure.** With a second factor enrolled Better Auth
-  // answers `200 { twoFactorRedirect: true }` and no `error`, so a client that inspects
-  // only `error` resolves, `onSuccess` fires, and the app navigates away from a sign-in
-  // that never completed. This is the regression T-005 closed, pinned.
+  // **The fork is a success, not a failure**: Better Auth answers `200` with no `error`,
+  // so inspecting only `error` navigates away from an incomplete sign-in. T-005, pinned.
   it("throws TWO_FACTOR_REQUIRED on a 200 that only redirects", async () => {
     const { auth } = clientOver([{ status: 200, body: { twoFactorRedirect: true } }]);
 
@@ -60,9 +57,8 @@ describe("AuthClient.signIn", () => {
 });
 
 describe("AuthClient — the endpoints anyone can reach", () => {
-  // Resolves on a rejection too, and deliberately. A failure a visitor can tell apart
-  // from a success is an oracle for which addresses are registered, and this is the one
-  // endpoint an anonymous caller can point at any address at all.
+  // Resolves on a rejection too: a failure a visitor can tell apart from a success is an
+  // oracle for which addresses are registered.
   it("reports the same outcome for a reset of an address that does not exist", async () => {
     const { auth } = clientOver([{ status: 400, body: { code: "USER_NOT_FOUND" } }]);
 
@@ -92,9 +88,8 @@ describe("AuthClient — the endpoints anyone can reach", () => {
 });
 
 describe("AuthClient — the three second factors", () => {
-  // Alternatives rather than a sequence, and each one hits its own endpoint. A form
-  // that sent a backup code to the TOTP verifier would fail in a way that looks like a
-  // wrong code, which is the least debuggable outcome available.
+  // Alternatives, not a sequence, each on its own endpoint: a backup code sent to the
+  // TOTP verifier fails in the way a wrong code does.
   it("verifies each factor against its own endpoint", async () => {
     const { auth, calls } = clientOver([{ status: 200 }, { status: 200 }, { status: 200 }]);
 
@@ -117,9 +112,8 @@ describe("AuthClient — the three second factors", () => {
 });
 
 describe("AccountClient", () => {
-  // `revokeOtherSessions` is not optional in practice: changing a password because it
-  // may be known to someone else, and leaving their session alive, is the failure the
-  // whole flow exists to prevent.
+  // Not optional: changing a password because someone else may know it, and leaving
+  // their session alive, is the failure this flow prevents.
   it("signs other devices out whenever a password changes", async () => {
     const { auth, calls } = clientOver([{ status: 200 }]);
 
@@ -141,9 +135,8 @@ describe("AccountClient", () => {
     });
   });
 
-  // Serialised, so the list survives a TanStack Query cache round trip. A `Date` here
-  // dehydrates to a string and rehydrates as one, which makes the type a lie on the
-  // second render rather than the first.
+  // A `Date` dehydrates to a string and rehydrates as one, which makes the type a lie on
+  // the second render rather than the first.
   it("hands back timestamps a cache can round-trip", async () => {
     const { auth } = clientOver([
       {

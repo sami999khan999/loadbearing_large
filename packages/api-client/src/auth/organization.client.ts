@@ -7,12 +7,8 @@ export interface OrganizationSwitch {
   readonly organizationId: string;
 }
 
-// The three ways a session ends up pointing at a different tenant, reached through
-// Better Auth's own transport because they are Better Auth endpoints — the plugin in
-// `packages/auth` — and the session cookie they re-issue rides the same response.
-//
-// Takes the `AuthClient` rather than a config, as `AccountClient` does: one instance
-// per component tree, one cookie handling, one plugin set.
+// The three ways a session ends up pointing at a different tenant, over Better Auth's
+// own transport because the cookie they re-issue rides the same response.
 export class OrganizationClient {
   private readonly client: BetterAuthClient;
 
@@ -20,10 +16,8 @@ export class OrganizationClient {
     this.client = auth.raw;
   }
 
-  // Resolves once the session row, its Redis copy and the cookie cache all name the
-  // new tenant. The caller still has to clear its own caches — every cached row
-  // belongs to the tenant being left — which is why the query layer declares no
-  // invalidation for this and the call site does what sign-out does.
+  // Resolves once row, Redis copy and cookie cache all name the new tenant. The caller
+  // still clears its own caches: every cached row belongs to the tenant being left.
   public switch(organizationId: string): Promise<OrganizationSwitch> {
     return this.post("/organization/switch", { organizationId });
   }
@@ -42,9 +36,8 @@ export class OrganizationClient {
     const response = await this.client.$fetch(path, { method: "POST", body });
     if (response.error) throw BetterAuthErrorNormalizer.normalize(response.error);
 
-    // Narrowed by shape rather than by a generic on `$fetch`: the payload is whatever the
-    // endpoint returned, and a guard is what keeps a changed plugin from becoming a
-    // silently wrong `organizationId` downstream.
+    // Narrowed by shape, not by a generic on `$fetch`: the guard is what keeps a changed
+    // plugin from becoming a silently wrong `organizationId` downstream.
     const data: unknown = response.data;
     if (!OrganizationClient.isSwitch(data)) throw new InternalError();
     return data;

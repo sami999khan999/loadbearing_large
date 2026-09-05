@@ -6,10 +6,8 @@ import { type ContractRouterClient, createORPCClient, RPCLink } from "../import.
 // added in `contracts` appears here with no edit in this package.
 export type AppClient = ContractRouterClient<AppContract>;
 
-// `lib.dom`'s `fetch`, reached off `globalThis` — the same trick `Uuid` uses for
-// `crypto`. Node 18+ and every browser have it; `lib: ["ES2024"]` declares neither.
-// `unknown` in and `never` out on purpose: naming `Request` or `Response` here would
-// need the DOM lib. Both flow through untouched, so neither has to be named.
+// `fetch` off `globalThis`, since `lib: ["ES2024"]` declares neither it nor `Request`.
+// `unknown` in and `never` out: both flow through untouched, so neither is named.
 type FetchLike = (input: unknown, init?: Record<string, unknown>) => Promise<never>;
 
 const platformFetch = (): FetchLike => (globalThis as unknown as { fetch: FetchLike }).fetch;
@@ -31,16 +29,14 @@ export class ApiClient {
     return new ApiClient(createORPCClient<AppClient>(link));
   }
 
-  // SSR — no network. `"/api/rpc"` resolves to this same server, so an HTTP client here
-  // would serialise a payload, cross the loopback, and deserialise it again, twice per
-  // loader. The router client is built by `apps/web` and injected (24).
+  // SSR — no network. An HTTP client here would serialise, cross the loopback and
+  // deserialise again, twice per loader.
   public static inProcess(rpc: AppClient): ApiClient {
     return new ApiClient(rpc);
   }
 
-  // One accessor per contract namespace, added as slices arrive. It exists so callers
-  // name a subject rather than reaching through a field called `raw` — and so the day a
-  // namespace needs a wrapper, the call sites already go through a method.
+  // One accessor per contract namespace, so the day a namespace needs a wrapper the call
+  // sites already go through a method rather than through `raw`.
   public get role(): AppClient["role"] {
     return this.rpc.role;
   }
