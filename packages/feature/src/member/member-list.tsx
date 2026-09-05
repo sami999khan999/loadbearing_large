@@ -1,5 +1,6 @@
 import { useMessages } from "../i18n/index.js";
 import {
+  Callout,
   DataTable,
   EmptyState,
   type MemberDto,
@@ -27,6 +28,8 @@ const day = (date: Date): string => date.toISOString().slice(0, 10);
 
 export function MemberList({ limit = 25 }: MemberListProps) {
   const { t } = useMessages("member");
+  // `common` for the states every list shares, `member` for this screen's own copy.
+  const shell = useMessages("common");
   const client = useApiClient();
   const members = useAppQuery(MemberQueries.list(client, { limit, offset: 0 }));
 
@@ -62,6 +65,9 @@ export function MemberList({ limit = 25 }: MemberListProps) {
   );
 
   if (members.isPending) return <DataTable.Skeleton rows={3} columns={4} />;
+  // A failed list rendered as "no members yet", which is the one answer a members page
+  // must not give when it does not know.
+  if (members.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
   if (rows.length === 0) return <EmptyState title={t("member.empty")} />;
 
   return <DataTable columns={columns} rows={rows} caption={t("member.title")} />;

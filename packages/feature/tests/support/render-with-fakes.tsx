@@ -1,9 +1,11 @@
+import type { ApiClient } from "@loadbearing/api-client";
 import { type ClientNamespace, MessageStore, StaticContentSource } from "@loadbearing/content";
 import {
   type CapabilitySetDto,
   type PermissionKey,
   PermissionRegistry,
 } from "@loadbearing/permissions";
+import { ApiClientProvider } from "@loadbearing/query";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type RenderResult, render } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -35,21 +37,26 @@ export const renderWithFakes = async (
   // `auth` by default, because most components under test read it. A spec elsewhere names
   // its own namespace, as a route would.
   namespaces: readonly ClientNamespace[] = ["auth"],
+  // Only for components that read a procedure. Omitted, nothing provides one, and a
+  // component reaching for it throws — which is the honest answer for a spec that forgot.
+  client?: ApiClient,
 ): Promise<RenderResult> => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
   });
   const messages = await messageStore(namespaces);
 
-  return render(
+  const tree = (
     <QueryClientProvider client={queryClient}>
       <MessageProvider messages={messages}>
         <SessionProvider user={user} capabilities={capabilities}>
           {ui}
         </SessionProvider>
       </MessageProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+
+  return render(client ? <ApiClientProvider client={client}>{tree}</ApiClientProvider> : tree);
 };
 
 export const capabilitiesWith = (grants: readonly string[]): CapabilitySetDto =>

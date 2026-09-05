@@ -26,6 +26,8 @@ export function LinkedAccountList({
   linkCallbackUrl,
 }: LinkedAccountListProps) {
   const { t } = useMessages("auth");
+  // `common` for the states every list shares, `auth` for this screen's own copy.
+  const shell = useMessages("common");
   const accounts = useAppQuery(AccountQueries.linkedAccounts(account));
 
   const unlink = AccountMutations.useUnlinkAccount(account);
@@ -36,6 +38,11 @@ export function LinkedAccountList({
   // backstop; this is the half that can explain itself.
   const isLast = linked.length <= 1;
   const hasGoogle = linked.some((entry) => entry.providerId === "google");
+
+  // Pending before empty: `data` is undefined until the first answer, so the empty state
+  // rendered for every account while the request was still in flight.
+  if (accounts.isPending) return <EmptyState title={shell.t("state.loading")} />;
+  if (accounts.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
 
   if (linked.length === 0) {
     return (

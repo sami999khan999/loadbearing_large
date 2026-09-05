@@ -117,6 +117,31 @@ the moment someone reworded the copy, and would already be broken in every local
 addresses are registered without needing a password. A small copy decision with a real security
 consequence.
 
+## Every list renders four states, in one order
+
+Pending → error → empty → the list, and the order is the whole point: `data` is `undefined` until
+the first answer, so any component that reads `data ?? []` and asks "is it empty?" first tells every
+reader their account has no linked providers and their organization no members, for as long as the
+request takes. A failed request answers the same way, which is worse — "there are no members" is the
+one thing a members page must not say when it does not know.
+
+```tsx
+if (query.isPending) return <EmptyState title={shell.t("state.loading")} />;
+if (query.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+if (rows.length === 0) return <EmptyState title={t("member.empty")} />;
+```
+
+`shell` is `useMessages("common")` beside the screen's own namespace — the states are shared copy,
+and the namespace is what keeps a typo a compile error. `MemberList` renders `DataTable.Skeleton`
+rather than a loading sentence, because it knows its own shape.
+
+**`ActiveSessionList` has a fifth state and it is per row.** `ActiveSession.current` says which
+session the tab is holding — the endpoint flags none, and the cookie carrying the token is httpOnly,
+so `AccountClient.listSessions` is the only place the comparison can happen. The current row gets
+the badge and **no** Revoke: signing yourself out of the page you are reading is what "Sign out on
+all devices" is for. Before that flag existed, the badge was rendered once after the list, attached
+to no device at all.
+
 ## The two RBAC components need no query at all
 
 That is the interesting part, and the one deliberate departure from the fetch-here pattern. The
@@ -136,7 +161,7 @@ namespace — and carry `data-allowed` for a design pass to hang an icon on. Bio
 ## Testing
 
 ```bash
-pnpm --filter @loadbearing/feature test     # 12 tests
+pnpm --filter @loadbearing/feature test
 ```
 
 **The test doc 23 names as the one worth writing first** is in `tests/rbac/`: render the same

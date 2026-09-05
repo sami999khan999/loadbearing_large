@@ -2,6 +2,7 @@ import { useCapabilities } from "../auth/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Button,
+  Callout,
   Can,
   EmptyState,
   type InvitationDto,
@@ -21,6 +22,8 @@ const day = (date: Date): string => date.toISOString().slice(0, 10);
 // request without it is FORBIDDEN whether or not the button rendered.
 export function InvitationList({ limit = 25 }: InvitationListProps) {
   const { t } = useMessages("member");
+  // `common` for the states every list shares, `member` for this screen's own copy.
+  const shell = useMessages("common");
   const client = useApiClient();
   const capabilities = useCapabilities();
   const invitations = useAppQuery(MemberQueries.invitations(client, { limit, offset: 0 }));
@@ -30,7 +33,10 @@ export function InvitationList({ limit = 25 }: InvitationListProps) {
   // through two packages, and a break anywhere degrades to `any` silently.
   const rows: readonly InvitationDto[] = invitations.data?.items ?? [];
 
-  if (invitations.isPending) return null;
+  // `null` while pending said nothing at all, so the panel looked like it had no
+  // invitations and then grew one.
+  if (invitations.isPending) return <EmptyState title={shell.t("state.loading")} />;
+  if (invitations.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
   if (rows.length === 0) return <EmptyState title={t("member.invitation.empty")} />;
 
   return (

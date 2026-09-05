@@ -5,6 +5,7 @@ import {
   AccountQueries,
   Button,
   Callout,
+  EmptyState,
   StatusBadge,
   useAppQuery,
 } from "../import.js";
@@ -15,12 +16,20 @@ export interface ActiveSessionListProps {
 
 export function ActiveSessionList({ account }: ActiveSessionListProps) {
   const { t } = useMessages("auth");
+  // `common` for the states every list shares, `auth` for this screen's own copy.
+  const shell = useMessages("common");
   const sessions = useAppQuery(AccountQueries.sessions(account));
 
   const revoke = AccountMutations.useRevokeSession(account);
   const revokeOthers = AccountMutations.useRevokeOtherSessions(account);
 
   const rows = sessions.data ?? [];
+
+  // Pending before empty: `data` is undefined until the first answer, so the empty state
+  // used to render for everyone with sessions while the request was still in flight.
+  if (sessions.isPending) return <EmptyState title={shell.t("state.loading")} />;
+  if (sessions.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+  if (rows.length === 0) return <EmptyState title={t("auth.sessions")} />;
 
   return (
     <>
@@ -33,16 +42,26 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
             }
             <span>{session.userAgent ?? session.ipAddress ?? session.id}</span>
 
-            <Button
-              variant="ghost"
-              disabled={revoke.isPending}
-              onClick={() => revoke.mutate({ token: session.token })}
-            >
-              {t("auth.sessionRevoke")}
-            </Button>
+            {
+              // On the row rather than beside the list, and without a Revoke: signing
+              // yourself out of the page you are reading is what the button below is for.
+            }
+            {session.current ? (
+              <StatusBadge tone="neutral">{t("auth.sessionCurrent")}</StatusBadge>
+            ) : (
+              <Button
+                variant="ghost"
+                disabled={revoke.isPending}
+                onClick={() => revoke.mutate({ token: session.token })}
+              >
+                {t("auth.sessionRevoke")}
+              </Button>
+            )}
           </li>
         ))}
       </ul>
+
+      {revoke.isError ? <Callout tone="danger">{shell.t("state.error")}</Callout> : null}
 
       {revokeOthers.isSuccess ? (
         <Callout tone="success">{t("auth.signOutEverywhereDone")}</Callout>
@@ -54,13 +73,11 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
       }
       <Button
         variant="danger"
-        disabled={revokeOthers.isPending}
+        disabled={revokeOthers.isPending || rows.length <= 1}
         onClick={() => revokeOthers.mutate()}
       >
         {t("auth.signOutEverywhere")}
       </Button>
-
-      <StatusBadge tone="neutral">{t("auth.sessionCurrent")}</StatusBadge>
     </>
   );
 }
