@@ -178,7 +178,7 @@ export class Container {
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
 
-    this.cache = new RedisCacheStore(this.redis.client());
+    this.cache = new RedisCacheStore(this.redis.client(), this.logger);
     this.storage = new S3StorageGateway(config.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
