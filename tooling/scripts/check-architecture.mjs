@@ -41,6 +41,31 @@ function packageDirs() {
     .filter((dir) => existsSync(join(dir, "package.json")));
 }
 
+// Everything first-party. An assertion about how source is written has no reason to
+// stop at `packages/` — an app is source someone reads too.
+function sourceDirs() {
+  const out = [...packageDirs()];
+  const apps = join(ROOT, "apps");
+
+  if (existsSync(apps)) {
+    for (const name of readdirSync(apps)) {
+      const dir = join(apps, name);
+      if (existsSync(join(dir, "package.json"))) out.push(dir);
+    }
+  }
+
+  return out;
+}
+
+// A generated file is not written by anyone, and `route-tree.gen.ts` asks in its own
+// header to be excluded from every checker pointed at it.
+function sourceFiles(dir) {
+  return [
+    ...walk(join(dir, "src"), [".ts", ".tsx"]),
+    ...walk(join(dir, "tests"), [".ts", ".tsx"]),
+  ].filter((file) => !/\.gen\.tsx?$/.test(file));
+}
+
 function rel(file) {
   return relative(ROOT, file).replaceAll("\\", "/");
 }
@@ -184,17 +209,14 @@ assert("every `@orpc/*` entry is on one version line", (failures) => {
 // like "**/dist/**" inside a string for a comment.
 
 assert("comments are `//`, never a block", (failures) => {
-  for (const dir of packageDirs()) {
-    const files = [
-      ...walk(join(dir, "src"), [".ts", ".tsx"]),
-      ...walk(join(dir, "tests"), [".ts", ".tsx"]),
-    ];
-
-    for (const file of files) {
+  for (const dir of sourceDirs()) {
+    for (const file of sourceFiles(dir)) {
       readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, index) => {
-          if (line.trimStart().startsWith("/*")) {
+          const trimmed = line.trimStart();
+          // `{/*` is the JSX form and reads as an exemption if it is not named.
+          if (trimmed.startsWith("/*") || trimmed.startsWith("{/*")) {
             failures.push(`${rel(file)}:${index + 1} block comment — use //`);
           }
         });
@@ -613,6 +635,48 @@ assert("every folder under `docs/` has an `index.md`", (failures) => {
   }
 
   return null;
+});
+
+// ── 14 — no comment block over two lines ─────────────────────────────────────
+//
+// docs/opinions/comments.md. A third consecutive line is an argument, and an
+// argument belongs in the package's docs/reference/ where it gets reviewed as prose.
+
+// A separator carries no prose and a pragma is instruction to a tool, so neither is
+// a line a reader has to hold. Both end a run rather than extending it.
+const COMMENT_EXEMPT = /^\/\/\s*(──|biome-ignore|eslint-disable|eslint-enable|@ts-)/;
+
+const COMMENT_CEILING = 2;
+
+assert("no comment block over two lines", (failures) => {
+  for (const dir of sourceDirs()) {
+    for (const file of sourceFiles(dir)) {
+      const lines = readFileSync(file, "utf8").split("\n");
+      let start = 0;
+      let run = 0;
+
+      const close = () => {
+        if (run > COMMENT_CEILING) {
+          failures.push(`${rel(file)}:${start} ${run}-line comment block — ceiling is two`);
+        }
+        run = 0;
+      };
+
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+
+        if (!trimmed.startsWith("//") || COMMENT_EXEMPT.test(trimmed)) {
+          close();
+          return;
+        }
+
+        if (run === 0) start = index + 1;
+        run += 1;
+      });
+
+      close();
+    }
+  }
 });
 
 // ── report ───────────────────────────────────────────────────────────────────
