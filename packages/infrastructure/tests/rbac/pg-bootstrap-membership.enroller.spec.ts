@@ -1,6 +1,6 @@
 import { Identifiers } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
