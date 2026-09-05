@@ -21,23 +21,29 @@ describe("SystemPrincipal", () => {
     expect(principal.userId).not.toBe(ORG);
   });
 
-  it("holds exactly the three named grants and nothing else", () => {
+  it("holds exactly the two named grants and nothing else", () => {
     const principal = SystemPrincipal.forOrganization(ORG);
 
     expect(principal.can("ai.embedding.write")).toBe(true);
     expect(principal.can("ai.embedding.read")).toBe(true);
-    expect(principal.can("core.activity.write")).toBe(true);
 
     // Never `PermissionRegistry.instance.all()`: this is the assertion that keeps the
-    // list narrow as the catalog grows.
+    // list narrow as the catalog grows. `core.*` is excluded because no set grants it.
     const ungranted = PermissionRegistry.instance
       .all()
-      .filter(
-        (key) => !["ai.embedding.write", "ai.embedding.read", "core.activity.write"].includes(key),
-      );
+      .filter((key) => !["ai.embedding.write", "ai.embedding.read"].includes(key))
+      .filter((key) => PermissionRegistry.instance.meta(key)?.module !== "core");
 
     expect(ungranted.length).toBeGreaterThan(0);
     for (const key of ungranted) expect(principal.can(key)).toBe(false);
+  });
+
+  // It writes audit rows, so it must hold this — and now does without being granted it.
+  it("writes audit entries without a grant that says so", () => {
+    const principal = SystemPrincipal.forOrganization(ORG);
+
+    expect(principal.can("core.activity.write")).toBe(true);
+    expect(principal.capabilities.toJSON().org.grants).not.toContain("core.activity.write");
   });
 
   it("is not a wildcard", () => {

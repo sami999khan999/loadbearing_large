@@ -14,13 +14,9 @@ export class SystemPrincipal {
   // tenant id reads as a user.
   public static readonly USER_ID = "00000000-0000-7000-8000-000000000001";
 
-  // Narrow, explicit and reviewed — never `PermissionRegistry.instance.all()`. Typed as
-  // `string[]` so `isKnown()` can narrow each entry.
-  private static readonly GRANTS: readonly string[] = [
-    "ai.embedding.write",
-    "ai.embedding.read",
-    "core.activity.write",
-  ];
+  // Narrow, explicit and reviewed — never `PermissionRegistry.instance.all()`, and no
+  // `core.*`: every resolved principal holds those. `string[]` so `isKnown()` narrows.
+  private static readonly GRANTS: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
 
   // Every job carries an organization: there is no global data, so a job that processes
   // rows must know whose rows.
