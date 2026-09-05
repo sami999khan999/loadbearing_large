@@ -3,6 +3,7 @@ import {
   index,
   type OrganizationId,
   pgTable,
+  sql,
   text,
   timestamp,
   type UserId,
@@ -57,10 +58,9 @@ export const rolePermissions = pgTable(
     permission: text("permission").notNull(),
   },
   (t) => [
-    uniqueIndex("role_permissions_uq").on(t.roleId, t.permission),
-    // The unique index leads with `role_id`, so it does not cover this FK: without it,
-    // deleting an organization scans every grant.
-    index("role_permissions_organization_idx").on(t.organizationId),
+    // Leads with the tenant, which also makes it the covering index for the
+    // `organization_id` FK — a separate one would be a redundant prefix.
+    uniqueIndex("role_permissions_uq").on(t.organizationId, t.roleId, t.permission),
   ],
 );
 
@@ -110,7 +110,7 @@ export const goalMembers = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("goal_members_uq").on(t.goalId, t.userId, t.roleId),
+    uniqueIndex("goal_members_uq").on(t.organizationId, t.goalId, t.userId, t.roleId),
     index("goal_members_user_idx").on(t.organizationId, t.userId),
     index("goal_members_goal_idx").on(t.goalId),
     index("goal_members_role_idx").on(t.roleId),
@@ -138,6 +138,13 @@ export const permissionOverrides = pgTable(
   (t) => [
     index("permission_overrides_user_idx").on(t.organizationId, t.userId),
     index("permission_overrides_goal_idx").on(t.goalId),
-    uniqueIndex("permission_overrides_uq").on(t.userId, t.goalId, t.permission),
+    // Two partial indexes, because NULLs are distinct: one index over a nullable
+    // `goal_id` accepts unlimited duplicate org-scope rows for the same permission.
+    uniqueIndex("permission_overrides_org_uq")
+      .on(t.organizationId, t.userId, t.permission)
+      .where(sql`${t.goalId} is null`),
+    uniqueIndex("permission_overrides_goal_uq")
+      .on(t.organizationId, t.userId, t.goalId, t.permission)
+      .where(sql`${t.goalId} is not null`),
   ],
 );

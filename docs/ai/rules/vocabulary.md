@@ -26,8 +26,13 @@ failure — a permission is a right you hold, an activity is a fact that happene
   every word a user reads lives in `@loadbearing/content`. A new code cannot ship without copy — the
   `Record<ErrorCode, ShellMessageKey>` will not compile.
 - **`organization_id` on every domain table, and every unique index on one leads with it.**
-  `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role. Spell it
+  `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role. The only
+  exceptions are the tenant table and the two lookups that arrive holding no tenant —
+  `invitations_token_uq`, `api_keys_hash_uq` — plus Better Auth's own tables. Spell it
   `organization`, never `organisation`.
+- **A nullable column in a unique index is not covered by it.** NULLs are distinct, so a unique
+  index over one enforces nothing for the rows where it is null. Two partial indexes, split on
+  `IS NULL` / `IS NOT NULL`, is the shape that works.
 - **Tables are `snake_case` plural; append-only tables are singular** (`activity_log`). **Zod enums
   mirror the DB enum values exactly** — `in_progress`, never `IN_PROGRESS`.
 - **Env vars are prefixed by purpose, not technology:** `REDIS_CACHE_URL` and `REDIS_QUEUE_URL`,

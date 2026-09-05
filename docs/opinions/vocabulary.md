@@ -105,9 +105,32 @@ neither of these is ever joined that way. `session` is singular too, but only be
 named it.
 
 **`organization_id` is on every domain table, and every unique index on one leads with it.**
-`roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role. The exceptions
-are the tenant table itself and the tables Better Auth generates, and `check-architecture.mjs` §9
-holds the list so that adding to it is a decision someone made rather than a file nobody noticed.
+`roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role.
+`check-architecture.mjs` §9 holds the list of tables so that adding to it is a decision someone made
+rather than a file nobody noticed.
+
+There are exactly three kinds of exception, and each has a reason a reader can check:
+
+| Index | Why it cannot lead with the tenant |
+|---|---|
+| `organizations_slug_uq` | This *is* the tenant table |
+| `invitations_token_uq` | The landing page and the accept endpoint arrive holding a token and no tenant — resolving it is the point |
+| `api_keys_hash_uq` | Same: a key arrives as a bare header, and the lookup is what establishes the organization |
+| the Better Auth tables | Generated against that library's own schema |
+
+**A nullable column in a unique index is not covered by it.** NULLs are distinct in Postgres, so
+`permission_overrides_uq` on `(user_id, goal_id, permission)` exempted every org-scope row — the
+index existed, read as a constraint, and enforced nothing for the rows that mattered most. The shape
+that works is two partial indexes:
+
+```sql
+CREATE UNIQUE INDEX … ON permission_overrides (organization_id, user_id, permission)
+  WHERE goal_id IS NULL;
+CREATE UNIQUE INDEX … ON permission_overrides (organization_id, user_id, goal_id, permission)
+  WHERE goal_id IS NOT NULL;
+```
+
+Check any unique index over a nullable column against that question before trusting it.
 
 Spell it **`organization`**, not `organisation`, everywhere — the column name settles it, and a
 codebase using both resolves it inconsistently per file.
