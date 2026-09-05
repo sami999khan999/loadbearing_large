@@ -432,19 +432,26 @@ export class CapabilitySet {
   // `can()` for an org-scoped permission — and the org half of a goal-scoped one.
   private allowsAtOrg(permission: PermissionKey): boolean {
     if (this.orgSet.deniesPermission(permission)) return false;
-    if (this.dto.wildcard) return true;
+    if (this.dto.wildcard || CapabilitySet.isCore(permission)) return true;
     return this.orgSet.grantsPermission(permission);
+  }
+
+  // The one exception to deny-by-default, and it is checked after denies like the
+  // wildcard is — see docs/reference/capability-set.md.
+  private static isCore(permission: PermissionKey): boolean {
+    return PermissionRegistry.instance.meta(permission)?.module === CORE_MODULE;
   }
 }
 ```
 
-### The four resolution rules
+### The six resolution rules
 
-1. **Deny by default.** Absence of a grant is a denial. There is no "allow unless denied" path.
+1. **Deny by default.** Absence of a grant is a denial. There is no "allow unless denied" path, except the closed module named in rule 6.
 2. **Explicit deny beats every grant**, including the wildcard. This is what makes per-user overrides usable as a suspension mechanism without unpicking role assignments.
 3. **A goal-scoped permission with no `goalId` is `false`.** Not an error, not a throw — `false`. This makes forgetting the scope fail closed.
 4. **Wildcard is checked after denies.** A superuser who has been explicitly denied one permission is denied it.
 5. **A permission the catalog does not define is denied**, not thrown on. Same reasoning as rule 3: a permission check that raises a `TypeError` turns a 403 into a 500, and takes the navigation with it.
+6. **Every `core.*` permission is held by any resolved principal**, checked beside the wildcard so rule 2 still wins. `core.activity.write` describes acting at all: a role that granted it would be a role that could be missing it, and for a while only `owner`'s wildcard carried it while one use-case asserted it. See [Reference · capability-set](../../packages/permissions/docs/reference/capability-set.md).
 
 ### `goalsWith()` does more work than it looks
 

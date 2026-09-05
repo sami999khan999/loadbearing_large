@@ -1,6 +1,6 @@
 ---
 title: TODO — loadbearing starter kit
-updated: 2026-09-03
+updated: 2026-09-05
 owner: sami
 schema: todo/v1
 ---
@@ -91,25 +91,27 @@ probe, and documentation that names directories which exist.
 
 ## 📋 Backlog
 
-- [ ] `T-030` **`core.activity.write` is unreachable for anyone but `owner`** `@sami` `P2` `~1h` `#api`
-  - **Goal:** `core.permissions.ts` says the key is "held by every principal … a property of acting at all", but `PgCapabilityRepository.resolveFor` grants only through roles and only `owner`'s wildcard carries it. `IndexDocumentUseCase` asserts it, so a `member` cannot index a document.
-  - **Done when:** Either every resolved principal holds the `core.*` keys or no use-case asserts one; the decision is recorded in `packages/permissions/docs/`.
-  - **Files:** `packages/infrastructure/src/pg/repository/pg-capability.repository.ts`, `packages/application/src/ai/index-document.use-case.ts`, `packages/permissions/src/catalog/core.permissions.ts`
-  - **Depends on:** none
-  - **Notes:** Found while planning `T-028`. The member use-cases deliberately assert only their own permission so `admin` — which holds `member.invite` and not `core.activity.write` — can invite. A capability-model change, so out of scope for the invitation work.
-
-- [ ] `T-026` **Make the activity-replay spec independent of how many rows are already in the table** `@sami` `P2` `~30m` `#api`
-  - **Goal:** `pg-activity-replay.reader.spec.ts` walks the table from the start in ten batches of two, so it can only reach its own rows while fewer than twenty older ones exist. `activity_log` is append-only and the other specs never clean up, so the suite goes red after roughly twenty runs against one database and stays red.
-  - **Done when:** The spec passes with several hundred unrelated rows already in `activity_log`.
-  - **Files:** `packages/infrastructure/tests/analytics/pg-activity-replay.reader.spec.ts`
-  - **Depends on:** none
-  - **Notes:** Pre-existing, and unrelated to `T-025` — found while running the suite against a database this machine had been using for a while. Reproduced by counting rows (24 older than the spec’s 2031 window, against a walk of 20) and confirmed by truncating `activity_log`, after which it passes. The spec drops its own partition in `afterAll`, so it is other specs that accumulate; one full suite run adds one row.
+*(nothing in the backlog — open work is tracked in `tasks/IMPLEMENTATION-PLAN.md`)*
 
 ## ⛔ Blocked
 
 *(nothing blocked)*
 
 ## ✅ Done
+
+- [x] `T-030` **`core.activity.write` is unreachable for anyone but `owner`** `@sami` `P2` `~1h` `#api` `done: 2026-09-05`
+  - **Goal:** `core.permissions.ts` says the key is "held by every principal … a property of acting at all", but `PgCapabilityRepository.resolveFor` grants only through roles and only `owner`'s wildcard carries it. `IndexDocumentUseCase` asserts it, so a `member` cannot index a document.
+  - **Done when:** Either every resolved principal holds the `core.*` keys or no use-case asserts one; the decision is recorded in `packages/permissions/docs/`.
+  - **Files:** `packages/permissions/src/capability/capability-set.ts`, `packages/application/src/ai/index-document.use-case.ts`, `packages/permissions/src/catalog/core.permissions.ts`, `apps/worker/src/system-principal.ts`
+  - **Done:** Both halves, because either alone leaves the other half of the contradiction standing. `CapabilitySet.can()` holds every `core.*` key for any resolved principal — checked after denies, exactly where the wildcard is, so rule 2 stays the one rule nothing is above — and `IndexDocumentUseCase` no longer asserts it. `SystemPrincipal.GRANTS` drops it too: granting what is already true reads as a decision. Recorded as the fifth resolution rule in `packages/permissions/docs/reference/capability-set.md`. Three new specs in `capability-set.spec.ts` and one in `system-principal.spec.ts`.
+  - **Notes:** Found while planning `T-028`. The member use-cases deliberately assert only their own permission so `admin` — which holds `member.invite` and not `core.activity.write` — can invite; that reading is now the only one. `PgCapabilityRepository` is untouched: the exemption belongs in the resolver, not in every row the database returns. Closed by `P2.14`.
+
+- [x] `T-026` **Make the activity-replay spec independent of how many rows are already in the table** `@sami` `P2` `~30m` `#api` `done: 2026-09-05`
+  - **Goal:** `pg-activity-replay.reader.spec.ts` walks the table from the start in ten batches of two, so it can only reach its own rows while fewer than twenty older ones exist. `activity_log` is append-only and the other specs never clean up, so the suite goes red after roughly twenty runs against one database and stays red.
+  - **Done when:** The spec passes with several hundred unrelated rows already in `activity_log`.
+  - **Files:** `packages/infrastructure/tests/analytics/pg-activity-replay.reader.spec.ts`
+  - **Done:** Every read starts from a checkpoint just before the spec's own 2031-03 instant rather than from `{null, null}`, so the walk is bounded by the partition this spec writes and drops rather than by the table. Verified against a database carrying the seed's audit rows.
+  - **Notes:** Pre-existing, and unrelated to `T-025`. Closed by `P6.5`.
 
 - [x] `T-029` **Organization plugin: switch, create, accept; switcher; invitation landing page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
   - **Goal:** A user in two organizations could reach only the one the session was pinned to, nothing let anyone create a second organization, and an existing account holding an invitation link had no way to accept it.
