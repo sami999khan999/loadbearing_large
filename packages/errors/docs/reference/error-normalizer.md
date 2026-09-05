@@ -66,7 +66,10 @@ Zod-shaped error is anything with an `issues` array whose entries have a `path` 
 `code` — which is Zod's contract in practice, and which also means any other validator with the same
 shape normalises for free.
 
-`SchemaIssue` declares only the four fields used: `path`, `code`, `minimum`, `maximum`.
+`SchemaIssue` declares only the four fields used: `path`, `code`, `minimum`, `maximum`. **Both
+bounds travel when an issue carries both** — a `min(8).max(64)` string produces `{ min, max }`, and a
+template that names only one simply ignores the other. Returning at the first bound found lost `max`
+on every such issue, and `error.field.tooLong` renders an unmatched `{max}` literally.
 
 ---
 
