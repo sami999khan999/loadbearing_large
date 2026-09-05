@@ -1,13 +1,7 @@
 import { AuthMailer, type ContentSource, type EmailSender, Locales } from "../import.js";
 
-// The one place `AuthMailer` (a port in `auth`), `EmailSender` (a port in `application`)
-// and `ContentSource` (the copy) meet — which is why it lives in the wiring package and
-// not in either of the two packages it joins. `auth` must not learn what a user reads;
-// `content` must not learn how a message is sent.
-//
-// The shape is `apps/worker`'s `DigestComposer` one layer down: copy through
-// `ContentSource`, so a subject line and a button label share one `Translator`, one
-// interpolation implementation, and one typo fix.
+// Where `AuthMailer`, `EmailSender` and `ContentSource` meet, which is why it is in the
+// wiring package: `auth` owes no words and `content` owes no transport.
 export class ContentAuthMailer extends AuthMailer {
   public constructor(
     private readonly content: ContentSource,
@@ -28,9 +22,8 @@ export class ContentAuthMailer extends AuthMailer {
     await this.send(to, url, "email.change.subject", "email.change.body", "email.change.action");
   }
 
-  // Not routed through `send` below: that method's whole shape is "one sentence and a
-  // link", and a one-time code is neither. Rendering a code as a URL is how a second
-  // factor ends up clickable in a mail client on a device the sign-in is not happening on.
+  // Not routed through `send`, whose shape is "one sentence and a link": rendering a
+  // code as a URL makes a second factor clickable on the wrong device.
   public override async sendTwoFactorOtp(to: string, code: string): Promise<void> {
     const t = await this.content.translator(Locales.DEFAULT, ["email"]);
 
@@ -41,10 +34,8 @@ export class ContentAuthMailer extends AuthMailer {
     });
   }
 
-  // The default locale, not a negotiated one. Better Auth calls these from a token
-  // endpoint that carries no request in `sendResetPassword`'s signature and no stored
-  // preference — and `users.locale` exists precisely so this becomes a lookup rather
-  // than a guess the day the port grows a recipient rather than an address.
+  // The default locale: Better Auth calls these from a token endpoint carrying no
+  // request. `users.locale` is what makes it a lookup once the port grows a recipient.
   private async send(
     to: string,
     url: string,
@@ -57,8 +48,7 @@ export class ContentAuthMailer extends AuthMailer {
     await this.email.send({
       to,
       subject: t.t(subject),
-      // Text only. The link is the message, and a plain-text transactional email is
-      // the one shape every client renders and no spam filter penalises.
+      // Text only: the link is the message, and every client renders text.
       text: [t.t(body), `${t.t(action)}: ${url}`].join("\n\n"),
     });
   }

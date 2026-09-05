@@ -1,8 +1,7 @@
 import { UnitOfWork } from "../import.js";
 
-// Runs the work, opens nothing, rolls back nothing. A fake that could roll back would
-// be testing the fake — atomicity is asserted against Postgres, in `db`'s integration
-// tier, which is the whole reason that tier exists.
+// Runs the work, opens nothing, rolls back nothing: a fake that could roll back would be
+// testing the fake. Atomicity is asserted against Postgres.
 export class DirectUnitOfWork extends UnitOfWork {
   private calls = 0;
 

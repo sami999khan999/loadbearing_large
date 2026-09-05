@@ -1,8 +1,7 @@
 import { type DomainEvent, EventBus } from "../import.js";
 
-// The one port with no production implementation — `Container` wires nine of the ten,
-// because nothing publishes a domain event yet. The fake exists anyway: it is what
-// makes the first use-case that does publish testable on the day it is written.
+// The one port with no production implementation, because nothing publishes a domain
+// event yet. The fake makes the first one that does testable on the day it lands.
 export class RecordingEventBus extends EventBus {
   private readonly events: DomainEvent[] = [];
 

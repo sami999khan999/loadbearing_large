@@ -1,8 +1,7 @@
 import { type DocumentChunk, type OrganizationId, type SearchHit, VectorStore } from "../import.js";
 
-// Chunks in a Map, keyed by tenant. Cosine is computed for real — a fake that scored
-// every hit the same would make "the top result is the right one" pass either way,
-// which is the one assertion a retrieval use-case is worth testing for.
+// Cosine is computed for real: scoring every hit the same makes "the top result is the
+// right one" pass either way, which is the assertion worth having.
 export class InMemoryVectorStore extends VectorStore {
   private readonly chunks = new Map<string, DocumentChunk[]>();
 
@@ -28,9 +27,8 @@ export class InMemoryVectorStore extends VectorStore {
     return Promise.resolve();
   }
 
-  // `goalIds` filters the input set, before scoring — the same order the real store
-  // uses, and the reason it matters: filtering after retrieval means the model already
-  // saw what the actor cannot.
+  // Filters the input set before scoring, like the real store: filtering after retrieval
+  // means the model already saw what the actor cannot.
   public override search(
     organizationId: OrganizationId,
     embedding: readonly number[],

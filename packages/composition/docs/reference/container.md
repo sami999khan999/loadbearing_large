@@ -136,23 +136,30 @@ Constructed first, because a `Database` that cannot reach Postgres should produc
 rather than a stack trace on stderr. Disposed last, because everything closing above it may have
 something to say on the way out.
 
-## `healthy()` pings what callers actually hold
+## `health()` pings what callers actually hold
 
 ```ts
 const [database, cache, queue, analytics] = await Promise.all([
   this.database.isHealthy(),
   this.redis.healthy("cache"),
   this.redis.healthy("queue"),
-  this.clickhouse?.healthy() ?? Promise.resolve(true),
+  this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
 ]);
+
+return { healthy: database && cache && queue && analytics !== false, database, cache, queue, analytics };
 ```
 
 Postgres and **both** Redis instances. A cache that is down degrades; a queue that is down silently
 stops accepting work, which is worth knowing about — and the two are separate servers with different
 eviction policies, so one being up says nothing about the other.
 
-**ClickHouse only when it is part of this deployment.** A container with no ClickHouse reports healthy
-without it, which is correct: it is not degraded, it is not running one.
+**It returns a breakdown rather than one boolean**, because the only consumer is a readiness probe,
+and the body of a failing probe is what an operator reads at three in the morning. `false` alone says
+the deployment is unhealthy; it does not say whether to restart the pod or page whoever owns Redis.
+
+**ClickHouse only when it is part of this deployment**, and `null` rather than `true` when it is not:
+that container is not healthy and not degraded, it is not running one, and a probe body saying `true`
+claims otherwise. The roll-up reads `analytics !== false`, so absent does not fail the probe.
 
 **Loki is deliberately absent from this list**, even though `LokiLogReader.healthy()` exists. Loki
 being down loses diagnostics and nothing else. Failing a readiness probe over it takes the application
@@ -164,6 +171,31 @@ store that is not answering is user-visible; a log line nobody is reading right 
 `ioredis` confined to `packages/infrastructure`. It pings the memoised connection the cache store and
 the queue publisher are already using; opening a second connection to answer a health check would
 report green on a socket nothing else uses.
+
+## Enrolment mode is a binding, not a policy
+
+```ts
+private static enroller(mode, personal, bootstrap, claimer): MembershipEnroller
+```
+
+Three modes, one env var, one decorator around all of them, and **this method is the only line in
+the system that knows which is which**. Tenancy is the decision a starter kit is most likely to be
+forked over, so it is resolved here rather than baked into an enroller — which is exactly what a DI
+root is for.
+
+| `AUTH_ENROLMENT_MODE` | Adapter | Posture |
+|---|---|---|
+| `personal` | `PgPersonalOrganizationEnroller` | The default: the only mode that works against an empty database, so a fresh clone can sign up and be signed in without `pnpm db:seed` having run |
+| `bootstrap` | `PgBootstrapMembershipEnroller` | The demo and single-tenant posture |
+| `invite` | `NullMembershipEnroller` | Production: the decorator is the only door, and an address nobody invited is refused a session by `MembershipReader` |
+
+Every one of the three is wrapped in `InvitationClaimingEnroller`, so an invited address joins the
+organization that invited it **before** the mode is consulted at all. See
+[`auth/docs/reference/enrolment.md`](../../../auth/docs/reference/enrolment.md).
+
+The enroller block, and everything else gated on `config.auth`, is skipped entirely in a process
+that never authenticates: `apps/worker` builds a `SystemPrincipal` from a named grant list and
+resolves no credential.
 
 ## The one nominal binding in the repository
 

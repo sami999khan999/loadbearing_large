@@ -1,9 +1,7 @@
 import { type LogEntry, type LogQuery, LogReader } from "../import.js";
 
-// Filters on the same four labels the real selector does, and on nothing else. That
-// restriction is the point: a fake that supported filtering by `userId` would let a
-// caller write a query the real Loki cannot serve without a label that would take it
-// down at scale.
+// The same four labels the real selector has, and nothing else: supporting `userId`
+// would let a caller write a query the real Loki cannot serve.
 export class InMemoryLogReader extends LogReader {
   public constructor(private readonly entries: readonly LogEntry[] = []) {
     super();
@@ -21,8 +19,8 @@ export class InMemoryLogReader extends LogReader {
         (!query.contains || JSON.stringify(entry.fields).includes(query.contains)),
     );
 
-    // Newest first, matching `direction=backward`. A fake returning them in insertion
-    // order hides a paging bug that only shows when the window exceeds `limit`.
+    // Newest first, matching `direction=backward`: insertion order hides a paging bug
+    // that only shows when the window exceeds `limit`.
     return Promise.resolve(
       [...matched]
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())

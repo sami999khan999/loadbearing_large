@@ -1,8 +1,7 @@
 import { type RequestHeaders, type ResolvedSession, SessionResolver } from "../import.js";
 
-// Resolves to whatever it was handed, `null` by default. A use-case test never reaches
-// this — it builds a `Principal` directly — which is exactly why the fake is one line:
-// it exists so the port has a double, not because anything asserts on it.
+// Resolves to whatever it was handed. One line, because it exists so the port has a
+// double — a use-case test builds a `Principal` directly and never reaches it.
 export class StubSessionResolver extends SessionResolver {
   public constructor(private readonly session: ResolvedSession | null = null) {
     super();

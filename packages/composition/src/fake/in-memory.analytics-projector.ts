@@ -5,10 +5,8 @@ import {
   type ProjectionCheckpoint,
 } from "../import.js";
 
-// Keyed on the activity id, like the real `ReplacingMergeTree`. A projector fake that
-// appended would make a redelivered batch look like new work, and idempotency is the
-// one property the consumer relies on — BullMQ redelivers, so a handler that is not
-// idempotent is a handler that eventually double-counts.
+// Keyed on the activity id, like the real `ReplacingMergeTree`: one that appended would
+// make a redelivered batch look like new work, and BullMQ redelivers.
 export class InMemoryAnalyticsProjector extends AnalyticsProjector {
   private readonly rows = new Map<string, ActivityRecord>();
 
@@ -16,8 +14,8 @@ export class InMemoryAnalyticsProjector extends AnalyticsProjector {
     return [...this.rows.values()];
   }
 
-  // Read back out of the stored rows, exactly as ClickHouse reads it out of the
-  // table, so a test cannot pass by keeping a cursor the real one does not have.
+  // Read back out of the stored rows, so a test cannot pass by keeping a cursor the real
+  // one does not have.
   public override checkpoint(): Promise<ProjectionCheckpoint> {
     const last = [...this.rows.values()].sort((a, b) => {
       const delta = a.occurredAt.getTime() - b.occurredAt.getTime();

@@ -7,9 +7,8 @@ import {
   type UserId,
 } from "../import.js";
 
-// Returns empty arrays, and that is enough. The point of this file is that adding a
-// port to `application` shows up here as one line rather than as a compile error in
-// forty specs — a test that needs real numbers passes them to the constructor.
+// Empty arrays are enough: adding a port shows up here as one line rather than a compile
+// error in forty specs. A test needing numbers passes them to the constructor.
 export class StubAnalyticsReader extends AnalyticsReader {
   public constructor(
     private readonly scores: readonly RiskScore[] = [],

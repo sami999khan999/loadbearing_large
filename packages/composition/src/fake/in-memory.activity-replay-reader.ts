@@ -5,10 +5,8 @@ import {
   type ProjectionCheckpoint,
 } from "../import.js";
 
-// Holds the records it was given and paginates them the way Postgres does — keyset on
-// `(occurredAt, id)`, not OFFSET. The pagination is the part worth faking honestly: a
-// stub that ignored the checkpoint would let a projection consumer that never advances
-// its cursor pass every test and then loop forever against a real database.
+// Paginates the way Postgres does — keyset on `(occurredAt, id)`, not OFFSET. Ignoring
+// the checkpoint would let a consumer that never advances its cursor pass every test.
 export class InMemoryActivityReplayReader extends ActivityReplayReader {
   private readonly records: readonly ActivityRecord[];
 

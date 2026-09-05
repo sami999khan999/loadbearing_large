@@ -1,8 +1,5 @@
-// Everything this package takes from outside itself, in one place. No relative
-// re-exports live here — that is what keeps it cycle-free.
-//
-// Longer than any other `import.ts` in the repository, and that is the package
-// working: wiring ports to implementations means naming both sides exactly once.
+// Everything this package takes from outside itself. The longest `import.ts` here, and
+// that is the package working: wiring names both sides exactly once.
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 export {
@@ -80,16 +77,16 @@ export {
 } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ─────────────────────────────────────────────
-// Only the branded ids two port signatures name. `test-container.ts` cannot override
-// `VectorStore.upsert` or `AnalyticsReader.goalRiskScores` without them.
+// Only the branded ids two port signatures name, without which `test-container.ts`
+// cannot override them.
 export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { type Clock, FixedClock, ServerOnly, SystemClock } from "@loadbearing/core";
 
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
-// Every concrete adapter, Postgres included. One import block, because there is now
-// one package holding the whole outside-world side of the ports below.
+// Every concrete adapter, Postgres included — one block, because one package holds the
+// whole outside-world side of the ports below.
 export {
   BullMqQueuePublisher,
   ClickHouseAnalyticsProjector,
@@ -126,6 +123,6 @@ export {
 export { JsonLogger, type Logger, type LogLevel, SilentLogger } from "@loadbearing/observability";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
-// Only the route table, and only so the invitation mail's link is built from the same
-// entry the landing page's `createFileRoute` spells.
+// Only the route table, so the invitation mail's link and the landing page spell the
+// same literal.
 export { ROUTES } from "@loadbearing/permissions";

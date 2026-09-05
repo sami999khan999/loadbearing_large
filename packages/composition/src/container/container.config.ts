@@ -1,9 +1,7 @@
 import type { LogLevel } from "../import.js";
 
-// Every value the system needs, in one shape, and none of it read from the
-// environment. `apps/web/src/env.ts` and `apps/worker/src/env.ts` are the only two
-// files in the repository that touch `process.env`; they parse it, validate it, and
-// hand this object down.
+// Every value the system needs, in one shape, and none of it read from the environment:
+// the two `env.ts` files parse it, validate it, and hand this object down.
 export interface ContainerConfig {
   readonly database: {
     readonly url: string;
@@ -36,18 +34,15 @@ export interface ContainerConfig {
     // Which of the three `MembershipEnroller`s this container binds. The one place in
     // the system that branches on it is `Container`, which is what a DI root is for.
     readonly enrolmentMode: "personal" | "bootstrap" | "invite";
-    // Absent switches Google sign-in off. `apps/web` only builds this block when both
-    // halves of the credential are present, so a half-filled `.env` disables the
-    // provider rather than shipping one that fails at the consent screen.
+    // Absent switches Google sign-in off. Built only when both halves are present, so
+    // a half-filled `.env` disables the provider rather than failing at consent.
     readonly google?: { readonly clientId: string; readonly clientSecret: string };
     // Read only under `enrolmentMode: "bootstrap"`. The organization every sign-up
     // joins — first one in as `owner`, everyone after as `member`.
     readonly bootstrapOrganizationSlug?: string;
   };
-  // Transactional mail. Not optional: `requireEmailVerification` defaults to on, and a
-  // container that cannot send is a container whose sign-ups can never complete. SMTP
-  // rather than a provider block, because every managed sender speaks it — swapping
-  // vendors is this URL and nothing else.
+  // Not optional: with `requireEmailVerification` on, a container that cannot send is
+  // one whose sign-ups never complete. SMTP, so swapping vendors is this URL.
   readonly email: {
     readonly url: string;
     readonly from: string;
@@ -58,34 +53,19 @@ export interface ContainerConfig {
     readonly dimensions: number;
   };
   // ── the swappable stores ───────────────────────────────────────────────────
-  //
-  // Three blocks, one shape. Each names a `driver`, and `Container` reads it to
-  // decide which class implements the port — so adopting a store is an environment
-  // variable and one `case`, never a change to a use-case, a repository, or a test.
-  //
-  // The `driver` field is what stops "swap the implementation" from being a claim.
-  // A seam with exactly one implementation is untested by construction; a seam with
-  // a discriminated config is exercised the first time somebody flips the value.
+  // Three blocks, one shape, each naming a `driver` the container switches on. See
+  // docs/reference/container.md.
   readonly vector: {
-    // `pgvector` today — physically inside Postgres, conceptually derived, and
-    // rebuildable by re-embedding the source documents. That last property is the
-    // whole reason a dedicated store can be adopted without a migration plan.
-    //
-    // A dedicated vector database is a fourth folder in
-    // `packages/infrastructure/src/` and one more member of this union. Nothing
-    // above `Container` learns which one is running, because `VectorStore.search()`
-    // already takes the resolved goal scope as a parameter rather than reaching for
-    // a `CapabilitySet` no remote store could hold.
+    // `pgvector` today. Rebuildable by re-embedding the sources, which is why a
+    // dedicated store can be adopted without a migration plan.
     readonly driver: "pgvector";
   };
   readonly analytics: {
     // `postgres` reads the nightly rollup tables; `clickhouse` reads the projected
     // event stream. Same port, same two questions, same call sites.
     readonly driver: "postgres" | "clickhouse";
-    // Required when the driver is `clickhouse`, ignored otherwise. Its presence is
-    // also what decides whether the projection pipeline exists at all — a container
-    // with no ClickHouse builds no `AnalyticsProjector`, and the worker registers no
-    // projection consumer, so nothing runs half-wired.
+    // Required when the driver is `clickhouse`. Its presence also decides whether the
+    // projection pipeline exists at all, so nothing runs half-wired.
     readonly clickhouse?: {
       readonly url: string;
       readonly database: string;
@@ -93,21 +73,18 @@ export interface ContainerConfig {
       readonly password: string;
     };
   };
-  // Absent means no `LogReader`. Diagnostics are still written — `JsonLogger` goes
-  // to stdout and has never heard of a log platform — this block only decides
-  // whether anything in-process can read them back.
+  // Absent means no `LogReader`. Diagnostics are still written to stdout either way;
+  // this only decides whether anything in-process can read them back.
   readonly logs?: {
     readonly driver: "loki";
     readonly url: string;
-    // Loki's multi-tenancy header. Unset locally; set on Grafana Cloud, which runs
-    // the identical thing and is the reason this is a config field rather than a
-    // migration.
+    // Loki's multi-tenancy header. Unset locally, set on Grafana Cloud — which is why
+    // this is a config field rather than a migration.
     readonly tenantId?: string;
   };
   readonly logging: {
     readonly level: LogLevel;
-    // Human-shaped output for a terminal. Never true in production — Alloy wants
-    // one JSON object per line and nothing else.
+    // Never true in production: Alloy wants one JSON object per line and nothing else.
     readonly pretty: boolean;
     // Two of the four log labels. Low-cardinality by construction.
     readonly app: string;

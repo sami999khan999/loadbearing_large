@@ -73,8 +73,8 @@ import {
 import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
 
-// The member slice's use-cases, reachable as `container.member`. Named so the getter
-// below can say what is absent rather than handing out `undefined`.
+// The member slice's use-cases. Named so the getter can say what is absent rather than
+// handing out `undefined`.
 export interface MemberUseCases {
   readonly listMembers: ListMembersUseCase;
   readonly listInvitations: ListInvitationsUseCase;
@@ -82,8 +82,8 @@ export interface MemberUseCases {
   readonly revokeInvitation: RevokeInvitationUseCase;
 }
 
-// What a readiness probe returns. One field per dependency the deployment cannot serve
-// requests without, plus the roll-up the probe's status code is derived from.
+// One field per dependency the deployment cannot serve requests without, plus the
+// roll-up the probe's status code comes from.
 export interface HealthReport {
   readonly healthy: boolean;
   readonly database: boolean;
@@ -101,8 +101,8 @@ export class Container {
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
   private readonly transactions: TransactionScope;
-  // Present only when `config.analytics.clickhouse` is. Held so `healthy()` can ping
-  // it and `dispose()` can close it without `Container` handing the connection out.
+  // Held so `health()` can ping it and `dispose()` can close it, without handing the
+  // connection out.
   private readonly clickhouse: ClickHouseConnection | undefined;
 
   // ── shared primitives ─────────────────────────────────────
@@ -120,25 +120,20 @@ export class Container {
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
-  // Built unconditionally, unlike the derived stores below. A missing analytics store
-  // means a feature is not deployed; a missing mail transport means every sign-up on a
-  // default configuration is a dead end, so it is required configuration instead.
+  // Built unconditionally: a missing analytics store means a feature is not deployed, a
+  // missing mail transport means every sign-up is a dead end.
   public readonly email: EmailSender;
-  // Platform housekeeping, carrying no principal because it owns no tenant's rows.
-  // Reachable only from the worker's schedules, never from a request path.
+  // No principal, because it owns no tenant's rows. Reachable only from the worker's
+  // schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
   public readonly activityArchive: ActivityArchiveGateway;
-  // The source half of the projection pipeline. Always built, because replaying the
-  // audit trail is useful with or without a derived store behind it — a reconciliation
-  // against nothing is simply a count.
+  // Always built: replaying the audit trail is useful with or without a derived store
+  // behind it, and a reconciliation against nothing is simply a count.
   public readonly activityReplay: ActivityReplayReader;
 
   // ── the derived stores, absent unless configured ─────────
-  //
-  // Optional fields rather than no-op implementations. A `NullAnalyticsProjector`
-  // would let the worker register a projection consumer that runs every five minutes
-  // and writes nowhere, which is indistinguishable from a working pipeline until a
-  // quarterly report comes out wrong. Absent means the consumer is never registered.
+  // Optional fields rather than no-op implementations: a null projector is
+  // indistinguishable from a working pipeline until a quarterly report comes out wrong.
   private readonly analyticsProjector: AnalyticsProjector | undefined;
   private readonly logReader: LogReader | undefined;
 
@@ -149,9 +144,8 @@ export class Container {
   public readonly capabilities: CapabilityCache;
 
   // ── membership, built in every process ────────────────────
-  // The web session function reads `memberships` for the switcher and the
-  // organization plugin reads all three; the worker reads none, and building them
-  // there costs nothing because none opens a connection until called.
+  // The worker reads none, and building them there costs nothing: none opens a
+  // connection until called.
   public readonly memberships: MembershipReader;
   public readonly invitationClaimer: InvitationClaimer;
   public readonly organizationFounder: OrganizationFounder;
@@ -161,8 +155,8 @@ export class Container {
   // docs/reference/container.md.
   public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
   public readonly rbac: { readonly listRoles: ListRolesUseCase };
-  // Present only with an auth config: the invitation mail needs `auth.baseUrl` for its
-  // link, and the process with no auth config is the worker, which never invites.
+  // Only with an auth config: the invitation mail needs `auth.baseUrl` for its link,
+  // and the process without one is the worker, which never invites.
   private readonly memberUseCases: MemberUseCases | undefined;
 
   public constructor(config: ContainerConfig) {
@@ -173,9 +167,8 @@ export class Container {
     });
     this.transactions = new TransactionScope();
 
-    // First, so a failure in anything below it has somewhere to be recorded.
-    // `app` and `env` are bound rather than passed through: they belong on every
-    // line, and `JsonLoggerOptions` has no field of its own for either.
+    // First, so a failure in anything below it has somewhere to be recorded. `app` and
+    // `env` are bound because they belong on every line.
     this.logger = new JsonLogger({
       level: config.logging.level,
       pretty: config.logging.pretty,
@@ -193,24 +186,19 @@ export class Container {
     this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
 
     // ── the swap points ──
-    //
-    // Each reads a `driver` off the config rather than naming one class directly.
-    // That is the difference between a seam and a claim about one: the alternative
-    // implementation is named here, in a switch a compiler checks, instead of in a
-    // document describing what somebody would do.
+    // Each reads a `driver` rather than naming a class: the alternative is named in a
+    // switch a compiler checks, not in a document.
     this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
-    // ClickHouse is opt-in and stopped by default (`--profile analytics`). Building
-    // the connection only when configured is what keeps "the seam exists, the
-    // container exists, and nothing writes to it" true rather than aspirational.
+    // Opt-in and stopped by default. Building the connection only when configured is
+    // what keeps the seam honest rather than aspirational.
     this.clickhouse = config.analytics.clickhouse
       ? new ClickHouseConnection(config.analytics.clickhouse)
       : undefined;
 
-    // A `clickhouse` driver with no `clickhouse` block would otherwise degrade to
-    // Postgres silently — the dashboard keeps answering, out of the store the
-    // operator believed they had moved off.
+    // Otherwise a `clickhouse` driver with no block degrades to Postgres silently, out
+    // of the store the operator believed they had moved off.
     if (config.analytics.driver === "clickhouse" && !this.clickhouse) {
       throw new Error(
         "analytics.driver is clickhouse but no analytics.clickhouse config was given.",
@@ -222,38 +210,33 @@ export class Container {
         ? new ClickHouseAnalyticsReader(this.clickhouse)
         : new PgAnalyticsReader(this.database, this.transactions);
 
-    // The writer is tied to the connection, not to the driver. Pointing the reader at
-    // Postgres while the projection already fills ClickHouse is the supported way to
-    // adopt it: project first, watch the reconciliation come back clean, then flip
-    // `ANALYTICS_DRIVER` — rather than cutting reads over to an empty store.
+    // The writer follows the connection, not the driver: project first, watch the
+    // reconciliation come back clean, then flip `ANALYTICS_DRIVER`.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
       : undefined;
 
-    // The only in-process reader of the diagnostic stream. Its absence changes
-    // nothing about what is written: `JsonLogger` goes to stdout either way.
+    // Its absence changes nothing about what is written: `JsonLogger` goes to stdout
+    // either way.
     this.logReader = config.logs ? new LokiLogReader(config.logs) : undefined;
 
-    // The server catalog, which is the only one carrying the `email` namespace the
-    // worker's digests read. A client bundle cannot reach it — 05 bans the import.
+    // The only catalog carrying the `email` namespace the worker's digests read. A
+    // client bundle cannot reach it.
     this.content = new StaticContentSource(SERVER_CATALOG);
     this.email = new SmtpEmailSender(config.email);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
 
-    // Shares the transaction scope, which is what makes the audit row commit
-    // with the state change rather than beside it. Built before the membership
-    // adapters below, which write audit rows of their own.
+    // Shares the transaction scope, which is what makes the audit row commit with the
+    // state change rather than beside it.
     this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
 
-    // The membership side of authentication. These are the places `infrastructure`'s
-    // adapters are bound to the ports `auth` declares — `PgMembershipReader` cannot
-    // implement `MembershipReader` nominally, because `auth` already depends on
-    // `infrastructure`, so these lines are where a signature drift is caught.
+    // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
+    // is structural, so these lines are where a signature drift is caught.
     this.memberships = new PgMembershipReader(this.database, this.transactions);
-    // Held concretely too: the personal enroller calls `found` with a slug the port
-    // does not expose, so it takes the class rather than the seam.
+    // Held concretely too: the personal enroller calls `found` with a slug the port does
+    // not expose.
     const founder = new PgOrganizationFounder(this.database, this.transactions, this.activity);
     this.organizationFounder = founder;
     this.invitationClaimer = new PgInvitationClaimer(
@@ -262,24 +245,17 @@ export class Container {
       this.activity,
     );
 
-    // Repositories shared between the slices below. One instance each: they hold no
-    // state beyond the pool and the scope, so a second copy would be a second name.
+    // One instance each: they hold no state beyond the pool and the scope, so a second
+    // copy would be a second name.
     const roles = new PgRoleRepository(this.database, this.transactions);
     const members = new PgMemberRepository(this.database, this.transactions);
     const invitations = new PgInvitationRepository(this.database, this.transactions);
 
-    // Everything below is skipped when `config.auth` is absent — `apps/worker` builds a
-    // `SystemPrincipal` from a named grant list and never resolves a credential (25.3).
+    // Skipped when `config.auth` is absent: `apps/worker` builds a `SystemPrincipal`
+    // from a named grant list and never resolves a credential.
     if (config.auth) {
-      // The write half of membership. It is what puts the very first row in
-      // `memberships` — without it a fresh database can never produce a session,
-      // because the hook correctly refuses one to a user with no membership and
-      // nothing else in the repository writes that table.
-      //
-      // Three modes, one env var, one decorator around all of them, and this is the
-      // only line in the system that knows which is which. Tenancy is the decision a
-      // starter kit is most likely to be forked over, so it is a binding rather than a
-      // policy baked into the enroller — which is exactly what a DI root is for.
+      // The only thing that writes the first `memberships` row, and the only line that
+      // knows which mode is bound. See docs/reference/container.md.
       const membershipEnroller: MembershipEnroller = Container.enroller(
         config.auth.enrolmentMode,
         config.auth.bootstrapOrganizationSlug,
@@ -295,9 +271,8 @@ export class Container {
         this.cache,
         this.memberships,
         membershipEnroller,
-        // The copy and the transport, joined here and nowhere else. `auth` owes no
-        // words and `content` owes no transport, which is the whole reason this line
-        // is in the wiring package.
+        // Copy and transport joined here and nowhere else: `auth` owes no words and
+        // `content` owes no transport.
         new ContentAuthMailer(this.content, this.email),
         this.invitationClaimer,
         founder,
@@ -313,7 +288,7 @@ export class Container {
       );
 
       // Inside the auth block because the mail's link is `auth.baseUrl`. The use-cases
-      // themselves know nothing about that — they hand a token to a port.
+      // hand a token to a port and know nothing about it.
       this.memberUseCases = {
         listMembers: new ListMembersUseCase(this.authorizer, members),
         listInvitations: new ListInvitationsUseCase(this.authorizer, invitations),
@@ -336,8 +311,8 @@ export class Container {
       };
     }
 
-    // Takes the storage gateway, because archiving a partition is a database read and
-    // an object write in one operation — the only place those two ports meet.
+    // Takes the storage gateway: archiving a partition is a database read and an object
+    // write in one operation.
     this.activityArchive = new PgActivityArchiveGateway(
       this.database,
       this.transactions,
@@ -359,15 +334,8 @@ export class Container {
     };
   }
 
-  // The three enrolment modes, resolved to the one adapter that implements each, and
-  // every one of them wrapped so an invited address joins the organization that
-  // invited it before the mode is consulted at all.
-  //
-  // `personal` is the default because it is the only one that works against an empty
-  // database: a fresh clone can sign up and be signed in without `pnpm db:seed` having
-  // run. `bootstrap` is the demo and single-tenant posture. `invite` is the production
-  // posture — the decorator is the only door, and an address nobody invited is refused
-  // a session by `MembershipReader` exactly as before.
+  // Three modes, each wrapped so an invited address joins the organization that invited
+  // it before the mode is consulted. See docs/reference/container.md.
   private static enroller(
     mode: "personal" | "bootstrap" | "invite",
     bootstrapOrganizationSlug: string | undefined,
@@ -392,8 +360,8 @@ export class Container {
     return new InvitationClaimingEnroller(claimer, inner);
   }
 
-  // Getters rather than optional fields, so `apps/web` still reads `container.auth`
-  // with no `?.` and a process that skipped auth fails loudly at the call site.
+  // Getters rather than optional fields, so a process that skipped auth fails loudly at
+  // the call site rather than silently.
   public get auth(): AuthInstance {
     if (!this.authInstance) throw new Error("This container was built without an auth config.");
     return this.authInstance;
@@ -420,9 +388,7 @@ export class Container {
     return this.principalBuilder;
   }
 
-  // The projection writer, when one exists. A getter rather than a public optional
-  // field, so `apps/worker` reads `container.projector` with no `?.` and a process
-  // that reached it without ClickHouse configured fails at the call site with a
+  // A getter, so a process reaching it without ClickHouse configured fails with a
   // sentence rather than at the first insert with a `TypeError`.
   public get projector(): AnalyticsProjector {
     if (!this.analyticsProjector) {
@@ -431,8 +397,8 @@ export class Container {
     return this.analyticsProjector;
   }
 
-  // What the worker branches on. Registering a projection consumer against a store
-  // that is not running is the exact failure this arrangement is shaped to prevent.
+  // What the worker branches on: registering a projection consumer against a store that
+  // is not running is the failure this prevents.
   public get hasProjector(): boolean {
     return this.analyticsProjector !== undefined;
   }
@@ -446,25 +412,15 @@ export class Container {
     return this.logReader !== undefined;
   }
 
-  // Postgres and both Redis instances. A cache that is down degrades; a queue
-  // that is down silently stops accepting work, which is worth knowing about.
-  //
-  // A breakdown rather than one boolean, because the only consumer is a readiness probe
-  // and the body of a failing probe is what an operator reads at three in the morning.
-  // `false` alone says the deployment is unhealthy; it does not say whether to restart
-  // the pod or page whoever owns Redis.
+  // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
+  // of a failing probe is what an operator reads. See docs/reference/container.md.
   public async health(): Promise<HealthReport> {
     const [database, cache, queue, analytics] = await Promise.all([
       this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
-      // Only when it is part of this deployment. `null` rather than `true` for a
-      // container with no ClickHouse: it is not healthy and it is not degraded, it is
-      // not running one, and a probe body saying `true` claims otherwise.
-      //
-      // The log platform is deliberately absent from this list. Loki being down
-      // loses diagnostics and nothing else, and failing a readiness probe over it
-      // takes the application down in order to protect its logs.
+      // `null` rather than `true` when absent: it is not healthy and not degraded, it
+      // is not running one. Loki is absent from this list on purpose.
       this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
     ]);
 
@@ -477,8 +433,8 @@ export class Container {
     };
   }
 
-  // Reverse construction order. Closing Redis while BullMQ still holds blocking
-  // connections produces a hang on shutdown that looks like a deadlock, because it is.
+  // Reverse construction order: closing Redis while BullMQ holds blocking connections
+  // hangs on shutdown, and it is a deadlock.
   public async dispose(): Promise<void> {
     await this.queuePublisher.close();
     await this.redis.close();
@@ -486,14 +442,8 @@ export class Container {
     await this.database.close();
   }
 
-  // The one place a port and the concrete class behind it meet for vectors, kept as
-  // a static so adopting a dedicated vector database is a `case` in a switch the
-  // compiler checks rather than another branch inside an already-long constructor.
-  //
-  // What makes that swap cheap is not this method — it is that `VectorStore.search()`
-  // takes the resolved goal scope as a parameter. A remote store holds no
-  // `CapabilitySet` and can join back to nothing, so the permission filter had to
-  // run on the input set from the first day or the port would have been unswappable.
+  // A static, so adopting a dedicated vector store is a `case` the compiler checks. The
+  // swap is cheap because `search()` takes the resolved goal scope as a parameter.
   private static buildVectorStore(
     config: ContainerConfig,
     database: Database,
@@ -503,8 +453,8 @@ export class Container {
       case "pgvector":
         return new PgVectorStore(database, transactions);
       default: {
-        // Exhaustiveness, checked at build time. A driver added to the union and not
-        // to this switch is a compile error rather than a runtime surprise.
+        // Exhaustiveness at build time: a driver added to the union and not here is a
+        // compile error rather than a runtime surprise.
         const unreachable: never = config.vector.driver;
         throw new Error(`Unknown vector driver: ${String(unreachable)}`);
       }

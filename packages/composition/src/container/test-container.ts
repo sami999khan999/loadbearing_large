@@ -41,17 +41,15 @@ import {
   type VectorStore,
 } from "../import.js";
 
-// One entry per port in `application/src/port/`. Adding a port there is one line here
-// and a compile error until it is written — which is the entire reason this file is in
-// `src/` rather than in a spec: it is checked by `tsc`, not by a test that runs.
+// One entry per port. In `src/` rather than a spec so `tsc` checks it: adding a port is
+// a compile error here until it is written.
 export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityArchive: ActivityArchiveGateway;
   readonly activityReplay: ActivityReplayReader;
   readonly analytics: AnalyticsReader;
-  // The two halves of the derived-store pipeline. Present here even though the real
-  // container leaves them absent unless ClickHouse is configured — a test has no
-  // opinion about the deployment, and a consumer spec needs both sides to exist.
+  // Present even though the real container leaves them absent: a test has no opinion
+  // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
   readonly content: ContentSource;
@@ -67,9 +65,8 @@ export interface TestPorts {
   readonly vectors: VectorStore;
 }
 
-// The ports, plus the three shared primitives a use-case is constructed with. No
-// `auth`, no `principals`, no `capabilities`: a use-case test builds a `Principal`
-// directly with a hand-made `CapabilitySet` and never authenticates.
+// The ports plus the three shared primitives. No auth: a use-case test builds a
+// `Principal` directly and never authenticates.
 export interface TestHarness extends TestPorts {
   readonly clock: FixedClock;
   readonly logger: Logger;
@@ -83,10 +80,8 @@ export class TestContainer {
 
   private constructor() {}
 
-  // Ports come back as their abstract types, which is the opposite of what a test
-  // asserting on a fake needs. That is deliberate: construct the fake yourself, keep
-  // the reference, and pass it in — `TestContainer.build({ activity })` — so the
-  // assertion reads `activity.actions()` off a variable the spec already owns.
+  // Ports come back as abstract types on purpose: construct the fake, keep the
+  // reference, pass it in, and assert off the variable the spec already owns.
   public static build(overrides: Partial<TestPorts> = {}): TestHarness {
     return {
       clock: new FixedClock(new Date(TestContainer.EPOCH)),

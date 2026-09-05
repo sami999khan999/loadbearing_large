@@ -6,8 +6,7 @@ describe("TestContainer", () => {
   it("builds every port without touching infrastructure", () => {
     const harness = TestContainer.build();
 
-    // One assertion per port, deliberately. This is the completeness check: a port
-    // added to `application` and forgotten here fails to compile, and a port wired to
+    // One assertion per port: this is the completeness check, and a port wired to
     // `undefined` fails right on this line.
     expect(harness.activity).toBeDefined();
     expect(harness.analytics).toBeDefined();
