@@ -58,17 +58,29 @@ reports as an implicit `any`.
 The object key is `<subject>/<yyyy>/<mm>/…`, the same prefix layout every other object uses, so a
 lifecycle rule can move archives to cold storage without naming them individually.
 
-## Two defects, recorded here because the page is the honest place for them
+## The count is taken after the detach
 
-Both are `P2.6` in `tasks/IMPLEMENTATION-PLAN.md`.
+`countOf(name)` runs **after** `DETACH PARTITION`, not before. Detaching first is what makes the
+export a closed set, so counting first would count a different set from the one uploaded: rows
+written in between would be streamed to S3 and missing from `activity_archive.row_count`, and that
+drift is permanent and silent.
 
-**The count runs before the detach.** `countOf(name)` is called ahead of `DETACH PARTITION`, so rows
-inserted between the two are streamed to S3 but missing from `activity_archive.row_count`. The drift
-is permanent and silent.
+## A failure between detach and drop re-attaches
 
-**A failure between detach and drop leaves the partition detached.** If `putStream` or the archive
-insert throws, the partition is neither attached nor archived: its rows are invisible to every query
-against the parent table, and nothing re-attaches it.
+Everything from the detach to the drop runs inside a `try`. If `putStream`, the archive insert or
+the verification throws, the partition is put back where it was and the original error is rethrown.
 
-Until both are fixed, treat a failed archive run as needing a manual `ATTACH PARTITION` before it is
-retried.
+Without that, a failed run left the partition **neither attached nor archived**: its rows invisible
+to every query against `activity_log`, and nothing to put them back but an operator who knew to look.
+
+```ts
+sql.raw(`alter table activity_log attach partition ${name} for values from ('${from}') to ('${to}')`)
+```
+
+`sql.raw`, because **Postgres accepts no bind parameters in DDL** — the same trap
+`PgMaintenanceGateway` documents, and one the parameterised form fails silently into here because
+the re-attach is deliberately best-effort. Both bounds are derived from a `Date`, so there is no
+injection surface.
+
+The re-attach swallows its own failure on purpose: the caller needs the error that started the
+unwind, and a partition that will not go back is an operator's problem either way.

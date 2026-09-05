@@ -47,8 +47,6 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     const name = PgActivityArchiveGateway.partitionName(period);
     const key = PgActivityArchiveGateway.objectKey(period);
 
-    const [{ count: rowCount }] = await this.countOf(name);
-
     // ── 1. detach ──
     // CONCURRENTLY so the parent is not locked against writers while it happens. It
     // cannot run inside a transaction, which is also why this whole method is not one.
@@ -56,38 +54,73 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       sql`alter table ${sql.identifier("activity_log")} detach partition ${sql.identifier(name)} concurrently`,
     );
 
-    // ── 2. stream to S3 as gzipped NDJSON ──
-    // NDJSON, so ClickHouse reads it back with `s3(…, 'JSONEachRow', …)` directly.
-    const stored = await this.storage.putStream(
-      key,
-      PgActivityArchiveGateway.gzip(this.rows(name)),
-      "application/x-ndjson+gzip",
-    );
+    // Everything from here to the drop re-attaches on failure: a detached partition is
+    // invisible to every query against the parent, and nothing else puts it back.
+    try {
+      // Counted after the detach, not before: rows written in between would otherwise be
+      // streamed to S3 and missing from `row_count`, and the drift is permanent.
+      const [{ count: rowCount }] = await this.countOf(name);
 
-    // ── 3. record, before anything is destroyed ──
-    await this.db
-      .insert(activityArchive)
-      .values({
-        period: PgActivityArchiveGateway.iso(period),
-        objectKey: stored.key,
-        rowCount,
-        checksum: stored.checksum,
-      })
-      .onConflictDoUpdate({
-        target: activityArchive.period,
-        set: { objectKey: stored.key, rowCount, checksum: stored.checksum },
-      });
+      // ── 2. stream to S3 as gzipped NDJSON ──
+      // NDJSON, so ClickHouse reads it back with `s3(…, 'JSONEachRow', …)` directly.
+      const stored = await this.storage.putStream(
+        key,
+        PgActivityArchiveGateway.gzip(this.rows(name)),
+        "application/x-ndjson+gzip",
+      );
 
-    // ── 4. verify the object is readable and complete ──
-    // A `HEAD` is not enough: it proves an object exists, not that its bytes survived.
-    if (!(await this.storage.exists(stored.key))) {
-      throw new Error(`Archive object missing after upload: ${stored.key}`);
+      // ── 3. record, before anything is destroyed ──
+      await this.db
+        .insert(activityArchive)
+        .values({
+          period: PgActivityArchiveGateway.iso(period),
+          objectKey: stored.key,
+          rowCount,
+          checksum: stored.checksum,
+        })
+        .onConflictDoUpdate({
+          target: activityArchive.period,
+          set: { objectKey: stored.key, rowCount, checksum: stored.checksum },
+        });
+
+      // ── 4. verify the object is readable and complete ──
+      // A `HEAD` is not enough: it proves an object exists, not that its bytes survived.
+      if (!(await this.storage.exists(stored.key))) {
+        throw new Error(`Archive object missing after upload: ${stored.key}`);
+      }
+
+      // ── 5. only now ──
+      await this.db.execute(sql`drop table ${sql.identifier(name)}`);
+
+      return { period: PgActivityArchiveGateway.iso(period), key: stored.key, rowCount };
+    } catch (error: unknown) {
+      await this.reattach(name, period);
+      throw error;
     }
+  }
 
-    // ── 5. only now ──
-    await this.db.execute(sql`drop table ${sql.identifier(name)}`);
+  // Puts the partition back where it was, so a failed run leaves the table as it found
+  // it. Best effort: a re-attach that itself fails must not replace the real error.
+  private async reattach(name: string, period: Date): Promise<void> {
+    const from = PgActivityArchiveGateway.iso(period);
+    const to = PgActivityArchiveGateway.iso(PgActivityArchiveGateway.nextMonth(period));
 
-    return { period: PgActivityArchiveGateway.iso(period), key: stored.key, rowCount };
+    try {
+      // `sql.raw`, because Postgres accepts no bind parameters in DDL — the same trap
+      // `PgMaintenanceGateway` documents. Both bounds are derived from a `Date`.
+      await this.db.execute(
+        sql.raw(
+          `alter table activity_log attach partition ${name} for values from ('${from}') to ('${to}')`,
+        ),
+      );
+    } catch {
+      // Swallowed on purpose: the caller needs the failure that started this, and a
+      // partition that will not re-attach is an operator's problem either way.
+    }
+  }
+
+  private static nextMonth(period: Date): Date {
+    return new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1));
   }
 
   private async countOf(name: string): Promise<[{ count: number }]> {
