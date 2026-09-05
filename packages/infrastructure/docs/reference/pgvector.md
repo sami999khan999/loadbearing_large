@@ -54,24 +54,38 @@ Two `NOT NULL` columns — `sourceType` and `chunkIndex` — are read out of it 
 `String(unknown)` would write `"[object Object]"` and never throw, so both go through a narrowing
 helper with a fallback.
 
-## The `ORDER BY` defeats the index
-
-**This is a known defect** (`P2.3` in `tasks/IMPLEMENTATION-PLAN.md`), recorded here because the
-query looks correct:
+## Order on the distance, not on the similarity
 
 ```ts
-const similarity = sql<number>`1 - (${cosineDistance(documentChunks.embedding, [...embedding])})`;
+const distance = cosineDistance(documentChunks.embedding, [...embedding]);
+const similarity = sql<number>`1 - (${distance})`;
 …
-.orderBy(desc(similarity))
+.where(and(eq(documentChunks.organizationId, organizationId), scope, lt(distance, MAX_DISTANCE)))
+.orderBy(asc(distance))
 ```
 
-pgvector serves an HNSW index only for an ascending order on the distance operator itself —
-`ORDER BY embedding <=> $1 ASC`. Ordering by `desc(1 - distance)` is an expression the planner cannot
-match to the index, so **every search is a tenant-wide sequential scan** with a full distance
-computation per row. It returns correct results, which is why it survives review; it stops being
-survivable at corpus size.
+**pgvector serves an HNSW index only for an ascending order on the operator itself** —
+`ORDER BY embedding <=> $1 ASC`. Ordering by `desc(1 - distance)`, which is what this store did until
+it was fixed, is an expression the planner cannot match to the index, so that path was unavailable at
+every table size. The query returned correct results, which is exactly why it survived review.
 
-The fix is to order by `asc(cosineDistance(...))` and express the floor as
-`distance < 1 - MIN_SCORE`, keeping `1 - distance` only in the projected `score`. The spec that goes
-with it runs `EXPLAIN` and asserts an index scan, because nothing else distinguishes the two queries
-from their results.
+The floor moved with the ordering: `MAX_DISTANCE = 1 - MIN_SCORE`, and the predicate is on the same
+`distance` expression. `1 - distance` survives only in the projected `score`, where the port's callers
+want a similarity.
+
+### What the spec can and cannot assert
+
+`tests/vector/pg-vector.store.spec.ts` asserts the **shape**: the issued SQL orders by the bare
+operator ascending, with no `DESC` and no inversion, and the plan's sort key is the operator rather
+than an expression over it.
+
+It deliberately does **not** assert "an index scan happened", and the reason is worth knowing:
+
+> **HNSW cannot serve the tenant predicate.** `organization_id = $1` is not part of the index, so a
+> filtered nearest-neighbour query is a post-filtering path — the planner picks between it and the
+> tenant index by estimated cost. At the row counts a spec can seed, taking
+> `document_chunks_goal_null_idx` and sorting is genuinely cheaper, and Postgres is right to.
+
+So an "asserts an index scan" spec is a spec that passes or fails on table statistics. What has to
+hold at every size is the ordering shape, which is what makes the HNSW path *available* to the
+planner at the size where it wins.

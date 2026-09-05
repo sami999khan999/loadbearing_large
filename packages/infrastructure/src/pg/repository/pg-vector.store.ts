@@ -1,12 +1,12 @@
 import {
   and,
+  asc,
   cosineDistance,
   type DocumentChunk,
-  desc,
   eq,
-  gt,
   inArray,
   isNull,
+  lt,
   type OrganizationId,
   or,
   type SearchHit,
@@ -28,6 +28,10 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
   // Vector search always returns `limit` rows however bad. Without a floor an
   // unrelated question retrieves the least-unrelated documents in the corpus.
   private static readonly MIN_SCORE = 0.3;
+
+  // The same floor as a distance, because cosine distance is `1 - similarity` and the
+  // predicate has to be on the indexed expression rather than on an inversion of it.
+  private static readonly MAX_DISTANCE = 1 - PgVectorStore.MIN_SCORE;
 
   public async upsert(
     organizationId: OrganizationId,
@@ -79,7 +83,10 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
     goalIds: readonly string[],
     limit: number,
   ): Promise<readonly SearchHit[]> {
-    const similarity = sql<number>`1 - (${cosineDistance(documentChunks.embedding, [...embedding])})`;
+    // The distance, not the similarity. pgvector serves the HNSW index only for an
+    // ascending order on the operator itself — see docs/reference/pgvector.md.
+    const distance = cosineDistance(documentChunks.embedding, [...embedding]);
+    const similarity = sql<number>`1 - (${distance})`;
 
     // An empty scope means org-wide chunks only, never everything. If it meant "no
     // filter", a bug that fails to compute the permitted set would grant the corpus.
@@ -101,10 +108,10 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
         and(
           eq(documentChunks.organizationId, organizationId),
           scope,
-          gt(similarity, PgVectorStore.MIN_SCORE),
+          lt(distance, PgVectorStore.MAX_DISTANCE),
         ),
       )
-      .orderBy(desc(similarity))
+      .orderBy(asc(distance))
       .limit(limit);
   }
 }

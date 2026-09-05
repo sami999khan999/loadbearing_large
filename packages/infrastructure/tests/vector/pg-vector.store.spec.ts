@@ -1,13 +1,25 @@
 import { Identifiers } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, type Logger } from "drizzle-orm";
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgVectorStore } from "../../src/pg/repository/pg-vector.store.js";
 import { documentChunks, organizations } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { openDatabase, seedOrganizationId } from "../support/database.js";
+import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
 
+// Captures the SQL the store actually issued, so the EXPLAIN below runs the query under
+// test rather than a copy of it that can drift.
+class RecordingLogger implements Logger {
+  public last: { query: string; params: unknown[] } | null = null;
+
+  public logQuery(query: string, params: unknown[]): void {
+    this.last = { query, params };
+  }
+}
+
+const recorder = new RecordingLogger();
 let database: Database;
 let store: PgVectorStore;
 
@@ -20,7 +32,7 @@ const blend = (a: number, b: number): number[] =>
   Array.from({ length: 1536 }, (_, i) => (i === a ? 0.99 : i === b ? 0.14 : 0));
 
 beforeAll(() => {
-  database = openDatabase();
+  database = openDatabase(recorder);
   store = new PgVectorStore(database, new TransactionScope());
 });
 
@@ -129,6 +141,52 @@ describe("PgVectorStore", () => {
 
     await store.deleteBySource(otherOrg, sourceId);
     await database.client.delete(organizations).where(eq(organizations.id, otherOrg));
+  });
+
+  // `ORDER BY (1 - (embedding <=> $1)) DESC` is an expression no HNSW index can serve.
+  // See docs/reference/pgvector.md for why the assertion is on the shape.
+  it("orders on the distance operator, in the shape the HNSW index can serve", async () => {
+    const organizationId = await seedOrg();
+    const sourceId = Uuid.v7();
+
+    await store.upsert(
+      organizationId,
+      Array.from({ length: 32 }, (_, i) => ({
+        id: Uuid.v7(),
+        sourceId,
+        goalId: null,
+        content: `chunk ${i}`,
+        embedding: axis(i),
+        metadata: { chunkIndex: i },
+      })),
+    );
+
+    await store.search(organizationId, axis(0), [], 10);
+
+    const issued = recorder.last;
+    if (!issued) throw new Error("expected the search above to have been logged");
+
+    // Ascending on the bare operator, and no inversion anywhere in the ordering.
+    const ordering = /order by\s+"\w+"\."embedding"\s*<=>\s*\$\d+\s+asc/i;
+    expect(issued.query).toMatch(ordering);
+    expect(issued.query).not.toMatch(/order by[\s\S]*desc/i);
+    expect(issued.query).not.toMatch(/order by[\s\S]*1 -/i);
+
+    // And the plan agrees: the sort key is the operator, not an expression over it.
+    const pool = new Pool({ connectionString: DATABASE_URL });
+    const client = await pool.connect();
+
+    try {
+      const explained = await client.query(`explain ${issued.query}`, issued.params);
+      const plan = explained.rows.map((row) => Object.values(row).join(" ")).join(" | ");
+      const sortKey = /Sort Key: \(\(embedding <=> [^)]*\)\)/.test(plan);
+
+      expect(sortKey || plan.includes("document_chunks_embedding_idx")).toBe(true);
+    } finally {
+      client.release();
+      await pool.end();
+      await store.deleteBySource(organizationId, sourceId);
+    }
   });
 
   it("upsert replaces content for an existing id", async () => {

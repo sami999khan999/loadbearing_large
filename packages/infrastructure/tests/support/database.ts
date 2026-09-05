@@ -3,7 +3,9 @@ import { organizations } from "../../src/pg/schema/index.js";
 
 // The local scratch stack, whose credentials are `ratchet` everywhere on purpose so
 // a database nobody can debug is not the price of a secret ([11]).
-const URL = "postgres://ratchet:ratchet@localhost:5432/ratchet";
+export const DATABASE_URL = "postgres://ratchet:ratchet@localhost:5432/ratchet";
+
+const URL = DATABASE_URL;
 
 export const openDatabase = (logger?: ConstructorParameters<typeof Database>[0]["logger"]) =>
   new Database(logger ? { url: URL, logger } : { url: URL });
