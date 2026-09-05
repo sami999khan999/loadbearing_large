@@ -72,9 +72,8 @@ describe("ApiKeyResolver", () => {
 
     const principal = await resolver.resolve(TOKEN);
 
-    // This is the behaviour the whole class exists for: revoking a person narrows every
-    // key they ever issued, in the same request. With frozen scopes the key keeps
-    // working and nothing anywhere reports it.
+    // What the class exists for: revoking a person narrows every key they issued, in the
+    // same request. Frozen scopes would keep working and report nothing.
     expect(principal?.can("rbac.role.read")).toBe(true);
     expect(principal?.can("rbac.role.manage")).toBe(false);
   });
@@ -125,9 +124,8 @@ describe("ApiKeyResolver", () => {
   });
 
   it("refuses a token whose hash matches nothing the prefix returned", async () => {
-    // The repository narrows by prefix and hands back candidates; several keys share a
-    // prefix. Returning the first candidate rather than comparing hashes would
-    // authenticate one integration as another.
+    // Several keys share a prefix. Returning the first candidate rather than comparing
+    // hashes would authenticate one integration as another.
     const { resolver } = resolverFor(
       [record({ tokenHash: await ApiKeyHasher.hash("rk_someothertoken") })],
       issuerHolding("rbac.role.read"),

@@ -4,6 +4,8 @@
   "pages": [
     "principal-builder",
     "enrolment",
+    "auth-factory",
+    "organization-plugin",
     "two-factor",
     "social-login",
     "capability-cache",

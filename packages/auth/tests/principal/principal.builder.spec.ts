@@ -94,9 +94,8 @@ describe("PrincipalBuilder", () => {
 
     const principal = await builder.fromHeaders(headers({ "x-api-key": TOKEN }));
 
-    // An integration calling from a browser context sends both. Checking the session
-    // first would silently upgrade a key scoped to `member.read` to the signed-in
-    // user's full permissions — the key is the more specific credential and must win.
+    // An integration calling from a browser sends both. Session-first would upgrade a key
+    // scoped to `member.read` to the user's full permissions.
     expect(principal?.kind).toBe("api_key");
     expect(principal?.userId).toBe(KEY_ISSUER);
     expect(principal?.can("member.read")).toBe(true);

@@ -12,9 +12,8 @@ import {
 export class CapabilityCache {
   private static readonly PREFIX = "capability:user:";
 
-  // Sixty seconds, and no longer. The TTL is a backstop for an invalidation somebody
-  // forgot, not the mechanism — raising it because the hit rate looks better trades a
-  // security window for a metric.
+  // A backstop for a forgotten invalidation, not the mechanism, and a revocation window
+  // rather than a hit-rate dial. See docs/reference/capability-cache.md.
   private static readonly TTL_SECONDS = 60;
 
   public constructor(
@@ -33,9 +32,8 @@ export class CapabilityCache {
     return resolved;
   }
 
-  // Called on every RBAC write, not as an optimization: getting this wrong in the stale
-  // direction means a revoked permission keeps working, which is a security bug wearing a
-  // caching bug's clothes.
+  // Called on every RBAC write. Stale in this direction means a revoked permission keeps
+  // working — a security bug wearing a caching bug's clothes.
   public async invalidate(organizationId: OrganizationId, userId: UserId): Promise<void> {
     await this.cache.delete(CapabilityCache.keyFor(organizationId, userId));
   }
@@ -45,10 +43,8 @@ export class CapabilityCache {
     await this.cache.deletePrefix(CapabilityCache.PREFIX);
   }
 
-  // The organization sits between the fixed prefix and the user id: it has to be in the
-  // key, because a user in two organizations would otherwise get whichever capability set
-  // was cached first — a cross-tenant privilege bug with a one-minute fuse and no error
-  // anywhere — and it has to be in that position, or `deletePrefix` stops meaning anything.
+  // The organization sits between prefix and user id: in the key or a user in two of them
+  // gets whichever set cached first, and in that position or `deletePrefix` breaks.
   private static keyFor(organizationId: OrganizationId, userId: UserId): string {
     return `${CapabilityCache.PREFIX}${organizationId}:${userId}`;
   }

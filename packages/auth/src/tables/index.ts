@@ -7,21 +7,8 @@ import { MembershipEnroller } from "../session/membership.enroller.js";
 import { MembershipReader, type OrganizationSummary } from "../session/membership.reader.js";
 import { OrganizationFounder } from "../session/organization.founder.js";
 
-// What Better Auth's own tables must look like, printed from the pinned runtime.
-//
-// This replaces the `better-auth generate` step the setup doc describes. The published
-// `@better-auth/cli` trails the library by two minor versions, and a generator that does
-// not know about the runtime's newer fields writes a schema that is wrong in exactly the
-// way nothing catches until a query fails in production. `getSchema` is the same function
-// the CLI calls, taken from the version actually installed.
-//
-// Run it after any Better Auth upgrade and diff the output against
-// `packages/infrastructure/src/schema/auth.schema.ts`. Every field below needs a matching property
-// **under Better Auth's own name** — the Drizzle adapter resolves a column by looking up
-// `schema[model][field]`, so the property keys are load-bearing and the SQL column names
-// are not.
-//
-// Nothing here connects: `new Pool()` is lazy, and no query is issued.
+// Better Auth's own tables, printed from the pinned runtime rather than by
+// `@better-auth/cli`, which trails the library. Diff against pg/schema/auth.schema.ts.
 
 const url = process.env.DATABASE_URL ?? "postgres://unused:unused@localhost:5432/unused";
 

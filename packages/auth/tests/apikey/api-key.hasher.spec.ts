@@ -22,9 +22,8 @@ describe("ApiKeyHasher", () => {
   });
 
   it("indexes on a prefix short enough to collide across keys", () => {
-    // `prefixOf` is the *lookup* column, not an identifier. A spec asserting it were
-    // unique would be asserting the opposite of the design: several keys share a prefix,
-    // and the hash comparison is what picks one.
+    // `prefixOf` is the lookup column, not an identifier: several keys share a prefix and
+    // the hash comparison picks one.
     expect(ApiKeyHasher.prefixOf("rk_0123456789abcdef")).toBe("rk_01234");
     expect(ApiKeyHasher.prefixOf("rk_0123456789abcdef")).toHaveLength(8);
   });
@@ -39,9 +38,8 @@ describe("ApiKeyHasher", () => {
   });
 
   it("does not short-circuit on the first differing character", () => {
-    // Both comparisons must be false. A `===` would also be false, so this is a
-    // regression guard on the loop rather than a timing measurement — measuring
-    // nanoseconds in a test runner produces a flaky suite and proves nothing.
+    // A regression guard on the loop, not a timing measurement: measuring nanoseconds in
+    // a test runner is flaky and proves nothing.
     expect(ApiKeyHasher.timingSafeEqual("zaaaaa", "aaaaaa")).toBe(false);
     expect(ApiKeyHasher.timingSafeEqual("aaaaaz", "aaaaaa")).toBe(false);
   });

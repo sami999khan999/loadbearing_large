@@ -21,19 +21,8 @@ const switchBody = z.object({ organizationId: z.uuid() });
 const createBody = z.object({ name: z.string().trim().min(1).max(NAME_MAX) });
 const acceptBody = z.object({ token: z.string().min(1) });
 
-// The three actions that end in a session pointing at a different tenant, as Better
-// Auth endpoints rather than oRPC procedures — for two reasons, both verified.
-//
-// They are identity-gated, not permission-gated: "may I switch to a tenant I belong
-// to", "may I found one", "may I accept an invitation sent to my address" are answered
-// by membership and by the verified mailbox, never by a role held in some *other*
-// organization. Nothing in `PROCEDURE_PERMISSIONS` could gate them, and every
-// procedure must be gated there.
-//
-// And only an endpoint holding Better Auth's `ctx` can call `setSessionCookie`. The
-// session cookie cache (`session.cookieCache`, sixty seconds) is what most requests
-// resolve the tenant from; a switch that updated the row and not the cookie would have
-// every RPC for the next minute answering for the tenant just left.
+// The three actions that end in a session pointing at a different tenant. Endpoints
+// rather than procedures — see docs/reference/organization-plugin.md.
 export class OrganizationPlugin {
   private constructor() {}
 
@@ -88,8 +77,7 @@ export class OrganizationPlugin {
             const { session, user } = ctx.context.session;
 
             // Null covers every refusal at once — unknown token, expired, revoked, sent
-            // to a different address, unverified account. The claimer decides, and the
-            // landing page has already told the person which of those it is.
+            // elsewhere, unverified. The landing page has already said which.
             const organizationId = await claimer.claimByToken(user.id as UserId, ctx.body.token);
             if (!organizationId) {
               throw new APIError("NOT_FOUND", {
@@ -106,10 +94,8 @@ export class OrganizationPlugin {
     };
   }
 
-  // What Better Auth's own organization plugin does for `setActiveOrganization`, plus
-  // the last-active preference: the row in Postgres and the copy in Redis through
-  // `updateSession`, then the cookie cache through `setSessionCookie`, so the very
-  // next request — RPC or SSR — resolves the new tenant.
+  // Row and Redis copy first, cookie cache last, so the very next request — RPC or SSR
+  // — resolves the new tenant. See docs/reference/organization-plugin.md.
   private static async rebind(
     ctx: GenericEndpointContext,
     token: string,
@@ -123,8 +109,8 @@ export class OrganizationPlugin {
       throw new APIError("INTERNAL_SERVER_ERROR", { message: "The session could not be updated." });
     }
 
-    // Where the next sign-in lands. `MembershipReader.activeOrganizationFor` honours it
-    // only while the membership still exists, so nothing here needs to be undone later.
+    // Where the next sign-in lands. `activeOrganizationFor` honours it only while the
+    // membership still exists, so nothing here needs undoing later.
     await ctx.context.internalAdapter.updateUser(user.id, {
       lastActiveOrganizationId: organizationId,
     });

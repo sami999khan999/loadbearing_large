@@ -138,23 +138,12 @@ act through the organization endpoints, never an ambient one.
 ## Switching, founding, accepting
 
 `OrganizationPlugin` mounts three `POST` endpoints on Better Auth — `/organization/switch`,
-`/organization/create`, `/invitation/accept` — and every one of them ends the same way: the
-session row is rebound to the new tenant, the Redis copy with it, `users.last_active_organization_id`
-is written, and **the session cookie cache is re-issued**. That last step is the reason these are
-endpoints here rather than oRPC procedures. `session.cookieCache` is what most requests resolve the
-tenant from, and only a handler holding Better Auth's `ctx` can call `setSessionCookie`; a switch
-that updated the row and not the cookie would have every RPC for the next sixty seconds answering
-for the tenant just left.
-
-The other reason is that they are identity-gated. "May I switch to a tenant I belong to", "may I
-found one", "may I accept an invitation sent to my address" are answered by membership and by the
-verified mailbox — never by a role held in some *other* organization — so nothing in
-`PROCEDURE_PERMISSIONS` could gate them, and every procedure must be gated there.
-
-The client half is `OrganizationClient` in `packages/api-client`: three thin posts over Better
-Auth's own `$fetch`, no client plugin. After any of them the call site does what sign-out does —
-clear the query cache, invalidate the session store, re-run the root loader — because every cached
-row belongs to the tenant just left.
+`/organization/create`, `/invitation/accept` — and every one of them ends by rebinding the session
+row to the new tenant, the Redis copy with it, and **re-issuing the session cookie cache**. They are
+endpoints rather than oRPC procedures because only a handler holding Better Auth's `ctx` can call
+`setSessionCookie`, and because they are identity-gated rather than permission-gated. The full
+argument, the `rebind()` order and the refusal semantics are in
+[`reference/organization-plugin.md`](reference/organization-plugin.md).
 
 ---
 
@@ -179,6 +168,14 @@ row belongs to the tenant just left.
   with the issuer's live capabilities on every request.
 - [Membership enrolment](reference/enrolment.md) — the tenancy gate, the three modes, the invitation
   claim that runs before them, and the locks.
+- [`AuthFactory`](reference/auth-factory.md) — the two secondary-storage traps, the cookie cache
+  window, the session hook that resolves the tenant, and the five rate limits that are not twenty.
+- [`OrganizationPlugin`](reference/organization-plugin.md) — why switch, create and accept are
+  endpoints rather than procedures, and the order `rebind()` writes in.
+- [Two-factor authentication](reference/two-factor.md) — enrolment, the OTP fallback, and why backup
+  codes are shown exactly once.
+- [Social login](reference/social-login.md) — trusted providers, account linking, and the
+  pre-registration attack `requireLocalEmailVerified` stops.
 
 ---
 

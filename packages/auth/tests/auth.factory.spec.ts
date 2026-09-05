@@ -8,8 +8,7 @@ import { MembershipEnroller } from "../src/session/membership.enroller.js";
 import { MembershipReader, type OrganizationSummary } from "../src/session/membership.reader.js";
 import { OrganizationFounder } from "../src/session/organization.founder.js";
 
-// Nothing here connects. No option below is exercised — this spec reads `auth.options`
-// back, which is what `src/tables/` already does and the only way to assert on
+// Nothing here connects: this spec reads `auth.options` back, the only way to assert on
 // configuration that has no behaviour until a request arrives.
 const unreachable = (): never => {
   throw new Error("auth.factory.spec.ts inspects configuration only.");
@@ -104,9 +103,8 @@ const optionsFor = (config: AuthConfig = BASE, mailer: AuthMailer = new StubAuth
   ).options;
 
 describe("AuthFactory — social providers", () => {
-  // Absent rather than half-configured. An empty client id reaches Google as a request
-  // it rejects at the consent screen, which is a failure the user sees and nobody can
-  // diagnose from a log line here.
+  // Absent rather than half-configured: an empty client id is rejected at Google's
+  // consent screen, where no log line here can explain it.
   it("configures no provider when no credentials were supplied", () => {
     expect(optionsFor().socialProviders).toEqual({});
   });
@@ -120,9 +118,8 @@ describe("AuthFactory — social providers", () => {
     expect(options.socialProviders?.google?.clientId).toBe("id.apps.googleusercontent.com");
   });
 
-  // Without it Google silently reuses whichever account the browser is already signed
-  // into, which makes signing in as somebody else impossible on a shared machine and
-  // reads as a bug in this application rather than in the consent screen.
+  // Without it Google reuses whichever account the browser is signed into, which reads
+  // as a bug in this application rather than in the consent screen.
   it("always asks Google which account to use", () => {
     const options = optionsFor({ ...BASE, google: { clientId: "id", clientSecret: "secret" } });
 
@@ -131,27 +128,22 @@ describe("AuthFactory — social providers", () => {
 });
 
 describe("AuthFactory — account linking", () => {
-  // Google asserts a verified address, so a Google sign-in matching an existing account
-  // is the same person. The alternative is a dead end where a real user is told their
-  // email is taken by themselves.
+  // Google asserts a verified address, so a match is the same person. The alternative is
+  // telling a real user their email is taken by themselves.
   it("trusts Google and nothing else", () => {
     expect(optionsFor().account?.accountLinking?.trustedProviders).toEqual(["google"]);
   });
 
-  // `requireLocalEmailVerified` defaults to true and is deliberately never set here.
-  // Setting it false is what would let someone pre-register an unverified account at a
-  // victim's address and have the victim's Google identity linked into it.
+  // `requireLocalEmailVerified` defaults to true and is deliberately never set: false
+  // lets someone pre-register at a victim's address and have their identity linked in.
   it("leaves the local-verification gate at its safe default", () => {
     expect(optionsFor().account?.accountLinking?.requireLocalEmailVerified).toBeUndefined();
   });
 });
 
 describe("AuthFactory — credential endpoints", () => {
-  // The global 20/60 is right for the endpoints nobody attacks and far too loose for
-  // these five, each of which is either a guess against a credential or an email this
-  // deployment pays to send. The paths are Better Auth's own and were read off the
-  // pinned runtime — a rule keyed on a path that does not exist limits nothing, and
-  // looks identical in review to one that works.
+  // Paths are Better Auth's own, read off the pinned runtime: a rule keyed on a path that
+  // does not exist limits nothing and looks identical in review to one that works.
   it("rate-limits every endpoint that guesses a credential or sends mail", () => {
     const rules = optionsFor().rateLimit?.customRules ?? {};
 
@@ -202,9 +194,8 @@ describe("AuthFactory — credential endpoints", () => {
 });
 
 describe("AuthFactory — two-factor", () => {
-  // The label an authenticator app shows beside the code, read by the plugin as its
-  // issuer. Wrong here means every enrolled device names the wrong product, and
-  // re-enrolment is the only fix.
+  // The label an authenticator app shows beside the code. Wrong here means every enrolled
+  // device names the wrong product, and re-enrolment is the only fix.
   it("issues TOTP under the configured app name", () => {
     expect(optionsFor().appName).toBe("Loadbearing");
   });
@@ -248,10 +239,8 @@ describe("AuthFactory — organization plugin", () => {
 });
 
 describe("AuthFactory — change of email", () => {
-  // The confirmation goes to the address being moved *away from*. Better Auth hands the
-  // new address to the same callback, so getting this wrong is one property access —
-  // and it would let a hijacked session move the account somewhere its owner cannot
-  // follow. Asserts the recipient rather than merely that a sender was configured.
+  // To the address being moved *away from*. Better Auth hands the new one to the same
+  // callback, so getting it wrong is a single property access.
   it("confirms at the current address, never the new one", async () => {
     const sent: string[] = [];
 

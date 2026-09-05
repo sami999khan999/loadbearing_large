@@ -3,10 +3,8 @@ import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import type { ApiKeyRecord, ApiKeyRepository } from "../../src/apikey/api-key.resolver.js";
 import type { RequestHeaders, ResolvedSession, SessionResolver } from "../../src/import.js";
 
-// Hand-written doubles rather than `@loadbearing/composition`'s fakes, and that is not
-// duplication: `composition` depends on this package, so importing its fakes here would
-// close a cycle. These are also narrower — each records what it was asked, because the
-// behaviours worth pinning here are about *which* call happened and in what order.
+// Hand-written rather than `composition`'s fakes, which would close a cycle. Each
+// records what it was asked: the behaviours here are about which call happened, in order.
 
 export class RecordingCapabilityRepository implements CapabilityRepository {
   public readonly calls: { organizationId: string; userId: string }[] = [];
@@ -48,9 +46,8 @@ export class MapCacheStore implements CacheStore {
   }
 }
 
-// Returns every staged record regardless of prefix, which is deliberate: the real
-// repository narrows by an indexed column, and the resolver must still not trust the
-// narrowing — the hash comparison is what decides.
+// Every staged record regardless of prefix, deliberately: the resolver must not trust
+// the narrowing, because the hash comparison is what decides.
 export class StubApiKeyRepository implements ApiKeyRepository {
   public readonly prefixes: string[] = [];
   public readonly touched: { id: string; at: Date }[] = [];

@@ -11,9 +11,8 @@ describe("NullMembershipEnroller", () => {
     expect(await new NullMembershipEnroller().enrol(USER)).toBeNull();
   });
 
-  // Pins the answer against a future "helpful" default. A mode that silently invented a
-  // tenant here would hand every anonymous sign-up a working session, and nothing else
-  // in the chain would notice.
+  // Pins the answer against a future "helpful" default: inventing a tenant here hands
+  // every anonymous sign-up a working session, unnoticed.
   it("says so on every call, not only the first", async () => {
     const enroller = new NullMembershipEnroller();
 

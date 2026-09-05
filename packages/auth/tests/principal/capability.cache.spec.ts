@@ -43,9 +43,8 @@ describe("CapabilityCache", () => {
     const inA = await cache.forUser(ORG_A, USER);
     const inB = await cache.forUser(ORG_B, USER);
 
-    // Keyed on the user alone, the second call would hit the first call's entry and this
-    // person would carry organization A's permissions into organization B — a
-    // cross-tenant privilege bug with a one-minute fuse and no error anywhere.
+    // Keyed on the user alone, this person carries organization A's permissions into B —
+    // a cross-tenant privilege bug with a one-minute fuse and no error anywhere.
     expect(inA.can("rbac.role.manage")).toBe(true);
     expect(inB.can("rbac.role.manage")).toBe(false);
     expect(inB.can("member.read")).toBe(true);

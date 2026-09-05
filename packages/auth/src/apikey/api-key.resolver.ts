@@ -20,10 +20,8 @@ export interface ApiKeyRecord {
   readonly revokedAt: Date | null;
 }
 
-// Declared here rather than in `application`, deliberately: an API key is an
-// authentication artifact, not a domain entity, and nothing in `application` should learn
-// that keys exist. Implemented in `db` as `PgApiKeyRepository`, which cannot import this
-// file — `auth` already depends on `db` — so the binding is checked in `Container` (17).
+// Declared here, not in `application`: a key is an authentication artifact and no
+// use-case should learn keys exist. See docs/reference/api-key.md.
 export abstract class ApiKeyRepository {
   public abstract findByPrefix(prefix: string): Promise<readonly ApiKeyRecord[]>;
   public abstract touch(id: string, at: Date): Promise<void>;
@@ -57,10 +55,8 @@ export class ApiKeyResolver {
       goals: {},
     });
 
-    // Re-intersected on every request, not frozen at creation. This is the part that
-    // matters: with frozen scopes, revoking the issuer's `finance.read.global` leaves
-    // every key they ever issued still reading finance — and nobody notices, because the
-    // key still works. Re-intersecting means revoking a person narrows their keys with them.
+    // Re-intersected per request, never frozen at creation: revoking a person has to
+    // narrow every key they issued. See docs/reference/api-key.md.
     const issuer = await this.capabilities.forUser(record.organizationId, record.issuerId);
     const effective = declared.intersect(issuer);
 

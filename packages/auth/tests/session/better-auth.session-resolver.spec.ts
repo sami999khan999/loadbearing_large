@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AuthInstance } from "../../src/auth.factory.js";
 import { BetterAuthSessionResolver } from "../../src/session/better-auth.session-resolver.js";
 
-// Better Auth's real instance needs a database, a cache and a secret. This resolver's
-// whole job is the shape it reads back, so the double is the API surface it touches and
-// nothing else — a cast rather than a fixture stack that would test the library.
+// The double is the API surface this resolver touches and nothing else: a real instance
+// needs a database, a cache and a secret, and would be testing the library.
 function resolverReturning(result: unknown): BetterAuthSessionResolver {
   return new BetterAuthSessionResolver({
     api: { getSession: () => Promise.resolve(result) },
@@ -24,9 +23,8 @@ describe("BetterAuthSessionResolver", () => {
       user: { id: "u1" },
     });
 
-    // A session written before the create hook existed, or by hand. Guessing a tenant
-    // here is a cross-tenant read with no error anywhere downstream, so "no tenant" has
-    // to mean "no session".
+    // A session written before the create hook existed, or by hand. Guessing a tenant is a
+    // silent cross-tenant read, so "no tenant" has to mean "no session".
     expect(await resolver.resolve(HEADERS)).toBeNull();
   });
 

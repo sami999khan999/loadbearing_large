@@ -34,9 +34,8 @@ export class ApiKeyHasher {
     return token.slice(0, ApiKeyHasher.PREFIX_LENGTH);
   }
 
-  // Constant time in the length of the compared strings. The prefix already narrowed the
-  // candidate set, so this costs nothing — and it removes a class of question that would
-  // otherwise have to be answered in a security review.
+  // Constant time in the length compared. The prefix already narrowed the candidate set,
+  // so this costs nothing.
   public static timingSafeEqual(a: string, b: string): boolean {
     if (a.length !== b.length) return false;
     let diff = 0;

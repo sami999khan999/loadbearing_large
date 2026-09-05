@@ -8,13 +8,8 @@ export interface InvitationPreview {
   readonly expired: boolean;
 }
 
-// The write path that turns an invitation into a membership. Declared here for the
-// same reason `MembershipEnroller` is: it populates the artifact a session is refused
-// without, and the enrolment hook calls it before any use-case could.
-//
-// Every claim is gated on one fact — the invited address equals the user's *verified*
-// address — and the implementation checks it in the query, not the caller. A token is
-// only how the row is found; the verified mailbox is the credential.
+// Turns an invitation into a membership. A token is only how the row is found — the
+// verified mailbox is the credential. See docs/reference/enrolment.md.
 export abstract class InvitationClaimer {
   public abstract preview(token: string): Promise<InvitationPreview | null>;
 
