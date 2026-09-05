@@ -14,10 +14,16 @@ describe("RedirectSearch", () => {
 
   // Each of these leaves this origin once a browser resolves it. Rejecting them at the
   // schema is what keeps `/sign-in?redirect=` from being an open redirect.
-  it.each(["//evil.test/path", "https://evil.test", "javascript:alert(1)", "evil.test"])(
-    "rejects %s",
-    (redirect) => {
-      expect(() => RedirectSearch.schema.parse({ redirect })).toThrow();
-    },
-  );
+  it.each([
+    "//evil.test/path",
+    "https://evil.test",
+    "javascript:alert(1)",
+    "evil.test",
+    // A backslash is a path separator to every browser, so `/\evil.test` resolves with
+    // `evil.test` as the host exactly as `//evil.test` does.
+    "/\\evil.test",
+    "/settings\\@evil.test",
+  ])("rejects %s", (redirect) => {
+    expect(() => RedirectSearch.schema.parse({ redirect })).toThrow();
+  });
 });
