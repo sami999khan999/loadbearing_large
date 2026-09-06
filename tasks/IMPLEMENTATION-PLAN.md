@@ -1684,10 +1684,30 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 - [ ] `P7.5` `/organization/create` is bounded only by a 5/min rate limit; each call seeds
   roles and ~17 permission rows — per-user cap on owned organizations (`AUTH_MAX_OWNED_ORGANIZATIONS`,
   default 10). **Docs:** `auth/docs/reference/organization-plugin.md`.
-- [ ] `P7.6` `ClickHouseConnection.encode` builds `'${String(v)}'` with no escaping — escape
-  `\` and `'`.
-- [ ] `P7.7` `Uuid.isValid` checks the variant nibble, not the version — tighten to `[7]` or
-  rename `isValidV7`.
+- [x] `P7.6` `ClickHouseConnection.encode` builds `'${String(v)}'` with no escaping — escape
+  `\` and `'`. `done: 2026-09-06`
+  - **Only the array branch needed it, and the reason is worth keeping**: a scalar rides its own
+    `param_*` query-string entry and is never quoted, so nothing in it can end anything. An array has
+    to go over as a literal, and each element was wrapped in quotes with no escape.
+  - **Not a route into the statement — a route into the value.** The predicate stays bound, so this
+    is not injection into SQL; an element carrying `'` closed its own string and became *two*, and a
+    filter list then matches rows the caller never named. Confirmed by watching the old code emit
+    `['a'b','c']` for `["a'b", "c"]`.
+  - **Backslash first, then quote**, or the escape the first pass writes is escaped by the second.
+    There is a spec for that ordering specifically, because getting it backwards still looks right.
+- [x] `P7.7` `Uuid.isValid` checks the variant nibble, not the version — tighten to `[7]` or
+  rename `isValidV7`. `done: 2026-09-06`
+  - **Neither, and the third option is the one the package's own reference doc argues for.**
+    `core/docs/reference/uuid.md` records the general-shape-guard intent as deliberate — "an
+    identifier minted elsewhere is still an identifier" — and per the rulebook a package's
+    `docs/reference/` wins over a line in this file. Tightening to `[7]` would move a schema decision
+    into a regex; renaming would keep the loose check and give it a name that lies.
+  - **What was actually wrong is narrower than the entry says.** The version group was `[0-9a-f]`,
+    which is to say the version was not checked at all: a correct variant alone passed a version
+    nibble of `0` or `f`, so the nil UUID and the max UUID were accepted. `[1-8]` is every version
+    RFC 9562 defines. A v4 still passes, deliberately, and there is a spec saying so.
+  - **No production callers** — `isValid` is used only by its own spec — so this is a correctness fix
+    to an exported surface rather than a behaviour change to anything running.
 - [ ] `P7.8` `Container.dispose()` never closes the SMTP transport — `SmtpEmailSender.close()`.
 - [ ] `P7.9` `MessageStore.ensure` has no in-flight de-duplication (`SessionStore.ensure` has)
   — share the promise per namespace set.

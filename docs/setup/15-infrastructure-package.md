@@ -574,7 +574,8 @@ Three things `ClickHouseConnection` does that are easy to get wrong by hand:
 
 - **Server-side bound parameters, never interpolation.** ClickHouse reads `{name:Type}` placeholders
   out of `param_*` query-string entries. The analytics store holds every tenant's rows in one table,
-  so an injected predicate here is a cross-tenant read.
+  so an injected predicate here is a cross-tenant read. **An array parameter is the exception**: it
+  goes over as a literal, so its elements are escaped — a scalar is never quoted and needs none.
 - **Table names qualified against the configured database.** ClickHouse resolves an unqualified name
   against the session default, which is `default` — the same trap the init script documents, and the
   reason a table can look missing while it exists.
