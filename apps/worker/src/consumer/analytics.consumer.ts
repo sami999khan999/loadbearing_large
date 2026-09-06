@@ -1,4 +1,11 @@
-import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
+import {
+  type Container,
+  type Job,
+  type ProjectionCheckpoint,
+  QueueName,
+  type Redis,
+  Worker,
+} from "../import.js";
 
 // What makes ClickHouse derived rather than authoritative: `project` moves the rows and
 // `reconcile` notices when it has not. See docs/reference/consumers.md.
@@ -101,13 +108,17 @@ export class AnalyticsConsumer {
     let checkpoint = await projector.checkpoint();
     let projected = 0;
     let batches = 0;
+    let caughtUp = false;
 
     while (batches < AnalyticsConsumer.MAX_BATCHES_PER_RUN) {
       const records = await this.container.activityReplay.since(
         checkpoint,
         AnalyticsConsumer.BATCH_SIZE,
       );
-      if (records.length === 0) break;
+      if (records.length === 0) {
+        caughtUp = true;
+        break;
+      }
 
       projected += await projector.project(records);
       batches += 1;
@@ -118,13 +129,14 @@ export class AnalyticsConsumer {
 
       // A short batch means caught up: continuing issues one more query to learn what
       // this length already said.
-      if (records.length < AnalyticsConsumer.BATCH_SIZE) break;
+      if (records.length < AnalyticsConsumer.BATCH_SIZE) {
+        caughtUp = true;
+        break;
+      }
     }
 
     const now = this.container.clock.now();
-    const lagMs = checkpoint.lastOccurredAt
-      ? now.getTime() - checkpoint.lastOccurredAt.getTime()
-      : 0;
+    const lagMs = await this.lagMs(checkpoint, caughtUp, now);
     const lagSeconds = Math.round(lagMs / 1_000);
 
     this.container.logger.emit("analytics.projection.completed", {
@@ -144,6 +156,19 @@ export class AnalyticsConsumer {
         thresholdSeconds: AnalyticsConsumer.LAG_WARNING_MS / 1_000,
       });
     }
+  }
+
+  // The age of the oldest row still unprojected, never the age of the newest projected
+  // one. See docs/reference/consumers.md for what each of those answers.
+  private async lagMs(
+    checkpoint: ProjectionCheckpoint,
+    caughtUp: boolean,
+    now: Date,
+  ): Promise<number> {
+    if (caughtUp) return 0;
+
+    const [oldest] = await this.container.activityReplay.since(checkpoint, 1);
+    return oldest ? now.getTime() - oldest.occurredAt.getTime() : 0;
   }
 
   // Counts per day on both sides and a diff, with today excluded because a difference in
@@ -177,10 +202,11 @@ export class AnalyticsConsumer {
       });
     }
 
-    if (drift.length > 0) return;
-
+    // Emitted whether or not anything drifted. Returning early here made "reconciliation
+    // is finding drift" and "the consumer stopped" the same absence on a dashboard.
     this.container.logger.emit("analytics.reconciliation.completed", {
       days: source.length,
+      drifted: drift.length,
       durationMs: this.container.clock.now().getTime() - now.getTime(),
     });
   }

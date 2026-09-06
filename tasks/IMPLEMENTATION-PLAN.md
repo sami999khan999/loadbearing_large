@@ -1773,9 +1773,26 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - `implements` on an abstract class buys nothing and costs the `override` checking: a port method
     renamed leaves the old one behind as a new public method, and nothing says so. Both methods now
     carry `override`, which is what makes that a compile error.
-- [ ] `P7.15` `AnalyticsConsumer` lag: `lagSeconds` is 0 forever on an empty destination —
+- [x] `P7.15` `AnalyticsConsumer` lag: `lagSeconds` is 0 forever on an empty destination —
   compute from the oldest unprojected row; `reconcile` emits `completed` with a `drifted`
-  count instead of returning early.
+  count instead of returning early. `done: 2026-09-06`
+  - **The lag was wrong, but not in the way this entry says, and the difference matters.** It was
+    the age of the newest *projected* row, so an empty destination that drains reports the age of
+    the newest row, not zero. Zero only ever came back when the audit trail was empty too, where it
+    is correct. What is actually reachable — and what the specs reproduce — is a caught-up
+    deployment that has been quiet for ninety minutes reporting ninety minutes of lag and tripping
+    `analytics.projection.lagged` at `warn` on every run, forever, with nothing wrong.
+  - **The other direction is worse and quieter.** A run that stops at its batch ceiling reported the
+    age of the last row it *did* write, which understates the backlog it just failed to clear.
+  - **Fixed to the oldest unprojected row**, as the entry asks. Caught up is zero and the loop
+    already knows it is caught up, so only a capped run pays for the answer — one keyset query for
+    the next row after the checkpoint, on the run where the true backlog age is worth a query.
+  - **`reconcile` no longer returns early**, and `completed` carries `drifted`. The early return made
+    "the reconciliation is finding drift" and "the consumer has stopped" the same absence on a
+    dashboard; the one signal this job owes an operator is that it ran.
+  - Five specs, three of which fail against the previous implementation. The capped branch is not
+    among them: reaching it needs 100,001 records through the in-memory fake, which is a slow
+    fixture for three lines — stated rather than skipped quietly.
 - [x] `P7.16` `SystemPrincipal.GRANTS` validated per job — once at module load, frozen.
   `done: 2026-09-06`
   - Module-level `const` and `Object.freeze`, not a `static readonly` field — the same shape

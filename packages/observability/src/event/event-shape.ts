@@ -90,6 +90,9 @@ export interface EventShape {
   readonly "analytics.reconciliation.completed": {
     readonly days: number;
     readonly durationMs: number;
+    // Emitted whether or not anything drifted. A `completed` line that appears only on a
+    // clean run makes "the reconciliation is failing" and "it never ran" the same gap.
+    readonly drifted: number;
   };
   // One line per drifting day, not one listing them: a field is something you filter on,
   // and a day is the grain an operator groups by.

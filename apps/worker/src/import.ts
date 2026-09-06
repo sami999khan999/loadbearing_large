@@ -6,6 +6,7 @@
 // constructs a user's.
 export {
   Principal,
+  type ProjectionCheckpoint,
   QueueName,
 } from "@loadbearing/application";
 
