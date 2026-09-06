@@ -765,7 +765,7 @@ it once and make the doc-drift gate (`P4.26`) check it.
 
 ### `docs/setup`
 
-- [ ] `P4.18` `docs/setup/25-worker-app.md` (worst page) — install block omits `contracts`,
+- [x] `P4.18` `docs/setup/25-worker-app.md` (worst page) — install block omits `contracts`,
   adds `core`; `Principal.system` snippet has two args (real: three, plus `USER_ID`); "only
   the `rbac` catalog ships" (three fragments ship); "`isKnown()` at boot" (per call — `P7.16`);
   `EmbeddingConsumer` snippet wrong ctor arity, `private handle`; `WorkerBootstrap` snippet
@@ -775,6 +775,39 @@ it once and make the doc-drift gate (`P4.26`) check it.
   absent; cleanup "orphaned uploads" not implemented; "three months out" is two; root
   `biome.json` named for an override in `tooling/biome-config`; `apps/desktop`; layout tree
   omits `tests/`, `vitest.config.ts`. Re-derive every snippet from the file it shows.
+  `done: 2026-09-06`
+  - **Every snippet re-derived from its file**, which is what the entry asked for and what the
+    page had stopped being. `SystemPrincipal` gained `USER_ID` and the third `Principal.system`
+    argument — passing the organization id as the actor compiles until the brands diverge and puts
+    a tenant id in the audit trail's actor column. `EmbeddingConsumer` takes `concurrency`, its
+    `handle` is public (a private one is a unit of work no spec can reach), and the job data
+    carries `goalId` and `sourceType`.
+  - **`WorkerBootstrap` was the snippet with the most missing**, and each omission is its own
+    incident: the `stopping` guard (a platform sending `SIGTERM` then `SIGINT` calls `stop()`
+    twice and the second `close()` rejects with nothing to catch it), the race against
+    `WORKER_SHUTDOWN_TIMEOUT_MS` (a job that never returns drains past the platform's SIGKILL
+    timer), and `container.clock.now()` on both sides of the duration rather than `Date.now()`.
+    All three are now shown and each carries the failure it prevents. Same for `main.ts`: the two
+    process-level handlers registered *before* `start()`, so a container that cannot reach
+    Postgres logs a parseable line instead of a raw stack.
+  - **Three claims were false in a way that would strand a reader**, and each was checked against
+    the code: `core` in the install block (the worker never imports it) with `contracts` missing
+    (it does); "only the `rbac` catalog fragment ships" (five do, and both keys the snippet grants
+    are real); "`isKnown()` at boot" (it runs per `forOrganization` call — recorded as the fact it
+    is, since the failure is loud either way).
+  - **Two schedules described work that does not happen.** `cleanup-daily` does not sweep orphaned
+    uploads — `sweepExpired` takes sessions and verification rows, and an orphaned S3 object has
+    no row to sweep from, which is a different job with a different cost. The recovery sweep has
+    no file, so it is out of the shipping table and its paragraph is conditional.
+  - The ✅ Gate asserted `"consumers":1`, which can never pass — two always start, three with
+    `CLICKHOUSE_URL`. `document_embeddings` ×2 → `document_chunks`. `apps/desktop` dropped from
+    the boundary note. The layout tree gained `bootstrap/`, every folder barrel, `tests/` and
+    `vitest.config.ts`; the `biome.json` note names `tooling/biome-config/src/base.json`, which
+    the root file does nothing but extend.
+  - **Step 25.2 gained the four `WORKER_*` keys**, which the page never mentioned while the
+    bootstrap snippet now reads three of them. Two are capped or defaulted to `1` for reasons that
+    are silent when wrong — a second maintenance job deadlocks on the same partition, a second
+    projection run interleaves keyset batches.
 - [ ] `P4.19` `docs/setup/26-hygiene-and-ci.md` — `scope-enum` block has `db`, lacks `errors`
   (its own `fix(db):` example is rejected); CI YAML omits the extensions step,
   `deps:check`/`repo:check`, migrate/seed, `check:contrast`, the `audit` job, uses

@@ -24,24 +24,34 @@ Running BullMQ inside the web process also breaks the moment you run two web ins
 apps/worker/
 ├── package.json
 ├── tsconfig.json
-└── src/
-    ├── import.ts                     ← the outside surface: every external symbol, once
-    ├── env.ts                        → Env  ★ the second process.env reader; keeps its own imports
-    ├── main.ts                       ← entrypoint
-    ├── worker-bootstrap.ts           → WorkerBootstrap
-    ├── system-principal.ts           → SystemPrincipal
-    ├── consumer/
-    │   ├── embedding.consumer.ts     → EmbeddingConsumer
-    │   ├── maintenance.consumer.ts   → MaintenanceConsumer
-    │   └── analytics.consumer.ts     → AnalyticsConsumer   (registered only when configured)
-    ├── notification/
-    │   └── notification-digest.composer.ts        → DigestComposer  (the only email-namespace reader)
-    └── schedule/
-        ├── cleanup.schedule.ts       → CleanupSchedule
-        ├── partitions.schedule.ts    → PartitionsSchedule
-        ├── archive.schedule.ts       → ArchiveSchedule
-        ├── projection.schedule.ts    → ProjectionSchedule  (analytics)
-        └── reconcile.schedule.ts     → ReconcileSchedule   (analytics)
+├── vitest.config.ts
+├── src/
+│   ├── import.ts                     ← the outside surface: every external symbol, once
+│   ├── env.ts                        → Env  ★ the second process.env reader; keeps its own imports
+│   ├── main.ts                       ← entrypoint. Resolved by name, so it stays loose
+│   ├── bootstrap/                    ← what the process assembles before it starts working
+│   │   ├── index.ts
+│   │   ├── worker-bootstrap.ts       → WorkerBootstrap
+│   │   └── system-principal.ts       → SystemPrincipal
+│   ├── consumer/
+│   │   ├── index.ts
+│   │   ├── embedding.consumer.ts     → EmbeddingConsumer
+│   │   ├── maintenance.consumer.ts   → MaintenanceConsumer
+│   │   └── analytics.consumer.ts     → AnalyticsConsumer   (registered only when configured)
+│   ├── notification/
+│   │   ├── index.ts
+│   │   └── notification-digest.composer.ts        → DigestComposer  (the only email-namespace reader)
+│   └── schedule/
+│       ├── index.ts
+│       ├── cleanup.schedule.ts       → CleanupSchedule
+│       ├── partitions.schedule.ts    → PartitionsSchedule
+│       ├── archive.schedule.ts       → ArchiveSchedule
+│       ├── projection.schedule.ts    → ProjectionSchedule  (analytics)
+│       └── reconcile.schedule.ts     → ReconcileSchedule   (analytics)
+└── tests/                            ← mirrors src/, never inside it
+    ├── bootstrap/system-principal.spec.ts
+    ├── consumer/maintenance.consumer.spec.ts
+    └── notification/notification-digest.composer.spec.ts
 ```
 
 ---
@@ -83,13 +93,16 @@ Revisit this only if you ever set `erasableSyntaxOnly: true` and rewrite every c
 pnpm add --filter @loadbearing/worker \
   @loadbearing/composition@workspace:* @loadbearing/application@workspace:* \
   @loadbearing/infrastructure@workspace:* @loadbearing/permissions@workspace:* \
-  @loadbearing/content@workspace:* @loadbearing/core@workspace:* \
+  @loadbearing/contracts@workspace:* @loadbearing/content@workspace:* \
   bullmq@catalog: ioredis@catalog: zod@catalog:
-pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
+pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog: \
+  rimraf@catalog: vitest@catalog: @types/node@catalog:
 ```
-> No `contracts`, no `api-client`, no `ui`. The worker never speaks HTTP and never renders. It reaches use-cases through the container.
+> No `api-client`, no `ui`. The worker never speaks HTTP and never renders. It reaches use-cases through the container.
 >
-> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary only applies to React packages, `apps/web`, and `apps/desktop`.
+> **`contracts` is here for the DTOs a use-case answers with**, not for a transport — the worker has none. `core` is not, because nothing here needs a primitive that `application` does not already re-export through its ports.
+>
+> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary applies to React packages and `apps/web`.
 >
 > **`content` is here because the worker sends email**, and email has words in it. It cannot
 > import `feature` — that is React — so it takes the plain `Translator` instead. This is the
@@ -107,7 +120,7 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 }
 ```
 
-**No lint config here either.** The `apps/*/src/env.ts` exemption in the root `biome.json` covers this app's `env.ts` by the same glob that covers the web app's.
+**No lint config here either.** The `apps/*/src/env.ts` exemption lives in `tooling/biome-config/src/base.json`, which the root `biome.json` does nothing but extend — so this app's `env.ts` is covered by the same glob that covers the web app's.
 
 ---
 
@@ -117,7 +130,18 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog:
 
 **It parses the same `LOG_LEVEL` and `LOG_PRETTY` the web app does**, and returns the same `logging` block. A worker with no log output is a worker you cannot operate.
 
-**It parses a smaller schema.** The worker needs `DATABASE_URL`, both Redis URLs, the S3 block, and the embedding block. It does **not** need `AUTH_SECRET`, `AUTH_URL`, or `AUTH_TRUSTED_ORIGINS` — it never issues or validates a session.
+**It parses a smaller schema.** The worker needs `DATABASE_URL`, both Redis URLs, the S3 block, the embedding block, and `SMTP_URL` / `EMAIL_FROM` — it is the process that sends the digest. It does **not** need `AUTH_SECRET`, `AUTH_URL`, or `AUTH_TRUSTED_ORIGINS`: it never issues or validates a session.
+
+**Four keys exist only here**, all defaulted, because each is an operational dial rather than a secret:
+
+| Key | Default | What it decides |
+|---|---|---|
+| `WORKER_SHUTDOWN_TIMEOUT_MS` | `25000` | How long `stop()` waits for in-flight jobs before the race gives up. Under the platform's own SIGKILL timer, deliberately |
+| `WORKER_EMBEDDING_CONCURRENCY` | `4` | In-flight embedding jobs per instance |
+| `WORKER_MAINTENANCE_CONCURRENCY` | `1` | Serial by default: these jobs take table-level locks and deadlock on the same partition |
+| `WORKER_ANALYTICS_CONCURRENCY` | `1` | Capped at 1 in the schema, not by convention — the projection holds a keyset cursor and two runs would interleave batches |
+
+Two of the four are capped or defaulted to `1` for reasons that are silent when wrong: a second maintenance job deadlocks, a second projection run duplicates rows. Raising either needs the reason to have changed, not just the number.
 
 **Do not share one `env.ts` between the two apps by extracting it to a package.** The whole point of the `process.env` rule is that each deployable declares exactly what it needs. A shared schema would force the worker to carry an `AUTH_SECRET` it never uses, which is one more secret in one more environment for no reason.
 
@@ -133,19 +157,19 @@ Jobs have no user. They still need a principal, because `Authorizer.assert()` is
 
 ```ts
 import { Principal } from "@loadbearing/application";
-import type { UserId } from "@loadbearing/contracts";
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 
 export class SystemPrincipal {
   private constructor() {}
 
-  // Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all().
-  // Typed as string[] so isKnown() can narrow each entry to a PermissionKey.
-  private static readonly GRANTS: readonly string[] = [
-    "ai.embedding.write",
-    "ai.embedding.read",
-    "core.activity.write",
-  ];
+  // A fixed, reserved uuid rather than the organization's own: an actor column
+  // holding a tenant id reads as a user.
+  public static readonly USER_ID = "00000000-0000-7000-8000-000000000001";
+
+  // Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all(), and
+  // no core.*: every resolved principal already holds those.
+  private static readonly GRANTS: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
 
   public static forOrganization(organizationId: string): Principal {
     const registry = PermissionRegistry.instance;
@@ -158,7 +182,8 @@ export class SystemPrincipal {
     });
 
     return Principal.system(
-      organizationId as UserId,
+      organizationId as OrganizationId,
+      SystemPrincipal.USER_ID as UserId,
       CapabilitySet.from({
         wildcard: false,
         org: { grants, denies: [] },
@@ -175,12 +200,15 @@ export class SystemPrincipal {
 > - **`CapabilitySet.from(dto)`, never `new CapabilitySet(...)`** — the constructor is private ([08](08-permissions-package.md)), and the argument is a `CapabilitySetDto`, not a list of `{ permission, goalId }` pairs.
 > - **`PermissionRegistry.instance.isKnown(...)`** — `isKnown` is an instance method on the singleton, not a static.
 > - **`GRANTS` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+> - **`Principal.system` takes three arguments** — organization, actor, capabilities. Passing the organization id as the user id compiles only until the brands diverge, and lands a tenant id in the audit trail's actor column.
 >
-> The three keys above are **illustrative** — the starter kit ships only the `rbac` catalog fragment, so as written this throws at boot. Add the real keys to `packages/permissions/src/catalog/` first. That boot-time failure is the rule working: a system principal naming a permission that does not exist should never start.
+> Both keys above are real: `ai.embedding.write` and `ai.embedding.read` ship in `packages/permissions/src/catalog/ai.permissions.ts`. Name one that does not and this throws at boot, which is the rule working — a system principal referencing a permission that does not exist should never start.
 
-**A wildcard here would erase every authorization guarantee in the codebase.** The moment `SystemPrincipal` carries `PermissionRegistry.all()`, any bug that lets user input reach a job path becomes a full privilege escalation. Three named permissions, added deliberately, reviewed like any other grant.
+**No `core.*` key is granted here, deliberately.** `CapabilitySet.can()` holds every `core.*` key for any resolved principal, so granting one would read as a decision where none was made. That is the fifth resolution rule in [`packages/permissions/docs/reference/capability-set.md`](../../packages/permissions/docs/reference/capability-set.md).
 
-**The `isKnown()` check catches typos and deleted permissions at boot** rather than at 3am when a job silently starts failing authorization.
+**A wildcard here would erase every authorization guarantee in the codebase.** The moment `SystemPrincipal` carries `PermissionRegistry.all()`, any bug that lets user input reach a job path becomes a full privilege escalation. Two named permissions, added deliberately, reviewed like any other grant.
+
+**The `isKnown()` check runs on every `forOrganization` call**, not once at boot — the registry is a singleton and the map is cheap, but a renamed permission therefore surfaces on the first job rather than at start-up. Either way it is a loud failure rather than a job that silently stops passing authorization.
 
 **Every job carries an organization.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
 
@@ -195,33 +223,39 @@ import { Worker, type Job } from "bullmq";
 import type { Redis } from "ioredis";
 import type { Container } from "@loadbearing/composition";
 import { QueueName } from "@loadbearing/infrastructure";
-import { SystemPrincipal } from "../system-principal.js";
+import { SystemPrincipal } from "../bootstrap/index.js";
 
 interface EmbeddingJobData {
   readonly organizationId: string;
   readonly documentId: string;
   readonly text: string;
+  readonly goalId?: string | null;
+  readonly sourceType?: string;
 }
 
 export class EmbeddingConsumer {
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
+    private readonly concurrency: number,
   ) {}
 
   public start(): Worker {
     return new Worker<EmbeddingJobData>(
       QueueName.EMBEDDING,
       async (job: Job<EmbeddingJobData>) => this.handle(job),
-      { connection: this.connection, concurrency: 4 },
+      { connection: this.connection, concurrency: this.concurrency },
     );
   }
 
-  private async handle(job: Job<EmbeddingJobData>): Promise<void> {
+  // Public, so a spec can drive one job without standing up a Redis connection.
+  public async handle(job: Job<EmbeddingJobData>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
     await this.container.ai.indexDocument.execute(principal, {
       documentId: job.data.documentId,
       text: job.data.text,
+      goalId: job.data.goalId ?? null,
+      sourceType: job.data.sourceType ?? "document",
     });
   }
 }
@@ -229,7 +263,9 @@ export class EmbeddingConsumer {
 
 **The consumer is a thin adapter, exactly like an oRPC router.** Deserialise the job, build a principal, call a use-case. All the logic lives in `IndexDocumentUseCase`, which is testable without Redis and callable from an HTTP endpoint too.
 
-**`concurrency` is per worker instance, not global.** Four instances at concurrency 4 is sixteen in-flight jobs, and each one may hold a Postgres connection. Keep `concurrency × instances` below your pool size.
+**`concurrency` is a constructor argument, not a literal**, and `WorkerBootstrap` passes `Env.embeddingConcurrency` — one queue's throughput is an operational decision, and burying it in a consumer means a redeploy to change it.
+
+**It is per worker instance, not global.** Four instances at concurrency 4 is sixteen in-flight jobs, and each one may hold a Postgres connection. Keep `concurrency × instances` below your pool size.
 
 **Let the handler throw.** BullMQ's retry and backoff are driven by rejection. Catching and logging turns a retryable failure into permanent silent data loss.
 
@@ -340,7 +376,7 @@ Each one exists because something else in the architecture assumed it would.
 
 | Schedule | Queue | Pattern | Why it exists |
 |---|---|---|---|
-| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions, orphaned uploads, stale verification rows |
+| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions and stale verification rows |
 | `partitions-monthly` | maintenance | `0 2 1 * *` | Creates the next few months of `activity_log` partitions |
 | `archive-monthly` | maintenance | `0 4 1 * *` | Detaches the month that aged out, ships it to S3, records it |
 | `analytics-projection` | analytics | `*/5 * * * *` | Replays `activity_log` into the derived store |
@@ -354,11 +390,13 @@ left `cleanup-daily` broken for a while. A consumer with no *store* is worse: it
 five minutes of nothing looks exactly like five minutes of work, and the first sign is a report that
 comes out wrong months later. **Absent beats no-op.**
 
-**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. Create three months out and the job can fail twice before anything breaks.
+**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. `MaintenanceConsumer.MONTHS_AHEAD` is 3: each run creates the current month and the next two, so the job can miss two runs before anything breaks.
+
+**Sweeping uploads is not in `cleanup-daily`.** `MaintenanceGateway.sweepExpired` takes sessions and verification rows and nothing else — an orphaned S3 object has no row to sweep from, so finding one means listing the bucket against the table, which is a different job with a different cost. Adding it is a method on the gateway and a line in `MaintenanceConsumer.cleanup`.
 
 **Session expiry is a `DELETE`, and that is the whole reason `sessions` is not partitioned.** `DELETE FROM sessions WHERE expires_at < now()` on the index from [16](16-auth-package.md) keeps the table small, which is what partitioning would have bought — without fighting Better Auth's lookup pattern ([Data and scale](../opinions/data-and-scale.md) §4.2).
 
-**`recovery-sweep-daily` reconciles against Postgres, never against BullMQ.** A queued job is the one thing in the system that is derived from nothing — a `FLUSHALL`, a crash between enqueue and persist, or a handler that swallowed an error all lose work with no trace. The sweep asks *which domain rows should have been processed and have not been*, which catches all three. It cannot ask BullMQ, because completed jobs age out after an hour and failures after a day ([15](15-infrastructure-package.md)), long before a nightly run.
+**A recovery sweep would reconcile against Postgres, never against BullMQ.** A queued job is the one thing in the system that is derived from nothing — a `FLUSHALL`, a crash between enqueue and persist, or a handler that swallowed an error all lose work with no trace. The sweep asks *which domain rows should have been processed and have not been*, which catches all three. It cannot ask BullMQ, because completed jobs age out after an hour and failures after a day ([15](15-infrastructure-package.md)), long before a nightly run.
 
 This is what makes rule 1 above load-bearing rather than good practice: **the sweep re-enqueues work that may well have already been done.** A handler that is not idempotent turns a recovery mechanism into a duplicate-notification incident.
 
@@ -384,9 +422,9 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 **The alert has a deadline attached.**
 
 > [!NOTE]
-> **`recovery-sweep-daily` is described above and is not yet built.** It is the one schedule in this
-> section without a file, and the gap is deliberate: nothing publishes the kind of job it would
-> re-enqueue yet. The reasoning stands for whenever the first one lands.
+> **The recovery sweep is the one schedule described here with no file**, which is why it is absent
+> from the table above rather than listed as shipping. The gap is deliberate: nothing publishes the
+> kind of job it would re-enqueue yet. The reasoning stands for whenever the first one lands.
 
 ---
 
@@ -397,6 +435,7 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 ```ts
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
+  private stopping = false;
 
   public constructor(
     private readonly container: Container,
@@ -404,31 +443,84 @@ export class WorkerBootstrap {
   ) {}
 
   public async start(): Promise<void> {
-    this.workers.push(new EmbeddingConsumer(this.container, this.redis.queueClient()).start());
+    this.workers.push(
+      new EmbeddingConsumer(this.container, this.redis.queueClient(), Env.embeddingConcurrency)
+        .start(),
+    );
+
+    // Before the schedules register, so an entry that fires the instant it lands has
+    // somewhere to run.
+    this.workers.push(
+      new MaintenanceConsumer(this.container, this.redis.queueClient(), Env.maintenanceConcurrency)
+        .start(),
+    );
+
+    // Without a ClickHouse config no consumer starts and no schedule registers.
+    if (this.container.hasProjector) {
+      this.workers.push(
+        new AnalyticsConsumer(this.container, this.redis.queueClient(), Env.analyticsConcurrency)
+          .start(),
+      );
+    }
+
+    await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
+    await new ArchiveSchedule(this.container, this.redis.queueClient()).register();
+
+    if (this.container.hasProjector) {
+      await new ProjectionSchedule(this.container, this.redis.queueClient()).register();
+      await new ReconcileSchedule(this.container, this.redis.queueClient()).register();
+    }
+
     this.container.logger.emit("process.started", {
       service: "worker",
       consumers: this.workers.length,
     });
   }
 
+  // Idempotent: closing twice surfaces as an unhandled rejection from an
+  // already-closed client.
   public async stop(signal: string): Promise<void> {
+    if (this.stopping) return;
+    this.stopping = true;
+
     this.container.logger.emit("process.stopping", { service: "worker", signal });
     const startedAt = this.container.clock.now();
 
-    await Promise.all(this.workers.map((w) => w.close()));
+    // `close()` drains; the race is the backstop, because a job that never returns
+    // must not hold the process past the platform's SIGKILL timer.
+    await Promise.race([
+      Promise.all(this.workers.map((w) => w.close())),
+      WorkerBootstrap.after(Env.shutdownTimeoutMs),
+    ]);
+
     await this.redis.close();
 
     this.container.logger.emit("process.stopped", {
       service: "worker",
-      durationMs: Date.now() - startedAt.getTime(),
+      durationMs: this.container.clock.now().getTime() - startedAt.getTime(),
     });
 
     // Last, because everything closing above it may have had something to say.
     await this.container.dispose();
   }
+
+  private static after(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      // Unreferenced, so a pending timer cannot keep the loop alive once every
+      // worker has drained.
+      setTimeout(resolve, ms).unref();
+    });
+  }
 }
 ```
+
+> [!IMPORTANT]
+> **Three things in `stop()` are each a separate incident when left out.**
+>
+> - **The `stopping` guard.** A container platform that sends `SIGTERM` and then `SIGINT` calls this twice, and the second `close()` on an already-closed client rejects with nothing to catch it.
+> - **The race against `WORKER_SHUTDOWN_TIMEOUT_MS`.** `close()` drains, and a job that never returns drains forever — past the platform's own SIGKILL timer, which then kills the process in the state graceful shutdown existed to avoid.
+> - **`container.clock.now()` on both sides of the duration, never `Date.now()`.** The clock is a port precisely so a test can freeze it; mixing the two makes the one number the shutdown emits untestable.
 
 > [!IMPORTANT]
 > **Use `RedisConnection` from [15](15-infrastructure-package.md), not a bare `{ host, port }`.** BullMQ accepts either, but `queueClient()` is what applies `maxRetriesPerRequest: null` and omits the cache key prefix — the two settings BullMQ requires. A plain `{ host, port }` gets ioredis defaults, and the symptom is workers that stop consuming after a few minutes with no error.
@@ -438,29 +530,55 @@ export class WorkerBootstrap {
 **`apps/worker/src/main.ts`**
 
 ```ts
-import { Container } from "@loadbearing/composition";
-import { RedisConnection } from "@loadbearing/infrastructure";
+import { Container, RedisConnection } from "./import.js";
+import { WorkerBootstrap } from "./bootstrap/index.js";
 import { Env } from "./env.js";
-import { WorkerBootstrap } from "./worker-bootstrap.js";
 
 const config = Env.containerConfig();
 const container = new Container(config);
-const bootstrap = new WorkerBootstrap(
-  container,
-  new RedisConnection({
-    cacheUrl: config.redis.cacheUrl,
-    queueUrl: config.redis.queueUrl,
-  }),
-);
 
-await bootstrap.start();
+const redis = new RedisConnection({
+  cacheUrl: config.redis.cacheUrl,
+  queueUrl: config.redis.queueUrl,
+});
+
+const bootstrap = new WorkerBootstrap(container, redis);
+
+// Before `start()`, so a throw during boot lands in the same log stream as one
+// during work. Node's default handler prints a stack no collector can key on.
+process.on("unhandledRejection", (reason: unknown) => {
+  container.logger.failure(reason, { service: "worker", phase: "unhandledRejection" });
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error: unknown) => {
+  container.logger.failure(error, { service: "worker", phase: "uncaughtException" });
+  process.exit(1);
+});
+
+try {
+  await bootstrap.start();
+} catch (error: unknown) {
+  container.logger.failure(error, { service: "worker", phase: "start" });
+  process.exit(1);
+}
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    void bootstrap.stop(signal).then(() => process.exit(0));
+    void bootstrap
+      .stop(signal)
+      .then(() => process.exit(0))
+      .catch((error: unknown) => {
+        // Logged, never swallowed: a bare `.catch(() => process.exit(1))` turns
+        // every shutdown failure into an exit code and nothing else.
+        container.logger.failure(error, { service: "worker", signal });
+        process.exit(1);
+      });
   });
 }
 ```
+
+**The two process-level handlers are registered before `start()`, not after.** A container that fails to reach Postgres throws during boot, and without them Node prints a raw stack to stderr — unparseable by the collector, so the one failure you most need in the log stream is the one that misses it. The same reasoning puts a `try` around `start()` and a `.catch` on `stop()`.
 
 **Graceful shutdown is not optional for a worker.** `worker.close()` waits for in-flight jobs to finish before disconnecting. Killing the process mid-job leaves it stalled until BullMQ's lock expires — up to 30 seconds of a job that looks running and is not.
 
@@ -474,16 +592,16 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 pnpm dev:worker
 ```
 
-Then, from `psql` or a scratch script, enqueue a job and watch the log. A round trip that ends with a row in `document_embeddings` proves the whole chain: env → container → queue → consumer → use-case → port → adapter → Postgres.
+Then, from `psql` or a scratch script, enqueue a job and watch the log. A round trip that ends with a row in `document_chunks` proves the whole chain: env → container → queue → consumer → use-case → port → adapter → Postgres.
 
 ---
 
 ## ✅ Gate
 
-- `pnpm dev:worker` boots and emits one line of JSON: `{"level":"info","event":"process.started","service":"worker","consumers":1}`.
+- `pnpm dev:worker` boots and emits one line of JSON: `{"level":"info","event":"process.started","service":"worker","consumers":2}` — or `3` with `CLICKHOUSE_URL` set.
 - `SIGTERM` emits `process.stopping` before draining, and `process.stopped` after.
 - `grep -rn "console\." apps/worker/src` returns nothing — Biome's `noConsole` ([05](05-lint-and-format.md)) fails the build otherwise.
-- Enqueuing an embedding job produces a row in `document_embeddings`.
+- Enqueuing an embedding job produces a row in `document_chunks`.
 - `SIGTERM` drains in-flight jobs before exiting.
 - Restarting the worker three times leaves exactly **one** repeatable `cleanup-daily` entry (`redis-cli --scan --pattern 'bull:*repeat*'`).
 - `apps/worker/src/env.ts` is the only file in the app reading `process.env`.
