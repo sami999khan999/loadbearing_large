@@ -18,6 +18,12 @@ import type { TransactionScope } from "../transaction/index.js";
 // organization has exactly one member.
 const FOUNDER_ROLE = "owner";
 
+// The same shape `OrganizationFounder` in `auth` declares, restated because this package
+// cannot import it — the same reason `InvitationPreview` is restated.
+export interface OrganizationFounder {
+  found(userId: UserId, name: string, slug?: string): Promise<OrganizationId>;
+}
+
 // One implementation of "create a tenant and own it", called from the personal enroller
 // and from the create endpoint. See docs/reference/enrollers.md.
 export class PgOrganizationFounder extends BaseRepository {

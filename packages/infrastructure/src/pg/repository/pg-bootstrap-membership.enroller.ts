@@ -1,6 +1,7 @@
 import { and, eq, type OrganizationId, sql, type UserId, Uuid } from "../../import.js";
-import { BaseRepository } from "../primitive/index.js";
+import { BaseRepository, type Database } from "../primitive/index.js";
 import { memberships, organizations, roles } from "../schema/index.js";
+import type { TransactionScope } from "../transaction/index.js";
 
 // Both seeded by `SystemRoleSeed`. An organization missing either is one the seed never
 // ran against, and enrolment declines rather than guesses.
@@ -20,13 +21,16 @@ function lockKey(organizationId: string): number {
 // The `bootstrap` mode, and wrong for anything reachable from the internet: the sign-up
 // form hands out membership of your tenant. See docs/reference/enrollers.md.
 export class PgBootstrapMembershipEnroller extends BaseRepository {
-  // `undefined` switches enrolment off entirely, which is the default: an unaffiliated
-  // sign-up then gets no membership and the session is refused.
-  private organizationSlug: string | undefined;
-
-  public withOrganizationSlug(slug: string | undefined): this {
-    this.organizationSlug = slug;
-    return this;
+  // A constructor argument, not a setter: an enroller between construction and its
+  // `withOrganizationSlug` call is one that silently enrols nobody.
+  public constructor(
+    database: Database,
+    scope: TransactionScope,
+    // `undefined` switches enrolment off entirely, which is the default: an unaffiliated
+    // sign-up then gets no membership and the session is refused.
+    private readonly organizationSlug: string | undefined,
+  ) {
+    super(database, scope);
   }
 
   // Runs once per user, on the first session they ever open — `activeOrganizationFor`

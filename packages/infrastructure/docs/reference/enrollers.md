@@ -101,6 +101,17 @@ administer.
 The audit row is written as the tenant that was just created, not the caller's current one, with an
 empty capability set: the logger reads only the organization and the actor off the principal.
 
+The file also restates `OrganizationFounder` as an interface, for the same reason
+`PgInvitationClaimer` restates `InvitationPreview`: the port lives in `auth`, which is downstream of
+this package. `PgPersonalOrganizationEnroller` takes that shape rather than the concrete class, so
+`Container` can pass its port field and stay the one place a class is named.
+
+## `PgBootstrapMembershipEnroller` takes its slug in the constructor
+
+It used to take it from `withOrganizationSlug`, a setter returning `this`. An enroller between
+construction and that call is one that enrols nobody and says nothing about it — and a fluent setter
+on a class the container builds once buys nothing that an argument does not.
+
 ## `PgInvitationClaimer`: the verified address is the credential
 
 Deliberately **not** tenant-scoped. The caller arrives holding a token or a user id and no
