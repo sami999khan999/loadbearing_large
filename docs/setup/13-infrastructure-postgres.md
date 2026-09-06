@@ -458,6 +458,38 @@ CREATE TABLE activity_log_2026_01 PARTITION OF activity_log
 
 **Decide retention at the same time.** The usual shape is 12–24 months of detail in Postgres, aggregates kept forever in the analytics store, and older partitions detached to cold storage. Detaching a partition is instant; a `DELETE` over the same rows bloats the table and holds a lock.
 
+### Writing a unique-index migration
+
+`pnpm db:generate` emits `CREATE UNIQUE INDEX` and nothing else. That statement is correct on an
+empty database and **fails on every database that already holds a duplicate** — which is the only
+kind of database that needs the index. The migration then aborts, its transaction rolls back, and
+the deploy stops at a table nobody knew was dirty.
+
+So a unique index arrives in three statements, in this order, in one migration:
+
+```sql
+DELETE FROM "accounts" a USING "accounts" b WHERE a."provider_id" = b."provider_id" AND a."account_id" = b."account_id" AND (a."created_at", a."id") > (b."created_at", b."id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "accounts_provider_account_uq" ON "accounts" USING btree ("provider_id","account_id");
+```
+
+Three things make that shape work and are worth stating, because each one is a way it goes wrong:
+
+- **The de-dup names a winner, and the rule is written down.** `(created_at, id) > (…)` keeps the
+  earliest row per group — the original link — and the tuple comparison breaks the tie that
+  `created_at` alone leaves open. Where the newest row is the right one, or where a flag decides
+  (`two_factors` keeps the verified enrolment over a later abandoned one), say so in the `WHERE`
+  rather than relying on physical order. A `DELETE` with no deterministic winner is a coin flip
+  that two replicas can call differently.
+- **`IF NOT EXISTS` on the create, `IF EXISTS` on a drop.** Drizzle's journal runs each migration
+  once, but a migration also gets applied by hand — to a branch database, to a snapshot restored
+  half-way — and the second run should be a no-op, not an error.
+- **One migration, one transaction.** `migrate.ts` wraps a file's statements together, so the
+  de-dup and the index either both land or neither does. Splitting them across two migrations opens
+  a window where the duplicates are gone and the index that prevents new ones is not yet there.
+
+Verify it against real duplicates, not an empty table: insert the collision by hand, run
+`pnpm db:migrate`, and check that the row you meant to keep is the row that survived.
+
 > **`session` looks like the third table on this list and is not.** Better Auth updates it on refresh, deletes it on sign-out, and looks rows up by id — a predicate carrying no partition key, so every lookup would scan every partition, and its generated schema will not produce the composite primary key partitioning requires. Sessions are bounded by expiry instead, and a `DELETE ... WHERE expires_at < now()` on the cleanup schedule is the right tool ([25](25-worker-app.md)).
 
 ```bash

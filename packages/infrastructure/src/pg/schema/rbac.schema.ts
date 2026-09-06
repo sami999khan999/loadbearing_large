@@ -61,6 +61,9 @@ export const rolePermissions = pgTable(
     // Leads with the tenant, which also makes it the covering index for the
     // `organization_id` FK — a separate one would be a redundant prefix.
     uniqueIndex("role_permissions_uq").on(t.organizationId, t.roleId, t.permission),
+    // Deleting a role cascades here, and the unique index above leads with the tenant,
+    // so it cannot serve that scan.
+    index("role_permissions_role_fk_idx").on(t.roleId),
   ],
 );
 
@@ -120,6 +123,9 @@ export const goalMembers = pgTable(
   (t) => [
     uniqueIndex("goal_members_uq").on(t.organizationId, t.goalId, t.userId, t.roleId),
     index("goal_members_user_idx").on(t.organizationId, t.userId),
+    // The one above is tenant-scoped and a user delete is not, so the cascade needs
+    // an index that leads with `user_id`.
+    index("goal_members_user_fk_idx").on(t.userId),
     index("goal_members_goal_idx").on(t.goalId),
     index("goal_members_role_idx").on(t.roleId),
   ],
@@ -145,6 +151,9 @@ export const permissionOverrides = pgTable(
   },
   (t) => [
     index("permission_overrides_user_idx").on(t.organizationId, t.userId),
+    // Same split: the tenant-leading index answers the resolver, this one answers
+    // the cascade from `users`.
+    index("permission_overrides_user_fk_idx").on(t.userId),
     index("permission_overrides_goal_idx").on(t.goalId),
     // Two partial indexes, because NULLs are distinct: one index over a nullable
     // `goal_id` accepts unlimited duplicate org-scope rows for the same permission.
