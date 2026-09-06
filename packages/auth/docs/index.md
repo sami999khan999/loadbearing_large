@@ -51,7 +51,7 @@ packages/auth/
 │   │   ├── principal.builder.ts          → PrincipalBuilder
 │   │   └── capability.cache.ts           → CapabilityCache
 │   ├── session/
-│   │   ├── better-auth.session-resolver.ts → BetterAuthSessionResolver
+│   │   ├── better-auth-session.resolver.ts → BetterAuthSessionResolver
 │   │   ├── membership.reader.ts          → MembershipReader, OrganizationSummary   (port)
 │   │   ├── membership.enroller.ts        → MembershipEnroller                (port)
 │   │   ├── invitation.claimer.ts         → InvitationClaimer, InvitationPreview   (port)
@@ -64,7 +64,7 @@ packages/auth/
     ├── apikey/{api-key.hasher,api-key.resolver}.spec.ts
     ├── factory/auth.factory.spec.ts
     ├── principal/{capability.cache,principal.builder}.spec.ts
-    └── session/{better-auth.session-resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
+    └── session/{better-auth-session.resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
 ```
 
 ---

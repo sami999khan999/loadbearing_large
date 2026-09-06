@@ -1,4 +1,4 @@
 export {
   type OpenAiEmbeddingConfig,
   OpenAiEmbeddingProvider,
-} from "./openai.embedding-provider.js";
+} from "./openai-embedding.provider.js";

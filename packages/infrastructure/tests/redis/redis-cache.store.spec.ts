@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Redis } from "../../src/import.js";
-import { RedisCacheStore } from "../../src/redis/redis.cache-store.js";
+import { RedisCacheStore } from "../../src/redis/redis-cache.store.js";
 import { RecordingLogger } from "../support/recording.logger.js";
 
 // Only the three commands `get` reaches. A real client would make this a live-Redis

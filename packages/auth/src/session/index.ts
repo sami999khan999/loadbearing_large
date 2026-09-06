@@ -1,4 +1,4 @@
-export { BetterAuthSessionResolver } from "./better-auth.session-resolver.js";
+export { BetterAuthSessionResolver } from "./better-auth-session.resolver.js";
 export { InvitationClaimer, type InvitationPreview } from "./invitation.claimer.js";
 export { InvitationClaimingEnroller } from "./invitation-claiming.enroller.js";
 export { MembershipEnroller } from "./membership.enroller.js";

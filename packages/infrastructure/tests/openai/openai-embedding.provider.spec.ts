@@ -1,6 +1,6 @@
 import { UnavailableError } from "@loadbearing/errors";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OpenAiEmbeddingProvider } from "../../src/openai/openai.embedding-provider.js";
+import { OpenAiEmbeddingProvider } from "../../src/openai/openai-embedding.provider.js";
 
 // The provider is driven entirely by `fetch`, so a stub of it is the whole double and
 // these assertions stay true across a change of endpoint.

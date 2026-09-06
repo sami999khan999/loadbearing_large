@@ -1,6 +1,6 @@
 import { UnavailableError } from "@loadbearing/errors";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LokiLogReader } from "../../src/loki/loki.log-reader.js";
+import { LokiLogReader } from "../../src/loki/loki-log.reader.js";
 import { RecordingLogger } from "../support/recording.logger.js";
 
 const failWith = (status: number, body: string) =>

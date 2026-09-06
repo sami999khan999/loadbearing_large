@@ -1,6 +1,6 @@
 import { UnavailableError } from "@loadbearing/errors";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SmtpEmailSender } from "../../src/smtp/smtp.email-sender.js";
+import { SmtpEmailSender } from "../../src/smtp/smtp-email.sender.js";
 import { RecordingLogger } from "../support/recording.logger.js";
 
 // `createTransport` is called in the constructor, so the double has to be in place

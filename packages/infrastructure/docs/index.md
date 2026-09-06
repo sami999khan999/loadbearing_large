@@ -47,17 +47,17 @@ packages/infrastructure/
     │   ├── transaction/ pg-unit-of-work.ts → PgUnitOfWork, TransactionScope
     │   └── seed/        system-role.seed.ts → SystemRoleSeed
     ├── clickhouse/ clickhouse.connection.ts          → ClickHouseConnection
-    │               clickhouse.analytics-reader.ts    → ClickHouseAnalyticsReader
-    │               clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
-    ├── loki/      loki.log-reader.ts       → LokiLogReader
+    │               clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
+    │               clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
+    ├── loki/      loki-log.reader.ts       → LokiLogReader
     ├── redis/     redis.connection.ts      → RedisConnection, RedisConfig
-    │              redis.cache-store.ts     → RedisCacheStore
+    │              redis-cache.store.ts     → RedisCacheStore
     ├── s3/        s3-storage.gateway.ts    → S3StorageGateway, S3Config
     │              storage-key.ts           → StorageKey
-    ├── bullmq/    bullmq.queue-publisher.ts → BullMqQueuePublisher
+    ├── bullmq/    bullmq-queue.publisher.ts → BullMqQueuePublisher
     │              queue-name.ts            → QueueName
-    ├── smtp/      smtp.email-sender.ts     → SmtpEmailSender
-    └── openai/    openai.embedding-provider.ts → OpenAiEmbeddingProvider
+    ├── smtp/      smtp-email.sender.ts     → SmtpEmailSender
+    └── openai/    openai-embedding.provider.ts → OpenAiEmbeddingProvider
 ```
 
 **The four runnable scripts sit above `src/`.** A script inside a folder makes that folder's barrel
@@ -80,7 +80,7 @@ files. They were flattened for two reasons.
 The first is [Simplicity](../../../docs/opinions/simplicity.md): a folder holding one file is a path,
 not a subject. The second is what happens when a port gets a second implementation. `pg/analytics/`
 beside `clickhouse/` reads as two different things; `pg/repository/pg-analytics.reader.ts` beside
-`clickhouse/clickhouse.analytics-reader.ts` reads as what it is — two implementations of one port,
+`clickhouse/clickhouse-analytics.reader.ts` reads as what it is — two implementations of one port,
 one per store, each named after the store it speaks to. **The technology is the axis this package
 sorts on, and naming the subject twice broke that.**
 
