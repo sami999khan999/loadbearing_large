@@ -6,7 +6,7 @@ import { MembershipEnroller } from "./membership.enroller.js";
 export class NullMembershipEnroller extends MembershipEnroller {
   // Null on every call, which the session hook turns into a refused sign-in. A real
   // implementation rather than a missing binding, so the refusal is fail-closed.
-  public enrol(_userId: UserId): Promise<OrganizationId | null> {
+  public override enrol(_userId: UserId): Promise<OrganizationId | null> {
     return Promise.resolve(null);
   }
 }
