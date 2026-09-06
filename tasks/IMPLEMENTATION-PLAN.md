@@ -1668,7 +1668,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     an abstract member with no implementation, compiling because nothing typechecks the file, and
     passing because the spec never calls it. A third method made it two. Both are fixed there; the
     hole that let it happen is this entry.
-- [ ] `P6.8` **`tooling/scripts` fixtures** — see `P8.10`.
+- [x] `P6.8` **`tooling/scripts` fixtures** — closed by `P8.10`. `done: 2026-09-06`
 
 **Exit.** Every file named above has a spec in the mirrored `tests/` path.
 
@@ -2067,11 +2067,42 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     reordering it to serve the cascade trades a hot read for a rare write.
   - **Both were verified by breaking them**: `roles_key_uq` reduced to `(key)` and
     `memberships_role_idx` deleted, each named by exactly one failure line, then restored.
-- [ ] `P8.10` **scripts are untyped and untested** `P2` `~4h` — `// @ts-check` +
+- [x] `P8.10` **scripts are untyped and untested** `P2` `~4h` — `// @ts-check` +
   `tsc --checkJs` in `tooling/scripts/package.json`; `tests/check-architecture.spec.mjs` runs
-  each assertion against a fixture tree that violates it (`docs/setup/26:210` demands this);
-  `check-contrast.mjs` missing-name branch blames the wrong name and `--border` presence is
-  never checked.
+  each assertion against a fixture tree that violates it; `check-contrast.mjs` missing-name
+  branch blames the wrong name and `--border` presence is never checked. `done: 2026-09-06`
+  - **The citation was wrong and is dropped.** `docs/setup/26:210` is a step of the `verify`
+    workflow listing, and the page demanded nothing of the kind — it said nothing about the
+    scripts at all. It does now: a new §26.4c, written because the gap was real even though the
+    line that was supposed to say so did not.
+  - **`checkJs` found twenty-eight places** where a value that can be `undefined` was used as
+    though it could not — `process.argv[2]` with no argument, `.find()` over a column list,
+    `match[1]` off a regex, `packages[0]` with no packages. Each one is a `TypeError` that kills
+    the script instead of reporting, which is the failure these checks exist to catch.
+  - **`noImplicitAny` is off on purpose.** Turning it on wants JSDoc on about seventy parameters,
+    and JSDoc is a block comment — banned by `docs/opinions/comments.md` and by assertion 5
+    itself. `strictNullChecks` and `noUncheckedIndexedAccess` need no annotations and are the
+    half that finds bugs. Recorded in §26.4c rather than left as a silent setting.
+  - **The parsers moved to `tooling/scripts/source-text.mjs`** so they can be specced without a
+    repository to point at. Byte-identical bodies, checked; the eight are `specifiers`,
+    `withoutComments`, `topLevelAwait`, `lineOf`, `closingBracket`, `columnsOf`, `indexesOf` and
+    `outsideFences`.
+  - **Writing those specs found one more defect.** `topLevelAwait` matched the word inside a
+    quoted string, so `const s = "await me"` in a built barrel failed §6 for nothing. Strings and
+    templates are skipped now. An `await` inside a `${}` is still missed — it always was, since
+    `${` opens a brace and depth never reached zero — and the spec says so rather than implying a
+    coverage that is not there.
+  - **The fixture harness needs no `ROOT` parameter.** The script derives `ROOT` from its own
+    location, so a fixture is a temp tree with a copy of it under `tooling/scripts/`. Seventeen of
+    eighteen assertions are covered in both directions. §8 is not: it greps a built
+    `apps/web/.output`, and building one is not a unit test. Sixty-five tests in three files, and
+    the harness itself was mutation-checked — the comment ceiling raised to five, the spec went
+    red, the ceiling restored.
+  - **The contrast half was two defects, not one.** `--border` appears in no `PAIRS` entry, so its
+    presence had never been checked by anything; the twelve are now asserted by name, per block.
+    And the branch that guessed which of a missing pair to blame guessed wrong whenever both were
+    absent — it is a `continue` now, because both cases are already reported above it. Verified by
+    deleting `--border` from `forest.css` and watching one clean failure.
 
 ### CI and hooks
 

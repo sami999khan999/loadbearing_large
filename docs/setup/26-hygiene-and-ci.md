@@ -768,6 +768,48 @@ is also a rule and not only a check.
 
 ---
 
+## Step 26.4c — The scripts are checked like source, because they are
+
+Everything above is enforced by five files in `tooling/scripts/`, and for most of this repository's
+life they were the only code in it that nothing checked and nothing tested. An assertion that
+silently stops matching is worse than an absent one: the build goes green and reports a rule as
+held.
+
+Two things close that.
+
+**`// @ts-check` on every script, run by `pnpm typecheck`.** `tooling/scripts` is a workspace
+package, so `tsconfig.json` there — `allowJs`, `checkJs`, `noEmit` over `@loadbearing/tsconfig` —
+is picked up by the root `pnpm -r run typecheck` with nothing else to wire. It found twenty-eight
+places where a value that can be `undefined` was used as though it could not: `process.argv[2]`
+with no argument, `.find()` on a column list, `match[1]` from a regex, `packages[0]` when there are
+no packages. None had bitten yet. Each one crashes the script with a `TypeError` rather than
+reporting anything, which is the failure mode these checks exist to prevent.
+
+**`noImplicitAny` is off, and that is a decision.** Turning it on wants a JSDoc type annotation on
+about seventy parameters, and JSDoc is a block comment — banned everywhere in this repository by
+`docs/opinions/comments.md`, and by assertion 5 in every directory it walks. The half worth having
+is `strictNullChecks` and `noUncheckedIndexedAccess`, which need no annotations to work; the half
+given up is parameter types on functions whose callers are all in the same file. Writing the
+scripts in TypeScript instead would buy the other half, at the cost of a build step between
+`package.json` and every `node tooling/scripts/*.mjs` line — the wrong trade for five files.
+
+**Specs, in `tooling/scripts/tests/`, run by `pnpm test`.** They come in two shapes.
+
+`source-text.spec.mjs` covers the parsers the assertions are built out of, which is why they now
+live in `source-text.mjs` rather than inside `check-architecture.mjs`. Every case in it is one an
+earlier version got wrong or could: a `//` inside a string, an indented top-level `await`, a column
+name that merely ends in `organization_id`, an index callback whose brackets nest. Writing them
+found one more — `topLevelAwait` counted the word inside a quoted string, so `const s = "await me"`
+in a bundled barrel would have failed the build for nothing.
+
+`check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through eighteen
+assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
+with a copy of the script under `tooling/scripts/` and a few files around it. Seventeen of the
+eighteen are covered both ways — the tree that violates it fails, and the tree that does not
+passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
+in a fixture is not a unit test.
+
 ## Step 26.5 — Optional but worth it
 
 **One of these already ships**, in the workflow above: `pnpm audit --audit-level high` as a
@@ -828,6 +870,9 @@ be fatal.
 - Adding `import { sql } from "drizzle-orm"` to a file in `packages/application/src/` fails `check:architecture`.
 - Adding `process.env.FOO` to a package file fails `check:architecture`.
 - `pnpm check:contrast` passes, and adding a theme that omits one of the twelve names fails it.
+- `pnpm test` covers `tooling/scripts` too, and changing an assertion's behaviour without
+  changing its spec fails — verified by raising the comment ceiling to five and watching
+  `check-architecture.spec.mjs` go red.
 - The full CI job passes end to end on a fresh clone — which means checking that `verify` got past
   `pnpm/action-setup` at all, not only that no check reported a failure.
 

@@ -6,6 +6,8 @@
 //
 // Run: node tooling/scripts/boot-smoke.mjs worker
 
+// @ts-check
+
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -26,7 +28,7 @@ const APPS = {
 
 const TIMEOUT_MS = 60_000;
 
-const name = process.argv[2];
+const name = process.argv[2] ?? "";
 const app = Object.hasOwn(APPS, name) ? APPS[name] : undefined;
 
 if (!app) {

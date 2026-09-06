@@ -8,6 +8,8 @@
 // cannot reach is silently clipped by the browser, so the shipped colour is not the one
 // in the file and the contrast computed from the file is not the contrast on screen.
 
+// @ts-check
+
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,23 +24,41 @@ const COLOR_DIR = join(ROOT, "packages", "ui", "src", "theme", "color");
 const AA_TEXT = 4.5;
 const AA_NON_TEXT = 3;
 
+// The twelve `packages/ui` declares. Checked for *presence* separately from contrast,
+// because `--border` appears in no pairing — a subtle separator at 3:1 is a rule no
+// considered neutral meets — so nothing else here would notice a theme that omitted it.
+const REQUIRED = [
+  "bg",
+  "surface",
+  "muted",
+  "border",
+  "fg",
+  "fg-muted",
+  "primary",
+  "primary-fg",
+  "success",
+  "warning",
+  "danger",
+  "ring",
+];
+
 // Every pairing the class layer actually produces. --success and --warning are absent as
 // foregrounds on purpose: neither clears AA as text on --bg at these lightnesses, which
 // is why status-badge.css tints them into --surface instead of filling with them.
 const PAIRS = [
-  ["fg", "bg", AA_TEXT, "body text on the page"],
-  ["fg", "surface", AA_TEXT, "body text on a card"],
-  ["fg", "muted", AA_TEXT, "body text on a subtle fill"],
-  ["fg-muted", "bg", AA_TEXT, "secondary text on the page"],
-  ["fg-muted", "surface", AA_TEXT, "secondary text on a card"],
-  ["fg-muted", "muted", AA_TEXT, "placeholder text inside an input"],
-  ["primary-fg", "primary", AA_TEXT, "label on a primary button"],
-  ["primary-fg", "danger", AA_TEXT, "label on a danger button"],
-  ["primary", "bg", AA_TEXT, "link text on the page"],
-  ["primary", "surface", AA_TEXT, "link text on a card"],
-  ["danger", "bg", AA_TEXT, "field error text"],
-  ["danger", "surface", AA_TEXT, "field error text on a card"],
-  ["ring", "bg", AA_NON_TEXT, "focus ring against the page"],
+  { front: "fg", back: "bg", floor: AA_TEXT, label: "body text on the page" },
+  { front: "fg", back: "surface", floor: AA_TEXT, label: "body text on a card" },
+  { front: "fg", back: "muted", floor: AA_TEXT, label: "body text on a subtle fill" },
+  { front: "fg-muted", back: "bg", floor: AA_TEXT, label: "secondary text on the page" },
+  { front: "fg-muted", back: "surface", floor: AA_TEXT, label: "secondary text on a card" },
+  { front: "fg-muted", back: "muted", floor: AA_TEXT, label: "placeholder text inside an input" },
+  { front: "primary-fg", back: "primary", floor: AA_TEXT, label: "label on a primary button" },
+  { front: "primary-fg", back: "danger", floor: AA_TEXT, label: "label on a danger button" },
+  { front: "primary", back: "bg", floor: AA_TEXT, label: "link text on the page" },
+  { front: "primary", back: "surface", floor: AA_TEXT, label: "link text on a card" },
+  { front: "danger", back: "bg", floor: AA_TEXT, label: "field error text" },
+  { front: "danger", back: "surface", floor: AA_TEXT, label: "field error text on a card" },
+  { front: "ring", back: "bg", floor: AA_NON_TEXT, label: "focus ring against the page" },
 ];
 
 // oklch(L C H) -> linear sRGB. Unclamped, so the caller can see a channel leave [0,1]
@@ -68,12 +88,12 @@ function outOfGamut(color) {
 }
 
 function luminance(color) {
-  const [r, g, b] = linearRgb(color).map((v) => Math.min(1, Math.max(0, v)));
+  const [r = 0, g = 0, b = 0] = linearRgb(color).map((v) => Math.min(1, Math.max(0, v)));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 function ratio(a, b) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  const [hi = 0, lo = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -100,13 +120,13 @@ function blocks(source) {
 
   while (match !== null) {
     const declarations = {};
-    for (const line of match[2].split(";")) {
+    for (const line of (match[2] ?? "").split(";")) {
       const at = line.indexOf(":");
       if (at === -1) continue;
       const name = line.slice(0, at).trim();
       if (name.startsWith("--")) declarations[name.slice(2)] = line.slice(at + 1).trim();
     }
-    found.push([match[1].trim().replace(/\s+/g, " "), declarations]);
+    found.push({ selector: (match[1] ?? "").trim().replace(/\s+/g, " "), declarations });
     match = pattern.exec(stripped);
   }
 
@@ -116,13 +136,21 @@ function blocks(source) {
 const failures = [];
 let checkedPairs = 0;
 let checkedColors = 0;
+let checkedBlocks = 0;
 
 for (const file of readdirSync(COLOR_DIR).filter((f) => f.endsWith(".css"))) {
   const source = readFileSync(join(COLOR_DIR, file), "utf8");
 
-  for (const [selector, declarations] of blocks(source)) {
+  for (const { selector, declarations } of blocks(source)) {
     const where = `${file} ${selector}`;
     const parsed = {};
+    checkedBlocks += 1;
+
+    // Once per block and by name, rather than once per pairing and by inference. A theme
+    // that omits a name inherits whatever the `:root` seed left, which is another theme's.
+    for (const name of REQUIRED) {
+      if (!(name in declarations)) failures.push(`${where} -- missing --${name}`);
+    }
 
     for (const [name, raw] of Object.entries(declarations)) {
       const color = parseColor(raw);
@@ -140,18 +168,14 @@ for (const file of readdirSync(COLOR_DIR).filter((f) => f.endsWith(".css"))) {
       }
     }
 
-    for (const [front, back, floor, label] of PAIRS) {
+    for (const { front, back, floor, label } of PAIRS) {
       const a = parsed[front];
       const b = parsed[back];
 
-      // A missing name is its own defect and a louder one: it falls through to whatever
-      // the :root seed left behind, which is a colour from a different theme.
-      if (!a || !b) {
-        if (!declarations[front] || !declarations[back]) {
-          failures.push(`${where} -- missing --${declarations[front] ? back : front}`);
-        }
-        continue;
-      }
+      // Already reported — either as a missing name above or as an unparseable value.
+      // Guessing which of the two to blame is what this used to do, and it guessed wrong
+      // whenever both were absent.
+      if (!a || !b) continue;
 
       checkedPairs += 1;
       const value = ratio(a, b);
@@ -171,5 +195,6 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `OK ${checkedPairs} pairings meet WCAG AA and ${checkedColors} colours are inside sRGB, across every theme and mode.`,
+  `OK ${checkedPairs} pairings meet WCAG AA and ${checkedColors} colours are inside sRGB, ` +
+    `all ${REQUIRED.length} names present in ${checkedBlocks} blocks, across every theme and mode.`,
 );

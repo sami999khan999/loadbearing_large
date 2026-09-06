@@ -6,6 +6,8 @@
 //
 // Run: node tooling/scripts/compose-wait.mjs
 
+// @ts-check
+
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
