@@ -1660,8 +1660,14 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 - [ ] `P6.6` **query-count assertions** — `SystemRoleSeed.run` (after `P7.1`: one `IN` query),
   `PgInvitationRepository.list`, `PgMemberRepository.list`, using the `DatabaseConfig.logger`
   seam `pg-capability.repository.spec.ts:31-43` already uses.
-- [ ] `P6.7` **`apps/worker` tests typechecked** — `tsconfig.json` includes `src/**` only;
-  `--passWithNoTests` on the test script. Add `tsconfig.test.json`, drop the flag.
+- [ ] `P6.7` **no package typechecks its own tests** — `tsconfig.json` includes `src/**` only,
+  in `apps/worker` and in every other package. Add `tsconfig.test.json`, and drop
+  `--passWithNoTests` from the worker's test script.
+  - **This is not theoretical, and `P7.5` walked into it.** `StubMembershipReader` in
+    `auth.factory.spec.ts` had been missing `isActive` since that method was added to the port:
+    an abstract member with no implementation, compiling because nothing typechecks the file, and
+    passing because the spec never calls it. A third method made it two. Both are fixed there; the
+    hole that let it happen is this entry.
 - [ ] `P6.8` **`tooling/scripts` fixtures** — see `P8.10`.
 
 **Exit.** Every file named above has a spec in the mirrored `tests/` path.
@@ -1710,9 +1716,27 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **No spec.** Exercising the cap needs 101 tenants for one user, and each one seeds roles and
     ~17 permission rows; that is a slow, brittle fixture guarding a `.limit()`. Recorded rather
     than skipped quietly.
-- [ ] `P7.5` `/organization/create` is bounded only by a 5/min rate limit; each call seeds
+- [x] `P7.5` `/organization/create` is bounded only by a 5/min rate limit; each call seeds
   roles and ~17 permission rows — per-user cap on owned organizations (`AUTH_MAX_OWNED_ORGANIZATIONS`,
-  default 10). **Docs:** `auth/docs/reference/organization-plugin.md`.
+  default 10). **Docs:** `auth/docs/reference/organization-plugin.md`. `done: 2026-09-06`
+  - **A rate limit bounds the rate, not the total.** Five a minute is three hundred an hour, and
+    nothing in that is abusive by the rate limit's own measure. The two limits answer different
+    questions and the endpoint needed both.
+  - **Owning is holding the `owner` role, not having founded it** — the definition that survives a
+    transfer. `ownedCount` is a `count(*)` over memberships joined to `roles`, deliberately not
+    `organizationsFor().length`: that read is capped at 100 by `P7.4`, so counting it would make the
+    check pass forever once someone reached the ceiling.
+  - The field runs `env.ts` → `ContainerConfig` → `AuthConfig` → `OrganizationPlugin.create`, which
+    is four files for one number, and correct: `auth.config.ts` says none of its values are literals.
+  - **It found something else on the way.** No package typechecks its own `tests/` — every
+    `tsconfig.json` includes `src/**` and not `tests/**` — so `StubMembershipReader` in
+    `auth.factory.spec.ts` had been missing `isActive` since that method was added, and compiled
+    anyway. `P6.7` names this for `apps/worker`; it is every package. Both stale doubles are fixed
+    here, and `P6.7` now says so.
+  - Two specs on `ownedCount`, against a fixture where one user owns two tenants and another owns
+    one while belonging to two — which is the pair a membership count would get wrong. No spec on
+    the endpoint itself: reaching it needs a live Better Auth instance and a request, and the
+    `auth` package's own specs read `auth.options` back rather than serving anything.
 - [x] `P7.6` `ClickHouseConnection.encode` builds `'${String(v)}'` with no escaping — escape
   `\` and `'`. `done: 2026-09-06`
   - **Only the array branch needed it, and the reason is worth keeping**: a scalar rides its own

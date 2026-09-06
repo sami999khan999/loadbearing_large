@@ -37,6 +37,9 @@ const Schema = z
     // How a new user acquires the membership without which no session is issued.
     // `personal` is the only mode that works against an empty database.
     AUTH_ENROLMENT_MODE: z.enum(["personal", "bootstrap", "invite"]).default("personal"),
+    // A ceiling on the total, which the 5/min rate limit on `/organization/create` does
+    // not give: each tenant seeds four roles and every permission the registry defines.
+    AUTH_MAX_OWNED_ORGANIZATIONS: z.coerce.number().int().positive().default(10),
     // The same slug `pnpm db:seed` creates. Unset means no enrolment at all, which is
     // the production posture and why there is no default.
     BOOTSTRAP_ORGANIZATION_SLUG: z.string().min(1).optional(),
@@ -164,6 +167,7 @@ export class Env {
         appName: e.AUTH_APP_NAME,
         enrolmentMode: e.AUTH_ENROLMENT_MODE,
         bootstrapOrganizationSlug: e.BOOTSTRAP_ORGANIZATION_SLUG,
+        maxOwnedOrganizations: e.AUTH_MAX_OWNED_ORGANIZATIONS,
         // Both halves or neither: a partly-filled pair builds a provider pointed at a
         // client Google rejects.
         google:

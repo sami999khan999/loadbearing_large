@@ -11,6 +11,10 @@ export interface OrganizationSummary {
   readonly roleName: string;
 }
 
+// The role `SystemRoleSeed` gives a founder. Owning a tenant is holding this role in it,
+// which is the only definition of "owner" that survives a role being renamed in the UI.
+const OWNER_ROLE_KEY = "owner";
+
 // Satisfies `MembershipReader` structurally, because `auth` already depends on this
 // package. See docs/reference/enrollers.md.
 export class PgMembershipReader extends BaseRepository {
@@ -86,5 +90,17 @@ export class PgMembershipReader extends BaseRepository {
       .limit(PgMembershipReader.MAX_ORGANIZATIONS);
 
     return rows;
+  }
+
+  // `count(*)` rather than counting `organizationsFor()`, which is itself capped — a
+  // limit on the read used to check a limit would make the check pass at the ceiling.
+  public async ownedCount(userId: UserId): Promise<number> {
+    const [row] = await this.db
+      .select({ owned: sql<number>`count(*)::int` })
+      .from(memberships)
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(and(eq(memberships.userId, userId), eq(roles.key, OWNER_ROLE_KEY)));
+
+    return row?.owned ?? 0;
   }
 }

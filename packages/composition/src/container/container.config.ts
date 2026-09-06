@@ -40,6 +40,9 @@ export interface ContainerConfig {
     // Read only under `enrolmentMode: "bootstrap"`. The organization every sign-up
     // joins — first one in as `owner`, everyone after as `member`.
     readonly bootstrapOrganizationSlug?: string;
+    // The ceiling on tenants one account may found. The rate limit on the endpoint
+    // bounds the rate; this bounds the total.
+    readonly maxOwnedOrganizations: number;
   };
   // Not optional: with `requireEmailVerification` on, a container that cannot send is
   // one whose sign-ups never complete. SMTP, so swapping vendors is this URL.

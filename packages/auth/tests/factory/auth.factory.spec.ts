@@ -33,6 +33,16 @@ class StubMembershipReader extends MembershipReader {
   public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return unreachable();
   }
+
+  // Both were missing until the port grew a third method and nothing complained:
+  // `tsconfig.json` includes `src/**` and not `tests/**`, so a stale double compiles.
+  public override isActive(): Promise<boolean> {
+    return unreachable();
+  }
+
+  public override ownedCount(): Promise<number> {
+    return unreachable();
+  }
 }
 
 class StubMembershipEnroller extends MembershipEnroller {
@@ -88,6 +98,7 @@ const BASE: AuthConfig = {
   requireEmailVerification: true,
   appName: "Loadbearing",
   enrolmentMode: "personal",
+  maxOwnedOrganizations: 10,
 };
 
 const optionsFor = (config: AuthConfig = BASE, mailer: AuthMailer = new StubAuthMailer()) =>

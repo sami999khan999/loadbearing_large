@@ -23,4 +23,7 @@ export interface AuthConfig {
   // Required when `enrolmentMode` is `bootstrap` and ignored otherwise. The same slug
   // `pnpm db:seed` creates, which is what stops the two drifting.
   readonly bootstrapOrganizationSlug?: string;
+  // How many tenants one person may found. A rate limit bounds the rate and not the
+  // total — see docs/reference/organization-plugin.md.
+  readonly maxOwnedOrganizations: number;
 }

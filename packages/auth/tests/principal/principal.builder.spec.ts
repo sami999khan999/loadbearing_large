@@ -46,6 +46,10 @@ class StubMemberships extends MembershipReader {
   public override isActive(): Promise<boolean> {
     return Promise.resolve(this.active);
   }
+
+  public override ownedCount(): Promise<number> {
+    return Promise.resolve(0);
+  }
 }
 
 async function build(options: {
