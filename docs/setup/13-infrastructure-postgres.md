@@ -748,6 +748,9 @@ export class SystemRoleSeed extends BaseRepository {
     if (grants.length === 0) return;
 
     await this.db.insert(rolePermissions).values(grants).onConflictDoNothing();
+
+    // The half an insert cannot do — see "the seed reconciles" below.
+    await this.reconcile(organizationId, [...idByKey.values()], grants);
   }
 }
 ```
@@ -756,10 +759,20 @@ export class SystemRoleSeed extends BaseRepository {
 
 **The read is not optional, and skipping it is the subtle bug.** `onConflictDoNothing` does not tell you which rows it skipped, so the ids generated above are correct only for the rows that actually landed. Reading `(organization_id, key)` back afterwards is also what makes a concurrent seed safe: two requests creating the same tenant race on `roles_key_uq`, one loses the insert, and both then read the same winning ids.
 
-**Assert the statement count in an integration test**, for the same reason [Step 13.7](#step-137--repositories) argues it for `resolveFor`: "three statements" is a claim that decays the first time someone adds a lookup inside a loop.
+**The seed reconciles, it does not only add.** `onConflictDoNothing` makes the insert idempotent and
+leaves the other direction open: a permission removed from the catalog, or dropped from a role's
+list, stays granted forever. A fourth statement deletes the grants on the seeded roles that are no
+longer in the intended set — one row-value `not in`, so it covers every role at once including the
+one whose intended set is empty, which a per-role delete gets wrong.
+
+**That delete is safe only because it is scoped to the seeded roles.** `RoleRules.assertEditable`
+refuses to edit a system role, so nothing but this seed writes their grants; the same statement
+pointed at a custom role would take back what an administrator granted through the UI.
+
+**Assert the statement count in an integration test**, for the same reason [Step 13.7](#step-137--repositories) argues it for `resolveFor`: "four statements" is a claim that decays the first time someone adds a lookup inside a loop. The number is not the point — that it does not grow with the number of roles is.
 
 ```ts
-expect(counter.count).toBe(3);
+expect(counter.count).toBe(4);
 ```
 
 **`permissions: "all"` for owner resolves through `PermissionRegistry.all()` at seed time.** That means every new permission a feature adds is automatically granted to owners when the seed re-runs, which is what you want — and it is why the seed must be idempotent and re-run on every deploy rather than once at install.
@@ -794,6 +807,17 @@ pnpm db:seed
 The seed grants permissions to **system** roles. Granting a new permission to a **custom** role that a customer created is a data migration, and it belongs in `migrations/` as a hand-written SQL file alongside the generated DDL. Drizzle-kit will not write it for you.
 
 This is also the staged-rollout mechanism: until the migration that grants a module's permissions runs, the feature is invisible in the navigation and uncallable through the API, for everyone. That is not a limitation — it is the release switch.
+
+**And the seed's own writes are one transaction with the organization it hangs them off.** The two
+halves are not independently useful: an organization with no roles is a tenant nobody can be a
+member of, and a failure between the insert and the seed leaves exactly that.
+
+**The seeded organization is not joined under `personal` or `invite`, and the script says so.** Only
+`AUTH_ENROLMENT_MODE=bootstrap` reads `BOOTSTRAP_ORGANIZATION_SLUG` at runtime; seeding it regardless
+is deliberate — a fresh database with no organization at all tells you nothing in `db:studio`, and
+the roles are the template every other tenant is seeded from. But someone who seeds, signs up under
+`personal` and lands in an organization of their own needs to be told that rather than left to work
+it out, so `pnpm db:seed` prints it.
 
 ---
 

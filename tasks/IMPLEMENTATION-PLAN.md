@@ -2139,12 +2139,30 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `0003` and `0004` themselves, which have already run everywhere they are going to run — so the
     remaining work is deciding whether a replayed history is a case this repo supports at all,
     rather than writing SQL.
-- [ ] `P8.17` **seed** `P2` `~1h` — organization insert and `SystemRoleSeed.run()` in one
+- [x] `P8.17` **seed** `P2` `~1h` — organization insert and `SystemRoleSeed.run()` in one
   transaction; roles insert gains `onConflictDoNothing`; permissions removed from the catalog
   are reconciled off `owner` (today only ever added); `seed.ts` falls back to `"loadbearing"`
   while `env.ts` has no default, so under `personal` mode the seeded organization is never
   joined — make the seed print that under `personal` it creates nothing but the system roles
-  template, or make both read the same default.
+  template, or make both read the same default. `done: 2026-09-06`
+  - **`onConflictDoNothing` arrived with `P7.1`**, so this entry was three clauses by the time it
+    was picked up.
+  - **The reconciliation is the substantive one, and it is not only `owner`.** The seed only ever
+    added, so a permission dropped from any role's list stayed granted forever. A fourth statement
+    deletes the grants on the seeded roles that are no longer intended — one row-value `not in`, so
+    it covers every role at once, **including `guest`, whose intended set is empty and whose stale
+    rows a per-role delete would miss entirely.**
+  - **It is safe only because it is scoped to the seeded roles.** `RoleRules.assertEditable` refuses
+    to edit a system role, so nothing but the seed writes their grants; the same statement pointed at
+    a custom role would take back what an administrator granted through the UI. Said in
+    `docs/setup/13`, because the next person to reuse this shape is the one it would bite.
+  - **Three statements became four**, and the count-assertion specs move with it. The number was
+    never the claim — that it does not grow with the number of roles is.
+  - **Printed, not unified.** Giving `env.ts` a default would contradict its own reason for having
+    none ("unset means no enrolment at all, which is the production posture"), so `pnpm db:seed`
+    says what the seeded organization is for when the mode is not `bootstrap`.
+  - Four specs on the seed now, two of them new and both watched failing — the stale grant left on
+    `member`, and `guest` keeping a row it should never hold.
 
 ### Infra
 

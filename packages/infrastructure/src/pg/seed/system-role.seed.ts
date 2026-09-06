@@ -5,6 +5,7 @@ import {
   type OrganizationId,
   type PermissionKey,
   PermissionRegistry,
+  sql,
   Uuid,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -82,5 +83,32 @@ export class SystemRoleSeed extends BaseRepository {
     if (grants.length === 0) return;
 
     await this.db.insert(rolePermissions).values(grants).onConflictDoNothing();
+
+    // The half an insert cannot do. A permission removed from the catalog, or dropped
+    // from a role's list, stays granted forever if the seed only ever adds.
+    await this.reconcile(organizationId, [...idByKey.values()], grants);
+  }
+
+  // Scoped to the seeded roles, which is what makes a blanket delete safe: `RoleRules`
+  // refuses to edit a system role, so nothing but this seed writes their grants.
+  private async reconcile(
+    organizationId: OrganizationId,
+    roleIds: readonly string[],
+    grants: readonly { readonly roleId: string; readonly permission: string }[],
+  ): Promise<void> {
+    const pairs = sql.join(
+      grants.map((grant) => sql`(${grant.roleId}, ${grant.permission})`),
+      sql`, `,
+    );
+
+    await this.db.delete(rolePermissions).where(
+      and(
+        eq(rolePermissions.organizationId, organizationId),
+        inArray(rolePermissions.roleId, [...roleIds]),
+        // A row-value `not in`, so one statement covers every role — including `guest`,
+        // whose whole set is "none" and whose stale rows are therefore all of them.
+        sql`(${rolePermissions.roleId}, ${rolePermissions.permission}) not in (${pairs})`,
+      ),
+    );
   }
 }

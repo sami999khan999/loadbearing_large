@@ -49,24 +49,24 @@ const roleRows = () =>
     .where(eq(roles.organizationId, organizationId));
 
 describe("SystemRoleSeed.run", () => {
-  it("seeds the four roles in three statements, not one per role", async () => {
+  it("seeds the four roles in four statements, not one per role", async () => {
     await seed.run(organizationId);
 
-    // The regression: a SELECT then an INSERT per role, then a grants INSERT per role —
-    // twelve round trips on a path every organization creation runs.
-    expect(counter.count).toBe(3);
+    // The regression: a SELECT and an INSERT per role plus a grants INSERT per role, so
+    // eleven round trips. Four now, and not five when a fifth role is added.
+    expect(counter.count).toBe(4);
 
     const rows = await roleRows();
     expect(rows.map((row) => row.key).sort()).toEqual(["admin", "guest", "member", "owner"]);
   });
 
-  it("is idempotent, and costs the same three statements the second time", async () => {
+  it("is idempotent, and costs the same four statements the second time", async () => {
     const before = await roleRows();
     counter.count = 0;
 
     await seed.run(organizationId);
 
-    expect(counter.count).toBe(3);
+    expect(counter.count).toBe(4);
 
     // Same ids: a re-seed must not replace the rows memberships point at.
     const after = await roleRows();
@@ -107,6 +107,68 @@ describe("SystemRoleSeed.run", () => {
         and(
           eq(rolePermissions.organizationId, organizationId),
           eq(rolePermissions.roleId, guest?.id ?? ""),
+        ),
+      );
+
+    expect(granted).toHaveLength(0);
+  });
+
+  // The half an insert cannot do. Before this the seed only ever added, so a permission
+  // dropped from a role's list — or removed from the catalog — stayed granted forever.
+  it("takes back a grant that is no longer in the role's list", async () => {
+    const [member] = await database.client
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.key, "member")));
+
+    const stale = PermissionRegistry.instance
+      .all()
+      .find((key) => key !== "member.read" && !key.startsWith("core."));
+    if (!stale || !member) throw new Error("the permission catalog is too small for this spec");
+
+    await database.client
+      .insert(rolePermissions)
+      .values({ organizationId, roleId: member.id, permission: stale });
+
+    await seed.run(organizationId);
+
+    const granted = await database.client
+      .select({ permission: rolePermissions.permission })
+      .from(rolePermissions)
+      .where(
+        and(
+          eq(rolePermissions.organizationId, organizationId),
+          eq(rolePermissions.roleId, member.id),
+        ),
+      );
+
+    expect(granted.map((row) => row.permission)).toEqual(["member.read"]);
+  });
+
+  // `guest` is the case a per-role delete gets wrong: its intended set is empty, so it
+  // contributes no pair to the `not in` and every stale row it holds has to go.
+  it("empties a role whose list is empty", async () => {
+    const [guest] = await database.client
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.key, "guest")));
+
+    const any = PermissionRegistry.instance.all()[0];
+    if (!any || !guest) throw new Error("the permission catalog is empty");
+
+    await database.client
+      .insert(rolePermissions)
+      .values({ organizationId, roleId: guest.id, permission: any });
+
+    await seed.run(organizationId);
+
+    const granted = await database.client
+      .select({ permission: rolePermissions.permission })
+      .from(rolePermissions)
+      .where(
+        and(
+          eq(rolePermissions.organizationId, organizationId),
+          eq(rolePermissions.roleId, guest.id),
         ),
       );
 
