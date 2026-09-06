@@ -452,7 +452,7 @@ Two items grew a second half the audit had not named, and both are in the same c
 **Goal.** The tree matches `docs/ai/rules` and `docs/opinions`, or the opinion is updated to
 match a decision the tree already made.
 
-- [ ] `P3.1` **loose files under `packages/auth/src`** `~30m` — `auth.config.ts`,
+- [x] `P3.1` done: 2026-09-05 · **loose files under `packages/auth/src`** `~30m` — `auth.config.ts`,
   `auth.factory.ts` → `src/factory/`. Update `src/index.ts`, `auth/docs/index.md` tree.
 - [ ] `P3.2` **barrels that are scripts** `~1h` — `auth/src/tables/index.ts` (137 lines,
   dotenv, `console.log`) and `infrastructure/src/smoke/index.ts` (130 lines) → move above
@@ -467,7 +467,7 @@ match a decision the tree already made.
 - [x] `P3.4` done: 2026-09-05 · **static mutable state** `~15m` — freeze `SystemRoleSeed.ROLES`
   (`system-role.seed.ts:22`) and `QueueName.ALL` (`queue-name.ts:14`) at module load, as
   `permission-registry.ts:13` does.
-- [ ] `P3.5` **two classes per file** `~30m` — split `ApiKeyRepository` out of
+- [x] `P3.5` done: 2026-09-05 · **two classes per file** `~30m` — split `ApiKeyRepository` out of
   `auth/src/apikey/api-key.resolver.ts` into `api-key.repository.ts`; rename
   `feature/src/account/two-factor.disable.tsx` → `two-factor.panel.tsx` (exports
   `TwoFactorPanel`). Update barrels and both `docs/index.md` trees.
@@ -514,13 +514,13 @@ match a decision the tree already made.
     `notification-digest.composer.ts` (subject-folder prefix rule).
   - **Docs:** `infrastructure/docs/index.md`, `composition/docs/index.md`, `docs/setup/15`,
     `docs/setup/28`.
-- [ ] `P3.16` **layering graph vs `composition → content`** `~30m` — `layering.md` puts
+- [x] `P3.16` done: 2026-09-05 · **layering graph vs `composition → content`** `~30m` — `layering.md` puts
   `content` to the right of `composition`; `composition` imports it for the two mailers. Move
   `content` beside `contracts` in `docs/ai/rules/layering.md` and
   `docs/opinions/dependencies.md`; add an `eslint` boundary entry that matches.
 - [x] `P3.17` done: 2026-09-05 · **abbreviated params in the authorization kernel** `~15m` —
   `permissions/src/capability/capability-set.ts:26,30,104,108,128,140` (`p s a b`).
-- [ ] `P3.18` **`permission` module grammar** `~30m` — `member.*` and `apikey.*` declare
+- [x] `P3.18` done: 2026-09-05 · **`permission` module grammar** `~30m` — `member.*` and `apikey.*` declare
   `module: "rbac"` (`rbac.permissions.ts:26-38`) against `<module>.<subject>.<action>`. Either
   register `member` and `apikey` modules in `ModuleRegistry` or rename the keys
   `rbac.member.invite` etc. Recommend registering the modules (fewer renames, keys are already
