@@ -726,9 +726,113 @@ export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js";
 ```
 
+The barrel grows with the slices below it — `MembershipEnroller`, `InvitationClaimer`,
+`OrganizationFounder` and `InvitationClaimingEnroller` from `session/`, and the plugin from
+`plugin/` — each named explicitly, because `export *` would make the public surface an accident.
+
 **`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `smoke.ts` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
+
+---
+
+## Step 16.11 — Enrolment: how a new user acquires a membership
+
+**No session is ever issued to a user with no membership.** `BetterAuthSessionResolver` refuses one,
+which is fail-closed and correct — and it means sign-up is only half a flow until something inserts
+into `memberships`. `MembershipEnroller` is that something, and it is the write half of the pair
+`MembershipReader` reads.
+
+**`packages/auth/src/session/membership.enroller.ts`**
+
+```ts
+export abstract class MembershipEnroller {
+  // Null is not an error: registration switched off returns it on every sign-up, and
+  // the session is then refused. Fail-closed is the whole point.
+  public abstract enrol(userId: UserId): Promise<OrganizationId | null>;
+}
+```
+
+**Three implementations, and `AUTH_ENROLMENT_MODE` picks one** — the container is where the choice is
+made, exactly like every other adapter:
+
+| Mode | Enroller | What a new user gets |
+|---|---|---|
+| `personal` | `PgPersonalOrganizationEnroller` | An organization of their own, owned by them, with the same four system roles `pnpm db:seed` creates |
+| `bootstrap` | `PgBootstrapMembershipEnroller` | Membership of the one organization `BOOTSTRAP_ORGANIZATION_SLUG` names — first in as `owner`, everyone after as `member` |
+| `invite` | `NullMembershipEnroller` | Nothing. Their first sign-in is refused |
+
+**`personal` is the default and the only mode that works against an empty database.** `bootstrap` is
+right for a demo or a single-tenant install and wrong for anything reachable from the internet — the
+sign-up form then hands out membership of your tenant. `invite` is the production posture: an
+invitation is the only door.
+
+**The mode is not the whole answer, because an invited address never gets what the mode would give
+it.** `InvitationClaimingEnroller` wraps whichever enroller the mode picked:
+
+```ts
+public async enrol(userId: UserId): Promise<OrganizationId | null> {
+  return (await this.claimer.claimPending(userId)) ?? this.inner.enrol(userId);
+}
+```
+
+**Decorating rather than branching is what keeps this one rule instead of three.** Written as a
+condition inside each enroller, "an invitation wins" would be stated three times and could disagree
+with itself; here the mode's enroller never learns invitations exist. Adding a fourth mode inherits
+the behaviour for free.
+
+> [!IMPORTANT]
+> **Claims match on the verified address**, which is why invitations need
+> `AUTH_REQUIRE_EMAIL_VERIFICATION` on. Matching an unverified one lets anyone type a colleague's
+> address at sign-up and walk into their organization.
+
+**Enrolment runs from `session.create.before`, not `user.create.after`.** Better Auth queues
+`create.after` hooks until the whole sign-up endpoint has finished — which is *after* the session
+hook has already refused for want of a membership. The symptom is a sign-up that appears to succeed
+and a sign-in that never does, with the membership row present in the database the whole time.
+
+**`bootstrap` takes a `pg_advisory_xact_lock`** so two simultaneous first sign-ups cannot both read
+"no owner yet" and both become one.
+
+---
+
+## Step 16.12 — The organization plugin: switch, create, accept
+
+Three actions do not fit the oRPC router, and the reason is worth stating rather than working around.
+
+**They are identity-gated, not permission-gated.** Switching to an organization you are a member of
+is not a permission any role grants — `memberships.isMember(user, org)` *is* the whole authorization,
+and there is no key that could express it. Creating an organization is the same: a person with no
+memberships at all may do it.
+
+**And only an endpoint holding Better Auth's own `ctx` can call `setSessionCookie`.** Without that,
+`session.cookieCache` keeps answering for the old tenant for up to sixty seconds after a switch — so
+the very next RPC reads the wrong organization's rows, and it looks like a cache bug rather than a
+missing call.
+
+**`packages/auth/src/plugin/organization.plugin.ts`** declares three endpoints under Better Auth's
+own base path:
+
+| Endpoint | Authorization |
+|---|---|
+| `POST /organization/switch` | `memberships.isMember(user, organizationId)` — one indexed lookup, and the whole check |
+| `POST /organization/create` | A session. The caller becomes `owner`, through the same `OrganizationFounder` the personal enroller uses |
+| `POST /invitation/accept` | The token, claimed against the verified address |
+
+All three end in the same private `rebind`, and **the order inside it is the load-bearing part**:
+
+```ts
+await ctx.context.internalAdapter.updateSession(token, { activeOrganizationId });
+await ctx.context.internalAdapter.updateUser(user.id, { lastActiveOrganizationId: organizationId });
+await setSessionCookie(ctx, { session: updated, user });
+```
+
+Row first, then where the next sign-in lands, then the cookie cache. Writing the cookie first and the
+row second leaves a window where a crash produces a cookie pointing at a tenant the session table
+does not agree with — and the cookie is what every subsequent request believes.
+
+**`lastActiveOrganizationId` is honoured only while the membership still exists**, so removing
+someone from an organization needs no cleanup pass over this column.
 
 ---
 
@@ -740,6 +844,9 @@ export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js"
 - `api_keys` carries `organization_id`, and `api_keys_issuer_idx` covers the `issuer_id` foreign key.
 - The foreign keys from `memberships`, `goal_members`, and `permission_overrides` to `users(id)` exist, and every `user_id` column is `uuid`.
 - `grep -rn "better-auth" packages --include=*.ts` matches only `packages/auth/` and (later) `packages/api-client/src/auth/`.
+- With `AUTH_ENROLMENT_MODE=personal`, a fresh sign-up reaches the app and owns an organization named after them, against a database `pnpm db:seed` has never touched.
+- With `AUTH_ENROLMENT_MODE=invite`, the same sign-up is refused at sign-in — and an address holding a pending invitation is not.
+- Switching organizations and **immediately** issuing an RPC answers for the new tenant, not the old one. Inside sixty seconds, this is the assertion that catches a missing `setSessionCookie`.
 
 ```bash
 grep -rn 'text("user_id")\|text("actor_id")\|text("issuer_id")' packages/infrastructure/src/pg

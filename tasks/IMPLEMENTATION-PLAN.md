@@ -903,14 +903,41 @@ it once and make the doc-drift gate (`P4.26`) check it.
   `20:879` (`bundled.content-source.ts` → `static.`); `05:565` and `00:36` (Prettier, not
   used); `10:171,245,310,372` and `24:560` (`task` slice → `role`);
   `docs/infra/deployment.md:89` (`docker-compose.prod.yml`); `30:228` (`apps/desktop`).
-- [ ] `P4.23` **shipped features with no setup page** — `AUTH_ENROLMENT_MODE` appears in zero
+- [x] `P4.23` **shipped features with no setup page** — `AUTH_ENROLMENT_MODE` appears in zero
   files under `docs/`; organization plugin, `PgOrganizationFounder`, `PgInvitationClaimer`,
   `InvitationClaimingEnroller`, `MemberRouter`, `OrganizationSwitcher`, `/settings/members`,
   `/organization/new`, `/invitation/$token` in no setup page; `/api/health` not walked in `24`;
   `docs/ai/rules/workflow.md` command list omits `check:contrast`, `smoke`, `deps:check`,
   `repo:check`, `auth:tables`, `infra:up:analytics`, and Mailpit. Add §16.x (enrolment modes,
   organization plugin), §24.x (health, member router), §27.4 (second slice), and fix
-  `workflow.md`.
+  `workflow.md`. `done: 2026-09-06`
+  - **§16.11 — enrolment.** The gap that mattered: `AUTH_ENROLMENT_MODE` appeared in zero files
+    under `docs/`, and it decides whether a fresh sign-up can reach the app at all. The section
+    gives the port, the three enrollers, the table of what each mode grants, and two failures that
+    are silent when you get them wrong — enrolment must run from `session.create.before`, because
+    Better Auth queues `create.after` until the sign-up endpoint has finished, which is *after* the
+    session hook has already refused; and `bootstrap` takes a `pg_advisory_xact_lock` so two
+    simultaneous first sign-ups cannot both become owner.
+  - **`InvitationClaimingEnroller` is documented as a decorator, and why that is the design.**
+    Written as a condition inside each enroller, "an invitation wins" would be stated three times
+    and could disagree with itself. A fourth mode inherits it for free.
+  - **§16.12 — the organization plugin**, with the two reasons it is not oRPC stated rather than
+    implied: these actions are identity-gated (`isMember` *is* the authorization, and no permission
+    key could express it), and only an endpoint holding Better Auth's `ctx` can call
+    `setSessionCookie` — without which the cookie cache answers for the old tenant for up to a
+    minute. `rebind`'s three writes are shown **in order**, because writing the cookie before the
+    row leaves a window where a crash produces a cookie the session table disagrees with.
+  - **§24.7 gained `/api/health`** — readiness, not liveness, and the difference decides what the
+    platform does with a 503: hold the instance out of the pool, or kill the container. Also why
+    `cache-control: no-store` is not boilerplate, why `analytics` is `null` rather than `true` when
+    unconfigured, and why Loki is deliberately absent from the report.
+  - **§24.6 now shows the real `app.router.ts`** with both merge points, and calls out
+    `revokeInvitation` as the four-line procedure: the use-case answers `void` because "it worked"
+    is the transport's word, so the router is where the domain's silence and the contract's output
+    schema meet. Every write-shaped procedure will have those four lines.
+  - `docs/ai/rules/workflow.md` gained `check:contrast`, `deps:check`, `repo:check`, `smoke`,
+    `auth:tables`, `infra:up:analytics` and Mailpit, and "fourteen assertions" became fifteen.
+  - §27.4's second slice was closed by `P4.20`.
 - [ ] `P4.24` **rules ↔ opinions disagreements** — comments scope (`opinions/comments.md:10`
   says anywhere in src/tests, `:128` scopes enforcement to `packages/*`); `classes.md`
   free-function ban in tests (opinions scope to `src/`, rules silent —
