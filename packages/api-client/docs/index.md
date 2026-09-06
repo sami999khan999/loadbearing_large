@@ -68,7 +68,7 @@ So the constructor is private:
 | Factory | Used by | Transport |
 | --- | --- | --- |
 | `ApiClient.overHttp(baseUrl, auth)` | browser, Tauri webview, CLI | `RPCLink` over `fetch` |
-| `ApiClient.inProcess(rpc)` | SSR loaders in `apps/web` — not wired yet | the router client, directly |
+| `ApiClient.inProcess(rpc)` | SSR loaders in `apps/web` | the router client, directly |
 
 `createQueryClient()` in [21](../../../docs/setup/21-query-package.md) picks per environment. Both
 satisfy the same type, so nothing downstream can tell which it got — and on client-side navigation
@@ -141,12 +141,23 @@ loaders make real HTTP calls. Point the server-side client at an internal URL an
 incoming request's cookies onto the outbound call. That is a change to one factory, which is only
 true because loaders go through `ApiClient` instead of importing the router.
 
-## One thing this package does not have yet
+## Picking the transport is a build-time decision, not a runtime one
 
-**No `inProcess` caller.** `apps/web/src/server/rpc-client.ts` builds the router client, and
-`ApiClient.inProcess` takes exactly that — but nothing calls either one. Every read goes over HTTP
-today, SSR loaders included, so the loopback hop the factory exists to remove is still being paid.
-The factory and its test are here; the wiring is not.
+`apps/web/src/router.tsx` chooses with `createIsomorphicFn`, and the Start plugin removes the branch
+that does not apply along with its imports — which is what keeps `createServerRpcClient`, and the
+whole container graph behind it, out of the client bundle. The bundle assertion in
+[26](../../../docs/setup/26-hygiene-and-ci.md) is what proves that rather than assuming it.
+
+> [!IMPORTANT]
+> **`overHttp` refuses a relative base outside a browser.** `Endpoint.rpc` is `/api/rpc`, which is
+> correct in a browser and unresolvable under Node — `fetch` has no document to resolve against, so
+> the first call throws `TypeError: Invalid URL` from inside a route loader, several frames from the
+> line that chose the transport. The guard turns that into an `InternalError` at construction whose
+> `cause` names `ApiClient.inProcess`.
+>
+> The sentence rides on `cause` rather than `message` because the code **is** the message here
+> ([`errors`](../../errors/docs/index.md)): the envelope stays wordless and the diagnostic reaches
+> the logger.
 
 **Two namespace accessors, and the rest go through `raw`.** `role` and `member` have a `get` on
 `ApiClient`; a slice adds two lines — `public get task() { return this.rpc.task; }` — which is what

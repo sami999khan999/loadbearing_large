@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { InternalError } from "@loadbearing/errors";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BearerAuthStrategy } from "../../src/auth/bearer-auth.strategy.js";
 import { CookieAuthStrategy } from "../../src/auth/cookie-auth.strategy.js";
 import { TokenProvider } from "../../src/auth/token.provider.js";
@@ -84,6 +85,46 @@ describe("ApiClient.overHttp", () => {
     await callThrough(ApiClient.overHttp("https://api.test/rpc", new CookieAuthStrategy()));
 
     expect(captured?.url.startsWith("https://api.test/rpc")).toBe(true);
+  });
+});
+
+describe("ApiClient.overHttp rejects a base Node cannot resolve", () => {
+  it("throws at construction rather than at the first call", () => {
+    // The failure this replaces is a `TypeError: Invalid URL` raised inside a route
+    // loader, several frames from the line that chose the transport.
+    expect(() =>
+      ApiClient.overHttp("/api/rpc", new BearerAuthStrategy(new StaticTokenProvider("t"))),
+    ).toThrow(InternalError);
+  });
+
+  it("keeps the diagnostic on `cause`, so the code is still the message", () => {
+    try {
+      ApiClient.overHttp("/api/rpc", new BearerAuthStrategy(new StaticTokenProvider("t")));
+      expect.unreachable("a relative base must not construct under Node");
+    } catch (error) {
+      // The envelope stays wordless; the sentence naming the fix reaches the logger.
+      expect((error as InternalError).message).toBe("INTERNAL");
+      expect(((error as InternalError).cause as Error).message).toContain("ApiClient.inProcess");
+    }
+  });
+
+  it("allows a relative base in a browser, where it is the correct thing to pass", () => {
+    vi.stubGlobal("window", { location: { origin: "https://app.example" } });
+
+    expect(() =>
+      ApiClient.overHttp("/api/rpc", new BearerAuthStrategy(new StaticTokenProvider("t"))),
+    ).not.toThrow();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("allows an absolute base under Node, which is what a cross-process caller passes", () => {
+    expect(() =>
+      ApiClient.overHttp(
+        "https://api.test/rpc",
+        new BearerAuthStrategy(new StaticTokenProvider("t")),
+      ),
+    ).not.toThrow();
   });
 });
 

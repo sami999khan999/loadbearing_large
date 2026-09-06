@@ -3,6 +3,7 @@ import {
   type ClientNamespace,
   EffectivePermissionsInspector,
   RoleMatrix,
+  RoleQueries,
   useMessages,
 } from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
@@ -11,12 +12,22 @@ import { RouteGuard } from "~/route/-guard.js";
 // or a coverage test can read without executing anything, and the loader resolves it.
 const MESSAGES = ["role"] as const satisfies readonly ClientNamespace[];
 
+// The same page and limit `RoleMatrix` asks for, so its `useAppQuery` reads the cache
+// the loader filled rather than issuing a second request after hydration.
+const PAGE = { limit: 25, offset: 0 } as const;
+
 // Behind `rbac.role.read` — the same key the procedure is gated on and the use-case
 // asserts. See docs/reference/enforcement-surfaces.md.
 export const Route = createFileRoute("/(app)/_authenticated/settings/roles")({
   beforeLoad: RouteGuard.requirePermission("rbac.role.read"),
   staticData: { messages: MESSAGES },
-  loader: ({ context }) => context.messages.ensure(MESSAGES),
+  // Both, in parallel. `ensureQueryData` runs under Node during SSR, which is what
+  // makes `router.tsx`'s in-process transport load-bearing rather than an optimisation.
+  loader: ({ context }) =>
+    Promise.all([
+      context.messages.ensure(MESSAGES),
+      context.queryClient.ensureQueryData(RoleQueries.list(context.api, PAGE)),
+    ]),
   component: Roles,
 });
 

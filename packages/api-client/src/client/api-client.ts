@@ -1,6 +1,6 @@
 import type { AuthStrategy } from "../auth/index.js";
 import type { AppContract } from "../import.js";
-import { type ContractRouterClient, createORPCClient, RPCLink } from "../import.js";
+import { type ContractRouterClient, createORPCClient, InternalError, RPCLink } from "../import.js";
 
 // The typed client every caller holds. It is derived from the contract, so a procedure
 // added in `contracts` appears here with no edit in this package.
@@ -12,11 +12,18 @@ type FetchLike = (input: unknown, init?: Record<string, unknown>) => Promise<nev
 
 const platformFetch = (): FetchLike => (globalThis as unknown as { fetch: FetchLike }).fetch;
 
+// Off `globalThis` for the same reason as `fetch`: `lib: ["ES2024"]` declares none of
+// these. `window` is the browser test, and its absence is what makes a relative base wrong.
+type UrlCtor = { canParse(input: string): boolean };
+const platform = () => globalThis as unknown as { URL: UrlCtor; window?: unknown };
+
 export class ApiClient {
   private constructor(private readonly rpc: AppClient) {}
 
   // Browser, Tauri webview, and any cross-process caller.
   public static overHttp(baseUrl: string, auth: AuthStrategy): ApiClient {
+    ApiClient.assertResolvable(baseUrl);
+
     const link = new RPCLink({
       url: baseUrl,
       headers: () => auth.headers(),
@@ -33,6 +40,23 @@ export class ApiClient {
   // deserialise again, twice per loader.
   public static inProcess(rpc: AppClient): ApiClient {
     return new ApiClient(rpc);
+  }
+
+  // A relative base is correct in a browser and never correct under Node, where `fetch`
+  // has no document to resolve against. See docs/reference/transports.md.
+  private static assertResolvable(baseUrl: string): void {
+    if (platform().window !== undefined) return;
+    if (platform().URL.canParse(baseUrl)) return;
+
+    // The sentence rides on `cause`, which is non-enumerable and reaches the logger
+    // without ever reaching the envelope — the code is still the message.
+    throw new InternalError(
+      new Error(
+        `ApiClient.overHttp was given the relative base "${baseUrl}" outside a browser. ` +
+          "Under Node it fails at the first call with `Invalid URL`. " +
+          "Use ApiClient.inProcess(...) for SSR, or pass an absolute URL.",
+      ),
+    );
   }
 
   // One accessor per contract namespace, so the day a namespace needs a wrapper the call

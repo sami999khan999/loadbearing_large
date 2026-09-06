@@ -89,6 +89,27 @@ probe.
 
 ## 📋 Backlog
 
+- [ ] `T-032` **The production SSR bundle throws `jsxDEV is not a function`** `@unassigned` `P1` `~3h` `#ui`
+  - **Goal:** `pnpm --filter @loadbearing/web build` succeeds and `node .output/server/index.mjs`
+    returns 500 on **every** page. `RootDocument` in `__root.tsx` calls
+    `import_jsx_dev_runtime.jsxDEV`, which the production React runtime does not export — a
+    development JSX transform reached the server build. `pnpm dev` is unaffected, which is why
+    nothing has noticed: every check in CI and every local gate passes on a build that cannot serve
+    a request.
+  - **Found while verifying `P5.10`.** Confirmed pre-existing by stashing that change and
+    rebuilding from a clean `.output`: the baseline fails identically. Not caused by the isomorphic
+    transport.
+  - **Where to look first.** `vite.config.ts` prepends the `development` export condition only when
+    `command === "serve"`, and its own comment records that leaving it in a build once shipped
+    `@tanstack/react-router`'s dev build to the client. This is the same failure on the **ssr**
+    side: `ssr.resolve.conditions` and `ssr.resolve.externalConditions` both take `devCondition`,
+    so check what `react/jsx-dev-runtime` resolves to in the server graph. `esbuild` appears twice
+    in the pnpm store at two versions (`0.27.7`, `0.28.2`), which is worth ruling out too.
+  - **Done when:** a built `.output` serves `/`, `/sign-up` and `/settings/roles`, and the ✅ Gate
+    in `docs/setup/24` gains a line asserting it — the existing gate checks the *client* bundle
+    carries no dev build and never checks that the server bundle runs at all.
+
+
 - [ ] `T-031` **Transactional outbox for cross-slice events** `@unassigned` `P3` `~12h` `#api` `#db`
   - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
     notification slice. Without a seam for that, slice ownership decays into a call graph where

@@ -100,9 +100,18 @@ server hand it an in-process transport and the browser an HTTP one, with nothing
 differing:
 
 ```ts
-transport: ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy())  // browser
-transport: ApiClient.inProcess(createServerRpcClient(request))        // SSR
+// apps/web/src/router.tsx — the plugin removes the branch that does not apply,
+// along with its imports, which is what keeps the container out of the browser.
+const transport = createIsomorphicFn()
+  .client(() => ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()))
+  .server(() => ApiClient.inProcess(createServerRpcClient(getRequest())));
 ```
+
+**Both sides are load-bearing, and the server one is not an optimisation.** `Endpoint.rpc` is a
+relative path: correct in a browser, unresolvable under Node. A loader calling `ensureQueryData`
+during SSR through the HTTP transport fails outright rather than being slow, which is why
+`ApiClient.overHttp` now refuses a relative base outside a browser
+([`api-client`](../../api-client/docs/index.md)).
 
 **`createQueryClient` is an exported function**, which the repo's OOP rule would normally reject —
 `packages/query` is deliberately not in that ESLint block. It is a factory in the React idiom, and

@@ -1167,13 +1167,40 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     has a `bn` cell (make the locale record total, not `Partial`, so a missing cell will not
     compile).
   - **Docs:** `content/docs/reference/namespace.md`, `docs/setup/20`.
-- [ ] `P5.10` **SSR uses the in-process client** `P1` `~2h` `#ui`
+- [x] `P5.10` **SSR uses the in-process client** `P1` `~2h` `#ui`
   - **Goal:** `createServerRpcClient` / `ApiClient.inProcess` have no caller; `router.tsx`
     builds `ApiClient.overHttp("/api/rpc")` for both sides, so the first loader
     `ensureQueryData` throws `Failed to parse URL` under Node.
   - **Done when:** `router.tsx` injects `ApiClient.inProcess(...)` when `typeof window ===
     "undefined"`; one route loader prefetches (`/settings/roles`) and an SSR spec proves it.
-  - **Docs:** `api-client/docs/index.md:63,135`, `query/docs/index.md:90`.
+  - **Docs:** `api-client/docs/index.md:63,135`, `query/docs/index.md:90`. `done: 2026-09-06`
+  - **The bug is real and was reproduced before it was fixed.** Under Node,
+    `ApiClient.overHttp("/api/rpc", …)` throws `TypeError: Invalid URL` on the first call — `fetch`
+    has no document to resolve a relative base against. It was latent only because no loader
+    prefetched; adding one is what fires it.
+  - **`createIsomorphicFn` is the mechanism**, and the reason it is safe here is checkable rather
+    than assumed: the Start plugin removes the unused branch *and its imports*, so
+    `createServerRpcClient` — and the container graph behind it — never enters the client graph.
+    Verified against the built bundle: `createServerRpcClient`, `serverTransport`,
+    `createRouterClient`, `drizzle` and `ioredis` all return zero hits across 38 assets, and §8
+    passes. Without that property this would be a one-hop path from every route component to the
+    server graph, which is exactly what the two import surfaces exist to prevent.
+  - **The runtime stub prefers the server branch when untransformed**, which is the right default
+    for Node and the reason a vitest run must not call `getRouter()`.
+  - **Beyond the entry: `overHttp` now refuses a relative base outside a browser.** A `TypeError`
+    raised inside a route loader names neither the transport nor the fix; an `InternalError` at
+    construction does. The sentence rides on `cause` rather than `message`, because in this
+    repository the code **is** the message — the first draft put prose in `message` and the spec
+    caught it, which is the convention working.
+  - **Proven end to end, not only by unit test.** `/settings/roles` prefetches through
+    `ensureQueryData` in its loader; against a live Postgres and both Redis instances, a `curl` with
+    a session cookie returns 200 with the role names and permission cells already in the HTML — no
+    JavaScript ran — and zero `Invalid URL` in the server log.
+  - **Found and filed, not fixed here: `T-032`.** A production `.output` build 500s on every page
+    with `jsxDEV is not a function` — a development JSX transform in the *server* bundle. Confirmed
+    pre-existing by stash-and-rebuild. `pnpm dev` is unaffected, which is why no gate has caught it:
+    doc 24's ✅ Gate checks that the *client* bundle carries no dev build and never checks that the
+    server bundle serves a request.
 
 ### Cut (delete code and docs together) or wire
 
