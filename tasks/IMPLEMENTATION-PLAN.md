@@ -2119,9 +2119,29 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `build`. Reproduced locally by deleting the file (48 errors, same as CI), fixed by moving the
     web build above `typecheck`, and verified from a clean state: 0 errors.
   - `docs/setup/26` and `docs/ai/rules/workflow.md` now say so, because the error names none of it.
-- [ ] `P8.13` **doc-promised jobs** — compose smoke job, `pnpm peers check`, `pnpm sbom`
+- [x] `P8.13` **doc-promised jobs** — compose smoke job, `pnpm peers check`, `pnpm sbom`
   (`26:426-432`): implement the first (boot `infra:up`, `db:migrate`, `db:seed`, hit
-  `/api/health`), drop the other two from the doc.
+  `/api/health`), drop the other two from the doc. `done: 2026-09-06`
+  - **The entry's premise is wrong twice.** The doc does not *promise* these — it lists them under
+    "optional but worth it", explicitly as "decisions rather than omissions". And `pnpm peers` and
+    `pnpm sbom` are both real commands in the pinned pnpm 11.21, checked against `--help`, so
+    dropping them would delete two correct suggestions. Only the compose job was worth building.
+  - **It does not hit `/api/health`, and that is deliberate.** `T-032` — the production `.output`
+    server bundle throws `jsxDEV is not a function` — is why there is no web boot smoke either. The
+    job runs `pnpm smoke` instead, which reaches Redis, S3, BullMQ and Loki against the real
+    containers and needs no web server. The health route joins it when `T-032` closes.
+  - **What it proves that `verify` cannot:** that `infra/postgres.init.sql` works *as an initdb
+    script* (`verify` applies it by hand, because a service container starts before checkout), that
+    the compose healthchecks are right, and that Loki, Alloy and Mailpit start at all — none of the
+    three is reachable from a `services:` block.
+  - **The wait is a script, not `--wait`.** `minio-init` exits 0 by design and that flag reads a
+    finished service as a dead one. `readiness()` is exported and kept free of side effects so the
+    classification is testable; its seven cases were checked by hand here, and a real spec lands
+    with `P8.10`.
+  - **Not verified locally: this container has the docker CLI and no daemon.** The compose file
+    parses (`docker compose config` resolves the profile to eight services) and the readiness
+    classification is checked, but the job itself is proved by CI, which is the only place it means
+    anything.
 
 ### Migrations and seed
 

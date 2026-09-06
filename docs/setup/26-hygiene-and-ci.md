@@ -783,10 +783,40 @@ The rest are not written, and each is a decision rather than an omission:
   with `cache: pnpm`. The `dist/` half is deliberately not: `tsup` has no incremental mode, so a
   restored `dist/` is rebuilt by the very next step. It would only pay off by making the build
   conditional on a cache hit, and a stale `dist/` silently used is a worse failure than a slow job.
-- **A `docker compose up` smoke job** running the real containers and a migration, to catch drift
-  the pinned CI service images hide.
 - **`pnpm peers`** to surface unmet peers, which pnpm 11 no longer prints as a tree during install.
 - **`pnpm sbom --sbom-format cyclonedx`** if anything downstream wants a bill of materials.
+
+Both of those are real commands in the pinned pnpm — checked, because a suggestion naming a command
+that does not exist is worse than no suggestion.
+
+## Step 26.3b — The `compose` job
+
+The `docker compose up` smoke that used to be on the list above now ships, as its own job.
+
+**It exists because `verify`'s `services:` block is not the stack anyone runs.** Those are pinned
+images configured in the workflow file; `infra/docker-compose.yml` is what a developer boots and
+what the setup pages describe. The two drift — an image tag, a healthcheck, an init script — and
+nothing else in this workflow can see it.
+
+It is also the only job that reaches **Loki, Alloy and Mailpit at all.** A `services:` container
+takes no command and mounts nothing from the checkout, which is why MinIO is a `docker run` in
+`verify` and why those three have no equivalent there.
+
+Three things it proves that `verify` cannot:
+
+- **`infra/postgres.init.sql` does its job.** Compose mounts it as an initdb script. `verify` has to
+  apply it by hand, in a step that exists only because a service container starts before checkout —
+  so the file being correct *as an initdb script* is untested there.
+- **The healthchecks are right.** `compose-wait.mjs` reads them, so one that never reports healthy
+  fails the job rather than being noticed by a developer waiting at a terminal.
+- **`pnpm smoke` runs against the real containers**, including the Loki reader, which no other job
+  can reach.
+
+**`docker compose up -d --wait` cannot express this stack**, which is why the wait is a script.
+`minio-init` creates buckets and exits 0, and `--wait` has no way to be told that a service
+finishing is the success case. `readiness()` in that script encodes the three ways a container can
+be ready — healthy, running with no healthcheck, or already exited cleanly — and the two ways it can
+be fatal.
 
 ---
 
