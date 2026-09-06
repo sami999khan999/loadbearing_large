@@ -5,6 +5,9 @@ export interface MatrixSubject {
   readonly id: string;
   readonly label: string;
   readonly capabilities: CapabilitySet;
+  // Per subject, not per matrix: a page showing four roles where one is seeded needs
+  // three editable columns and one that is not.
+  readonly editable?: boolean;
 }
 
 export interface PermissionMatrixProps {
@@ -54,7 +57,7 @@ export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatri
               const allowed = subject.capabilities.can(permission, goalId);
               return (
                 <td key={subject.id} data-allowed={allowed ? "true" : "false"}>
-                  {onToggle ? (
+                  {onToggle && subject.editable ? (
                     <input
                       type="checkbox"
                       checked={allowed}

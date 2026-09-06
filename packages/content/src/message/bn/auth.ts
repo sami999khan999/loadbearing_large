@@ -1,6 +1,7 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design — anything missing falls back to English.
+// Total, not partial: `NamespaceBundle` is a `Record`, so an `en` key added without a
+// translation fails `tsc` rather than rendering an English sentence on a Bengali page.
 export const auth: NamespaceBundle<"auth"> = {
   "auth.signIn": "সাইন ইন",
   "auth.signOut": "সাইন আউট",
@@ -95,4 +96,6 @@ export const auth: NamespaceBundle<"auth"> = {
   "auth.sessionRevoke": "সাইন আউট",
   "auth.signOutEverywhere": "সব ডিভাইসে সাইন আউট করুন",
   "auth.signOutEverywhereDone": "অন্য প্রতিটি ডিভাইস সাইন আউট হয়ে গেছে।",
+  "auth.organization": "প্রতিষ্ঠান",
+  "auth.organizationNew": "নতুন প্রতিষ্ঠান",
 };

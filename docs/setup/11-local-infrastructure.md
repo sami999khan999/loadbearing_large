@@ -2,7 +2,7 @@
 
 > Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, Mailpit as the mail stand-in, and the log platform the diagnostic stream ships to. One command.
 
-**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki, so the log stream has somewhere to land.
+**Delivers:** A running local stack that `infrastructure` and `auth` can both connect to — plus Loki, so the log stream has somewhere to land.
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 
@@ -231,7 +231,7 @@ idea what an organization is.
 
 `observability` is on by default because the diagnostic stream is not hypothetical — `JsonLogger` exists, `EVENT_CATALOG` exists, and every adapter written from [13](13-infrastructure-postgres.md) onward emits into it. A stream with no sink is a stream nobody checks.
 
-`analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. `AnalyticsReader` is the seam, `PgAnalyticsReader` is the implementation, and snapshot tables in Postgres answer every question this kit will ask for years. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics` and a consumer, not an infrastructure project.
+`analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. Postgres answers every question this kit will ask for years, and nothing in the kit reads an analytics store at all. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics`, `CLICKHOUSE_URL`, and then the reader the dashboard needs, rather than an infrastructure project.
 
 > **A running ClickHouse with nothing writing to it is worse than no ClickHouse**, because it looks like a decision that was made. Leave it stopped until a projection consumer exists.
 

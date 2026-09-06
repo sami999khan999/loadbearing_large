@@ -2,25 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
 
 describe("ApiKeyHasher", () => {
-  it("returns the token once and stores only its digest", async () => {
-    const key = await ApiKeyHasher.generate();
-
-    // The whole point of the split: what goes in the database is the hash, and it must
-    // not be possible to get back to the token from either stored field.
-    expect(key.token).toMatch(/^rk_[0-9a-f]{64}$/);
-    expect(key.hash).toBe(await ApiKeyHasher.hash(key.token));
-    expect(key.hash).not.toContain(key.token);
-    expect(key.token.startsWith(key.prefix)).toBe(true);
-  });
-
-  it("never issues the same token twice", async () => {
-    const tokens = await Promise.all(
-      Array.from({ length: 32 }, () => ApiKeyHasher.generate().then((key) => key.token)),
-    );
-
-    expect(new Set(tokens).size).toBe(tokens.length);
-  });
-
+  // Minting moved to `ApiKeyRules` in `application`, where a key is issued from; what
+  // is left here is what *authentication* needs. Its spec moved with it.
   it("indexes on a prefix short enough to collide across keys", () => {
     // `prefixOf` is the lookup column, not an identifier: several keys share a prefix and
     // the hash comparison picks one.

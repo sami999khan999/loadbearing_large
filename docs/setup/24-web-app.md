@@ -269,7 +269,6 @@ const Schema = z.object({
   AUTH_URL: z.url(),
   AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
   AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-  AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
   // The revocation window. Capped in the schema, not by convention — a deploy that
   // raises it to "improve cache hit rate" fails at boot instead of quietly widening
   // the gap between removing access and access stopping.
@@ -351,7 +350,7 @@ export class Env {
 
 **Session lifetimes come from the environment, and the cookie cache is capped here rather than trusted.** A staging box and production do not want the same session length, so these are not literals in a factory. The `.max(60)` on the cookie cache is the load-bearing one: that value *is* the revocation window ([16](16-auth-package.md) §16.9), and the pressure to raise it always arrives as a performance argument. A schema that refuses to boot is a better answer than a comment asking people not to.
 
-**`AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` is parsed here but not consumed by `containerConfig()`.** It belongs to the desktop token policy ([30](30-desktop-app.md)), and it is validated at boot alongside the rest so a malformed value fails in one place rather than at first use on a machine nobody is watching.
+**Not every parsed key reaches `containerConfig()`.** `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` are read by Better Auth's own configuration rather than by an adapter, and they are still validated at boot alongside the rest — one place to fail is the entire point of the schema, and a malformed value found at first use is a value found on a machine nobody is watching.
 
 **`AUTH_TRUSTED_ORIGINS` carries the Tauri origins from the first deployment**, not from whenever the desktop app is built:
 
@@ -557,7 +556,7 @@ export class ErrorInterceptor {
 
 ## Step 24.6 — A router
 
-**`apps/web/src/server/orpc/task.router.ts`** — illustrative. The kit ships one real router built exactly this way, `role.router.ts` ([27](27-verification-and-first-feature.md) Step 27.4).
+**`apps/web/src/server/orpc/task.router.ts`** — illustrative. The kit ships two real routers built exactly this way, `role.router.ts` and `member.router.ts` ([27](27-verification-and-first-feature.md) Step 27.4).
 
 ```ts
 import { authed } from "./base.js";
@@ -586,12 +585,22 @@ export class TaskRouter {
 **`apps/web/src/server/orpc/app.router.ts`**
 
 ```ts
-import { TaskRouter } from "./task.router.js";
+import { MemberRouter } from "./member.router.js";
+import { RoleRouter } from "./role.router.js";
 
-export const appRouter = { task: TaskRouter.all };
+export const appRouter = { role: RoleRouter.all, member: MemberRouter.all };
 ```
 
-The shape mirrors `contract` exactly. A mismatch is a type error.
+The shape mirrors `contract` exactly. A mismatch is a type error, and the merge point is the only
+line a new slice adds here.
+
+> [!NOTE]
+> **One procedure in `member.router.ts` is four lines rather than three, and it is worth knowing
+> why.** `revokeInvitation` awaits the use-case and returns `{ ok: true }` — the use-case answers
+> `void`, because "it worked" is the transport's word and not the domain's. A use-case that returned
+> `{ ok: true }` would be shaping a response for a protocol it must not know about; a router that
+> returned `undefined` would make the contract's output schema a lie. The four lines are where those
+> two facts meet, and every write-shaped procedure will have them.
 
 ---
 
@@ -678,11 +687,48 @@ decision in two places.
 
 **These files have no `component`.** A route may be server-only; nothing renders at `/api/rpc/$`.
 
+### The third entrypoint: `/api/health`
+
+**`apps/web/src/route/api/health.ts`** is the one route an orchestrator reaches before any credential
+exists, so it is unauthenticated by necessity rather than by oversight.
+
+```ts
+export const Route = createFileRoute("/api/health")({
+  server: {
+    handlers: {
+      GET: async () => {
+        const report = await container.health();
+
+        return new Response(JSON.stringify(report), {
+          status: report.healthy ? 200 : 503,
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      },
+    },
+  },
+});
+```
+
+**Readiness, not liveness**, and the difference decides what the platform does with the answer. A 503
+means *do not send me traffic yet* — a rolling deploy holds the new instance out of the pool until
+Postgres and both Redis instances answer. A liveness probe returning 503 gets the container killed
+instead, which is the wrong response to a database that is still starting.
+
+**`cache-control: no-store` is not boilerplate.** A cached readiness answer keeps reporting healthy
+for its TTL after the thing it describes has stopped, which is precisely the window a load balancer
+uses to route traffic into a broken instance.
+
+**`container.health()` checks Postgres, both Redis instances and ClickHouse in parallel**, and
+ClickHouse answers `null` rather than `true` when it is not configured — it is not healthy and not
+degraded, it is not running one, and `healthy` is `analytics !== false`. Loki is absent from the list
+on purpose: logs are lossy by design ([Data and scale](../opinions/data-and-scale.md)), so a
+collector being down is not a reason to drain an instance that is serving requests correctly.
+
 > [!WARNING]
-> **A route `beforeLoad` does not protect an API route.** These are the only two paths into
-> `src/server/`, and everything behind them authenticates for itself — `principalMiddleware` for
-> oRPC, Better Auth for its own endpoints. Test each one with a direct anonymous request and assert
-> nothing private comes back; that is the check in the Gate below.
+> **A route `beforeLoad` does not protect an API route.** These are the paths into `src/server/`, and
+> everything behind them authenticates for itself — `principalMiddleware` for oRPC, Better Auth for
+> its own endpoints, and `/api/health` deliberately not at all. Test each one with a direct anonymous
+> request and assert nothing private comes back; that is the check in the Gate below.
 
 ### CORS, because the desktop client is cross-origin
 
@@ -940,10 +986,18 @@ rather than something to remember.
 > fetch whatever the first navigation asks for. Added to `content` in
 > [20](20-content-package.md).
 >
-> **Locale negotiation is the piece this step does not wire.** `Locales.negotiate(acceptLanguage,
-> cookie)` needs the request, and `getRouter()` does not receive one. Reading it inside a root-route
-> `beforeLoad` — which does — and calling `messages.ensure()` there is the shape that fits this
-> version; until then the store starts at `"en"` and the fallback layer covers every locale.
+> **Locale negotiation happens later, in the root route, and that is not a workaround.**
+> `Locales.negotiate(acceptLanguage, cookie)` needs the request and `getRouter()` does not receive
+> one, so the store is seeded with `Locales.DEFAULT` here and the root's `beforeLoad` calls
+> `messages.setLocale()` once `fetchAppearance` has read the header and the cookie. The ordering is
+> load-bearing: `beforeLoad` completes before the loader below it, and `ensure()` fetches a
+> namespace for whatever locale the store holds when it is called. Reverse the two and the first
+> paint is English.
+>
+> **The locale rides `AppearanceSnapshot`**, beside theme, mode and font — same cookie, same
+> server-resolved-so-the-first-byte-is-right argument. It is the one of the four that is not a CSS
+> variable, which is why the switcher calls `router.invalidate()`: the copy has to be fetched, not
+> restyled.
 
 ### Why there is no second fetch
 
@@ -1097,6 +1151,10 @@ passed while the app was broken.**
   `curl -X OPTIONS http://localhost:3000/api/rpc/x -H "Origin: <trusted>"` returns `204` with
   `access-control-allow-origin`. An **untrusted** origin returns `204` with **no** allow-origin
   header (Step 24.7).
+- `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/health` returns `200` with the
+  stack up and `503` with Postgres stopped — anonymously, in both cases, and with `cache-control:
+  no-store` on the response. Its body names `database`, `cache`, `queue` and `analytics`, and
+  `analytics` is `null` rather than `false` when `CLICKHOUSE_URL` is unset.
 - An SSR page load produces **zero** requests to your own `/api/rpc` — check the server access log; it should be silent during SSR.
 - Removing a permission from a role removes the nav item **and** the call returns `FORBIDDEN`.
 - Importing `@loadbearing/infrastructure` from a component is a Biome error; importing it from `src/server/**` is fine.

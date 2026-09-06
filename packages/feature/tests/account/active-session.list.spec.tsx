@@ -34,7 +34,7 @@ describe("ActiveSessionList", () => {
     await render(() => Promise.reject(new Error("nope")));
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
-    expect(screen.getByText("Something went wrong")).toBeDefined();
+    expect(screen.getByText("Something went wrong. Please try again.")).toBeDefined();
   });
 
   // The regression guard: the badge was rendered once, after the list, attached to no

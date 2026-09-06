@@ -23,16 +23,13 @@ describe("StaticContentSource", () => {
     expect(snapshot.overrides).toEqual({});
   });
 
-  // English always rides alongside, per namespace. That is what makes a Partial locale safe.
+  // English always rides alongside, per namespace — two layers, not one merged map.
   it("loads English as the fallback layer beneath another locale", async () => {
     const snapshot = await new StaticContentSource().messages("bn", []);
 
     expect(snapshot.locale).toBe("bn");
     expect(snapshot.overrides["error.forbidden"]).toBe("এটি করার অনুমতি আপনার নেই।");
     expect(snapshot.base["error.forbidden"]).toBe("You do not have permission to do that.");
-    // Untranslated, so the fallback answers.
-    expect(snapshot.overrides["error.conflict"]).toBeUndefined();
-    expect(snapshot.base["error.conflict"]).toBeDefined();
   });
 
   it("hands back a Translator over the same snapshot", async () => {
@@ -40,7 +37,29 @@ describe("StaticContentSource", () => {
 
     expect(t.locale).toBe("bn");
     expect(t.t("error.forbidden")).toBe("এটি করার অনুমতি আপনার নেই।");
-    expect(t.t("error.conflict")).toBe("Someone else changed this first. Reload and try again.");
+  });
+
+  // A fixture catalog, not the real `bn`: `NamespaceBundle` is total, so a shipped
+  // bundle cannot have the gap this needs.
+  it("falls back per key when a locale's bundle is missing one", async () => {
+    const partial = new StaticContentSource({
+      en: {
+        common: async () => ({ "action.save": "Save", "action.cancel": "Cancel" }),
+        error: async () => ({ "error.forbidden": "You do not have permission to do that." }),
+      },
+      bn: {
+        common: async () => ({ "action.save": "সংরক্ষণ" }),
+        error: async () => ({}),
+      },
+    });
+
+    const t = await partial.translator("bn", []);
+
+    expect(t.t("action.save")).toBe("সংরক্ষণ");
+    // Per key, not per namespace: the layer below still answers inside a bundle the
+    // locale did supply.
+    expect(t.t("action.cancel")).toBe("Cancel");
+    expect(t.t("error.forbidden")).toBe("You do not have permission to do that.");
   });
 
   // A catalog with no loader for a namespace yields nothing rather than throwing.

@@ -5,7 +5,7 @@ description: The rules an agent must know unprompted, one file per topic. A dige
 
 # Repository rules
 
-One file per topic, none longer than ~850 tokens, ~6,800 for all twelve. Procedures that touch many
+One file per topic, none longer than ~900 tokens, ~7,700 for all twelve. Procedures that touch many
 files in a fixed order are run books instead, in [`../skills/`](../skills/index.md) — adding a
 feature slice, writing a package's docs.
 

@@ -48,10 +48,10 @@ These are the checks a green build does not give you. Run them by hand once now,
 - [ ] **Clean client bundle.** The built client output contains no Drizzle, no ioredis, no AWS SDK.
 - [ ] **Naming.** Every file under `packages/*/src` matches the rules in [29](29-naming-and-boundaries.md): one class, filename derived from it, kebab-case, role suffix.
 - [ ] **The vector seam.** `grep -rn "PgVectorStore" packages/ apps/` returns hits in exactly two *packages*: `packages/infrastructure`, where it is defined and named by three barrels, and `packages/composition`, where it appears twice — in `src/import.ts` and `src/container/container.ts` — because every external symbol enters a package through its one outside surface. What matters is that no third package names it: if it appears in a use-case, the swap in [14](14-vector-store.md) is no longer cheap.
-- [ ] **The analytics seam.** `grep -rn "PgAnalyticsReader" packages/ apps/` returns hits in exactly two places, for the same reason. A use-case that names it has turned a config change into a rewrite.
+- [ ] **The analytics seam.** `grep -rn "ClickHouseAnalyticsProjector" packages/ apps/` returns hits in exactly two places, for the same reason. A use-case that names it has turned a config change into a rewrite. There is no analytics *reader* to check: the kit shipped one nothing called, and it was deleted ([12](12-application-package.md)).
 - [ ] **Tenant scoping.** `pnpm check:architecture` reports every domain table carrying `organization_id`, and no repository method queries without narrowing by it. The grep covers the schema; the query side is a review habit.
 - [ ] **Query counts.** The integration tests assert a fixed number of queries for `resolveFor` and every repository method that loops. An N+1 is invisible at fifty rows and fatal at fifty thousand.
-- [ ] **Env boundary.** `process.env` appears in exactly two files: `apps/web/src/env.ts` and `apps/worker/src/env.ts`.
+- [ ] **Env boundary.** `process.env` appears in two files under `src/` — `apps/web/src/env.ts` and `apps/worker/src/env.ts` — and nowhere else. Six more reads are exempt and all sit *outside* an app or package's `src/`: `apps/web/vitest.config.ts`, `packages/infrastructure/{drizzle.config,migrate,seed,smoke}.ts` and `packages/auth/tables.ts`. That is the shape the exemption takes rather than a list of pardons: a build-time config or a runnable script above `src/` cannot make a folder barrel execute on import.
 
 **The bundle check, the two seam checks, and the naming check are the four that rot quietly.** The others fail loudly on their own. Put the first three in CI (you already did, in [26](26-hygiene-and-ci.md)); the naming one is a code-review habit.
 
@@ -59,18 +59,18 @@ These are the checks a green build does not give you. Run them by hand once now,
 
 ## Step 27.3 — The commit sequence
 
-If you built this in one pass, split it before pushing. Fifteen commits, each independently reviewable:
+If you built this in one pass, split it before pushing. Eighteen commits, each independently reviewable:
 
 ```
 chore(repo): pnpm workspace, catalogs, recursive scripts
-chore(tooling): shared tsconfig, eslint (OOP + server-only), prettier
+chore(tooling): shared tsconfig, biome and eslint (OOP + server-only)
 feat(core): Result, Clock, Uuid, ServerOnly
 feat(permissions): PermissionRegistry, ModuleRegistry, CapabilitySet
 feat(contracts): zod contracts, entities, oRPC contract router, procedure permissions
 chore(infra): docker compose for postgres, redis, minio
 feat(application): Principal, Authorizer, DomainError, ports
-feat(db): drizzle rbac schema, repositories, seed
-feat(db): pgvector schema and PgVectorStore behind the port
+feat(infrastructure): drizzle rbac schema, repositories, seed
+feat(infrastructure): pgvector schema and PgVectorStore behind the port
 feat(infrastructure): redis cache, s3 gateway, bullmq publisher
 feat(auth): better-auth config, session resolver, capability cache, api keys
 feat(composition): Container
@@ -132,14 +132,46 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
     packages/composition/src/container/container.ts        expose the new use-cases
 ```
 
-**The kit ships one slice built exactly this way.** `role` — a read-only list of the organization's
-roles and what each grants — walks all twelve steps, reuses `rbac.role.read` rather than adding a
-permission, and lands at `/permissions` behind a `RouteGuard`. Read it as the worked example: the
-same key gates the procedure in `PROCEDURE_PERMISSIONS`, the use-case through `Authorizer.assert()`,
-the route through `RouteGuard.requirePermission`, and the nav through `<Can>`. Steps 1 and 2 are
-empty for it, which is the common case rather than a shortcut.
+**The kit ships two slices built exactly this way**, and they are worth reading in that order.
 
-**Plus a migration seeding the new permission rows and granting them to the right system roles** — which is what makes the module *appear*. Until that migration runs, the feature is invisible and uncallable for everyone. That is your staged-rollout mechanism working as designed, not a bug.
+`role` is the one to read first. Its list is the smallest possible walk of all twelve steps — it
+reuses `rbac.role.read` rather than adding a permission, and lands at `/settings/roles` behind a
+`RouteGuard`. The same key gates the procedure in `PROCEDURE_PERMISSIONS`, the use-case through
+`Authorizer.assert()`, the route through `RouteGuard.requirePermission`, and the nav through `<Can>`.
+
+Its writes — create, rename, delete, grant, revoke — are where the three rules an RBAC slice cannot
+be correct without live, and each is a `ConflictError` with a reason rather than a driver error:
+
+- **Seeded roles are immutable.** `SystemRoleSeed` rewrites them on every deploy, so an accepted
+  edit disappears at the next one with no error and no trace.
+- **A reserved key cannot be created**, even before the seed has run. The seed resolves its rows by
+  `(organization_id, key)` and grants `owner` every permission in the catalog, so a user-created
+  `owner` would collect the wildcard on the next deploy.
+- **A role somebody holds cannot be deleted.** `memberships.role_id` and `goal_members.role_id` are
+  `on delete no action`, so the alternative to the check is a driver error no UI can render.
+
+`GrantPermissionUseCase` adds a fourth that is not about the database: **it refuses to hand out a
+permission the actor does not hold**. Without that, `rbac.permission.grant` is the only key anyone
+ever needs — hold it and you can write every other one into a role you hold. An owner's wildcard
+answers `can()` for everything, so the rule never obstructs the role that is meant to grant anything.
+
+Every one of those writes calls `CapabilityInvalidator` **after** the transaction commits
+([16](16-auth-package.md) Step 16.8). A revoke that does not flush keeps working for a minute.
+
+`member` is the one whose writes cross a slice — invite, revoke, change role, deactivate — so it
+exercises what `role` does not: mail that goes out only after the transaction commits, and the
+last-owner rule, which is the refusal that keeps a tenant recoverable from inside the product.
+
+The organization plugin (switch, create, accept) is deliberately **not** a slice, and reading it as
+one is a mistake: those actions are identity-gated, no permission a non-owner holds could gate them,
+and only an endpoint holding Better Auth's own `ctx` can call `setSessionCookie` — without which the
+session cookie cache keeps answering for the old tenant for up to a minute after a switch.
+
+**A new permission needs its rows seeded and granted to the right system roles**, which is what makes
+a module *appear*. Both shipped slices do this in `SystemRoleSeed` at seed time rather than in a
+migration — the seed is idempotent and re-runnable, so a grant added later reaches an existing
+database on the next `pnpm db:seed`. Until that runs, the feature is invisible and uncallable for
+everyone, which is the staged-rollout mechanism working as designed rather than a bug.
 
 **The order is not arbitrary.** Each step compiles against the one before it. Write the permission first, the error codes second and the contract third, and by the time you reach the React component the permission key autocompletes, the error code autocompletes, and a typo in either is a compile error.
 
@@ -158,7 +190,7 @@ than throwing, which is what makes the omission visible in review instead of at 
 > **The same twelve steps as a run book:** [`docs/ai/skills/add-slice.md`](../ai/skills/add-slice.md) — what to write,
 > what to check, what to commit, without the reasoning. This section is why the order is what it
 > is; that page is the checklist you work from. `.claude/skills/add-slice/` points at it so Claude
-> Code surfaces it as a skill, `.agents/add-slice.md` does the same for other tools, and there is
+> Code surfaces it as `/add-slice`; any other tool opens the file by path. Either way there is
 > still only one copy.
 
 ---
@@ -182,7 +214,7 @@ Do this once, early. Doing it after twenty features is a merge-conflict festival
 
 ## What you have
 
-Fifteen packages and three applications, where:
+Fifteen packages and two applications, where:
 
 - Business logic lives in `packages/`, and the applications are thin.
 - One permission decision drives four enforcement surfaces from one `can()`.
@@ -192,7 +224,7 @@ Fifteen packages and three applications, where:
 
 The next thing you build is a feature, not infrastructure. That was the point.
 
-[28](28-folder-structure.md) is the whole tree on one page — use it to check what you built. Then [30](30-desktop-app.md) builds the desktop shell, and the measure of everything above is that it costs one app directory and no changes to any of it.
+[28](28-folder-structure.md) is the whole tree on one page — use it to check what you built. [30](30-desktop-app.md) is the plan for a third application, a desktop shell that has not been built; the measure of everything above is that it would cost one app directory and no changes to any of it.
 
 ---
 

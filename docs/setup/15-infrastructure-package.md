@@ -4,8 +4,8 @@
 > opt-in stores: ClickHouse and Loki. Server-only.
 
 **Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, the
-embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsReader` /
-`ClickHouseAnalyticsProjector`, and `LokiLogReader`.
+embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsProjector`, and
+`LokiLogReader`.
 
 **Prerequisite:** [14 · Vector Storage](14-vector-store.md)
 
@@ -13,12 +13,9 @@ embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsReader` /
 
 ## Why this package exists
 
-This is a departure from the architecture docs, flagged in [00](00-README.md). The docs place concrete adapters in `db` "or in the app that constructs them." Neither works here:
+Every concrete adapter the system owns lives here, behind a port declared in `application` — the Postgres ones from [13](13-infrastructure-postgres.md) and [14](14-vector-store.md) included. The alternative is to construct them in `apps/`, and that means duplication: `apps/web` and `apps/worker` both need S3 and Redis, so each app would carry its own copy of the retry policy, the key layout, and the presign expiry — which will drift.
 
-- **`db` means Postgres.** An S3 client and a Redis connection inside a package called `db` makes the name a lie, and the next person adds a Kafka producer there too.
-- **`apps/` means duplication.** `apps/web` and `apps/worker` both need S3 and Redis. Constructing them in each app means two copies of the retry policy, the key layout, and the presign expiry — which will drift.
-
-So non-Postgres adapters get one server-only package, exactly the way `auth` got one. The dependency direction is identical to `db`: it implements ports declared in `application`, and `application` never imports it.
+So the adapters get one server-only package, exactly the way `auth` got one, organised by vendor rather than by capability ([00](00-README.md), departure 1). The dependency direction is the one every adapter obeys: it implements ports declared in `application`, and `application` never imports it.
 
 ### What belongs here, and what only looks like it does
 
@@ -34,7 +31,7 @@ nothing.
 | Thing | Where | Why |
 |---|---|---|
 | Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
-| **ClickHouse** | **here** | `AnalyticsReader` and `AnalyticsProjector` — the same shape as Redis |
+| **ClickHouse** | **here** | `AnalyticsProjector` — write-only; the read seam is deliberately absent, see [12](12-application-package.md) |
 | **Postgres** | **here**, in `src/pg/` | Folded in from the separate database package — see [13](13-infrastructure-postgres.md) |
 | **SMTP** | **here**, in `src/smtp/` | `EmailSender`. SMTP rather than a provider's HTTP API, so a vendor swap is a URL |
 | **Loki** | **here, the read side only** | `LogReader`. Nothing in `packages/` writes to it |
@@ -81,7 +78,6 @@ packages/infrastructure/src/
 │   └── storage-key.ts                    → StorageKey
 ├── bullmq/
 │   ├── index.ts
-│   ├── queue-name.ts                     → QueueName
 │   └── bullmq-queue.publisher.ts         → BullMqQueuePublisher
 ├── openai/
 │   ├── index.ts
@@ -89,7 +85,6 @@ packages/infrastructure/src/
 ├── clickhouse/                           ← opt-in: built only when configured
 │   ├── index.ts
 │   ├── clickhouse.connection.ts          → ClickHouseConnection
-│   ├── clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
 │   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
 ├── loki/                                 ← opt-in: built only when LOKI_URL is set
 │   ├── index.ts
@@ -123,10 +118,9 @@ import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/infrastructure");
 
-export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
+export { BullMqQueuePublisher } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
-  ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
@@ -244,7 +238,7 @@ The reason it is one class taking two URLs rather than two classes: **which conn
 
 ## Step 15.2 — `RedisCacheStore`
 
-**`packages/infrastructure/src/cache/redis-cache.store.ts`**
+**`packages/infrastructure/src/redis/redis-cache.store.ts`**
 
 ```ts
 import type { Redis } from "ioredis";
@@ -317,7 +311,7 @@ export class RedisCacheStore extends CacheStore {
 
 ## Step 15.3 — `S3StorageGateway`
 
-**`packages/infrastructure/src/storage/storage-key.ts`**
+**`packages/infrastructure/src/s3/storage-key.ts`**
 
 ```ts
 import { Uuid } from "@loadbearing/core";
@@ -344,7 +338,7 @@ export class StorageKey {
 
 **Date-partitioned** because lifecycle rules, cost reports, and bulk deletes all work on prefixes. A flat bucket with a million objects is painful in a way that only becomes apparent when you need to delete last year's.
 
-**`packages/infrastructure/src/storage/s3-storage.gateway.ts`**
+**`packages/infrastructure/src/s3/s3-storage.gateway.ts`**
 
 ```ts
 import {
@@ -465,7 +459,14 @@ The gateway supports both, and which one a feature uses is a domain decision:
 
 ## Step 15.4 — `BullMqQueuePublisher`
 
-**`packages/infrastructure/src/queue/queue-name.ts`**
+**`packages/application/src/primitive/queue-name.ts`**
+
+> [!NOTE]
+> **It lives in `application`, not here.** Which queue a job belongs on is a domain
+> decision — `QueueDocumentIndexUseCase` names `QueueName.EMBEDDING` — and `application`
+> cannot import this package. It is a closed vocabulary of strings, like the permission
+> catalog, so it sits beside `Principal` and `Authorizer` rather than beside the adapter
+> that happens to consume it.
 
 ```ts
 export class QueueName {
@@ -491,7 +492,7 @@ export class QueueName {
 
 **`ANALYTICS` is its own concern because it is allowed to fall behind.** Projecting domain events into snapshot tables is the one workload here where lag is acceptable and throughput matters more than latency — nobody is waiting on a dashboard row. Sharing a queue with notifications would let a backlog of projections delay something a user is actually waiting for. It is also the queue whose depth is the health signal for the derived store: a consumer that died on Tuesday shows up here before it shows up in a wrong quarterly number ([Data and scale](../opinions/data-and-scale.md) §2).
 
-**`packages/infrastructure/src/queue/bullmq-queue.publisher.ts`**
+**`packages/infrastructure/src/bullmq/bullmq-queue.publisher.ts`**
 
 ```ts
 import { Queue } from "bullmq";
@@ -562,8 +563,7 @@ Three files, and the split between them is a guard rather than an organisational
 
 | Class | Port | Reachable from |
 |---|---|---|
-| `ClickHouseConnection` | — | the two below |
-| `ClickHouseAnalyticsReader` | `AnalyticsReader` | a request path |
+| `ClickHouseConnection` | — | the projector below |
 | `ClickHouseAnalyticsProjector` | `AnalyticsProjector` | the worker, only |
 
 **A single class with both would put `project()` on the object a dashboard query holds.** *Nothing
@@ -622,13 +622,11 @@ export { StorageKey } from "./storage-key.js";
 ```ts
 // packages/infrastructure/src/bullmq/index.ts
 export { BullMqQueuePublisher } from "./bullmq-queue.publisher.js";
-export { QueueName } from "./queue-name.js";
 ```
 
 ```ts
 // packages/infrastructure/src/clickhouse/index.ts
 export { ClickHouseAnalyticsProjector } from "./clickhouse-analytics.projector.js";
-export { ClickHouseAnalyticsReader } from "./clickhouse-analytics.reader.js";
 export { type ClickHouseConfig, ClickHouseConnection } from "./clickhouse.connection.js";
 ```
 

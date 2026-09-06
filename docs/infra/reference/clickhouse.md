@@ -29,10 +29,12 @@ service.
 explicit about when: *"do not do this week."* Its five-thousand-employee topology has no ClickHouse
 in it at all.
 
-**Today, `AnalyticsReader` is the port and `PgAnalyticsReader` is the default implementation**,
-reading snapshot tables in Postgres. Half a million rows a year is a Postgres table with a good index.
+**Today nothing reads an analytics store at all.** Half a million rows a year is a Postgres table
+with a good index, and no screen in the kit asks a question that needs more. The kit used to ship an
+`AnalyticsReader` port with implementations over both stores; nothing called it, and it was deleted
+([12](../../setup/12-application-package.md)).
 
-**The code side is finished; the deployment side is off.** `ClickHouseAnalyticsReader`,
+**The write side is finished; the deployment side is off.**
 `ClickHouseAnalyticsProjector`, the worker's projection consumer and the nightly reconciliation all
 exist and are covered by the smoke check — see
 [the package reference](../../../packages/infrastructure/docs/reference/clickhouse.md). What is off is
@@ -88,9 +90,9 @@ ORDER BY (organization_id, occurred_at, id)
 TTL toDateTime(occurred_at) + INTERVAL 5 YEAR;
 ```
 
-Mounted at `/docker-entrypoint-initdb.d/01-schema.sql`, alongside `goal_risk_daily` and
-`user_reliability_daily` — the two rollups `AnalyticsReader` answers from, mirroring the Postgres
-schema column for column.
+Mounted at `/docker-entrypoint-initdb.d/01-schema.sql`, and it is the only table the file creates.
+Two rollup tables used to sit beside it, mirroring a Postgres pair column for column; both were
+empty in both stores and answered a port nothing called, so all four were dropped.
 
 ### `ratchet.` is qualified on purpose
 
@@ -153,17 +155,6 @@ mislabelled row creates a second row rather than replacing the first.
 Reordering these is not a tuning tweak — it changes physical layout, changes what deduplicates, and
 requires a rewrite.
 
-### The rollup tables order on the goal, not the tenant
-
-`goal_risk_daily` is `ORDER BY (goal_id, period, organization_id)`, which breaks the tenant-first rule
-directly above it.
-
-`AnalyticsReader.goalRiskScores(goalIds)` carries no organization — the permitted scope arrives
-already resolved by `capabilities.goalsWith()`, because a remote analytics store holds no
-`CapabilitySet` and can join back to nothing. So the tenant column is genuinely unavailable as a
-leading key, and the query would scan without this order. Postgres has the identical problem and the
-identical answer, spelled `goal_risk_daily_goal_idx`.
-
 ### `LowCardinality(String)` on `action`
 
 Stores the column as a dictionary of distinct values plus an index into it. `action` is a closed
@@ -207,9 +198,8 @@ that way only if both hold — **and both are implemented**, which they were not
 first written:
 
 - **Nothing writes to it except the projection.** `ClickHouseAnalyticsProjector` is the only class in
-  the repository that inserts, and it is reachable only from the worker. `ClickHouseAnalyticsReader`
-  is the class a request path can reach, and it has no write method. No direct writes from use-cases,
-  no manual backfills that are not replays.
+  the repository that inserts, and it is reachable only from the worker. No request path can reach
+  ClickHouse at all today. No direct writes from use-cases, no manual backfills that are not replays.
 - **A daily reconciliation job** comparing row counts per day against the activity log. That is
   `analytics-reconcile`, at 05:00, over the last seven days. The realistic failure is not an outage —
   it is a consumer that died quietly on a Tuesday and a quarterly report that looks wrong in March.
@@ -220,9 +210,9 @@ the mechanics are; this page is about the container they run against.
 
 **The way it stops being derived:** a KPI computed in a materialized view and stored nowhere else. At
 that point it is authoritative, the rebuild story is gone, and nobody decided it. This is a live
-temptation rather than a hypothetical one — `goal_risk_daily` and `user_reliability_daily` are
-currently empty in both stores, and a materialized view over `activity_events` would fill the
-ClickHouse copy in an afternoon.
+temptation rather than a hypothetical one — a materialized view over `activity_events` is an
+afternoon's work, and the first dashboard to want one will not naturally ask where it could be
+rebuilt from.
 
 ---
 

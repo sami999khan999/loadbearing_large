@@ -44,6 +44,17 @@ export class MemberContract {
     invitationId: Identifiers.invitationId,
   });
 
+  // The member is addressed by `userId`, not by a membership id: the caller holds a
+  // row from `list`, and `(organizationId, userId)` is what the unique index is on.
+  public static readonly changeRole = z.object({
+    userId: Identifiers.userId,
+    roleId: Identifiers.roleId,
+  });
+
+  public static readonly setActive = z.object({
+    userId: Identifiers.userId,
+  });
+
   public static readonly listQuery = Pagination.query;
 }
 
@@ -51,3 +62,5 @@ export type MemberDto = z.infer<typeof MemberContract.entity>;
 export type InvitationDto = z.infer<typeof MemberContract.invitation>;
 export type InviteMemberInput = z.infer<typeof MemberContract.invite>;
 export type RevokeInvitationInput = z.infer<typeof MemberContract.revoke>;
+export type ChangeMemberRoleInput = z.infer<typeof MemberContract.changeRole>;
+export type SetMemberActiveInput = z.infer<typeof MemberContract.setActive>;

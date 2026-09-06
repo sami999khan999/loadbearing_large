@@ -1,23 +1,42 @@
-import { eq, type OrganizationId, type UserId } from "../../import.js";
+import {
+  type ApiKeyId,
+  type ApiKeyPage,
+  type ApiKeyRecord,
+  type ApiKeyRepository,
+  type ApiKeySummary,
+  and,
+  asc,
+  count,
+  eq,
+  isNull,
+  lt,
+  type NewApiKey,
+  type OrganizationId,
+  or,
+  type PaginationQuery,
+  type UserId,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { apiKeys } from "../schema/index.js";
 
-// Satisfied structurally, because `auth` depends on this package and the arrow cannot
-// point back. See docs/reference/enrollers.md.
-export interface ApiKeyRow {
-  readonly id: string;
-  readonly organizationId: OrganizationId;
-  readonly issuerId: UserId;
-  readonly tokenHash: string;
-  readonly scopes: readonly string[];
-  readonly expiresAt: Date | null;
-  readonly revokedAt: Date | null;
-}
+// The columns a settings page renders. `token_hash` is absent on purpose: the read that
+// lists keys must not be able to hand one to a caller.
+const SUMMARY = {
+  id: apiKeys.id,
+  name: apiKeys.name,
+  prefix: apiKeys.prefix,
+  issuerId: apiKeys.issuerId,
+  scopes: apiKeys.scopes,
+  expiresAt: apiKeys.expiresAt,
+  revokedAt: apiKeys.revokedAt,
+  lastUsedAt: apiKeys.lastUsedAt,
+  createdAt: apiKeys.createdAt,
+};
 
-export class PgApiKeyRepository extends BaseRepository {
+export class PgApiKeyRepository extends BaseRepository implements ApiKeyRepository {
   // Not tenant-scoped, and it cannot be: the organization is what this lookup
   // *establishes*, from a bare header with no principal behind it yet.
-  public async findByPrefix(prefix: string): Promise<readonly ApiKeyRow[]> {
+  public async findByPrefix(prefix: string): Promise<readonly ApiKeyRecord[]> {
     const rows = await this.db
       .select({
         id: apiKeys.id,
@@ -31,12 +50,102 @@ export class PgApiKeyRepository extends BaseRepository {
       .from(apiKeys)
       .where(eq(apiKeys.prefix, prefix));
 
-    return rows.map((row) => ({ ...row, organizationId: row.organizationId as OrganizationId }));
+    return rows.map((row) => ({
+      ...row,
+      id: row.id as ApiKeyId,
+      organizationId: row.organizationId as OrganizationId,
+    }));
   }
 
-  // A write on the read path, which is why it is a single-column update on a primary key
-  // and nothing more.
-  public async touch(id: string, at: Date): Promise<void> {
-    await this.db.update(apiKeys).set({ lastUsedAt: at }).where(eq(apiKeys.id, id));
+  // A write on the read path, so the predicate carries the throttle: an unthrottled
+  // version is one UPDATE per authenticated request, forever.
+  public async touch(id: ApiKeyId, at: Date, notBefore: Date): Promise<void> {
+    await this.db
+      .update(apiKeys)
+      .set({ lastUsedAt: at })
+      .where(
+        and(eq(apiKeys.id, id), or(isNull(apiKeys.lastUsedAt), lt(apiKeys.lastUsedAt, notBefore))),
+      );
+  }
+
+  public async listByOrganization(
+    organizationId: OrganizationId,
+    page: PaginationQuery,
+  ): Promise<ApiKeyPage> {
+    const rows = await this.db
+      .select(SUMMARY)
+      .from(apiKeys)
+      // Every read narrows by tenant. There is no code path here that could omit it.
+      .where(eq(apiKeys.organizationId, organizationId))
+      // By creation, so a page boundary is stable: ordering by last use reshuffles the
+      // list under the reader every time a key authenticates.
+      .orderBy(asc(apiKeys.createdAt))
+      .limit(page.limit)
+      .offset(page.offset);
+
+    const [counted] = await this.db
+      .select({ total: count() })
+      .from(apiKeys)
+      .where(eq(apiKeys.organizationId, organizationId));
+
+    return {
+      items: rows.map((row) => PgApiKeyRepository.toSummary(row)),
+      total: counted?.total ?? 0,
+    };
+  }
+
+  public async findById(
+    organizationId: OrganizationId,
+    apiKeyId: ApiKeyId,
+  ): Promise<ApiKeySummary | null> {
+    const [row] = await this.db
+      .select(SUMMARY)
+      .from(apiKeys)
+      .where(and(eq(apiKeys.organizationId, organizationId), eq(apiKeys.id, apiKeyId)))
+      .limit(1);
+
+    return row ? PgApiKeyRepository.toSummary(row) : null;
+  }
+
+  public async create(organizationId: OrganizationId, key: NewApiKey): Promise<void> {
+    await this.db.insert(apiKeys).values({
+      id: key.id,
+      organizationId,
+      name: key.name,
+      issuerId: key.issuerId,
+      prefix: key.prefix,
+      tokenHash: key.tokenHash,
+      scopes: [...key.scopes],
+      expiresAt: key.expiresAt,
+    });
+  }
+
+  // Only the first revocation writes: `revoked_at is null` in the predicate keeps the
+  // moment the credential actually stopped working, whatever a retry asks for.
+  public async revoke(organizationId: OrganizationId, apiKeyId: ApiKeyId, at: Date): Promise<void> {
+    await this.db
+      .update(apiKeys)
+      .set({ revokedAt: at })
+      .where(
+        and(
+          eq(apiKeys.organizationId, organizationId),
+          eq(apiKeys.id, apiKeyId),
+          isNull(apiKeys.revokedAt),
+        ),
+      );
+  }
+
+  private static toSummary(row: {
+    id: string;
+    name: string;
+    prefix: string;
+    issuerId: UserId;
+    scopes: string[];
+    expiresAt: Date | null;
+    revokedAt: Date | null;
+    lastUsedAt: Date | null;
+    createdAt: Date;
+  }): ApiKeySummary {
+    return { ...row, id: row.id as ApiKeyId };
   }
 }

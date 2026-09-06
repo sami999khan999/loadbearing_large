@@ -1,10 +1,11 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
 import { type ApiKeyRecord, ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
 import { PrincipalBuilder } from "../../src/principal/principal.builder.js";
+import { MembershipReader, type OrganizationSummary } from "../../src/session/index.js";
 import {
   headers,
   MapCacheStore,
@@ -23,9 +24,34 @@ function holding(...grants: readonly PermissionKey[]): CapabilitySet {
   return CapabilitySet.from({ wildcard: false, org: { grants, denies: [] }, goals: {} });
 }
 
+// A deactivated membership is the one case where a valid session must not produce a
+// principal, so the double answers the question rather than the whole reader.
+class StubMemberships extends MembershipReader {
+  public constructor(private readonly active: boolean) {
+    super();
+  }
+
+  public override activeOrganizationFor(): Promise<OrganizationId | null> {
+    return Promise.resolve(ORG);
+  }
+
+  public override isMember(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
+    return Promise.resolve([]);
+  }
+
+  public override isActive(): Promise<boolean> {
+    return Promise.resolve(this.active);
+  }
+}
+
 async function build(options: {
   readonly session: boolean;
   readonly keys?: readonly ApiKeyRecord[];
+  readonly active?: boolean;
 }) {
   const sessions = new StubSessionResolver(
     options.session
@@ -55,6 +81,7 @@ async function build(options: {
     sessions,
     new ApiKeyResolver(keyRepository, capabilities),
     capabilities,
+    new StubMemberships(options.active ?? true),
   );
 
   return { builder, sessions, keyRepository };
@@ -81,6 +108,14 @@ describe("PrincipalBuilder", () => {
     expect(principal?.kind).toBe("user");
     expect(principal?.userId).toBe(COOKIE_USER);
     expect(principal?.can("rbac.role.manage")).toBe(true);
+  });
+
+  // The whole point of deactivating someone: their cookie is still valid, still
+  // decrypts, and still names a real organization. Nothing else refuses it.
+  it("returns null for a valid session whose membership is deactivated", async () => {
+    const { builder } = await build({ session: true, active: false });
+
+    expect(await builder.fromHeaders(headers())).toBeNull();
   });
 
   it("returns null when there is no credential of any kind", async () => {

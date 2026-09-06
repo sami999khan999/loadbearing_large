@@ -26,4 +26,29 @@ export abstract class MemberRepository {
   // Whether an address already belongs to someone in the tenant. Compared
   // case-insensitively by the adapter, so the caller need not normalise.
   public abstract existsByEmail(organizationId: OrganizationId, email: string): Promise<boolean>;
+
+  // Null rather than a throw: "not a member of this tenant" is the same answer as
+  // "no such user", and the use-case turns either into `NOT_FOUND`.
+  public abstract findByUser(
+    organizationId: OrganizationId,
+    userId: UserId,
+  ): Promise<MemberRecord | null>;
+
+  public abstract changeRole(
+    organizationId: OrganizationId,
+    userId: UserId,
+    roleId: RoleId,
+  ): Promise<void>;
+
+  // Null reactivates. One method rather than two, because the column is one value and
+  // two setters would let them disagree about what "active" means.
+  public abstract setDeactivatedAt(
+    organizationId: OrganizationId,
+    userId: UserId,
+    at: Date | null,
+  ): Promise<void>;
+
+  // Active owners only. The last-owner rule is about who can still act, so a
+  // deactivated owner does not keep a tenant unlockable.
+  public abstract countActiveOwners(organizationId: OrganizationId): Promise<number>;
 }

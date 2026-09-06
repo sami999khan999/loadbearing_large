@@ -2,9 +2,9 @@
 // which imports this folder back.
 import { type PermissionKey, PermissionRegistry } from "../registry/permission-registry.js";
 
-// Held by every resolved principal rather than granted through a role. Named once here
-// so the rule is a lookup against `PermissionMeta.module`, never a string prefix.
-const CORE_MODULE = "core";
+// Held by every resolved principal rather than granted through a role, so the rule is a
+// lookup against `PermissionMeta.module`. Exported so a scope picker can exclude it.
+export const CORE_MODULE = "core";
 
 export interface ScopedSetDto {
   readonly grants: readonly PermissionKey[];

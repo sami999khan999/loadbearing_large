@@ -50,12 +50,6 @@ export interface EventShape {
     readonly key: string;
     readonly rowCount: number;
   };
-  readonly "queue.sweep.completed": {
-    readonly queue: string;
-    readonly found: number;
-    readonly reEnqueued: number;
-  };
-
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;
@@ -69,8 +63,6 @@ export interface EventShape {
   readonly "email.send.failed": { readonly reason: string };
 
   readonly "cache.entry.corrupt": { readonly key: string };
-  readonly "db.query.slow": { readonly operation: string; readonly durationMs: number };
-  readonly "storage.upload.failed": { readonly bucket: string; readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };
 
   readonly "analytics.projection.completed": {

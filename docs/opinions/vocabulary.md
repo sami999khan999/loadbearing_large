@@ -91,7 +91,7 @@ Derived types follow the schema name: `TaskDto` from `entity`, `CreateTaskInput`
 | Timestamp column | `<verb>ed_at` | `reactivated_at` |
 | Unique index | `<table>_<cols>_uq` | `goal_member_uq` |
 | Regular index | `<table>_<cols>_idx` | `goal_member_user_idx` |
-| Snapshot table | `<subject>_<grain>` | `goal_risk_daily` |
+| Snapshot table | `<subject>_<grain>` | `goal_risk_daily` (illustrative) |
 | Enum values | `snake_case` | `in_progress` |
 | Drizzle export | `camelCase` plural, matching the table | `goalMembers` |
 
@@ -136,9 +136,10 @@ Spell it **`organization`**, not `organisation`, everywhere — the column name 
 codebase using both resolves it inconsistently per file.
 
 **A snapshot table name says it is derived.** `goal_risk_daily` reads as a rollup at a grain;
-`goal_risks` would read as a domain table somebody could write to. Only the projection consumer
-writes to these, and they are rebuildable by replaying the activity log
-([Data and scale](data-and-scale.md) §2).
+`goal_risks` would read as a domain table somebody could write to. Only a projection consumer writes
+to one, and it is rebuildable by replaying the activity log ([Data and scale](data-and-scale.md) §2).
+The kit ships no snapshot table today — it had two, empty and unread, and they went with the port
+that was supposed to read them — so the row above is a naming rule rather than a pointer.
 
 ## Packages, env, React
 

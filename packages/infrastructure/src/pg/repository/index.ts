@@ -3,8 +3,7 @@
 export { PgActivityLogger } from "./pg-activity.logger.js";
 export { PgActivityArchiveGateway } from "./pg-activity-archive.gateway.js";
 export { PgActivityReplayReader } from "./pg-activity-replay.reader.js";
-export { PgAnalyticsReader } from "./pg-analytics.reader.js";
-export { type ApiKeyRow, PgApiKeyRepository } from "./pg-api-key.repository.js";
+export { PgApiKeyRepository } from "./pg-api-key.repository.js";
 export { PgBootstrapMembershipEnroller } from "./pg-bootstrap-membership.enroller.js";
 export { PgCapabilityRepository } from "./pg-capability.repository.js";
 export { PgInvitationClaimer } from "./pg-invitation.claimer.js";

@@ -27,8 +27,8 @@ instances, S3/MinIO, Loki, the Alloy agent that ships stdout to it, and ClickHou
 not reach a bundle" and files a log aggregator under build tooling.
 
 **Some of them are reached from code, and reached over a protocol is not the same as imported.**
-`ClickHouseAnalyticsReader` and `LokiLogReader` are real adapters behind real ports, and both are
-`fetch` against a documented HTTP API — no `@clickhouse/client`, no Loki SDK, nothing added to a
+`ClickHouseAnalyticsProjector` and `LokiLogReader` are real adapters behind real ports, and both
+are `fetch` against a documented HTTP API — no `@clickhouse/client`, no Loki SDK, nothing added to a
 manifest. `OpenAiEmbeddingProvider` was the first instance of that pattern; these two are why it is a
 pattern rather than a one-off.
 
@@ -101,7 +101,7 @@ Each entry names a framework. Each is quarantined to the one layer allowed to na
 |---|---|---|
 | `@orpc/server` | `apps/*/src/server/` | The transport seam. This is the file that changes when the backend framework does; nothing above it moves. |
 | `@tanstack/react-router` | `apps/` | Routing is app-shaped, not product-shaped. A Next app brings its own and reads paths from `@loadbearing/permissions`. |
-| `@tauri-apps/api` | `apps/desktop` | Desktop shell only. |
+| `@tauri-apps/api` | `apps/desktop` | Desktop shell only, and not installed — the app does not exist ([30](../setup/30-desktop-app.md)). |
 | `@tanstack/react-query`, `@orpc/tanstack-query` | `packages/{query,ui,feature}` | React-scoped, which is inside the target set — all three front-end targets are React. |
 | `better-auth` | `packages/auth` | Multi-framework by export map: `./node` covers Node, Express, Fastify, Nest; `./next-js` and `./tanstack-start` cover two front-ends; the core web handler covers Hono. |
 
@@ -123,7 +123,7 @@ Four questions, in order. The first "yes" decides the tier.
    addition needs a port in `application/src/port/` before any use-case can reach it.
 
 **If a dependency would be Tier 3 and you want it in `packages/`, the answer is almost always an
-abstract class instead.** That is what `port/` is for, and it is why `db` can hold `drizzle-orm`
+abstract class instead.** That is what `port/` is for, and it is why `infrastructure` can hold `drizzle-orm`
 while `application` holds a `TaskRepository` that has never heard of SQL.
 
 ---

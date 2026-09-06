@@ -270,25 +270,12 @@ listing in [23](23-feature-package.md) Step 23.5 originally did exactly that.
 
 Session is the piece of state that gates everything else, so it lives in the same cache as everything else. This is why [18](18-api-client-package.md) wraps Better Auth's *vanilla* client rather than using `better-auth/react`.
 
-**`packages/query/src/session/session.queries.ts`**
-
-```ts
-import { type AuthClient, queryOptions } from "../import.js";
-import { QueryKeys } from "../key/index.js";
-
-export class SessionQueries {
-  private constructor() {}
-
-  public static current(auth: AuthClient) {
-    return queryOptions({
-      queryKey: QueryKeys.session,
-      queryFn: () => auth.session(),
-      staleTime: 60_000,
-      retry: false,
-    });
-  }
-}
-```
+> [!NOTE]
+> **There is no `SessionQueries`, and that is a decision rather than an omission.** An earlier draft
+> cached `auth.session()` under `QueryKeys.session`, which put the session in two places: the cache
+> and `SessionStore`, which rides the SSR payload ([24](24-web-app.md)). Two copies of the answer
+> that gates every other read is one copy too many — the store owns it, resolves it server-side, and
+> is what `RouteGuard` reads. `SessionMutations` stays, because signing in and out is a *write*.
 
 **`packages/query/src/session/session.mutations.ts`**
 

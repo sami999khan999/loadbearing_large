@@ -424,7 +424,7 @@ describe("FixedClock", () => {
 
 Tests live in a per-package **`tests/`** directory, named `<subject>.spec.ts`, mirroring the `src/` tree they cover. Not colocated in `src/`, not in a `__tests__/` directory, and not in one repo-wide `test/` folder.
 
-Per-package rather than repo-wide because each package owns its own `vitest.config.ts` and `test` script, and the root `pnpm -r --parallel run test` fans out to them — a single root config would have to be re-split the moment `ui` needs jsdom or `db` needs a live Postgres. Outside `src/` rather than beside it so `src/` is exactly the shipped surface: `tsup` builds from `src/index.ts` and the `development` export condition points into `src/`, and neither should be able to reach a spec file. The cost is that a subject and its test are no longer adjacent; the mirrored layout is what pays for it — `src/clock.ts` is tested by `tests/clock.spec.ts`, always.
+Per-package rather than repo-wide because each package owns its own `vitest.config.ts` and `test` script, and the root `pnpm -r --parallel run test` fans out to them — a single root config would have to be re-split the moment `ui` needs jsdom or `infrastructure` needs a live Postgres. Outside `src/` rather than beside it so `src/` is exactly the shipped surface: `tsup` builds from `src/index.ts` and the `development` export condition points into `src/`, and neither should be able to reach a spec file. The cost is that a subject and its test are no longer adjacent; the mirrored layout is what pays for it — `src/clock.ts` is tested by `tests/clock.spec.ts`, always.
 
 One consequence to keep in mind: `tests/**` has to stay in the package's tsconfig `include`, or `tsc --noEmit` silently stops typechecking the tests.
 

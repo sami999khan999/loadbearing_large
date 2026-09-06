@@ -13,7 +13,6 @@ export {
   useCapabilities,
   useSession,
 } from "./session.context.js";
-export { SessionGuard, type SessionGuardProps } from "./session.guard.js";
 export { SignInForm, type SignInFormProps } from "./sign-in.form.js";
 export { SignOutButton, type SignOutButtonProps } from "./sign-out.button.js";
 export { SignUpForm, type SignUpFormProps } from "./sign-up.form.js";

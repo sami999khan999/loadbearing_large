@@ -23,7 +23,7 @@ Everything outside itself is reached through an abstract class in `port/`. That 
 >
 > The rule pays for itself immediately. Nothing has to thread a third argument into `execute(actor, input)`; there is no ambient request context to establish; the `Container` stays process-scoped. And a `ForbiddenError` gets logged **once**, at the boundary that catches it, with its full structured `context` — rather than three times on the way up, each layer adding a little and losing a little.
 >
-> Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `db` and `infrastructure`.
+> Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `infrastructure`.
 
 ```
 packages/application/src/
@@ -40,10 +40,8 @@ packages/application/src/
 └── port/                     ← abstract classes only, no implementations
     ├── index.ts
     ├── activity.logger.ts    → ActivityLogger
-    ├── analytics.reader.ts   → AnalyticsReader
     ├── cache.store.ts        → CacheStore
     ├── embedding.provider.ts → EmbeddingProvider
-    ├── event.bus.ts          → EventBus
     ├── queue.publisher.ts    → QueuePublisher
     ├── session.resolver.ts   → SessionResolver
     ├── storage.gateway.ts    → StorageGateway
@@ -172,7 +170,7 @@ What stays true here is the discipline, and it is worth restating because this p
 That single rule is most of what keeps the transport swappable, and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
 
 <details>
-<summary>The original listing, for reference</summary>
+<summary>The original listing, for reference — these paths no longer exist; the classes live in <code>packages/errors/src/error/</code></summary>
 
 **`packages/application/src/error/domain.error.ts`**
 
@@ -452,39 +450,17 @@ const hits = await this.vectors.search(orgId, embedding, goalIds, 20);
 
 `goalsWith()` takes the candidate set for the same reason `search()` does — a `CapabilitySet` knows only the goals its own DTO names, so a wildcard holder or an org-level grantee would otherwise resolve to `[]` and silently retrieve org-wide chunks only ([08](08-permissions-package.md)).
 
-### `AnalyticsReader`
+### The port that is not here: `AnalyticsReader`
 
-```ts
-// packages/application/src/port/analytics.reader.ts
-import type { GoalId, UserId } from "@loadbearing/contracts";
+The kit shipped one, and it was deleted. It declared `goalRiskScores` and `reliabilityTrend`, had a Postgres implementation over two rollup tables and a ClickHouse implementation over the projected event stream, and an `ANALYTICS_DRIVER` flag chose between them. **Nothing called any of it** — no use-case, no procedure, no screen.
 
-export interface DateRange {
-  readonly from: Date;
-  readonly to: Date;
-}
+That is worth a paragraph rather than a silent absence, because the argument for building it early was a good one and still turned out wrong. A column store *does* become necessary at a volume this kit will not reach for years, and by then every call site *would* have to change — but a port nothing calls has no call sites, so the retrofit it was protecting against did not exist. Meanwhile the shape was a guess: two queries and two table layouts, invented with no dashboard to check them against and kept in step by hand across two adapters.
 
-export abstract class AnalyticsReader {
-  public abstract goalRiskScores(
-    goalIds: readonly GoalId[],
-  ): Promise<readonly RiskScore[]>;
+**The write half survives, and it is the half that earns its place.** `AnalyticsProjector` ([15](15-infrastructure-clickhouse.md)) has a consumer, a checkpoint and a nightly reconciliation; `CLICKHOUSE_URL` turns it on. The store fills and proves itself while nothing reads it, which is the state you want to be in before writing a reader.
 
-  public abstract reliabilityTrend(
-    userId: UserId,
-    goalIds: readonly GoalId[],
-    window: DateRange,
-  ): Promise<readonly TrendPoint[]>;
-}
-```
+When a dashboard needs one, one decision is already made: **`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. There is no join back to `goal_members` from ClickHouse. And **nothing writes through such a port** — a write method is the moment a derived store stops being derived ([Data and scale](../opinions/data-and-scale.md) §2).
 
-Aggregate reads over time — the questions a dashboard asks, as opposed to the questions a screen asks. `PgAnalyticsReader` answers them from snapshot tables in [13](13-infrastructure-postgres.md); the reason the seam exists before a second implementation does is that a column store becomes necessary at a volume this kit will not reach for years, and by then every call site would otherwise have to change.
-
-**`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. That is even more true once the implementation is not Postgres: there is no join back to `goal_members` from ClickHouse.
-
-**Every method is `async` from the first day**, including any the Postgres implementation could answer synchronously. A remote store cannot be synchronous, so a synchronous seam would turn the swap into a breaking change at every call site — the same reasoning `ContentSource` uses in [20](20-content-package.md).
-
-**Nothing writes through this port.** Analytics is a derived read model, fed by the worker consuming domain events, and rebuildable by replaying the activity log. A write method here would be the moment it stopped being derived — see [Data and scale](../opinions/data-and-scale.md) §2.
-
-> **Why this sits in `port/` when `TaskRepository` does not.** The rule below is that repository ports live with their slice, and it holds: `port/` would otherwise grow one file per feature forever. `AnalyticsReader` is the other shape — one cross-cutting read seam that many subjects ask questions of, like `VectorStore`. The test is whether adding a feature adds a *method* here or a *file*; a method is fine, a file per slice is the smell.
+> See [Simplicity](../opinions/simplicity.md) — this is the counter-example that section is built around.
 
 ### `UnitOfWork`
 
@@ -498,44 +474,13 @@ export abstract class UnitOfWork {
 >
 > **The implementation must genuinely enrol the repositories that run inside `work()`.** A `run()` that opens a transaction the repositories never join is worse than no `UnitOfWork` at all: every call site reads as atomic and none of it is, and the first symptom is a state change with no audit row after a restart. [13](13-infrastructure-postgres.md) is where that is made real.
 
-### `EventBus`
-
-```ts
-// packages/application/src/port/event.bus.ts
-export interface DomainEvent {
-  // Stable identity, so a handler that runs twice can tell that it has.
-  readonly id: string;
-  readonly name: string;
-  readonly occurredAt: Date;
-  readonly payload: Readonly<Record<string, unknown>>;
-}
-
-export abstract class EventBus {
-  public abstract publish(event: DomainEvent): Promise<void>;
-}
-```
-> The seam for cross-slice side effects. A finance use-case should not import a notification use-case; it publishes `invoice.approved` and the notification slice subscribes. Without this, slice ownership decays into a call graph where every team's code reaches into every other team's.
-
-The analytics projection is the second consumer class: the worker subscribes to domain events and writes snapshot rows, which is what keeps the analytics store derived rather than written to directly ([13](13-infrastructure-postgres.md)).
-
-**Keep this interface broker-shaped**, even while dispatch is in-process. Four properties, and each one is a thing a Kafka or Redis Streams implementation cannot give back later:
-
-- **`publish` is async and returns nothing.** A caller that reads a return value is a caller doing RPC.
-- **Handlers are idempotent.** At-least-once delivery is what every broker offers; `id` is what makes deduplication possible.
-- **No ordering assumptions.** Two events published in order may be handled out of order.
-- **No handler exceptions reaching the publisher.** In-process dispatch could propagate them; a broker cannot, so a use-case that catches an event-handler failure is depending on semantics that will disappear.
-
-A handler that starts relying on synchronous in-process behaviour is the one thing that would make the broker swap expensive — [Data and scale](../opinions/data-and-scale.md) §7.
-
 ### The barrel
 
 ```ts
 // packages/application/src/port/index.ts
 export { ActivityLogger } from "./activity.logger.js";
-export { AnalyticsReader, type DateRange } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
-export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export {
   type RequestHeaders,
@@ -586,13 +531,9 @@ export {
 } from "./error/index.js";
 export {
   ActivityLogger,
-  AnalyticsReader,
   CacheStore,
-  type DateRange,
   type DocumentChunk,
-  type DomainEvent,
   EmbeddingProvider,
-  EventBus,
   type JobOptions,
   QueuePublisher,
   type RequestHeaders,
@@ -609,7 +550,7 @@ export { Principal, type PrincipalKind } from "./principal.js";
 
 **Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every seam the composition root wires. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([17](17-composition-container.md)).
 
-**One port on that list has no implementation yet, deliberately.** `EventBus` is declared because the *shape* is what a broker cannot give back later (see below), not because something publishes an event today — so `Container` wires nine of these ten and gains an `events` field with the first use-case that needs one. A port is a declaration of what the domain may ask for; it is not a promise that an adapter exists on the day it is written.
+**Every port on that list has exactly one implementation in `Container`**, and keeping it that way is a decision this package has already got wrong once. `EventBus` sat here for a while with no adapter and no publisher — declared because the *shape* is what a broker cannot give back later, which is a real argument and not a sufficient one. A port with no binding does not read as absent; it reads as working, right up until a use-case publishes into nothing. It was deleted, and the outbox design it was reserving is a backlog item in `tasks/TODO.md` — to land as a port, an adapter and a `Container` line in one change.
 
 **Repository ports are not on the list.** `TaskRepository` lives in its slice and is exported through the barrel only when a consumer outside the package genuinely needs the type — `Container` does, `apps/web` does not.
 

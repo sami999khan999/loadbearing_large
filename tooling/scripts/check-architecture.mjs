@@ -676,9 +676,172 @@ assert("no comment block over two lines", (failures) => {
   }
 });
 
+// ── 15 — every backticked path in the docs exists ───────────────────────────
+//
+// The cheapest class of documentation rot, and the one a reader trusts most: a path
+// in backticks reads as a fact about the tree. `docs/setup/15` sent readers to
+// `src/cache/` for two months, which is not a folder this repository has ever had.
+//
+// Only paths are checked, and a path is recognised conservatively — see PATH_SHAPE.
+// A false positive here is worse than a miss: it teaches people to add exemptions.
+
+const DOC_ROOTS = ["docs", "README.md", "AGENTS.md", "CLAUDE.md"];
+
+// A backticked span that names a file or folder in this repository. It must contain a
+// `/` or end in a known source extension, so `useState` and `owner` are not paths.
+const PATH_SHAPE =
+  /^(?:packages|apps|docs|tooling|infra|tasks|\.github|\.husky)\/[\w./@{},*$()[\]-]+$|^[\w.-]+\.(?:ts|tsx|mjs|mts|js|json|jsonc|md|css|sql|yml|yaml)$/;
+
+// Written as a shape rather than a real path: a brace set, a glob, a route parameter,
+// or an ellipsis is a description of several files and cannot be resolved to one.
+const PATH_PLACEHOLDER = /[{}*<>]|\.\.\.|…|\$\{/;
+
+// Real, and deliberately not on disk.
+const PATH_EXEMPT = [
+  // Both are named only as things that do not exist: the desktop shell doc 30
+  // describes, and the Nest app `src/server/` would move to "if NestJS ever arrives".
+  /^apps\/desktop/,
+  /^apps\/api/,
+  // A generated artefact, present only after a build.
+  /^apps\/web\/src\/route-tree\.gen\.ts$/,
+  /^apps\/web\/\.output\//,
+  /\/dist\//,
+  // Untracked by design.
+  /^\.env$/,
+  /\/\.env$/,
+];
+
+// A trailing `:12` or `:12-40` is a line reference, not part of the filename.
+const stripLines = (path) => path.replace(/:\d+(?:[-,]\d+)*$/, "");
+
+function docFiles() {
+  const out = [];
+
+  for (const entry of DOC_ROOTS) {
+    const full = join(ROOT, entry);
+    if (!existsSync(full)) continue;
+    if (statSync(full).isDirectory()) out.push(...walk(full, [".md"]));
+    else out.push(full);
+  }
+
+  for (const dir of sourceDirs()) {
+    out.push(...walk(join(dir, "docs"), [".md"]));
+  }
+
+  return out;
+}
+
+// The package or app a doc belongs to, so `docs/reference/x.md` inside it resolves the
+// way its reader does. `null` for the repository's own docs/, which have no owner.
+function ownerOf(file) {
+  for (const dir of sourceDirs()) {
+    if (file.startsWith(`${dir}/`)) return dir;
+  }
+  return null;
+}
+
+// A path the page already tells its reader is not on disk: a slice the setup docs teach
+// by building but do not ship, or a file a step deleted. Marking one is the author's
+// job — say so on the line that names it — and honouring the marker is this one's.
+const UNBUILT = /illustrative|not written yet|does not exist|removed|deleted|☐/i;
+
+// Fenced blocks are code and diagrams: an ASCII tree is full of names that are not
+// paths, and a snippet's imports resolve against the file it would live in, not here.
+// A collapsed `<details>` block is a historical listing kept for comparison, which is
+// the one place a page is deliberately describing a tree that is gone.
+function outsideFences(source) {
+  const kept = [];
+  let fenced = false;
+  let collapsed = false;
+  // A heading can carry the marker for the list under it — "What this removed" is a
+  // section of paths that are gone, and repeating the word per bullet reads worse.
+  let section = false;
+
+  for (const line of source.split("\n")) {
+    const trimmed = line.trimStart();
+
+    if (trimmed.startsWith("```")) {
+      fenced = !fenced;
+      kept.push("");
+      continue;
+    }
+    if (trimmed.startsWith("<details")) collapsed = true;
+    if (trimmed.startsWith("#")) section = UNBUILT.test(line);
+
+    kept.push(fenced || collapsed || section || UNBUILT.test(line) ? "" : line);
+
+    if (trimmed.startsWith("</details>")) collapsed = false;
+  }
+
+  return kept;
+}
+
+assert("every backticked path in the docs exists", (failures) => {
+  for (const file of docFiles()) {
+    const lines = outsideFences(readFileSync(file, "utf8"));
+
+    lines.forEach((line, index) => {
+      for (const [, span] of line.matchAll(/`([^`\n]+)`/g)) {
+        const candidate = stripLines(span.trim());
+
+        if (PATH_PLACEHOLDER.test(candidate)) continue;
+        if (!PATH_SHAPE.test(candidate)) continue;
+        if (PATH_EXEMPT.some((pattern) => pattern.test(candidate))) continue;
+
+        // A bare filename names a file whose folder the sentence around it supplies.
+        if (!candidate.includes("/")) continue;
+
+        // `docs/reference/x.md` means the page beside the doc that writes it, and the
+        // opinions pages write it generically — "the package's `docs/reference/`".
+        // So a `docs/…` span resolves against any package that has one, and only then
+        // against the repository root.
+        const owner = ownerOf(file);
+        const roots = candidate.startsWith("docs/")
+          ? [...(owner ? [owner] : []), ...sourceDirs(), ROOT]
+          : [ROOT];
+
+        if (!roots.some((base) => existsSync(join(base, candidate)))) {
+          failures.push(`${rel(file)}:${index + 1} \`${candidate}\` does not exist`);
+        }
+      }
+    });
+  }
+});
+
+// ── 16 — the two pnpm version declarations agree ─────────────────────────────
+//
+// `pnpm/action-setup` reads `packageManager` and nothing else; pnpm 11 reads
+// `devEngines.packageManager`. Both have to exist and say the same thing. See
+// docs/setup/26-hygiene-and-ci.md.
+
+assert("both pnpm version declarations agree", (failures) => {
+  const manifest = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const modern = manifest.devEngines?.packageManager;
+  const legacy = manifest.packageManager;
+
+  // Declaring only the modern one is what left CI red on every branch for weeks: the
+  // action fails in seconds with "No pnpm version is specified" and nothing runs.
+  if (!legacy) {
+    failures.push("package.json has no `packageManager` — `pnpm/action-setup` reads only that");
+    return null;
+  }
+  if (!modern) {
+    failures.push("package.json has no `devEngines.packageManager` — pnpm 11 reads only that");
+    return null;
+  }
+
+  const expected = `${modern.name}@${modern.version}`;
+  if (legacy !== expected) {
+    failures.push(`packageManager is \`${legacy}\`, devEngines says \`${expected}\``);
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;
+let skippedCount = 0;
 
 for (const { name, failures, skipped } of results) {
   if (failures.length > 0) {
@@ -686,6 +849,7 @@ for (const { name, failures, skipped } of results) {
     console.log(`✗ ${name}`);
     for (const detail of failures) console.log(`    ${detail}`);
   } else if (skipped) {
+    skippedCount += 1;
     console.log(`○ ${name} — skipped: ${skipped}`);
   } else {
     console.log(`✓ ${name}`);
@@ -697,4 +861,19 @@ if (failed > 0) {
   process.exit(1);
 }
 
-console.log(`\n${results.length} assertions passed.`);
+const passed = results.length - skippedCount;
+
+if (skippedCount === 0) {
+  console.log(`\n${passed} assertions passed.`);
+  process.exit(0);
+}
+
+// Counted apart, never summed: a skip is an assertion that did not run, and printing
+// "16 assertions passed" over two `○` lines is how an unbuilt artefact reads as green.
+console.log(`\n${passed} passed, ${skippedCount} skipped, of ${results.length}.`);
+
+// Locally a skip is a fast loop; in CI it is a check nobody ran and nobody will.
+if (process.env.CI === "true") {
+  console.log("A skipped assertion is unverified. Build the artefacts it needs first.");
+  process.exit(1);
+}

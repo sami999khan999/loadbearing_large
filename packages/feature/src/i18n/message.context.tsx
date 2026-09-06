@@ -35,11 +35,19 @@ export function MessageProvider({ messages, children }: MessageProviderProps) {
   return <MessageContext.Provider value={translator}>{children}</MessageContext.Provider>;
 }
 
+// The translator itself, for the one caller that needs it un-narrowed: `ErrorCopy` picks
+// its own shell key from the code, so a namespace parameter would have nothing to scope.
+export function useTranslator(): Translator {
+  const translator = useContext(MessageContext);
+  if (!translator) throw new Error("useTranslator must be used inside a MessageProvider.");
+
+  return translator;
+}
+
 // `N` is inferred from one argument position, which is what makes the constraint real:
 // a two-argument `t(ns, key)` widens `N` until both arguments fit.
 export function useMessages<N extends ClientNamespace>(namespace: N) {
-  const translator = useContext(MessageContext);
-  if (!translator) throw new Error("useMessages must be used inside a MessageProvider.");
+  const translator = useTranslator();
 
   const t = useCallback(
     (key: ScopedKey<N>, params?: MessageParams) => translator.t(key, params),

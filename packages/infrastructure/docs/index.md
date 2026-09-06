@@ -125,26 +125,35 @@ Neither is built unless `analytics.clickhouse` is configured. Both are exercised
 
 ## The swap points, and what makes them real
 
-Three ports have, or will have, more than one implementation. Each is chosen by a `driver` field on
+Two ports have, or will have, more than one implementation. Each is chosen by a `driver` field on
 `ContainerConfig` rather than by a `new` in the constructor — so adopting a store is an environment
 variable and one `case`, never a change to a use-case, a repository, or a test.
 
 | Port | `driver` | Today | Next | Trigger |
 | --- | --- | --- | --- | --- |
 | `VectorStore` | `VECTOR_DRIVER` | `pgvector` | a dedicated vector database | pgvector recall or latency degrades |
-| `AnalyticsReader` | `ANALYTICS_DRIVER` | `postgres` | `clickhouse` | snapshots stop covering ad-hoc queries |
 | `LogReader` | `LOKI_URL` set or not | Loki | anything with a range-query API | search latency during a real incident |
+
+There was a third. `AnalyticsReader` had a `postgres` and a `clickhouse` implementation behind
+`ANALYTICS_DRIVER`, and **nothing ever read through either** — so the port, both adapters and the
+flag were deleted rather than kept warm. See
+[12](../../../docs/setup/12-application-package.md) and
+[Simplicity](../../../docs/opinions/simplicity.md).
 
 **The `driver` field is what stops "swap the implementation" from being a claim.** A seam with exactly
 one implementation is untested by construction. A seam with a discriminated config is exercised the
 first time somebody flips the value — and `Container.buildVectorStore` has an exhaustive `switch`, so
 a driver added to the union and not to the switch is a build error.
 
-**Adopting ClickHouse is deliberately two steps, not one.** Setting `CLICKHOUSE_URL` builds the
-projector and starts the worker's projection and reconciliation; `ANALYTICS_DRIVER` still says
-`postgres`, so reads do not move. Flip the driver once the nightly reconciliation has come back clean
-for a few days. The alternative — one variable that moves reads and writes together — cuts dashboards
-over to a store that is still filling.
+**Adopting ClickHouse is still deliberately two steps.** Setting `CLICKHOUSE_URL` builds the
+projector and starts the worker's projection and reconciliation. Nothing reads the store, so the
+second step is *writing* the reader a dashboard needs — against a store that has been filling and
+reconciling for days. The gap used to be spelled `ANALYTICS_DRIVER`; it is now the absence of a
+reader, which cannot be flipped by accident.
+
+Setting `CLICKHOUSE_URL` also makes `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER` required: both
+default to ClickHouse's own `default` and the compose container is `ratchet`, so the defaults cannot
+reach the only ClickHouse this kit ships.
 
 **What makes the vector swap cheap is not the switch.** It is that `VectorStore.search()` takes the
 resolved goal scope as a parameter. A remote store holds no `CapabilitySet` and can join back to

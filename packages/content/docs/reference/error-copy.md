@@ -159,6 +159,25 @@ for.
 
 ---
 
+## Who calls this
+
+`feature`'s `useErrorMessage` and nothing else, which is deliberate: it normalises whatever a query
+or mutation threw, renders the code through `ERROR_COPY` and the violations through
+`FIELD_RULE_COPY`, and hands back one object. Nine components used to render
+`shell.t("state.error")` — "Something went wrong" — against a server that had already said *which*
+thing. A `FORBIDDEN` and a `CONFLICT` are different things to be told, and the envelope carried the
+difference all the way to the component before it was thrown away.
+
+`apps/web`'s root route uses the same hook for its `errorComponent`, so an uncaught throw anywhere in
+the tree gets the catalog's sentence rather than a stack trace.
+
+**Two call sites still branch before falling back**, and both are right to: an invitation that is
+`NOT_FOUND` and an invite that is `CONFLICT` have copy of their own in their slice's namespace, which
+is more specific than the shared one. They fall through to `ErrorCopy` for everything else, so the
+branch adds a sentence rather than replacing the mechanism.
+
+---
+
 ## See also
 
 - [namespace](namespace.md) — `ShellMessageKey`, and why it is not `MessageKey`

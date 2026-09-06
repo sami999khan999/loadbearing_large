@@ -1,4 +1,4 @@
-import { EmbeddingProvider, UnavailableError } from "../import.js";
+import { EmbeddingProvider, type Logger, UnavailableError } from "../import.js";
 
 export interface OpenAiEmbeddingConfig {
   readonly apiKey: string;
@@ -16,7 +16,12 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
 
   public override readonly dimensions: number;
 
-  public constructor(private readonly config: OpenAiEmbeddingConfig) {
+  // Optional, like `LokiLogReader`'s: the vendor's own reason belongs in the log and
+  // never on the wire, and a provider built without one still works.
+  public constructor(
+    private readonly config: OpenAiEmbeddingConfig,
+    private readonly logger?: Logger,
+  ) {
     super();
     this.dimensions = config.dimensions;
   }
@@ -47,6 +52,7 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
       // UNAVAILABLE, not INTERNAL: the catalog marks it retryable, which is what
       // lets the embedding consumer try again instead of dead-lettering a blip.
       if (!response.ok) {
+        this.fail(batch.length);
         throw new UnavailableError("openai.embeddings", response.status);
       }
 
@@ -55,6 +61,7 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
       // One vector per text, or the alignment below is a lie. A short response would
       // otherwise be padded with empties that `vector(1536)` rejects at insert time.
       if (body.data.length !== batch.length) {
+        this.fail(batch.length);
         throw new UnavailableError("openai.embeddings", response.status);
       }
 
@@ -66,5 +73,11 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
     }
 
     return out;
+  }
+
+  // The batch size, not the whole call: a run that fails on its fourth batch has
+  // already embedded three, and the count is what a retry storm is measured in.
+  private fail(chunks: number): void {
+    this.logger?.emit("embedding.request.failed", { model: this.config.model, chunks });
   }
 }

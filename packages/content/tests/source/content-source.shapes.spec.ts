@@ -61,9 +61,6 @@ describe("the other three shapes", () => {
 
   // Not a stub that throws: the shape exists to come from a database, and a missing slug
   // is a 404.
-  it("has no documents", async () => {
-    expect(await source.document("terms-of-service")).toBeNull();
-  });
 });
 
 // Tested against the two real catalogs rather than a hand-built empty one.
@@ -83,12 +80,14 @@ describe("the server-only email namespace", () => {
     expect(snapshot.base["error.conflict"]).toBeDefined();
   });
 
-  it("falls back to English inside the email namespace too", async () => {
+  it("carries both layers inside the email namespace too", async () => {
     const t = await server.translator("bn", ["email"]);
 
     expect(t.t("email.digest.viewAll")).toBe("ড্যাশবোর্ড খুলুন");
-    // Untranslated in bn/email.ts, so the fallback layer answers.
-    expect(t.t("email.digest.unsubscribe")).toBe("Change how often you hear from us");
+    // The English layer is loaded beneath it whether or not any key needs it — which is
+    // what makes the *server* catalog behave like the client one.
+    const snapshot = await server.messages("bn", ["email"]);
+    expect(snapshot.base["email.digest.viewAll"]).toBe("Open the dashboard");
   });
 
   // A client catalog has no email loader, so the lookup is skipped and `t()` renders the

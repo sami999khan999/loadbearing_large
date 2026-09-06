@@ -178,7 +178,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 ## 1.9 Inside `packages/application`
 
 - **`error/`** — the domain error hierarchy. Each carries a `code` string, which is the *only* thing the transport layer maps. No HTTP status codes anywhere in this folder.
-- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, analytics, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
+- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, analytics, embeddings, sessions, activity, email, maintenance, logs, unit of work. One file per capability, all abstract, zero implementations — and every one bound in `Container`.
 - **`<slice>/`** — one folder per feature slice, holding that slice's use-cases, its policies, **and its repository port**.
 - **Repository ports live in the slice, not in `port/`.** `port/` is for capabilities the whole system shares; `TaskRepository` is meaningful only next to the use-cases that need it. Putting it in `port/` would make that folder grow by one file per feature forever.
 - **Every use-case has one public method, `execute(principal, input)`**, following load → authorize → work → persist.
@@ -351,13 +351,16 @@ The Postgres side gets its own section because it is the largest folder in the p
 
 ---
 
-## 1.22 Inside `apps/desktop`
+## 1.22 If a desktop shell arrives
 
-- **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything here is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
+**`apps/desktop` does not exist.** [30](30-desktop-app.md) is the plan for it, and the rules below
+are what the naming above already decides, recorded so the shell is a day rather than a debate.
+
+- **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything there is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
 - **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.
-- **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. This file plus `BearerAuthStrategy` is the *entire* difference between the desktop client and the browser client.
+- **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. That file plus `BearerAuthStrategy` is the *entire* difference between a desktop client and the browser client — both of which ship today, unused, which is the claim this section exists to keep honest.
 - **`src/router.tsx`** — its own `@tanstack/react-router` instance on memory or hash history, because the webview serves from a custom protocol with no server to resolve a cold path against. Its own route tree; **not** its own paths — destinations come from `ROUTES` in `permissions`, and keeping the strings identical to web's is what lets a `<Link>` inside a `feature` component be correct in both shells.
-- **Holds no container.** No `composition`, no `application`, no `db`, no `auth`. It is a client, and the server-only ESLint boundary applies here with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt.
+- **Holds no container.** No `composition`, no `application`, no `infrastructure`, no `auth`. It is a client, and it wants the server-only ESLint boundary with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt. Its glob is **not** in `tooling/biome-config/src/base.json` today, and adding it is one line in an existing array rather than a new override ([05](05-lint-and-format.md)).
 - **Smell:** a `process.env` reference; a secret in `config.ts`; a hand-written route path; anything imported from `composition` or `application`.
 
 ---
@@ -428,13 +431,13 @@ apps/web  server/orpc/base.ts
         │    → auth  PrincipalBuilder.fromHeaders()
         │        → auth  BetterAuthSessionResolver     (who is this?)
         │        → auth  CapabilityCache               (Redis, 60s backstop)
-        │            └ miss → db  PgCapabilityRepository  (3 queries)
+        │            └ miss → infrastructure  PgCapabilityRepository  (3 queries)
         │    → contracts  ProcedurePermissions.required("task.get")
         ▼  Principal { userId, CapabilitySet }
 apps/web  server/orpc/task.router.ts        ← three lines
         ▼
 application  GetTaskUseCase.execute(principal, input)
-        │  1. load     → TaskRepository (port)  ──► db  PgTaskRepository
+        │  1. load     → TaskRepository (port)  ──► infrastructure  PgTaskRepository
         │  2. authorize → Authorizer.assert(principal, "task.read", goalId)
         │  3. work     → TaskEntity
         ▼  TaskDto
@@ -476,8 +479,8 @@ application  ReactivateTaskUseCase.execute(principal, input)
         │  3. WORK       OverdueLockPolicy + TaskEntity.reactivate(clock.now())
         │                  └ fails → ConflictError
         │  4. PERSIST    UnitOfWork
-        │                  ├ TaskRepository.save(task)      → db
-        │                  └ ActivityLogger.log("task.reactivated")  → db
+        │                  ├ TaskRepository.save(task)      → infrastructure
+        │                  └ ActivityLogger.log("task.reactivated")  → infrastructure
         │  5. ENQUEUE    QueuePublisher.publish("embedding.generate", …)
         │                  → infrastructure  BullMqQueuePublisher → Redis
         ▼  TaskDto
@@ -499,7 +502,7 @@ apps/worker  consumer/embedding.consumer.ts
         ▼
 application  IndexTaskUseCase.execute(systemPrincipal, …)
         │  → EmbeddingProvider (port) → infrastructure  OpenAiEmbeddingProvider
-        │  → VectorStore       (port) → db              PgVectorStore
+        │  → VectorStore       (port) → infrastructure  PgVectorStore
         ▼  row in task_embeddings
 ```
 
@@ -510,7 +513,7 @@ application  IndexTaskUseCase.execute(systemPrincipal, …)
 An admin removes `task.reactivate` from the Manager role. Nobody deploys anything.
 
 ```
-db  role_permissions row deleted
+postgres  role_permissions row deleted
         ▼
 auth  CapabilityCache invalidated for every affected user
         ▼
@@ -530,7 +533,7 @@ auth  CapabilityCache invalidated for every affected user
 
 **Every use-case followed load → authorize → work → persist.** Authorization is step two, in the use-case, every time. Never in middleware, never in a router, never only in the UI.
 
-**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container/container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
+**Swapping anything is local.** Postgres → another SQL database: `infrastructure/src/pg/` only. pgvector → Qdrant: one line in `container/container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
 
 ---
 
@@ -540,4 +543,4 @@ Given a feature name and a layer, you can write the file path and the class name
 
 ---
 
-[← Folder Structure](28-folder-structure.md) · [`apps/desktop` →](30-desktop-app.md)
+[← Folder Structure](28-folder-structure.md) · [A desktop shell, if one arrives →](30-desktop-app.md)

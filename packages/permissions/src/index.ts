@@ -1,4 +1,9 @@
-export { CapabilitySet, type CapabilitySetDto, type ScopedSetDto } from "./capability/index.js";
+export {
+  CapabilitySet,
+  type CapabilitySetDto,
+  CORE_MODULE,
+  type ScopedSetDto,
+} from "./capability/index.js";
 export { CATALOG } from "./catalog/index.js";
 export { GATES } from "./gate/index.js";
 export {

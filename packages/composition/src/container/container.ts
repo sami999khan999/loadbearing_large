@@ -3,7 +3,6 @@ import {
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
-  type AnalyticsReader,
   ApiKeyResolver,
   AuthFactory,
   type AuthInstance,
@@ -12,19 +11,25 @@ import {
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
+  ChangeMemberRoleUseCase,
   ClickHouseAnalyticsProjector,
-  ClickHouseAnalyticsReader,
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  CreateApiKeyUseCase,
+  CreateRoleUseCase,
   Database,
+  DeleteRoleUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  GrantPermissionUseCase,
   IndexDocumentUseCase,
+  InspectEffectivePermissionsUseCase,
   type InvitationClaimer,
   InvitationClaimingEnroller,
   InviteMemberUseCase,
   JsonLogger,
+  ListApiKeysUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListRolesUseCase,
@@ -40,7 +45,6 @@ import {
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
@@ -55,23 +59,37 @@ import {
   PgUnitOfWork,
   PgVectorStore,
   PrincipalBuilder,
+  QueueDocumentIndexUseCase,
   type QueuePublisher,
   RedisCacheStore,
   RedisConnection,
+  RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
+  RevokePermissionUseCase,
   S3StorageGateway,
   SERVER_CATALOG,
+  SearchDocumentsUseCase,
   type SessionResolver,
+  SetMemberActiveUseCase,
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
   SystemClock,
   TransactionScope,
   type UnitOfWork,
+  UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
 import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
+
+// The API-key slice's use-cases. Grouped like the member ones, and absent for the same
+// reason: the worker authenticates nothing and issues nothing.
+interface ApiKeyUseCases {
+  readonly listApiKeys: ListApiKeysUseCase;
+  readonly createApiKey: CreateApiKeyUseCase;
+  readonly revokeApiKey: RevokeApiKeyUseCase;
+}
 
 // The member slice's use-cases. Named so the getter can say what is absent rather than
 // handing out `undefined`.
@@ -80,6 +98,10 @@ export interface MemberUseCases {
   readonly listInvitations: ListInvitationsUseCase;
   readonly inviteMember: InviteMemberUseCase;
   readonly revokeInvitation: RevokeInvitationUseCase;
+  readonly changeMemberRole: ChangeMemberRoleUseCase;
+  // One use-case behind two procedures: the direction is an argument, because the
+  // column is one value and two classes would let them disagree about "active".
+  readonly setMemberActive: SetMemberActiveUseCase;
 }
 
 // One field per dependency the deployment cannot serve requests without, plus the
@@ -115,7 +137,6 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
-  public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
@@ -153,8 +174,23 @@ export class Container {
   // ── use-cases, one field each, constructed eagerly ────────
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
-  public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
-  public readonly rbac: { readonly listRoles: ListRolesUseCase };
+  public readonly ai: {
+    readonly indexDocument: IndexDocumentUseCase;
+    readonly queueIndex: QueueDocumentIndexUseCase;
+    readonly searchDocuments: SearchDocumentsUseCase;
+  };
+  // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
+  // config there is no principal to be the issuer.
+  private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
+  public readonly rbac: {
+    readonly listRoles: ListRolesUseCase;
+    readonly inspectEffective: InspectEffectivePermissionsUseCase;
+    readonly createRole: CreateRoleUseCase;
+    readonly updateRole: UpdateRoleUseCase;
+    readonly deleteRole: DeleteRoleUseCase;
+    readonly grantPermission: GrantPermissionUseCase;
+    readonly revokePermission: RevokePermissionUseCase;
+  };
   // Only with an auth config: the invitation mail needs `auth.baseUrl` for its link,
   // and the process without one is the worker, which never invites.
   private readonly memberUseCases: MemberUseCases | undefined;
@@ -189,7 +225,7 @@ export class Container {
     // Each reads a `driver` rather than naming a class: the alternative is named in a
     // switch a compiler checks, not in a document.
     this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
-    this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
+    this.embeddings = new OpenAiEmbeddingProvider(config.embedding, this.logger);
 
     // Opt-in and stopped by default. Building the connection only when configured is
     // what keeps the seam honest rather than aspirational.
@@ -197,21 +233,8 @@ export class Container {
       ? new ClickHouseConnection(config.analytics.clickhouse, this.logger)
       : undefined;
 
-    // Otherwise a `clickhouse` driver with no block degrades to Postgres silently, out
-    // of the store the operator believed they had moved off.
-    if (config.analytics.driver === "clickhouse" && !this.clickhouse) {
-      throw new Error(
-        "analytics.driver is clickhouse but no analytics.clickhouse config was given.",
-      );
-    }
-
-    this.analytics =
-      config.analytics.driver === "clickhouse" && this.clickhouse
-        ? new ClickHouseAnalyticsReader(this.clickhouse)
-        : new PgAnalyticsReader(this.database, this.transactions);
-
-    // The writer follows the connection, not the driver: project first, watch the
-    // reconciliation come back clean, then flip `ANALYTICS_DRIVER`.
+    // The projector follows the connection and nothing else. There is no read driver to
+    // flip: the store is written and reconciled, and no feature reads it yet.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
       : undefined;
@@ -282,10 +305,29 @@ export class Container {
 
       const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
       const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
+
+      this.apiKeyUseCases = {
+        listApiKeys: new ListApiKeysUseCase(this.authorizer, apiKeyRepository),
+        createApiKey: new CreateApiKeyUseCase(
+          this.authorizer,
+          apiKeyRepository,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
+        revokeApiKey: new RevokeApiKeyUseCase(
+          this.authorizer,
+          apiKeyRepository,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
+      };
       this.principalBuilder = new PrincipalBuilder(
         this.sessionResolver,
         apiKeyResolver,
         this.capabilities,
+        this.memberships,
       );
 
       // Inside the auth block because the mail's link is `auth.baseUrl`. The use-cases
@@ -309,6 +351,21 @@ export class Container {
           this.activity,
           this.unitOfWork,
         ),
+        changeMemberRole: new ChangeMemberRoleUseCase(
+          this.authorizer,
+          members,
+          roles,
+          this.capabilities,
+          this.activity,
+          this.unitOfWork,
+        ),
+        setMemberActive: new SetMemberActiveUseCase(
+          this.authorizer,
+          members,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
       };
     }
 
@@ -322,15 +379,51 @@ export class Container {
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
 
-    this.rbac = { listRoles: new ListRolesUseCase(this.authorizer, roles) };
+    this.rbac = {
+      listRoles: new ListRolesUseCase(this.authorizer, roles),
+      // The same repository `CapabilityCache` reads, deliberately un-cached: an
+      // inspector showing a stale answer is worse than one that costs a query.
+      inspectEffective: new InspectEffectivePermissionsUseCase(
+        this.authorizer,
+        members,
+        capabilityRepository,
+      ),
+      createRole: new CreateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      updateRole: new UpdateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      deleteRole: new DeleteRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      // `CapabilityCache` bound to the `CapabilityInvalidator` port: the domain states
+      // that a grant must flush, and this line is the only one that knows what to.
+      grantPermission: new GrantPermissionUseCase(
+        this.authorizer,
+        roles,
+        this.capabilities,
+        this.activity,
+        this.unitOfWork,
+      ),
+      revokePermission: new RevokePermissionUseCase(
+        this.authorizer,
+        roles,
+        this.capabilities,
+        this.activity,
+        this.unitOfWork,
+      ),
+    };
 
     this.ai = {
+      // Run by the worker's consumer, off the queue the two below feed.
       indexDocument: new IndexDocumentUseCase(
         this.authorizer,
         this.embeddings,
         this.vectors,
         this.activity,
         this.unitOfWork,
+      ),
+      queueIndex: new QueueDocumentIndexUseCase(this.authorizer, this.queuePublisher),
+      searchDocuments: new SearchDocumentsUseCase(
+        this.authorizer,
+        this.embeddings,
+        this.vectors,
+        this.activity,
       ),
     };
   }
@@ -370,6 +463,13 @@ export class Container {
   public get auth(): AuthInstance {
     if (!this.authInstance) throw new Error("This container was built without an auth config.");
     return this.authInstance;
+  }
+
+  public get apiKey(): ApiKeyUseCases {
+    if (!this.apiKeyUseCases) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.apiKeyUseCases;
   }
 
   public get member(): MemberUseCases {

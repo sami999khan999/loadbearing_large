@@ -1,17 +1,24 @@
+import { useCapabilities, useSession } from "../auth/index.js";
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
+  Button,
   Callout,
+  Can,
   DataTable,
   DateFormat,
   EmptyState,
   type MemberDto,
+  MemberMutations,
   MemberQueries,
   StatusBadge,
   type TableColumn,
   useApiClient,
   useAppQuery,
   useMemo,
+  useState,
 } from "../import.js";
+import { EffectivePermissionsInspector } from "../rbac/index.js";
 
 export interface MemberListProps {
   // Paged rather than unbounded: `Pagination.query` caps `limit` at 100 in the schema.
@@ -25,10 +32,18 @@ interface MemberRow extends MemberDto {
 
 export function MemberList({ limit = 25 }: MemberListProps) {
   const { t } = useMessages("member");
-  // `common` for the states every list shares, `member` for this screen's own copy.
-  const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const client = useApiClient();
+  const capabilities = useCapabilities();
+  const { user } = useSession();
   const members = useAppQuery(MemberQueries.list(client, { limit, offset: 0 }));
+  const deactivate = MemberMutations.useDeactivate(client);
+  const reactivate = MemberMutations.useReactivate(client);
+  // One row at a time: the inspector issues a query, and opening every row would issue
+  // one per member on a page of twenty-five.
+  const [inspecting, setInspecting] = useState<MemberDto | null>(null);
 
   const rows = useMemo<readonly MemberRow[]>(() => {
     // Annotated rather than inferred: the client's procedure types are reconstructed
@@ -61,15 +76,79 @@ export function MemberList({ limit = 25 }: MemberListProps) {
         header: t("member.column.joined"),
         cell: (row) => DateFormat.day(row.joinedAt),
       },
+      {
+        key: "actions",
+        header: t("member.column.actions"),
+        cell: (row) => (
+          <>
+            <Can permission="rbac.effective.inspect" capabilities={capabilities}>
+              <Button variant="ghost" onClick={() => setInspecting(row)}>
+                {t("member.action.inspect")}
+              </Button>
+            </Can>
+            <Can permission="member.deactivate" capabilities={capabilities}>
+              {
+                // Hidden for your own row, because the use-case refuses it: a button whose
+                // only outcome is a CONFLICT is a button that should not be there.
+                row.userId === user?.id ? null : (
+                  <Button
+                    variant="secondary"
+                    disabled={deactivate.isPending || reactivate.isPending}
+                    onClick={() =>
+                      row.deactivated
+                        ? reactivate.mutate({ userId: row.userId })
+                        : deactivate.mutate({ userId: row.userId })
+                    }
+                  >
+                    {row.deactivated
+                      ? t("member.action.reactivate")
+                      : t("member.action.deactivate")}
+                  </Button>
+                )
+              }
+            </Can>
+          </>
+        ),
+      },
     ],
-    [t],
+    [t, capabilities, user, deactivate, reactivate],
   );
+
+  // The last-owner and self refusals get their own sentence: the catalog's generic
+  // conflict copy says "someone else changed this first", which is wrong about both.
+  const refusal = describe(deactivate.error ?? reactivate.error);
+  const refusalCopy =
+    refusal?.envelope.code === "CONFLICT"
+      ? t(
+          refusal.envelope.context.reason === "self"
+            ? "member.error.self"
+            : "member.error.lastOwner",
+        )
+      : refusal?.message;
 
   if (members.isPending) return <DataTable.Skeleton rows={3} columns={4} />;
   // A failed list rendered as "no members yet", which is the one answer a members page
   // must not give when it does not know.
-  if (members.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+  if (members.isError) return <Callout tone="danger">{describe(members.error)?.message}</Callout>;
   if (rows.length === 0) return <EmptyState title={t("member.empty")} />;
 
-  return <DataTable columns={columns} rows={rows} caption={t("member.title")} />;
+  return (
+    <>
+      {refusal ? <Callout tone="danger">{refusalCopy}</Callout> : null}
+      <DataTable columns={columns} rows={rows} caption={t("member.title")} />
+      {inspecting ? (
+        <section>
+          <h3>{t("member.inspect.title", { name: inspecting.name })}</h3>
+          {
+            // The resolved set for *that* member, which only the server can answer —
+            // the viewer's own comes off the session with no round trip.
+          }
+          <EffectivePermissionsInspector userId={inspecting.userId} />
+          <Button variant="secondary" onClick={() => setInspecting(null)}>
+            {t("member.inspect.close")}
+          </Button>
+        </section>
+      ) : null}
+    </>
+  );
 }

@@ -62,7 +62,7 @@ packages/auth/src/
     └── index.ts                          ← prints what the pinned runtime expects
 ```
 
-**Depends on** `core`, `contracts`, `permissions`, `application`, `db`, `infrastructure`.
+**Depends on** `core`, `contracts`, `permissions`, `application`, `infrastructure`.
 **Used by** `composition` only. Never by `apps/web`'s component tree.
 
 The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@loadbearing/api-client` is the package whose entire job is "how to reach the server." See [18](18-api-client-package.md).
@@ -355,11 +355,11 @@ export abstract class MembershipReader {
 }
 ```
 
-Implemented in `db` as `PgMembershipReader`, ordered by creation so a user in two organizations lands in the same one every time rather than wherever the planner happened to look first.
+Implemented in `infrastructure` as `PgMembershipReader`, ordered by creation so a user in two organizations lands in the same one every time rather than wherever the planner happened to look first.
 
 > **Declared here rather than in `application`, and that is the same judgement `ApiKeyRepository` gets in Step 16.6.** It exists to populate an authentication artifact, and no use-case should learn that sessions have an organization column.
 >
-> The cost is that `db` cannot implement it nominally — `auth` already depends on `db`, so the arrow cannot point back — and the two are bound structurally in `Container` ([17](17-composition-container.md)). A signature drift fails composition's typecheck rather than this package's. That is a real trade, and the alternative is worse: a port in `application` describing a table `application` is not allowed to know exists.
+> The cost is that `infrastructure` cannot implement it nominally — `auth` already depends on `infrastructure`, so the arrow cannot point back — and the two are bound structurally in `Container` ([17](17-composition-container.md)). A signature drift fails composition's typecheck rather than this package's. That is a real trade, and the alternative is worse: a port in `application` describing a table `application` is not allowed to know exists.
 
 ---
 
@@ -402,9 +402,10 @@ export class CapabilityCache {
     await this.cache.delete(`${CapabilityCache.PREFIX}${organizationId}:${userId}`);
   }
 
-  // Role edits affect everyone holding it — cheaper to flush than to enumerate.
-  public async invalidateAll(): Promise<void> {
-    await this.cache.deletePrefix(CapabilityCache.PREFIX);
+  // Role edits affect everyone holding it — cheaper to flush than to enumerate, and
+  // the tenant in the key is what keeps that flush inside the organization.
+  public async invalidateOrganization(organizationId: OrganizationId): Promise<void> {
+    await this.cache.deletePrefix(`${CapabilityCache.PREFIX}${organizationId}:`);
   }
 }
 ```
@@ -415,15 +416,18 @@ Every one of these must evict:
 
 | Event | Evict |
 |---|---|
-| Role's permissions changed | `invalidateAll()` |
-| Role deleted | `invalidateAll()` |
+| Role's permissions changed | `invalidateOrganization(organizationId)` |
+| Role deleted | `invalidateOrganization(organizationId)` |
+| Membership's role changed | `invalidate(userId)` |
 | Membership added or removed | `invalidate(userId)` |
 | Goal member added or removed | `invalidate(userId)` |
 | Permission override written or deleted | `invalidate(userId)` |
 | User deactivated | `invalidate(userId)` |
 | API key created or revoked | `invalidate(issuerId)` |
 
-**Get this wrong in the stale direction and a revoked permission keeps working until the TTL expires.** That is a security bug, not a caching bug. Every one of these events is already written to the activity log, so the eviction hook has an obvious home next to that write.
+**Get this wrong in the stale direction and a revoked permission keeps working until the TTL expires.** That is a security bug, not a caching bug. Every one of these events is already written to the activity log, so the eviction hook has an obvious home next to that write — but *after* the transaction commits, not inside it: a flush issued while the old row is still committed lets a concurrent read cache the stale set again.
+
+**The domain never names this class.** The use-cases take a `CapabilityInvalidator` port from `application/src/port/`, and `Container` binds `CapabilityCache` to it — `application` may not import `auth`, which is what makes the port the only way this call can exist in a use-case at all.
 
 **The cache key carries the organization, and that is not decoration.** A key of `capability:user:<id>` means a user who belongs to two organizations gets whichever capability set was cached first — a cross-tenant privilege bug with a one-minute fuse and no error anywhere. The prefix scheme still supports `deletePrefix`, because the organization segment sits between the fixed prefix and the user id.
 
@@ -528,30 +532,15 @@ export const apiKeys = pgTable(
 
 **`packages/auth/src/apikey/api-key.hasher.ts`**
 
+> [!NOTE]
+> **Minting is not in this file any more.** `ApiKeyRules` in `packages/application/src/apikey/`
+> owns the token format and `mint()`, because issuing a key is a use-case and both layers depend on
+> the same format — two copies drift into a key that authenticates against nothing. What is left
+> here is what *authentication* needs: `hash`, `prefixOf`, `timingSafeEqual`.
+
 ```ts
-import { Uuid } from "@loadbearing/core";
-
-export interface GeneratedApiKey {
-  // Shown to the user exactly once, at creation. Never stored.
-  readonly token: string;
-  readonly prefix: string;
-  readonly hash: string;
-}
-
 export class ApiKeyHasher {
-  private static readonly PREFIX_LENGTH = 8;
-
   private constructor() {}
-
-  public static async generate(): Promise<GeneratedApiKey> {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    const token = `rk_${[...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-    return {
-      token,
-      prefix: token.slice(0, ApiKeyHasher.PREFIX_LENGTH),
-      hash: await ApiKeyHasher.hash(token),
-    };
-  }
 
   public static async hash(token: string): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
@@ -590,9 +579,12 @@ export interface ApiKeyRecord {
   readonly revokedAt: Date | null;
 }
 
+// In `packages/application/src/apikey/` — see the note below. `notBefore` is the
+// throttle on a write that sits on the hottest read path in the system.
 export abstract class ApiKeyRepository {
   public abstract findByPrefix(prefix: string): Promise<readonly ApiKeyRecord[]>;
-  public abstract touch(id: string, at: Date): Promise<void>;
+  public abstract touch(id: ApiKeyId, at: Date, notBefore: Date): Promise<void>;
+  // …plus listByOrganization, findById, create and revoke, for the settings page.
 }
 
 export class ApiKeyResolver {
@@ -639,7 +631,9 @@ export class ApiKeyResolver {
 
 **Timing-safe comparison** even though the prefix already narrowed the candidate set. It costs nothing and removes a class of question you would otherwise have to answer in a security review.
 
-**`ApiKeyRepository` is declared here as an abstract class** and implemented in `db`. That is a slight break from "ports live in `application`," and it is deliberate: an API key is an authentication artifact, not a domain entity, and nothing in `application` should know keys exist.
+**`ApiKeyRepository` was declared here as an abstract class**, on the argument that an API key is an authentication artifact rather than a domain entity and nothing in `application` should know keys exist. **That argument did not survive the feature.** The moment the product grew `/settings/api-keys`, issuing a key became a domain operation gated on `apikey.manage`, with a scope check, an audit row and a `UnitOfWork` — so the port lives in `packages/application/src/apikey/` and `auth` imports it from there, as it already imports `SessionResolver`.
+
+What survived is better than the original rule: the *shapes* are split rather than the ports. `ApiKeyRecord` carries `tokenHash` and is what authentication reads; `ApiKeySummary` is what a list renders and has no hash field at all, so a digest cannot reach the wire through a careless DTO mapping.
 
 ---
 
@@ -687,20 +681,31 @@ signed cookie cache   ← 60s max
 
 An in-process LRU is the tier that surprises people, because a Redis `DEL` cannot reach it — twenty app instances hold twenty copies. Keep its TTL short enough that correctness never depends on invalidating it, which is why it is seconds rather than minutes.
 
-**Three values, and they are answered — as environment variables, not literals.** The defaults below ship in `.env.example`; a staging box and production are not obliged to agree, which is the whole reason they are not constants in `AuthFactory`.
+**Two values, and they are answered — as environment variables, not literals.** The defaults below ship in `.env.example`; a staging box and production are not obliged to agree, which is the whole reason they are not constants in `AuthFactory`.
 
 | Value | Variable | Default | Note |
 | --- | --- | --- | --- |
 | Web session lifetime | `AUTH_SESSION_MAX_AGE_SECONDS` | 7 days | |
 | Slides on activity? | — | Yes | `updateAge` is a quarter of the lifetime, so a session in daily use is never interrupted while an abandoned one still expires on schedule. A sliding window and a short cookie-cache TTL interact — the cache delays revocation regardless |
-| Desktop token lifetime | `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` | 30 days | Longer, which is what makes the next paragraph mandatory rather than nice to have |
 | Revocation window | `AUTH_COOKIE_CACHE_MAX_AGE_SECONDS` | 60s | Capped at 60 in the env schema ([24](24-web-app.md)), because the pressure to raise it always arrives as a performance argument |
 
-**A longer-lived desktop token needs independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. That is what the `surface` column on `sessions` is for (Step 16.2): every session records whether it was opened from the web or the desktop shell, so revoking one class is `DELETE FROM sessions WHERE user_id = $1 AND surface = 'desktop'` against `sessions_user_surface_idx` — not a scan, and not a guess made from a user-agent string months after the fact.
+**A second surface will want a longer-lived token than a web session, and that needs independent
+revocation** — "sign out all devices" has to reach a machine that may be offline. That is what the
+`surface` column on `sessions` is for (Step 16.2): every session records where it was opened from,
+so revoking one class is `DELETE FROM sessions WHERE user_id = $1 AND surface = 'desktop'` against
+`sessions_user_surface_idx` — not a scan, and not a guess made from a user-agent string months after
+the fact. Today every row says `web`, and the column costs a byte.
 
-Deciding this at the same time as the lifetime is the point. The mechanism is cheap now and expensive on the afternoon somebody loses a laptop.
+**Deciding this at the same time as the lifetime is the point**, and it is the exception
+[Simplicity](../opinions/simplicity.md) names: a seam earns its place early when the retrofit is
+spread rather than local. Adding `surface` to a table with a year of sessions in it, and then
+backfilling a value nobody recorded, is not a migration anyone wants to write. The mechanism is
+cheap now and expensive on the afternoon somebody loses a laptop.
 
-**The desktop path has no cookie**, so the first tier of that chain does not exist for it ([30](30-desktop-app.md)). A bearer-token client pays a full capability resolution on every cache miss, and the in-process LRU is the only thing absorbing it. Worth knowing before the load test, because desktop traffic and web traffic have genuinely different cost profiles per request.
+**A bearer-token client would have no cookie**, so the first tier of the chain above does not exist
+for it ([30](30-desktop-app.md)) — it pays a full capability resolution on every cache miss, and the
+in-process LRU is the only thing absorbing it. Worth knowing before the load test: the two surfaces
+have genuinely different cost profiles per request.
 
 ---
 
@@ -713,22 +718,120 @@ import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/auth");
 
-export {
-  ApiKeyHasher,
-  type ApiKeyRecord,
-  ApiKeyRepository,
-  ApiKeyResolver,
-  type GeneratedApiKey,
-} from "./apikey/index.js";
+export { ApiKeyHasher, ApiKeyResolver } from "./apikey/index.js";
 export type { AuthConfig } from "./auth.config.js";
 export { AuthFactory, type AuthInstance } from "./auth.factory.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js";
 ```
 
-**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `db` gives `migrate/` and `infrastructure` gives `smoke/` ([15](15-infrastructure-package.md)).
+The barrel grows with the slices below it — `MembershipEnroller`, `InvitationClaimer`,
+`OrganizationFounder` and `InvitationClaimingEnroller` from `session/`, and the plugin from
+`plugin/` — each named explicitly, because `export *` would make the public surface an accident.
+
+**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `smoke.ts` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
+
+---
+
+## Step 16.11 — Enrolment: how a new user acquires a membership
+
+**No session is ever issued to a user with no membership.** `BetterAuthSessionResolver` refuses one,
+which is fail-closed and correct — and it means sign-up is only half a flow until something inserts
+into `memberships`. `MembershipEnroller` is that something, and it is the write half of the pair
+`MembershipReader` reads.
+
+**`packages/auth/src/session/membership.enroller.ts`**
+
+```ts
+export abstract class MembershipEnroller {
+  // Null is not an error: registration switched off returns it on every sign-up, and
+  // the session is then refused. Fail-closed is the whole point.
+  public abstract enrol(userId: UserId): Promise<OrganizationId | null>;
+}
+```
+
+**Three implementations, and `AUTH_ENROLMENT_MODE` picks one** — the container is where the choice is
+made, exactly like every other adapter:
+
+| Mode | Enroller | What a new user gets |
+|---|---|---|
+| `personal` | `PgPersonalOrganizationEnroller` | An organization of their own, owned by them, with the same four system roles `pnpm db:seed` creates |
+| `bootstrap` | `PgBootstrapMembershipEnroller` | Membership of the one organization `BOOTSTRAP_ORGANIZATION_SLUG` names — first in as `owner`, everyone after as `member` |
+| `invite` | `NullMembershipEnroller` | Nothing. Their first sign-in is refused |
+
+**`personal` is the default and the only mode that works against an empty database.** `bootstrap` is
+right for a demo or a single-tenant install and wrong for anything reachable from the internet — the
+sign-up form then hands out membership of your tenant. `invite` is the production posture: an
+invitation is the only door.
+
+**The mode is not the whole answer, because an invited address never gets what the mode would give
+it.** `InvitationClaimingEnroller` wraps whichever enroller the mode picked:
+
+```ts
+public async enrol(userId: UserId): Promise<OrganizationId | null> {
+  return (await this.claimer.claimPending(userId)) ?? this.inner.enrol(userId);
+}
+```
+
+**Decorating rather than branching is what keeps this one rule instead of three.** Written as a
+condition inside each enroller, "an invitation wins" would be stated three times and could disagree
+with itself; here the mode's enroller never learns invitations exist. Adding a fourth mode inherits
+the behaviour for free.
+
+> [!IMPORTANT]
+> **Claims match on the verified address**, which is why invitations need
+> `AUTH_REQUIRE_EMAIL_VERIFICATION` on. Matching an unverified one lets anyone type a colleague's
+> address at sign-up and walk into their organization.
+
+**Enrolment runs from `session.create.before`, not `user.create.after`.** Better Auth queues
+`create.after` hooks until the whole sign-up endpoint has finished — which is *after* the session
+hook has already refused for want of a membership. The symptom is a sign-up that appears to succeed
+and a sign-in that never does, with the membership row present in the database the whole time.
+
+**`bootstrap` takes a `pg_advisory_xact_lock`** so two simultaneous first sign-ups cannot both read
+"no owner yet" and both become one.
+
+---
+
+## Step 16.12 — The organization plugin: switch, create, accept
+
+Three actions do not fit the oRPC router, and the reason is worth stating rather than working around.
+
+**They are identity-gated, not permission-gated.** Switching to an organization you are a member of
+is not a permission any role grants — `memberships.isMember(user, org)` *is* the whole authorization,
+and there is no key that could express it. Creating an organization is the same: a person with no
+memberships at all may do it.
+
+**And only an endpoint holding Better Auth's own `ctx` can call `setSessionCookie`.** Without that,
+`session.cookieCache` keeps answering for the old tenant for up to sixty seconds after a switch — so
+the very next RPC reads the wrong organization's rows, and it looks like a cache bug rather than a
+missing call.
+
+**`packages/auth/src/plugin/organization.plugin.ts`** declares three endpoints under Better Auth's
+own base path:
+
+| Endpoint | Authorization |
+|---|---|
+| `POST /organization/switch` | `memberships.isMember(user, organizationId)` — one indexed lookup, and the whole check |
+| `POST /organization/create` | A session. The caller becomes `owner`, through the same `OrganizationFounder` the personal enroller uses |
+| `POST /invitation/accept` | The token, claimed against the verified address |
+
+All three end in the same private `rebind`, and **the order inside it is the load-bearing part**:
+
+```ts
+await ctx.context.internalAdapter.updateSession(token, { activeOrganizationId });
+await ctx.context.internalAdapter.updateUser(user.id, { lastActiveOrganizationId: organizationId });
+await setSessionCookie(ctx, { session: updated, user });
+```
+
+Row first, then where the next sign-in lands, then the cookie cache. Writing the cookie first and the
+row second leaves a window where a crash produces a cookie pointing at a tenant the session table
+does not agree with — and the cookie is what every subsequent request believes.
+
+**`lastActiveOrganizationId` is honoured only while the membership still exists**, so removing
+someone from an organization needs no cleanup pass over this column.
 
 ---
 
@@ -740,6 +843,9 @@ export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js"
 - `api_keys` carries `organization_id`, and `api_keys_issuer_idx` covers the `issuer_id` foreign key.
 - The foreign keys from `memberships`, `goal_members`, and `permission_overrides` to `users(id)` exist, and every `user_id` column is `uuid`.
 - `grep -rn "better-auth" packages --include=*.ts` matches only `packages/auth/` and (later) `packages/api-client/src/auth/`.
+- With `AUTH_ENROLMENT_MODE=personal`, a fresh sign-up reaches the app and owns an organization named after them, against a database `pnpm db:seed` has never touched.
+- With `AUTH_ENROLMENT_MODE=invite`, the same sign-up is refused at sign-in — and an address holding a pending invitation is not.
+- Switching organizations and **immediately** issuing an RPC answers for the new tenant, not the old one. Inside sixty seconds, this is the assertion that catches a missing `setSessionCookie`.
 
 ```bash
 grep -rn 'text("user_id")\|text("actor_id")\|text("issuer_id")' packages/infrastructure/src/pg

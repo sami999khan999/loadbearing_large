@@ -14,6 +14,8 @@ interface NavRecord {
 const ITEMS = [
   { module: "rbac", labelKey: "nav.roles", icon: "check", order: 10 },
   { module: "member", labelKey: "nav.members", icon: "user", order: 20 },
+  { module: "apikey", labelKey: "nav.apiKeys", icon: "key", order: 30 },
+  { module: "document", labelKey: "nav.documents", icon: "check", order: 40 },
 ] as const satisfies readonly NavRecord[];
 
 export const navItems: readonly NavItem[] = NavContract.collection.parse(ITEMS);

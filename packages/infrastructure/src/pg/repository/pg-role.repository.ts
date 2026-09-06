@@ -1,8 +1,11 @@
 import {
   and,
   asc,
+  ConflictError,
+  count,
   eq,
   inArray,
+  not,
   type OrganizationId,
   type PaginationQuery,
   type RoleId,
@@ -12,7 +15,7 @@ import {
   sql,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { rolePermissions, roles } from "../schema/index.js";
+import { goalMembers, memberships, rolePermissions, roles } from "../schema/index.js";
 
 export class PgRoleRepository extends BaseRepository implements RoleRepository {
   // Three queries, fixed — never one per role: the grants come for the whole page with a
@@ -74,6 +77,91 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
     }));
 
     return { items, total: counted?.total ?? 0 };
+  }
+
+  // By the slug `roles_key_uq` is on, so a create can refuse a duplicate rather than
+  // let the driver raise one.
+  public async findByKey(organizationId: OrganizationId, key: string): Promise<RoleRecord | null> {
+    const [row] = await this.db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.key, key)))
+      .limit(1);
+
+    return row ? this.findById(organizationId, row.id as RoleId) : null;
+  }
+
+  // The row and its grants in one call, reconciled rather than replaced: deleting every
+  // permission and re-inserting would churn the index on a rename.
+  public async save(organizationId: OrganizationId, role: RoleRecord): Promise<void> {
+    // Update first, insert only if it matched nothing. One `on conflict (id)` cannot do
+    // this: an existing row trips `roles_key_uq` too, and only the arbiter is caught.
+    const updated = await this.db
+      .update(roles)
+      .set({ name: role.name, description: role.description })
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.id, role.id)));
+
+    if ((updated.rowCount ?? 0) === 0) {
+      const inserted = await this.db
+        .insert(roles)
+        .values({
+          id: role.id,
+          organizationId,
+          key: role.key,
+          name: role.name,
+          description: role.description,
+          scope: role.scope,
+          isSystem: role.isSystem,
+        })
+        // The use-case refuses a duplicate key before it reaches here; this closes the
+        // race between that check and this insert, with the code it would have thrown.
+        .onConflictDoNothing({ target: [roles.organizationId, roles.key] });
+
+      if ((inserted.rowCount ?? 0) === 0) throw new ConflictError("role", "duplicate");
+    }
+
+    const keep = [...role.permissions];
+
+    await this.db
+      .delete(rolePermissions)
+      .where(
+        and(
+          eq(rolePermissions.organizationId, organizationId),
+          eq(rolePermissions.roleId, role.id),
+          keep.length === 0 ? undefined : not(inArray(rolePermissions.permission, keep)),
+        ),
+      );
+
+    if (keep.length > 0) {
+      await this.db
+        .insert(rolePermissions)
+        .values(keep.map((permission) => ({ organizationId, roleId: role.id, permission })))
+        .onConflictDoNothing();
+    }
+  }
+
+  // The grants go with the row: `role_permissions.role_id` cascades, so this is one
+  // statement and the second table is the database's problem.
+  public async delete(organizationId: OrganizationId, roleId: RoleId): Promise<void> {
+    await this.db
+      .delete(roles)
+      .where(and(eq(roles.organizationId, organizationId), eq(roles.id, roleId)));
+  }
+
+  // Both tables that reference `roles` with `on delete no action`, summed: either one
+  // non-empty makes a delete a driver error rather than a refusal the UI can render.
+  public async countAssignments(organizationId: OrganizationId, roleId: RoleId): Promise<number> {
+    const [held] = await this.db
+      .select({ total: count() })
+      .from(memberships)
+      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.roleId, roleId)));
+
+    const [scoped] = await this.db
+      .select({ total: count() })
+      .from(goalMembers)
+      .where(and(eq(goalMembers.organizationId, organizationId), eq(goalMembers.roleId, roleId)));
+
+    return (held?.total ?? 0) + (scoped?.total ?? 0);
   }
 
   // Two queries for one row: `RoleRecord` carries its grants, and a thinner record type

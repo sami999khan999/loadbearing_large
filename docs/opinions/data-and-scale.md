@@ -338,33 +338,38 @@ expiry instead, and a `DELETE … WHERE expires_at < now()` on the cleanup sched
 **Decide the retention policy at the same time.** The common shape: 12–24 months of detail in
 Postgres, aggregates forever in the analytics store, older partitions detached to cold storage.
 
-### 4.3 The `AnalyticsReader` port
+### 4.3 The write path is built; the read seam is not
 
-The seam, with a Postgres implementation behind it. Same pattern as `VectorStore` and
-`ContentSource` — one line in `Container` when the implementation changes.
+The projection is real: `AnalyticsProjector`, `ClickHouseAnalyticsProjector`, the projection
+consumer and the nightly reconciliation all ship, and `CLICKHOUSE_URL` turns them on. **Nothing
+reads the store back**, and that is deliberate rather than unfinished.
+
+The kit used to ship an `AnalyticsReader` port with two methods — `goalRiskScores` and
+`reliabilityTrend` — two Postgres rollup tables to answer them, a ClickHouse implementation, and an
+`ANALYTICS_DRIVER` flag to choose. Nothing called any of it. No consumer meant no evidence about
+the shape, so what shipped was a guess at two queries and two table layouts, kept in step by hand
+across two adapters. It was deleted in favour of building it when a dashboard asks.
+
+This is [simplicity](simplicity.md) applied to its own example: *"the seam is implemented"* and
+*"the store is running"* are two decisions, and only the second costs anything to be wrong about.
+A read seam whose future swap touches one adapter has earned nothing until something reads it.
+
+**When a dashboard does need one, this is the shape**, and the one part worth deciding in advance
+is the signature:
 
 ```ts
-// packages/application/src/port/analytics.reader.ts
-export abstract class AnalyticsReader {
-  public abstract goalRiskScores(
-    goalIds: readonly GoalId[],
-  ): Promise<readonly RiskScore[]>;
-
-  public abstract reliabilityTrend(
-    userId: UserId,
-    goalIds: readonly GoalId[],
-    window: DateRange,
-  ): Promise<readonly TrendPoint[]>;
-}
+public abstract goalRiskScores(
+  goalIds: readonly GoalId[],
+): Promise<readonly RiskScore[]>;
 ```
 
 **`goalIds` is a parameter, not an option.** The permission filter runs on the input set before the
 query, resolved by `capabilities.goalsWith()` — identical in shape and reasoning to
-`VectorStore.search()` ([14](../setup/14-vector-store.md)). An analytics store does not know the
-`CapabilitySet`, so the scope has to arrive already resolved. Putting it in the signature means it
-cannot be forgotten.
+`VectorStore.search()` ([14](../setup/14-vector-store.md)), which is the seam that *does* ship and
+is worth reading first. An analytics store does not know the `CapabilitySet`, so the scope has to
+arrive already resolved. Putting it in the signature means it cannot be forgotten.
 
-**It lives in `port/` rather than in a slice** because it is one cross-cutting read seam over many
+**It belongs in `port/` rather than in a slice** because it is one cross-cutting read seam over many
 subjects, not one port per subject — the same reason `VectorStore` is there and `TaskRepository` is
 not ([12](../setup/12-application-package.md)).
 
@@ -416,7 +421,7 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 2 | KPI snapshot tables | Dashboard over 1s on a warm cache | A day |
 | 3 | Read replica for dashboards | Reads competing with writes | A day; one adapter change |
 | 4 | pgBouncer, transaction mode | Past ~100 connections | Hours |
-| 5 | ClickHouse behind `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **Two env vars** |
+| 5 | ClickHouse reads, behind a new `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **One env var, then a day** |
 | 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
 | 7 | Shard Postgres by `organization_id` | Writes past a single primary | Weeks — needs 4.1 |
 | 8 | Broker-backed event bus | In-process dispatch saturates | Days — needs §6 |
@@ -436,20 +441,21 @@ predictive analytics and ad-hoc KPI exploration are exactly what they cannot cov
 **At 100k DAU it is required.**
 
 Because the write path is a replay of `activity_log` from step 4.3, adopting it changes where rows
-land and nothing else. **The port and the pipeline are built; the destination is a config change.**
+land and nothing else. **The pipeline is built; filling the store is a config change.**
 
-Move #5 in the table above says "two env vars" rather than "a week" because
-`ClickHouseAnalyticsReader`, `ClickHouseAnalyticsProjector`, the projection consumer and the nightly
-reconciliation are written, and the container is in the compose file behind a profile:
+Move #5 says "one env var, then a day" because `ClickHouseAnalyticsProjector`, the projection
+consumer and the nightly reconciliation are written, and the container is in the compose file
+behind a profile:
 
 1. `pnpm infra:up:analytics` — starts the container. Nothing writes to it.
 2. `CLICKHOUSE_URL=…` — the projection starts filling it and the reconciliation starts reporting.
-   Dashboards still read Postgres.
-3. `ANALYTICS_DRIVER=clickhouse` — reads move.
+3. Write the reader the dashboard actually needs, against a store that has been filling and
+   reconciling for days.
 
-**The two-variable arrangement is the design, not an accident.** One switch that moved reads and
-writes together would cut dashboards over to a store that is still filling. Step 2 without step 3 is
-the state you sit in for a few days while the reconciliation proves itself.
+**Step 2 without step 3 is the state to sit in**, and it is why filling the store is separated from
+reading it: a switch that moved reads the moment the pipeline started would cut a dashboard over to
+a store that is still backfilling. That gap used to be spelled `ANALYTICS_DRIVER`. It is now the
+absence of a reader, which cannot be flipped by accident.
 
 What is still a week, if you want it, is what the store is *for*: the rollup job at move #2, which
 does not exist in either store, and the queries a real dashboard asks. The infrastructure is not the
@@ -524,10 +530,18 @@ Worth naming, because it is most of the system. At every scale on this page:
 - **Event handlers** — moving from in-process dispatch to a broker changes the dispatcher, not the
   subscribers.
 
-That last one has a condition attached. **Keep the event bus interface broker-shaped:** async
-`publish`, no return value, idempotent handlers, no ordering assumptions. A handler that starts
-depending on synchronous in-process semantics is the one thing that would make the broker swap
-expensive.
+That last one has a condition attached, and it applies to the interface that does not exist yet:
+**when an event bus is built, build it broker-shaped** — async `publish`, no return value,
+idempotent handlers keyed on a stable event id, no ordering assumptions, and no handler exception
+reaching the publisher. Each of those is something a Kafka or Redis Streams implementation cannot
+give back later, and a handler that starts depending on synchronous in-process semantics is the one
+thing that would make the swap expensive.
+
+**Shape is not a reason to declare the port early.** One was declared here, faked in
+`TestContainer`, and bound nowhere, which meant a use-case that published would have published into
+nothing in production while reading as correct. It was deleted. The retrofit for this seam is local
+— a port file, an adapter, one `Container` line — so it lands with its first publisher, together,
+and `tasks/TODO.md` carries the design until then.
 
 ---
 
@@ -596,7 +610,7 @@ stdout → Alloy → Loki               diagnostics
 | Audit trail | Postgres, partitioned monthly, **in-transaction** |
 | Auth sessions | Postgres + Redis cache |
 | Vectors | pgvector, behind `VectorStore` — `VECTOR_DRIVER` |
-| Analytics aggregates | Postgres snapshots → ClickHouse, behind `AnalyticsReader` — `ANALYTICS_DRIVER` |
+| Analytics aggregates | Postgres snapshots → ClickHouse, written by `AnalyticsProjector` — `CLICKHOUSE_URL`. No reader yet; see §4.3 |
 | System logs | stdout → **Loki**, 30-day retention, low-cardinality labels only; read back through `LogReader` |
 | Uploads | S3, presigned URLs, short TTL |
 
@@ -610,12 +624,13 @@ stdout → Alloy → Loki               diagnostics
 | pgvector or a dedicated store | Source documents | Re-embed |
 
 **Do this week:** `organization_id` everywhere · partition `activity_log` and `task_status_history` ·
-`AnalyticsReader` port with a Postgres implementation · index every FK · query-count assertions in
-integration tests · separate the Redis cache instance from the queue instance.
+index every FK · query-count assertions in integration tests · separate the Redis cache instance
+from the queue instance.
 
-**Do not do this week:** *starting* ClickHouse, a dedicated vector database, sharding, a broker. Every
-one is a swap behind a seam that already exists, and building any of them before a real query is slow
-means building the wrong schema for a load pattern nobody has measured.
+**Do not do this week:** *starting* ClickHouse, a dedicated vector database, sharding, a broker —
+nor an `AnalyticsReader` before a dashboard asks one a question. Each is a swap behind a seam that
+already exists or is a day's work when it is needed, and building any of them before a real query is
+slow means building the wrong schema for a load pattern nobody has measured.
 
 > [!NOTE]
 > **"The seam is implemented" and "the store is running" are two different decisions, and only the

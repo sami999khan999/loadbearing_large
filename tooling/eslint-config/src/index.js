@@ -124,11 +124,7 @@ export default tseslint.config(
 
   // ── email copy is server-only: it exists for apps/worker's digests ──
   {
-    files: [
-      "packages/{ui,query}/src/**/*.{ts,tsx}",
-      "apps/web/src/**/*.{ts,tsx}",
-      "apps/desktop/src/**/*.{ts,tsx}",
-    ],
+    files: ["packages/{ui,query}/src/**/*.{ts,tsx}", "apps/web/src/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
         "error",

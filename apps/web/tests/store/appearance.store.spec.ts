@@ -8,7 +8,13 @@ const parse = (cookie: string | null, prefersDark = false): AppearanceSnapshot =
 
 describe("AppearanceStore.fromCookieHeader", () => {
   it("falls back to the palette that seeds :root when there is no cookie", () => {
-    expect(parse(null)).toEqual({ theme: "slate", mode: "light", preference: "system" });
+    expect(parse(null)).toEqual({
+      theme: "slate",
+      mode: "light",
+      preference: "system",
+      font: "sans",
+      locale: "en",
+    });
   });
 
   it("reads a palette and a mode back out", () => {
@@ -16,7 +22,16 @@ describe("AppearanceStore.fromCookieHeader", () => {
       theme: "ocean",
       mode: "dark",
       preference: "dark",
+      font: "sans",
+      locale: "en",
     });
+  });
+
+  // The third axis, and the reason it is a token override rather than a theme: it moves
+  // independently, so a serif reader keeps whatever palette they picked.
+  it("reads a font back out, and rejects one the registry does not know", () => {
+    expect(parse("theme=ocean; mode=dark; font=serif").font).toBe("serif");
+    expect(parse("font=comic").font).toBe("sans");
   });
 
   it("ignores everything it does not recognise", () => {
@@ -90,6 +105,30 @@ describe("AppearanceStore", () => {
     await Promise.all([store.ensure(load), store.ensure(load)]);
 
     expect(calls).toBe(1);
+  });
+
+  // The fourth axis. Unlike the other three it is not a CSS variable, so it is the one
+  // the switcher has to invalidate the router for.
+  it("prefers the locale cookie over the Accept-Language header", () => {
+    const snapshot = AppearanceStore.fromCookieHeader("locale=bn", false, "en-GB,en;q=0.9");
+
+    expect(snapshot.locale).toBe("bn");
+  });
+
+  it("negotiates from Accept-Language when no cookie has been set", () => {
+    const snapshot = AppearanceStore.fromCookieHeader(null, false, "bn-BD,bn;q=0.9,en;q=0.8");
+
+    expect(snapshot.locale).toBe("bn");
+  });
+
+  // A cookie is a string a user can edit, and an unknown locale would index a catalog
+  // that has no loader for it.
+  it("refuses a locale the catalog does not carry", () => {
+    expect(AppearanceStore.fromCookieHeader("locale=fr", false, "fr-FR").locale).toBe("en");
+  });
+
+  it("falls back to English when the header names nothing it has", () => {
+    expect(AppearanceStore.fromCookieHeader(null, false, "de-DE,de;q=0.9").locale).toBe("en");
   });
 
   it("round-trips through the SSR payload", () => {

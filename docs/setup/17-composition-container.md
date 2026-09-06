@@ -115,7 +115,6 @@ import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
 import { JsonLogger, type LogLevel, type Logger } from "@loadbearing/observability";
 import {
   type ActivityLogger,
-  type AnalyticsReader,
   Authorizer,
   type CacheStore,
   type EmbeddingProvider,
@@ -138,7 +137,6 @@ import { ContentSource, StaticContentSource } from "@loadbearing/content";
 import {
   Database,
   PgActivityLogger,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMembershipReader,
@@ -172,13 +170,11 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
-  public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
   public readonly sessions: SessionResolver;
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
-  // `EventBus` is the tenth port and is deliberately absent — see below.
 
   // ── auth ──────────────────────────────────────────────────
   public readonly auth: AuthInstance;
@@ -214,9 +210,8 @@ export class Container {
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
 
-    // ── the three swap points ──
+    // ── the two swap points ──
     this.vectors = new PgVectorStore(this.database, this.transactions);
-    this.analytics = new PgAnalyticsReader(this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
     // No argument until `SERVER_CATALOG` exists — the constructor already defaults to
@@ -225,8 +220,8 @@ export class Container {
 
     // The fourth argument is what pins a tenant onto every session at sign-in. It is
     // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
-    // `auth` declares — `db` cannot implement it nominally, because `auth` already
-    // depends on `db`, so this line is where a signature drift is caught.
+    // `auth` declares — `infrastructure` cannot implement it nominally, because `auth`
+    // already depends on it, so this line is where a signature drift is caught.
     const membershipReader: MembershipReader = new PgMembershipReader(
       this.database,
       this.transactions,
@@ -294,20 +289,22 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 **The logger is constructed first and disposed last**, which is the same rule read from both ends. Constructed first, because a `Database` that cannot reach Postgres should produce a structured line rather than a stack trace on stderr. Disposed last, because everything closing above it may have something to say on the way out.
 
 > [!NOTE]
-> **`logger` is a shared primitive, not a port.** It sits with `clock` and `authorizer` rather than in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` — the domain layer does not log at all ([12](12-application-package.md)). The seam lives in `@loadbearing/observability`, low enough in the graph that `db`, `infrastructure`, `auth`, and both apps can reach it.
+> **`logger` is a shared primitive, not a port.** It sits with `clock` and `authorizer` rather than in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` — the domain layer does not log at all ([12](12-application-package.md)). The seam lives in `@loadbearing/observability`, low enough in the graph that `infrastructure`, `auth`, and both apps can reach it.
 
 ---
 
 > [!NOTE]
-> **Fifteen of the sixteen ports are wired here. `EventBus` is not.** `application` declares it for
-> cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
-> notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
-> adapter in `db` or `infrastructure` and no field on this class. Adding one is a field plus a
-> constructor line, exactly like the rest.
+> **Every port `application` declares is wired here — all sixteen, no exceptions.** That is a
+> property worth checking rather than assuming: read `packages/application/src/port/` against the
+> fields on this class and the two lists should line up name for name.
 >
-> A fake for it exists regardless, in `TestContainer` — which is the point of that file: the first
-> use-case that publishes an event is testable on the day it is written, without a port double being
-> the thing that blocks it.
+> It has not always held. `EventBus` was declared for cross-slice side effects — a finance use-case
+> publishing `invoice.approved` rather than importing the notification slice — with no adapter in
+> `infrastructure` and no field here. A use-case that published would have published into a
+> recording fake under test and into nothing at all in production, which is worse than a missing
+> feature: it reads as working. It was deleted; the transactional outbox it was reserving is a
+> backlog item in `tasks/TODO.md`, and it lands as a port, an adapter and a `Container` line
+> together or not at all.
 
 ---
 
@@ -350,11 +347,9 @@ The reason this class exists in this shape:
 // `src/` and not in a spec: it is checked by `tsc`, not by a test that runs.
 export interface TestPorts {
   readonly activity: ActivityLogger;
-  readonly analytics: AnalyticsReader;
   readonly cache: CacheStore;
   readonly content: ContentSource;
   readonly embeddings: EmbeddingProvider;
-  readonly events: EventBus;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
@@ -382,13 +377,11 @@ export class TestContainer {
       authorizer: new Authorizer(),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
-      analytics: overrides.analytics ?? new StubAnalyticsReader(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       // Already in-memory: its catalog is a map of dynamic imports, so there is nothing
       // to fake. The one port whose real implementation is the test double.
       content: overrides.content ?? new StaticContentSource(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
-      events: overrides.events ?? new RecordingEventBus(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
@@ -415,11 +408,9 @@ expect(activity.actions()).toEqual(["task.reactivated"]);
 
 No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test builds a `Principal` directly with a hand-made `CapabilitySet` and asserts on behaviour. Integration tests — the ones that need real infrastructure — are then reserved for the adapters themselves and the auth routes, which is a much smaller and much less flaky set.
 
-**A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that.
+**A fake for every port, including the ones a given test does not use.** `StubEmbeddingProvider` returns a fixed vector; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that. `tests/container/test-container.spec.ts` counts the port directory rather than restating the list, so a port added without a double fails the run.
 
 **Two of them carry real logic anyway, and both earn it.** `InMemoryVectorStore` computes actual cosine, because a fake that scored every hit identically would let *"the top result is the right one"* pass either way — the one assertion a retrieval use-case is worth testing. And `RecordingQueuePublisher` honours `jobId` deduplication, because "enqueue OCR for this receipt, once" is a business rule the use-case is responsible for, not queue configuration.
-
-**`RecordingEventBus` exists even though `Container` wires no `EventBus`.** That is the point of the file rather than an inconsistency: the first use-case that publishes a domain event is testable on the day it is written.
 
 **Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-infrastructure-postgres.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
 

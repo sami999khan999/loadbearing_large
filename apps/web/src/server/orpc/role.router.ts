@@ -9,6 +9,48 @@ export class RoleRouter {
     context.container.rbac.listRoles.execute(context.principal, input),
   );
 
+  // `toJSON()` is the four lines: the use-case answers a `CapabilitySet` because that
+  // is the domain's type, and the contract declares its wire shape.
+  public static readonly effective = authed.role.effective.handler(async ({ input, context }) => {
+    const capabilities = await context.container.rbac.inspectEffective.execute(
+      context.principal,
+      input,
+    );
+
+    return capabilities.toJSON();
+  });
+
+  public static readonly create = authed.role.create.handler(({ input, context }) =>
+    context.container.rbac.createRole.execute(context.principal, input),
+  );
+
+  public static readonly update = authed.role.update.handler(({ input, context }) =>
+    context.container.rbac.updateRole.execute(context.principal, input),
+  );
+
+  // The `{ ok: true }` is the transport's word, not the domain's — the use-case
+  // returns nothing, as `revokeInvitation` does.
+  public static readonly remove = authed.role.remove.handler(async ({ input, context }) => {
+    await context.container.rbac.deleteRole.execute(context.principal, input);
+    return { ok: true as const };
+  });
+
+  public static readonly grant = authed.role.grant.handler(({ input, context }) =>
+    context.container.rbac.grantPermission.execute(context.principal, input),
+  );
+
+  public static readonly revoke = authed.role.revoke.handler(({ input, context }) =>
+    context.container.rbac.revokePermission.execute(context.principal, input),
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring `RoleProcedures.all`.
-  public static readonly all = { list: RoleRouter.list } as const;
+  public static readonly all = {
+    list: RoleRouter.list,
+    effective: RoleRouter.effective,
+    create: RoleRouter.create,
+    update: RoleRouter.update,
+    remove: RoleRouter.remove,
+    grant: RoleRouter.grant,
+    revoke: RoleRouter.revoke,
+  } as const;
 }

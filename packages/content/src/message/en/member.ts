@@ -23,4 +23,17 @@ export const member = {
   // The one failure worth its own sentence: the generic conflict copy talks about a
   // concurrent edit, which is not what happened.
   "member.invite.alreadyMember": "That address already belongs to a member of this organization.",
+
+  // ── lifecycle ──
+  "member.column.actions": "Actions",
+  "member.action.deactivate": "Deactivate",
+  "member.action.reactivate": "Reactivate",
+  "member.action.changeRole": "Change role",
+  "member.action.inspect": "Why?",
+  "member.inspect.title": "What {name} can do here",
+  "member.inspect.close": "Close",
+  // Two refusals worth their own sentence, because the generic conflict copy — "someone
+  // else changed this first" — is wrong about both.
+  "member.error.lastOwner": "This is the only active owner. Promote someone else to owner first.",
+  "member.error.self": "You cannot deactivate your own membership.",
 } as const;

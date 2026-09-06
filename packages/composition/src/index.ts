@@ -25,10 +25,8 @@ export {
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingEmailSender,
-  RecordingEventBus,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
-  StubAnalyticsReader,
   StubEmbeddingProvider,
   StubSessionResolver,
 } from "./fake/index.js";

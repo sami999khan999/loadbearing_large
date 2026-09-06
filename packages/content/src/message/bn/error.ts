@@ -1,11 +1,20 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design: `error.serverOnly` is read by a developer in a console, so English
-// is the right answer and the fallback layer supplies it.
+// Total, like every bundle here. `error.serverOnly` is translated even though a
+// developer reads it in a console: a hole in the type is worse than an unread sentence.
 export const error: NamespaceBundle<"error"> = {
   "error.unauthorized": "চালিয়ে যেতে সাইন ইন করুন।",
   "error.forbidden": "এটি করার অনুমতি আপনার নেই।",
   "error.notFound": "আপনি যা খুঁজছেন তা আমরা পাইনি।",
   "error.unexpected": "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।",
   "error.field.required": "{field} আবশ্যক।",
+  "error.field.tooShort": "{field} অন্তত {min}টি অক্ষরের হতে হবে।",
+  "error.field.tooLong": "{field} সর্বোচ্চ {max}টি অক্ষরের হতে পারে।",
+  "error.field.invalidFormat": "{field} প্রত্যাশিত বিন্যাসে নেই।",
+  "error.field.invalid": "{field} বৈধ নয়।",
+  "error.conflict": "অন্য কেউ আগেই এটি পরিবর্তন করেছেন। পৃষ্ঠাটি রিলোড করে আবার চেষ্টা করুন।",
+  "error.rateLimited": "অনেক বেশি চেষ্টা হয়েছে। একটু অপেক্ষা করে আবার চেষ্টা করুন।",
+  "error.twoFactorRequired": "চালিয়ে যেতে আপনার অথেনটিকেটর অ্যাপের কোডটি দিন।",
+  "error.serverOnly":
+    "{package} একটি ক্লায়েন্ট বান্ডলে ঢুকে পড়েছে। এটি বান্ডলের আকারের সমস্যা নয়, একটি ফাঁস — অর্থাৎ ডেটাবেস বা ক্রেডেনশিয়াল কোড ব্রাউজার থেকে নাগালযোগ্য।",
 };

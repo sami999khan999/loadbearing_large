@@ -1,6 +1,6 @@
 ---
 title: Test container
-description: The eleven fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
+description: The sixteen fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
 ---
 
 # `TestContainer`
@@ -29,8 +29,11 @@ is a much smaller and much less flaky set.
 `files.md` says tests mirror `src/` and never live inside it. This is not a test — it is a
 **compile-time completeness check**, and it has to be inside `src/` for `tsc` to see it.
 
-`TestPorts` has one entry per abstract class in `packages/application/src/port/`. Add an eleventh
-port there and this file stops compiling until it has a double. That is the whole claim of
+`TestPorts` has one entry per abstract class in `packages/application/src/port/` — sixteen of them —
+plus `content`, which is a `ContentSource` from a package to `application`'s left rather than a port
+of its own. Seventeen entries, and adding a seventeenth port makes this file stop compiling until it
+has a double. The spec counts the directory rather than restating the list, so the entry is caught
+even where the type would not force it. That is the whole claim of
 [17](../../../../docs/setup/17-composition-container.md) §17.4 — *"adding a port to `application`
 shows up here as one line rather than as a compile error in forty specs"* — and it only holds if the
 check is `tsc`'s rather than a spec's.
@@ -89,15 +92,13 @@ That is also why `fake/` has a barrel while `TestContainer` does not go on the p
 | `StorageGateway` | `InMemoryStorageGateway` | bytes in a Map; `presign*` returns a fake URL rather than throwing |
 | `QueuePublisher` | `RecordingQueuePublisher` | records, and honours `jobId` dedup because that is a domain rule |
 | `VectorStore` | `InMemoryVectorStore` | **real cosine**, goal filter applied to the input set |
-| `AnalyticsReader` | `StubAnalyticsReader` | empty arrays, and that is enough |
 | `EmbeddingProvider` | `StubEmbeddingProvider` | deterministic character histogram, no network |
 | `SessionResolver` | `StubSessionResolver` | `null` by default; a use-case test never reaches it |
 | `ActivityLogger` | `RecordingActivityLogger` | records actor, action and payload |
-| `EventBus` | `RecordingEventBus` | the port with no production implementation — see below |
 | `UnitOfWork` | `DirectUnitOfWork` | runs the work, opens nothing, counts the call |
 | `ContentSource` | `StaticContentSource` | **the real one** — its catalog is a map of dynamic imports |
 
-`StubAnalyticsReader` returning empty arrays is not laziness. The value of this file is that adding a
+`StubSessionResolver` returning `null` is not laziness. The value of this file is that adding a
 port is **one line** here; a fake elaborate enough to need its own tests would defeat that.
 
 **Two exceptions worth naming.** `InMemoryVectorStore` computes cosine for real, because a fake that
@@ -106,14 +107,17 @@ assertion a retrieval use-case is actually worth testing. And `RecordingQueuePub
 `jobId` deduplication, because *"enqueue OCR for this receipt, once"* is a business rule the
 use-case is responsible for, not queue configuration.
 
-## `EventBus` is faked but never wired
+## Every fake has a real counterpart
 
-`Container` constructs fifteen of the sixteen ports. `EventBus` has no implementation in
-`infrastructure` and no field on the container, because nothing publishes a domain event yet.
-`RecordingEventBus` exists regardless — the fake is what makes the first publishing use-case testable
-on the day it is written, and its absence from `Container` is a gap in
-[12](../../../../docs/setup/12-application-package.md)/[17](../../../../docs/setup/17-composition-container.md)
-rather than a decision taken here.
+`Container` constructs an implementation for all sixteen ports, so every entry above is a *double*
+for something rather than the only thing that exists. That has not always held: `EventBus` was
+declared and faked here while nothing bound it in `Container`, which meant a publishing use-case
+would have published into this recording fake under test and into nothing at all in production. It
+was deleted rather than implemented — the outbox design it reserved is in `tasks/TODO.md`.
+
+The property is worth keeping deliberately, because this file is where it breaks first: a fake is
+cheap to add and a real adapter is not, so a port faked here and unbound in `Container` reads as
+working for exactly as long as nobody runs it.
 
 ## No `auth`, no `sessions`, no `principals`
 

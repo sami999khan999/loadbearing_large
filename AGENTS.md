@@ -1,28 +1,24 @@
-## The rulebook, loaded in full
+# loadbearing
 
-Every file in `docs/ai/rules/` is imported below, so an agent working in Claude Code holds the
-whole rulebook before it reads a line of code and never has to know to go looking. The router in
-[`docs/ai/index.md`](docs/ai/index.md) and the contents page in
-[`docs/ai/rules/index.md`](docs/ai/rules/index.md) are deliberately **not** imported — once every
-rule is present, both are tables pointing at things already in context. They stay for agents that
-do not read this file.
+A pnpm-workspace starter kit: a TanStack Start web app and a standalone worker over a layered,
+port-and-adapter package graph. Postgres + pgvector, two Redis instances (cache and queue,
+deliberately separate), S3, stdout → Loki, ClickHouse behind a driver flag.
 
-This list is checked: `check-architecture.mjs` §12 fails if a file lands in `docs/ai/rules/` and no
-`@` line here imports it.
+**Start at [`docs/ai/index.md`](docs/ai/index.md).** It is a table, one row per thing you might be
+about to do, naming the one or two rule files that answer it. The whole rulebook is
+[`docs/ai/rules/index.md`](docs/ai/rules/index.md) — twelve files, none longer than ~850 tokens.
 
-@docs/ai/rules/layering.md
-@docs/ai/rules/files.md
-@docs/ai/rules/folders.md
-@docs/ai/rules/imports.md
-@docs/ai/rules/classes.md
-@docs/ai/rules/comments.md
-@docs/ai/rules/color.md
-@docs/ai/rules/dependencies.md
-@docs/ai/rules/vocabulary.md
-@docs/ai/rules/data.md
-@docs/ai/rules/simplicity.md
-@docs/ai/rules/workflow.md
+**Do not work from the surrounding code's example.** This repository's conventions are stated, and a
+convention you infer will be wrong in the ways that matter.
 
-The skill run books in [`docs/ai/skills/`](docs/ai/skills/index.md) are **not** imported. They are
-procedures you execute on request, not rules you must hold — reach them by name (`/add-slice`,
-`/add-docs`) or open the file.
+Four that cost the most when broken, before you read anything else:
+
+- **Dependencies point one way**, and `packages/application` names no framework and never logs.
+- **`//` comments only, two lines maximum.** No block comments anywhere, JSX included.
+- **Every colour is `var(--<name>)`**, from the twelve `packages/ui` declares. Nothing else is a
+  colour.
+- **Never name yourself as author, co-author, or contributor** — not in a commit message, a pull
+  request, or a branch name.
+
+Run `pnpm check:architecture` before claiming a change is done: sixteen assertions that typecheck,
+lint and tests all pass without noticing.

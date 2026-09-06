@@ -1,4 +1,8 @@
 import {
+  type FontKey,
+  FontRegistry,
+  type Locale,
+  Locales,
   type ModeKey,
   type ModePreference,
   ModeRegistry,
@@ -12,10 +16,18 @@ export interface AppearanceSnapshot {
   readonly theme: ThemeKey;
   readonly mode: ModeKey;
   readonly preference: ModePreference;
+  // A third axis, independent of the other two: a reader can pick a serif face without
+  // also picking a colour scheme, which is why it is a token override and not a theme.
+  readonly font: FontKey;
+  // Resolved here rather than in the browser for the same reason the theme is: a locale
+  // decided after hydration renders the shell twice, in two languages.
+  readonly locale: Locale;
 }
 
 const THEME_COOKIE = "theme";
 const MODE_COOKIE = "mode";
+const FONT_COOKIE = "font";
+const LOCALE_COOKIE = "locale";
 // A year. The cost of getting this wrong is one wrong-coloured first paint, and the
 // cookie is rewritten on every change anyway.
 const MAX_AGE = 31_536_000;
@@ -24,6 +36,8 @@ const DEFAULT: AppearanceSnapshot = {
   theme: ThemeRegistry.DEFAULT,
   mode: ModeRegistry.DEFAULT,
   preference: "system",
+  font: FontRegistry.DEFAULT,
+  locale: Locales.DEFAULT,
 };
 
 // One place, so the rule is suppressed once: the Cookie Store API it points at is in
@@ -50,18 +64,29 @@ export class AppearanceStore {
 
   // Both guards run first: a cookie is a string a user can edit, and an unknown theme key
   // renders a page with every colour undefined.
-  public static fromCookieHeader(header: string | null, prefersDark: boolean): AppearanceSnapshot {
+  public static fromCookieHeader(
+    header: string | null,
+    prefersDark: boolean,
+    acceptLanguage: string | null = null,
+  ): AppearanceSnapshot {
     const rawTheme = header ? read(header, THEME_COOKIE) : null;
     const rawMode = header ? read(header, MODE_COOKIE) : null;
+    const rawFont = header ? read(header, FONT_COOKIE) : null;
 
     const theme = rawTheme && ThemeRegistry.isKnown(rawTheme) ? rawTheme : DEFAULT.theme;
     const preference = rawMode && ModeRegistry.isPreference(rawMode) ? rawMode : DEFAULT.preference;
+    const font = rawFont && FontRegistry.isKnown(rawFont) ? rawFont : DEFAULT.font;
+    // The cookie wins over the header, and `negotiate` does both guards: an edited
+    // cookie naming a locale with no catalog would index one and get `undefined`.
+    const locale = Locales.negotiate(acceptLanguage, header ? read(header, LOCALE_COOKIE) : null);
 
     // `resolveMode` last: a dark-only palette outranks preference and OS alike, because
     // the alternative is a selector that matches nothing.
     return {
       theme,
       preference,
+      font,
+      locale,
       mode: ThemeRegistry.resolveMode(theme, ModeRegistry.resolve(preference, prefersDark)),
     };
   }
@@ -86,7 +111,13 @@ export class AppearanceStore {
 
   // Attributes first and in the same frame, because they are what the user sees; the
   // cookie is only what the *next* server render reads.
-  public choose(theme: ThemeKey, preference: ModePreference, prefersDark: boolean): void {
+  public choose(
+    theme: ThemeKey,
+    preference: ModePreference,
+    prefersDark: boolean,
+    font: FontKey = this.snapshot.font,
+    locale: Locale = this.snapshot.locale,
+  ): void {
     const mode = ThemeRegistry.resolveMode(theme, ModeRegistry.resolve(preference, prefersDark));
     const root = document.documentElement;
 
@@ -95,13 +126,16 @@ export class AppearanceStore {
     root.dataset.themeSwitching = "";
     ThemeRegistry.apply(root, theme);
     ModeRegistry.apply(root, mode);
+    FontRegistry.apply(root, font);
     requestAnimationFrame(() => {
       delete root.dataset.themeSwitching;
     });
 
     write(THEME_COOKIE, theme);
     write(MODE_COOKIE, preference);
-    this.snapshot = { theme, mode, preference };
+    write(FONT_COOKIE, font);
+    write(LOCALE_COOKIE, locale);
+    this.snapshot = { theme, mode, preference, font, locale };
   }
 
   public dehydrate(): AppearanceSnapshot {

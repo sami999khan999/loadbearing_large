@@ -83,11 +83,17 @@ export const memberships = pgTable(
       .notNull()
       .references(() => roles.id, { onDelete: "no action" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Per membership, not per user: `users.deactivated_at` would lock someone out of
+    // every tenant they belong to, which is a cross-tenant write dressed as a local one.
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (t) => [
     // One membership per person per tenant, leading with the tenant column: `(user_id,
     // role_id)` let one person hold two roles and the switcher render a tenant twice.
     uniqueIndex("memberships_uq").on(t.organizationId, t.userId),
+    // The sign-in path reads one membership by (org, user) and checks this column, so
+    // it rides the unique index above rather than needing one of its own.
+    index("memberships_active_idx").on(t.organizationId, t.deactivatedAt),
     // The `user_id` foreign key's own index: every by-user read starts from here.
     index("memberships_user_idx").on(t.userId),
     index("memberships_role_idx").on(t.roleId),

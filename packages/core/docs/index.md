@@ -31,13 +31,14 @@ packages/core/
 │       ├── clock.ts      → Clock, SystemClock, FixedClock
 │       ├── result.ts     → Result, Ok, Err, Results
 │       ├── uuid.ts       → Uuid
+│       ├── token.ts      → Token
 │       └── server-only.ts → ServerOnly
 └── tests/
     └── primitive/
         ├── clock.spec.ts
         ├── result.spec.ts
         ├── server-only.spec.ts
-    └── uuid.spec.ts
+        └── uuid.spec.ts
 ```
 
 ---
@@ -53,11 +54,11 @@ Two conditions, both required:
 
 Everything that clears both bars is something that can never be substituted with a fake, because
 there is no seam below `core` to insert one. That is the real cost of an addition, and it is why
-the package has four exports rather than forty.
+the package has five exports rather than forty.
 
 ---
 
-## The four primitives
+## The five primitives
 
 ### [`Clock`](reference/clock.md) — time as an injected dependency
 
@@ -103,6 +104,19 @@ Uuid.isValid(someInput); // boolean
 v7 rather than v4 so inserts land at the tail of the B-tree instead of scattering across it. The
 tradeoff — IDs leak creation time — is documented rather than hidden.
 
+### [`Token`](reference/token.md) — an opaque random string, and the digest of one
+
+```ts
+export class Token {
+  public static random(bytes = 32): string;
+  public static hash(value: string): Promise<string>;
+}
+```
+
+`random()` goes to the recipient; `hash()` goes to the table. It is here rather than beside
+`ApiKeyHasher` in `auth` because both `application` (hashing an invitation before saving it) and
+`infrastructure` (hashing before looking one up) need it, and neither can reach `auth`.
+
 ### [`ServerOnly`](reference/server-only.md) — a runtime bundle-leak tripwire
 
 ```ts
@@ -111,7 +125,7 @@ import { ServerOnly } from "@loadbearing/core";
 ServerOnly.assert("@loadbearing/infrastructure");
 ```
 
-Called on the first line of four barrels: `db`, `infrastructure`, `auth`, `composition`. It is the
+Called on the first line of four barrels: `application`, `infrastructure`, `auth`, `composition`. It is the
 second of three independent defences against server code reaching the browser.
 
 ---
@@ -141,7 +155,7 @@ role, which is exactly what that folder name means everywhere it appears — `co
 `Locale`. `src/` itself holds only `index.ts` and `import.ts`
 ([Opinions · Folders](../../../docs/opinions/folders.md)).
 
-`primitive/index.ts` names the four exports; the root `index.ts` re-exports that one barrel. The
+`primitive/index.ts` names the five exports; the root `index.ts` re-exports that one barrel. The
 indirection costs a line and buys the thing barrels exist for: moving `clock.ts` into a future
 `time/` folder changes two files and nothing downstream.
 
@@ -169,6 +183,6 @@ pnpm --filter @loadbearing/core test
 
 ## See also
 
-- [Clock](reference/clock.md) · [Result](reference/result.md) · [Uuid](reference/uuid.md) · [ServerOnly](reference/server-only.md)
+- [Clock](reference/clock.md) · [Result](reference/result.md) · [Uuid](reference/uuid.md) · [Token](reference/token.md) · [ServerOnly](reference/server-only.md)
 - [Build order · 07 · core](../../../docs/setup/07-core-package.md)
 - [`@loadbearing/tsconfig` · base](../../../tooling/tsconfig/docs/reference/base.md) — where `lib: ["ES2024"]` and `noUncheckedIndexedAccess` come from

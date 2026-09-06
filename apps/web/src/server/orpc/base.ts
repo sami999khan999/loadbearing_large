@@ -2,7 +2,9 @@ import {
   type Container,
   Correlation,
   contract,
+  ErrorNormalizer,
   ForbiddenError,
+  HTTP_STATUS,
   implement,
   type Logger,
   os,
@@ -45,10 +47,33 @@ export const principalMiddleware = base.middleware(async ({ context, next, path 
 // no `traceId` and no request-scoped logger. See docs/reference/enforcement-surfaces.md.
 export const errorMiddleware = os
   .$context<{ traceId: TraceId; log: Logger }>()
-  .middleware(async ({ context, next }) => {
+  .middleware(async ({ context, next, path }) => {
+    // The procedure path, not the URL: `/api/rpc` is one route and would make every
+    // line indistinguishable. It is the same string `ProcedurePermissions` is keyed on.
+    const procedure = path.join(".");
+    const startedAt = Date.now();
+
     try {
-      return await next();
+      const result = await next();
+
+      // Sampled at 10 % by the catalog — this is the highest-volume line the system
+      // emits, and the failure below is never sampled.
+      context.log.emit("http.request.completed", {
+        path: procedure,
+        status: 200,
+        durationMs: Date.now() - startedAt,
+      });
+
+      return result;
     } catch (thrown) {
+      // Before the interceptor, because `toTransport` never returns: it logs the
+      // failure and throws the envelope.
+      context.log.emit("http.request.failed", {
+        path: procedure,
+        status: HTTP_STATUS[ErrorNormalizer.normalize(thrown).code],
+        durationMs: Date.now() - startedAt,
+      });
+
       ErrorInterceptor.toTransport(thrown, context.log, context.traceId);
     }
   });

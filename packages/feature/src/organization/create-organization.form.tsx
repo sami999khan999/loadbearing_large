@@ -1,3 +1,4 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Button,
@@ -19,7 +20,9 @@ export interface CreateOrganizationFormProps {
 
 export function CreateOrganizationForm({ organization, onCreated }: CreateOrganizationFormProps) {
   const { t } = useMessages("organization");
-  const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const [name, setName] = useState("");
   const create = OrganizationMutations.useCreate(organization, onCreated);
 
@@ -45,7 +48,7 @@ export function CreateOrganizationForm({ organization, onCreated }: CreateOrgani
         />
       </Field>
 
-      {create.isError ? <Callout tone="danger">{shell.t("state.error")}</Callout> : null}
+      {create.isError ? <Callout tone="danger">{describe(create.error)?.message}</Callout> : null}
 
       <Button type="submit" disabled={create.isPending || name.trim().length === 0}>
         {t("organization.create.submit")}

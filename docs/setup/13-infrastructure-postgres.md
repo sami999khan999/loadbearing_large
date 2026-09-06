@@ -8,7 +8,7 @@
 > one seam in two places. Everything below is now `packages/infrastructure/src/pg/`; the other stores
 > are [15](15-infrastructure-package.md).
 
-**Delivers:** RBAC tables with `organization_id` on every one, `CapabilityRepository`, a migration pipeline whose first migration is already partitioned, `PgAnalyticsReader`, and the four system roles.
+**Delivers:** RBAC tables with `organization_id` on every one, `CapabilityRepository`, a migration pipeline whose first migration is already partitioned, and the four system roles.
 
 **Prerequisite:** [12 · `@loadbearing/application`](12-application-package.md)
 
@@ -47,7 +47,6 @@ packages/infrastructure/
     │   ├── pg-activity.logger.ts          → PgActivityLogger
     │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
     │   ├── pg-activity-replay.reader.ts   → PgActivityReplayReader
-    │   ├── pg-analytics.reader.ts         → PgAnalyticsReader
     │   ├── pg-api-key.repository.ts       → PgApiKeyRepository
     │   ├── pg-capability.repository.ts    → PgCapabilityRepository
     │   ├── pg-maintenance.gateway.ts      → PgMaintenanceGateway
@@ -92,11 +91,9 @@ export {
   type DrizzleClient,
 } from "./primitive/index.js";
 export {
-  type ApiKeyRow,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,
@@ -633,7 +630,7 @@ An N+1 caught by a failing assertion costs a minute. The same N+1 caught by a pr
 
 ### The naming rule for implementations
 
-`PgCapabilityRepository`, `PgActivityLogger`, `PgVectorStore` — implementations lead with their technology, because the prefix is what marks them as the swappable one. That is the second exemption to folder-prefix symmetry (the first is use-cases, which lead with a verb). The filename still mirrors the class: `capability.repository.ts` exports `PgCapabilityRepository`, and the `Pg` prefix is dropped from the filename because the folder already says `db`.
+`PgCapabilityRepository`, `PgActivityLogger`, `PgVectorStore` — implementations lead with their technology, because the prefix is what marks them as the swappable one. That is the second exemption to folder-prefix symmetry (the first is use-cases, which lead with a verb). The filename still mirrors the class: `capability.repository.ts` exports `PgCapabilityRepository`, and the `Pg` prefix is dropped from the filename because the folder already says `pg`.
 
 ---
 
@@ -785,7 +782,7 @@ export class PgUnitOfWork extends UnitOfWork {
 }
 ```
 
-**`AsyncLocalStorage` rather than threading a handle through every port.** The alternative is a `tx` parameter on every repository method, which puts a database concept into `application` — the one thing this architecture spends its effort keeping out. `AsyncLocalStorage` is a Node built-in, costs effectively nothing, and keeps the transaction invisible above `db`.
+**`AsyncLocalStorage` rather than threading a handle through every port.** The alternative is a `tx` parameter on every repository method, which puts a database concept into `application` — the one thing this architecture spends its effort keeping out. `AsyncLocalStorage` is a Node built-in, costs effectively nothing, and keeps the transaction invisible above this package.
 
 This is the one place ambient context is acceptable, and it is worth being precise about why: the value is scoped to a single `run()` call rather than to a request, it is written in exactly one place, and nothing outside `BaseRepository` reads it. That is a different thing from a request-scoped container, which [17](17-composition-container.md) still bans.
 

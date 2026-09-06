@@ -24,7 +24,6 @@ const Schema = z
     AUTH_URL: z.url(),
     AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
     AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-    AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
     // The revocation window, capped in the schema rather than by convention: a deploy
     // that raises it fails at boot instead of widening the gap silently.
     AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),
@@ -62,9 +61,8 @@ const Schema = z
     // A driver plus the connection detail it needs, so adopting a store is these
     // variables and nothing else.
     VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
-    ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-    // Present without `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the
-    // projection runs while reads still come from Postgres.
+    // Its absence keeps ClickHouse stopped. Present, the projection and its
+    // reconciliation run; no feature reads the store back yet.
     CLICKHOUSE_URL: z.url().optional(),
     // ClickHouse's own out-of-the-box values: a default naming the project would be a
     // credential baked into shipped code.
@@ -87,8 +85,8 @@ const Schema = z
 
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   })
-  // The one cross-field rule, and it earns the exception: `bootstrap` with no slug
-  // silently enrols nobody. See docs/reference/env.md.
+  // Two cross-field rules, and each earns the exception: `bootstrap` with no slug
+  // silently enrols nobody, and ClickHouse's defaults cannot reach its own container.
   .superRefine((env, ctx) => {
     if (env.AUTH_ENROLMENT_MODE === "bootstrap" && !env.BOOTSTRAP_ORGANIZATION_SLUG) {
       ctx.addIssue({
@@ -96,6 +94,20 @@ const Schema = z
         path: ["BOOTSTRAP_ORGANIZATION_SLUG"],
         message: 'Required when AUTH_ENROLMENT_MODE is "bootstrap".',
       });
+    }
+
+    // The compose container is `ratchet/ratchet`; these default to ClickHouse's own
+    // `default/default`, which cannot authenticate against it. See docs/reference/env.md.
+    if (env.CLICKHOUSE_URL) {
+      for (const key of ["CLICKHOUSE_DATABASE", "CLICKHOUSE_USER"] as const) {
+        if (env[key] === "default") {
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: "Set it explicitly when CLICKHOUSE_URL is set.",
+          });
+        }
+      }
     }
   });
 
@@ -168,7 +180,6 @@ export class Env {
       // Undefined unless a URL was given, which is what `Container` branches on: a
       // partly-filled object builds a connection pointed at nothing.
       analytics: {
-        driver: e.ANALYTICS_DRIVER,
         clickhouse: e.CLICKHOUSE_URL
           ? {
               url: e.CLICKHOUSE_URL,

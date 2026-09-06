@@ -33,7 +33,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | 02 | [Repository Skeleton](02-repo-skeleton.md) | Four top-level folders, six root files, first commit |
 | 03 | [Workspace & Catalogs](03-workspace-and-catalogs.md) | `pnpm install` succeeds; topological scripts replace Turborepo |
 | 04 | [TypeScript Configs](04-typescript-configs.md) | Four shared `tsconfig` bases |
-| 05 | [Lint & Format](05-lint-and-format.md) | Prettier, and the ESLint rules that mechanically enforce OOP + the server-only boundary |
+| 05 | [Lint & Format](05-lint-and-format.md) | Biome, and the six ESLint rules that mechanically enforce OOP + the server-only boundary |
 | 06 | [Package Anatomy](06-package-anatomy.md) | The shape every package copies, and the one-shot scaffold script |
 
 ### Phase B — the shared kernel
@@ -77,7 +77,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | 25 | [`apps/worker`](25-worker-app.md) | BullMQ consumers and repeatable schedules |
 | 26 | [Hygiene & CI](26-hygiene-and-ci.md) | Hooks, commit scopes, pipeline, bundle-leak assertion |
 | 27 | [Verification & First Feature](27-verification-and-first-feature.md) | Architecture checks, commit sequence, the add-a-module checklist |
-| 30 | [`apps/desktop`](30-desktop-app.md) | Tauri: one app directory, zero new packages |
+| 30 | [`apps/desktop`](30-desktop-app.md) | **A plan, not a build.** Tauri: what one app directory and zero new packages would take |
 
 > 30 is numbered last because it is read last — it depends on every package above it. It is not optional: Tauri is the desktop shell, and 16, 24 and 28 are written on that basis.
 
@@ -117,11 +117,11 @@ continually — every rule for what to call a thing and where to put it, one pag
 
 All three are called out again where they happen. Read them now so they aren't a surprise.
 
-**1. `packages/infrastructure` is a package the architecture docs do not have.** The architecture docs place concrete adapters in `db` "or in the app that constructs them." Neither works for Redis and S3: `db` means Postgres, and putting an S3 client in `apps/` duplicates it between `web` and `worker`. So non-Postgres adapters get one server-only package, exactly the way `auth` got one. If you would rather stay at thirteen, fold `infrastructure/src/cache/` and `infrastructure/src/storage/` into `db/src/` as sibling folders to `vector/` — every other line in these documents is unchanged.
+**1. `packages/infrastructure` holds every adapter, Postgres included.** An earlier draft split them — a `db` package for Postgres, `infrastructure` for the rest — and the split put one seam in two places: `PgVectorStore` on one side, and every remote-store adapter on the other. They were folded together in this direction rather than the other because the name has to stay honest: an S3 client in a package called `db` would be a lie, but Postgres genuinely is infrastructure. The package is organised by vendor — `pg/`, `redis/`, `s3/`, `bullmq/`, `openai/`, `clickhouse/`, `loki/`, `smtp/` — so `rm -r src/clickhouse/` is the complete answer to a swap.
 
 **2. `VectorStore` is declared in `application/port/`, not beside its implementation.** The architecture docs put the abstract class in the database package. That works only while the implementation is Postgres. Your requirement is to move to a dedicated vector database later without rewrites, and a use-case cannot depend on an adapter package — so the abstraction has to sit where every other port sits. `PgVectorStore` still lives in `packages/infrastructure/src/pg/repository/`. See [14](14-vector-store.md).
 
-**3. `AnalyticsReader` is a port with one implementation, built before it is needed.** Same shape as departure 2 and for the same reason: aggregate reads move to a column store at a volume this kit will not reach for years, and the seam is what makes that a `Container` line rather than a rewrite. `PgAnalyticsReader` lives in `db/src/analytics/`. See [Data and scale](../opinions/data-and-scale.md) §4.3.
+**3. There is no `AnalyticsReader`, and there was.** It was the same shape as departure 2, on the same argument — aggregate reads move to a column store eventually, so build the seam first — and it turned out to be the case where that argument fails. A port nothing calls has no call sites to protect, so the retrofit it was insuring against did not exist, while the interface was a guess maintained across two adapters. It was deleted; `AnalyticsProjector`, the half with a consumer, stayed. See [Data and scale](../opinions/data-and-scale.md) §4.3 and [Simplicity](../opinions/simplicity.md).
 
 ---
 
@@ -152,7 +152,7 @@ Every package is `@loadbearing/*` so these documents line up with the architectu
 **Then the three defaults that are baked into shipped code rather than into local config**, none of
 which a find-and-replace on `@loadbearing/` will reach:
 
-- `advanced.cookiePrefix` in `packages/auth/src/auth.factory.ts` — user-visible in the browser, and
+- `advanced.cookiePrefix` in `packages/auth/src/factory/auth.factory.ts` — user-visible in the browser, and
   changing it later invalidates every cookie already issued
 - the `keyPrefix` default in `packages/infrastructure/src/redis/redis.connection.ts` — a stale one is
   a cache that reads nothing, with no error anywhere

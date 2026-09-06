@@ -86,7 +86,7 @@ merges them left to right:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-**`infra/docker-compose.prod.yml`**
+**`infra/docker-compose.prod.yml`** — illustrative; write it on the host, it is not in the repository.
 
 ```yaml
 services:
@@ -164,6 +164,41 @@ connection.
 **`--maxmemory 512mb` on the cache** is what makes `allkeys-lru` mean anything. Without a ceiling the
 policy never triggers and the cache grows until the box does.
 
+### Readiness: `depends_on` is the start of the answer, not the whole of it
+
+`depends_on: { postgres: { condition: service_healthy } }` gets the container *started* in the right
+order. It says nothing about whether the app inside it can serve a request — the process still has to
+parse its environment, build a container, and open its own connections.
+
+**`GET /api/health` is that answer**, and it is the endpoint a load balancer, an orchestrator, or a
+`caddy` health check should be pointed at rather than at the port being open:
+
+```yaml
+  web:
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+```
+
+**It is a readiness probe, and the distinction decides what happens on a 503.** Readiness means *do
+not send me traffic yet* — a rolling deploy holds the instance out of the pool while Postgres is
+still starting, and puts it back when the answer changes. A liveness probe on the same endpoint kills
+the container instead, which is the wrong response to a dependency that is merely slow, and turns one
+slow database into a restart loop across every instance.
+
+The report names `database`, `cache`, `queue` and `analytics`; `analytics` is `null` when ClickHouse
+is not configured, which is neither healthy nor degraded. **Loki is deliberately not in it** — logs
+are lossy by design, so a collector being down is not a reason to drain an instance that is serving
+correctly ([Data and scale](../opinions/data-and-scale.md)).
+
+**The worker has no HTTP surface and therefore no equivalent.** Its liveness signal is the
+`process.started` line it emits with its consumer count, and its readiness is that it consumes —
+which is why the `analytics-reconcile` schedule exists ([25](../setup/25-worker-app.md)): a worker
+that died quietly on a Tuesday is not something a probe finds.
+
 ### The one thing that gets simpler in production
 
 **The applications are containers here, and they were not locally.** `pnpm dev` runs on the host, so
@@ -178,7 +213,7 @@ the pipeline reads that label from the log body rather than from the container n
 
 ### TLS
 
-**`infra/Caddyfile`**
+**`infra/Caddyfile`** — illustrative; write it on the host, it is not in the repository.
 
 ```
 example.com {
@@ -385,9 +420,9 @@ Everything in Phase 2 is *the same capability, operated by somebody else*. This 
 ClickHouse on the original VPS or reach ClickHouse Cloud from a fully-managed stack; the two
 decisions do not interact.
 
-**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that
-`PgAnalyticsReader` reading snapshot tables covers every question this kit will ask for years, and
-the container in the compose file is deliberately stopped.
+**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that Postgres
+covers every question this kit will ask for years, and the container in the compose file is
+deliberately stopped.
 
 ### The trigger, and the prerequisite
 
@@ -405,21 +440,17 @@ Without the first, a running ClickHouse is an empty database that looks like a d
 second, a consumer that dies quietly on a Tuesday surfaces as a wrong number in March. Without the
 third, the store is not derived at all, whatever the documentation claims.
 
-### What changes in the code — and it is genuinely small
+### What changes in the code
 
-```ts
-// packages/infrastructure/src/analytics/clickhouse-analytics.reader.ts
-export class ClickHouseAnalyticsReader extends AnalyticsReader { … }
-```
+The write half is already written: `ClickHouseAnalyticsProjector`, the projection consumer and the
+nightly reconciliation ship, and `CLICKHOUSE_URL` turns them on
+([15](../setup/15-infrastructure-package.md)).
 
-```ts
-// packages/composition/src/container.ts   — one line
-this.analytics = new ClickHouseAnalyticsReader(config.analytics);
-```
-
-`@clickhouse/client` joins the node-only tier in the catalog, `AnalyticsReader` is unchanged, and no
-use-case, contract or component knows anything happened. That is the entire point of building the
-port years before the store ([15](../setup/15-infrastructure-package.md)).
+The read half is not, and that is deliberate. Adding it is a new port in
+`packages/application/src/port/`, an adapter behind it, one line in `Container`, and the queries the
+dashboard actually asks — a day's work against a store that has been filling and reconciling for
+days. The kit shipped that port once, guessed at two questions, and deleted it unused; see
+[Simplicity](../opinions/simplicity.md).
 
 `ContainerConfig` gains an `analytics` block, and `apps/*/src/env.ts` gains the variables to fill it —
 still the only two files in the repository that read `process.env`.
@@ -495,7 +526,7 @@ Worth stating plainly, because it is most of the system.
 - **`packages/permissions`** — pure computation, identical answer in every runtime.
 - **`packages/contracts`** — unchanged.
 - **The event catalog and the four log labels** — the pipeline moves, the vocabulary does not.
-- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`, `AnalyticsReader`.
+- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`, `AnalyticsProjector`.
   A managed service is a different constructor argument in `Container`, one line each.
 - **`.env` as the only config surface** — enforced by `check-architecture.mjs` §3, which is why
   "move a service" is never a code search.

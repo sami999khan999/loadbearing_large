@@ -22,26 +22,34 @@ sidecar. **One React import makes all of those impossible.**
 | **Package** | `@loadbearing/api-client` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/contracts`, plus `@orpc/client`, `@orpc/contract`, `better-auth` |
-| **Used by** | `query`, `feature` (type-only), `apps/web`, `apps/desktop` |
+| **Used by** | `query`, `feature` (type-only), `apps/web` |
 | **Environment** | isomorphic — browser, Tauri webview, Node. **No `ServerOnly.assert()`** |
 
 ```
 packages/api-client/src/
 ├── index.ts
-├── import.ts                       ← every external symbol. Note what is absent
+├── import.ts                             ← every external symbol. Note what is absent
 ├── client/
 │   ├── index.ts
-│   └── api-client.ts               → ApiClient, AppClient
+│   └── api-client.ts                     → ApiClient, AppClient
 └── auth/
     ├── index.ts
-    ├── auth.client.ts              → AuthClient, AuthClientConfig
-    ├── auth.strategy.ts            → AuthStrategy, RequestCredentials
-    ├── bearer-auth.strategy.ts     → BearerAuthStrategy
-    ├── cookie-auth.strategy.ts     → CookieAuthStrategy
-    └── token.provider.ts           → TokenProvider
+    ├── auth.client.ts                    → AuthClient, AuthClientConfig
+    ├── account.client.ts                 → AccountClient, ActiveSession, LinkedAccount,
+    │                                       TwoFactorEnrolment
+    ├── organization.client.ts            → OrganizationClient, OrganizationSwitch
+    ├── better-auth-error-normalizer.ts   → BetterAuthErrorNormalizer, BetterAuthError
+    ├── auth.strategy.ts                  → AuthStrategy, RequestCredentials
+    ├── bearer-auth.strategy.ts           → BearerAuthStrategy
+    ├── cookie-auth.strategy.ts           → CookieAuthStrategy
+    └── token.provider.ts                 → TokenProvider
 
 packages/api-client/tests/
-├── auth/auth.strategy.spec.ts
+├── auth/
+│   ├── auth.client.spec.ts
+│   ├── auth.strategy.spec.ts
+│   ├── better-auth-error-normalizer.spec.ts
+│   └── organization.client.spec.ts
 └── client/api-client.spec.ts
 ```
 
@@ -104,7 +112,7 @@ When they disagree — and they do, on sign-out — the UI shows a signed-in she
 of `UNAUTHORIZED` responses.
 
 Wrapping the vanilla client here puts session state in the same cache as everything else, through
-`SessionQueries` in [21](../../../docs/setup/21-query-package.md). One owner, one invalidation story.
+`SessionStore` in `apps/web`, which rides the SSR payload. One owner, one invalidation story.
 
 **`AuthClient` throws rather than returning `{ data, error }`.** Better Auth's client returns the
 pair; the rest of this codebase throws. Normalising at the boundary means a `SignInForm` uses the same
@@ -133,12 +141,25 @@ loaders make real HTTP calls. Point the server-side client at an internal URL an
 incoming request's cookies onto the outbound call. That is a change to one factory, which is only
 true because loaders go through `ApiClient` instead of importing the router.
 
-## Two things this package does not have yet
+## Picking the transport is a build-time decision, not a runtime one
 
-**No namespace accessors.** `AppContract` is `{}` until the first slice lands, so `raw` is the only
-accessor on `ApiClient`. Each slice adds two lines — `public get task() { return this.rpc.task; }` —
-which is what keeps the public surface readable rather than a pass-through, and gives a per-namespace
-concern (a retry policy for a flaky procedure) somewhere to live later.
+`apps/web/src/router.tsx` chooses with `createIsomorphicFn`, and the Start plugin removes the branch
+that does not apply along with its imports — which is what keeps `createServerRpcClient`, and the
+whole container graph behind it, out of the client bundle. The bundle assertion in
+[26](../../../docs/setup/26-hygiene-and-ci.md) is what proves that rather than assuming it.
 
-**No `inProcess` caller.** `apps/web/src/server/rpc-client.ts` builds the router client and injects
-it ([24](../../../docs/setup/24-web-app.md)). The factory is here; the thing it is handed is not.
+> [!IMPORTANT]
+> **`overHttp` refuses a relative base outside a browser.** `Endpoint.rpc` is `/api/rpc`, which is
+> correct in a browser and unresolvable under Node — `fetch` has no document to resolve against, so
+> the first call throws `TypeError: Invalid URL` from inside a route loader, several frames from the
+> line that chose the transport. The guard turns that into an `InternalError` at construction whose
+> `cause` names `ApiClient.inProcess`.
+>
+> The sentence rides on `cause` rather than `message` because the code **is** the message here
+> ([`errors`](../../errors/docs/index.md)): the envelope stays wordless and the diagnostic reaches
+> the logger.
+
+**Two namespace accessors, and the rest go through `raw`.** `role` and `member` have a `get` on
+`ApiClient`; a slice adds two lines — `public get task() { return this.rpc.task; }` — which is what
+keeps the public surface readable rather than a pass-through, and gives a per-namespace concern (a
+retry policy for a flaky procedure) somewhere to live later.

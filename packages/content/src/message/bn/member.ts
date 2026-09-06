@@ -1,6 +1,7 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design — anything missing falls back to English.
+// Total, not partial: `NamespaceBundle` is a `Record`, so an `en` key added without a
+// translation fails `tsc` rather than rendering an English sentence on a Bengali page.
 export const member: NamespaceBundle<"member"> = {
   "member.title": "সদস্য",
   "member.subtitle": "এই প্রতিষ্ঠানে কারা আছেন, এবং কাদের যোগ দিতে বলা হয়েছে।",
@@ -24,4 +25,14 @@ export const member: NamespaceBundle<"member"> = {
   "member.invite.submit": "আমন্ত্রণ পাঠান",
   "member.invite.sent": "{email}-এ আমন্ত্রণ পাঠানো হয়েছে। এটি সাত দিন পরে মেয়াদোত্তীর্ণ হবে।",
   "member.invite.alreadyMember": "এই ঠিকানাটি ইতিমধ্যে এই প্রতিষ্ঠানের একজন সদস্যের।",
+
+  "member.column.actions": "কার্যক্রম",
+  "member.action.deactivate": "নিষ্ক্রিয় করুন",
+  "member.action.reactivate": "সক্রিয় করুন",
+  "member.action.changeRole": "ভূমিকা পরিবর্তন",
+  "member.action.inspect": "কেন?",
+  "member.inspect.title": "{name} এখানে যা করতে পারেন",
+  "member.inspect.close": "বন্ধ করুন",
+  "member.error.lastOwner": "ইনিই একমাত্র সক্রিয় মালিক। আগে অন্য কাউকে মালিক করুন।",
+  "member.error.self": "আপনি নিজের সদস্যপদ নিষ্ক্রিয় করতে পারবেন না।",
 };

@@ -4,7 +4,10 @@
 // ── @loadbearing/application ─────────────────────────────────────────────────
 // The principal a consumer runs as. `SystemPrincipal` narrows it; nothing here
 // constructs a user's.
-export { Principal } from "@loadbearing/application";
+export {
+  Principal,
+  QueueName,
+} from "@loadbearing/application";
 
 // ── @loadbearing/composition ─────────────────────────────────────────────────
 // A value in `main.ts` and a type everywhere else. The worker never builds an adapter
@@ -22,7 +25,7 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 // `RedisConnection` is what applies `maxRetriesPerRequest: null`: a bare connection gets
 // ioredis defaults, and the symptom is a worker that stops consuming silently.
-export { QueueName, RedisConnection } from "@loadbearing/infrastructure";
+export { RedisConnection } from "@loadbearing/infrastructure";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";

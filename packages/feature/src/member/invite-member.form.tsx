@@ -1,8 +1,8 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Button,
   Callout,
-  ErrorNormalizer,
   Field,
   type FormEvent,
   Input,
@@ -18,7 +18,9 @@ import {
 // offered here with no second list.
 export function InviteMemberForm() {
   const { t } = useMessages("member");
-  const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const client = useApiClient();
   const roles = useAppQuery(RoleQueries.list(client, { limit: 100, offset: 0 }));
   const invite = MemberMutations.useInvite(client);
@@ -52,10 +54,11 @@ export function InviteMemberForm() {
     );
   };
 
-  // The one failure that deserves its own sentence; everything else uses the catalog's.
-  const failure = invite.error ? ErrorNormalizer.normalize(invite.error) : null;
+  // The one failure that deserves its own sentence; everything else uses the catalog's,
+  // which now says what the code was rather than that something went wrong.
+  const failure = describe(invite.error);
   const failureCopy =
-    failure?.code === "CONFLICT" ? t("member.invite.alreadyMember") : shell.t("state.error");
+    failure?.envelope.code === "CONFLICT" ? t("member.invite.alreadyMember") : failure?.message;
 
   return (
     <form onSubmit={submit} noValidate>

@@ -31,12 +31,14 @@ export {
   type ActivityRecord,
   type ActivityReplayReader,
   type AnalyticsProjector,
-  type AnalyticsReader,
+  type ApiKeyPage,
+  type ApiKeyRecord,
+  type ApiKeyRepository,
+  type ApiKeySummary,
   type ArchivedPartition,
   CacheStore,
   type CapabilityRepository,
   type DailyCount,
-  type DateRange,
   type DocumentChunk,
   type EmailMessage,
   EmailSender,
@@ -52,13 +54,13 @@ export {
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
+  type NewApiKey,
   type NewInvitation,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
   type ProjectionCheckpoint,
   QueuePublisher,
-  type RiskScore,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
@@ -66,13 +68,13 @@ export {
   StorageGateway,
   type StoredObject,
   type SweepOutcome,
-  type TrendPoint,
   UnitOfWork,
   type VectorStore,
 } from "@loadbearing/application";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
+  type ApiKeyId,
   type GoalId,
   Identifiers,
   type InvitationId,
@@ -86,7 +88,7 @@ export {
 export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
+export { ConflictError, InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
 
 // ── @loadbearing/observability ───────────────────────────────────────────────
 export { Logger } from "@loadbearing/observability";
@@ -108,6 +110,7 @@ export {
   and,
   asc,
   cosineDistance,
+  count,
   desc,
   eq,
   gt,
@@ -116,6 +119,7 @@ export {
   isNull,
   type Logger as DrizzleLogger,
   lt,
+  not,
   or,
   type SQL,
   sql,

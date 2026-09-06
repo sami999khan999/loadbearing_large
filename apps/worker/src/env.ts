@@ -2,70 +2,85 @@ import { z } from "zod";
 
 // The second and last `process.env` reader, and deliberately not sharing the web app's
 // schema — see docs/reference/env.md.
-const Schema = z.object({
-  DATABASE_URL: z.url(),
-  REDIS_CACHE_URL: z.url(),
-  REDIS_QUEUE_URL: z.url(),
+const Schema = z
+  .object({
+    DATABASE_URL: z.url(),
+    REDIS_CACHE_URL: z.url(),
+    REDIS_QUEUE_URL: z.url(),
 
-  S3_ENDPOINT: z.url(),
-  S3_REGION: z.string().min(1),
-  S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY: z.string().min(1),
-  S3_SECRET_KEY: z.string().min(1),
-  S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
+    S3_ENDPOINT: z.url(),
+    S3_REGION: z.string().min(1),
+    S3_BUCKET: z.string().min(1),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
 
-  // In both processes because both build a `Container`, which treats mail as required
-  // rather than optional.
-  SMTP_URL: z.string().min(1),
-  EMAIL_FROM: z.string().min(1),
+    // In both processes because both build a `Container`, which treats mail as required
+    // rather than optional.
+    SMTP_URL: z.string().min(1),
+    EMAIL_FROM: z.string().min(1),
 
-  EMBEDDING_MODEL: z.string().min(1),
-  EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
-  OPENAI_API_KEY: z.string().default(""),
+    EMBEDDING_MODEL: z.string().min(1),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
+    OPENAI_API_KEY: z.string().default(""),
 
-  // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
-  // it just means the platform kills you mid-drain.
-  WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
-  WORKER_EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(4),
-  // Serial by default: these jobs take table-level locks and can deadlock on the same
-  // partition.
-  WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
-  // Serial, and not a dial worth turning: correctness rests on there being exactly one
-  // writer, not on the insert being idempotent.
-  WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
+    // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
+    // it just means the platform kills you mid-drain.
+    WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+    WORKER_EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(4),
+    // Serial by default: these jobs take table-level locks and can deadlock on the same
+    // partition.
+    WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
+    // Serial, and not a dial worth turning: correctness rests on there being exactly one
+    // writer, not on the insert being idempotent.
+    WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
 
-  // The same block the web app parses: a worker with no log output cannot be operated.
+    // The same block the web app parses: a worker with no log output cannot be operated.
 
-  // ── the swappable stores ──
-  // A driver plus the connection detail it needs, so adopting a store is these variables
-  // and nothing else.
-  VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
-  ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-  // Their absence keeps ClickHouse stopped. Present without the driver is the supported
-  // half-way state: the projection runs while reads come from Postgres.
-  CLICKHOUSE_URL: z.url().optional(),
-  // ClickHouse's own out-of-the-box values: a default naming the project would be a
-  // credential baked into shipped code.
-  CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
-  CLICKHOUSE_USER: z.string().min(1).default("default"),
-  CLICKHOUSE_PASSWORD: z.string().default(""),
-  // Unset means no `LogReader`. Logs are still written to stdout and shipped by Alloy
-  // either way.
-  LOKI_URL: z.url().optional(),
-  LOKI_TENANT_ID: z.string().optional(),
+    // ── the swappable stores ──
+    // A driver plus the connection detail it needs, so adopting a store is these variables
+    // and nothing else.
+    VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
+    // Their absence keeps ClickHouse stopped. Present, the projection and its
+    // reconciliation run; no feature reads the store back yet.
+    CLICKHOUSE_URL: z.url().optional(),
+    // ClickHouse's own out-of-the-box values: a default naming the project would be a
+    // credential baked into shipped code.
+    CLICKHOUSE_DATABASE: z.string().min(1).default("default"),
+    CLICKHOUSE_USER: z.string().min(1).default("default"),
+    CLICKHOUSE_PASSWORD: z.string().default(""),
+    // Unset means no `LogReader`. Logs are still written to stdout and shipped by Alloy
+    // either way.
+    LOKI_URL: z.url().optional(),
+    LOKI_TENANT_ID: z.string().optional(),
 
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  LOG_PRETTY: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((v) => v === "true"),
-  // Two of the four log labels. Low-cardinality by construction, and this default is
-  // why `.env` must not pin `APP` globally — both processes would claim one name.
-  APP: z.string().default("worker"),
-  ENV: z.string().default("development"),
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+    LOG_PRETTY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    // Two of the four log labels. Low-cardinality by construction, and this default is
+    // why `.env` must not pin `APP` globally — both processes would claim one name.
+    APP: z.string().default("worker"),
+    ENV: z.string().default("development"),
 
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-});
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  })
+  // The one cross-field rule here: the compose container is `ratchet/ratchet` and these
+  // default to ClickHouse's own `default/default`, which cannot authenticate against it.
+  .superRefine((env, ctx) => {
+    if (!env.CLICKHOUSE_URL) return;
+
+    for (const key of ["CLICKHOUSE_DATABASE", "CLICKHOUSE_USER"] as const) {
+      if (env[key] === "default") {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: "Set it explicitly when CLICKHOUSE_URL is set.",
+        });
+      }
+    }
+  });
 
 export class Env {
   private constructor() {}
@@ -120,7 +135,6 @@ export class Env {
       // Undefined unless a URL was given, which is what `Container` branches on: a
       // partly-filled object builds a connection pointed at nothing.
       analytics: {
-        driver: e.ANALYTICS_DRIVER,
         clickhouse: e.CLICKHOUSE_URL
           ? {
               url: e.CLICKHOUSE_URL,

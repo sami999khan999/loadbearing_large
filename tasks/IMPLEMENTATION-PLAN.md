@@ -591,73 +591,217 @@ it once and make the doc-drift gate (`P4.26`) check it.
 
 ### Package docs
 
-- [ ] `P4.1` `packages/errors/docs` — `reference/catalog.md:40` says `RATE_LIMITED` and
+- [x] `P4.1` `packages/errors/docs` — `reference/catalog.md:40` says `RATE_LIMITED` and
   `UNAVAILABLE` have no class (both exist and are exported); `index.md` tree lists 8 of 11
-  error files.
-- [ ] `P4.2` `packages/core/docs/index.md` — "four exports"; `Token` is the fifth, missing
+  error files. `done: 2026-09-06`
+  - **Done:** the two rows say **yes** with the class named; the `index.md` tree lists all twelve
+    files in `src/error/`. The catalog page's own point survives the fix — `RATE_LIMITED` is
+    `expected` (someone tried something they cannot do) and `UNAVAILABLE` is `unexpected` (we are
+    broken), which is what decides the log level, and neither claim depended on the class being
+    absent.
+- [x] `P4.2` `packages/core/docs/index.md` — "four exports"; `Token` is the fifth, missing
   from tree, exports section and tests list; `reference/token.md` does not exist.
-- [ ] `P4.3` `packages/permissions/docs/index.md` — trees omit `core.permissions.ts`,
+  `done: 2026-09-06`
+  - **Done:** five exports, `Token` in the tree, the exports section and the tests list.
+  - **`reference/token.md` was written rather than the mention dropped**, and registered in
+    `reference/meta.json`. `Token` is the one export in this package where the *how* matters —
+    an opaque random string and the digest of one, which is what lets an invitation token be
+    stored as a hash and compared without ever holding the plaintext.
+- [x] `P4.3` `packages/permissions/docs/index.md` — trees omit `core.permissions.ts`,
   `ai.permissions.ts`, `account.routes.ts`, `organization.routes.ts`; "four exports" is five.
-- [ ] `P4.4` `packages/contracts/docs/index.md` — "none ship yet" (`role/`, `member/` ship);
-  `InvitationId` absent from the identifiers line; two spec files missing.
-- [ ] `P4.5` `packages/application/docs` — `meta.json` and `index.md:3` say "ten ports", the
+  `done: 2026-09-06`
+  - **Done:** all four files in the trees, five exports.
+  - **The two `*.routes.ts` files carry the more interesting note** now they are visible:
+    `account.routes.ts` and `organization.routes.ts` deliberately have **no gate**, because your
+    own password is not a capability and founding your own tenant is not either. A route table
+    whose every entry had a gate would be one nobody could read for the exceptions.
+- [x] `P4.4` `packages/contracts/docs/index.md` — "none ship yet" (`role/`, `member/` ship);
+  `InvitationId` absent from the identifiers line; two spec files missing. `done: 2026-09-06`
+  - **Done:** `role/` and `member/` named as shipping, `InvitationId` on the identifiers line, both
+    spec files in the tree. "None ship yet" was the load-bearing error — it is the sentence that
+    sends a reader looking for a worked example the package has two of.
+- [x] `P4.5` `packages/application/docs` — `meta.json` and `index.md:3` say "ten ports", the
   table lists fifteen, `src/port/` holds sixteen; tree omits `email.sender.ts`, `ai/`,
   `member/`, `rbac/` and their tests; `index.md:89` says `EventBus` is implemented in
   composition (it is not — `composition/docs/index.md:120` is right); example port path
-  `src/task/task.repository.ts` does not exist.
-- [ ] `P4.6` `packages/infrastructure/docs` — `index.md` tree omits `smtp/`;
-  `reference/unit-of-work.md` (rewritten by `P2.1`).
-- [ ] `P4.7` `packages/composition/docs` — "two exports" is three (`HealthReport`); 9 of 15
+  `src/task/task.repository.ts` does not exist. `done: 2026-09-06`
+  - **Done:** sixteen ports counted from `src/port/` in both `meta.json` and `index.md`, and the
+    table lists all sixteen. The tree gained `email.sender.ts`, `ai/`, `member/`, `rbac/` and their
+    tests. The example port path is a slice that exists.
+  - **`EventBus` was the claim worth correcting rather than deleting.** `index.md` said composition
+    implements it; nothing does. It is now stated as the port to watch — `composition` wires
+    `RecordingEventBus` into `TestContainer` and binds nothing in the real one, so the seam is
+    exercised by tests and unused in production, which is a different thing from unimplemented.
+- [x] `P4.6` `packages/infrastructure/docs` — `index.md` tree omits `smtp/`;
+  `reference/unit-of-work.md` (rewritten by `P2.1`). `done: 2026-09-06`
+  - **Done:** `smtp/` in the tree with `SmtpEmailSender`, and `reference/unit-of-work.md` rewritten
+    against the shipped class.
+- [x] `P4.7` `packages/composition/docs` — "two exports" is three (`HealthReport`); 9 of 15
   fakes listed; `reference/test-container.md` says eleven fakes, ten ports, "one entry per
-  port" (it also carries `content`).
-- [ ] `P4.8` **stale `db` package** — named in `observability`, `contracts`, `permissions`,
+  port" (it also carries `content`). `done: 2026-09-06`
+  - **Done:** three exports (`Container`, `ContainerConfig`, `HealthReport`), all fifteen fakes.
+  - **`test-container.md`'s "one entry per port" was a rule the file itself breaks**, and the
+    exception is the interesting part: it also carries `content`, because `StaticContentSource` is
+    the one port whose *real* implementation is the test double — there is no fake worth writing
+    for a class that reads a catalog out of memory.
+  - Carries the `P3.8` refusal: migrating `application/tests/**` onto `TestContainer` would make
+    `application` depend on `composition`, inverting the layering. Recorded in that page.
+- [x] `P4.8` **stale `db` package** — named in `observability`, `contracts`, `permissions`,
   `application` docs, `auth/src/apikey/api-key.resolver.ts:25`, `docs/setup/00:120,124`,
   `docs/setup/26:243`, `docs/setup/27:72-73`, `docs/setup/28` (bare `├── db/` and `:164,896`).
   `auth/src/tables/index.ts:19` and `auth.factory.ts:101` name `src/schema/auth.schema.ts`
-  (real: `src/pg/schema/`).
-- [ ] `P4.9` `packages/asset/docs/index.md:111` and `font.css:1-2` name `ui/src/token/token.css`
+  (real: `src/pg/schema/`). `done: 2026-09-06`
+  - **Done:** `grep -rn '\bdb\b' docs packages/*/docs README.md AGENTS.md` returns only the
+    drizzle `db:*` scripts, the `db` transaction getter, `better-auth/db`, and two sentences that
+    frame the fold as history. The two source-file claims were already stale — `api-key.resolver.ts`
+    and `auth/src/tables/index.ts` name real paths — so nothing under `src/` changed.
+  - **Wider than the entry.** The fold invalidated derived claims the entry did not list, and each
+    was checked against the code rather than reworded: the `06` dependency graph (the
+    `application ──┬── db ──┐ … └── infra ─┘` fork is now one `infrastructure` chain), the `06`
+    scaffold table (`db`'s drizzle devDependencies moved onto `infrastructure`), the `05`
+    `OOP_PACKAGES` glob (which also lacked `errors` and `observability`, as
+    `tooling/eslint-config/src/index.js:4` has them), the `28` package tree, the `28`
+    `ServerOnly.assert()` roll-call (four markers, but `application` not `db` —
+    `packages/*/src/index.ts:3`), the `28` `<slice>` count (six, not seven: `infrastructure`
+    splits a slice across `pg/schema/` and `pg/repository/`), the `26` `scope-enum` block, and the
+    `29` flow diagrams.
+  - **The `00`/`15` "departure" is retired, not reworded.** Both pages argued for `infrastructure`
+    as a package *the architecture docs do not have*; `docs/ai/rules/layering.md` now names it and
+    prescribes the vendor split, so the departure was won. `00` departure 1 states the fold and why
+    it went in this direction; `15`'s "Why this package exists" argues against `apps/` duplication,
+    which is the reason that survived.
+  - **Overlaps `P4.19`** (`scope-enum` has `db`, lacks `errors`) — that half is closed here; the
+    rest of `P4.19` is untouched.
+- [x] `P4.9` `packages/asset/docs/index.md:111` and `font.css:1-2` name `ui/src/token/token.css`
   (real `theme/token/typography.css`); `apps/web/src/store/appearance.store.ts:96` names
-  `token.css` for a rule that lives in `motion.css`.
-- [ ] `P4.10` `packages/ui/docs/index.md` — `ThemeRegistry.apply` shown setting `colorScheme`
+  `token.css` for a rule that lives in `motion.css`. `done: 2026-09-06`
+  - **Already true — a verified no-op, not a skip.** All three sites name
+    `packages/ui/src/theme/token/typography.css` today, and
+    `grep -rn 'token\.css' packages apps docs` returns nothing at all. `appearance.store.ts:96` no
+    longer names a file. The rest of the page was re-checked against the tree — `svg/` holds the
+    three icons listed, `image.manifest.ts` holds the one `brand.logo` key it claims, and
+    `packages/ui/src/theme/token/typography.css:1` is the sole importer of `font.css` — so the
+    entry is stale rather than the page.
+- [x] `P4.10` `packages/ui/docs/index.md` — `ThemeRegistry.apply` shown setting `colorScheme`
   (that is `ModeRegistry.apply`; `ThemeMeta` has no such field); tree lists 5 of 11
   components; "neither Storybook nor `/kitchen-sink` picked" (`/kitchen-sink` exists); "no
   component stylesheet" contradicted by ten files in `theme/class/`; "33 tests" (53).
-- [ ] `P4.11` `packages/content/docs/index.md` — "four namespaces per locale" (eight); "eight
+  `done: 2026-09-06`
+  - **Done:** the apply snippet now shows both calls and says why `colorScheme` belongs to
+    `ModeRegistry` — it is a property of light-or-dark, not of the palette. The paragraph gained
+    `resolveMode`, which the page never mentioned and which is the reason `midnight` (`modes:
+    ["dark"]`) cannot render a page with no colours. The tree lists all eleven components.
+    `/kitchen-sink` is named as the choice that was made, with the reason (no second build, no
+    story files to keep in step). "No component stylesheet" became "no third-party design system":
+    ten of the eleven have a file in `theme/class/`, and `Can` renders no element of its own.
+  - The "33 tests" claim was already gone; the run is 61 across 10 files.
+- [x] `P4.11` `packages/content/docs/index.md` — "four namespaces per locale" (eight); "eight
   catalog cells" (fourteen); `catalog.server.ts` "blocked" and `MessageStore` "deferred" (both
   shipped); tree omits `message-store.ts`, `catalog.server.ts`, four spec files; "28 tests" (54).
-- [ ] `P4.12` `packages/api-client/docs/index.md` — tree omits `account.client.ts`,
+  `done: 2026-09-06`
+  - **Done:** eight namespaces (`common` `error` `nav` `auth` `role` `member` `organization` +
+    the server-only `email`), fourteen client cells over `Locale × ClientNamespace`, and the two
+    ☐ rows are ✅ with their callers named — `Container`/`TestContainer` for `SERVER_CATALOG`,
+    `apps/web/src/router.tsx` and `feature`'s `MessageProvider` for `MessageStore`. 55 tests.
+  - **The paragraph under the table was inverted, not just restated.** It argued
+    `SERVER_CATALOG` should wait; it now carries the reason the shipped file gives — static
+    imports, because a dynamic specifier makes rollup emit an `email` chunk into the public assets
+    directory even after the catalog is tree-shaken out. That is also why
+    `router.tsx` still constructs `new StaticContentSource()` with no argument.
+  - The `nav.data.ts` ban is no longer "passing vacuously" — the file exists, so the ESLint
+    `PermissionKey` ban does work.
+- [x] `P4.12` `packages/api-client/docs/index.md` — tree omits `account.client.ts`,
   `organization.client.ts`, the normalizer, 3 of 5 specs; "no namespace accessors" (has
   `role`, `member`); `inProcess` "used by SSR loaders" (used by nothing — `P5.10`).
-- [ ] `P4.13` `packages/query/docs/index.md` — tree lists 3 of 7 folders; `Env.apiUrl` example
+  `done: 2026-09-06`
+  - **Done:** the tree names all nine source files and all five specs. "No namespace accessors"
+    became "two, and the rest go through `raw`".
+  - **`inProcess` is recorded as unwired, not as working.** `createServerRpcClient` has no caller
+    either, so every read goes over HTTP today, SSR loaders included — the loopback hop the factory
+    exists to remove is still being paid. The factory table row is annotated rather than deleted;
+    `P5.10` is what closes it.
+- [x] `P4.13` `packages/query/docs/index.md` — tree lists 3 of 7 folders; `Env.apiUrl` example
   (no such field); "no feature slices"; "no hook tests … arrives with 22" (22 arrived);
-  `QueryKeys.rbac.effective` headline example has no caller until `P5.2`.
-- [ ] `P4.14` `packages/feature/docs/index.md` — tree lists 7 of 27 files (`account/`,
+  `QueryKeys.rbac.effective` headline example has no caller until `P5.2`. `done: 2026-09-06`
+  - **Done:** all seven folders in the tree. `Env.apiUrl` became `Endpoint.rpc`, which is what
+    `apps/web/src/router.tsx:34` actually passes — and the distinction matters, since `Env` is
+    server-only and cannot reach the client bundle at all.
+  - The two "does not have" items were both false and are replaced by the one that is true:
+    `QueryKeys.rbac.effective` is read by no caller outside its own spec. Left as a fact about the
+    key rather than a defect — the procedure it names exists; nothing reads effective permissions
+    through the cache yet.
+- [x] `P4.14` `packages/feature/docs/index.md` — tree lists 7 of 27 files (`account/`,
   `member/`, `organization/` and six `auth/` files absent); "12 tests" (29); "no feature
-  slices".
+  slices". `done: 2026-09-06`
+  - **Done:** all 27 files across the five slice folders. 62 tests across 14 spec files.
+  - **"No feature slices" is wrong in a way worth naming.** Five slices ship; none of them is a
+    *product* slice. Identity, membership and authorization are what a product needs before it has
+    a product, so the honest claim is that nothing here reads a domain procedure yet and doc 23
+    §23.5 is still an unwalked path.
 
 ### Root and `tasks/`
 
-- [ ] `P4.15` `README.md` — "Sign up at `/sign-in`" (there is `/sign-up`); step 6 and the
+- [x] `P4.15` `README.md` — "Sign up at `/sign-in`" (there is `/sign-up`); step 6 and the
   troubleshooting row describe `bootstrap` enrolment while `.env.example` ships
   `AUTH_ENROLMENT_MODE=personal`; "`AGENTS.md` … one row per task" (it is twelve `@` lines,
   byte-identical to `CLAUDE.md`); `.agents/` referenced as committed (also `.gitignore:27`,
   `docs/setup/27:161`) and does not exist; readers sent to an `infra/.env` the repo does not
   template; no mention of organizations, members, invitations, enrolment modes; token budget
-  "~650" vs `docs/ai/rules/index.md` "~850" vs `docs/index.md` "~400".
-- [ ] `P4.16` `docs/ai/index.md:57-59` draws `CLAUDE.md ├── @AGENTS.md` — false; `:86-89`
+  "~650" vs `docs/ai/rules/index.md` "~850" vs `docs/index.md` "~400". `done: 2026-09-06`
+  - **Step 6 was the one that would strand a reader**, and it is rewritten around the shipped
+    default. `personal` is what `.env.example` sets and the only mode that works against an empty
+    database; the page now leads with *no session is issued without a membership*, which is why the
+    mode is a decision at all, then names `bootstrap` and `invite` and the invitation override that
+    beats all three. The `/settings/members` → second account → `/forbidden` walk replaces the old
+    first-user-gets-owner story, so the reader watches the route guard and the use-case gate decide
+    the same thing.
+  - The troubleshooting row now splits by mode rather than naming `BOOTSTRAP_ORGANIZATION_SLUG`
+    unconditionally — under `invite` the cause is a missing invitation, not a missing slug.
+  - `/sign-in` → `/sign-up`. `~650` → `~900`, measured. `.agents/` removed from all three files
+    that named it. `infra/.env` is described as a file you create, since every published port has a
+    default in the compose file — and `CLICKHOUSE_HTTP_PORT` / `CLICKHOUSE_NATIVE_PORT` were
+    missing from the overridable list.
+- [x] `P4.16` `docs/ai/index.md:57-59` draws `CLAUDE.md ├── @AGENTS.md` — false; `:86-89`
   claims one copy of every document while `AGENTS.md` duplicates `CLAUDE.md` verbatim. Make
   `AGENTS.md` a one-line pointer or an `@` import of `CLAUDE.md`, and fix the tree.
-- [ ] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
+  `done: 2026-09-06`
+  - **The diagram was made true rather than redrawn.** `CLAUDE.md` now `@`-imports `AGENTS.md`, and
+    `AGENTS.md` is the brief the diagram always described — what the repo is, four rules that cost
+    the most when broken, and the route into `docs/ai/index.md`. ~340 tokens.
+  - **A pointer would have been the wrong fix.** `AGENTS.md` is the only file most non-Claude tools
+    load unprompted, so a one-line redirect leaves them holding nothing; the twelve `@` lines it
+    used to carry were worse — unresolvable tokens for any tool that does not implement the
+    syntax. A brief works for both readers, and §12 already asserts it points at a router.
+  - Token budgets across `docs/ai/index.md`, `docs/ai/rules/index.md` and `README.md` were
+    re-measured rather than reconciled: twelve rule files are ~7,700 tokens, 410–890 each.
+- [x] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
   "11/11 assertions" (13); "388 tests across 65 files" (542 / 94); "20 projects" (17 declare
   `typecheck`); "Every task T-001–T-024 is done" (through T-029); `/permissions` ×3 (is
   `/settings/roles`); T-001 names `PgMembershipEnroller` (is `PgBootstrapMembershipEnroller`)
   and `seed/index.ts` (now a barrel); T-005 names `route/sign-in.tsx` (is `(shell)/`); no
   2026-09-03 changelog row; T-029 cites `~/.claude/plans/…` outside the repo for ten owed
   verification steps — copy the steps into the task. **Depends on:** `P1` (re-measure after).
+  `done: 2026-09-06`
+  - **Every number re-run, not adjusted.** 15 packages build · 17 typecheck projects · 716 lint
+    files · **659 tests across 114 files** · 15/15 assertions with `build:packages` and the web
+    build done first, so nothing skipped · `deps:check` and `repo:check` silent. Dated 2026-09-06.
+  - **`infrastructure` is inside the total now.** It ran against a live Postgres on this machine
+    (83 tests), so the "needs live Postgres — covered in CI" row is gone rather than reworded.
+  - **The callout that replaced it says the opposite of what the old one did.** The old note
+    deferred three acceptance criteria to CI; CI has never run, on this branch or on the default
+    one — both jobs die in ~20s at `pnpm/action-setup@v4` because the root manifest declares
+    `devEngines.packageManager` and the action reads `packageManager`. So the table now says
+    plainly that "covered in CI" is not an answer any task may give until `P8.12` lands.
+  - `T-029`'s ten manual steps are copied into the task, with step 5 named as the one that matters:
+    the sixty-second `session.cookieCache` window is what a switch has to invalidate, and nothing
+    unit-testable proves it does. The plan file it pointed at was outside the repository.
+  - Also: `/permissions` → `/settings/roles` ×3, `PgBootstrapMembershipEnroller`,
+    `seed/system-role.seed.ts`, `factory/auth.factory.ts`, `(shell)/sign-in.tsx`, and three missing
+    changelog rows (2026-09-03, 2026-09-05, 2026-09-06).
 
 ### `docs/setup`
 
-- [ ] `P4.18` `docs/setup/25-worker-app.md` (worst page) — install block omits `contracts`,
+- [x] `P4.18` `docs/setup/25-worker-app.md` (worst page) — install block omits `contracts`,
   adds `core`; `Principal.system` snippet has two args (real: three, plus `USER_ID`); "only
   the `rbac` catalog ships" (three fragments ship); "`isKnown()` at boot" (per call — `P7.16`);
   `EmbeddingConsumer` snippet wrong ctor arity, `private handle`; `WorkerBootstrap` snippet
@@ -667,7 +811,40 @@ it once and make the doc-drift gate (`P4.26`) check it.
   absent; cleanup "orphaned uploads" not implemented; "three months out" is two; root
   `biome.json` named for an override in `tooling/biome-config`; `apps/desktop`; layout tree
   omits `tests/`, `vitest.config.ts`. Re-derive every snippet from the file it shows.
-- [ ] `P4.19` `docs/setup/26-hygiene-and-ci.md` — `scope-enum` block has `db`, lacks `errors`
+  `done: 2026-09-06`
+  - **Every snippet re-derived from its file**, which is what the entry asked for and what the
+    page had stopped being. `SystemPrincipal` gained `USER_ID` and the third `Principal.system`
+    argument — passing the organization id as the actor compiles until the brands diverge and puts
+    a tenant id in the audit trail's actor column. `EmbeddingConsumer` takes `concurrency`, its
+    `handle` is public (a private one is a unit of work no spec can reach), and the job data
+    carries `goalId` and `sourceType`.
+  - **`WorkerBootstrap` was the snippet with the most missing**, and each omission is its own
+    incident: the `stopping` guard (a platform sending `SIGTERM` then `SIGINT` calls `stop()`
+    twice and the second `close()` rejects with nothing to catch it), the race against
+    `WORKER_SHUTDOWN_TIMEOUT_MS` (a job that never returns drains past the platform's SIGKILL
+    timer), and `container.clock.now()` on both sides of the duration rather than `Date.now()`.
+    All three are now shown and each carries the failure it prevents. Same for `main.ts`: the two
+    process-level handlers registered *before* `start()`, so a container that cannot reach
+    Postgres logs a parseable line instead of a raw stack.
+  - **Three claims were false in a way that would strand a reader**, and each was checked against
+    the code: `core` in the install block (the worker never imports it) with `contracts` missing
+    (it does); "only the `rbac` catalog fragment ships" (five do, and both keys the snippet grants
+    are real); "`isKnown()` at boot" (it runs per `forOrganization` call — recorded as the fact it
+    is, since the failure is loud either way).
+  - **Two schedules described work that does not happen.** `cleanup-daily` does not sweep orphaned
+    uploads — `sweepExpired` takes sessions and verification rows, and an orphaned S3 object has
+    no row to sweep from, which is a different job with a different cost. The recovery sweep has
+    no file, so it is out of the shipping table and its paragraph is conditional.
+  - The ✅ Gate asserted `"consumers":1`, which can never pass — two always start, three with
+    `CLICKHOUSE_URL`. `document_embeddings` ×2 → `document_chunks`. `apps/desktop` dropped from
+    the boundary note. The layout tree gained `bootstrap/`, every folder barrel, `tests/` and
+    `vitest.config.ts`; the `biome.json` note names `tooling/biome-config/src/base.json`, which
+    the root file does nothing but extend.
+  - **Step 25.2 gained the four `WORKER_*` keys**, which the page never mentioned while the
+    bootstrap snippet now reads three of them. Two are capped or defaulted to `1` for reasons that
+    are silent when wrong — a second maintenance job deadlocks on the same partition, a second
+    projection run interleaves keyset batches.
+- [x] `P4.19` `docs/setup/26-hygiene-and-ci.md` — `scope-enum` block has `db`, lacks `errors`
   (its own `fix(db):` example is rejected); CI YAML omits the extensions step,
   `deps:check`/`repo:check`, migrate/seed, `check:contrast`, the `audit` job, uses
   `ratchet_test` where `ci.yml:18-21` explains why not; "required by rule 3" (rule 8);
@@ -676,53 +853,229 @@ it once and make the doc-drift gate (`P4.26`) check it.
   12 description omits the `CLAUDE.md` import clause; promises `actions/cache`, compose smoke
   job, `pnpm peers`, `pnpm sbom`, desktop workflow — none exist; `check:contrast` gate
   undocumented; "`@orpc/shared` pinned exactly" — no such catalog entry (also
-  `docs/ai/rules/dependencies.md:26`, `pnpm-workspace.yaml:114`).
-- [ ] `P4.20` `docs/setup/27-verification-and-first-feature.md` — "Fifteen commits" over
+  `docs/ai/rules/dependencies.md:26`, `pnpm-workspace.yaml:114`). `done: 2026-09-06`
+  - **The CI block is now the file, copied verbatim from `.github/workflows/ci.yml`** rather than a
+    paraphrase that had drifted eight steps. Paraphrasing a workflow is what let it drift; a reader
+    diffing the page against the repo now gets nothing.
+  - **The most useful thing on the page is a new caution: this workflow has never run.**
+    `pnpm/action-setup@v4` reads the root manifest's `packageManager` field and nothing else, and
+    the root declares only `devEngines.packageManager` — so both jobs die in ~20s, on every branch,
+    before a single check executes. It is easy to miss because it is not a check failing. Repo-side
+    fix is `P8.12`; the page says to declare both fields or pass `version:` on the action, and the
+    ✅ Gate now asks whether `verify` got *past* setup, not only whether a check reported red.
+  - **Four steps the old block dropped are each restored with the hole they close:** the extensions
+    step (compose mounts `postgres.init.sql` as an initdb script, and a `services:` container starts
+    before checkout, so there is nothing to mount), `db:migrate` + `db:seed` (the infrastructure
+    specs read the seeded organization rather than creating one), `deps:check` + `repo:check`
+    before the build (pure file reads, seconds, caught by nothing else), and `check:contrast`. The
+    `audit` job moved out of "optional but worth it" — it ships.
+  - **`ratchet_test` was worse than a typo.** `tests/support/database.ts` pins the scratch URL, so a
+    differently-named database fails every infrastructure spec with a connection error rather than
+    an assertion — which reads as infrastructure being down. The page says so now.
+  - **`check:contrast` had no section at all**, and it is the one gate that computes rather than
+    greps: 117 pairings over five themes × two modes, WCAG AA, plus the sRGB-gamut check nobody
+    expects — an out-of-gamut `oklch()` does not error, the browser clips it differently per engine,
+    and the symptom is a palette that looks muddy in one theme.
+  - Also corrected against their sources: the framework ban list (twelve entries, not seven — the
+    doc's copy predated `@nestjs/`, `pg`, `express`, `fastify`, `hono`), `EMAIL_FINGERPRINTS` (five,
+    not one), `ENV_FINGERPRINTS` (five, not three — the two missing are `GOOGLE_CLIENT_SECRET` and
+    `AUTH_ENROLMENT_MODE`), the assertion-12 description (it also checks the `CLAUDE.md` `@`-import
+    list, which is the clause the routers cannot see), the `scope-enum` block, `~650` → `~900`, and
+    the desktop-workflow bullet.
+  - **`@orpc/shared` is not a catalog entry and should not be.** The pinning is upstream's:
+    `@orpc/server@1.15.0` depends on `@orpc/shared@1.15.0` exactly, not `^`. That is precisely why a
+    skew between our four catalog ranges puts two copies in the tree rather than resolving to one —
+    the page said "they pin", which sent a reader looking for a line that does not exist.
+- [x] `P4.20` `docs/setup/27-verification-and-first-feature.md` — "Fifteen commits" over
   eighteen lines, two with scope `db`, `prettier` named; `/permissions` (`/settings/roles`);
   "one slice" (two); "three applications" (two); "`process.env` in exactly two files" (ten,
   eight exempt; repeated `28:148,160`); §27.4 "permission migration" describes a mechanism the
   shipped slices do not use (`SystemRoleSeed` at seed time); `member` slice and organization
-  plugin absent from the twelve-step map.
-- [ ] `P4.21` `docs/setup/28-folder-structure.md` — "after step 26" vs 27; sixteen packages
+  plugin absent from the twelve-step map. `done: 2026-09-06`
+  - **"Fifteen commits" over eighteen lines** — eighteen, with the two `db` scopes already retired
+    by `P4.8` and `prettier` replaced by `biome and eslint`, which is what the repo runs.
+  - **The worked-example paragraph was the substantive fix.** It claimed one slice and a permission
+    *migration*. Two slices ship, and neither uses a migration: `SystemRoleSeed` grants at seed
+    time, which is idempotent and re-runnable, so a grant added later reaches an existing database
+    on the next `pnpm db:seed`. `member` is now named as the one worth reading second — it has the
+    writes, so it exercises the `UnitOfWork`, the in-transaction activity entry, and mail that goes
+    out only after commit, none of which `role` touches.
+  - **The organization plugin is named as deliberately not a slice.** Reading it as one is the
+    mistake the page invited: those actions are identity-gated, no permission a non-owner holds
+    could gate them, and only an endpoint holding Better Auth's `ctx` can call `setSessionCookie`.
+  - **"`process.env` in exactly two files" was the checklist item most likely to fail on a clean
+    tree.** Eight source files read it; six are exempt, and the shape of the exemption is the point
+    — every one sits *outside* an app or package's `src/`, so a folder barrel cannot execute a
+    script on import. The box now says that rather than a number a reader would trip over.
+  - `/permissions` → `/settings/roles`. "Three applications" → two, with doc 30 named as a plan for
+    a third rather than as something built.
+- [x] `P4.21` `docs/setup/28-folder-structure.md` — "after step 26" vs 27; sixteen packages
   incl. `db/`; four `ServerOnly` markers named wrongly (real: application, composition, auth,
   infrastructure); malformed infra block with non-existent `postgres/init/01-extensions.sql`,
   missing `check-contrast.mjs`; "5 steps" CI (thirteen + a job); `(shell)/` 3 of 8 files,
   `server/` 2 of 3 fn files ("two" ×2 in prose), settings/organization routes missing, worker
   tree minimal, `tests/` and `vitest.config.ts` absent for both apps; full `apps/desktop/`
-  tree.
-- [ ] `P4.22` **wrong backticked paths** — `15:247,320,347,468,494` (`src/{cache,storage,queue}`
+  tree. `done: 2026-09-06`
+  - **Both app trees listed a fraction of what exists** and are now complete: `apps/web` at 3 of 8
+    `(shell)/` files, missing every `settings/` and `organization/` route, missing
+    `invitation.fn.ts`, `-redirect.ts` and `-session.ts`, and naming a generic `<subject>.router.ts`
+    where `role` and `member` ship. `apps/worker` was missing `bootstrap/`, every folder barrel and
+    four of five schedules. Both gained `tests/` and `vitest.config.ts` — a page whose whole claim
+    is *the complete tree* cannot omit the directory the file rules say must mirror `src/`.
+  - **The infra block was malformed and named a file that does not exist:** a stray second `└──`
+    hung `postgres/init/01-extensions.sql` off `infra/`, where the real file is
+    `infra/postgres.init.sql`. `tooling/scripts/` listed one script of three and called them "the
+    thirteen CI greps".
+  - "after step 26" → 27; CI "5 steps" → two jobs; the `(shell)` paragraph now says why the
+    invitation landing page is there — an anonymous visitor must be able to preview one; "the two
+    `*.fn.ts` files" → three, in both places the prose says it. The sixteen-package list and the
+    `ServerOnly` roll-call were already closed by `P4.8`.
+  - **Deferred to `P4.25`:** the full `apps/desktop/` tree, which is one item in a change that also
+    touches doc 29, doc 30, both `env.ts` files, `.env.example` and a Biome glob. Splitting it
+    across two entries would leave the tree gone and the env var still parsed.
+- [x] `P4.22` **wrong backticked paths** — `15:247,320,347,468,494` (`src/{cache,storage,queue}`
   → `redis/ s3/ bullmq/`, which contradicts `layering.md`'s own vendor rule); `14:233`
   (`src/embedding/` → `src/openai/`); `12:177,193,210` (`application/src/error/` → `errors/`);
   `20:879` (`bundled.content-source.ts` → `static.`); `05:565` and `00:36` (Prettier, not
   used); `10:171,245,310,372` and `24:560` (`task` slice → `role`);
   `docs/infra/deployment.md:89` (`docker-compose.prod.yml`); `30:228` (`apps/desktop`).
-- [ ] `P4.23` **shipped features with no setup page** — `AUTH_ENROLMENT_MODE` appears in zero
+  `done: 2026-09-06`
+  - **Every path corrected against the tree, and §15 is now what stops the next one.** The vendor
+    paths in `15` and `14` and the `application/src/error/` block went with the first pass; this one
+    closed the rest.
+  - **Three were not path typos but stale claims underneath a path**, which is why the entry is
+    worth more than a find-and-replace: `00:36` still sold doc 05 as "Prettier" for a page whose
+    whole subject is replacing it; `10`'s two `illustrative` markers said "the starter kit ships no
+    feature slices" while `role/` and `member/` sit in that package; and `12`'s
+    `application/src/error/` paths were correct-as-history but the `<summary>` did not say so, so
+    §15's `<details>` exemption was carrying a reader who could not see why.
+  - **`bundled.content-source.ts` was a naming-rule violation, not a wrong path.** The role suffix
+    is `.source`, so the technology joins with a hyphen: `bundled-content.source.ts`, matching the
+    `static-content.source.ts` beside it. Written the other way, `*.source.ts` misses the file —
+    which is exactly the failure `docs/ai/rules/files.md` names. Fixed in three places in doc 20 and
+    in `packages/content/docs/`.
+  - `deployment.md:89` already reads "illustrative; write it on the host, it is not in the
+    repository", and `30:228` is now under that page's not-built banner (`P4.25`).
+- [x] `P4.23` **shipped features with no setup page** — `AUTH_ENROLMENT_MODE` appears in zero
   files under `docs/`; organization plugin, `PgOrganizationFounder`, `PgInvitationClaimer`,
   `InvitationClaimingEnroller`, `MemberRouter`, `OrganizationSwitcher`, `/settings/members`,
   `/organization/new`, `/invitation/$token` in no setup page; `/api/health` not walked in `24`;
   `docs/ai/rules/workflow.md` command list omits `check:contrast`, `smoke`, `deps:check`,
   `repo:check`, `auth:tables`, `infra:up:analytics`, and Mailpit. Add §16.x (enrolment modes,
   organization plugin), §24.x (health, member router), §27.4 (second slice), and fix
-  `workflow.md`.
-- [ ] `P4.24` **rules ↔ opinions disagreements** — comments scope (`opinions/comments.md:10`
+  `workflow.md`. `done: 2026-09-06`
+  - **§16.11 — enrolment.** The gap that mattered: `AUTH_ENROLMENT_MODE` appeared in zero files
+    under `docs/`, and it decides whether a fresh sign-up can reach the app at all. The section
+    gives the port, the three enrollers, the table of what each mode grants, and two failures that
+    are silent when you get them wrong — enrolment must run from `session.create.before`, because
+    Better Auth queues `create.after` until the sign-up endpoint has finished, which is *after* the
+    session hook has already refused; and `bootstrap` takes a `pg_advisory_xact_lock` so two
+    simultaneous first sign-ups cannot both become owner.
+  - **`InvitationClaimingEnroller` is documented as a decorator, and why that is the design.**
+    Written as a condition inside each enroller, "an invitation wins" would be stated three times
+    and could disagree with itself. A fourth mode inherits it for free.
+  - **§16.12 — the organization plugin**, with the two reasons it is not oRPC stated rather than
+    implied: these actions are identity-gated (`isMember` *is* the authorization, and no permission
+    key could express it), and only an endpoint holding Better Auth's `ctx` can call
+    `setSessionCookie` — without which the cookie cache answers for the old tenant for up to a
+    minute. `rebind`'s three writes are shown **in order**, because writing the cookie before the
+    row leaves a window where a crash produces a cookie the session table disagrees with.
+  - **§24.7 gained `/api/health`** — readiness, not liveness, and the difference decides what the
+    platform does with a 503: hold the instance out of the pool, or kill the container. Also why
+    `cache-control: no-store` is not boilerplate, why `analytics` is `null` rather than `true` when
+    unconfigured, and why Loki is deliberately absent from the report.
+  - **§24.6 now shows the real `app.router.ts`** with both merge points, and calls out
+    `revokeInvitation` as the four-line procedure: the use-case answers `void` because "it worked"
+    is the transport's word, so the router is where the domain's silence and the contract's output
+    schema meet. Every write-shaped procedure will have those four lines.
+  - `docs/ai/rules/workflow.md` gained `check:contrast`, `deps:check`, `repo:check`, `smoke`,
+    `auth:tables`, `infra:up:analytics` and Mailpit, and "fourteen assertions" became fifteen.
+  - §27.4's second slice was closed by `P4.20`.
+- [x] `P4.24` **rules ↔ opinions disagreements** — comments scope (`opinions/comments.md:10`
   says anywhere in src/tests, `:128` scopes enforcement to `packages/*`); `classes.md`
   free-function ban in tests (opinions scope to `src/`, rules silent —
   `apps/worker/tests/consumer/maintenance.consumer.spec.ts` has three); rulebook size
   (`data-and-scale.md` is 613 lines vs "~2 000 tokens"). Settle each in the opinion, mirror in
-  the rule. **Depends on:** `P1.11`.
-- [ ] `P4.25` **`apps/desktop` does not exist** — `docs/setup/30-desktop-app.md`, `28:127-148`,
+  the rule. **Depends on:** `P1.11`. `done: 2026-09-06`
+  - **Two of the three were already settled and one was real.** The comments scope agrees in all
+    three places today — `opinions/comments.md` says `{src,tests}` under `packages/*` or `apps/*` in
+    both the statement and the enforcement section, `rules/comments.md` says the same, and
+    `sourceDirs()` in the script walks exactly that. The "~2 000 tokens" claim is not in the tree at
+    all any more; `P1.11` and `P4.16`'s re-measurement took it out.
+  - **The free-function ban was genuinely wrong, and in a way a reader could not resolve.** The
+    opinion's package list was eleven and omitted `observability`, which the ESLint glob has had all
+    along — so the page said one thing and the config another with nothing to arbitrate. And neither
+    file stated the *scope*, which is why `apps/worker/tests/…spec.ts`'s three local helpers read as
+    violations: the glob is `packages/{…}/src/**`, so `tests/` is outside it and `apps/*` is outside
+    it twice over.
+  - **Settled in the opinion, mirrored in the rule**, as the entry asks: the ban is on the shipped
+    surface — exported, and `src/` only. Both halves carry their reason. A spec has no public API to
+    keep coherent, so forcing a `harness()` into a class buys nothing; a module-private helper beside
+    the class that uses it is fine. What the rule prevents is a barrel that is half classes and half
+    loose functions, where there is no answer to *where does the next one go*.
+- [x] `P4.25` **`apps/desktop` does not exist** — `docs/setup/30-desktop-app.md`, `28:127-148`,
   `29:354`, `26:429`, `25:92`, `biome-config/src/base.json:75`,
   `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` (required in both `env.ts`, read by nothing). Add a
   "not yet built" banner to `30`, remove the desktop trees from `28`/`29`, drop the env key
-  from `env.ts` and `.env.example`, drop the biome glob.
-- [ ] `P4.26` **doc-drift gate** `~2h` — `check-architecture` **§15**: every backticked
+  from `env.ts` and `.env.example`, drop the biome glob. `done: 2026-09-06`
+  - **`AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` was the item with teeth.** It was **required** — no
+    default — in `apps/web/src/env.ts`, so every deployment had to supply a value that nothing in
+    the repository reads. A required env var nobody can explain is worse than a missing one: the
+    first person to meet it either invents a number or copies the example, and neither is a
+    decision. Dropped from the schema, `.env.example`, `apps/web/vitest.config.ts` and three docs.
+  - **Both server-only globs dropped** — Biome's and ESLint's, though the entry named only Biome;
+    leaving one would have re-created the disagreement. By the repo's own tie-breaker this is
+    clear-cut: the retrofit is *local*, one line in an existing array. Doc 05's CAUTION stays and
+    now says exactly that, because the CAUTION is what prevents the real mistake — adding a
+    separate `apps/desktop/**` override, which replaces the whole `paths` map rather than adding to
+    it and silently unbans every server-only package.
+  - **Doc 30 keeps its content and gains a banner that does the useful half of the work**: what is
+    real today (the abstract `TokenProvider`, `BearerAuthStrategy`, the `surface` column, the shared
+    route table — each of which earns its place on the web app's own terms), and what is not (no
+    globs, no env key, no CI workflow), with the one-line cost of each named. "A glob matching
+    nothing and an env key nothing reads are not preparation — they are a rule a reader cannot
+    verify and a required value nobody can explain."
+  - Doc 28's tree and doc 29's §1.22 became "if a desktop shell arrives" sections rather than
+    deletions: the naming decisions in them are already load-bearing on the pages before them, and
+    deleting them would lose the reason `ROUTES` is shared and `surface` exists.
+  - **Also swept, since a stale config claim is the same defect:** doc 20 said the `SERVER_CATALOG`
+    ESLint ban covers `packages/feature` and `apps/desktop` (it covers neither), and doc 03 said
+    `apps/desktop` imports `@tanstack/react-router` directly while `apps/web` never installs it —
+    the reverse of the manifests. Four `Used by … apps/desktop` rows in package docs, and the Tauri
+    catalog comment, now say what is installed.
+- [x] `P4.26` **doc-drift gate** `~2h` — `check-architecture` **§15**: every backticked
   repo-relative path in `docs/**`, `README.md`, `AGENTS.md`, `packages/*/docs/**`,
   `apps/*/docs/**` must exist on disk (exclude fenced code blocks and paths ending in
   `<placeholder>`). ~25 of the findings above would have been caught by it.
-  **Docs:** `docs/setup/26`, `docs/ai/rules/workflow.md` (fifteen).
-- [ ] `P4.27` `docs/infra` — `reference/compose.md:157-171` and `README.md:16-26` describe an
+  **Docs:** `docs/setup/26`, `docs/ai/rules/workflow.md` (fifteen). `done: 2026-09-06`
+  - **§15 ships and has been the working gate for this whole phase** — it caught prose in
+    `docs/setup/26` on the commit that introduced it, and has failed on something in most of the
+    passes since. The estimate that it would catch ~25 of the findings held.
+  - Resolution is owner-relative: a `docs/…` span tries the owning package, then every source dir,
+    then the root, so `docs/reference/<page>.md` written generically in an opinions page passes if
+    any package has one. Fenced blocks, `<details>` blocks, and any line or heading marked
+    `illustrative` / `not written yet` / `does not exist` / `removed` / `deleted` / `☐` are skipped
+    — the last is what lets a page show a planned file without lying about it.
+  - `apps/desktop` and `apps/api` are exempt by name, and `P4.25` is what made the first of those an
+    exemption for a directory nothing claims exists rather than a hole in the gate.
+- [x] `P4.27` `docs/infra` — `reference/compose.md:157-171` and `README.md:16-26` describe an
   `infra/.env` that `P8.19` ships; `deployment.md` describes readiness without naming
-  `/api/health`.
+  `/api/health`. `done: 2026-09-06`
+  - **`infra/.env` is documented as a file you create, not one `P8.19` will ship.** Every published
+    port already has a default in the compose file, so a template of defaults would be one more file
+    to keep in step for no gain. What the page was missing is the distinction that actually catches
+    people: the root `.env` is what the *applications* read through `env.ts`, `infra/.env` is what
+    *Compose* reads, and overriding a port in one means changing the matching URL in the other.
+  - **`deployment.md` gained a readiness section**, because `depends_on: service_healthy` gets a
+    container *started* in the right order and says nothing about whether the app inside it can
+    serve — it still has to parse its environment, build a container and open its own connections.
+    `/api/health` is that answer, with a Compose `healthcheck` block, and the readiness-versus-
+    liveness distinction stated in terms of what happens on a 503: held out of the pool, or killed.
+    A liveness probe on this endpoint turns one slow database into a restart loop.
+  - **The worker's absence from that section is the point**, not an omission: it has no HTTP surface,
+    so its liveness signal is the `process.started` line with its consumer count and its readiness is
+    that it consumes — which is why `analytics-reconcile` exists. A worker that died quietly on a
+    Tuesday is not something a probe finds.
 
 **Exit.** `pnpm check:architecture` §15 zero failures; a fresh reader can follow `README.md`
 step 6 under the default enrolment mode and land where it says.
@@ -736,7 +1089,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Build
 
-- [ ] `P5.1` **Role management** `P1` `~12h` `#api #ui`
+- [x] `P5.1` **Role management** `P1` `~12h` `#api #ui`
   - **Goal:** `rbac.role.manage`, `rbac.permission.grant`, `rbac.permission.revoke` are keys
     with nothing behind them; `PermissionMatrix.onToggle` is a checkbox with no mutation;
     `CapabilityCache.invalidate` is never called from production code.
@@ -753,13 +1106,74 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `packages/feature/src/rbac/`, `apps/web/src/server/orpc/role.router.ts`,
     `packages/composition/src/container/container.ts`.
   - **Docs:** `permissions/docs/reference/capability-set.md` (invalidation contract),
-    `auth/docs/reference/capability-cache.md`, `docs/setup/27` §27.4 example.
-- [ ] `P5.2` **Effective permissions inspector** `P2` `~4h` `#api #ui`
+    `auth/docs/reference/capability-cache.md`, `docs/setup/27` §27.4 example. `done: 2026-09-06`
+  - **Four refusals, and three of them are the database's.** Seeded roles are immutable
+    (`SystemRoleSeed` rewrites them on every deploy, so an accepted edit vanishes at the next one);
+    a reserved key cannot be created even before the seed has run; and a role somebody holds cannot
+    be deleted, because `memberships.role_id` and `goal_members.role_id` are `on delete no action`
+    and the alternative to the check is a driver error no UI can render.
+  - **The reserved-key rule closes a real escalation path.** `SystemRoleSeed` resolves its rows by
+    `(organization_id, key)` and grants `owner` **every permission in the catalog**. A tenant that
+    created a role keyed `owner` before the seed ran would have had it handed the wildcard on the
+    next deploy — a privilege escalation with a deploy-shaped fuse.
+  - **`GrantPermissionUseCase` refuses to hand out a permission the actor does not hold.** Not in
+    the plan and added anyway: without it `rbac.permission.grant` is the only key anyone ever needs,
+    since holding it lets you write every other one into a role you hold. An owner's wildcard
+    answers `can()` for everything, so the rule never obstructs the role meant to grant anything.
+  - **Grant validates against the registry; revoke deliberately does not.** A row left behind by a
+    renamed permission is exactly the one somebody needs to be able to remove, so the asymmetry is
+    the point rather than an oversight. Both pinned.
+  - **The invalidation is a port, and it caught a live bug on the way in.**
+    `CapabilityInvalidator` in `application/src/port/` is the sixteenth port; `Container` binds
+    `CapabilityCache` to it. Wiring it revealed that **`ChangeMemberRoleUseCase` never flushed** —
+    a demoted member kept the old role's resolved set for up to the 60s TTL. One line, two specs.
+  - **`invalidateAll()` became `invalidateOrganization(organizationId)`.** The old method had no
+    production consumer and flushed every tenant to answer a change in one; the key layout already
+    put the organization between the fixed prefix and the user id precisely so this would work.
+  - **After the commit, never inside it.** A flush issued while the old row is still the committed
+    one lets a concurrent read resolve the stale set and cache it again — the same bug the flush
+    exists to prevent, now with a race attached.
+  - **`PgRoleRepository.save` is an update-then-insert, and the first attempt was wrong.** A single
+    `on conflict (id) do update` raises rather than upserting here: an existing row trips
+    `roles_key_uq` too, and Postgres only arbitrates the named index. Caught by the integration
+    spec, not by review. The insert carries `on conflict do nothing` on `(organization_id, key)`
+    and turns a lost race into the same `CONFLICT` the use-case would have thrown.
+  - **`test-container.spec` now counts the port directory instead of restating it.** It called
+    itself "one port per abstract class in application/src/port" while being a hardcoded list, and
+    it did not notice the new port. Verified by adding a throwaway port and watching it fail.
+  - **Verified end to end against a live stack**, not only by unit test: create, duplicate key,
+    reserved key, rename and delete of a seeded role, grant, an unknown permission, grant into a
+    seeded role, revoke, revoke of a stale row, the escalation refusal, delete-in-use, and the audit
+    trail carrying all six actions. Cache invalidation checked directly in Redis — one key after a
+    read, zero after a revoke.
+  - **Two doc sections were already stale from `P5.2`** and are corrected here: `query/docs` still
+    said `QueryKeys.rbac.effective` had no caller, and `feature/docs` still said
+    `EffectivePermissionsInspector` needed no query.
+- [x] `P5.2` **Effective permissions inspector** `P2` `~4h` `#api #ui`
   - **Done when:** `rbac.effective` procedure (`rbac.effective.inspect`) returns the resolved
     `CapabilitySetDto` for a member; `EffectivePermissionsInspector` reads it via
     `QueryKeys.rbac.effective(userId)` (today a key with no caller); reachable from a member
-    row on `/settings/members`. **Depends on:** `P5.3`.
-- [ ] `P5.3` **Member lifecycle** `P1` `~8h` `#api #ui`
+    row on `/settings/members`. **Depends on:** `P5.3`. `done: 2026-09-06`
+  - **The inspector answered the wrong question.** It read `useCapabilities()` — the *viewer's*
+    set, from the session — so on a members page it showed you your own permissions next to
+    somebody else's name. It now takes an optional `userId`: absent means your own, with no round
+    trip, and present means theirs, which only the server can resolve.
+  - **The procedure resolves through `CapabilityRepository`, not `CapabilityCache`.** An inspector
+    is opened to answer "why can they do that", and a cached answer is the wrong one — so the query
+    also carries `staleTime: 0`.
+  - **Membership is checked before resolving.** Without it a uuid from another tenant resolves to
+    an empty set and reads as "this person has no permissions" rather than "not a member here".
+    Verified: a cross-tenant id returns `NOT_FOUND`, not an empty grant list.
+  - **The wire type is declared in the contract, not imported from `permissions`**, and the client
+    filters unknown keys through `PermissionRegistry.isKnown` exactly as `RoleMatrix` already does.
+    A permission the catalog no longer knows is a stale row, and the boundary is where it stops
+    being trusted.
+  - **`QueryKeys.rbac.effective` has a caller now**, which `P4.13` recorded as the one thing `query`
+    was missing.
+  - **Verified live:** an owner inspecting a member gets `{"wildcard":false,"org":{"grants":
+    ["member.read"],"denies":[]},"goals":{}}` — exactly what `SystemRoleSeed` grants that role — a
+    plain member is `FORBIDDEN` on `rbac.effective.inspect`, and a cross-tenant user is `NOT_FOUND`.
+- [x] `P5.3` **Member lifecycle** `P1` `~8h` `#api #ui`
   - **Goal:** `member.deactivate` is a key with nothing behind it; a member's role cannot be
     changed; `member.badge.deactivated` copy exists and is never rendered.
   - **Done when:** `member.changeRole` and `member.deactivate` (+ `member.reactivate`)
@@ -767,15 +1181,76 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `PrincipalBuilder` refuses a deactivated membership; "cannot deactivate or demote the last
     owner" rule with a spec; `MemberList` row actions; `member.deactivated`,
     `member.role.changed` events.
-  - **Docs:** `auth/docs/reference/principal-builder.md`, `docs/setup/27`.
-- [ ] `P5.4` **API keys** `P2` `~8h` `#api #ui`
+  - **Docs:** `auth/docs/reference/principal-builder.md`, `docs/setup/27`. `done: 2026-09-06`
+  - **The migration fixes a tenancy bug, not just a missing column.** `MemberDto.deactivated`
+    already existed and was read from `users.deactivated_at` — a **user-level** flag. Deactivating
+    someone in one organization would have locked them out of every organization they belong to,
+    which is a cross-tenant write dressed as a local one. `memberships.deactivated_at` is per
+    membership, and `PgMemberRepository.list` now reads that column.
+  - **`PrincipalBuilder` refuses the session, and that is the half that matters.** A deactivated
+    member's cookie is still valid, still decrypts, and still names a real organization — nothing
+    else in the stack refuses it. One row on `memberships_uq` before the capability read, because a
+    deactivated membership is not a principal with nothing granted, it is no principal at all.
+    Verified live: the same cookie that worked returns `UNAUTHORIZED` after deactivation and works
+    again after reactivation.
+  - **`PgCapabilityRepository` also skips a deactivated membership** — defence in depth, free,
+    because that query already starts from `memberships`.
+  - **The last-owner rule is enforced in two places and pinned by four specs.** Demoting the last
+    active owner and deactivating them both refuse with `CONFLICT/lastOwner`; the count is of
+    **active** owners, so a deactivated one does not keep a tenant unlockable. Promotion never
+    consults the count, and a spec asserts it is not even read.
+  - **Self-deactivation refuses with its own reason.** Locking yourself out is recoverable by a
+    colleague and still never what the click meant; the row action is hidden for your own row, since
+    a button whose only outcome is a `CONFLICT` should not be there.
+  - **Two procedures, one use-case.** `deactivate` and `reactivate` carry the direction in the path
+    so a product can gate them apart later; the column is one value, so two classes would let them
+    disagree about what "active" means. `member.role.change` is its own permission key because
+    removing someone's access and changing what they may do are different powers.
+  - **Both refusals get their own copy**, in `en` and `bn`. The catalog's generic conflict sentence
+    is "someone else changed this first", which is wrong about both.
+  - **Verified end to end against a live stack**, not only by unit test: `CONFLICT/self`,
+    `CONFLICT/lastOwner`, a successful deactivate returning the updated DTO, `UNAUTHORIZED` for the
+    deactivated member's session, reactivation restoring it, and `member.deactivated` in
+    `activity_log`.
+- [x] `P5.4` **API keys** `P2` `~8h` `#api #ui`
   - **Goal:** `apikey.read` / `apikey.manage` keys, `PgApiKeyRepository`, `ApiKeyHasher` and
     `ApiKeyResolver` all exist; nothing can create or list a key.
   - **Done when:** `apikey.list`, `apikey.create`, `apikey.revoke` procedures; `ROUTES.rbac.apiKeys
     = "/settings/api-keys"` plus route; the plaintext key is shown once; `apikey.created/revoked`
     events; `api_keys` gains `last_used_at` throttling per `P7.2`.
-  - **Docs:** `auth/docs/reference/api-key.md`.
-- [ ] `P5.5` **Document index and search** `P2` `~8h` `#api #ui`
+  - **Docs:** `auth/docs/reference/api-key.md`. `done: 2026-09-06`
+  - **`ApiKeyRepository` moved from `auth` to `application`**, and the doc's stated reason for it
+    living in `auth` — "no use-case should learn that API keys exist" — is corrected rather than
+    quietly dropped. It held exactly as long as nothing could issue a key. `auth` already imports
+    `application`, so the resolver reads the port from there and `PgApiKeyRepository` serves both.
+  - **The split that replaced it is better than the original rule.** `ApiKeyRecord` carries
+    `tokenHash` and is what authentication reads; `ApiKeySummary` is what a list renders and **has
+    no hash field at all**, so a digest cannot reach the wire through a careless DTO mapping.
+  - **Minting moved to `ApiKeyRules` in `application`**, which owns the token format — the `rk_`
+    marker and the eight-character prefix — because both layers depend on it and two copies drift
+    into a key that authenticates against nothing. `ApiKeyHasher.generate` is gone; its two specs
+    moved to `application/tests/apikey/` with it.
+  - **A key cannot be issued with a scope its issuer does not hold.** The resolver re-intersects
+    with the issuer's live capabilities, so such a scope grants nothing *today* — and silently
+    widens the key the day that person is promoted. Refused at creation instead.
+  - **`last_used_at` is throttled in the predicate, not in a branch** (`P7.2`'s item, done here
+    because the write is on the path this feature creates). Unthrottled it is one `UPDATE` per
+    authenticated request forever, to a column nothing reads more precisely than "roughly when".
+  - **Revocation is a timestamp and it is idempotent**, keeping the *first* one: that is the
+    timestamp an incident review reads, and a retry must not move it.
+  - **`CORE_MODULE` is now exported from `permissions`.** The scope picker offered
+    `core.activity.write` — a permission every principal holds implicitly, so `can()` said yes.
+    Caught by reading the rendered page, not by a test.
+  - **Verified end to end against a live stack:** create; the plaintext returned once and absent
+    from `api_keys` and `activity_log`; an unknown scope and a past expiry both refused; the key
+    authenticating `member/list` and being FORBIDDEN on `role/list`; `last_used_at` written once
+    then not rewritten inside the window; revoke making it UNAUTHORIZED; a second revoke preserving
+    the timestamp; and the escalation refusal from a principal holding `apikey.manage` but not
+    `member.deactivate`.
+  - **My first probe used `Authorization: Bearer` and got `UNAUTHORIZED`.** The header is
+    `x-api-key`, checked before the session in `PrincipalBuilder` so a scoped key is never
+    silently upgraded to the issuer's full session. That was a test error, not a defect.
+- [x] `P5.5` **Document index and search** `P2` `~8h` `#api #ui`
   - **Goal:** `VectorStore.search` has zero callers; `ai.embedding.read` is unused;
     `container.queue` is exposed and never called; nothing in the app can enqueue the
     embedding job that `EmbeddingConsumer` waits for.
@@ -783,28 +1258,125 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `document.search` procedure calls `VectorStore.search` with the principal's goal scope;
     a minimal `/documents` page (paste text → index → search). `ai.document.searched` event.
   - **Docs:** `infrastructure/docs/reference/pgvector.md`, `docs/setup/14`, `25` (the Gate at
-    `25:477` finally has a producer).
-- [ ] `P5.6` **Error surfaces** `P1` `~4h` `#ui`
+    `25:477` finally has a producer). `done: 2026-09-06`
+  - **`QueueName` moved from `infrastructure` to `application/src/primitive/`.** Which queue a job
+    belongs on is a domain decision — `QueueDocumentIndexUseCase` names `QueueName.EMBEDDING` — and
+    `application` cannot import `infrastructure` to say it. The alternative was passing the queue
+    name in from `Container`, which puts a domain rule in the DI root. A closed vocabulary of
+    strings belongs beside `Principal` and `Authorizer`, not beside the adapter that consumes it.
+  - **A live bug the unit tests could not catch: BullMQ rejects a `jobId` containing `:`.** The
+    dedup key was `<org>:<doc>`, the recording fake accepted it happily, and the real publish threw
+    `Custom Id cannot contain :` as a 500. Now `_`, pinned by a spec that asserts the absence of the
+    character, and stated on `JobOptions.jobId` where the next caller will read it.
+  - **Indexing is queued, and the response says so.** `DocumentContract.queued` returns the id and
+    nothing else: a shape promising chunks would be a lie the day someone reads it, since the work
+    has not happened yet. The copy says the same thing, because a search straight after indexing
+    finds nothing and the page looks broken otherwise.
+  - **`document.search` is a `POST`.** It is a read, but the query goes in the body — a search
+    string in a URL is a search string in every access log between the browser and the server — and
+    it writes an `ai.document.searched` activity row, which is what an audit asks for after a leak.
+  - **The dedup key carries the tenant.** Two organizations re-indexing documents that happen to
+    share an id must not collapse into one job; verified live by publishing the same document twice
+    and watching the queue depth stay put.
+  - **Verified end to end against live Redis and Postgres:** the job lands on `bull:embedding` with
+    the tenant on its payload and `<org>_<doc>` as its id; a duplicate is deduplicated; a blank
+    query is refused before it costs an embedding; and both procedures answer `FORBIDDEN` to a
+    plain member.
+  - **The OpenAI round trip is the one link not exercised**, because this environment has no
+    `OPENAI_API_KEY`. What that leaves covered: the use-case logic by unit test, the store by the
+    five existing `pg-vector.store.spec.ts` integration tests against real pgvector, and the
+    enqueue live. Searching with no key answers a clean `UNAVAILABLE` 503 rather than a 500, which
+    was checked rather than assumed.
+- [x] `P5.6` **Error surfaces** `P1` `~4h` `#ui`
   - **Goal:** `ErrorCopy`, `ERROR_COPY`, `FIELD_RULE_COPY` have zero consumers; no
     `errorComponent`, `notFoundComponent` or `pendingComponent` anywhere; forms fall back to
     `shell.t("state.error")`.
   - **Done when:** `__root.tsx` has `errorComponent` and `notFoundComponent` rendering
     `ErrorCopy`; `feature/src/error/use-error-message.ts` maps an `AppError` to copy; every
     form's error callout uses it; `pendingComponent` on `(app)/_authenticated`.
-  - **Docs:** `content/docs/reference/error-copy.md`, `feature/docs/index.md`.
-- [ ] `P5.7` **Navigation from data** `P2` `~3h` `#ui`
+  - **Docs:** `content/docs/reference/error-copy.md`, `feature/docs/index.md`. `done: 2026-09-06`
+  - **The defect was worse than "unused exports".** Nine components rendered
+    `shell.t("state.error")` — "Something went wrong" — against an envelope that had travelled from
+    the server carrying the exact code. A `FORBIDDEN` and a `CONFLICT` reached the component as
+    different things and left it as the same sentence.
+  - **`useErrorMessage` is the seam**, in a new `feature/src/error/`. It normalises whatever was
+    thrown, renders the code through `ERROR_COPY` and the violations through `FIELD_RULE_COPY`, and
+    returns `{ message, fields, envelope }` — `fields` always an array, so a caller renders it
+    without asking what kind of failure it holds.
+  - **`useTranslator` was needed and is a real addition, not a convenience.**
+    `useMessages(namespace)` narrows keys to one namespace, and `ErrorCopy` picks its own shell key
+    from the code — there is nothing to scope, so the narrowed hook cannot express it.
+  - **The two branching call sites keep their branch.** An invitation that is `NOT_FOUND` and an
+    invite that is `CONFLICT` have their own copy in their slice namespace, which is more specific
+    than the shared sentence. They now fall through to `ErrorCopy` instead of to `state.error`, so
+    the branch adds a sentence rather than replacing the mechanism.
+  - **`errorComponent` and `notFoundComponent` go on the root**, not per page: a boundary declared
+    per route is one somebody forgets, and an unhandled throw in TanStack Router renders a bare
+    stack. `pendingComponent` goes on `(app)/_authenticated`, which covers every gated page —
+    including `/settings/roles`, whose loader now prefetches (`P5.10`) and so has a visible wait.
+  - **Four specs asserted the bug.** They pinned "Something went wrong", which is `state.error` —
+    the exact string this replaces. They now assert the catalog's sentence, and a new spec rejects
+    with a `ForbiddenError` and asserts "You do not have permission to do that." appears while the
+    generic one does not. That is the assertion the old specs could not make.
+- [x] `P5.7` **Navigation from data** `P2` `~3h` `#ui`
   - **Goal:** `_authenticated.tsx` hardcodes two `<Can>`/`<Link>` pairs; `ROUTES` is never
     imported by `apps/web`; the `nav` collection, `ContentSource.nav()` and `rbacGates` have no
     consumer; five route files assert in comments that their literal equals a `ROUTES` entry.
   - **Done when:** the sidebar renders from `MODULE_GATES` + `ContentSource.nav()`;
     `apps/web/tests/route/routes.spec.ts` asserts every `createFileRoute` literal is a value in
-    `ROUTES` and every gated `ROUTES` path has a route file.
-- [ ] `P5.8` **Home page, `/settings` index, deep-link return** `P2` `~4h` `#ui`
+    `ROUTES` and every gated `ROUTES` path has a route file. `done: 2026-09-06`
+  - **`ModuleNav` joins two lists on `module`, and the join is the security property.** Content
+    says what a menu holds and in what order; `ModuleRegistry` says who may see it. An editor
+    reordering a menu cannot grant access, which is why `module` is the only join key and why
+    `NavContract` deliberately types it as a wide `string` — a CMS row is wide.
+  - **The component takes `renderLink` rather than importing `<Link>`.** `feature` may not name the
+    router, so the shell passes the element. That is the same rule that keeps every other component
+    in this package mountable under a different routing shell.
+  - **The icon is validated, not cast.** `IconRegistry.isKnown` gates it, so an unknown name from a
+    content row renders no icon rather than a `<use>` pointing at nothing. That needed `ui` to
+    re-export `IconName` and `IconRegistry` — a consumer rendering `<Icon name={…}>` from data has
+    no other way to check. It also closes half of `P5.15`'s `IconRegistry` item.
+  - **`ContentSource` is on the router context now**, and the layout's loader resolves `nav()`
+    beside the message namespaces. The seam rather than `navItems` directly: a CMS behind this port
+    must not mean editing the layout that renders it.
+  - **Two links stay hardcoded and ungated, and that is the correct reading.** `/settings/account`
+    and `/settings/security` have no gate because `accountRoutes` declares none — "may I change my
+    own password" is not a capability anyone can be denied. Rendering them through a gate-driven nav
+    would have required inventing one.
+  - **The spec was verified by breaking it.** Renaming `ROUTES.rbac.roles` to `/settings/roles-typo`
+    fails both assertions; it sees all fifteen route files and resolves each URL through the group
+    and pathless-layout rules. `api/` mounts, the `$token` parameter and the dev-only kitchen sink
+    are excluded by name, each with the reason stated.
+- [x] `P5.8` **Home page, `/settings` index, deep-link return** `P2` `~4h` `#ui`
   - **Goal:** `/` renders `EmptyState("Nothing here yet")` and is the target of every
     post-sign-in, post-switch, post-create navigation; `/settings` 404s.
   - **Done when:** `/` shows the organization, role, member count and gated links;
     `/settings` redirects to `/settings/account`; sign-in returns to the deep link (`P2.18`).
-- [ ] `P5.9` **Locale** `P2` `~4h` `#ui`
+  `done: 2026-09-06`
+  - **Verified against the live stack, not only by test.** A `curl` with a session cookie returns
+    `<h1>Home Probe</h1><p>You are Owner here.</p><p>Members: 1</p><nav>…` — organization, role,
+    count and gated links, all server-rendered before any JavaScript. `/settings` answers `307` to
+    `/settings/account`. Signed out, the page is a sign-in prompt rather than an empty state.
+  - **The role needed one join, not a new procedure.** `organizationsFor` already joined
+    `memberships → organizations`; it now also joins `roles` and selects the name, so the answer
+    costs no extra round trip. `roleName` sits on the *organization* row rather than on the user
+    because the same person is an owner in one tenant and a member in another.
+  - **A spec pins exactly that**, and it is the one worth having: a join on the wrong column would
+    read "Owner" for every tenant without failing anything else. Grace owns her own organization and
+    is a plain member of Ada's, and the assertion is `["Owner", "Member"]`. Ada's fixtures were left
+    alone after a first attempt broke three specs that assert which tenants she is and is not in.
+  - **The member count is prefetched only when the capability allows it.** The loader checks the
+    same `member.read` key `<Can>` checks, so an anonymous or unpermitted visit issues no member
+    query at all — and a permitted one has no loading flash, because the cache is warm before first
+    paint.
+  - **`ModuleNav` from `P5.7` is reused rather than a second nav written**, which is the payoff for
+    having built it from data.
+  - **`nav.home.members` is "Members: {count}", not "{count} members".** `Translator` interpolates
+    and does not pluralise, so the obvious phrasing renders "1 members" — and would be wrong in
+    every locale that inflects. Caught by reading the rendered page.
+  - **`/settings` had to be declared in `ROUTES`**, which `P5.7`'s new spec caught on the first run:
+    a route file whose path no fragment declares is one a `<Link>` cannot be typed against.
+- [x] `P5.9` **Locale** `P2` `~4h` `#ui`
   - **Goal:** `bn/` (eight files) is unreachable: `MessageStore.empty("en")` is hardcoded,
     `Locales.negotiate` has zero callers, no locale cookie, no switcher. `bn` is also missing
     `error.*` ×8, `common.*` ×4 (`state.empty`, `state.error` are rendered by six components),
@@ -813,54 +1385,257 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `Locales.negotiate(Accept-Language, cookie)`, a header switcher exists, and every `en` key
     has a `bn` cell (make the locale record total, not `Partial`, so a missing cell will not
     compile).
-  - **Docs:** `content/docs/reference/namespace.md`, `docs/setup/20`.
-- [ ] `P5.10` **SSR uses the in-process client** `P1` `~2h` `#ui`
+  - **Docs:** `content/docs/reference/namespace.md`, `docs/setup/20`. `done: 2026-09-06`
+  - **The locale is a fourth axis on `AppearanceSnapshot`**, beside theme, mode and font: same
+    cookie mechanism, same argument for resolving it server-side, and `fetchAppearance` was already
+    holding the request headers `Accept-Language` arrives in.
+  - **It is the one axis that is not a CSS variable**, which is the whole difference. Theme and font
+    are attributes the cascade applies in the same frame; a locale change has to *fetch* copy, so
+    the switcher calls `router.invalidate()` and the root re-runs.
+  - **The ordering in `__root.tsx` is load-bearing and is commented as such.** `beforeLoad` awaits
+    appearance, then calls `MessageStore.setLocale`; the loader's `ensure(SHELL)` runs after it.
+    Reversed, the first paint is English and corrects itself in front of the reader.
+  - **`setLocale` drops every loaded namespace rather than merging.** They are the previous locale's
+    copy, and a merge leaves the old sentences under keys the new bundle also has.
+  - **Fifteen missing `bn` cells, and four of them were `common`** — `state.empty` and `state.error`
+    are rendered by six components, so a Bengali page fell back to English at exactly the moments a
+    reader is already confused. `error.*` was missing eight of twelve.
+  - **`NamespaceBundle` is now `Record`, not `Partial`.** Verified by removing a key and watching
+    `tsc` fail. **`tsup`'s DTS build does not catch it — only `pnpm typecheck` does**, which is
+    worth knowing before trusting a green `pnpm build`.
+  - **Four specs pinned the *absence* of a translation** as their fixture for the English fallback
+    layer, so doing the translations broke them. That is the spec depending on incomplete data:
+    rewritten against a local fixture catalog, plus one that now asserts every `ErrorCode` renders
+    non-ASCII in `bn` — a runtime check of what the type promises. Verified by reverting one value
+    to English and watching it fail.
+  - **`Locales.label()` returns endonyms**, and the switcher never translates them: "বাংলা" is what
+    a reader who cannot read the current locale is scanning for.
+  - **Verified end to end against a live server**, all six negotiation cases: no cookie and no
+    header → `en`; `Accept-Language: bn` → `bn`; a cookie beating a conflicting header; a cookie
+    naming a locale with no catalog → `en`; a header naming one → `en`. `/sign-in` server-renders
+    Bengali including the switcher's own label.
+  - **`T-035` filed:** the English fallback layer is now unreachable for anything that compiles, and
+    it doubles the message payload on every non-English page. The fix is a decision, not an edit —
+    drop the base layer, or relax the totality — and shipping both would be the wrong answer twice.
+- [x] `P5.10` **SSR uses the in-process client** `P1` `~2h` `#ui`
   - **Goal:** `createServerRpcClient` / `ApiClient.inProcess` have no caller; `router.tsx`
     builds `ApiClient.overHttp("/api/rpc")` for both sides, so the first loader
     `ensureQueryData` throws `Failed to parse URL` under Node.
   - **Done when:** `router.tsx` injects `ApiClient.inProcess(...)` when `typeof window ===
     "undefined"`; one route loader prefetches (`/settings/roles`) and an SSR spec proves it.
-  - **Docs:** `api-client/docs/index.md:63,135`, `query/docs/index.md:90`.
+  - **Docs:** `api-client/docs/index.md:63,135`, `query/docs/index.md:90`. `done: 2026-09-06`
+  - **The bug is real and was reproduced before it was fixed.** Under Node,
+    `ApiClient.overHttp("/api/rpc", …)` throws `TypeError: Invalid URL` on the first call — `fetch`
+    has no document to resolve a relative base against. It was latent only because no loader
+    prefetched; adding one is what fires it.
+  - **`createIsomorphicFn` is the mechanism**, and the reason it is safe here is checkable rather
+    than assumed: the Start plugin removes the unused branch *and its imports*, so
+    `createServerRpcClient` — and the container graph behind it — never enters the client graph.
+    Verified against the built bundle: `createServerRpcClient`, `serverTransport`,
+    `createRouterClient`, `drizzle` and `ioredis` all return zero hits across 38 assets, and §8
+    passes. Without that property this would be a one-hop path from every route component to the
+    server graph, which is exactly what the two import surfaces exist to prevent.
+  - **The runtime stub prefers the server branch when untransformed**, which is the right default
+    for Node and the reason a vitest run must not call `getRouter()`.
+  - **Beyond the entry: `overHttp` now refuses a relative base outside a browser.** A `TypeError`
+    raised inside a route loader names neither the transport nor the fix; an `InternalError` at
+    construction does. The sentence rides on `cause` rather than `message`, because in this
+    repository the code **is** the message — the first draft put prose in `message` and the spec
+    caught it, which is the convention working.
+  - **Proven end to end, not only by unit test.** `/settings/roles` prefetches through
+    `ensureQueryData` in its loader; against a live Postgres and both Redis instances, a `curl` with
+    a session cookie returns 200 with the role names and permission cells already in the HTML — no
+    JavaScript ran — and zero `Invalid URL` in the server log.
+  - **Found and filed, not fixed here: `T-032`.** A production `.output` build 500s on every page
+    with `jsxDEV is not a function` — a development JSX transform in the *server* bundle. Confirmed
+    pre-existing by stash-and-rebuild. `pnpm dev` is unaffected, which is why no gate has caught it:
+    doc 24's ✅ Gate checks that the *client* bundle carries no dev build and never checks that the
+    server bundle serves a request.
 
 ### Cut (delete code and docs together) or wire
 
-- [ ] `P5.11` **`EventBus`** — port, `RecordingEventBus`, `TestPorts.events`,
+- [x] `P5.11` **`EventBus`** — port, `RecordingEventBus`, `TestPorts.events`,
   `application/docs` row, `composition/docs` sentence. No adapter, no publisher, no
   `Container` field. **Delete.** Record the outbox design as a `TODO.md` backlog item.
-- [ ] `P5.12` **Analytics rollups** — `AnalyticsReader.goalRiskScores` / `reliabilityTrend`,
+  `done: 2026-09-06`
+  - **Deleted:** `application/src/port/event.bus.ts`, `composition/src/fake/recording-event.bus.ts`,
+    both barrel lines, both `import.ts` lines, `TestPorts.events` and its default.
+    `grep -rn 'EventBus\|DomainEvent'` over `packages` and `apps` returns nothing.
+  - **The design is preserved as `T-031` in `TODO.md`, and it is an outbox rather than a bus.** The
+    four broker-shaped properties move there intact, because they are the part a Kafka or Redis
+    Streams implementation cannot give back later. What the entry adds is why the deleted port was
+    the wrong shape anyway: the event and the state change that caused it must commit or fail
+    together, and neither publishing inside the transaction nor publishing after it has that
+    property. The `UnitOfWork` this repo already has is what makes an outbox one line at a call site.
+  - **A spec was quietly not doing its job, and that is the finding worth keeping.**
+    `test-container.spec.ts`'s "one assertion per port — this is the completeness check" listed
+    twelve of sixteen: `activityArchive`, `activityReplay`, `analyticsProjector`, `logs` and
+    `maintenance` had all been added to `TestPorts` without the check noticing. It now iterates
+    `Object.entries(harness)`, and a second spec pins the exact key set — a hand-written subset is
+    a completeness check that passes while being incomplete, which is how it drifted.
+  - **Counts corrected in the same pass**, since they all derived from the deleted port: sixteen
+    ports → fifteen in `application/docs/{index.md,meta.json}` and `composition/docs`, and
+    `packages/application/docs/index.md` had `VectorStore` listed twice.
+  - **The `.bus.ts` role suffix left the closed set** in `docs/opinions/files.md` and
+    `docs/ai/rules/files.md`. Every other row in that table names a file that exists, and the set is
+    closed precisely so an entry means something. `T-031` re-adds it.
+- [x] `P5.12` **Analytics rollups** — `AnalyticsReader.goalRiskScores` / `reliabilityTrend`,
   `goal_risk_daily`, `user_reliability_daily`, both readers' implementations, the fake, and the
   `ANALYTICS_DRIVER` switch for reads: nothing reads them and nothing writes the tables. Keep
   `activity_events` projection and reconciliation. **Delete** the two rollups and their tables
   (migration); keep the port with one method (`dailyCounts`) until a feature needs more.
   **Docs:** `infrastructure/docs/reference/clickhouse.md`, `docs/setup/15`, `25`,
-  `docs/opinions/data-and-scale.md`.
+  `docs/opinions/data-and-scale.md`. `done: 2026-09-06`
+  - **The item's own instruction could not be followed, and the premise is why.** It says to keep the
+    port with one method, `dailyCounts` — but `dailyCounts` is on `ActivityReplayReader` and
+    `AnalyticsProjector`, never on `AnalyticsReader`. Removing the two rollups leaves the port with
+    **no methods**, so "keep it" was not an available option. Confirmed with the user before acting.
+  - **Deleted in full:** both methods, `goal_risk_daily` and `user_reliability_daily` (migration
+    `0011`, and the matching pair in `infra/clickhouse.init.sql`), `AnalyticsReader`,
+    `PgAnalyticsReader`, `ClickHouseAnalyticsReader`, `StubAnalyticsReader`, `container.analytics`,
+    `TestPorts.analytics`, `DateRange`/`RiskScore`/`TrendPoint`, and `ANALYTICS_DRIVER` from both
+    `env.ts` files and `.env`/`.env.example`.
+  - **`ANALYTICS_DRIVER` had to go with it.** Its entire function was choosing between two
+    implementations of the deleted port. A flag left behind would be a lie a deployer can act on:
+    set it to `clickhouse` and believe reads had moved.
+  - **What survives is the half with a consumer.** `AnalyticsProjector`,
+    `ClickHouseAnalyticsProjector`, the projection consumer, the nightly reconciliation and
+    `activity_events` all stay; `CLICKHOUSE_URL` still turns them on. The store fills and reconciles
+    while nothing reads it, which is the state to be in before writing a reader.
+  - **Both tables were empty in the live database** before the migration ran — checked, not assumed.
+  - **`test-container.spec` caught the removal** as well as the addition in `P5.1`, because it now
+    counts the port directory. Fifteen ports again.
+  - **The doc rewrite is the bulk of this item, and one section reverses.**
+    `docs/opinions/simplicity.md` used `AnalyticsReader` as its example of a seam that earns its
+    place before the second implementation. It is now the counter-example, which is the more useful
+    version of that argument: certainty about the swap is the cheap half of the test, and the
+    expensive half — *is the retrofit spread or local?* — is the one it failed. A port nothing calls
+    has no call sites, so the cost it was insuring against did not exist.
+  - **Fourteen more pages corrected**, including `docs/setup/{00,06,11,12,13,14,15,17,27,28}`,
+    `docs/opinions/{classes,folders,dependencies,vocabulary,data-and-scale}.md`, both
+    `clickhouse.md` references, `docs/infra/deployment.md`, and the `application`, `composition` and
+    `infrastructure` package docs. Examples that named the deleted symbols moved to ones that exist
+    (`LogReader`, `ActivityReplayReader.dailyCounts`, `ClickHouseAnalyticsProjector`).
+  - **`T-034` filed:** bring the reader back with the first dashboard, against a store that has been
+    reconciling for days — and keep `goalIds` a required resolved parameter when it returns.
 - [ ] `P5.13` **`LogReader`, `StorageGateway.presign*`, `QueuePublisher.publish`** — keep
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
   exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI).
-- [ ] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
+- [x] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
   been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
   consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
   (provider), `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
   (consumer catch). **Delete** `queue.sweep.completed`, `db.query.slow`,
   `storage.upload.failed` from `core.events.ts` and `event-shape.ts`.
-  **Docs:** `observability/docs/reference/catalog.md`.
-- [ ] `P5.15` **Zero-consumer symbols** — decide per symbol and record in the owning
+  **Docs:** `observability/docs/reference/catalog.md`. `done: 2026-09-06`
+  - **Five wired, three deleted, and the count re-derived rather than trusted:** twenty-four codes
+    were declared, eight had no production call site, and twenty-one ship now with every one emitted.
+  - **`queue.job.failed` is emitted *beside* `logger.failure`, not instead of it.** The three
+    consumers already logged the error; what they had no way to produce was a countable signal.
+    The event gives one `event_code`, so queue health is a rate; the `error.raised` line beside it
+    carries the normalised code, cause and stack. One without the other is either a number nobody
+    can explain or an explanation nobody can alert on.
+  - **`http.request.completed` / `.failed` go in `errorMiddleware`**, inside the oRPC chain rather
+    than at the adapter — the same reason the error interceptor is there, since an adapter-level
+    hook has no `traceId` and no request-scoped logger. The `path` field is the **procedure** path:
+    every RPC arrives at `/api/rpc`, so the URL would make every line identical. The failure line
+    is emitted before `ErrorInterceptor.toTransport`, which never returns.
+  - **`embedding.request.failed` needed a seam that already existed.** `OpenAiEmbeddingProvider`
+    had no logger; it now takes an optional one exactly as `LokiLogReader` does, wired in
+    `Container`. It fires on both failure branches — a non-`ok` response and a short batch — and
+    carries the *batch* size, because a run that fails on its fourth batch has already embedded
+    three.
+  - **`analytics.projection.failed`'s declared shape wanted an `eventId` the projector cannot
+    produce**, since `project(records)` works in batches. The checkpoint is read *before* the run
+    and reported on failure: it is where a replay resumes, which is the question a failed
+    projection cannot otherwise be asked. The catch rethrows — BullMQ's retry is driven by
+    rejection.
+  - **The three deletions each name a thing the system does not do:** `queue.sweep.completed` (the
+    recovery sweep has no file), `db.query.slow` (no query timing exists; that is Postgres's own
+    `log_min_duration_statement`, a deployment setting), `storage.upload.failed` (the gateway
+    presigns and never uploads, so that failure happens in the browser).
+  - **Filed `T-033`:** an assertion that every declared code has an emitter. Left out of this entry
+    deliberately — a sixteenth assertion means renumbering "fifteen" across four files, which is
+    churn worth doing once rather than mid-phase.
+- [x] `P5.15` **Zero-consumer symbols** — decide per symbol and record in the owning
   `docs/index.md`: `SessionGuard` (delete — `RouteGuard` is the surface), `SessionQueries`
   (delete — `SessionStore` owns it), `FontRegistry` (wire into `appearance.store` or delete),
   `IconRegistry` (keep — `<Icon>` should validate against it; add the check), `ImageManifest`
   / `MediaResolver` / `ContentSource.media()` / `brand.logo` (wire the logo into the header),
   `DocumentEntity` / `ContentSource.document()` hardcoded `null` (delete),
   `ApiClient.raw` (keep, documented escape hatch), `QueryKeys.account.twoFactor` (delete or
-  use for `P2.15`).
-- [ ] `P5.16` **`/kitchen-sink` ships to production** — `(dev)` is a pathless group, not a
+  use for `P2.15`). `done: 2026-09-06`
+  - **Deleted:** `SessionGuard` (+ spec), `SessionQueries` (+ spec), `DocumentEntity`,
+    `DocumentContract`, `ContentSource.document()` and its `StaticContentSource` implementation,
+    `QueryKeys.account.twoFactor`.
+  - **`SessionGuard` and `RouteGuard` were two statements of one rule.** The guard ran *after* a
+    component mounted and called back; `RouteGuard` runs in the loader, before the page renders at
+    all. Doc 23's "four enforcement surfaces" list now names `<Can>` alone as this package's.
+  - **`SessionQueries` put the session in two places** — the cache and `SessionStore`, which rides
+    the SSR payload. Two copies of the answer that gates every other read is one too many, and the
+    store is the one that resolves server-side. `SessionMutations` stays: signing in is a write.
+  - **`document()` is the one I nearly kept.** It was correct — `null` is an honest answer — and
+    heavily defended in `content-shapes.md` as "the shape that exists to come from a database".
+    That is an argument for building it *with* the database rather than before one: nothing called
+    it, no adapter returned a row, and the contract and entity beside it parsed nothing. Re-adding
+    it is one abstract method, one implementation and one contract — the same cost it was carrying
+    while doing nothing. Three shapes now, each with a caller.
+  - **`FontRegistry` was wired, not deleted**, because it is a complete third axis with the same
+    shape as the other two. `appearance.store` gained a `font` cookie, snapshot field and
+    `FontRegistry.apply` in `choose`; `__root.tsx` sets `--font-sans` on the *server-rendered*
+    element, because a face that swaps after hydration reflows the whole page. A picker sits in
+    the kitchen sink, and a spec pins that an unknown cookie value falls back.
+  - **`IconRegistry` gained its check** as part of `P5.7`: `ModuleNav` validates a content row's
+    icon name through `isKnown` rather than casting, so an unknown name renders no icon instead of
+    a `<use>` pointing at nothing. That needed `ui` to re-export it.
+  - **The logo is wired through the seam, not imported.** `_authenticated`'s loader resolves
+    `ContentSource.media("brand.logo")`, which is what gives `ImageManifest`, `MediaResolver` and
+    `media()` a consumer at once — content records hold a key, never a path, so a CDN is one adapter.
+  - **`ApiClient.raw` kept**, already documented as the escape hatch for a namespace with no
+    accessor (`P4.12`).
+  - **§15 caught the doc drift immediately**, naming two setup pages that showed the deleted files.
+    Both sections were rewritten to say what was removed and why rather than deleted, since the
+    reasoning is what a reader of a build guide is there for.
+- [x] `P5.16` **`/kitchen-sink` ships to production** — `(dev)` is a pathless group, not a
   build condition. Gate: `loader: () => { if (!import.meta.env.DEV) throw notFound() }`; add
   `Callout`, `CodeList`, `QrCode` (three of eleven primitives missing); translate its eleven
-  string literals. **Docs:** `ui/docs/index.md:165`.
+  string literals. **Docs:** `ui/docs/index.md:165`. `done: 2026-09-06`
+  - **Gated, and the gate is pinned in both directions.** `loader` throws `notFound()` unless
+    `import.meta.env.DEV`, and `apps/web/tests/route/kitchen-sink.spec.ts` asserts it throws with
+    `DEV` false and does not with `DEV` true — a one-direction spec would pass with the gate
+    deleted.
+  - **The three primitives are in, with real inputs rather than placeholders.** `CodeList` gets six
+    backup-code-shaped strings because the grid's column count is the thing being looked at, and
+    `QrCode` gets a genuine `otpauth://` URI because that component re-encodes nothing — a trimmed
+    sample renders a QR that scans into an authenticator generating wrong codes. `Callout` shows
+    its four tones; the page had listed a fifth, `neutral`, which `CalloutTone` does not have.
+  - **Ten of eleven, not eleven.** `Can` renders no element of its own, so there is nothing for a
+    visual surface to show. Stated in `ui/docs` rather than left as an apparent gap.
+  - **The eleven string literals are deliberately not translated, and the entry's two halves are in
+    tension.** Gating the page out of production is what settles it: a route that `notFound()`s in
+    production has no users, so there is no user-visible copy for `content` to own. Translating
+    them would mean a `dev` namespace in `ClientNamespace` and `NamespaceShape` plus two catalog
+    cells — structure built so that nobody can read it, which is what
+    [`simplicity`](../docs/ai/rules/simplicity.md) asks about first. Recorded in `ui/docs`.
 
 **Exit.** `grep -rn` for each deleted symbol returns nothing; every remaining permission key in
 `CATALOG` is used by at least one `PROCEDURE_PERMISSIONS` entry (add that as a
 `contracts` spec).
+
+**Met on 2026-09-06, except `P5.13`, which is blocked on `P8.12`.**
+- **The grep is clean.** `EventBus`, `RecordingEventBus`, `SessionGuard`, `SessionQueries`,
+  `DocumentEntity`, `AnalyticsReader` and its three implementations, `goalRiskScores`,
+  `reliabilityTrend`, `goal_risk_daily`, `user_reliability_daily`, `ANALYTICS_DRIVER`,
+  `invalidateAll`, `GeneratedApiKey` and `ApiKeyRow` return nothing outside `dist/` and the
+  migration history. One stale mention of `ApiKeyRow` survived in `docs/setup/13` and is gone.
+- **The spec is `procedure-permissions.spec.ts`**, "leaves no permission in the catalog without a
+  procedure behind it". It exempts the `core` module, because `core.activity.write` is held
+  implicitly by every principal in `CapabilitySet.can()` rather than granted through a role — no
+  procedure asserts it and none should. Verified by adding a key with no procedure and watching it
+  fail.
+- **Fourteen keys, thirteen gated.** All five `rbac.*`, all four `member.*`, both `apikey.*` and
+  both `ai.embedding.*` now sit behind a procedure that a screen can reach.
 
 ---
 
@@ -897,8 +1672,12 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 - [ ] `P7.1` `SystemRoleSeed.run` issues one SELECT per role (four) and runs on every
   organization creation — one `IN` query and one batched insert. **Docs:** `docs/setup/13`.
-- [ ] `P7.2` `PgApiKeyRepository.touch` writes `last_used_at` on every authenticated API
+- [x] `P7.2` `PgApiKeyRepository.touch` writes `last_used_at` on every authenticated API
   request, awaited — throttle to once per minute (`WHERE last_used_at < now() - interval '1 minute'`).
+  `done: 2026-09-06` — closed by `P5.4`, whose feature put the write on a path anyone could reach.
+  The throttle is a `notBefore` parameter on the port rather than an interval in the SQL, so the
+  window is a domain decision (`ApiKeyRules.TOUCH_THROTTLE_MS`, five minutes) and the adapter holds
+  no policy. Verified live: written once, then not rewritten inside the window.
 - [ ] `P7.3` `PgMaintenanceGateway.sweepExpired` uses `.returning({ id })` to count —
   use the command tag row count.
 - [ ] `P7.4` `PgMembershipReader.organizationsFor` has no limit — cap at 100 and document.
@@ -961,9 +1740,15 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### `tooling/scripts`
 
-- [ ] `P8.6` **(verified) summary counts skipped as passed** `P1` `~30m` —
+- [x] `P8.6` **(verified) summary counts skipped as passed** `P1` `~30m` —
   `check-architecture.mjs:634-639` prints `${results.length} assertions passed` with `○`
-  lines included; print `passed / skipped`, exit 1 on any skip when `CI=true`.
+  lines included; print `passed / skipped`, exit 1 on any skip when `CI=true`. `done: 2026-09-06`
+  - Skips are counted apart and never summed into the passes, and `CI=true` turns one into a
+    failure. Verified by deleting `apps/web/.output` and running with `CI=true`: `15 passed, 1
+    skipped, of 16` and exit 1.
+  - `process.env` in a tooling script needs a Biome exemption; `check-architecture.mjs` joins the
+    four scripts already named in `tooling/biome-config/src/base.json` rather than a `tooling/**`
+    glob, so each stays a decision.
 - [ ] `P8.7` **§8 cannot see a stale bundle** `P2` `~30m` — the local 13/13 observed during
   the audit ran against an `.output` predating T-027..029. Fail when the newest file under
   `apps/web/src` is newer than `apps/web/.output`.
@@ -986,16 +1771,42 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### CI and hooks
 
-- [ ] `P8.11` **(verified) pre-push runs only ESLint** `P1` `~15m` — `.husky/pre-push`:
+- [x] `P8.11` **(verified) pre-push runs only ESLint** `P1` `~15m` — `.husky/pre-push`:
   `pnpm lint:fast && pnpm check:architecture && pnpm check:contrast`; keep `typecheck` in CI
-  (slow). `.lintstagedrc.json` stays biome-only. **Docs:** `docs/setup/26:56`.
-- [ ] `P8.12` **`ci.yml`** `P1` `~2h` — `audit` job is `continue-on-error` at job level
+  (slow). `.lintstagedrc.json` stays biome-only. **Docs:** `docs/setup/26:56`. `done: 2026-09-06`
+  - Four checks, about a second in total, measured. `typecheck` and `test` stay in CI: a hook people
+    learn to `--no-verify` past checks nothing.
+- [x] `P8.12` **`ci.yml`** `P1` `~2h` — `audit` job is `continue-on-error` at job level
   (cannot signal): step-level plus a summary write; `env:` lacks every `S3_*`, `EMBEDDING_*`,
   `AUTH_*` key both `env.ts` schemas require (the job survives because nothing evaluates
   `Env`) — add them and a boot-smoke step per app; add a MinIO service (S3 gateway and
   activity archive have zero coverage); run `pnpm --filter @loadbearing/worker build`;
   `actions/cache` on `packages/*/dist` (promised at `26:426`); "fifteen themes" comment is
-  five; pin `pnpm/action-setup` to `packageManager`.
+  five; pin `pnpm/action-setup` to `packageManager`. `done: 2026-09-06`
+  - **CI had never passed, on any branch, ever.** `pnpm/action-setup@v4` reads the root
+    `packageManager` field and nothing else; this repo declared only `devEngines.packageManager`,
+    so both jobs died in about twenty seconds before a single check ran. Every "verified" claim in
+    this plan rested on local runs.
+  - **`docs/setup/26` already described the failure** in a CAUTION block and then contradicted
+    itself forty lines later — *"leave the action's `version` input unset"* is the advice that
+    produced the broken workflow. Both passages are reconciled.
+  - **Assertion 16 makes the drift impossible rather than unlikely:** both declarations must exist
+    and agree. Verified by removing one and watching the check fail.
+  - **The `env:` block now carries every key both schemas require**, and the boot smoke is what
+    makes that mean something — before it, nothing in CI ever evaluated `Env`, so a missing key was
+    invisible until a deploy.
+  - **`tooling/scripts/boot-smoke.mjs`** boots the built worker, waits for `process.started`, sends
+    SIGTERM and requires a clean `process.stopped` exit. Verified three ways: it passes on a good
+    boot, fails with no env at all, and fails with one key removed.
+  - **No web boot smoke.** Its server bundle throws `jsxDEV is not a function` — `T-032`. The step
+    lands with that fix, and the script's `APPS` table says so at the line someone will read.
+  - **MinIO is a `docker run` step, not a `services:` entry**, because it needs `server /data` and a
+    service container takes no command. `P5.13` is unblocked.
+  - **The `dist` cache was written and then removed.** `tsup` has no incremental mode, so a restored
+    `dist/` is rebuilt by the very next step; it would only pay off by making the build conditional
+    on a cache hit, and a stale `dist/` silently used is a worse failure than a slow job. The pnpm
+    store half is already done by `actions/setup-node`. `docs/setup/26` says this now.
+  - **"fifteen themes" was five**, and the comment now carries the real number, 117 pairings.
 - [ ] `P8.13` **doc-promised jobs** — compose smoke job, `pnpm peers check`, `pnpm sbom`
   (`26:426-432`): implement the first (boot `infra:up`, `db:migrate`, `db:seed`, hit
   `/api/health`), drop the other two from the doc.
@@ -1006,9 +1817,9 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   `(provider_id, account_id)` (two rows per Google account accepted);
   `two_factors_user_idx` is not unique (two TOTP secrets per user). Migration + `auth.schema.ts`.
   Run `pnpm auth:tables` and diff.
-- [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive` (and
-  `goal_risk_daily`, `user_reliability_daily` unless `P5.12` deletes them). Partition by month
-  in a migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
+- [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive`. It is the only one
+  left: `P5.12` deleted `goal_risk_daily` and `user_reliability_daily`. Partition by month in a
+  migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
 - [ ] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
   unique indexes with no de-dup; `0004` drops `memberships_uq` before recreating it. Ship a
   `0005` that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"
@@ -1022,11 +1833,19 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Infra
 
-- [ ] `P8.18` **compose** `P1` `~1h` — MinIO healthcheck runs `mc ready local` inside the
+- [x] `P8.18` **compose** `P1` `~1h` — MinIO healthcheck runs `mc ready local` inside the
   server image (no `mc`; the alias lives in `minio-init`) → HTTP `/minio/health/live`;
   `minio-init` gets `restart: "no"`; Alloy's docker-socket mount gets `group_add` so it
   collects on Linux; ClickHouse user/db `ratchet` vs `env.ts` default `default` — align.
-  **Docs:** `docs/infra/reference/compose.md`.
+  **Docs:** `docs/infra/reference/compose.md`. `done: 2026-09-06`
+  - The MinIO probe could only ever fail: `mc` is absent from the server image and the `local` alias
+    it names is created by `minio-init`, which waits on this healthcheck. HTTP `/minio/health/live`
+    now.
+  - **ClickHouse is aligned by a cross-field rule, not by changing the defaults.** `env.ts` explains
+    that a default naming the project would be a credential baked into shipped code — that reasoning
+    is sound, so setting `CLICKHOUSE_URL` now *requires* `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER`
+    instead. Both apps; the worker had no `superRefine` before. Verified by setting the URL with the
+    defaults left alone and watching boot refuse with both field paths.
 - [ ] `P8.19` **env templates** `P2` `~30m` — ship `infra/.env.example` with the eleven port
   overrides; remove `EMBEDDING_PROVIDER` and `WEB_PORT` from `.env.example` and
   `docs/setup/02:139,146` (read by nothing); `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` per

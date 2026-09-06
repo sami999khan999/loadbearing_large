@@ -37,7 +37,7 @@ ServerOnly.assert("@loadbearing/infrastructure");
 
 | Package | Why |
 | --- | --- |
-| `db` | connection pool, full table shapes |
+| `infrastructure` | connection pool, full table shapes |
 | `infrastructure` | queue and cache clients, vendor SDKs |
 | `auth` | signing secrets, session handling |
 | `composition` | wires all three together |

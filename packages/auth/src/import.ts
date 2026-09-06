@@ -3,6 +3,9 @@
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 export {
+  type ApiKeyRecord,
+  ApiKeyRepository,
+  ApiKeyRules,
   type CacheStore,
   type CapabilityRepository,
   Principal,
@@ -15,7 +18,7 @@ export {
 export { type OrganizationId, Password, type UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
-export { ServerOnly, Uuid } from "@loadbearing/core";
+export { ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 export { Database } from "@loadbearing/infrastructure";

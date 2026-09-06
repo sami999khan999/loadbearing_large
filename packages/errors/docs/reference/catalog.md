@@ -37,10 +37,15 @@ The ten shipped codes:
 | `INTERNAL` | no | unexpected | `InternalError`, via `ErrorNormalizer` |
 | `SERVER_ONLY` | no | unexpected | `ServerOnlyError`, from `core` at module load |
 
-**`RATE_LIMITED` and `UNAVAILABLE` have no class**, and that is not an omission. Neither is ever
-raised by domain code — a rate limiter and a health check are adapters, and they construct a
-`TransportError` or throw through the boundary that owns them. A class exists for a code when a
-use-case needs to *throw* it with context.
+**Every code has a class, and two of them are thrown only by adapters.** `RateLimitedError` takes
+the limiter's name; `UnavailableError` takes a dependency and an optional status — `("clickhouse",
+503)`, `("smtp")`. Neither is raised by domain code, because a rate limiter and a health check are
+adapters, but both needed a class the moment an adapter had context worth carrying: the dependency
+that failed is the whole diagnostic, and putting it in a message rather than in `ErrorContext` is
+what let a ClickHouse response body reach the wire.
+
+A class exists for a code when something needs to *throw* it with context. That turned out to be
+every code.
 
 **`SERVER_ONLY` gets `500` in `HTTP_STATUS` and can never be served.** The record is total over
 `ErrorCode`, so it needs a number; no request can reach it, because the module that would serve the

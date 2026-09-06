@@ -41,7 +41,7 @@ what to write, what to check, what to commit.
 
 3. Decide the subject noun. It is singular, kebab-case in paths, and the **same word in every
    package** — `contracts/src/lead/`, `application/src/lead/`, `query/src/lead/`,
-   `feature/src/lead/`, `apps/web/src/route/(app)/_authenticated/lead/`. One glob per team:
+   `feature/src/lead/`, `web/src/route/(app)/_authenticated/lead/`. One glob per team:
    `packages/*/src/lead/**`.
 
 ---
@@ -135,7 +135,7 @@ src/<subject>/<verb>-<subject>.use-case.ts    -> <Verb><Subject>UseCase
 - Authorize with `authorizer.assert(...)`, never `can(...)`. `can()` answers a question; `assert()`
   enforces an outcome. Mixing them is how a UI check silently becomes the only check.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate belongs in the
-  analytics store, behind `AnalyticsReader`.
+  analytics store, read through a port of its own rather than from a use-case.
 
 ### 8 — Client data (`packages/api-client`, `packages/query`)
 

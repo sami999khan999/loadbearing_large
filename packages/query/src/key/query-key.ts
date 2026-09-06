@@ -16,7 +16,6 @@ export class QueryKeys {
   // refetch three lists every time a session is refreshed.
   public static readonly account = {
     all: () => ["account"] as const,
-    twoFactor: () => ["account", "two-factor"] as const,
     accounts: () => ["account", "linked", "list"] as const,
     sessions: () => ["account", "session", "list"] as const,
   };
@@ -25,6 +24,13 @@ export class QueryKeys {
     all: () => ["rbac"] as const,
     roles: (params: unknown) => ["rbac", "role", "list", params] as const,
     effective: (userId: string) => ["rbac", "effective", userId] as const,
+  };
+
+  // Create and revoke both invalidate `all()`: the list is the only read, and a new
+  // key changes it whichever way it changed.
+  public static readonly apiKey = {
+    all: () => ["apiKey"] as const,
+    list: (params: unknown) => ["apiKey", "list", params] as const,
   };
 
   // Inviting and revoking both invalidate `all()`: an invitation becoming a membership

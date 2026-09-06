@@ -26,16 +26,43 @@ shell mount these components under a different routing shell.
 
 ```
 packages/feature/src/
-├── index.ts                           ← "use client" on line 1
-├── import.ts                          ← the two bans, made visible
-├── i18n/message.context.tsx           → MessageProvider, useMessages
+├── index.ts                                → "use client" on line 1
+├── import.ts                               → the two bans, made visible
+├── i18n/message.context.tsx                → MessageProvider, useMessages
 ├── auth/
-│   ├── session.context.tsx            → SessionProvider, useSession, useCapabilities
-│   ├── session.guard.tsx              → SessionGuard
-│   ├── sign-in.form.tsx               → SignInForm
-│   └── two-factor.form.tsx            → TwoFactorForm
+│   ├── session.context.tsx                 → SessionProvider, useSession, useCapabilities
+│   ├── session.guard.tsx                   → SessionGuard
+│   ├── sign-in.form.tsx                    → SignInForm
+│   ├── sign-up.form.tsx                    → SignUpForm
+│   ├── sign-out.button.tsx                 → SignOutButton
+│   ├── social-sign-in.tsx                  → SocialSignIn
+│   ├── forgot-password.form.tsx            → ForgotPasswordForm
+│   ├── reset-password.form.tsx             → ResetPasswordForm
+│   ├── password-pair.tsx                   → the shared confirm-and-strength control
+│   ├── two-factor.form.tsx                 → TwoFactorForm
+│   └── verify-email.notice.tsx             → VerifyEmailNotice
+├── account/
+│   ├── profile.form.tsx                    → ProfileForm
+│   ├── change-email.form.tsx               → ChangeEmailForm
+│   ├── change-password.form.tsx            → ChangePasswordForm
+│   ├── two-factor.panel.tsx                → TwoFactorPanel
+│   ├── two-factor.setup.tsx                → TwoFactorSetup
+│   ├── active-session.list.tsx             → ActiveSessionList
+│   └── linked-account.list.tsx             → LinkedAccountList
+├── organization/
+│   ├── create-organization.form.tsx        → CreateOrganizationForm
+│   ├── organization-switcher.tsx           → OrganizationSwitcher
+│   └── invitation-accept.tsx               → InvitationAccept, InvitationPreview
+├── member/
+│   ├── member-list.tsx                     → MemberList
+│   ├── invite-member.form.tsx              → InviteMemberForm
+│   └── invitation-list.tsx                 → InvitationList
 └── rbac/
-    ├── permission-matrix.tsx          → PermissionMatrix, MatrixSubject
+    ├── permission-matrix.tsx               → PermissionMatrix, MatrixSubject
+    ├── role-matrix.tsx                     → RoleMatrix
+    ├── role-list.tsx                       → RoleList
+    ├── create-role.form.tsx                → CreateRoleForm
+    ├── use-role-failure.ts                 → useRoleFailure
     └── effective-permissions.inspector.tsx → EffectivePermissionsInspector
 ```
 
@@ -158,16 +185,22 @@ the badge and **no** Revoke: signing yourself out of the page you are reading is
 all devices" is for. Before that flag existed, the badge was rendered once after the list, attached
 to no device at all.
 
-## The two RBAC components need no query at all
+## `PermissionMatrix` fetches nothing, and that is the point
 
-That is the interesting part, and the one deliberate departure from the fetch-here pattern. The
-permission axis is `PermissionRegistry.instance` — already in the bundle — and the answer axis is
-`CapabilitySet.can()`, already in the session context. So `EffectivePermissionsInspector` takes
-nothing but an optional `goalId`, and `PermissionMatrix` takes its **subjects** as a prop.
+The permission axis is `PermissionRegistry.instance` — already in the bundle — and the answer axis is
+`CapabilitySet.can()`. So `PermissionMatrix` takes its **subjects** as a prop rather than reading
+them: rows are the catalog, which is static, and columns are whatever the caller is comparing —
+roles on an admin screen, two users in a support tool. A component that fetched its own columns
+could only ever do one of those.
 
-Rows are the catalog, which is static; columns are whatever the caller is comparing — roles on an
-admin screen, two users in a support tool. A component that fetched its own columns could only ever
-do one of those.
+`EffectivePermissionsInspector` splits on the same line. With no `userId` it answers from the
+session context with no round trip; with one it reads `RoleQueries.effective`, because *someone
+else's* resolved set is a question only the server can answer.
+
+`editable` is per subject rather than per matrix, because a page showing four roles where three are
+seeded needs one editable column and three that are not. A checkbox appears only where `onToggle`
+is given **and** that subject allows it, so the read-only case is honest rather than a control that
+silently does nothing.
 
 **Both render a word, not a glyph.** `✓` announces as "check mark", which is not an answer. Cells
 read `t("state.allowed")` / `t("state.denied")` — two keys this package added to `content`'s `common`
@@ -192,10 +225,19 @@ not exist yet. `StaticContentSource` gives the same snapshot asynchronously and 
 `vitest.setup.ts` runs `afterEach(cleanup)`, which is **not optional** with `globals: false` — see
 [`ui`](../../ui/docs/index.md) for the failure it prevents.
 
-## Two things this package does not have
+## One thing this package does not have
 
-**No feature slices.** `AppContract` is `{}`, so there is nothing to query. The shape a slice takes
-is in doc 23 §23.5.
+**No product slice.** Everything here is identity, membership and authorization — the surfaces every
+product needs before it has a product. Nothing yet reads a domain procedure, so the twelve-step
+checklist in doc 23 §23.5 is still the unwalked path rather than a description of what shipped.
+
+**No copy of its own for a failure.** `useErrorMessage` normalises what a query or mutation threw and
+renders it through [`ErrorCopy`](../../content/docs/reference/error-copy.md), so the sentence a user
+reads is keyed to the code the server sent. Nine components rendered `state.error` — one generic
+sentence — against an envelope that already said which failure it was.
+
+`useTranslator` exists for that hook alone: `useMessages(namespace)` narrows keys to one namespace,
+and `ErrorCopy` picks its own shell key from the code, so there is nothing to scope.
 
 **No cache-library import.** A slice reads through
 [`useAppQuery`](../../query/docs/index.md) — a three-line pass-through in `query` that exists so this

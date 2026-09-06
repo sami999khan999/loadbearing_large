@@ -25,7 +25,7 @@ export type NamespaceKeys = { [K in Namespace]: keyof NamespaceShape[K] & string
 export type MessageKey = NamespaceKeys[Namespace];
 export type ShellMessageKey = NamespaceKeys[ShellNamespace];
 
-export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+export type NamespaceBundle<N extends Namespace> = Record<NamespaceKeys[N], string>;
 export type MessageBundle = Partial<Record<MessageKey, string>>;
 export type MessageParams = Readonly<Record<string, string | number | boolean>>;
 
@@ -92,7 +92,7 @@ somebody remembers.
 
 ---
 
-## `NamespaceBundle<N>` is `Partial` per namespace, not per locale
+## `NamespaceBundle<N>` is total, and scoped per namespace
 
 ```ts
 // bn/error.ts
@@ -102,13 +102,21 @@ export const error: NamespaceBundle<"error"> = {
 };
 ```
 
-Two properties at once, and the second is the interesting one:
+Two properties at once:
 
-- **`Partial`** — translations arrive incrementally. Requiring completeness means either blocking a
-  locale until it is finished or filling it with placeholder English nobody notices needs replacing.
+- **Total** — a key added to `en` without a translation fails `tsc` in every other locale, rather
+  than rendering an English sentence in the middle of a Bengali page. It was `Partial` until
+  `P5.9`, on the argument that translations arrive incrementally; what actually arrived was
+  fifteen keys nobody noticed were missing, including four in `common` that six components render.
+  **`tsup`'s DTS build does not catch this — only `pnpm typecheck` does**, which is why the
+  package's `typecheck` script is the gate rather than the build.
 - **Per namespace** — a key from another namespace in this file is a compile error, which is what
   stops `bn/nav.ts` from quietly shipping auth copy inside the nav chunk. **The chunk boundary and
   the type boundary are the same boundary.**
+
+The cost is that a new locale cannot land half-finished, and the English fallback layer beneath it
+is now unreachable for anything that compiles — `T-035` in `tasks/TODO.md` holds that trade-off
+open rather than settling it here.
 
 English files are `as const` rather than `NamespaceBundle<N>`: they are the source the union is
 derived *from*, so they cannot be checked against it, and they are the fallback layer, so they must

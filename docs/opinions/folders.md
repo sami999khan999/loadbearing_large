@@ -128,10 +128,9 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `event/` | type-only declarations of what an event carries | `observability` |
 | `logger/` | the diagnostic seam and its sinks | `observability` |
 | `port/` | abstract classes for cross-cutting infrastructure, zero implementations | `application` |
-| `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `db` |
-| `transaction/` | the `UnitOfWork` seam and the scope it reads | `db` |
-| `seed/` | idempotent seeds, run after migration | `db` |
-| `migrate/` | the migration runner | `db` |
+| `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `infrastructure` |
+| `transaction/` | the `UnitOfWork` seam and the scope it reads | `infrastructure` |
+| `seed/` | the seed classes a runnable script above `src/` calls | `infrastructure` |
 | `container/` | the DI root and the config shape it takes | `composition` |
 | `fake/` | test doubles for ports, one per port, never on the barrel | `composition` |
 | `client/` | the outbound transport and the typed client over it | `api-client` |
@@ -223,15 +222,15 @@ and its two merge points are role folders — `primitive/`, `procedure/`, `catal
 because there is exactly one of each. Its subjects are subject folders, because there is one per
 slice. Nothing about the package had to choose; each folder answered the question on its own.
 
-**Two things that look like slices and are not.** `PgVectorStore` and `PgAnalyticsReader` are
+**Two things that look like slices and are not.** `PgVectorStore` and `PgActivityReplayReader` are
 infrastructure, which is why they sit in `pg/repository/` beside `PgCapabilityRepository` rather than
 inside a slice. And repository *ports* live in the slice, not in `application/src/port/` — `port/` is
 for capabilities the whole system shares, and putting `TaskRepository` there would make that folder
 grow by one file per feature forever.
 
-**The test for `port/` is what a new feature adds, not what the port is called.** `AnalyticsReader`
-lives there and looks slice-shaped — `goalRiskScores`, `reliabilityTrend` — but a second feature
-adds a *method* to it, not a second file beside it. `TaskRepository` is the opposite: every feature
+**The test for `port/` is what a new feature adds, not what the port is called.**
+`ActivityReplayReader` lives there and looks slice-shaped — `since`, `dailyCounts` — but a second
+feature adds a *method* to it, not a second file beside it. `TaskRepository` is the opposite: every feature
 brings its own. One cross-cutting seam that many subjects ask questions of belongs in `port/`; one
 seam per subject belongs with the subject.
 

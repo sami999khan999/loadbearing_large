@@ -53,35 +53,33 @@ Only **Goal** and **Done when** are required. Drop the rest when empty.
 
 ---
 
-## State of the repo — 2026-08-29
+## State of the repo — 2026-09-06
 
-Verified by running the pipeline end to end on this tree:
+Verified by running the pipeline end to end on this tree, with `build:packages` and the web build
+done first so no assertion skips:
 
 | Check | Result |
 | --- | --- |
 | `pnpm build:packages` | ✅ 15 packages build |
-| `pnpm typecheck` | ✅ 20 projects clean |
-| `pnpm lint` (biome + eslint) | ✅ 538 files, no findings |
-| `pnpm test` (excl. `infrastructure`) | ✅ 388 tests across 65 files |
+| `pnpm typecheck` | ✅ 17 projects clean |
+| `pnpm lint` (biome + eslint) | ✅ 716 files, no findings |
+| `pnpm test` | ✅ 659 tests across 114 files, `infrastructure` included |
 | `pnpm --filter @loadbearing/web build` | ✅ builds `.output/` |
-| `pnpm check:architecture` | ✅ 11/11 assertions |
-| `pnpm deps:check` / `pnpm repo:check` | ✅ silent, and now blocking in CI |
-| `pnpm test` (`infrastructure`) | ⚠️ needs live Postgres — Docker not running locally, covered in CI |
+| `pnpm check:architecture` | ✅ 16/16 assertions, none skipped |
+| `pnpm deps:check` / `pnpm repo:check` | ✅ silent, and blocking in CI |
 
-**Every task `T-001`–`T-024` is done.** The kit now authenticates a user end to end, ships one
-feature slice through all twelve steps of `27.4`, has a transactional mail transport, a readiness
-probe, and documentation that names directories which exist.
+**Every task `T-001`–`T-030` is done.** The kit authenticates a user end to end, enrols them by one
+of three modes, brings a second person in by invitation, moves between organizations, ships one
+feature slice through all twelve steps of `27.4`, has a transactional mail transport and a readiness
+probe.
 
 > [!IMPORTANT]
-> **Three things could not be verified on this machine and are verified by CI instead.** Docker was
-> not running, so nothing below was exercised against a live Postgres, Redis or Mailpit:
->
-> - `T-001`'s end-to-end sign-up → sign-in against `/api/auth`, and the membership row it writes
-> - `T-002`'s owner-renders / member-redirects behaviour on `/permissions`
-> - `T-004`'s verification message landing in Mailpit
->
-> Every one of them typechecks, builds, lints, and passes its unit tests. CI runs `db:migrate` and
-> `db:seed` against a real Postgres and will exercise the rest on the next push.
+> **CI has never been green, and the reason is not this tree.** Both jobs die in ~20s at
+> `pnpm/action-setup@v4` with "No pnpm version is specified" — the root `package.json` declares
+> `devEngines.packageManager` rather than the `packageManager` field the action reads. It fails
+> identically on every run of the default branch, so nothing here has ever been verified by CI.
+> `P8.12` in [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
+> lands, "covered in CI" is not an answer any task may give.
 
 ---
 
@@ -91,7 +89,116 @@ probe, and documentation that names directories which exist.
 
 ## 📋 Backlog
 
-*(nothing in the backlog — open work is tracked in `tasks/IMPLEMENTATION-PLAN.md`)*
+- [ ] `T-033` **Assert that every event code has an emitter** `@unassigned` `P3` `~1h` `#tooling`
+  - **Goal:** `P5.14` found eight of twenty-four declared codes with no production call site. A
+    declared code that nothing emits is a dashboard panel that stays empty forever, and an empty
+    panel is indistinguishable from a healthy system. The catalog is clean today and nothing stops
+    it drifting again.
+  - **Done when:** `check-architecture.mjs` gains an assertion — every key in `EVENT_CATALOG` has at
+    least one `logger.emit("<code>"` outside `core.events.ts`, `event-shape.ts` and `tests/`. The
+    grep is the one `P5.14` used:
+    `grep -rn '"<code>"' packages apps --include=*.ts | grep -v node_modules | grep -v dist`.
+  - **Notes:** deliberately not done inside `P5.14`. A new assertion means renumbering "fifteen
+    assertions" across `docs/ai/rules/workflow.md`, `docs/setup/26`, `AGENTS.md` and the `TODO.md`
+    state table, which is churn worth doing once rather than mid-phase. The same shape would serve
+    `permissions`: every key in `CATALOG` used by at least one `PROCEDURE_PERMISSIONS` entry, which
+    is Phase 5's own exit criterion.
+
+
+- [ ] `T-032` **The production SSR bundle throws `jsxDEV is not a function`** `@unassigned` `P1` `~3h` `#ui`
+  - **Goal:** `pnpm --filter @loadbearing/web build` succeeds and `node .output/server/index.mjs`
+    returns 500 on **every** page. `RootDocument` in `__root.tsx` calls
+    `import_jsx_dev_runtime.jsxDEV`, which the production React runtime does not export — a
+    development JSX transform reached the server build. `pnpm dev` is unaffected, which is why
+    nothing has noticed: every check in CI and every local gate passes on a build that cannot serve
+    a request.
+  - **Found while verifying `P5.10`.** Confirmed pre-existing by stashing that change and
+    rebuilding from a clean `.output`: the baseline fails identically. Not caused by the isomorphic
+    transport.
+  - **Where to look first.** `vite.config.ts` prepends the `development` export condition only when
+    `command === "serve"`, and its own comment records that leaving it in a build once shipped
+    `@tanstack/react-router`'s dev build to the client. This is the same failure on the **ssr**
+    side: `ssr.resolve.conditions` and `ssr.resolve.externalConditions` both take `devCondition`,
+    so check what `react/jsx-dev-runtime` resolves to in the server graph. `esbuild` appears twice
+    in the pnpm store at two versions (`0.27.7`, `0.28.2`), which is worth ruling out too.
+  - **Done when:** a built `.output` serves `/`, `/sign-up` and `/settings/roles`, and the ✅ Gate
+    in `docs/setup/24` gains a line asserting it — the existing gate checks the *client* bundle
+    carries no dev build and never checks that the server bundle runs at all.
+
+
+- [ ] `T-035` **The English fallback layer is now dead payload** `@unassigned` `P3` `~3h` `#ui`
+  - **Goal:** `StaticContentSource` loads English *beneath* every locale, per namespace, so a key
+    the locale had not translated still rendered a sentence. `P5.9` made `NamespaceBundle` a total
+    `Record`, so a bundle with a gap no longer compiles — and the layer beneath it can no longer be
+    reached by anything that ships.
+  - **What it costs:** every non-English page carries both copies. Measured on `/sign-in` under
+    `locale=bn`: the dehydrated payload holds the full `common` + `error` + `auth` English bundle
+    *and* the full Bengali one, roughly doubling the message bytes on the wire and in memory.
+  - **Why this is not just "delete it".** The layer is also what makes a *partially loaded* set of
+    namespaces work, and it is the safety net if copy ever arrives from somewhere `tsc` does not
+    see — a CMS behind `ContentSource`, which is the swap that seam exists for. Removing it makes
+    adding a locale all-or-nothing at runtime as well as at compile time, which is a real barrier
+    to a contributor landing a third language incrementally.
+  - **Done when:** one of two decisions is made and written down — either the base layer is dropped
+    for a locale whose bundles are statically known total (and `StaticContentSource` gains the test
+    that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
+    `check-architecture` assertion counting the gap instead. Do not ship both.
+
+
+- [ ] `T-034` **Bring back an analytics reader, with the first dashboard** `@unassigned` `P3` `~8h` `#api` `#db`
+  - **Goal:** Nothing reads the analytics store. `P5.12` deleted `AnalyticsReader`, both its
+    implementations, its two rollup tables and the `ANALYTICS_DRIVER` flag, because nothing ever
+    called any of it — a shape guessed at with no consumer to check it against, kept in step by hand
+    across two adapters. The write half stayed: `AnalyticsProjector` fills `activity_events` and the
+    nightly reconciliation checks it.
+  - **The trigger, and it is not "the table is large".** Snapshot tables stop covering the questions
+    people ask — the specific moment somebody wants an aggregate nobody precomputed.
+  - **Do it in this order**, which is the whole point of having deleted the seam: set
+    `CLICKHOUSE_URL` and let the projection fill and reconcile for days first, then write the reader
+    against a store with real data in it and a dashboard with a real query.
+  - **Four decisions carry over** and should not be re-litigated:
+    - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
+      `project()` on the object a dashboard query holds.
+    - **Read-only by construction.** A write method is the moment a derived store becomes
+      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
+    - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
+      analytics store holds no `CapabilitySet` and can join back to nothing.
+    - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return
+      different shapes and each adapter normalises.
+  - **A driver flag comes back only if a second implementation does**, and only once the first has a
+    caller. Its absence is currently a feature — a flag that moved reads the moment the pipeline
+    started would cut a dashboard over to a store that is still backfilling.
+
+
+- [ ] `T-031` **Transactional outbox for cross-slice events** `@unassigned` `P3` `~12h` `#api` `#db`
+  - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
+    notification slice. Without a seam for that, slice ownership decays into a call graph where
+    every team's code reaches into every other team's. An `EventBus` port was declared for this and
+    deleted by `P5.11` — it had no adapter and no publisher, so a use-case that published would have
+    published into a recording fake under test and into nothing at all in production.
+  - **Why an outbox and not a bus.** The event and the state change that caused it must commit or
+    fail together. Publishing to a broker inside the transaction cannot be rolled back; publishing
+    after it commits loses the event on a crash in between. An outbox table written in the same
+    transaction, drained by the worker, is the only shape with neither hole — and this repository
+    already has the `UnitOfWork` that makes it one line at the call site.
+  - **Done when:** an `outbox` table (`organization_id`, partitioned, `published_at` nullable with
+    the two partial indexes that a nullable column in a unique index needs); an `EventPublisher`
+    port whose `publish` enrols in the ambient `UnitOfWork`; a `PgOutboxPublisher`; a worker
+    consumer that drains and marks; one real publisher and one real subscriber, all in one change.
+    A port, an adapter and a `Container` line land together or not at all — that is what `P5.11`
+    established.
+  - **Build the interface broker-shaped**, because these four are what Kafka or Redis Streams
+    cannot give back later ([Data and scale](../docs/opinions/data-and-scale.md) §7):
+    - `publish` is async and returns nothing — a caller reading a return value is doing RPC.
+    - Handlers are idempotent, keyed on a stable event id: at-least-once is what every broker offers.
+    - No ordering assumptions. Two events published in order may be handled out of order.
+    - No handler exception reaches the publisher. In-process dispatch *could* propagate one; a
+      broker cannot, so a use-case that catches a handler failure depends on semantics that will
+      disappear.
+  - **Notes:** re-adds the `.bus.ts` role suffix to `docs/opinions/files.md` and
+    `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
+    file that exists. The analytics projection is the second consumer class and already works
+    without this: it reads `activity_log`, which is a different stream with a different guarantee.
 
 ## ⛔ Blocked
 
@@ -117,7 +224,20 @@ probe, and documentation that names directories which exist.
   - **Goal:** A user in two organizations could reach only the one the session was pinned to, nothing let anyone create a second organization, and an existing account holding an invitation link had no way to accept it.
   - **Done when:** `POST /api/auth/organization/{switch,create}` and `/api/auth/invitation/accept` rebind the session and re-issue the cookie cache so the very next RPC resolves the new tenant; the header switcher lists every membership; `/organization/new` founds and switches; `/invitation/$token` previews for an anonymous visitor and accepts for a signed-in one; `/sign-in?redirect=` returns there; a sign-in lands in the last-used organization.
   - **Files:** `packages/auth/src/plugin/organization.plugin.ts`, `packages/api-client/src/auth/organization.client.ts`, `packages/query/src/organization/`, `packages/feature/src/organization/`, `apps/web/src/server/{session,invitation}.fn.ts`, `apps/web/src/route/-redirect.ts`, `apps/web/src/route/(shell)/invitation/$token.tsx`, `apps/web/src/route/(app)/_authenticated/organization/new.tsx`
-  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The ten-step manual pass in the plan (`~/.claude/plans/sprightly-kindling-dongarra.md`, "Verification") is still owed, in particular step 5 — a switch followed immediately by an RPC that must answer for the new tenant.
+  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The manual pass below is still owed, and step 5 is the one that matters — the cookie cache is what a switch has to invalidate, and nothing unit-testable proves it does.
+
+    1. Sign up two accounts; invite the second into the first's organization.
+    2. Accept the invitation while signed in as the second account, from `/invitation/$token`.
+    3. Confirm the switcher lists both memberships for the second account.
+    4. Switch organizations from the header.
+    5. **Immediately** issue an RPC that reads tenant-scoped data and confirm it answers for the
+       new organization, not the old one — within the sixty-second `session.cookieCache` window.
+    6. Reload; confirm the session is still pinned to the switched organization.
+    7. Sign out and back in; confirm the sign-in lands in the last-used organization.
+    8. Found a second organization at `/organization/new`; confirm it switches on creation.
+    9. Open `/invitation/$token` signed out; confirm the anonymous preview renders and
+       `/sign-in?redirect=` returns to it after sign-in.
+    10. Confirm `users.last_active_organization_id` matches the switcher on every step above.
   - **Notes:** A Better Auth plugin rather than oRPC, for two verified reasons: these actions are identity-gated and no permission a non-owner holds could gate them, and only an endpoint with Better Auth's `ctx` can call `setSessionCookie` — without that, `session.cookieCache` keeps resolving the old tenant for up to sixty seconds after a switch. `rebind` does what Better Auth's own organization plugin does for `setActiveOrganization`, plus writes `users.last_active_organization_id`. `SessionUser` now carries `activeOrganizationId` and `organizations`, resolved in `fetchSession` in one extra indexed query. The sign-in page's `?redirect=` is validated to a rooted single-slash path. `auth` gained a `zod` dependency for the plugin's request bodies.
 
 - [x] `T-028` **Member slice: invite, list members, list and revoke invitations, members page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
@@ -144,15 +264,15 @@ probe, and documentation that names directories which exist.
 - [x] `T-001` **Create a membership row so sign-in can succeed** `@sami` `P0` `~3h` `#db` `done: 2026-08-29`
   - **Goal:** Nothing in the repository ever inserts into `memberships`, so every sign-in is aborted before a session exists.
   - **Done when:** A fresh `pnpm db:migrate && pnpm db:seed` followed by a sign-up and sign-in against `/api/auth` returns a session whose `activeOrganizationId` is the seeded organization.
-  - **Files:** `packages/infrastructure/src/pg/seed/index.ts`, `packages/auth/src/auth.factory.ts`, `packages/infrastructure/src/pg/repository/pg-membership.reader.ts`
-  - **Done:** `MembershipEnroller` (port, `packages/auth/src/session/`) and `PgMembershipEnroller` (`packages/infrastructure/src/pg/repository/`), bound in `Container`. Enrolment runs from `session.create.before`, **not** `user.create.after` — Better Auth queues `create.after` until the whole sign-up endpoint has finished, which is after the session hook has already refused. Gated on `BOOTSTRAP_ORGANIZATION_SLUG`, which the seed reads too so the two cannot drift; first user in gets `owner`, everyone after `member`, behind a `pg_advisory_xact_lock`. Not exercised against a live database on this machine.
+  - **Files:** `packages/infrastructure/src/pg/seed/system-role.seed.ts`, `packages/auth/src/factory/auth.factory.ts`, `packages/infrastructure/src/pg/repository/pg-membership.reader.ts`
+  - **Done:** `MembershipEnroller` (port, `packages/auth/src/session/`) and `PgBootstrapMembershipEnroller` (`packages/infrastructure/src/pg/repository/`), bound in `Container`. Enrolment runs from `session.create.before`, **not** `user.create.after` — Better Auth queues `create.after` until the whole sign-up endpoint has finished, which is after the session hook has already refused. Gated on `BOOTSTRAP_ORGANIZATION_SLUG`, which the seed reads too so the two cannot drift; first user in gets `owner`, everyone after `member`, behind a `pg_advisory_xact_lock`. Not exercised against a live database on this machine.
 
 - [x] `T-002` **Resolve the session into the router context** `@sami` `P0` `~4h` `#ui` `done: 2026-08-29`
   - **Goal:** `RouteGuard` and `SessionProvider` are both inert, so two of the four enforcement surfaces named in `docs/setup/23` do nothing.
   - **Done when:** `RouterContext` carries `user` and `capabilities`, a root loader resolves them server-side during SSR, and `RouteGuard.requirePermission("rbac.role.read")` on a test route redirects a member to `/forbidden` while an owner renders it.
   - **Files:** `apps/web/src/route/-context.ts`, `apps/web/src/route/__root.tsx`, `apps/web/src/route/-guard.ts`, `apps/web/src/router.tsx`
 
-  - **Done:** `RouterContext` carries `user`, `capabilities` (as the DTO) and a `SessionStore`; the root's `beforeLoad` resolves them through `fetchSession`, a `createServerFn` in `src/server/`. The DTO rather than a `CapabilitySet` because TanStack dehydrates a `beforeLoad` return value and rejects anything carrying a method — `RouteGuard` rebuilds the class, so `can()` stays the one decision. `SessionStore` rides the same dehydrate/hydrate payload as the message snapshot, so the browser refetches nothing; `/sign-in` invalidates both on success. `/permissions` is the gated route: `requireSession()` then `requirePermission("rbac.role.read")`.
+  - **Done:** `RouterContext` carries `user`, `capabilities` (as the DTO) and a `SessionStore`; the root's `beforeLoad` resolves them through `fetchSession`, a `createServerFn` in `src/server/`. The DTO rather than a `CapabilitySet` because TanStack dehydrates a `beforeLoad` return value and rejects anything carrying a method — `RouteGuard` rebuilds the class, so `can()` stays the one decision. `SessionStore` rides the same dehydrate/hydrate payload as the message snapshot, so the browser refetches nothing; `/sign-in` invalidates both on success. `/settings/roles` is the gated route: `requireSession()` then `requirePermission("rbac.role.read")`.
 
 - [x] `T-003` **Fix the `auth:generate` root script** `@agent` `P1` `~5m` `#tooling` `done: 2026-08-29`
   - **Goal:** `pnpm auth:generate` fails, because the root script calls a package script that does not exist.
@@ -169,8 +289,8 @@ probe, and documentation that names directories which exist.
 - [x] `T-005` **Make the two-factor flow reachable** `@sami` `P1` `~3h` `#ui` `done: 2026-08-29`
   - **Goal:** The 2FA half of sign-in is written end to end and can never fire — the branch that would trigger it is unreachable.
   - **Done when:** A user with TOTP enrolled who submits `SignInForm` is shown `TwoFactorForm`, and a valid code completes the sign-in.
-  - **Files:** `packages/api-client/src/auth/auth.client.ts`, `packages/feature/src/auth/sign-in.form.tsx`, `apps/web/src/route/sign-in.tsx`
-  - **Done:** Three breaks, three fixes. `AuthClient.signIn` throws `TwoFactorRequiredError` on `data.twoFactorRedirect === true` — a *successful* response, which is why inspecting `error` alone resolved and navigated away — and throws `UnauthorizedError` rather than a bare `Error`, so `ErrorNormalizer` stops flattening every failure to `INTERNAL`. `sign-in.tsx` passes `onNeedsTwoFactor` and renders `TwoFactorForm`. `SignInForm` tracks the fork separately from `isError`, so the hand-off does not render “sign-in failed” under a form that is about to be replaced. Cost one new dependency: `api-client` → `errors`.
+  - **Files:** `packages/api-client/src/auth/auth.client.ts`, `packages/feature/src/auth/sign-in.form.tsx`, `apps/web/src/route/(shell)/sign-in.tsx`
+  - **Done:** Three breaks, three fixes. `AuthClient.signIn` throws `TwoFactorRequiredError` on `data.twoFactorRedirect === true` — a *successful* response, which is why inspecting `error` alone resolved and navigated away — and throws `UnauthorizedError` rather than a bare `Error`, so `ErrorNormalizer` stops flattening every failure to `INTERNAL`. `(shell)/sign-in.tsx` passes `onNeedsTwoFactor` and renders `TwoFactorForm`. `SignInForm` tracks the fork separately from `isError`, so the hand-off does not render “sign-in failed” under a form that is about to be replaced. Cost one new dependency: `api-client` → `errors`.
 
 - [x] `T-006` **Give `packages/auth` a test suite** `@sami` `P1` `~5h` `#api` `done: 2026-08-29`
   - **Goal:** The only package with no tests is the one holding every credential path.
@@ -287,7 +407,7 @@ probe, and documentation that names directories which exist.
   - **Goal:** `contract` and `appRouter` are both empty, so `/api/rpc` answers 404 to everything and none of the transport wiring has been exercised against a real procedure.
   - **Done when:** One slice exists end to end through all twelve steps of `27.4`, its procedures appear in `ProcedurePermissions`, the coverage test passes against the real contract rather than only against its fixture, and its route renders behind a `RouteGuard`.
   - **Files:** `packages/contracts/src/procedure/index.ts`, `packages/contracts/src/catalog/index.ts`, `apps/web/src/server/orpc/app.router.ts`
-  - **Done:** The `role` slice, end to end through all twelve steps: `contracts/src/role/` plus the procedure and permission merge points, `RoleRepository` and `ListRolesUseCase` in `application/src/rbac/`, `PgRoleRepository` (three fixed queries, never one per role), `RoleQueries`, an `ApiClient.role` accessor, a new `role` message namespace in both locales, `RoleMatrix` in `feature`, `RoleRouter`, and `/permissions` behind the guard. `Envelope.paginated` now marks `items` readonly so a handler never copies an array to widen it. The coverage tests run against a real contract, and `handler.ts`'s explicit context annotation is gone as its comment promised. Also fixed doc `24.6`, which documented `implement(x).use(authed)` — `.use()` takes a middleware, not a builder.
+  - **Done:** The `role` slice, end to end through all twelve steps: `contracts/src/role/` plus the procedure and permission merge points, `RoleRepository` and `ListRolesUseCase` in `application/src/rbac/`, `PgRoleRepository` (three fixed queries, never one per role), `RoleQueries`, an `ApiClient.role` accessor, a new `role` message namespace in both locales, `RoleMatrix` in `feature`, `RoleRouter`, and `/settings/roles` behind the guard. `Envelope.paginated` now marks `items` readonly so a handler never copies an array to widen it. The coverage tests run against a real contract, and `handler.ts`'s explicit context annotation is gone as its comment promised. Also fixed doc `24.6`, which documented `implement(x).use(authed)` — `.use()` takes a middleware, not a builder.
 
 - [x] `T-000` **Build steps 01–26 of the setup guide** `@sami` `P1` `#repo` `done: 2026-08-28`
   - **Done when:** `pnpm build:packages`, `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm check:architecture` all pass on a clean tree.
@@ -306,4 +426,7 @@ probe, and documentation that names directories which exist.
 | 2026-08-28 | @sami   | Created the list from a full audit of the tree at `c681449` |
 | 2026-08-29 | @agent  | Closed `T-001`–`T-024`. Three acceptance criteria need a live stack and are covered by CI |
 | 2026-09-01 | @sami   | Closed `T-025`. Every auth flow verified against a live stack on this machine, not deferred to CI |
+| 2026-09-03 | @sami   | Closed `T-027`–`T-029`: invitations, the member slice, and the organization plugin |
 | 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
+| 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
+| 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |

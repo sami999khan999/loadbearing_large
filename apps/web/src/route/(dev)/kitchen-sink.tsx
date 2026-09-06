@@ -1,15 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import {
   type BadgeTone,
   Button,
   type ButtonVariant,
+  Callout,
+  type CalloutTone,
+  CodeList,
   type CSSProperties,
   DataTable,
   EmptyState,
   Field,
+  type FontKey,
+  FontRegistry,
   Icon,
   Input,
   type ModePreference,
+  QrCode,
   type ReactNode,
   StatusBadge,
   type ThemeKey,
@@ -18,7 +24,14 @@ import {
 
 // The one surface that renders every theme against every primitive, so an unreadable
 // pairing is looked at directly rather than found in production.
-export const Route = createFileRoute("/(dev)/kitchen-sink")({ component: KitchenSink });
+export const Route = createFileRoute("/(dev)/kitchen-sink")({
+  // `(dev)` groups files and contributes nothing to the URL — it is not a build
+  // condition, so without this the page is a public route in production.
+  loader: () => {
+    if (!import.meta.env.DEV) throw notFound();
+  },
+  component: KitchenSink,
+});
 
 // The twelve names every theme declares. A theme that omits one shows up here as a
 // swatch of whatever leaked through.
@@ -39,6 +52,23 @@ const TOKENS = [
 
 const VARIANTS: readonly ButtonVariant[] = ["primary", "secondary", "ghost", "danger"];
 const TONES: readonly BadgeTone[] = ["neutral", "accent", "success", "warning", "danger"];
+const CALLOUTS: readonly CalloutTone[] = ["info", "success", "warning", "danger"];
+
+// Shaped like real backup codes, because the grid's column count is what is being
+// looked at and five short strings would not show it.
+const CODES: readonly string[] = [
+  "4f2a-91cd",
+  "7b18-30ea",
+  "c0d4-6f77",
+  "19ae-b2c5",
+  "83f1-4d6b",
+  "e57c-08a9",
+];
+
+// A real `otpauth://` URI: `QrCode` re-encodes nothing, so a trimmed sample would
+// render a QR that scans into an authenticator generating the wrong codes.
+const OTPAUTH =
+  "otpauth://totp/Loadbearing:you@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Loadbearing";
 const PREFERENCES: readonly ModePreference[] = ["light", "dark", "system"];
 
 interface SampleRow {
@@ -134,14 +164,14 @@ function Pair({ fg, bg, label }: { fg: string; bg: string; label: string }) {
 
 function KitchenSink() {
   const { appearance, appearanceSnapshot } = Route.useRouteContext();
-  const { theme, mode, preference } = appearanceSnapshot;
+  const { theme, mode, preference, font } = appearanceSnapshot;
 
-  // No state and no re-render: the picker writes two attributes on <html> and the
+  // No state and no re-render: the picker writes three properties on <html> and the
   // cascade does the rest.
-  const choose = (next: ThemeKey, wanted: ModePreference): void => {
+  const choose = (next: ThemeKey, wanted: ModePreference, face: FontKey = font): void => {
     const prefersDark =
       typeof matchMedia === "function" && matchMedia("(prefers-color-scheme:dark)").matches;
-    appearance.choose(next, wanted, prefersDark);
+    appearance.choose(next, wanted, prefersDark, face);
   };
 
   return (
@@ -172,8 +202,20 @@ function KitchenSink() {
             </Button>
           ))}
         </div>
+        <div style={gap} />
+        <div style={row}>
+          {FontRegistry.all().map((key) => (
+            <Button
+              key={key}
+              variant={key === font ? "primary" : "secondary"}
+              onClick={() => choose(theme, preference, key)}
+            >
+              {FontRegistry.meta(key).label}
+            </Button>
+          ))}
+        </div>
         <p style={{ color: "var(--fg-muted)", fontSize: "var(--text-sm)" }}>
-          {`rendering ${theme} / ${mode}, preference ${preference}`}
+          {`rendering ${theme} / ${mode} / ${font}, preference ${preference}`}
         </p>
       </Section>
 
@@ -230,6 +272,21 @@ function KitchenSink() {
           >
             <Input id="ks-broken" defaultValue="not an address" />
           </Field>
+        </div>
+      </Section>
+
+      <Section title="Blocks">
+        <div style={{ display: "grid", gap: "var(--space-3)" }}>
+          {CALLOUTS.map((tone) => (
+            <Callout key={tone} tone={tone} title={tone}>
+              A callout carries one message and a tone, never a colour prop.
+            </Callout>
+          ))}
+        </div>
+        <div style={gap} />
+        <div style={{ display: "grid", gap: "var(--space-4)", maxWidth: "24rem" }}>
+          <CodeList values={CODES} label="Sample backup codes" />
+          <QrCode value={OTPAUTH} label="Sample authenticator QR" />
         </div>
       </Section>
 

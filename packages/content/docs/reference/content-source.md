@@ -19,7 +19,7 @@ export abstract class ContentSource {
 ```
 
 > [!NOTE]
-> **Two methods today, five when the package is finished.** `media()`, `nav()` and `document()` join
+> **Two methods at first, four now.** `media()` and `nav()` joined
 > the contract once `@loadbearing/asset`'s manifest and the nav collection exist. See
 > [Why the contract is short](#why-the-contract-is-short-rather-than-stubbed).
 
@@ -114,7 +114,7 @@ written, so this is checked rather than assumed.
 
 ## Why the contract is short rather than stubbed
 
-`media()`, `nav()` and `document()` are not declared yet, and the alternative was worse in both
+`media()` and `nav()` were not declared at first, and the alternative was worse in both
 available forms.
 
 An abstract method is not a placeholder you can defer — it is a compile error in every subclass until
@@ -132,7 +132,7 @@ outside this package depends on the count.
 
 | | |
 | --- | --- |
-| `media()`, `nav()`, `document()` | with `@loadbearing/asset` and the nav collection |
+| `media()`, `nav()` | with `@loadbearing/asset` and the nav collection |
 | `SERVER_CATALOG` | with the `email` namespace — a copy of `CLIENT_CATALOG` would be a boundary that enforces nothing |
 | `BundledContentSource` | with the desktop app: every locale statically imported, `snapshotSync` for a first render with no await and no chunk fetch |
 | `MessageStore` | when a route loader calls `ensure()` |

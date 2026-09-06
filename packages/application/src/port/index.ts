@@ -7,16 +7,10 @@ export {
   type ProjectionCheckpoint,
 } from "./activity-replay.reader.js";
 export { AnalyticsProjector } from "./analytics.projector.js";
-export {
-  AnalyticsReader,
-  type DateRange,
-  type RiskScore,
-  type TrendPoint,
-} from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
+export { CapabilityInvalidator } from "./capability.invalidator.js";
 export { type EmailMessage, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
-export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";

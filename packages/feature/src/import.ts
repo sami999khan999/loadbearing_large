@@ -5,27 +5,43 @@
 // Type-only. The instance arrives as a prop, so this creates no runtime dependency and
 // no read can bypass a defined query.
 export type { AccountClient, AuthClient, OrganizationClient } from "@loadbearing/api-client";
-// ── @loadbearing/content ─────────────────────────────────────────────────────
 export type {
   ClientNamespace,
   MessageParams,
   MessageStore,
   NamespaceKeys,
+  NavItem,
   ShellNamespace,
   Translator,
 } from "@loadbearing/content";
+// ── @loadbearing/content ─────────────────────────────────────────────────────
+// `ErrorCopy` is the only value taken from here: it is where a failure gets words, and
+// taking the map instead would put the fallback rule in every call site.
+export { ErrorCopy } from "@loadbearing/content";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes the server returns, plus the one value: `Password` carries the bounds the
 // server enforces, so a form cannot advertise a different floor.
-export { type InvitationDto, type MemberDto, Password, type RoleDto } from "@loadbearing/contracts";
+export {
+  type ApiKeyDto,
+  ApiKeyEntity,
+  type CapabilitiesDto,
+  type DocumentHitDto,
+  type InvitationDto,
+  type MemberDto,
+  Password,
+  type RoleDto,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { ErrorNormalizer } from "@loadbearing/errors";
+export { type ErrorEnvelope, ErrorNormalizer } from "@loadbearing/errors";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export {
   CapabilitySet,
   type CapabilitySetDto,
+  CORE_MODULE,
+  type ModuleKey,
+  ModuleRegistry,
   type PermissionKey,
   PermissionRegistry,
 } from "@loadbearing/permissions";
@@ -36,9 +52,13 @@ export {
 export {
   AccountMutations,
   AccountQueries,
+  ApiKeyMutations,
+  ApiKeyQueries,
+  DocumentMutations,
   MemberMutations,
   MemberQueries,
   OrganizationMutations,
+  RoleMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,
@@ -55,6 +75,8 @@ export {
   DateFormat,
   EmptyState,
   Field,
+  Icon,
+  IconRegistry,
   Input,
   QrCode,
   StatusBadge,

@@ -1,5 +1,7 @@
+import type { apikey } from "./en/apikey.js";
 import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
+import type { document } from "./en/document.js";
 import type { email } from "./en/email.js";
 import type { error } from "./en/error.js";
 import type { member } from "./en/member.js";
@@ -16,6 +18,8 @@ interface NamespaceShape {
   readonly role: typeof role;
   readonly member: typeof member;
   readonly organization: typeof organization;
+  readonly apikey: typeof apikey;
+  readonly document: typeof document;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -23,7 +27,15 @@ interface NamespaceShape {
 // Always present, in every snapshot, from every ContentSource. Never lazy.
 export type ShellNamespace = "common" | "error";
 // Everything a browser or desktop bundle may load. Lazy: a route declares what it needs.
-export type ClientNamespace = ShellNamespace | "nav" | "auth" | "role" | "member" | "organization";
+export type ClientNamespace =
+  | ShellNamespace
+  | "nav"
+  | "auth"
+  | "role"
+  | "member"
+  | "organization"
+  | "apikey"
+  | "document";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -36,8 +48,9 @@ export type MessageKey = NamespaceKeys[Namespace];
 // Only the always-loaded keys, so `ERROR_COPY` cannot point at a lazy namespace.
 export type ShellMessageKey = NamespaceKeys[ShellNamespace];
 
-// One locale's copy for one namespace. Partial: translations arrive incrementally.
-export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+// One locale's copy for one namespace, and **total**: a key added to `en` without a
+// translation is a compile error here rather than an English sentence in a Bengali page.
+export type NamespaceBundle<N extends Namespace> = Record<NamespaceKeys[N], string>;
 
 // A flat slice across whatever namespaces are loaded.
 export type MessageBundle = Partial<Record<MessageKey, string>>;
@@ -54,4 +67,6 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "role",
   "member",
   "organization",
+  "apikey",
+  "document",
 ];

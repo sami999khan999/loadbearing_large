@@ -4,7 +4,8 @@ import { config } from "dotenv";
 
 config({ path: new URL("../../.env", import.meta.url) });
 
-import { BullMqQueuePublisher, QueueName } from "./src/bullmq/index.js";
+import { QueueName } from "@loadbearing/application";
+import { BullMqQueuePublisher } from "./src/bullmq/index.js";
 import { ClickHouseConnection } from "./src/clickhouse/index.js";
 import { LokiLogReader } from "./src/loki/index.js";
 import { RedisCacheStore, RedisConnection } from "./src/redis/index.js";

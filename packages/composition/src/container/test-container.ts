@@ -8,11 +8,10 @@ import {
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
+  RecordingCapabilityInvalidator,
   RecordingEmailSender,
-  RecordingEventBus,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
-  StubAnalyticsReader,
   StubEmbeddingProvider,
   StubSessionResolver,
 } from "../fake/index.js";
@@ -21,13 +20,12 @@ import {
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
-  type AnalyticsReader,
   Authorizer,
   type CacheStore,
+  type CapabilityInvalidator,
   type ContentSource,
   type EmailSender,
   type EmbeddingProvider,
-  type EventBus,
   FixedClock,
   type Logger,
   type LogReader,
@@ -48,15 +46,14 @@ export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityArchive: ActivityArchiveGateway;
   readonly activityReplay: ActivityReplayReader;
-  readonly analytics: AnalyticsReader;
   // Present even though the real container leaves them absent: a test has no opinion
   // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
+  readonly capabilities: CapabilityInvalidator;
   readonly content: ContentSource;
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
-  readonly events: EventBus;
   readonly logs: LogReader;
   readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
@@ -92,15 +89,14 @@ export class TestContainer {
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityArchive: overrides.activityArchive ?? new RecordingActivityArchiveGateway(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
-      analytics: overrides.analytics ?? new StubAnalyticsReader(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
+      capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),
       // The one port whose real implementation is the test double, and `SERVER_CATALOG`
       // like `Container`: the client default carries no `email` namespace.
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),
       email: overrides.email ?? new RecordingEmailSender(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
-      events: overrides.events ?? new RecordingEventBus(),
       logs: overrides.logs ?? new InMemoryLogReader(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),

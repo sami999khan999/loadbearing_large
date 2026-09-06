@@ -1,6 +1,7 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design — anything missing falls back to English.
+// Total, not partial: `NamespaceBundle` is a `Record`, so an `en` key added without a
+// translation fails `tsc` rather than rendering an English sentence on a Bengali page.
 export const email: NamespaceBundle<"email"> = {
   "email.digest.subject": "আপনার দৈনিক সারসংক্ষেপ — {count}টি হালনাগাদ",
   "email.digest.subjectEmpty": "আপনার দৈনিক সারসংক্ষেপ",
@@ -32,4 +33,5 @@ export const email: NamespaceBundle<"email"> = {
   "email.invitation.body":
     "{inviter} আপনাকে {organization}-এ যোগ দিতে আমন্ত্রণ জানিয়েছেন। গ্রহণ করতে নিচের লিঙ্কটি খুলুন। আপনার অ্যাকাউন্ট না থাকলে এই ঠিকানা দিয়ে একটি তৈরি করতে বলা হবে — আমন্ত্রণটি এই ঠিকানার সাথে যুক্ত। এটি সাত দিন পরে মেয়াদোত্তীর্ণ হবে; আপনি এটি আশা না করে থাকলে উপেক্ষা করুন।",
   "email.invitation.action": "{organization}-এ যোগ দিন",
+  "email.digest.unsubscribe": "আমরা কত ঘন ঘন যোগাযোগ করব তা বদলান",
 };

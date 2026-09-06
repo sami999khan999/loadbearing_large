@@ -1,12 +1,12 @@
 import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgMembershipReader } from "../../src/pg/repository/pg-membership.reader.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
-import { organizations, roles, users } from "../../src/pg/schema/index.js";
+import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 
@@ -50,6 +50,23 @@ const setLastActive = (userId: UserId, organizationId: OrganizationId | null) =>
 
 const reader = () => new PgMembershipReader(database, new TransactionScope());
 
+// Joins a user to an existing tenant at a named system role, which `found` cannot do —
+// its founder is always the owner.
+const joinAs = async (userId: UserId, organizationId: OrganizationId, key: string) => {
+  const [role] = await database.client
+    .select({ id: roles.id })
+    .from(roles)
+    .where(and(eq(roles.organizationId, organizationId), eq(roles.key, key)))
+    .limit(1);
+
+  await database.client.insert(memberships).values({
+    id: Uuid.v7(),
+    organizationId,
+    userId,
+    roleId: role?.id ?? "",
+  });
+};
+
 beforeAll(async () => {
   database = openDatabase();
   ada = await makeUser("Ada");
@@ -57,9 +74,13 @@ beforeAll(async () => {
   first = await found(ada, "First");
   second = await found(ada, "Second");
   elsewhere = await found(grace, "Elsewhere");
+  // Grace owns her own and is a plain member of Ada's first. Ada is left alone: three
+  // other specs assert exactly which tenants she is and is not in.
+  await joinAs(grace, first, "member");
 });
 
 afterAll(async () => {
+  await database.client.delete(memberships).where(inArray(memberships.userId, created));
   await database.client.delete(users).where(inArray(users.id, created));
   for (const organizationId of founded) {
     await database.client.delete(roles).where(eq(roles.organizationId, organizationId));
@@ -73,7 +94,16 @@ describe("PgMembershipReader", () => {
     const rows = await reader().organizationsFor(ada);
 
     expect(rows.map((row) => row.id)).toEqual([first, second]);
-    expect(rows[0]).toEqual({ id: first, name: "First", slug: `o-${first}` });
+    expect(rows[0]).toEqual({ id: first, name: "First", slug: `o-${first}`, roleName: "Owner" });
+  });
+
+  // Why `roleName` is on the row and not on the user: a join on the wrong column would
+  // read "Owner" for every tenant without failing anything else.
+  it("names the role this user holds in each organization, not one role for the user", async () => {
+    const rows = await reader().organizationsFor(grace);
+
+    expect(rows.map((row) => row.name)).toEqual(["Elsewhere", "First"]);
+    expect(rows.map((row) => row.roleName)).toEqual(["Owner", "Member"]);
   });
 
   it("answers membership for the switch endpoint", async () => {

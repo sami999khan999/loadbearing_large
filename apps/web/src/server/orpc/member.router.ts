@@ -25,11 +25,28 @@ export class MemberRouter {
     },
   );
 
+  public static readonly changeRole = authed.member.changeRole.handler(({ input, context }) =>
+    context.container.member.changeMemberRole.execute(context.principal, input),
+  );
+
+  // The boolean is the router's, not the caller's: two procedures carry it in the path
+  // so a product can gate them apart without changing a request body.
+  public static readonly deactivate = authed.member.deactivate.handler(({ input, context }) =>
+    context.container.member.setMemberActive.execute(context.principal, input, false),
+  );
+
+  public static readonly reactivate = authed.member.reactivate.handler(({ input, context }) =>
+    context.container.member.setMemberActive.execute(context.principal, input, true),
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring `MemberProcedures.all`.
   public static readonly all = {
     list: MemberRouter.list,
     listInvitations: MemberRouter.listInvitations,
     invite: MemberRouter.invite,
     revokeInvitation: MemberRouter.revokeInvitation,
+    changeRole: MemberRouter.changeRole,
+    deactivate: MemberRouter.deactivate,
+    reactivate: MemberRouter.reactivate,
   } as const;
 }

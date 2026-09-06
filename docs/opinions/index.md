@@ -76,7 +76,7 @@ See [Comments](comments.md).
 | Explicit member accessibility | Biome `style/useConsistentMemberAccessibility` |
 | `import type` for type-only imports | Biome `style/useImportType` + `verbatimModuleSyntax` |
 | No `process.env` outside `apps/*/src/env.ts` | Biome `style/noProcessEnv` |
-| Layer bans (`ui` may not import `db`, …) | Biome `noRestrictedImports` overrides |
+| Layer bans (`ui` may not import `infrastructure`, …) | Biome `noRestrictedImports` overrides |
 | `application` may not import `HTTP_STATUS` | ESLint `no-restricted-imports` |
 | No exported free functions in OOP packages | ESLint `no-restricted-syntax` |
 | Consistent file casing | `forceConsistentCasingInFileNames` |

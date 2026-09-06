@@ -5,6 +5,9 @@ export interface OrganizationSummary {
   readonly id: OrganizationId;
   readonly name: string;
   readonly slug: string;
+  // The role *this* user holds here, which differs per tenant. It comes from the join
+  // `organizationsFor` already makes rather than from a second query.
+  readonly roleName: string;
 }
 
 // Which organization is this session for, plus the two questions a switch needs.
@@ -20,4 +23,8 @@ export abstract class MembershipReader {
 
   // Every tenant the user may switch to, oldest first. Read once per SSR pass.
   public abstract organizationsFor(userId: UserId): Promise<readonly OrganizationSummary[]>;
+
+  // False for a deactivated membership *and* for no membership at all, because the
+  // answer `PrincipalBuilder` needs is the same either way: do not issue a principal.
+  public abstract isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean>;
 }

@@ -3,6 +3,7 @@
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export type {
+  ApiKeyId,
   GoalId,
   InvitationId,
   OrganizationId,
@@ -22,6 +23,6 @@ export {
   UnavailableError,
   ValidationError,
 } from "@loadbearing/errors";
-
-// ── @loadbearing/permissions ─────────────────────────────────────────────────
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
+// ── @loadbearing/permissions ─────────────────────────────────────────────────
+export { PermissionRegistry } from "@loadbearing/permissions";

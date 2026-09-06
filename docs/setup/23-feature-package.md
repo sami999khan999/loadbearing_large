@@ -27,7 +27,6 @@ packages/feature/src/
 │   ├── index.ts
 │   ├── sign-in.form.tsx           → SignInForm
 │   ├── two-factor.form.tsx        → TwoFactorForm
-│   ├── session.guard.tsx          → SessionGuard
 │   └── session.context.tsx        → SessionProvider, useSession, useCapabilities
 └── rbac/
     ├── index.ts
@@ -209,54 +208,20 @@ export function useCapabilities(): CapabilitySet {
 
 ---
 
-## Step 23.3 — `SessionGuard`
+## Step 23.3 — The enforcement surfaces this package owns
 
-**`packages/feature/src/auth/session.guard.tsx`**
-
-```tsx
-import type { PermissionKey } from "@loadbearing/permissions";
-import type { ReactNode } from "react";
-import { useSession } from "./session.context.js";
-
-export interface SessionGuardProps {
-  readonly permission?: PermissionKey;
-  readonly goalId?: string;
-  readonly children: ReactNode;
-  readonly onUnauthenticated: () => void;
-  readonly onForbidden: () => void;
-}
-
-export function SessionGuard({
-  permission,
-  goalId,
-  children,
-  onUnauthenticated,
-  onForbidden,
-}: SessionGuardProps) {
-  const { user, capabilities } = useSession();
-
-  if (!user) {
-    onUnauthenticated();
-    return null;
-  }
-
-  if (permission && !capabilities.can(permission, goalId)) {
-    onForbidden();
-    return null;
-  }
-
-  return <>{children}</>;
-}
-```
-
-**The redirect is a callback, not a `<Navigate>`.** That is the router ban in practice: `apps/web` passes `() => navigate({ to: "/sign-in" })` and the desktop shell passes its own navigation. The component knows *that* it should redirect, never *how*.
+`<Can>` is the one this package ships, and it hides an affordance that would fail. An earlier draft
+also had a `SessionGuard` component here, taking `onUnauthenticated` and `onForbidden` callbacks so
+that `feature` could redirect without naming the router. It was deleted: `RouteGuard` in the route
+loader does the same job one layer up, and does it **before the page renders at all** rather than
+after a component has mounted and called back. Two guards meant two places to state the same rule.
 
 **This is the third of four enforcement surfaces**, and the weakest one. The order of authority:
 
 1. `Authorizer.assert()` in the use-case — the real gate ([12](12-application-package.md))
 2. `principalMiddleware` in the oRPC handler — defence in depth ([24](24-web-app.md))
 3. `RouteGuard` in the route loader — stops the page rendering at all ([24](24-web-app.md))
-4. `<Can>` and `SessionGuard` — hide affordances that would fail
+4. `<Can>` in this package — hides an affordance that would fail
 
 Removing a permission from a role must remove the nav item **and** return `FORBIDDEN`. Both, every time. If only the UI hides, you have security theatre; if only the API rejects, you have a UI full of buttons that produce errors.
 
@@ -520,7 +485,6 @@ The test worth writing first: **render the same component with two different `Ca
 "use client";
 
 export {
-  SessionGuard,
   type SessionGuardProps,
   SessionProvider,
   type SessionProviderProps,

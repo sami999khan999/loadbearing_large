@@ -6,8 +6,28 @@
 
 **Prerequisite:** [29 · Naming and boundaries](29-naming-and-boundaries.md)
 
+> [!IMPORTANT]
+> **This document is a plan. `apps/desktop` does not exist in this repository.** Every other page in
+> `docs/setup/` describes something you can open; this one describes something you would build, and
+> it is kept because the decisions in it are already load-bearing on the pages before it. Read it as
+> the specification for a directory, not as a description of one.
+>
+> **What is real today** is everything the shell would need and nothing it would contain: the
+> abstract `TokenProvider` and `BearerAuthStrategy` in
+> [`api-client`](../../packages/api-client/docs/index.md), the `surface` column on `sessions`
+> ([16](16-auth-package.md)), the shared route table in [08](08-permissions-package.md), and every
+> `feature` and `ui` component being framework-shaped rather than router-shaped. None of it is
+> speculative structure: each earns its place on the web app's own terms, and the desktop shell is
+> what would make the seams visible.
+>
+> **What is not real:** there is no `apps/desktop` glob in the Biome or ESLint server-only overrides
+> ([05](05-lint-and-format.md)), no `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` in either `env.ts`, and no
+> desktop workflow in CI. Each is one line, added the day the directory appears. A glob matching
+> nothing and an env key nothing reads are not preparation — they are a rule a reader cannot verify
+> and a required value nobody can explain.
+
 > [!NOTE]
-> **Tauri is the desktop shell — decided, not proposed.** Earlier documents are written on that basis rather than hedging against it: the bearer plugin and both Tauri origins are configured on day one in [16](16-auth-package.md) and [24](24-web-app.md), the shared route table in [08](08-permissions-package.md) exists partly so two shells cannot disagree about a path, and `apps/desktop` appears in the canonical tree in [28](28-folder-structure.md). Nothing in this document modifies work from an earlier one.
+> **Tauri is the shell this plan assumes — decided, not surveyed.** Earlier documents are written on that basis rather than hedging against it: the bearer plugin and both Tauri origins are configured on day one in [16](16-auth-package.md) and [24](24-web-app.md), and the shared route table in [08](08-permissions-package.md) exists partly so two shells cannot disagree about a path. Nothing in this document modifies work from an earlier one.
 
 ---
 
@@ -30,7 +50,7 @@ That is why the "must load in Electron's main process" justification for keeping
 
 **Three rules that do not change:**
 
-- The desktop app imports `feature`, `ui`, `query`, `api-client`, `content`, `permissions`, `contracts`, `asset`. It imports **none** of `db`, `auth`, `infrastructure`, `composition`, `application`.
+- The desktop app imports `feature`, `ui`, `query`, `api-client`, `content`, `permissions`, `contracts`, `asset`. It imports **none** of `infrastructure`, `auth`, `composition`, `application`.
 - `CapabilitySet.can()` is the same class, resolved from the same server, giving the same answers.
 - The contract is the contract. A desktop build talking to a newer server fails at the type level, not at runtime.
 
@@ -81,7 +101,7 @@ pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli@catalog: vite @vitejs/
 
 `catalog:` for all three, same as everywhere else — `apps/desktop` is not an exception to the rule that one file owns every version ([03](03-workspace-and-catalogs.md)). `@tanstack/react-router` matters most: `apps/web` gets it transitively through TanStack Start, so without a catalog entry the two shells can resolve different router versions while sharing the same `feature` components.
 
-**Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The **Biome** server-only boundary from [05](05-lint-and-format.md) Step 5.2 lists `apps/desktop/src/**` in the same override as `apps/web/src/**`, and here it has **no escape hatch at all** — unlike `apps/web` there is no `src/server/**` inside a Tauri bundle to exempt.
+**Note what is absent.** No `composition`, no `application`, no `infrastructure`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The **Biome** server-only boundary from [05](05-lint-and-format.md) Step 5.2 lists `apps/desktop/src/**` in the same override as `apps/web/src/**`, and here it has **no escape hatch at all** — unlike `apps/web` there is no `src/server/**` inside a Tauri bundle to exempt.
 
 ```
 apps/desktop/

@@ -1,7 +1,13 @@
-import { CapabilitySet, type PermissionKey, PermissionRegistry, Principal } from "../import.js";
+import {
+  type ApiKeyRepository,
+  ApiKeyRules,
+  CapabilitySet,
+  type PermissionKey,
+  PermissionRegistry,
+  Principal,
+} from "../import.js";
 import type { CapabilityCache } from "../principal/capability.cache.js";
 import { ApiKeyHasher } from "./api-key.hasher.js";
-import type { ApiKeyRepository } from "./api-key.repository.js";
 
 export class ApiKeyResolver {
   public constructor(
@@ -36,7 +42,13 @@ export class ApiKeyResolver {
     const issuer = await this.capabilities.forUser(record.organizationId, record.issuerId);
     const effective = declared.intersect(issuer);
 
-    await this.repository.touch(record.id, now);
+    // Throttled, not skipped: unthrottled this is one write per authenticated request
+    // forever, and the column is only ever read as "roughly when".
+    await this.repository.touch(
+      record.id,
+      now,
+      new Date(now.getTime() - ApiKeyRules.TOUCH_THROTTLE_MS),
+    );
     return Principal.apiKey(record.organizationId, record.issuerId, effective);
   }
 }

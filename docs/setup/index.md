@@ -64,7 +64,7 @@ and how to rename the scope. This page is the contents.
 |---|---|
 | `28` | [Folder structure](28-folder-structure.md) |
 | `29` | [Boundaries](29-naming-and-boundaries.md) |
-| `30` | [`apps/desktop` — Tauri](30-desktop-app.md) |
+| `30` | [`apps/desktop` — Tauri](30-desktop-app.md) · a plan; the directory does not exist |
 
 ---
 

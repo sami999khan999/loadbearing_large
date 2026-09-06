@@ -1,6 +1,6 @@
 # 20 · `@loadbearing/content`
 
-> Every user-visible string, document, and structured record — plus the `ContentSource` seam a CMS will slot into later. React-free.
+> Every user-visible string, image reference, and structured record — plus the `ContentSource` seam a CMS will slot into later. React-free.
 
 **Delivers:** `Translator`, `MessageStore`, two `ContentSource` implementations, the four content shapes, and a navigation model a content editor can safely change — with copy split by locale and namespace so no runtime downloads words it cannot use.
 
@@ -38,7 +38,7 @@ packages/content/src/
 ├── source/
 │   ├── content-source.ts         → ContentSource (abstract)              ✅  all four shapes
 │   ├── static-content.source.ts  → StaticContentSource   ← split; dynamic import   ✅
-│   └── bundled.content-source.ts → BundledContentSource  ← every locale, static    ☐
+│   └── bundled-content.source.ts → BundledContentSource  ← every locale, static    ☐
 ├── media/                        ── shape 2: media references            ✅
 │   ├── index.ts
 │   ├── media-ref.ts              → MediaResolver, ResolvedMedia
@@ -54,17 +54,14 @@ packages/content/src/
 │   │   ├── auth.ts                                                       ✅
 │   │   ├── error.ts                                                      ✅
 │   │   └── email.ts              ← the worker's namespace, server-only    ☐  lands with [25](25-worker-app.md)
-│   └── bn/                       ← same files; NamespaceBundle<N> each     ◐  four, all Partial
+│   └── bn/                       ← same files; NamespaceBundle<N> each     ●  eight, all total
 ├── collection/                   ── shape 3: repeating records            ✅
 │   ├── index.ts
 │   └── nav/
 │       ├── index.ts
 │       ├── nav.schema.ts         → NavContract, NavItem
 │       └── nav.data.ts           → navItems
-└── document/                     ── shape 4: long-form editorial          ✅
     ├── index.ts
-    ├── document.schema.ts        → DocumentContract
-    └── document.entity.ts        → DocumentEntity, DocumentRecord
 ```
 
 > [!IMPORTANT]
@@ -295,8 +292,9 @@ export type MessageKey = NamespaceKeys[Namespace];
 // loaded namespace and render as a raw key on a route that never asked for it.
 export type ShellMessageKey = NamespaceKeys[ShellNamespace];
 
-// One locale's copy for one namespace. Partial: translations arrive incrementally.
-export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+// One locale's copy for one namespace, and total: a key added to `en` with no
+// translation is a compile error rather than English inside a Bengali page.
+export type NamespaceBundle<N extends Namespace> = Record<NamespaceKeys[N], string>;
 
 // A flat slice across whatever namespaces are loaded.
 export type MessageBundle = Partial<Record<MessageKey, string>>;
@@ -455,9 +453,9 @@ export const SERVER_CATALOG: MessageCatalog = {
 > [!NOTE]
 > **The ESLint bans on importing `SERVER_CATALOG` are already in place** in
 > `tooling/eslint-config/src/index.js` ([05](05-lint-and-format.md) Step 5.3), for `packages/ui`,
-> `packages/query`, `packages/feature`, `apps/web` and `apps/desktop`. A `no-restricted-imports`
-> entry naming an export that does not exist yet costs nothing and cannot be forgotten later, which
-> is the right order for a boundary.
+> `packages/query` and `apps/web`. A `no-restricted-imports` entry naming an export that does not
+> exist yet costs nothing and cannot be forgotten later, which is the right order for a boundary —
+> unlike a glob naming a *directory* that does not exist, which is a rule no reader can verify.
 
 **`MessageCatalog` is `Partial` over `Namespace`, and each catalog is not.** That split is the
 point: `CLIENT_CATALOG` is declared with an exact `Record<ClientNamespace, …>` so a missing cell
@@ -774,11 +772,10 @@ export abstract class ContentSource {
     namespaces: readonly Namespace[],
   ): Promise<Translator>;
 
-  // ☐ The second pass adds three more, once `asset` and the nav collection exist:
+  // ☐ The second pass adds two more, once `asset` and the nav collection exist:
   //
   //   public abstract media(key: ImageKey): Promise<ResolvedMedia>;
   //   public abstract nav(): Promise<readonly NavItem[]>;
-  //   public abstract document(slug: string): Promise<string | null>;
 }
 ```
 
@@ -858,9 +855,6 @@ export class StaticContentSource extends ContentSource {
   //   public override nav(): Promise<readonly NavItem[]> {
   //     return Promise.resolve(navItems);
   //   }
-  //   public override document(_slug: string): Promise<string | null> {
-  //     return Promise.resolve(null);
-  //   }
 }
 ```
 
@@ -876,7 +870,7 @@ original bug; loading it for the four namespaces in play is just the fallback do
 > sites, no rule exemption, and it stops the method from claiming asynchrony it does not have.
 > `messages()` and `translator()` genuinely await, so they stay `async`.
 
-**`packages/content/src/source/bundled.content-source.ts`** ☐ *not written yet — it lands with
+**`packages/content/src/source/bundled-content.source.ts`** ☐ *not written yet — it lands with
 [30](30-desktop-app.md), the app that needs it.*
 
 ```ts
@@ -909,7 +903,7 @@ export class BundledContentSource extends ContentSource {
     return Promise.resolve(this.snapshotSync(locale, namespaces as readonly ClientNamespace[]));
   }
 
-  // translator / media / nav / document: all Promise.resolve, as above.
+  // translator / media / nav: all Promise.resolve, as above.
 }
 ```
 
@@ -1051,7 +1045,6 @@ The second pass adds five lines and changes none of the above:
 
 ```ts
 export { navItems, NavContract, type NavItem } from "./collection/index.js";
-export { DocumentContract, DocumentEntity, type DocumentRecord } from "./document/index.js";
 export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
 export { SERVER_CATALOG } from "./message/catalog.server.js";        // ☐ with 25
 export { BundledContentSource } from "./source/index.js";            // ☐ with 30
@@ -1105,9 +1098,8 @@ each of which is additive:
 | 3 | `message/en/email.ts` + `bn/email.ts`, `catalog.server.ts` | **[25](25-worker-app.md)** — the worker is what defines the copy | `ServerNamespace`, `Namespace`, the barrel |
 | 4 | `media/` — `MediaResolver`, `StaticMediaResolver` | [19](19-asset-package.md)'s `ImageManifest` | `ContentSource.media()`, the barrel |
 | 5 | `collection/nav/` — `NavContract`, `navItems` | `zod` (already a dependency), `ModuleKey` from `permissions` | `ContentSource.nav()`, the barrel |
-| 6 | `document/` — `DocumentContract`, `DocumentEntity` | — | `ContentSource.document()`, the barrel |
 | 7 | `translator/message-store.ts` — `MessageStore` | [23](23-feature-package.md)'s `MessageProvider` is the caller | the barrel |
-| 8 | `bundled.content-source.ts` — `BundledContentSource` | **[30](30-desktop-app.md)** | the barrel |
+| 8 | `bundled-content.source.ts` — `BundledContentSource` | **[30](30-desktop-app.md)** | the barrel |
 
 **Items 1, 2, 4, 5 and 6 are unblocked and go in together.** Doing them as one pass is what makes
 `ContentSource` declare all four shapes at once — which matters, because an abstract method with no
@@ -1128,11 +1120,12 @@ above with the step it arrives with. Until item 3 lands, [17](17-composition-con
 > `as const satisfies`. Both checks run and they check different things — narrowing the schema to
 > the unions instead makes it unable to parse the untrusted input it exists for.
 >
-> And `document/` is named in the tree without a schema anywhere in this document. The minimum a
-> database-backed `document()` has to parse is an addressable slug, a title, a markdown body, and
-> when it last changed. Note the loose end while you are there: `ContentSource.document(slug)`
-> returns `string | null` — the body — which is narrower than a `DocumentEntity`, and will want
-> widening when a `DbContentSource` exists.
+> A fourth shape, long-form editorial, was declared here for a while: `document(slug)` on the
+> source plus a contract and an entity to parse a row no adapter returned. It was deleted rather
+> than finished — see
+> [`content-shapes`](../../packages/content/docs/reference/content-shapes.md). Building it
+> *with* a `DbContentSource` costs the same as building it before one, and the interim
+> `string | null` was already narrower than the entity beside it.
 
 **Two things are worth re-checking rather than assuming when item 3 lands.** `SERVER_CATALOG` is the
 first thing that makes `Namespace` wider than `ClientNamespace`, so it is the first time

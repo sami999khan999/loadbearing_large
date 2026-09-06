@@ -1,0 +1,57 @@
+import { type Clock, ConflictError, NotFoundError, type UserId } from "../import.js";
+import type { ActivityLogger, UnitOfWork } from "../port/index.js";
+import type { Authorizer, Principal } from "../primitive/index.js";
+import type { MemberRecord, MemberRepository } from "./member.repository.js";
+import { MemberRules } from "./member.rules.js";
+
+export interface SetMemberActiveInput {
+  readonly userId: UserId;
+}
+
+// Both directions in one class, because they are one column and one rule. The two
+// procedures above it are separate so a product can gate them apart later.
+export class SetMemberActiveUseCase {
+  public constructor(
+    private readonly authorizer: Authorizer,
+    private readonly members: MemberRepository,
+    private readonly activity: ActivityLogger,
+    private readonly unitOfWork: UnitOfWork,
+    private readonly clock: Clock,
+  ) {}
+
+  public async execute(
+    actor: Principal,
+    input: SetMemberActiveInput,
+    active: boolean,
+  ): Promise<MemberRecord> {
+    this.authorizer.assert(actor, "member.deactivate");
+
+    const member = await this.members.findByUser(actor.organizationId, input.userId);
+    if (!member) throw new NotFoundError("member", input.userId);
+
+    if (member.deactivated === !active) return member;
+
+    if (!active) {
+      // Locking yourself out is recoverable by a colleague; locking out the last owner
+      // is not recoverable from inside the product at all.
+      if (member.userId === actor.userId) throw new ConflictError("member", "self");
+      if (MemberRules.isOwner(member)) await this.assertNotLastOwner(actor);
+    }
+
+    const at = active ? null : this.clock.now();
+
+    await this.unitOfWork.run(async () => {
+      await this.members.setDeactivatedAt(actor.organizationId, member.userId, at);
+      await this.activity.record(actor, active ? "member.reactivated" : "member.deactivated", {
+        userId: member.userId,
+      });
+    });
+
+    return { ...member, deactivated: !active };
+  }
+
+  private async assertNotLastOwner(actor: Principal): Promise<void> {
+    const owners = await this.members.countActiveOwners(actor.organizationId);
+    if (owners <= 1) throw new ConflictError("member", "lastOwner");
+  }
+}

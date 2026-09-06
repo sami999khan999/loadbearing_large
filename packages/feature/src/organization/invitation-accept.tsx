@@ -1,12 +1,7 @@
 import { useSession } from "../auth/index.js";
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
-import {
-  Button,
-  Callout,
-  ErrorNormalizer,
-  type OrganizationClient,
-  OrganizationMutations,
-} from "../import.js";
+import { Button, Callout, type OrganizationClient, OrganizationMutations } from "../import.js";
 
 // What the landing page knows before anyone is signed in. The same three fields the
 // server function returns from `InvitationClaimer.preview`.
@@ -38,7 +33,9 @@ export function InvitationAccept({
   onSignUp,
 }: InvitationAcceptProps) {
   const { t } = useMessages("organization");
-  const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const { user } = useSession();
   const accept = OrganizationMutations.useAcceptInvitation(organization, onAccepted);
 
@@ -72,9 +69,11 @@ export function InvitationAccept({
 
   // The server said no after the page said yes — revoked in between, most likely. Every
   // refusal arrives as NOT_FOUND, and that copy already exists.
-  const failure = accept.error ? ErrorNormalizer.normalize(accept.error) : null;
+  const failure = describe(accept.error);
   const failureCopy =
-    failure?.code === "NOT_FOUND" ? t("organization.invitation.missing") : shell.t("state.error");
+    failure?.envelope.code === "NOT_FOUND"
+      ? t("organization.invitation.missing")
+      : failure?.message;
 
   return (
     <>

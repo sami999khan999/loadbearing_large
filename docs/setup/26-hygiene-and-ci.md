@@ -56,10 +56,21 @@ pnpm exec commitlint --edit "$1"
 **`.husky/pre-push`** is where the slow pass goes:
 
 ```sh
+pnpm lint:fast
 pnpm exec eslint .
+pnpm check:architecture
+pnpm check:contrast
 ```
 
 ESLint's six architecture rules still block a merge — they run here and in CI, not on every commit.
+
+**The two `check:*` scripts belong here rather than in `lint-staged`**, for the reason above
+inverted: both read the *whole* repository, so a staged-file hook cannot express them, and both
+finish in about a second, so a push hook can. Between them they catch a comment block over two
+lines, a framework import in the domain, and a palette that fails AA — none of which ESLint sees.
+
+**`typecheck` and `test` stay in CI.** Both are minutes, and a hook people learn to `--no-verify`
+past checks nothing at all.
 
 > [!NOTE]
 > ESLint 9 resolves flat config from the **working directory** rather than per file. With a single root config ([05](05-lint-and-format.md)) that is a non-issue: both this hook and CI run `eslint .` from the repo root, so there is exactly one config and one rule set.
@@ -78,9 +89,9 @@ export default {
       2,
       "always",
       [
-        "core", "permissions", "contracts", "application", "db", "infrastructure",
-        "auth", "composition", "asset", "content", "api-client", "query", "ui", "feature",
-        "web", "worker", "desktop",
+        "errors", "core", "permissions", "observability", "contracts", "application",
+        "infrastructure", "auth", "composition", "asset", "content", "api-client",
+        "query", "ui", "feature", "web", "worker", "desktop",
         "tooling", "infra", "docs", "deps", "repo",
       ],
     ],
@@ -91,7 +102,7 @@ export default {
 
 ```
 feat(permissions): add goal-scoped intersect
-fix(db): index capability lookup by user_id
+fix(infrastructure): index capability lookup by user_id
 chore(deps): bump drizzle-orm
 ```
 
@@ -115,12 +126,18 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     services:
+      # pgvector, not stock postgres:17 — 0001's `vector(1536)` column and its hnsw
+      # index will not apply otherwise. The image ships the extension available; the
+      # "extensions" step below is what actually creates it.
       postgres:
         image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: ratchet
           POSTGRES_PASSWORD: ratchet
-          POSTGRES_DB: ratchet_test
+          # `ratchet`, not `ratchet_test`: packages/infrastructure/tests/support/database.ts
+          # pins the local scratch URL, so a differently-named database fails every
+          # infrastructure spec with a connection error rather than an assertion.
+          POSTGRES_DB: ratchet
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U ratchet"
@@ -139,16 +156,64 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
 
     env:
-      DATABASE_URL: postgres://ratchet:ratchet@localhost:5432/ratchet_test
+      DATABASE_URL: postgres://ratchet:ratchet@localhost:5432/ratchet
       REDIS_CACHE_URL: redis://localhost:6379
       REDIS_QUEUE_URL: redis://localhost:6380
+      # Read by every `env.ts` like any other config, so a missing one is a startup
+      # crash. Loki and Alloy are Tier 0 and deliberately absent.
       APP: ci
       ENV: test
+      PGPASSWORD: ratchet
+      # Required by both `env.ts` schemas, and no container answers them: nothing in
+      # this job sends a message. A shape that parses is the whole requirement.
+      SMTP_URL: smtp://localhost:1025
+      EMAIL_FROM: ci@localhost
+
+      # Every remaining key both `env.ts` schemas require. Without them the job passed
+      # only because nothing ever evaluated `Env` — the boot smoke below does, so a
+      # key missing here is now a failure rather than a deploy-time surprise.
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: ratchet
+      S3_ACCESS_KEY: ratchet
+      S3_SECRET_KEY: ratchetsecret
+      S3_FORCE_PATH_STYLE: "true"
+
+      # Thirty-two characters because the schema demands it, and obviously disposable
+      # because this is a public workflow file.
+      AUTH_SECRET: ci-secret-not-a-real-key-000000000000
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUSTED_ORIGINS: http://localhost:3000
+      AUTH_SESSION_MAX_AGE_SECONDS: "604800"
+      AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: "60"
+
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_DIMENSIONS: "1536"
 
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
+      # `docker run`, not a `services:` entry: MinIO needs `server /data` and a service
+      # container takes no command. The bucket is what `S3_BUCKET` above names.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=ratchet -e MINIO_ROOT_PASSWORD=ratchetsecret \
+            --health-cmd "curl -sf http://localhost:9000/minio/health/live" \
+            --health-interval 5s --health-timeout 3s --health-retries 10 \
+            minio/minio:latest server /data
+          for _ in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' minio)" = healthy ] && break
+            sleep 2
+          done
+          docker run --rm --network host --entrypoint sh minio/mc:latest -c "
+            mc alias set local http://localhost:9000 ratchet ratchetsecret &&
+            mc mb --ignore-existing local/ratchet"
+
+      # Reads the root manifest's `packageManager` field and nothing else — a root that
+      # declares only `devEngines.packageManager` fails here in seconds, before a single
+      # check runs. Assertion 16 keeps the two in step.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -156,15 +221,117 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Compose mounts this as an initdb script; a `services:` container starts before
+      # checkout, so there is nothing to mount and it has to be applied by hand.
+      - name: Create Postgres extensions
+        run: psql -h localhost -U ratchet -d ratchet -f infra/postgres.init.sql
+
+      # Before the build, because both are pure file reads and both fail in seconds.
+      # syncpack catches one dependency on two version lines across packages; sherif
+      # catches a workspace directory with no `package.json` and a package with no
+      # version. Neither is caught by anything else in this job, and dependency drift
+      # that nothing checks is dependency drift nobody finds until an install breaks.
+      - run: pnpm deps:check
+      - run: pnpm repo:check
+
       - run: pnpm build:packages
       - run: pnpm typecheck
       - run: pnpm lint
+
+      # packages/infrastructure's specs are integration tests against a real Postgres,
+      # and they read the seeded organization rather than creating one. Without both
+      # steps every one of them fails on "run `pnpm db:seed` first". The URL they use
+      # is pinned in packages/infrastructure/tests/support/database.ts.
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+
       - run: pnpm test
-      - run: pnpm --filter @loadbearing/web build # required by check:architecture rule 3
+
+      # Both apps, because `tsc -p` on the worker is the only thing that compiles it and
+      # `pnpm build:packages` filters to ./packages/*.
+      - run: pnpm --filter @loadbearing/worker build
+
+      # The one step that evaluates `Env` and opens a connection. Everything above it
+      # runs against source and cannot tell that a variable is missing.
+      - run: node tooling/scripts/boot-smoke.mjs worker
+
+      # Not optional. check:architecture's bundle assertion greps the built client
+      # output, and `build:packages` filters to ./packages/* — without this the
+      # assertion has no directory to read and reports `○ skipped`, not a pass.
+      - run: pnpm --filter @loadbearing/web build
       - run: pnpm check:architecture
+      # Every palette against every text pairing — 117 of them across five themes and
+      # both modes. With one theme this is judgement; with five it is the only thing
+      # between a contributor and an unreadable one.
+      - run: pnpm check:contrast
+
+  # Deliberately its own job, and deliberately not required. Blocking a merge on a
+  # transitive advisory nobody can fix today is how people learn to ignore a red build —
+  # and once they do, the advisories that *are* actionable are ignored with them.
+  # Advisories are filtered by GHSA id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `continue-on-error` on the *step*, not the job. At job level the conclusion is
+      # always `success`, so the result is unreadable from the checks list and from any
+      # branch rule — the job cannot signal at all. Here the step is allowed to fail and
+      # the summary below says what it found.
+      - id: audit
+        continue-on-error: true
+        run: pnpm audit --audit-level high | tee audit.txt
+
+      # Where the result becomes readable. A failed step with no summary is a green job
+      # and a line nobody scrolls to.
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## pnpm audit"
+            if [ "${{ steps.audit.outcome }}" = success ]; then
+              echo "No advisories at high or above."
+            else
+              echo "Advisories at high or above. Not blocking a merge."
+              echo "Silence one deliberately with auditConfig.ignoreGhsas in package.json."
+              sed 's/^/    /' audit.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
 
-> **CI runs neither Loki nor Alloy, and that is the correct choice rather than an omission.** Both are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point.
+> **CI runs neither Loki nor Alloy, and that is the correct choice rather than an omission.** Both are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point. `SMTP_URL` and `EMAIL_FROM` are there for the same reason and no container answers them: nothing in the job sends a message, so a shape that parses is the whole requirement.
+
+> [!CAUTION]
+> **`pnpm/action-setup@v4` reads the root manifest's `packageManager` field and nothing else.** A
+> root that declares only `devEngines.packageManager` — the newer field, and the one
+> [03](03-workspace-and-catalogs.md) writes — makes the action fail in seconds with *"No pnpm
+> version is specified"*, before a single check has run. Declare **both** — which this repository now
+> does, with assertion 16 keeping them in step. The failure is easy to miss precisely because it is
+> not a check failing: the job is red twenty seconds in, every time, on every branch, and the checks
+> below it never ran at all. It was, here, for weeks.
+
+> [!IMPORTANT]
+> **Four steps here look like padding and each one closes a specific hole.** The extensions step
+> exists because compose mounts `infra/postgres.init.sql` as an initdb script and a `services:`
+> container starts *before* checkout, so there is nothing to mount. `db:migrate` and `db:seed` run
+> because `packages/infrastructure`'s specs are integration tests that read the seeded organization
+> rather than creating one. `deps:check` and `repo:check` run **before** the build because both are
+> pure file reads that fail in seconds, and neither is caught by anything else in the job. And the
+> web build runs before `check:architecture` because the bundle assertion greps the built client
+> output — without it the assertion reports `○ skipped`, not a pass.
+>
+> **`POSTGRES_DB` is `ratchet`, not `ratchet_test`.** `packages/infrastructure/tests/support/database.ts`
+> pins the scratch URL, so a differently-named database fails every infrastructure spec with a
+> connection error rather than an assertion — which reads as infrastructure being down.
 >
 > ClickHouse is absent for a different reason. Its adapters *are* written, but nothing in the unit
 > tiers touches them — `ClickHouseAnalyticsProjector` is covered by the smoke check, which runs
@@ -185,15 +352,15 @@ jobs:
 
 **pnpm 11 has a `pnpm ci` command** (`pnpm clean` followed by a frozen install). It is the better choice on a runner with a persistent workspace; on GitHub's ephemeral runners there is nothing to clean, so the explicit form above costs nothing and reads more clearly.
 
-**`pnpm/action-setup` still installs pnpm**, but with `devEngines.packageManager` in `package.json` the version it installs barely matters — pnpm resolves the pinned version from the lockfile on first invocation. Leave the action's `version` input unset so the two cannot disagree.
+**`pnpm/action-setup` still installs pnpm**, and the version it installs barely matters — pnpm resolves the pinned version from the lockfile on first invocation. Leave the action's `version` input unset, but **the root must declare `packageManager` as well as `devEngines.packageManager`**: the action reads only the former, and with only the latter it fails before installing anything. That is not a hypothetical — it is what the CAUTION above describes, and this paragraph used to say the opposite. Assertion 16 in `check:architecture` now fails if the two disagree or either is missing.
 
 **Order matters.** Build before typecheck, because packages consuming `dist/` types need them to exist. Lint before test, because a lint error is a two-second answer and a failing test suite is a two-minute one.
 
 ---
 
-## Step 26.4 — The fourteen architectural assertions
+## Step 26.4 — The fifteen architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Fourteen greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Fifteen greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -213,7 +380,10 @@ Types cannot express "this package must not import that one across a bundle boun
 
 ```js
 // fail if packages/application/src/** imports any of these
-const BANNED = ["@orpc/", "@tanstack/", "drizzle-orm", "ioredis", "bullmq", "@aws-sdk/", "better-auth"];
+const FRAMEWORKS = [
+  "@orpc/", "@tanstack/", "@nestjs/", "drizzle-orm", "ioredis", "bullmq",
+  "@aws-sdk/", "better-auth", "pg", "express", "fastify", "hono",
+];
 ```
 
 `application` defines ports and use-cases. The moment it imports `drizzle-orm`, the dependency inversion is decorative — you can no longer test a use-case without a database, and swapping an adapter means editing the domain.
@@ -251,7 +421,7 @@ Every other `process.env` read is an unvalidated string that becomes `undefined`
 // fail if the @orpc/* entries in pnpm-workspace.yaml carry more than one range
 ```
 
-They pin `@orpc/shared` **exactly** rather than with a caret, so a skew puts two copies of it in the tree. `syncpack lint` cannot see this: it checks that one dependency carries the same range across packages, and has no concept of a group that must move together. The catalog's tiering ([03](03-workspace-and-catalogs.md)) deliberately splits these entries across two tiers for portability reasons, which makes an automated check the only thing holding them level.
+**Each `@orpc/*` package pins `@orpc/shared` to its own exact version** in its own manifest — `@orpc/server@1.15.0` depends on `@orpc/shared@1.15.0`, not `^1.15.0`. There is no catalog entry for it and there should not be: the pinning is upstream's, which is exactly why a skew between our four catalog ranges puts two copies of `@orpc/shared` in the tree rather than resolving to one. `syncpack lint` cannot see this: it checks that one dependency carries the same range across packages, and has no concept of a group that must move together. The catalog's tiering ([03](03-workspace-and-catalogs.md)) deliberately splits these entries across two tiers for portability reasons, which makes an automated check the only thing holding them level.
 
 Worth writing because it already happened: the catalog shipped `@orpc/server` at `^1.13.7` under a comment reading *"pin all four together"*, and every check in the repository passed.
 
@@ -300,13 +470,19 @@ const FINGERPRINTS = ["drizzle-orm", "pg-pool", "@aws-sdk/client-s3", "ioredis",
 const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 
 // Absent from the whole client output, like the server list above.
-const EMAIL_FINGERPRINTS = ["email.digest."];
+const EMAIL_FINGERPRINTS = [
+  "email.digest.", "email.verify.", "email.reset.", "email.change.", "email.otp.",
+];
 
 // Field names from the `env.ts` schemas. Also absent from the whole client output.
 const ENV_FINGERPRINTS = [
   "REDIS_QUEUE_URL",
   "S3_FORCE_PATH_STYLE",
   "AUTH_COOKIE_CACHE_MAX_AGE_SECONDS",
+  // The OAuth client secret. It reaches `Env` and nothing else — the sign-in page
+  // learns whether Google is configured from the session snapshot, not this schema.
+  "GOOGLE_CLIENT_SECRET",
+  "AUTH_ENROLMENT_MODE",
 ];
 ```
 
@@ -395,15 +571,19 @@ It is the one assertion whose failure mode is a destructive migration rather tha
 
 ```js
 // fail if a docs/opinions/*.md page is cited by no file in docs/ai/rules/,
-// if a rule file is routed to from neither AGENTS.md nor docs/ai/rules/index.md,
+// if a rule file is routed to from none of AGENTS.md, docs/ai/index.md or
+//   docs/ai/rules/index.md,
+// if CLAUDE.md does not @-import a rule file,
 // or if any of them routes to a path that does not exist
 ```
 
-[`docs/ai/rules/`](../ai/rules/index.md) is a digest of [`docs/opinions/`](../opinions/index.md) — the rules an agent must know *unprompted*, one file per topic, none over ~650 tokens. `AGENTS.md` at the repository root is a router and nothing else: one row per task, pointing at the file that answers it.
+[`docs/ai/rules/`](../ai/rules/index.md) is a digest of [`docs/opinions/`](../opinions/index.md) — the rules an agent must know *unprompted*, one file per topic, none over ~900 tokens. `AGENTS.md` at the repository root is the brief every non-Claude tool loads unprompted, and it routes into [`docs/ai/index.md`](../ai/index.md), which is the task table: one row per thing you might be about to do.
 
 A digest is a second copy of every rule it states, and the failure is not that it is wrong the day it is written. It is that a tenth opinions page lands months later, no rule file mentions it, and every agent works from a rulebook missing a chapter while nothing says so. Citing the path is the cheapest thing that cannot be forgotten silently.
 
 **Three links, all checked.** A page nothing cites is the missing chapter. A rule file nothing routes to is the same failure from the other end — it exists, it is correct, and no agent will ever open it. And a route to a renamed page sends a reader nowhere.
+
+**Plus a fourth, which is the one the routers cannot see.** `CLAUDE.md` `@`-imports every rule file, and that is what makes the rulebook load at the start of a session rather than when an agent thinks to go looking. A rule that is routed to correctly and never imported is the same silent gap one layer up, so the assertion checks the import list too — and checks that each `@` target exists, because Claude Code inlines nothing and says nothing when one does not. The clause is skipped when `CLAUDE.md` is absent: it is Claude Code's file, and deleting it is a supported choice that leaves the routers as the only path in.
 
 > [!WARNING]
 > **Match Markdown link targets, not just backticked paths.** The first version of this assertion greped only for `` `docs/…md` `` and a deleted rule file passed clean: `AGENTS.md` links its rule files as Markdown targets rather than backticked paths, which that pattern never saw, and a second file citing the same opinions page hid the gap. Verified against six break shapes — an uncited page, an orphaned file, a renamed target, a deleted rule file, a root file that stops pointing, and a broken relative link inside a rule file.
@@ -439,17 +619,81 @@ Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generat
 > [!NOTE]
 > **`pnpm check:comments` is the companion report, and it never fails.** `tooling/scripts/comment-density.mjs` prints per-package comment percentage, block count and the twenty-five files carrying the most comment lines. A package drifting toward the ceiling is visible there long before any single file trips §14 — and after the phase-1 sweep the tree sits at 13 % overall with zero blocks.
 
+### 15 — Every backticked path in the docs exists
+
+```js
+// fail if a backticked repo-relative path in docs/**, README.md, AGENTS.md or a
+// package's docs/** names nothing on disk
+```
+
+The cheapest kind of documentation rot and the one a reader trusts most: a path in backticks reads
+as a fact about the tree. [15](15-infrastructure-package.md) sent people to `src/cache/` and `src/queue/` for months —
+folders this repository has never had, because `infrastructure` is organised by vendor
+([Layering](../ai/rules/layering.md)). Twenty-one paths were wrong when this was first run, and six
+of them had been correct until a refactor moved the file and left the sentence behind.
+
+**Three things keep it from crying wolf**, because a check with false positives teaches people to
+add exemptions rather than fix paths:
+
+- **Fenced blocks are skipped.** An ASCII tree is full of names that are not paths, and a snippet's
+  imports resolve against the file it would live in, not against the repository root.
+- **A page may say a path is not real, and the check believes it.** `illustrative`, `not written
+  yet`, `does not exist`, `removed`, `deleted` or `☐` on the line — or on the heading above a list,
+  which is what `## What this removed` in [05](05-lint-and-format.md) is. A collapsed `<details>`
+  block is skipped whole: it is the one place a page deliberately shows a tree that is gone.
+- **A `docs/reference/<page>.md` span resolves against the package that wrote it.** The opinions pages say "the
+  package's `docs/reference/`" generically, so the span passes if any package has one.
+
+`apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
+move there, and doc [30](30-desktop-app.md) is a plan for one of them.
+
+---
+
+## Step 26.4b — `check:contrast`, the gate that is not a grep
+
+```bash
+pnpm check:contrast   # node tooling/scripts/check-contrast.mjs
+OK 117 pairings meet WCAG AA and 108 colours are inside sRGB, across every theme and mode.
+```
+
+**Fifteen assertions above read source; this one computes.** It resolves the twelve colour names
+([Opinions · Colour](../ai/rules/color.md)) for every theme in every mode, walks the pairings
+`packages/ui/src/theme/class/` actually produces, and fails on a contrast ratio under WCAG AA, a
+name a theme forgot to declare, or an `oklch()` value outside the sRGB gamut.
+
+**The gamut half is the one nobody expects.** `oklch()` describes colours a monitor cannot show, and
+a value outside sRGB does not error — the browser clips it, silently, differently per engine. A
+palette that looks right in one theme and muddy in another is usually this rather than a bad hue
+choice.
+
+With one theme this is judgement. With five, each in two modes, it is the only thing standing between
+a contributor adding a palette and a theme nobody can read — which is why it runs in CI beside
+`check:architecture` rather than living in a design review.
+
+It cannot see a literal written where it does not look, which is why "every colour is `var(--name)`"
+is also a rule and not only a check.
+
 ---
 
 ## Step 26.5 — Optional but worth it
 
-- **`actions/cache`** on the pnpm store and package `dist/` dirs, keyed by lockfile hash.
-- **A `docker compose up` smoke job** running the real containers and a migration to catch drift the pinned CI images hide.
-- **Branch protection** requiring `verify` to pass before merge — otherwise all of this is advisory.
-- **A separate tag-triggered workflow for desktop builds** ([30](30-desktop-app.md)). Deliberately not part of `verify`: Tauri needs three OS runners and several minutes each. `verify` typechecks and lints `apps/desktop` through the root scripts like anything else, and does **not** compile the Rust half — so a broken `main.rs` surfaces at tag time rather than at merge.
-- **`pnpm audit --audit-level high`** as a separate non-blocking job; blocking on transitive advisories you cannot fix teaches people to ignore red builds. Advisories are filtered by **GHSA** id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
-- **`pnpm peers check`** to surface unmet peers, which pnpm 11 no longer prints as a tree during install.
-- **`pnpm sbom`** if anything downstream wants a CycloneDX or SPDX bill of materials.
+**One of these already ships**, in the workflow above: `pnpm audit --audit-level high` as a
+separate, non-blocking `audit` job. Blocking a merge on a transitive advisory nobody can fix today
+is how people learn to ignore a red build, and once they do the actionable advisories go with it.
+Advisories are filtered by **GHSA** id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
+
+The rest are not written, and each is a decision rather than an omission:
+
+- **Branch protection** requiring `verify` to pass before merge — without it every assertion above
+  is advisory. This is the one to do first, and it is configured in the repository, not in a file.
+- **`actions/cache`** on package `dist/` dirs. The pnpm store half is done — `actions/setup-node`
+  with `cache: pnpm`. The `dist/` half is deliberately not: `tsup` has no incremental mode, so a
+  restored `dist/` is rebuilt by the very next step. It would only pay off by making the build
+  conditional on a cache hit, and a stale `dist/` silently used is a worse failure than a slow job.
+- **A `docker compose up` smoke job** running the real containers and a migration, to catch drift
+  the pinned CI service images hide.
+- **`pnpm peers`** to surface unmet peers, which pnpm 11 no longer prints as a tree during install.
+- **`pnpm sbom --sbom-format cyclonedx`** if anything downstream wants a bill of materials.
 
 ---
 
@@ -460,7 +704,9 @@ Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generat
 - `pnpm check:architecture` passes on a clean tree.
 - Adding `import { sql } from "drizzle-orm"` to a file in `packages/application/src/` fails `check:architecture`.
 - Adding `process.env.FOO` to a package file fails `check:architecture`.
-- The full CI job passes end to end on a fresh clone.
+- `pnpm check:contrast` passes, and adding a theme that omits one of the twelve names fails it.
+- The full CI job passes end to end on a fresh clone — which means checking that `verify` got past
+  `pnpm/action-setup` at all, not only that no check reported a failure.
 
 Do not proceed until this passes.
 

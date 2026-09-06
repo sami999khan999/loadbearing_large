@@ -17,12 +17,16 @@ export {
   type TwoFactorSetupProps,
 } from "./account/index.js";
 export {
+  ApiKeyList,
+  type ApiKeyListProps,
+  CreateApiKeyForm,
+  useApiKeyFailure,
+} from "./apikey/index.js";
+export {
   ForgotPasswordForm,
   type ForgotPasswordFormProps,
   ResetPasswordForm,
   type ResetPasswordFormProps,
-  SessionGuard,
-  type SessionGuardProps,
   type SessionOrganization,
   SessionProvider,
   type SessionProviderProps,
@@ -42,14 +46,23 @@ export {
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
-export { MessageProvider, type MessageProviderProps, useMessages } from "./i18n/index.js";
+export { DocumentSearch, IndexDocumentForm } from "./document/index.js";
+export { type ErrorMessage, useErrorMessage } from "./error/index.js";
+export {
+  MessageProvider,
+  type MessageProviderProps,
+  useMessages,
+  useTranslator,
+} from "./i18n/index.js";
 export {
   InvitationList,
   type InvitationListProps,
   InviteMemberForm,
+  MemberCount,
   MemberList,
   type MemberListProps,
 } from "./member/index.js";
+export { ModuleNav, type ModuleNavProps } from "./nav/index.js";
 export {
   CreateOrganizationForm,
   type CreateOrganizationFormProps,
@@ -60,11 +73,15 @@ export {
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
 export {
+  CreateRoleForm,
   EffectivePermissionsInspector,
   type EffectivePermissionsInspectorProps,
   type MatrixSubject,
   PermissionMatrix,
   type PermissionMatrixProps,
+  RoleList,
+  type RoleListProps,
   RoleMatrix,
   type RoleMatrixProps,
+  useRoleFailure,
 } from "./rbac/index.js";

@@ -51,11 +51,6 @@ export class StaticContentSource extends ContentSource {
     return Promise.resolve(navItems);
   }
 
-  // Always `null`: long-form editorial is the shape that exists to come from a database.
-  public override document(_slug: string): Promise<string | null> {
-    return Promise.resolve(null);
-  }
-
   // Skipped rather than thrown on, which is how a client catalog structurally cannot
   // obtain server-only copy.
   private static async load(

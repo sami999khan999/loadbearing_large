@@ -25,10 +25,7 @@ credential-collapsing decision, and there is no second implementation to be abst
 ## 1b. Swappable ports are chosen by a `driver`, not by a `new`
 
 ```ts
-this.vectors   = Container.buildVectorStore(config, this.database, this.transactions);
-this.analytics = config.analytics.driver === "clickhouse" && this.clickhouse
-  ? new ClickHouseAnalyticsReader(this.clickhouse)
-  : new PgAnalyticsReader(this.database, this.transactions);
+this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
 ```
 
 Rule 1 makes the *type* swappable. This makes the *choice* configurable, and the two are not the same
@@ -58,16 +55,16 @@ Same reasoning as the `auth` getter one section down, and the same shape: a proc
 port it was not built with fails at the call site with a sentence, rather than at the first insert
 with a `TypeError`.
 
-### The driver and the connection are two switches, on purpose
+### Analytics has a connection and no driver
 
-`CLICKHOUSE_URL` builds the projector. `ANALYTICS_DRIVER` moves reads. Setting the first without the
-second is the supported way to adopt ClickHouse: the projection fills the store and the nightly
-reconciliation reports, while dashboards still read Postgres. One combined switch would cut reads over
-to a store that is still filling.
+`CLICKHOUSE_URL` builds the projector, and that is the only analytics switch. There was a second,
+`ANALYTICS_DRIVER`, moving reads between a Postgres and a ClickHouse `AnalyticsReader` — and it went
+with the port, because nothing ever read through either implementation.
 
-The reverse — `ANALYTICS_DRIVER=clickhouse` with no URL — throws in the constructor. The alternative
-is a silent fall back to Postgres, where the dashboard keeps answering out of the store the operator
-believed they had moved off.
+The two-switch arrangement it existed for still holds, in a stronger form: filling the store and
+reading it are separate decisions, and now the second one cannot be taken by accident, because there
+is no reader to point anywhere. A flag that moved reads the moment the pipeline started would cut a
+dashboard over to a store that is still backfilling.
 
 ## 2. Never build request-scoped state into the container
 
@@ -112,7 +109,7 @@ orchestrator's name for the process is incidental.
 > in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` —
 > the domain layer does not log at all
 > ([`application/docs`](../../../application/docs/index.md)). The seam lives in
-> `@loadbearing/observability`, low enough in the graph that `db`, `infrastructure`, `auth`, and both
+> `@loadbearing/observability`, low enough in the graph that `infrastructure`, `auth`, and both
 > apps can reach it.
 
 ## 4. `dispose()` closes in reverse construction order
@@ -207,7 +204,7 @@ const membershipReader: MembershipReader = new PgMembershipReader(
 ```
 
 `MembershipReader` is declared in `@loadbearing/auth` and implemented in `@loadbearing/infrastructure`, which
-cannot import it — `auth` already depends on `db`, so the arrow cannot point back.
+cannot import it — `auth` already depends on `infrastructure`, so the arrow cannot point back.
 `PgMembershipReader` therefore satisfies it **structurally**, and nothing checks that until the two
 meet. The annotation on this local is that check. Drop it and a signature drift compiles everywhere
 and fails at sign-in.

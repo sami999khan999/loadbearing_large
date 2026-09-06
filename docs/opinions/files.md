@@ -33,7 +33,6 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.sender.ts` | `smtp-email.sender.ts` | `SmtpEmailSender` |
 | `.mailer.ts` | `content-auth.mailer.ts` | `ContentAuthMailer` |
 | `.source.ts` | `static-content.source.ts` | `StaticContentSource` |
-| `.bus.ts` | `event.bus.ts` | `EventBus` |
 | `.unit-of-work.ts` | `pg-unit-of-work.ts` | `PgUnitOfWork` |
 | `.connection.ts` | `redis.connection.ts` | `RedisConnection` |
 | `.cache.ts` | `capability.cache.ts` | `CapabilityCache` |

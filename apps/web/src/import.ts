@@ -18,6 +18,8 @@ export {
 export {
   type ClientNamespace,
   ContentSource,
+  type Locale,
+  Locales,
   type MessageSnapshot,
   MessageStore,
   StaticContentSource,
@@ -31,20 +33,28 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   ActiveSessionList,
+  ApiKeyList,
   ChangeEmailForm,
   ChangePasswordForm,
+  CreateApiKeyForm,
   CreateOrganizationForm,
+  CreateRoleForm,
+  DocumentSearch,
   EffectivePermissionsInspector,
   ForgotPasswordForm,
+  IndexDocumentForm,
   InvitationAccept,
   InvitationList,
   InviteMemberForm,
   LinkedAccountList,
+  MemberCount,
   MemberList,
   MessageProvider,
+  ModuleNav,
   OrganizationSwitcher,
   ProfileForm,
   ResetPasswordForm,
+  RoleList,
   RoleMatrix,
   SessionProvider,
   type SessionUser,
@@ -56,7 +66,9 @@ export {
   TwoFactorPanel,
   TwoFactorSetup,
   useCapabilities,
+  useErrorMessage,
   useMessages,
+  useSession,
   VerifyEmailNotice,
 } from "@loadbearing/feature";
 
@@ -66,7 +78,13 @@ export {
 export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
-export { ApiClientProvider, createQueryClient } from "@loadbearing/query";
+export {
+  ApiClientProvider,
+  ApiKeyQueries,
+  createQueryClient,
+  MemberQueries,
+  RoleQueries,
+} from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
 export {
@@ -74,15 +92,20 @@ export {
   Button,
   type ButtonVariant,
   Callout,
+  type CalloutTone,
   Can,
+  CodeList,
   DataTable,
   EmptyState,
   Field,
+  type FontKey,
+  FontRegistry,
   Icon,
   Input,
   type ModeKey,
   type ModePreference,
   ModeRegistry,
+  QrCode,
   StatusBadge,
   type ThemeKey,
   ThemeRegistry,
@@ -100,6 +123,11 @@ export { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // ── @tanstack/react-router ───────────────────────────────────────────────────
 // `router.tsx` only. Everything under `route/` imports this package directly.
 export { createRouter } from "@tanstack/react-router";
+
+// ── @tanstack/react-start ────────────────────────────────────────────────────
+// Not a `/server` entry, so unlike the three `*.fn.ts` files this one goes through
+// the surface. The plugin strips each branch from the build that does not run it.
+export { createIsomorphicFn } from "@tanstack/react-start";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export { type CSSProperties, type ReactNode, useMemo, useState } from "react";

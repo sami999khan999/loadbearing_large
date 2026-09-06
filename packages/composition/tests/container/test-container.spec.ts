@@ -1,25 +1,60 @@
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TestContainer } from "../../src/container/test-container.js";
 import { RecordingActivityLogger, RecordingQueuePublisher } from "../../src/fake/index.js";
+
+// Resolved from this file rather than `process.cwd()`, so the assertion holds whether
+// vitest is run from the package or from the workspace root.
+const PORT_DIR = fileURLToPath(new URL("../../../application/src/port/", import.meta.url));
+
+// The harness entries that are not ports: three shared primitives, plus the content
+// source, whose abstract class lives in `@loadbearing/content`.
+const NOT_PORTS = ["authorizer", "clock", "content", "logger"] as const;
 
 describe("TestContainer", () => {
   it("builds every port without touching infrastructure", () => {
     const harness = TestContainer.build();
 
-    // One assertion per port: this is the completeness check, and a port wired to
-    // `undefined` fails right on this line.
-    expect(harness.activity).toBeDefined();
-    expect(harness.analytics).toBeDefined();
-    expect(harness.cache).toBeDefined();
-    expect(harness.content).toBeDefined();
-    expect(harness.email).toBeDefined();
-    expect(harness.embeddings).toBeDefined();
-    expect(harness.events).toBeDefined();
-    expect(harness.queue).toBeDefined();
-    expect(harness.sessions).toBeDefined();
-    expect(harness.storage).toBeDefined();
-    expect(harness.unitOfWork).toBeDefined();
-    expect(harness.vectors).toBeDefined();
+    // Every key, from the object rather than by hand: a listed subset passes while
+    // a port added to `TestPorts` goes unbuilt, which is what this once did.
+    for (const [name, port] of Object.entries(harness)) {
+      expect(port, `${name} is not built`).toBeDefined();
+    }
+  });
+
+  // Counted off the directory rather than restated, which is the difference between a
+  // list that goes stale and one that fails the run the next port is added.
+  it("builds one port per abstract class in application/src/port", () => {
+    const harness = TestContainer.build();
+    const ports = readdirSync(PORT_DIR).filter(
+      (file) => file.endsWith(".ts") && file !== "index.ts",
+    );
+
+    // `content` has no port file — `ContentSource` is `@loadbearing/content`'s, and its
+    // real implementation is the test double. The other three are shared primitives.
+    expect(Object.keys(harness)).toHaveLength(ports.length + NOT_PORTS.length);
+    expect(Object.keys(harness).sort()).toEqual([
+      "activity",
+      "activityArchive",
+      "activityReplay",
+      "analyticsProjector",
+      "authorizer",
+      "cache",
+      "capabilities",
+      "clock",
+      "content",
+      "email",
+      "embeddings",
+      "logger",
+      "logs",
+      "maintenance",
+      "queue",
+      "sessions",
+      "storage",
+      "unitOfWork",
+      "vectors",
+    ]);
   });
 
   it("freezes the clock at the same instant every run", () => {

@@ -168,7 +168,7 @@ Decide the list shape once, here, and every list procedure in the product inheri
 
 Contract classes are **static readonly Zod schemas on a class**. This is the data-shape exemption to the no-free-exports rule: a Zod schema is a value describing a shape, not behaviour, and it stays namespaced on the class the way a free `export const taskEntitySchema` would not.
 
-**`packages/contracts/src/task/task.contract.ts`** — illustrative; the starter kit ships no feature slices.
+**`packages/contracts/src/task/task.contract.ts`** — illustrative; `role/` and `member/` are the two real ones to read beside it.
 
 ```ts
 import { z } from "../import.js";
@@ -242,7 +242,7 @@ export type TaskStatus = z.infer<typeof TaskContract.status>;
 
 ## Step 10.4 — A domain entity
 
-**`packages/contracts/src/task/task.entity.ts`**
+**`packages/contracts/src/task/task.entity.ts`** — illustrative, as in 10.3.
 
 ```ts
 // `Clock` and `CapabilitySet` join `src/import.ts` when this file lands — the first
@@ -307,7 +307,7 @@ export class TaskEntity {
 
 ## Step 10.5 — The oRPC contract
 
-**`packages/contracts/src/task/task.procedures.ts`**
+**`packages/contracts/src/task/task.procedures.ts`** — illustrative, as in 10.3.
 
 ```ts
 import { oc } from "../import.js";
@@ -369,7 +369,7 @@ The router object is the one place a plain `export const` appears in this packag
 
 ## Step 10.6 — `ProcedurePermissions`
 
-**`packages/contracts/src/catalog/task.permissions.ts`** — the slice's fragment.
+**`packages/contracts/src/catalog/task.permissions.ts`** — illustrative; the slice's fragment.
 
 > [!NOTE]
 > This one file lives in `catalog/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition. `catalog/` is the same name `@loadbearing/permissions` and `@loadbearing/errors` give the same pattern: team-owned fragments plus a platform-owned index that merges them.
@@ -552,14 +552,16 @@ Adding a subject means three edits, not two: `procedure/index.ts`, `catalog/inde
 
 ## What ships, and what is illustrative
 
-**`primitive/` is real.** `procedure/index.ts` and `catalog/index.ts` are **empty merge points**, and
-that is the deliverable — `contract` is `{}` and `PROCEDURE_PERMISSIONS` is `{}` until a product adds
-a slice. The kit ships the seam, not a sample task tracker.
+**`primitive/` is real, and so are `role/` and `member/`.** The kit ships two slices through this
+package and no sample task tracker: `procedure/index.ts` and `catalog/index.ts` are **merge points**,
+and that is the deliverable — each slice adds one line to each, and a product with neither would have
+`contract` as `{}` and `PROCEDURE_PERMISSIONS` as `{}`.
 
 Every `task.*` sample above is illustrative and cannot be pasted in as-is: `@loadbearing/permissions`
 declares no `task.read` or `task.reactivate` key, so `satisfies Record<string, PermissionKey>` in the
 fragment would fail to compile. A slice means adding the permission keys in
-[08](08-permissions-package.md) first — which is the dependency direction working correctly.
+[08](08-permissions-package.md) first — which is the dependency direction working correctly, and
+exactly what `role` and `member` did.
 
 ---
 

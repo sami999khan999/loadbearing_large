@@ -2,13 +2,16 @@ import { Endpoint } from "./endpoint.js";
 import {
   ApiClient,
   CookieAuthStrategy,
+  createIsomorphicFn,
   createQueryClient,
   createRouter as createTanStackRouter,
+  Locales,
   type MessageSnapshot,
   MessageStore,
   StaticContentSource,
 } from "./import.js";
 import { routeTree } from "./route-tree.gen";
+import { serverTransport } from "./server/rpc-transport.js";
 import { type AppearanceSnapshot, AppearanceStore } from "./store/appearance.store.js";
 import { type SessionSnapshot, SessionStore } from "./store/session.store.js";
 
@@ -22,17 +25,23 @@ export interface RouterDehydrated {
   readonly appearance: AppearanceSnapshot;
 }
 
+// The server branch and its imports are removed from the client build, which is what
+// keeps the container graph out of the browser. See docs/reference/import-surfaces.md.
+const transport = createIsomorphicFn()
+  .client(() => ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()))
+  .server(() => serverTransport());
+
 // Called per request on the server and once in the browser, which is the lifetime every
 // object below wants. A module-scope one would be a cross-tenant leak.
 export function getRouter() {
   // The client catalog, never the server one: `email` is server-only.
   const content = new StaticContentSource();
-  const messages = new MessageStore(content, MessageStore.empty("en"));
+  // Seeded with the default; `__root.tsx`'s `beforeLoad` calls `setLocale` once the
+  // cookie and `Accept-Language` have been read, before any namespace is fetched.
+  const messages = new MessageStore(content, MessageStore.empty(Locales.DEFAULT));
   const session = new SessionStore();
   const appearance = new AppearanceStore();
-  const { queryClient, apiClient } = createQueryClient({
-    transport: ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()),
-  });
+  const { queryClient, apiClient } = createQueryClient({ transport: transport() });
 
   return createTanStackRouter({
     routeTree,
@@ -45,6 +54,7 @@ export function getRouter() {
     // `empty()`, which denies.
     context: {
       messages,
+      content,
       queryClient,
       api: apiClient,
       session,

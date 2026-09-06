@@ -124,14 +124,16 @@ describe("ErrorCopy", () => {
     expect(ErrorCopy.message(t, envelope)).toBe("Something went wrong. Please try again.");
   });
 
-  it("renders in the requested locale, falling back per key", async () => {
+  it("renders in the requested locale", async () => {
     const t = await translator("bn");
 
     expect(ErrorCopy.message(t, { code: "FORBIDDEN", context: {} })).toBe(
       "এটি করার অনুমতি আপনার নেই।",
     );
-    expect(ErrorCopy.message(t, { code: "CONFLICT", context: {} })).toBe(
-      "Someone else changed this first. Reload and try again.",
-    );
+    // Every code, not a sample: `ERROR_COPY` is total over `ERROR_CATALOG` and every
+    // bundle is total over its namespace, so no code may render an English sentence.
+    for (const code of Object.keys(ERROR_CATALOG) as ErrorCode[]) {
+      expect(ErrorCopy.message(t, { code, context: {} })).not.toMatch(/^[\p{ASCII}]+$/u);
+    }
   });
 });

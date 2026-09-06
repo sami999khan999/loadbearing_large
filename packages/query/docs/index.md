@@ -33,7 +33,7 @@ this package.
 | **Entrypoint** | `src/index.ts` — opens with `"use client"` |
 | **Depends on** | `@loadbearing/api-client`, `@loadbearing/errors`, `@tanstack/react-query` |
 | **Peers** | `react`, `react-dom` — never dependencies |
-| **Used by** | `feature`, `apps/web`, `apps/desktop`. **Not** `apps/worker` — it calls use-cases in-process |
+| **Used by** | `feature`, `apps/web`. **Not** `apps/worker` — it calls use-cases in-process |
 
 ```
 packages/query/src/
@@ -48,10 +48,25 @@ packages/query/src/
 │   ├── api-client.context.tsx      → ApiClientProvider, useApiClient
 │   ├── use-app-mutation.ts         → useAppMutation, AppMutationOptions
 │   └── use-app-query.ts            → useAppQuery
-└── session/                        ── one subject folder per slice
+├── session/                        ── one subject folder per slice
+│   ├── index.ts
+│   ├── session.queries.ts          → SessionQueries
+│   └── session.mutations.ts        → SessionMutations
+├── account/
+│   ├── index.ts
+│   ├── account.queries.ts          → AccountQueries
+│   └── account.mutations.ts        → AccountMutations
+├── member/
+│   ├── index.ts
+│   ├── member.queries.ts           → MemberQueries
+│   └── member.mutations.ts         → MemberMutations
+├── organization/
+│   ├── index.ts
+│   └── organization.mutations.ts   → OrganizationMutations
+└── rbac/
     ├── index.ts
-    ├── session.queries.ts          → SessionQueries
-    └── session.mutations.ts        → SessionMutations
+    ├── role.queries.ts             → RoleQueries
+    └── role.mutations.ts           → RoleMutations
 ```
 
 Two role folders and one subject folder, the same split
@@ -86,9 +101,18 @@ server hand it an in-process transport and the browser an HTTP one, with nothing
 differing:
 
 ```ts
-transport: ApiClient.overHttp(Env.apiUrl, new CookieAuthStrategy())   // browser
-transport: ApiClient.inProcess(createServerRpcClient(request))        // SSR
+// apps/web/src/router.tsx — the plugin removes the branch that does not apply,
+// along with its imports, which is what keeps the container out of the browser.
+const transport = createIsomorphicFn()
+  .client(() => ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()))
+  .server(() => ApiClient.inProcess(createServerRpcClient(getRequest())));
 ```
+
+**Both sides are load-bearing, and the server one is not an optimisation.** `Endpoint.rpc` is a
+relative path: correct in a browser, unresolvable under Node. A loader calling `ensureQueryData`
+during SSR through the HTTP transport fails outright rather than being slow, which is why
+`ApiClient.overHttp` now refuses a relative base outside a browser
+([`api-client`](../../api-client/docs/index.md)).
 
 **`createQueryClient` is an exported function**, which the repo's OOP rule would normally reject —
 `packages/query` is deliberately not in that ESLint block. It is a factory in the React idiom, and
@@ -208,15 +232,12 @@ deliberate: routing is the one thing the desktop shell replaces.
 - [Mutations and invalidation](reference/mutations.md) — invalidate-before-`onSuccess`, the three
   states of `invalidates`, and why sign-out and switch declare none.
 
-## Two things this package does not have yet
+## Every `rbac` key now has a caller
 
-**No feature slices.** `AppContract` is `{}` until the first one lands, so there are no procedures to
-key. `QueryKeys` carries `session` and `rbac` — both of which name things that genuinely exist — and a
-slice adds a subject folder plus one barrel line. Doc 21's `QueryKeys.task` is illustrative; there is
-no task contract to mirror.
+`roles(params)` is read by `RoleQueries.list` and written through by all five of `RoleMutations`;
+`effective(userId)` is read by `EffectivePermissionsInspector` when it is inspecting someone other
+than the viewer. Doc 21's `QueryKeys.task` stays illustrative: there is no task contract to mirror.
 
-**No hook tests.** `QueryKeys`, `createQueryClient` (including its retry predicate),
-`useAppQuery`'s type preservation and `SessionQueries` are covered because they are plain values,
-functions and types. `useAppMutation`,
-`ApiClientProvider` and `SessionMutations` need a React renderer, which arrives with
-[22](../../../docs/setup/22-ui-package.md)'s testing setup.
+**`RoleMutations.useGrant` and `useRevoke` invalidate `QueryKeys.member.all()` as well as
+`rbac.all()`.** A grant changes what the effective-permissions inspector answers for every member
+holding that role, and that key hangs off the member namespace.

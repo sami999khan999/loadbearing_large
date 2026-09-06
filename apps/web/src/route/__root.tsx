@@ -2,7 +2,9 @@ import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/reac
 import {
   ApiClientProvider,
   ContentSource,
+  type CSSProperties,
   classCss,
+  FontRegistry,
   MessageProvider,
   QueryClientProvider,
   type ReactNode,
@@ -12,6 +14,7 @@ import {
 } from "~/import.js";
 import { fetchAppearance } from "~/server/appearance.fn.js";
 import { fetchSession } from "~/server/session.fn.js";
+import { ErrorBoundary, NotFound } from "./-boundary.js";
 import type { RouterContext } from "./-context.js";
 
 // The one case the cookie cannot answer: "system" with no client hint. Synchronous and
@@ -24,6 +27,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       context.session.ensure(fetchSession),
       context.appearance.ensure(fetchAppearance),
     ]);
+
+    // Before the loader below, which is what makes the ordering load-bearing: `ensure`
+    // fetches a namespace for whatever locale the store holds when it is called.
+    context.messages.setLocale(context.appearance.current.locale);
+
     return {
       user: context.session.user,
       capabilities: context.session.dto,
@@ -46,24 +54,30 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
   }),
   shellComponent: RootDocument,
+  // On the root, so every route inherits them: a boundary declared per page is one
+  // somebody forgets, and an unhandled throw in TanStack Router renders a bare stack.
+  errorComponent: ErrorBoundary,
+  notFoundComponent: NotFound,
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
   const { messages, queryClient, api, user, capabilities, appearanceSnapshot } =
     Route.useRouteContext();
-  const { theme, mode, preference } = appearanceSnapshot;
+  const { theme, mode, preference, font } = appearanceSnapshot;
 
   // Only when the server guessed, and only upgrading light to dark — so it cannot fight
   // an explicit choice or strand a dark-only theme.
   const correctsMode = preference === "system" && ThemeRegistry.supports(theme, "dark");
 
+  // The font override on the server-rendered element rather than after hydration: a
+  // face that swaps in front of the reader reflows the whole page.
+  const style = {
+    colorScheme: mode,
+    "--font-sans": FontRegistry.meta(font).stack,
+  } as CSSProperties;
+
   return (
-    <html
-      lang={messages.translator.locale}
-      data-theme={theme}
-      data-mode={mode}
-      style={{ colorScheme: mode }}
-    >
+    <html lang={messages.translator.locale} data-theme={theme} data-mode={mode} style={style}>
       <head>
         <HeadContent />
         {correctsMode ? <script dangerouslySetInnerHTML={{ __html: SYSTEM_MODE_SCRIPT }} /> : null}

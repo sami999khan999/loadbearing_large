@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/application"
-description: Principal, Authorizer, and the ten abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
+description: Principal, Authorizer, and the sixteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
 ---
 
 # `@loadbearing/application`
@@ -21,7 +21,7 @@ It returns nothing, and `check-architecture.mjs` §1 asserts it in CI.
 | **Package** | `@loadbearing/application` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/contracts`, `@loadbearing/core` (`ServerOnly`), `@loadbearing/errors` (`ForbiddenError`), `@loadbearing/permissions` — no third-party runtime dependency, ever |
-| **Used by** | `db`, `infrastructure`, `auth`, `composition`, `apps/worker` — **never** a browser bundle |
+| **Used by** | `infrastructure`, `auth`, `composition`, `apps/worker` — **never** a browser bundle |
 | **Environment** | server-only; `ServerOnly.assert()` is the runtime tripwire |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 
@@ -35,25 +35,43 @@ packages/application/
 │   │   ├── index.ts
 │   │   ├── principal.ts          → Principal, PrincipalKind
 │   │   └── authorizer.ts         → Authorizer
-│   └── port/                     ← abstract classes only, zero implementations
-│       ├── index.ts
-│       ├── activity.logger.ts    → ActivityLogger
-│       ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
-│       ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
-│       │                                 ProjectionCheckpoint, DailyCount
-│       ├── analytics.projector.ts → AnalyticsProjector
-│       ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
-│       ├── cache.store.ts        → CacheStore
-│       ├── embedding.provider.ts → EmbeddingProvider
-│       ├── event.bus.ts          → EventBus, DomainEvent
-│       ├── log.reader.ts         → LogReader, LogQuery, LogEntry
-│       ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
-│       ├── queue.publisher.ts    → QueuePublisher, JobOptions
-│       ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
-│       ├── storage.gateway.ts    → StorageGateway, StoredObject
-│       ├── unit-of-work.ts       → UnitOfWork
-│       └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
-└── tests/primitive/
+│   ├── port/                     ← abstract classes only, zero implementations
+│   │   ├── index.ts
+│   │   ├── activity.logger.ts    → ActivityLogger
+│   │   ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
+│   │   ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
+│   │   │                                 ProjectionCheckpoint, DailyCount
+│   │   ├── analytics.projector.ts → AnalyticsProjector
+│   │   ├── cache.store.ts        → CacheStore
+│   │   ├── capability.invalidator.ts → CapabilityInvalidator
+│   │   ├── email.sender.ts       → EmailSender, EmailMessage
+│   │   ├── embedding.provider.ts → EmbeddingProvider
+│   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
+│   │   ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
+│   │   ├── queue.publisher.ts    → QueuePublisher, JobOptions
+│   │   ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
+│   │   ├── storage.gateway.ts    → StorageGateway, StoredObject
+│   │   ├── unit-of-work.ts       → UnitOfWork
+│   │   └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
+│   ├── ai/
+│   │   └── index-document.use-case.ts  → IndexDocumentUseCase
+│   ├── member/                   ← a slice: its repository ports live with it
+│   │   ├── member.repository.ts        → MemberRepository, MemberRecord, MemberPage
+│   │   ├── invitation.repository.ts    → InvitationRepository, InvitationRecord
+│   │   ├── invitation.mailer.ts        → InvitationMailer, InvitationMail
+│   │   ├── invite-member.use-case.ts   → InviteMemberUseCase
+│   │   ├── list-members.use-case.ts    → ListMembersUseCase
+│   │   ├── list-invitations.use-case.ts → ListInvitationsUseCase
+│   │   └── revoke-invitation.use-case.ts → RevokeInvitationUseCase
+│   └── rbac/
+│       ├── role.repository.ts          → RoleRepository, RoleRecord, RolePage
+│       ├── capability.repository.ts    → CapabilityRepository
+│       └── list-roles.use-case.ts      → ListRolesUseCase
+└── tests/
+    ├── primitive/{principal,authorizer}.spec.ts
+    ├── ai/index-document.use-case.spec.ts
+    ├── rbac/list-roles.use-case.spec.ts
+    └── member/{invite-member,list-members,revoke-invitation}.use-case.spec.ts
 ```
 
 ## This package does not log
@@ -82,11 +100,11 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `ActivityLogger` | `PgActivityLogger` | never; audit is Postgres at every scale |
 | `ActivityArchiveGateway` | `PgActivityArchiveGateway` | never — it *is* the Postgres side |
 | `ActivityReplayReader` | `PgActivityReplayReader` | never — reads the source of truth |
-| `AnalyticsReader` | `PgAnalyticsReader` | `ClickHouseAnalyticsReader` — **written** |
 | `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
 | `CacheStore` | `RedisCacheStore` | managed Redis |
+| `CapabilityInvalidator` | `CapabilityCache` — `auth` | any cache the resolver reads |
+| `EmailSender` | `SmtpEmailSender` | any provider that speaks SMTP |
 | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
-| `EventBus` | in-process dispatch — `composition` | a broker |
 | `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |
 | `MaintenanceGateway` | `PgMaintenanceGateway` | never |
 | `QueuePublisher` | `BullMqQueuePublisher` | managed Redis |
@@ -95,10 +113,11 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `UnitOfWork` | `PgUnitOfWork` | never |
 | `VectorStore` | `PgVectorStore` | a dedicated vector database |
 
-Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts` and
-every name lines up with one binding. **Repository ports are not here** — each lives with its feature
-slice, `src/task/task.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
-`AnalyticsReader` and `VectorStore` are the exception because they are one cross-cutting read seam
+Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts`
+and every name lines up with exactly one binding, with no exceptions — which is the property this
+table exists to make checkable. **Repository ports are not here** — each lives with its feature slice,
+`src/member/member.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
+`VectorStore` is the exception because it is one cross-cutting read seam
 that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
 or a *file*.
 
@@ -109,19 +128,19 @@ transaction and every use-case holds it. The reader scans in bulk, carries no `P
 reachable only from the worker. One port with both would put a cross-tenant scan on the object every
 use-case already has.
 
-**`AnalyticsReader` reads the derived store; `AnalyticsProjector` writes it.** The reader is reachable
-from a request path and the projector is not. This is the guard that keeps the analytics store
-derived: *nothing writes to it except the projection*, and a single port with both would make that
-unenforceable.
+**`AnalyticsProjector` writes the derived store, and nothing reads it.** That is the guard that
+keeps the analytics store derived: *nothing writes to it except the projection*. There was an
+`AnalyticsReader` beside it with two implementations and a driver flag; nothing called it, and it
+was deleted — see [ports.md](reference/ports.md).
 
 **`LogReader` reads diagnostics and nothing writes them from here at all.** `JsonLogger` goes to
 stdout; a collector tails it. The write path has no port because it has no dependency — which is
 exactly what makes swapping the log platform a config change.
 
-## Two ports carry a required permitted scope
+## One port carries a required permitted scope
 
-`VectorStore.search()` and `AnalyticsReader.goalRiskScores()` both take `goalIds` as a required
-parameter, and that is the security design rather than a convenience.
+`VectorStore.search()` takes `goalIds` as a required parameter, and that is the security design
+rather than a convenience.
 
 ```ts
 const orgId = actor.organizationId;
