@@ -49,7 +49,7 @@ export {
   type JobOptions,
   type LogEntry,
   type LogQuery,
-  type LogReader,
+  LogReader,
   type MaintenanceGateway,
   type MemberPage,
   type MemberRecord,
