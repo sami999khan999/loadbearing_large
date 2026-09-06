@@ -31,6 +31,18 @@ The cost is real and worth paying: `errors/src/normalizer/` holds one file, and
 today needs no move when it holds three, and a rule with no judgement call in it is a rule nobody
 has to litigate in review.
 
+### An app's root is closed too, and the exceptions are the framework's
+
+`apps/*/src` follows the same rule with one addition: **a file the framework resolves by name
+stays at the root.** `main.ts` is the worker's entrypoint and `env.ts` is the one place
+`process.env` is read — an assertion in `check-architecture` §3 names that path. In `apps/web` the
+same applies to `router.tsx`, `endpoint.ts` and the generated `route-tree.gen.ts`.
+
+Everything else is a folder, and the test is the same one: `worker-bootstrap.ts` and
+`system-principal.ts` sat loose for as long as nobody asked what kind of thing they were. They are
+`bootstrap/` — what the process assembles before it starts working — and the question of where the
+next such file goes now has an answer.
+
 ## Every folder has an `index.ts`
 
 That is what lets you move a file within a folder without touching a single import elsewhere. The
@@ -133,6 +145,7 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `auth/` | the credential seam — strategies, token storage, the auth SDK wrapper | `api-client` |
 | `consumer/` | queue consumers | `apps/worker` |
 | `schedule/` | repeatable jobs | `apps/worker` |
+| `bootstrap/` | what a process assembles before it starts working | `apps/worker` |
 
 **Non-plural, always.** `tasks/` and `task/` coexisting in different packages is exactly the
 ambiguity this removes.
