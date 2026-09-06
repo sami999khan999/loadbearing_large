@@ -235,10 +235,11 @@ export class Container {
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
     this.memberships = new PgMembershipReader(this.database, this.transactions);
-    // Held concretely too: the personal enroller calls `found` with a slug the port does
-    // not expose.
-    const founder = new PgOrganizationFounder(this.database, this.transactions, this.activity);
-    this.organizationFounder = founder;
+    this.organizationFounder = new PgOrganizationFounder(
+      this.database,
+      this.transactions,
+      this.activity,
+    );
     this.invitationClaimer = new PgInvitationClaimer(
       this.database,
       this.transactions,
@@ -261,7 +262,7 @@ export class Container {
         config.auth.bootstrapOrganizationSlug,
         this.database,
         this.transactions,
-        founder,
+        this.organizationFounder,
         this.invitationClaimer,
       );
 
@@ -275,7 +276,7 @@ export class Container {
         // `content` owes no transport.
         new ContentAuthMailer(this.content, this.email),
         this.invitationClaimer,
-        founder,
+        this.organizationFounder,
       );
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
@@ -341,7 +342,9 @@ export class Container {
     bootstrapOrganizationSlug: string | undefined,
     database: Database,
     transactions: TransactionScope,
-    founder: PgOrganizationFounder,
+    // The port, not `PgOrganizationFounder`: the personal enroller declares the same
+    // shape structurally, which is what lets this stay the one place a class is named.
+    founder: OrganizationFounder,
     claimer: InvitationClaimer,
   ): MembershipEnroller {
     const inner = ((): MembershipEnroller => {
@@ -349,7 +352,9 @@ export class Container {
         case "personal":
           return new PgPersonalOrganizationEnroller(database, transactions, founder);
         case "bootstrap":
-          return new PgBootstrapMembershipEnroller(database, transactions).withOrganizationSlug(
+          return new PgBootstrapMembershipEnroller(
+            database,
+            transactions,
             bootstrapOrganizationSlug,
           );
         case "invite":
