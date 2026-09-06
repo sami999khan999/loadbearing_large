@@ -610,11 +610,32 @@ it once and make the doc-drift gate (`P4.26`) check it.
 - [ ] `P4.7` `packages/composition/docs` — "two exports" is three (`HealthReport`); 9 of 15
   fakes listed; `reference/test-container.md` says eleven fakes, ten ports, "one entry per
   port" (it also carries `content`).
-- [ ] `P4.8` **stale `db` package** — named in `observability`, `contracts`, `permissions`,
+- [x] `P4.8` **stale `db` package** — named in `observability`, `contracts`, `permissions`,
   `application` docs, `auth/src/apikey/api-key.resolver.ts:25`, `docs/setup/00:120,124`,
   `docs/setup/26:243`, `docs/setup/27:72-73`, `docs/setup/28` (bare `├── db/` and `:164,896`).
   `auth/src/tables/index.ts:19` and `auth.factory.ts:101` name `src/schema/auth.schema.ts`
-  (real: `src/pg/schema/`).
+  (real: `src/pg/schema/`). `done: 2026-09-06`
+  - **Done:** `grep -rn '\bdb\b' docs packages/*/docs README.md AGENTS.md` returns only the
+    drizzle `db:*` scripts, the `db` transaction getter, `better-auth/db`, and two sentences that
+    frame the fold as history. The two source-file claims were already stale — `api-key.resolver.ts`
+    and `auth/src/tables/index.ts` name real paths — so nothing under `src/` changed.
+  - **Wider than the entry.** The fold invalidated derived claims the entry did not list, and each
+    was checked against the code rather than reworded: the `06` dependency graph (the
+    `application ──┬── db ──┐ … └── infra ─┘` fork is now one `infrastructure` chain), the `06`
+    scaffold table (`db`'s drizzle devDependencies moved onto `infrastructure`), the `05`
+    `OOP_PACKAGES` glob (which also lacked `errors` and `observability`, as
+    `tooling/eslint-config/src/index.js:4` has them), the `28` package tree, the `28`
+    `ServerOnly.assert()` roll-call (four markers, but `application` not `db` —
+    `packages/*/src/index.ts:3`), the `28` `<slice>` count (six, not seven: `infrastructure`
+    splits a slice across `pg/schema/` and `pg/repository/`), the `26` `scope-enum` block, and the
+    `29` flow diagrams.
+  - **The `00`/`15` "departure" is retired, not reworded.** Both pages argued for `infrastructure`
+    as a package *the architecture docs do not have*; `docs/ai/rules/layering.md` now names it and
+    prescribes the vendor split, so the departure was won. `00` departure 1 states the fold and why
+    it went in this direction; `15`'s "Why this package exists" argues against `apps/` duplication,
+    which is the reason that survived.
+  - **Overlaps `P4.19`** (`scope-enum` has `db`, lacks `errors`) — that half is closed here; the
+    rest of `P4.19` is untouched.
 - [ ] `P4.9` `packages/asset/docs/index.md:111` and `font.css:1-2` name `ui/src/token/token.css`
   (real `theme/token/typography.css`); `apps/web/src/store/appearance.store.ts:96` names
   `token.css` for a rule that lives in `motion.css`.

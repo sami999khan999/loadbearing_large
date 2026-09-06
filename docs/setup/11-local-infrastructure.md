@@ -2,7 +2,7 @@
 
 > Postgres 17 with pgvector, two Redis instances, MinIO as the S3 stand-in, Mailpit as the mail stand-in, and the log platform the diagnostic stream ships to. One command.
 
-**Delivers:** A running local stack that `db`, `infrastructure`, and `auth` can all connect to — plus Loki, so the log stream has somewhere to land.
+**Delivers:** A running local stack that `infrastructure` and `auth` can both connect to — plus Loki, so the log stream has somewhere to land.
 
 **Prerequisite:** [10 · `@loadbearing/contracts`](10-contracts-package.md)
 

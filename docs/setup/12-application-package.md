@@ -23,7 +23,7 @@ Everything outside itself is reached through an abstract class in `port/`. That 
 >
 > The rule pays for itself immediately. Nothing has to thread a third argument into `execute(actor, input)`; there is no ambient request context to establish; the `Container` stays process-scoped. And a `ForbiddenError` gets logged **once**, at the boundary that catches it, with its full structured `context` — rather than three times on the way up, each layer adding a little and losing a little.
 >
-> Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `db` and `infrastructure`.
+> Diagnostics belong to the adapters: the oRPC layer ([24](24-web-app.md)), the worker's consumers ([25](25-worker-app.md)), and the vendor adapters in `infrastructure`.
 
 ```
 packages/application/src/

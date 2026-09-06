@@ -78,9 +78,9 @@ export default {
       2,
       "always",
       [
-        "core", "permissions", "contracts", "application", "db", "infrastructure",
-        "auth", "composition", "asset", "content", "api-client", "query", "ui", "feature",
-        "web", "worker", "desktop",
+        "errors", "core", "permissions", "observability", "contracts", "application",
+        "infrastructure", "auth", "composition", "asset", "content", "api-client",
+        "query", "ui", "feature", "web", "worker", "desktop",
         "tooling", "infra", "docs", "deps", "repo",
       ],
     ],
@@ -91,7 +91,7 @@ export default {
 
 ```
 feat(permissions): add goal-scoped intersect
-fix(db): index capability lookup by user_id
+fix(infrastructure): index capability lookup by user_id
 chore(deps): bump drizzle-orm
 ```
 

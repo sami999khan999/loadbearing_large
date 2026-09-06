@@ -125,7 +125,7 @@ import { ServerOnly } from "@loadbearing/core";
 ServerOnly.assert("@loadbearing/infrastructure");
 ```
 
-Called on the first line of four barrels: `db`, `infrastructure`, `auth`, `composition`. It is the
+Called on the first line of four barrels: `application`, `infrastructure`, `auth`, `composition`. It is the
 second of three independent defences against server code reaching the browser.
 
 ---

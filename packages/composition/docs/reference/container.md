@@ -112,7 +112,7 @@ orchestrator's name for the process is incidental.
 > in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` —
 > the domain layer does not log at all
 > ([`application/docs`](../../../application/docs/index.md)). The seam lives in
-> `@loadbearing/observability`, low enough in the graph that `db`, `infrastructure`, `auth`, and both
+> `@loadbearing/observability`, low enough in the graph that `infrastructure`, `auth`, and both
 > apps can reach it.
 
 ## 4. `dispose()` closes in reverse construction order
@@ -207,7 +207,7 @@ const membershipReader: MembershipReader = new PgMembershipReader(
 ```
 
 `MembershipReader` is declared in `@loadbearing/auth` and implemented in `@loadbearing/infrastructure`, which
-cannot import it — `auth` already depends on `db`, so the arrow cannot point back.
+cannot import it — `auth` already depends on `infrastructure`, so the arrow cannot point back.
 `PgMembershipReader` therefore satisfies it **structurally**, and nothing checks that until the two
 meet. The annotation on this local is that check. Drop it and a signature drift compiles everywhere
 and fails at sign-in.

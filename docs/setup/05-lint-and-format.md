@@ -261,7 +261,7 @@ pnpm add --filter @loadbearing/eslint-config -D eslint@catalog:
 import tseslint from "typescript-eslint";
 
 const OOP_PACKAGES = [
-  "packages/{core,permissions,contracts,application,db,infrastructure,auth,composition,api-client,asset,content}/src/**/*.ts",
+  "packages/{core,permissions,errors,observability,contracts,application,infrastructure,auth,composition,api-client,asset,content}/src/**/*.ts",
 ];
 
 export default tseslint.config(

@@ -17,7 +17,7 @@
 |  | `@loadbearing/ui` | `@loadbearing/feature` |
 |---|---|---|
 | May import | React, headless primitives, `@loadbearing/asset` | `ui`, `query`, `content`, `contracts`, `permissions` |
-| May **not** import | `@tanstack/*`, `@loadbearing/query`, `@loadbearing/contracts` at runtime | `@loadbearing/api-client`, `@tanstack/react-router`, `db`, `application` |
+| May **not** import | `@tanstack/*`, `@loadbearing/query`, `@loadbearing/contracts` at runtime | `@loadbearing/api-client`, `@tanstack/react-router`, `infrastructure`, `application` |
 | Example | `DataTable`, `Dialog`, `StatusBadge`, `EmptyState` | `TaskBoard`, `ReactivateTaskDialog`, `PermissionMatrix` |
 | Test with | Storybook / props | Fake `ApiClient` + `CapabilitySet` fixtures |
 

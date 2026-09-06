@@ -13,12 +13,9 @@ embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsReader` /
 
 ## Why this package exists
 
-This is a departure from the architecture docs, flagged in [00](00-README.md). The docs place concrete adapters in `db` "or in the app that constructs them." Neither works here:
+Every concrete adapter the system owns lives here, behind a port declared in `application` — the Postgres ones from [13](13-infrastructure-postgres.md) and [14](14-vector-store.md) included. The alternative is to construct them in `apps/`, and that means duplication: `apps/web` and `apps/worker` both need S3 and Redis, so each app would carry its own copy of the retry policy, the key layout, and the presign expiry — which will drift.
 
-- **`db` means Postgres.** An S3 client and a Redis connection inside a package called `db` makes the name a lie, and the next person adds a Kafka producer there too.
-- **`apps/` means duplication.** `apps/web` and `apps/worker` both need S3 and Redis. Constructing them in each app means two copies of the retry policy, the key layout, and the presign expiry — which will drift.
-
-So non-Postgres adapters get one server-only package, exactly the way `auth` got one. The dependency direction is identical to `db`: it implements ports declared in `application`, and `application` never imports it.
+So the adapters get one server-only package, exactly the way `auth` got one, organised by vendor rather than by capability ([00](00-README.md), departure 1). The dependency direction is the one every adapter obeys: it implements ports declared in `application`, and `application` never imports it.
 
 ### What belongs here, and what only looks like it does
 

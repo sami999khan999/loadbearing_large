@@ -87,7 +87,6 @@ ratchet/
 │   ├── permissions/
 │   ├── contracts/
 │   ├── application/
-│   ├── db/
 │   ├── infrastructure/
 │   ├── auth/
 │   ├── composition/
@@ -894,9 +893,9 @@ apps/desktop/
 
 **Three shells, still two `process.env` readers.** `web` and `worker` read the environment; `desktop` cannot, because a webview has no Node runtime. So the assertion in [26](26-hygiene-and-ci.md) holds at two without an exemption, and it holds for a reason rather than by convention.
 
-**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `db/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Seven places, one glob per team: `packages/*/src/<slice>/**`. The twelve-step checklist in [27](27-verification-and-first-feature.md) is just this list, walked in dependency order.
+**Notice the `<slice>` folders repeating.** `permissions/catalog/`, `contracts/<subject>/`, `application/<slice>/`, `query/<slice>/`, `feature/<slice>/`, `web/route/<slice>/`. Six places, one glob per team: `packages/*/src/<slice>/**`. `infrastructure` is the exception — it splits a slice across `pg/schema/` and `pg/repository/`, because drizzle-kit needs one barrel naming every table. The twelve-step checklist in [27](27-verification-and-first-feature.md) is just this list, walked in dependency order.
 
-**Notice the four `ServerOnly.assert()` markers** — `db`, `infrastructure`, `auth`, and `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
+**Notice the four `ServerOnly.assert()` markers** — `application`, `infrastructure`, `auth`, and `composition`. Those four packages must never reach a browser bundle, and there are three independent defences saying so: the Biome import boundary, that runtime assertion, and the CI bundle grep.
 
 ---
 

@@ -123,7 +123,7 @@ Four questions, in order. The first "yes" decides the tier.
    addition needs a port in `application/src/port/` before any use-case can reach it.
 
 **If a dependency would be Tier 3 and you want it in `packages/`, the answer is almost always an
-abstract class instead.** That is what `port/` is for, and it is why `db` can hold `drizzle-orm`
+abstract class instead.** That is what `port/` is for, and it is why `infrastructure` can hold `drizzle-orm`
 while `application` holds a `TaskRepository` that has never heard of SQL.
 
 ---

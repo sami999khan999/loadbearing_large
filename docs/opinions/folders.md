@@ -128,10 +128,9 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `event/` | type-only declarations of what an event carries | `observability` |
 | `logger/` | the diagnostic seam and its sinks | `observability` |
 | `port/` | abstract classes for cross-cutting infrastructure, zero implementations | `application` |
-| `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `db` |
-| `transaction/` | the `UnitOfWork` seam and the scope it reads | `db` |
-| `seed/` | idempotent seeds, run after migration | `db` |
-| `migrate/` | the migration runner | `db` |
+| `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `infrastructure` |
+| `transaction/` | the `UnitOfWork` seam and the scope it reads | `infrastructure` |
+| `seed/` | the seed classes a runnable script above `src/` calls | `infrastructure` |
 | `container/` | the DI root and the config shape it takes | `composition` |
 | `fake/` | test doubles for ports, one per port, never on the barrel | `composition` |
 | `client/` | the outbound transport and the typed client over it | `api-client` |

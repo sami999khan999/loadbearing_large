@@ -225,8 +225,8 @@ export class Container {
 
     // The fourth argument is what pins a tenant onto every session at sign-in. It is
     // the one place `PgMembershipReader` is bound to the `MembershipReader` port that
-    // `auth` declares — `db` cannot implement it nominally, because `auth` already
-    // depends on `db`, so this line is where a signature drift is caught.
+    // `auth` declares — `infrastructure` cannot implement it nominally, because `auth`
+    // already depends on it, so this line is where a signature drift is caught.
     const membershipReader: MembershipReader = new PgMembershipReader(
       this.database,
       this.transactions,
@@ -294,7 +294,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 **The logger is constructed first and disposed last**, which is the same rule read from both ends. Constructed first, because a `Database` that cannot reach Postgres should produce a structured line rather than a stack trace on stderr. Disposed last, because everything closing above it may have something to say on the way out.
 
 > [!NOTE]
-> **`logger` is a shared primitive, not a port.** It sits with `clock` and `authorizer` rather than in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` — the domain layer does not log at all ([12](12-application-package.md)). The seam lives in `@loadbearing/observability`, low enough in the graph that `db`, `infrastructure`, `auth`, and both apps can reach it.
+> **`logger` is a shared primitive, not a port.** It sits with `clock` and `authorizer` rather than in the port block, and there is no `Logger` abstract class in `packages/application/src/port/` — the domain layer does not log at all ([12](12-application-package.md)). The seam lives in `@loadbearing/observability`, low enough in the graph that `infrastructure`, `auth`, and both apps can reach it.
 
 ---
 
@@ -302,7 +302,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 > **Fifteen of the sixteen ports are wired here. `EventBus` is not.** `application` declares it for
 > cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
 > notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
-> adapter in `db` or `infrastructure` and no field on this class. Adding one is a field plus a
+> adapter in `infrastructure` and no field on this class. Adding one is a field plus a
 > constructor line, exactly like the rest.
 >
 > A fake for it exists regardless, in `TestContainer` — which is the point of that file: the first

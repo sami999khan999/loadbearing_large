@@ -357,7 +357,7 @@ The Postgres side gets its own section because it is the largest folder in the p
 - **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.
 - **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. This file plus `BearerAuthStrategy` is the *entire* difference between the desktop client and the browser client.
 - **`src/router.tsx`** — its own `@tanstack/react-router` instance on memory or hash history, because the webview serves from a custom protocol with no server to resolve a cold path against. Its own route tree; **not** its own paths — destinations come from `ROUTES` in `permissions`, and keeping the strings identical to web's is what lets a `<Link>` inside a `feature` component be correct in both shells.
-- **Holds no container.** No `composition`, no `application`, no `db`, no `auth`. It is a client, and the server-only ESLint boundary applies here with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt.
+- **Holds no container.** No `composition`, no `application`, no `infrastructure`, no `auth`. It is a client, and the server-only ESLint boundary applies here with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt.
 - **Smell:** a `process.env` reference; a secret in `config.ts`; a hand-written route path; anything imported from `composition` or `application`.
 
 ---
@@ -428,13 +428,13 @@ apps/web  server/orpc/base.ts
         │    → auth  PrincipalBuilder.fromHeaders()
         │        → auth  BetterAuthSessionResolver     (who is this?)
         │        → auth  CapabilityCache               (Redis, 60s backstop)
-        │            └ miss → db  PgCapabilityRepository  (3 queries)
+        │            └ miss → infrastructure  PgCapabilityRepository  (3 queries)
         │    → contracts  ProcedurePermissions.required("task.get")
         ▼  Principal { userId, CapabilitySet }
 apps/web  server/orpc/task.router.ts        ← three lines
         ▼
 application  GetTaskUseCase.execute(principal, input)
-        │  1. load     → TaskRepository (port)  ──► db  PgTaskRepository
+        │  1. load     → TaskRepository (port)  ──► infrastructure  PgTaskRepository
         │  2. authorize → Authorizer.assert(principal, "task.read", goalId)
         │  3. work     → TaskEntity
         ▼  TaskDto
@@ -476,8 +476,8 @@ application  ReactivateTaskUseCase.execute(principal, input)
         │  3. WORK       OverdueLockPolicy + TaskEntity.reactivate(clock.now())
         │                  └ fails → ConflictError
         │  4. PERSIST    UnitOfWork
-        │                  ├ TaskRepository.save(task)      → db
-        │                  └ ActivityLogger.log("task.reactivated")  → db
+        │                  ├ TaskRepository.save(task)      → infrastructure
+        │                  └ ActivityLogger.log("task.reactivated")  → infrastructure
         │  5. ENQUEUE    QueuePublisher.publish("embedding.generate", …)
         │                  → infrastructure  BullMqQueuePublisher → Redis
         ▼  TaskDto
@@ -499,7 +499,7 @@ apps/worker  consumer/embedding.consumer.ts
         ▼
 application  IndexTaskUseCase.execute(systemPrincipal, …)
         │  → EmbeddingProvider (port) → infrastructure  OpenAiEmbeddingProvider
-        │  → VectorStore       (port) → db              PgVectorStore
+        │  → VectorStore       (port) → infrastructure  PgVectorStore
         ▼  row in task_embeddings
 ```
 
@@ -510,7 +510,7 @@ application  IndexTaskUseCase.execute(systemPrincipal, …)
 An admin removes `task.reactivate` from the Manager role. Nobody deploys anything.
 
 ```
-db  role_permissions row deleted
+postgres  role_permissions row deleted
         ▼
 auth  CapabilityCache invalidated for every affected user
         ▼
@@ -530,7 +530,7 @@ auth  CapabilityCache invalidated for every affected user
 
 **Every use-case followed load → authorize → work → persist.** Authorization is step two, in the use-case, every time. Never in middleware, never in a router, never only in the UI.
 
-**Swapping anything is local.** Postgres → another SQL database: `db` only. pgvector → Qdrant: one line in `container/container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
+**Swapping anything is local.** Postgres → another SQL database: `infrastructure/src/pg/` only. pgvector → Qdrant: one line in `container/container.ts` plus a new store class. TanStack Start → NestJS: `apps/web/src/server/` moves and the error interceptor becomes an exception filter. Web → desktop: one `AuthStrategy` swap ([30](30-desktop-app.md)).
 
 ---
 

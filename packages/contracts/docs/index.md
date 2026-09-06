@@ -18,7 +18,7 @@ reason is at least ten characters" be written once and enforced in four places.
 | **Package** | `@loadbearing/contracts` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `zod`, `@orpc/contract`, `@loadbearing/permissions` (type-only), and — once slices land — `@loadbearing/core` and `@loadbearing/errors` |
-| **Used by** | `application`, `db`, `api-client`, `query`, `ui`, `feature`, `apps/*` |
+| **Used by** | `application`, `infrastructure`, `api-client`, `query`, `ui`, `feature`, `apps/*` |
 | **Environment** | isomorphic — server, browser, worker, and Tauri webview |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 

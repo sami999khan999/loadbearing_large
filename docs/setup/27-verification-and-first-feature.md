@@ -69,8 +69,8 @@ feat(permissions): PermissionRegistry, ModuleRegistry, CapabilitySet
 feat(contracts): zod contracts, entities, oRPC contract router, procedure permissions
 chore(infra): docker compose for postgres, redis, minio
 feat(application): Principal, Authorizer, DomainError, ports
-feat(db): drizzle rbac schema, repositories, seed
-feat(db): pgvector schema and PgVectorStore behind the port
+feat(infrastructure): drizzle rbac schema, repositories, seed
+feat(infrastructure): pgvector schema and PgVectorStore behind the port
 feat(infrastructure): redis cache, s3 gateway, bullmq publisher
 feat(auth): better-auth config, session resolver, capability cache, api keys
 feat(composition): Container

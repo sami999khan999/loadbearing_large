@@ -20,7 +20,7 @@ concept into `packages/application` — the one thing this architecture spends a
 out. A port with a transaction handle in its signature is a port that describes Postgres.
 
 `AsyncLocalStorage` is a Node built-in, costs effectively nothing, and keeps the transaction invisible
-above `db`. `BaseRepository` is the only reader:
+above this package. `BaseRepository` is the only reader:
 
 ```ts
 protected get db() {

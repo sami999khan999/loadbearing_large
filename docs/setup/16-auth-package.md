@@ -62,7 +62,7 @@ packages/auth/src/
     └── index.ts                          ← prints what the pinned runtime expects
 ```
 
-**Depends on** `core`, `contracts`, `permissions`, `application`, `db`, `infrastructure`.
+**Depends on** `core`, `contracts`, `permissions`, `application`, `infrastructure`.
 **Used by** `composition` only. Never by `apps/web`'s component tree.
 
 The **client** side of auth does not live here. Better Auth's client is a thin fetch wrapper around endpoints, and `@loadbearing/api-client` is the package whose entire job is "how to reach the server." See [18](18-api-client-package.md).
@@ -355,11 +355,11 @@ export abstract class MembershipReader {
 }
 ```
 
-Implemented in `db` as `PgMembershipReader`, ordered by creation so a user in two organizations lands in the same one every time rather than wherever the planner happened to look first.
+Implemented in `infrastructure` as `PgMembershipReader`, ordered by creation so a user in two organizations lands in the same one every time rather than wherever the planner happened to look first.
 
 > **Declared here rather than in `application`, and that is the same judgement `ApiKeyRepository` gets in Step 16.6.** It exists to populate an authentication artifact, and no use-case should learn that sessions have an organization column.
 >
-> The cost is that `db` cannot implement it nominally — `auth` already depends on `db`, so the arrow cannot point back — and the two are bound structurally in `Container` ([17](17-composition-container.md)). A signature drift fails composition's typecheck rather than this package's. That is a real trade, and the alternative is worse: a port in `application` describing a table `application` is not allowed to know exists.
+> The cost is that `infrastructure` cannot implement it nominally — `auth` already depends on `infrastructure`, so the arrow cannot point back — and the two are bound structurally in `Container` ([17](17-composition-container.md)). A signature drift fails composition's typecheck rather than this package's. That is a real trade, and the alternative is worse: a port in `application` describing a table `application` is not allowed to know exists.
 
 ---
 
@@ -639,7 +639,7 @@ export class ApiKeyResolver {
 
 **Timing-safe comparison** even though the prefix already narrowed the candidate set. It costs nothing and removes a class of question you would otherwise have to answer in a security review.
 
-**`ApiKeyRepository` is declared here as an abstract class** and implemented in `db`. That is a slight break from "ports live in `application`," and it is deliberate: an API key is an authentication artifact, not a domain entity, and nothing in `application` should know keys exist.
+**`ApiKeyRepository` is declared here as an abstract class** and implemented in `infrastructure`. That is a slight break from "ports live in `application`," and it is deliberate: an API key is an authentication artifact, not a domain entity, and nothing in `application` should know keys exist.
 
 ---
 
@@ -726,7 +726,7 @@ export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export { BetterAuthSessionResolver, MembershipReader } from "./session/index.js";
 ```
 
-**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `db` gives `migrate/` and `infrastructure` gives `smoke/` ([15](15-infrastructure-package.md)).
+**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `smoke.ts` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
 

@@ -25,7 +25,7 @@ in [Data and scale](../../../docs/opinions/data-and-scale.md).
 | **Package** | `@loadbearing/observability` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/core` (`Clock`, `Uuid`), `@loadbearing/errors` — nothing else, ever |
-| **Used by** | `db`, `infrastructure`, `auth`, `composition`, `apps/*` — **never** `application` |
+| **Used by** | `infrastructure`, `auth`, `composition`, `apps/*` — **never** `application` |
 | **Environment** | isomorphic — server, browser, worker, and Tauri webview |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 
@@ -72,7 +72,7 @@ That one rule dissolves every hard problem at once:
 - A `ForbiddenError` is logged **once**, at the boundary that catches it, with its full structured
   context — rather than three times on the way up, each time with less of it.
 
-Logging happens at the edges: the oRPC layer, the worker's consumers, the adapters in `db` and
+Logging happens at the edges: the oRPC layer, the worker's consumers, the adapters in
 `infrastructure`, and process boot and shutdown.
 
 ---

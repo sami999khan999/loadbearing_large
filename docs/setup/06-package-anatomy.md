@@ -268,8 +268,10 @@ const PACKAGES = {
   permissions: ["ts", {}],
   contracts: ["ts", {}],
   application: ["ts", {}],
-  db: ["ts", { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:" }],
-  infrastructure: ["ts", { "@types/node": "catalog:" }],
+  infrastructure: [
+    "ts",
+    { "drizzle-kit": "catalog:", tsx: "catalog:", "@types/pg": "catalog:", "@types/node": "catalog:" },
+  ],
   auth: ["ts", { "@types/node": "catalog:" }],
   composition: ["ts", {}],
   asset: ["ts", {}],
@@ -407,7 +409,7 @@ node -e "require('fs').unlinkSync('scaffold.mjs')"
 
 ## Step 6.2 — Wire the dependency graph
 
-**One command per package, in this order.** `db` depends on `application`, so `application` must be declared first for the graph to resolve cleanly on the first pass.
+**One command per package, in this order.** `infrastructure` depends on `application`, so `application` must be declared first for the graph to resolve cleanly on the first pass.
 
 ### `@loadbearing/errors`
 No runtime dependencies. It is the root of the graph and depends on nothing at all, because a failure has to be constructible and readable in the use-case that throws it, the transport that maps it, the component that renders it, and the worker that logs it. Any dependency would exclude one of those. See [09](09-errors-package.md).
@@ -424,7 +426,7 @@ pnpm add --filter @loadbearing/core @loadbearing/errors@workspace:*
 ```bash
 pnpm add --filter @loadbearing/observability @loadbearing/core@workspace:* @loadbearing/errors@workspace:*
 ```
-> The diagnostic stream. Two workspace dependencies and no third-party ones: `core` for `Clock` and `Uuid`, `errors` for `ERROR_CATALOG` and `ErrorNormalizer` — because the level of a logged failure comes from that catalog's `severity`. It sits this low in the graph so `db`, `infrastructure`, `auth`, and both apps can all reach it. **`application` may not**, and `check-architecture.mjs` asserts that. See [12](12-application-package.md).
+> The diagnostic stream. Two workspace dependencies and no third-party ones: `core` for `Clock` and `Uuid`, `errors` for `ERROR_CATALOG` and `ErrorNormalizer` — because the level of a logged failure comes from that catalog's `severity`. It sits this low in the graph so `infrastructure`, `auth`, and both apps can all reach it. **`application` may not**, and `check-architecture.mjs` asserts that. See [12](12-application-package.md).
 
 ### `@loadbearing/permissions`
 ```bash
@@ -496,7 +498,7 @@ pnpm add --filter @loadbearing/content @loadbearing/errors@workspace:* @loadbear
 ```bash
 pnpm add --filter @loadbearing/api-client @loadbearing/contracts@workspace:* @orpc/client@catalog: @orpc/contract@catalog: better-auth@catalog:
 ```
-> Depends on `contracts` but **not** on `db` or `application` — the client knows the shape of the API, never its implementation. `better-auth` is here for its *vanilla* client only (`better-auth/client`), never `better-auth/react`.
+> Depends on `contracts` but **not** on `infrastructure` or `application` — the client knows the shape of the API, never its implementation. `better-auth` is here for its *vanilla* client only (`better-auth/client`), never `better-auth/react`.
 >
 > **Both `@orpc` packages, and no `core`.** `ContractRouterClient` comes from `@orpc/contract`, not from `@orpc/client`; and nothing in this package imports `@loadbearing/core` — it is isomorphic and carries no `ServerOnly.assert`.
 >
@@ -550,15 +552,14 @@ If two packages that should be ordered build in parallel, one of them is missing
 errors ── core
  │         ├── permissions ──┐
  │         │                 ├── contracts ──┐
- │         │                 │               ├── application ──┬── db ────┐
- │         │                 │               │                 │          ├── auth ──┐
- │         │                 │               │                 └── infra ─┘          ├── composition
- │         │                 │               │                                       │
- │         │                 │               └── api-client ── query ── feature      │
- │         │                 │                                    │                  │
- │         │                 └────────────────────────────────────┘                  │
- │         │                                                                          │
- └─────────┴── asset ── content ──────────────────────────────────────────────────────┘
+ │         │                 │               ├── application ── infrastructure ── auth ──┐
+ │         │                 │               │                                           ├── composition
+ │         │                 │               │                                           │
+ │         │                 │               └── api-client ── query ── feature          │
+ │         │                 │                                    │                      │
+ │         │                 └────────────────────────────────────┘                      │
+ │         │                                                                             │
+ └─────────┴── asset ── content ─────────────────────────────────────────────────────────┘
                           └── ui ── feature
 ```
 

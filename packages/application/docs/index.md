@@ -21,7 +21,7 @@ It returns nothing, and `check-architecture.mjs` §1 asserts it in CI.
 | **Package** | `@loadbearing/application` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/contracts`, `@loadbearing/core` (`ServerOnly`), `@loadbearing/errors` (`ForbiddenError`), `@loadbearing/permissions` — no third-party runtime dependency, ever |
-| **Used by** | `db`, `infrastructure`, `auth`, `composition`, `apps/worker` — **never** a browser bundle |
+| **Used by** | `infrastructure`, `auth`, `composition`, `apps/worker` — **never** a browser bundle |
 | **Environment** | server-only; `ServerOnly.assert()` is the runtime tripwire |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 

@@ -30,7 +30,7 @@ That is why the "must load in Electron's main process" justification for keeping
 
 **Three rules that do not change:**
 
-- The desktop app imports `feature`, `ui`, `query`, `api-client`, `content`, `permissions`, `contracts`, `asset`. It imports **none** of `db`, `auth`, `infrastructure`, `composition`, `application`.
+- The desktop app imports `feature`, `ui`, `query`, `api-client`, `content`, `permissions`, `contracts`, `asset`. It imports **none** of `infrastructure`, `auth`, `composition`, `application`.
 - `CapabilitySet.can()` is the same class, resolved from the same server, giving the same answers.
 - The contract is the contract. A desktop build talking to a newer server fails at the type level, not at runtime.
 
@@ -81,7 +81,7 @@ pnpm add --filter @loadbearing/desktop -D @tauri-apps/cli@catalog: vite @vitejs/
 
 `catalog:` for all three, same as everywhere else — `apps/desktop` is not an exception to the rule that one file owns every version ([03](03-workspace-and-catalogs.md)). `@tanstack/react-router` matters most: `apps/web` gets it transitively through TanStack Start, so without a catalog entry the two shells can resolve different router versions while sharing the same `feature` components.
 
-**Note what is absent.** No `composition`, no `application`, no `db`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The **Biome** server-only boundary from [05](05-lint-and-format.md) Step 5.2 lists `apps/desktop/src/**` in the same override as `apps/web/src/**`, and here it has **no escape hatch at all** — unlike `apps/web` there is no `src/server/**` inside a Tauri bundle to exempt.
+**Note what is absent.** No `composition`, no `application`, no `infrastructure`, no `auth`, no `@orpc/server`. The desktop app has no container and constructs no adapters — it is a client. The **Biome** server-only boundary from [05](05-lint-and-format.md) Step 5.2 lists `apps/desktop/src/**` in the same override as `apps/web/src/**`, and here it has **no escape hatch at all** — unlike `apps/web` there is no `src/server/**` inside a Tauri bundle to exempt.
 
 ```
 apps/desktop/

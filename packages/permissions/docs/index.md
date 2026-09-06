@@ -18,7 +18,7 @@ algorithm, and it loads anywhere.
 | **Package** | `@loadbearing/permissions` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | — nothing at runtime |
-| **Used by** | `contracts`, `application`, `db`, `auth`, `api-client`, `query`, `ui`, `feature`, `content` (type-only), `apps/*` |
+| **Used by** | `contracts`, `application`, `infrastructure`, `auth`, `api-client`, `query`, `ui`, `feature`, `content` (type-only), `apps/*` |
 | **Environment** | isomorphic — server, browser, worker, and Tauri webview |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
 

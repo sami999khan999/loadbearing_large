@@ -68,7 +68,7 @@ up.
 
 ## No exported free functions in the OOP packages
 
-`core`, `permissions`, `errors`, `contracts`, `application`, `db`, `infrastructure`, `auth`,
+`core`, `permissions`, `errors`, `contracts`, `application`, `infrastructure`, `auth`,
 `composition`, `api-client`, `asset`, `content` export classes. A namespace of static methods on a
 class with a private constructor is the shape — `Locales`, `Results`, `ErrorNormalizer`. Enforced by
 ESLint `no-restricted-syntax`; Biome's `complexity/noStaticOnlyClass` is switched off precisely to
