@@ -36,7 +36,7 @@ packages/ui/
 ├── ui.d.ts                    ← declare module "*.svg"; named in tsconfig `include`
 ├── vitest.setup.ts            ← afterEach(cleanup)
 └── src/
-    ├── index.ts                 ← "use client" on line 1
+    ├── index.ts               ← "use client" on line 1
     ├── import.ts              ← two workspace entries, both type-only but one
     ├── theme/
     │   ├── theme.css          ← entry: @imports token/ and color/

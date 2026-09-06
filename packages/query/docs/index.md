@@ -37,7 +37,7 @@ this package.
 
 ```
 packages/query/src/
-├── index.ts                          ← "use client" on line 1
+├── index.ts                        ← "use client" on line 1
 ├── import.ts                       ← every external symbol. The router package is not on it
 ├── key/
 │   ├── index.ts
