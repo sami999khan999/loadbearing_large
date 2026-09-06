@@ -1,7 +1,7 @@
 import { ImageManifest } from "@loadbearing/asset";
 import { describe, expect, it } from "vitest";
 import { MediaResolver } from "../../src/media/media-ref.js";
-import { StaticMediaResolver } from "../../src/media/static.media-resolver.js";
+import { StaticMediaResolver } from "../../src/media/static-media.resolver.js";
 
 describe("StaticMediaResolver", () => {
   it("resolves a key to the manifest entry", () => {

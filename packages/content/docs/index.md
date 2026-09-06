@@ -41,11 +41,11 @@ packages/content/
 │   ├── source/
 │   │   ├── index.ts
 │   │   ├── content-source.ts      → ContentSource (abstract) — all four shapes
-│   │   └── static.content-source.ts → StaticContentSource
+│   │   └── static-content.source.ts → StaticContentSource
 │   ├── media/                     ── shape 2: media references
 │   │   ├── index.ts
 │   │   ├── media-ref.ts           → MediaResolver, ResolvedMedia
-│   │   └── static.media-resolver.ts → StaticMediaResolver
+│   │   └── static-media.resolver.ts → StaticMediaResolver
 │   ├── collection/                ── shape 3: repeating records
 │   │   ├── index.ts
 │   │   └── nav/
@@ -71,7 +71,7 @@ packages/content/
     ├── translator/
     │   └── translator.spec.ts
     ├── source/
-    │   └── static.content-source.spec.ts
+    │   └── static-content.source.spec.ts
     └── message/
         └── error-copy.spec.ts
 ```
@@ -164,7 +164,7 @@ repository permitted to carry a message. Moving it here cost nothing and removed
 | `message/namespace.ts` | ◐ four namespaces; gains the server-only `email` as a union member |
 | `message/catalog.ts` | ◐ eight cells, total over `Locale × ClientNamespace` |
 | `message/error-copy.ts` | ✅ final |
-| `content-source.ts`, `static.content-source.ts` | ✅ all four shapes declared and implemented |
+| `content-source.ts`, `static-content.source.ts` | ✅ all four shapes declared and implemented |
 | `media/` — `MediaResolver`, `StaticMediaResolver` | ✅ final |
 | `collection/nav/` — `NavContract`, `navItems` | ✅ final |
 | `document/` — `DocumentContract`, `DocumentEntity` | ✅ shape declared; `document()` answers `null` |

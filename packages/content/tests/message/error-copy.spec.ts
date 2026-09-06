@@ -7,7 +7,7 @@ import {
 } from "@loadbearing/errors";
 import { describe, expect, it } from "vitest";
 import { ERROR_COPY, ErrorCopy, FIELD_RULE_COPY } from "../../src/message/error-copy.js";
-import { StaticContentSource } from "../../src/source/static.content-source.js";
+import { StaticContentSource } from "../../src/source/static-content.source.js";
 
 const translator = (locale: "en" | "bn" = "en") => new StaticContentSource().translator(locale, []);
 

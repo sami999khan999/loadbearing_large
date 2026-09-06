@@ -37,15 +37,15 @@ packages/composition/src/
 │   └── test-container.ts             → TestContainer, TestPorts   (off the barrel)
 └── fake/
     ├── index.ts
-    ├── in-memory.cache-store.ts      → InMemoryCacheStore
-    ├── in-memory.storage-gateway.ts  → InMemoryStorageGateway
-    ├── in-memory.vector-store.ts     → InMemoryVectorStore
-    ├── recording.activity-logger.ts  → RecordingActivityLogger
-    ├── recording.event-bus.ts        → RecordingEventBus
-    ├── recording.queue-publisher.ts  → RecordingQueuePublisher
-    ├── stub.analytics-reader.ts      → StubAnalyticsReader
-    ├── stub.embedding-provider.ts    → StubEmbeddingProvider
-    └── stub.session-resolver.ts      → StubSessionResolver
+    ├── in-memory-cache.store.ts      → InMemoryCacheStore
+    ├── in-memory-storage.gateway.ts  → InMemoryStorageGateway
+    ├── in-memory-vector.store.ts     → InMemoryVectorStore
+    ├── recording-activity.logger.ts  → RecordingActivityLogger
+    ├── recording-event.bus.ts        → RecordingEventBus
+    ├── recording-queue.publisher.ts  → RecordingQueuePublisher
+    ├── stub-analytics.reader.ts      → StubAnalyticsReader
+    ├── stub-embedding.provider.ts    → StubEmbeddingProvider
+    └── stub-session.resolver.ts      → StubSessionResolver
 
 packages/composition/tests/
 ├── container/test-container.spec.ts

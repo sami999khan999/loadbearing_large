@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { StaticContentSource } from "../../src/source/static.content-source.js";
+import { StaticContentSource } from "../../src/source/static-content.source.js";
 
 describe("StaticContentSource", () => {
   // The shell is a property of the seam, not something a caller remembers to ask for.
