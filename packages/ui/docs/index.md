@@ -183,10 +183,22 @@ exist, because the first ships.
 
 **No Storybook, and no `*.stories.tsx`.** Doc 22 offers Storybook or a `/kitchen-sink` route in
 `apps/web` and says to pick one deliberately. The route is what was picked —
-`apps/web/src/route/(dev)/kitchen-sink.tsx` renders every component against every theme, with no
-second build, no second dependency tree and no story files to keep in step with the components. The
-component tests under `tests/`, on `jsdom` and `@testing-library/react`, are the other half: they
+`apps/web/src/route/(dev)/kitchen-sink.tsx` renders ten of the eleven components against every theme
+and every mode, with no second build, no second dependency tree and no story files to keep in step
+with the components. `Can` is the eleventh and has nothing to show: it renders no element of its own.
+The component tests under `tests/`, on `jsdom` and `@testing-library/react`, are the other half: they
 assert *behaviour* where the route shows *appearance*.
+
+> [!IMPORTANT]
+> **`(dev)` is a route group, not a build condition.** It organises files and contributes nothing to
+> the URL, so nothing about the directory name kept this page out of a production bundle — it was a
+> public route that any visitor could open. The route's loader now throws `notFound()` unless
+> `import.meta.env.DEV`, and `apps/web/tests/route/kitchen-sink.spec.ts` pins both directions.
+>
+> Its labels are English literals and stay that way. A page that cannot render in production has no
+> users, so there is no user-visible copy for [`content`](../../content/docs/index.md) to own —
+> adding a `dev` namespace to `ClientNamespace`, `NamespaceShape` and two catalog cells would be
+> structure built for nobody to read.
 
 **No third-party design system.** Every component carries a `ui-*` class, and those class names are
 the contract: `theme/class/*.css` is what they resolve to, exported separately from `theme.css` so a

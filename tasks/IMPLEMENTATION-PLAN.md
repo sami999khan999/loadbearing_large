@@ -1255,10 +1255,27 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   `DocumentEntity` / `ContentSource.document()` hardcoded `null` (delete),
   `ApiClient.raw` (keep, documented escape hatch), `QueryKeys.account.twoFactor` (delete or
   use for `P2.15`).
-- [ ] `P5.16` **`/kitchen-sink` ships to production** — `(dev)` is a pathless group, not a
+- [x] `P5.16` **`/kitchen-sink` ships to production** — `(dev)` is a pathless group, not a
   build condition. Gate: `loader: () => { if (!import.meta.env.DEV) throw notFound() }`; add
   `Callout`, `CodeList`, `QrCode` (three of eleven primitives missing); translate its eleven
-  string literals. **Docs:** `ui/docs/index.md:165`.
+  string literals. **Docs:** `ui/docs/index.md:165`. `done: 2026-09-06`
+  - **Gated, and the gate is pinned in both directions.** `loader` throws `notFound()` unless
+    `import.meta.env.DEV`, and `apps/web/tests/route/kitchen-sink.spec.ts` asserts it throws with
+    `DEV` false and does not with `DEV` true — a one-direction spec would pass with the gate
+    deleted.
+  - **The three primitives are in, with real inputs rather than placeholders.** `CodeList` gets six
+    backup-code-shaped strings because the grid's column count is the thing being looked at, and
+    `QrCode` gets a genuine `otpauth://` URI because that component re-encodes nothing — a trimmed
+    sample renders a QR that scans into an authenticator generating wrong codes. `Callout` shows
+    its four tones; the page had listed a fifth, `neutral`, which `CalloutTone` does not have.
+  - **Ten of eleven, not eleven.** `Can` renders no element of its own, so there is nothing for a
+    visual surface to show. Stated in `ui/docs` rather than left as an apparent gap.
+  - **The eleven string literals are deliberately not translated, and the entry's two halves are in
+    tension.** Gating the page out of production is what settles it: a route that `notFound()`s in
+    production has no users, so there is no user-visible copy for `content` to own. Translating
+    them would mean a `dev` namespace in `ClientNamespace` and `NamespaceShape` plus two catalog
+    cells — structure built so that nobody can read it, which is what
+    [`simplicity`](../docs/ai/rules/simplicity.md) asks about first. Recorded in `ui/docs`.
 
 **Exit.** `grep -rn` for each deleted symbol returns nothing; every remaining permission key in
 `CATALOG` is used by at least one `PROCEDURE_PERMISSIONS` entry (add that as a
