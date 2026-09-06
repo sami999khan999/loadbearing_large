@@ -21,14 +21,14 @@ named). Nothing between.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/composition` (private, never published) |
-| **Entrypoint** | `src/index.ts` — two exports, `Container` and `ContainerConfig` |
+| **Entrypoint** | `src/index.ts` — `Container`, `ContainerConfig`, `HealthReport`, and the test kit |
 | **Depends on** | `application`, `auth`, `content`, `contracts`, `core`, `infrastructure`, `observability` |
 | **Used by** | `apps/web`, `apps/worker`. **Never** `apps/desktop` — it holds no container ([30](../../../docs/setup/30-desktop-app.md)) |
 | **Environment** | server-only; `ServerOnly.assert()` in `src/index.ts` is the runtime tripwire |
 
 ```
 packages/composition/src/
-├── index.ts                          ← ServerOnly.assert(). Two exports, and no more
+├── index.ts                          ← ServerOnly.assert(). The container, and the test kit
 ├── import.ts                         ← every external symbol, both sides of every seam
 ├── container/
 │   ├── index.ts

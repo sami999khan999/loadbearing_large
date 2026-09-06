@@ -33,6 +33,7 @@ import {
   type LogReader,
   type MaintenanceGateway,
   type QueuePublisher,
+  SERVER_CATALOG,
   type SessionResolver,
   SilentLogger,
   StaticContentSource,
@@ -94,9 +95,9 @@ export class TestContainer {
       analytics: overrides.analytics ?? new StubAnalyticsReader(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
-      // Already in-memory — its catalog is a map of dynamic imports, so there is
-      // nothing to fake. The one port whose real implementation is the test double.
-      content: overrides.content ?? new StaticContentSource(),
+      // The one port whose real implementation is the test double, and `SERVER_CATALOG`
+      // like `Container`: the client default carries no `email` namespace.
+      content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),
       email: overrides.email ?? new RecordingEmailSender(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       events: overrides.events ?? new RecordingEventBus(),

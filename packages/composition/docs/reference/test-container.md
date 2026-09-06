@@ -35,14 +35,31 @@ port there and this file stops compiling until it has a double. That is the whol
 shows up here as one line rather than as a compile error in forty specs"* — and it only holds if the
 check is `tsc`'s rather than a spec's.
 
-It costs nothing at runtime. `tsup` builds from `src/index.ts`, which names neither
-`test-container.ts` nor `fake/`, so nothing is bundled:
+## The barrel exports it, and there is no second entrypoint
+
+`TestContainer`, `TestPorts`, `TestHarness`, `FixedClock` and the fakes come out of
+`src/index.ts` alongside `Container`. They were reachable only from inside this package, so every
+consumer downstream — `apps/worker` first — hand-rolled an object literal of the four members its
+subject happened to touch and cast it `as unknown as Container`. That double is silent about the
+port added next week, which is the exact failure `TestPorts` exists to make loud.
+
+No subpath export, per [Imports](../../../../docs/opinions/imports.md): a package wanting a second
+JavaScript entrypoint is a package that should be two.
+
+**It reaches `dist/index.js` and neither bundle.** `tsup` emits ESM, so a consumer that imports only
+`Container` shakes the rest out — `apps/web`'s client *and* server outputs contain none of these
+names, which is the check worth running after touching this barrel:
 
 ```bash
-grep -c "TestContainer\|InMemory\|Recording\|Stub" packages/composition/dist/index.js
+pnpm --filter @loadbearing/web build
+grep -rl "InMemoryVectorStore\|TestContainer" apps/web/.output/   # nothing
 ```
 
-Returns `0`.
+**`packages/application` is the one place that cannot use it**, and that is not an oversight.
+`composition` imports `application`; the reverse edge would be a cycle in the workspace graph and
+would invert the layering. Its specs keep their hand-rolled doubles, which is the cost of being
+upstream of the thing that knows how to fake it. Moving the fakes into a package left of
+`application` is the change that would fix it, and it is a package decision, not a file move.
 
 ## `build()` returns abstract types, on purpose
 

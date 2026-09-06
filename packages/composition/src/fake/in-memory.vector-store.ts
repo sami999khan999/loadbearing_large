@@ -1,5 +1,9 @@
 import { type DocumentChunk, type OrganizationId, type SearchHit, VectorStore } from "../import.js";
 
+// The same floor `PgVectorStore` applies. Without it a fake returns the least-unrelated
+// chunk where the adapter returns nothing, and the caller's empty branch never runs.
+const MIN_SCORE = 0.3;
+
 // Cosine is computed for real: scoring every hit the same makes "the top result is the
 // right one" pass either way, which is the assertion worth having.
 export class InMemoryVectorStore extends VectorStore {
@@ -47,6 +51,7 @@ export class InMemoryVectorStore extends VectorStore {
         score: InMemoryVectorStore.cosine(embedding, chunk.embedding),
         metadata: chunk.metadata,
       }))
+      .filter((hit) => hit.score >= MIN_SCORE)
       .sort((left, right) => right.score - left.score)
       .slice(0, limit);
 

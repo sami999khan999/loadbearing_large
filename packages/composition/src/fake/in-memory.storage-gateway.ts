@@ -1,4 +1,4 @@
-import { StorageGateway, type StoredObject } from "../import.js";
+import { NotFoundError, StorageGateway, type StoredObject } from "../import.js";
 
 interface StoredEntry {
   readonly body: Uint8Array;
@@ -48,9 +48,11 @@ export class InMemoryStorageGateway extends StorageGateway {
     return { key, size, contentType, checksum: `fake-${key}` };
   }
 
+  // `NotFoundError`, like `S3StorageGateway` — a bare `Error` here lets a caller's
+  // catch-by-code branch pass against the fake and fail against S3.
   public override get(key: string): Promise<Uint8Array> {
     const entry = this.objects.get(key);
-    if (!entry) return Promise.reject(new Error(`storage.object:${key}`));
+    if (!entry) return Promise.reject(new NotFoundError("storage.object", key));
     return Promise.resolve(entry.body);
   }
 

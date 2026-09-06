@@ -84,6 +84,9 @@ export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { type Clock, FixedClock, ServerOnly, SystemClock } from "@loadbearing/core";
 
+// ── @loadbearing/errors ──────────────────────────────────────────────────────
+export { NotFoundError } from "@loadbearing/errors";
+
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 // Every concrete adapter, Postgres included — one block, because one package holds the
 // whole outside-world side of the ports below.
