@@ -133,7 +133,7 @@ export class AccountClient {
     const { data, error } = listed;
     if (error || !data) throw BetterAuthErrorNormalizer.normalize(error);
 
-    const currentToken = current.data?.session.token;
+    const currentToken = current.data?.session?.token;
 
     return data.map((session) => ({
       id: session.id,

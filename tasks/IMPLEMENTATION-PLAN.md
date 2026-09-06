@@ -1692,9 +1692,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     matters most — **no cookie is written when the session row was not updated**, because a
     browser holding a tenant the server disagrees with is worse than a failed switch. The two
     authorization guards were watched failing.
-- [ ] `P6.3` **query and client** — `RouteGuard`, `useAppMutation` (invalidate before
+- [x] `P6.3` **query and client** — `RouteGuard`, `useAppMutation` (invalidate before
   `onSuccess`), `AccountMutations`, `MemberMutations`, `OrganizationMutations`,
   `MemberQueries`, `RoleQueries`, `AccountClient` (no spec at all), `MessageStore`.
+  `done: 2026-09-06`
+  - **Two of the nine were already covered.** `MessageStore` has a spec in `content`, and
+    `RouteGuard` has one in `apps/web` — five tests, including the round trip of the carried
+    destination through `RedirectSearch.schema`. It gains two: a deny sitting over a grant, and
+    a goal id on an org-scoped permission, which is every permission in the catalog today.
+  - **`useAppMutation` needed a renderer, so `packages/query` gains one.** jsdom,
+    `@testing-library/react` and `react-dom`, all from the catalog `feature` already uses, plus
+    the same one-line `cleanup` setup file. Eight tests: the invalidations run before the
+    caller's `onSuccess`, the optimistic key is invalidated whether or not `invalidates` names it
+    and never twice, the edit lands before the request resolves, **nothing is written when the key
+    holds no data** — seeding a cache with a value no server sent is worse than no edit — and the
+    rollback is restored before the caller's `onError`. Both orderings were watched failing with
+    the two `await`s swapped.
+  - **The mutation and query classes are declarations, and are tested as declarations.**
+    `useAppMutation` is stubbed at the runtime barrel, so `MemberMutations.useRevokeInvitation()`
+    hands back the object it declared and the spec reads `invalidates`, `optimistic.queryKey` and
+    `optimistic.apply` without React at all. Nineteen tests over the three mutation classes and
+    the two query classes, and the ones worth having are the absences: a change of address
+    invalidates nothing, enabling two-factor invalidates nothing, and none of the three
+    organization mutations names a key — because the whole cache belongs to the tenant just left.
+  - **`AccountClient` had no spec and had a defect.** `current.data?.session.token` stops its
+    optional chain at `data`, so a 200 carrying no `session` threw a `TypeError` inside the
+    settings page rather than marking no row current — which is exactly what the comment above it
+    claims happens. One character, and the spec that found it was watched failing against the old
+    form. Thirteen more: `revokeOtherSessions: true` on every password change, the `totpURI`
+    rename, ISO normalisation of `createdAt`, and which single row a session list marks.
 - [ ] `P6.4` **forms** — `sign-in.form` (the 2FA fork), `reset-password`, `change-password`,
   `change-email`, `two-factor.setup` (codes shown once), `linked-account.list` (last
   credential rule), `active-session.list`, `invite-member.form`, `organization-switcher`.

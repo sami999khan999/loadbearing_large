@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionUser } from "~/import.js";
+import type { PermissionKey, SessionUser } from "~/import.js";
 import { RouteGuard } from "../../src/route/-guard.js";
 import { RedirectSearch } from "../../src/route/-redirect.js";
 
@@ -81,5 +81,52 @@ describe("RouteGuard.requirePermission", () => {
         },
       }),
     ).not.toThrow();
+  });
+
+  // The DTO is rebuilt through `CapabilitySet.from()` rather than shape-checked, which
+  // is what makes a deny beat a grant here the way it does on the server.
+  it("refuses a denial that sits over a grant", () => {
+    const thrown = thrownBy(() =>
+      RouteGuard.requirePermission("rbac.role.read")({
+        context: {
+          capabilities: {
+            ...EMPTY,
+            org: {
+              grants: ["rbac.role.read"] as PermissionKey[],
+              denies: ["rbac.role.read"] as PermissionKey[],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(thrown.to).toBe("/forbidden");
+  });
+
+  // Every permission in the catalog is org-scoped today, so a goal id is carried and
+  // ignored — and a goal grant is not a substitute for the org one the answer needs.
+  it("ignores a goal id for an org-scoped permission, on both answers", () => {
+    const held = {
+      ...EMPTY,
+      org: { grants: ["rbac.role.read"] as PermissionKey[], denies: [] },
+    };
+    const goalOnly = {
+      ...EMPTY,
+      goals: { g1: { grants: ["rbac.role.read"] as PermissionKey[], denies: [] } },
+    };
+
+    expect(() =>
+      RouteGuard.requirePermission("rbac.role.read", "g1")({ context: { capabilities: held } }),
+    ).not.toThrow();
+    expect(
+      thrownBy(() =>
+        RouteGuard.requirePermission(
+          "rbac.role.read",
+          "g1",
+        )({
+          context: { capabilities: goalOnly },
+        }),
+      ).to,
+    ).toBe("/forbidden");
   });
 });

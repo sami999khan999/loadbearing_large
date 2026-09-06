@@ -1060,19 +1060,31 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.4(react@19.2.8)
-      react-dom:
-        specifier: catalog:react
-        version: 19.2.8(react@19.2.8)
     devDependencies:
       '@loadbearing/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
+      '@testing-library/dom':
+        specifier: 'catalog:'
+        version: 10.4.1
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/react':
         specifier: catalog:react
         version: 19.2.18
+      '@types/react-dom':
+        specifier: catalog:react
+        version: 19.2.5(@types/react@19.2.18)
+      jsdom:
+        specifier: 'catalog:'
+        version: 28.1.0(@noble/hashes@2.3.0)(supports-color@7.2.0)
       react:
         specifier: catalog:react
         version: 19.2.8
+      react-dom:
+        specifier: catalog:react
+        version: 19.2.8(react@19.2.8)
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3
