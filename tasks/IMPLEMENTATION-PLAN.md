@@ -1541,13 +1541,15 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     default run excludes `tests/smoke/**`; `pnpm smoke` runs them serially with a thirty-second
     timeout. Loki and ClickHouse skip by name through `describe.skipIf`, because a suite that
     silently contains no tests is indistinguishable from one that ran.
-  - **Not verified locally, and this is the honest half.** The container stack this environment had
-    been running went away partway through — no Docker daemon to restart it — so the suite was
-    exercised only as far as it can go without services: the config resolves and injects, the three
-    skip decisions report correctly, and the presign-shape test passes because signing needs no
-    network. Everything else is proved by CI's `compose` job, which is the only place `LOKI_URL` is
-    set. `packages/infrastructure` and `packages/composition` could not be re-run locally either,
-    for the same reason; the other 795 tests pass.
+  - **Verified in CI rather than locally, because the local stack went away.** The containers this
+    environment had been running disappeared partway through, with no Docker daemon to restart
+    them, so locally the suite was exercised only as far as it goes without services: the config
+    resolves and injects, all three skip decisions report correctly, and the presign-shape test
+    passes because signing needs no network. The `compose` job then ran it against the real stack
+    on `f60beec` — **11 passed, 2 skipped of 13**, the two being ClickHouse, which that profile
+    does not start. Loki's three ran, so `LogReader.query` is exercised where it is exercised
+    nowhere else. `packages/infrastructure` and `packages/composition` could not be re-run locally
+    for the same reason and are green in `verify`; the other 795 tests pass here.
 - [x] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
   been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
   consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
