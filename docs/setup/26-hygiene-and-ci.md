@@ -77,6 +77,17 @@ past checks nothing at all.
 
 ---
 
+> [!IMPORTANT]
+> **`.lintstagedrc.js` chunks the file list, and the limit is Windows', not Biome's.**
+> lint-staged passes every staged path to one command; Windows caps a command line at 8191
+> characters, which paths this long reach at around sixty files. The commit then fails with
+> `The command line is too long` **after** lint-staged has stashed — so the working tree is
+> restored, nothing names path length as the cause, and committing per layer hides it, which is
+> why it went unnoticed. Forty paths per invocation is roughly a quarter of the limit.
+>
+> The glob carries `mjs` and `cjs` as well. Every script in `tooling/scripts/` is `.mjs`, so
+> without them `pnpm lint` caught their formatting and the hook never did.
+
 ## Step 26.2 — Commit scopes
 
 **`commitlint.config.js`**

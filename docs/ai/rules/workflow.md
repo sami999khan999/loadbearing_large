@@ -50,6 +50,10 @@ the summary counts them apart from the passes — **under `CI=true` a skip fails
 there a skipped assertion is one nobody will come back to build the artefact for.
 **Treat a skip as unverified, not as a pass.** Then `pnpm typecheck && pnpm lint && pnpm test`.
 
+**`.claude/` is excluded from every grep in `check-architecture`.** It is agent scratch space,
+and it has held a full worktree checkout of this repository — which every assertion walking from
+the root would have counted a second time, in a copy nobody was editing.
+
 Four things rot quietly and no green build catches them: the client bundle staying clean, a concrete
 adapter escaping `infrastructure` + `composition`, naming drift, and a repository query that forgot
 its tenant scope.

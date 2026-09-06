@@ -2209,17 +2209,37 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     is sound, so setting `CLICKHOUSE_URL` now *requires* `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER`
     instead. Both apps; the worker had no `superRefine` before. Verified by setting the URL with the
     defaults left alone and watching boot refuse with both field paths.
-- [ ] `P8.19` **env templates** `P2` `~30m` — ship `infra/.env.example` with the eleven port
+- [x] `P8.19` **env templates** `P2` `~30m` — ship `infra/.env.example` with the eleven port
   overrides; remove `EMBEDDING_PROVIDER` and `WEB_PORT` from `.env.example` and
   `docs/setup/02:139,146` (read by nothing); `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` per
   `P4.25`; `S3_FORCE_PATH_STYLE` gains a `.default("false")` like `LOG_PRETTY`.
-- [ ] `P8.20` **stale worktree** `P3` `~5m` — `.claude/worktrees/…` is a full checkout inside
+  `done: 2026-09-06`
+  - **Two of the four clauses were already settled.** `P4.27` decided against shipping
+    `infra/.env.example` — every published port already has a default in the compose file, so a
+    template of defaults is one more file to keep in step for no gain — and `P4.25` removed
+    `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` from both schemas. Checked, not assumed.
+  - **`EMBEDDING_PROVIDER` and `WEB_PORT` are read by nothing** — verified across `.ts`, `.mjs`,
+    `.yml` and `.json` — and are gone from `.env`, `.env.example` and doc 02.
+  - **`S3_FORCE_PATH_STYLE` defaults to `"false"`, which is the production answer.** Real S3
+    addresses buckets by host and MinIO by path; `.env.example` sets `true` for the local stack and
+    now says why, so the value a deployment omits is the one it wants.
+- [x] `P8.20` **stale worktree** `P3` `~5m` — `.claude/worktrees/…` is a full checkout inside
   the repo (gitignored); greps from the root double-count. Delete it; note in `workflow.md`
-  that `.claude/` is excluded from every grep in `check-architecture`.
+  that `.claude/` is excluded from every grep in `check-architecture`. `done: 2026-09-06`
+  - **The worktree is already gone** — `.claude/` holds only `skills/`. What was not true is the
+    second half: `.claude` was **not** in `SKIP_DIRS`, so the note `workflow.md` was asked to make
+    would have been a claim rather than a fact. It is in the set now, and `workflow.md` says it.
+  - Nothing walks from the repository root today, so this was latent rather than live — which is
+    exactly the kind of thing worth closing by construction while it costs one line.
 
 ### Found while executing
 
-- [ ] `P8.21` **`lint-staged` fails on Windows above roughly sixty staged files** `P2` `~30m`
+- [x] `P8.21` **`lint-staged` fails on Windows above roughly sixty staged files** `P2` `~30m`
+  `done: 2026-09-06` — `.lintstagedrc.json` becomes `.lintstagedrc.js`, a function config chunking
+  forty paths per `biome check`. Forty is about a quarter of the 8191-character limit with paths
+  this long. Verified by running the exported function over 95 synthetic paths: three commands,
+  the longest 1,154 characters. `docs/setup/26` names the limit and, more usefully, names the
+  symptom — the failure lands *after* the stash, so the tree is restored and nothing says why.
   - **Goal:** `.lintstagedrc.json` passes every staged path to one `biome check` invocation. On
     Windows the 8191-character command line is reached at around sixty files with paths this long,
     and the commit fails with `The command line is too long` — after lint-staged has already
@@ -2228,7 +2248,8 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **Done when:** the config chunks (a function config in `.lintstagedrc.js` splitting the file
     list, or `biome check --write --no-errors-on-unmatched .` with no arguments), and
     `docs/setup/26` names the limit.
-- [ ] `P8.22` **`lint-staged` never formats `tooling/scripts/*.mjs`** `P3` `~5m`
+- [x] `P8.22` **`lint-staged` never formats `tooling/scripts/*.mjs`** `P3` `~5m`
+  `done: 2026-09-06` — `mjs` and `cjs` are in the glob, which `P8.21` rewrote in the same pass.
   - **Goal:** the glob is `*.{js,jsx,ts,tsx,json,jsonc,css}`. Every script in `tooling/scripts/` is
     `.mjs`, so none is formatted on commit — `pnpm lint` catches them, the hook does not.
   - **Done when:** `mjs` and `cjs` are in the glob.

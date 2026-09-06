@@ -16,7 +16,12 @@ const Schema = z
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
-    S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).transform((v) => v === "true"),
+    // Defaulted like `LOG_PRETTY`, and to the production answer: real S3 wants virtual-host
+    // addressing, MinIO wants path-style, and `.env.example` sets `true` for the local stack.
+    S3_FORCE_PATH_STYLE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
 
     // A short secret is a real weakness, and this schema is the only place anyone will
     // ever check.

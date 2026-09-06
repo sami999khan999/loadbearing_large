@@ -12,7 +12,17 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".output", ".git", "migrations", "src-tauri"]);
+// `.claude` holds agent scratch space — skills, and at one point a full worktree checkout,
+// which every grep here would have counted twice. Excluded by construction, not by luck.
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".output",
+  ".git",
+  ".claude",
+  "migrations",
+  "src-tauri",
+]);
 
 const results = [];
 
