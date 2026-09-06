@@ -454,7 +454,7 @@ match a decision the tree already made.
 
 - [x] `P3.1` done: 2026-09-05 · **loose files under `packages/auth/src`** `~30m` — `auth.config.ts`,
   `auth.factory.ts` → `src/factory/`. Update `src/index.ts`, `auth/docs/index.md` tree.
-- [ ] `P3.2` **barrels that are scripts** `~1h` — `auth/src/tables/index.ts` (137 lines,
+- [x] `P3.2` done: 2026-09-05 · **barrels that are scripts** `~1h` — `auth/src/tables/index.ts` (137 lines,
   dotenv, `console.log`) and `infrastructure/src/smoke/index.ts` (130 lines) → move above
   `src/` as `packages/auth/tables.mts` and `packages/infrastructure/smoke.mts` beside
   `drizzle.config.ts` and `seed.ts`; `pg/migrate/index.ts` likewise → `migrate.mts`. This
@@ -490,7 +490,7 @@ match a decision the tree already made.
     graph and inverts the layering `docs/ai/rules/layering.md` states. Fixing it means moving the
     fakes into a package left of `application`, which is a package decision rather than a file
     move — recorded in `composition/docs/reference/test-container.md`.
-- [ ] `P3.9` **duplication in `feature` and `apps/web`** `~3h` — `MIN_PASSWORD_LENGTH` ×3 and
+- [x] `P3.9` done: 2026-09-05 · **duplication in `feature` and `apps/web`** `~3h` — `MIN_PASSWORD_LENGTH` ×3 and
   the password/confirm `<Field>` pair ×3 → `feature/src/auth/password-pair.tsx` with the
   floor imported from `contracts` (one authority); `day()` ×2 → `ui/src/format/date-format.ts`;
   the "clear cache, invalidate session, re-run root, navigate" block ×4 (`_authenticated.tsx:50,58`,
@@ -508,7 +508,7 @@ match a decision the tree already made.
   in sign-in, sign-up, forgot, reset → prefixed (`sign-in-email`), as the account forms do.
 - [x] `P3.14` done: 2026-09-05 · **unused dependency** `~5m` — remove `@loadbearing/auth` from
   `apps/web/package.json`; `pnpm deps:check`.
-- [ ] `P3.15` **role-suffix vocabulary** `~2h`
+- [x] `P3.15` done: 2026-09-05 · **role-suffix vocabulary** `~2h`
   - **Goal:** `docs/opinions/files.md` lists 25 suffixes and calls the set closed; the tree uses
     ~30 more (`.enroller .founder .claimer .mailer .factory .plugin .config .seed .events .cache
     .hasher .builder .connection .unit-of-work .form .list .queries .mutations .client .guard
@@ -554,6 +554,27 @@ match a decision the tree already made.
 
 **Exit.** `pnpm lint`, `pnpm check:architecture`, `pnpm deps:check`, `pnpm repo:check` all
 green; `docs/ai/rules/*.md` and `docs/opinions/*.md` agree (§12).
+
+**Closed 2026-09-05.** All twenty items plus `P3.21`. The exit line holds: `pnpm lint`,
+`check:architecture` 14/14, `deps:check`, `repo:check`, `typecheck` and the full suite green,
+infrastructure included against a live Postgres.
+
+**Three items ended somewhere the audit did not predict.**
+
+1. `P3.8` did half of what it asked, and the other half is refused rather than deferred — see the
+   item. `application` cannot import `composition` without inverting the layer, so its specs keep
+   their hand-rolled doubles; `apps/worker` was the consumer that actually needed the harness and
+   now uses it.
+2. `P3.15` renamed nineteen files, not the seven the audit counted. Every vendor adapter outside
+   `pg/` and `s3/` wrote the role into the subject (`redis.cache-store.ts`), and so did every fake
+   standing in for one, both content mailers, and content's own two static implementations. The
+   suffix table records sixty roles against the twenty-five it claimed were closed.
+3. `P3.16`'s "eslint boundary entry" is a Biome one: there is no boundaries plugin, and the machinery
+   that already expresses the graph is the server-only ban list — which `content` and `asset` were
+   missing from for exactly as long as the graph put them downstream of `composition`.
+
+`P3.21` was filed from a defect `P2.11`'s spec created: `seedOrganizationId` picked whichever tenant
+Postgres returned first, which stopped being one row the moment a second spec founded its own.
 
 ---
 
@@ -1063,5 +1084,6 @@ grep hits exactly `infrastructure` and `composition`; no repository method queri
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-05 | @sami | Created from a full audit of the tree at `6463935` |
+| 2026-09-05 | @sami | Phase 3 closed. All twenty items plus `P3.21`, filed from a defect `P2.11`'s spec created. `P3.15` grew from seven renames to nineteen; `P3.8` did half and recorded why the other half is refused |
 | 2026-09-05 | @sami | Phase 2 closed but for `P2.20`, blocked on `P5.15` by its own instruction. 25 of 26 items done, each with a spec proven to fail before the fix. `P2.26` filed and fixed from a defect the work surfaced; `P8.23` taken out of phase order because it blocked a commit. `T-030` and `T-026` closed in `TODO.md`, whose backlog is now empty |
 | 2026-09-05 | @sami | Phase 1 closed. §14 shipped and §5 widened; 524 blocks to 0, density 18.8 % → 13.0 %; eleven reference pages and two app `docs/` trees written. Phase 1's density target revised — see the note under its exit line. `P8.21` and `P8.22` filed from defects the work surfaced |
