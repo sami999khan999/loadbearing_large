@@ -378,7 +378,7 @@ Each one exists because something else in the architecture assumed it would.
 
 | Schedule | Queue | Pattern | Why it exists |
 |---|---|---|---|
-| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions and stale verification rows |
+| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions, stale verification rows, and lapsed invitations |
 | `partitions-monthly` | maintenance | `0 2 1 * *` | Creates the next few months of `activity_log` partitions |
 | `archive-monthly` | maintenance | `0 4 1 * *` | Detaches the month that aged out, ships it to S3, records it |
 | `analytics-projection` | analytics | `*/5 * * * *` | Replays `activity_log` into the derived store |
@@ -392,7 +392,13 @@ left `cleanup-daily` broken for a while. A consumer with no *store* is worse: it
 five minutes of nothing looks exactly like five minutes of work, and the first sign is a report that
 comes out wrong months later. **Absent beats no-op.**
 
-**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. `MaintenanceConsumer.MONTHS_AHEAD` is 3: each run creates the current month and the next two, so the job can miss two runs before anything breaks.
+**The invitation half of `cleanup-daily` is not housekeeping.** `invitations_email_uq` is on
+`(organization_id, email)`, so an invitation that lapsed last month keeps that address un-invitable
+— and the symptom is a re-invite refused with a conflict, which nobody connects to an expired row.
+The predicate is indexed (`invitations_expires_idx`), because a nightly delete filtering on an
+unindexed column scans every invitation in the deployment to find the few that lapsed.
+
+**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. `MaintenanceConsumer.MONTHS_PER_RUN` is 3: each run creates the current month and the next two, so the job can miss two runs before anything breaks. The constant is named for the count rather than the runway, because it was `MONTHS_AHEAD` for a while and read as three months of headroom it never had.
 
 **Sweeping uploads is not in `cleanup-daily`.** `MaintenanceGateway.sweepExpired` takes sessions and verification rows and nothing else — an orphaned S3 object has no row to sweep from, so finding one means listing the bucket against the table, which is a different job with a different cost. Adding it is a method on the gateway and a line in `MaintenanceConsumer.cleanup`.
 

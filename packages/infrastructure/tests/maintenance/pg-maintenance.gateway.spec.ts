@@ -1,10 +1,10 @@
 import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
-import { sessions, users, verifications } from "../../src/pg/schema/index.js";
+import { invitations, roles, sessions, users, verifications } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
@@ -12,8 +12,10 @@ let database: Database;
 let gateway: PgMaintenanceGateway;
 let organizationId: OrganizationId;
 let sweeper: UserId;
+let roleId: string;
 
 const identifiers: string[] = [];
+const invited: string[] = [];
 
 // Far enough out that nothing has been here: the spec is about the CREATE path, and a
 // month that already has a partition tests the `to_regclass` probe instead.
@@ -29,6 +31,16 @@ beforeAll(async () => {
   await database.client
     .insert(users)
     .values({ id: sweeper, name: "Sweeper", email: `${sweeper}@example.test` });
+
+  // The seeded `member` role, because an invitation needs one and this spec is not about
+  // which role it names.
+  const [role] = await database.client
+    .select({ id: roles.id })
+    .from(roles)
+    .where(and(eq(roles.organizationId, organizationId), eq(roles.key, "member")))
+    .limit(1);
+  if (!role) throw new Error("run `pnpm db:seed` first");
+  roleId = role.id;
 });
 
 afterAll(async () => {
@@ -38,6 +50,9 @@ afterAll(async () => {
 
   // The live rows the sweep was supposed to leave behind. Sessions cascade off the user.
   await database.client.delete(verifications).where(inArray(verifications.identifier, identifiers));
+  if (invited.length > 0) {
+    await database.client.delete(invitations).where(inArray(invitations.email, invited));
+  }
   await database.client.delete(users).where(inArray(users.id, [sweeper]));
   await database.close();
 });
@@ -86,6 +101,20 @@ const verification = (expiresAt: Date) => {
   return { id: Uuid.v7(), identifier, value: "v", expiresAt };
 };
 
+const invitation = (expiresAt: Date) => {
+  const email = `sweep-${Uuid.v7()}@example.test`;
+  invited.push(email);
+  return {
+    id: Uuid.v7(),
+    organizationId,
+    email,
+    roleId,
+    tokenHash: Uuid.v7(),
+    invitedBy: sweeper,
+    expiresAt,
+  };
+};
+
 describe("PgMaintenanceGateway.sweepExpired", () => {
   const now = new Date("2030-01-01T00:00:00.000Z");
   const expired = new Date("2029-12-31T23:59:59.000Z");
@@ -100,14 +129,39 @@ describe("PgMaintenanceGateway.sweepExpired", () => {
     await database.client.insert(sessions).values(session(live));
     await database.client.insert(verifications).values(verification(expired));
     await database.client.insert(verifications).values([verification(live), verification(live)]);
+    await database.client.insert(invitations).values([invitation(expired), invitation(live)]);
 
     // The regression: this used `.returning({ id })` and counted the array, shipping every
     // expired row back over the wire to be measured and thrown away.
-    expect(await gateway.sweepExpired(now)).toEqual({ sessions: 2, verifications: 1 });
+    expect(await gateway.sweepExpired(now)).toEqual({
+      sessions: 2,
+      verifications: 1,
+      invitations: 1,
+    });
+  });
+
+  // Not housekeeping. `invitations_email_uq` is on `(organization_id, email)`, so a lapsed
+  // row keeps that address un-invitable until something removes it.
+  it("frees the address a lapsed invitation was holding", async () => {
+    const lapsed = invitation(expired);
+    await database.client.insert(invitations).values(lapsed);
+
+    await gateway.sweepExpired(now);
+
+    const remaining = await database.client
+      .select({ id: invitations.id })
+      .from(invitations)
+      .where(eq(invitations.email, lapsed.email));
+
+    expect(remaining).toHaveLength(0);
   });
 
   it("leaves the unexpired rows alone, and reports zero on a second pass", async () => {
-    expect(await gateway.sweepExpired(now)).toEqual({ sessions: 0, verifications: 0 });
+    expect(await gateway.sweepExpired(now)).toEqual({
+      sessions: 0,
+      verifications: 0,
+      invitations: 0,
+    });
 
     const remaining = await database.client
       .select({ id: sessions.id })

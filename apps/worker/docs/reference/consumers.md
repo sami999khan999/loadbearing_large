@@ -42,9 +42,15 @@ the other should be loud.
 The month to archive is computed **from the clock**, not passed in the job payload, so a redelivered
 job archives the same month rather than one relative to whenever the retry happened.
 
-> [!NOTE]
-> The runway constant says three months but the loop creates two — `P8.4` in
-> `tasks/IMPLEMENTATION-PLAN.md`.
+**`MONTHS_PER_RUN` counts partitions, not runway, and the two differ by one.** Three is the current
+month and the next two, so the job survives two consecutive missed runs and the third is a write
+outage. The constant used to be called `MONTHS_AHEAD`, which read as three months of runway and was
+never that — the log field is `months` for the same reason.
+
+**The sweep takes expired invitations as well as sessions and verifications**, and that one is not
+housekeeping: `invitations_email_uq` is on `(organization_id, email)`, so a lapsed row keeps that
+address un-invitable until something removes it. Nobody would connect "re-invite says the address
+already has an invitation" to a row that expired last month.
 
 ## `EmbeddingConsumer` catches nothing, on purpose
 

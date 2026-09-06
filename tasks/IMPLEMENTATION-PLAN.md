@@ -1949,11 +1949,41 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `QueueName.DOCUMENT` is deleted (or claimed by `P5.5`). Alternative: delete composer,
     queue names and the two env keys from the worker schema.
   - **Docs:** `docs/setup/25`, `apps/worker/docs/reference/consumers.md`.
-- [ ] `P8.4` **partition runway and sweeps** `P2` `~2h` — `MONTHS_AHEAD = 3` with
+  - **Deferred by decision on 2026-09-06, not by oversight.** The facts, so this is not re-derived:
+    nothing in the worker sends mail — both mailers are constructed inside `Container`'s
+    `config.auth` branch, which the worker has no auth block for — so `SmtpEmailSender` is built and
+    disposed without ever being called. `DigestComposer` is 31 lines constructed only by its own
+    spec, `NOTIFICATION` and `DOCUMENT` have no consumer or producer (`P5.5` indexed documents
+    through `EMBEDDING`, so `DOCUMENT` stayed unclaimed), and `email.digest.*` is 24 keys in two
+    locales.
+  - **The entry's recommendation to ship is the half worth arguing with.** A digest needs a
+    recipient list — there is no port for "members to notify" — a definition of what `count` counts,
+    since nothing in the schema models unread, and an opt-out. That is product work, not a fix, and
+    `docs/ai/rules/simplicity.md` is explicit about not building it in advance. Deletion is the
+    other half of the entry and remains available.
+- [x] `P8.4` **partition runway and sweeps** `P2` `~2h` — `MONTHS_AHEAD = 3` with
   `offset = 0` creates two months ahead (doc says three); `cleanup-daily` sweeps sessions and
   verifications only — add expired `invitations` (an expired row permanently blocks re-invite
   under `invitations_email_uq`) with an index on `expires_at`; delete the documented
-  `recovery-sweep-daily` from `25` or implement it.
+  `recovery-sweep-daily` from `25` or implement it. `done: 2026-09-06`
+  - **The partition clause is a naming defect, not an arithmetic one, and `docs/setup/25` was
+    already right.** The loop creates three partitions — the current month and the next two — which
+    doc 25 describes exactly and calls "can miss two runs". What was wrong is that the constant was
+    called `MONTHS_AHEAD`, which reads as three months of headroom it never had. Renamed to
+    `MONTHS_PER_RUN`, with the log field `monthsAhead` renamed to `months` for the same reason and
+    the caution in `consumers.md` replaced by the arithmetic. **Changing the behaviour instead would
+    have raised the runway nobody asked to raise.**
+  - **The invitation sweep is the real defect here.** `invitations_email_uq` is on
+    `(organization_id, email)`, so a lapsed row keeps that address un-invitable — and the symptom is
+    a re-invite refused with a conflict, which nobody connects to a row that expired last month.
+    `SweepOutcome` gains `invitations`, the log line reports it, and `0014` adds
+    `invitations_expires_idx` — a nightly delete filtering on an unindexed column scans every
+    invitation in the deployment.
+  - **`recovery-sweep-daily` appears nowhere.** Not in doc 25, not in the code, not anywhere in the
+    tree — so that clause was already resolved, presumably by an earlier pass. Checked rather than
+    assumed.
+  - Two specs against the live database, both watched failing: the counts including invitations, and
+    the address being freed.
 - [ ] `P8.5` **structure** — see `P3.20`.
 
 ### `tooling/scripts`

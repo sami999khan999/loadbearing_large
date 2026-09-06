@@ -39,11 +39,14 @@ export interface EventShape {
   readonly "maintenance.sweep.completed": {
     readonly sessions: number;
     readonly verifications: number;
+    readonly invitations: number;
   };
   readonly "maintenance.partitions.ensured": {
     readonly table: string;
     readonly created: number;
-    readonly monthsAhead: number;
+    // A count of partitions the run ensured, starting at the current month — not the
+    // runway, which is one less. Named for what it is after the two drifted apart.
+    readonly months: number;
   };
   readonly "maintenance.partition.archived": {
     readonly period: string;

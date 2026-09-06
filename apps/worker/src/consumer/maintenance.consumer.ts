@@ -3,9 +3,9 @@ import { type Container, type Job, QueueName, type Redis, Worker } from "../impo
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
 export class MaintenanceConsumer {
-  // Three, not one: a table with no partition for today rejects every insert, so one
-  // month of runway makes a missed run an outage. See docs/reference/consumers.md.
-  private static readonly MONTHS_AHEAD = 3;
+  // A count of partitions per run, not months of runway: three is the current month and
+  // the next two, so two consecutive missed runs survive and the third is an outage.
+  private static readonly MONTHS_PER_RUN = 3;
 
   // Thirteen months keeps a full year queryable in Postgres and archives the month that
   // has just fallen out of it.
@@ -80,6 +80,7 @@ export class MaintenanceConsumer {
     this.container.logger.emit("maintenance.sweep.completed", {
       sessions: outcome.sessions,
       verifications: outcome.verifications,
+      invitations: outcome.invitations,
     });
   }
 
@@ -103,13 +104,13 @@ export class MaintenanceConsumer {
   private async partitions(): Promise<void> {
     const created = await this.container.maintenance.ensureActivityPartitions(
       this.container.clock.now(),
-      MaintenanceConsumer.MONTHS_AHEAD,
+      MaintenanceConsumer.MONTHS_PER_RUN,
     );
 
     this.container.logger.emit("maintenance.partitions.ensured", {
       table: "activity_log",
       created: created.length,
-      monthsAhead: MaintenanceConsumer.MONTHS_AHEAD,
+      months: MaintenanceConsumer.MONTHS_PER_RUN,
     });
   }
 }

@@ -48,5 +48,8 @@ export const invitations = pgTable(
     index("invitations_email_idx").on(t.email),
     index("invitations_role_idx").on(t.roleId),
     index("invitations_inviter_idx").on(t.invitedBy),
+    // The nightly sweep's predicate. Without it that delete seq-scans every invitation
+    // in the deployment, every night, to find the few that lapsed.
+    index("invitations_expires_idx").on(t.expiresAt),
   ],
 );

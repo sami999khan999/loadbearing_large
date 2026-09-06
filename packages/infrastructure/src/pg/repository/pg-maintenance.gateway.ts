@@ -1,6 +1,6 @@
 import { lt, type MaintenanceGateway, type SweepOutcome, sql } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { sessions, verifications } from "../schema/index.js";
+import { invitations, sessions, verifications } from "../schema/index.js";
 
 export class PgMaintenanceGateway extends BaseRepository implements MaintenanceGateway {
   public async sweepExpired(now: Date): Promise<SweepOutcome> {
@@ -12,21 +12,27 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
       .delete(verifications)
       .where(lt(verifications.expiresAt, now));
 
+    // Swept for a reason the other two do not have: `invitations_email_uq` means a lapsed
+    // row keeps that address un-invitable until it is gone.
+    const expiredInvitations = await this.db
+      .delete(invitations)
+      .where(lt(invitations.expiresAt, now));
+
     // The command tag, never `.returning()`: the caller wants a count, and returning ids
     // ships every expired row back over the wire to be counted and thrown away.
     return {
       sessions: expiredSessions.rowCount ?? 0,
       verifications: expiredVerifications.rowCount ?? 0,
+      invitations: expiredInvitations.rowCount ?? 0,
     };
   }
 
-  public async ensureActivityPartitions(
-    from: Date,
-    monthsAhead: number,
-  ): Promise<readonly string[]> {
+  public async ensureActivityPartitions(from: Date, months: number): Promise<readonly string[]> {
     const created: string[] = [];
 
-    for (let offset = 0; offset < monthsAhead; offset += 1) {
+    // From the month `from` falls in, inclusive — so `months` is a count of partitions
+    // and the runway it buys is one less than that.
+    for (let offset = 0; offset < months; offset += 1) {
       const start = PgMaintenanceGateway.monthStart(from, offset);
       const end = PgMaintenanceGateway.monthStart(from, offset + 1);
       const name = PgMaintenanceGateway.partitionName(start);
