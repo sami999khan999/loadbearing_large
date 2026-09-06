@@ -47,10 +47,17 @@ packages/ui/
     │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
     │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
     │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
-    ├── icon/icon.tsx          → Icon
+    ├── button/…               → Button, ButtonVariant
+    ├── callout/…              → Callout, CalloutTone
     ├── can/can.tsx            → Can
+    ├── code-list/…            → CodeList
     ├── data-table/…           → DataTable, DataTable.Skeleton
     ├── empty-state/…          → EmptyState
+    ├── field/…                → Field
+    ├── format/…               → DateFormat
+    ├── icon/icon.tsx          → Icon
+    ├── input/…                → Input
+    ├── qr-code/…              → QrCode
     └── status-badge/…         → StatusBadge, BadgeTone
 ```
 
@@ -100,16 +107,23 @@ Adding a theme is one CSS block and one registry entry — no re-render, no prov
 churn. And because every icon uses `currentColor` ([`asset`](../../asset/docs/index.md)), a theme
 recolours the entire icon set with no per-theme variants.
 
-`ThemeRegistry.apply` sets **two** things, and the second is the one people forget:
+**Applying a preference is two calls, and the second is the one people forget:**
 
 ```ts
-root.dataset.theme = key;
-root.style.colorScheme = THEMES[key].colorScheme;
+root.dataset.theme = key;   // ThemeRegistry.apply
+root.dataset.mode = mode;   // ModeRegistry.apply, which also sets
+root.style.colorScheme = mode;
 ```
 
-`colorScheme` is what makes native scrollbars, form controls and date pickers match. Without it a
-dark theme has light scrollbars. Call it before hydration — a tiny inline script in `<head>` reading
-the stored preference — or a dark-theme user gets a white flash on every load.
+Each registry moves only its own axis, so switching palette never disturbs the mode. `colorScheme`
+belongs to `ModeRegistry` because it is a property of light-or-dark rather than of the palette, and
+it is what makes native scrollbars, form controls and date pickers match — without it a dark theme
+has light scrollbars. Call both before hydration, from a tiny inline script in `<head>` reading the
+stored preference, or a dark-mode reader gets a white flash on every load.
+
+**A palette need not ship both modes, which is why `resolveMode` exists.** `midnight` declares
+`modes: ["dark"]`; asked to render light it would match no selector at all, so
+`ThemeRegistry.resolveMode(key, wanted)` is what stops that pair reaching the DOM.
 
 `FontRegistry` is the same shape one level down: it overrides the `--font-sans` custom property
 rather than restyling anything, so one line changes the whole system. Reading font choice as a token
@@ -168,14 +182,17 @@ wrapper here when that is made. A dialog that traps focus incorrectly is worse t
 exist, because the first ships.
 
 **No Storybook, and no `*.stories.tsx`.** Doc 22 offers Storybook or a `/kitchen-sink` route in
-`apps/web` and says to pick one deliberately. Neither is picked. What ships instead is the component
-tests under `tests/`, on `jsdom` and `@testing-library/react` — which assert *behaviour* where a story
-shows *appearance*. You want both; this is the half that automates.
+`apps/web` and says to pick one deliberately. The route is what was picked —
+`apps/web/src/route/(dev)/kitchen-sink.tsx` renders every component against every theme, with no
+second build, no second dependency tree and no story files to keep in step with the components. The
+component tests under `tests/`, on `jsdom` and `@testing-library/react`, are the other half: they
+assert *behaviour* where the route shows *appearance*.
 
-**No component stylesheet.** Every component carries a `ui-*` class and those are styling hooks: the
-class names are the contract, what they resolve to is a design decision. So a fresh `packages/ui`
-renders correct, accessible, **unstyled** markup. That is the right order — tokens and themes are what
-a design pass builds on, and shipping a default look here would be a third decision to undo.
+**No third-party design system.** Every component carries a `ui-*` class, and those class names are
+the contract: `theme/class/*.css` is what they resolve to, exported separately from `theme.css` so a
+consumer can take the tokens and write its own look. Ten of the eleven components have a stylesheet
+there; `Can` renders no element of its own. Keeping the hooks and the styling in two files is what
+makes a design pass a rewrite of one directory rather than of every component.
 
 ## Testing
 

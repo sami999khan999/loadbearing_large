@@ -48,10 +48,24 @@ packages/query/src/
 │   ├── api-client.context.tsx      → ApiClientProvider, useApiClient
 │   ├── use-app-mutation.ts         → useAppMutation, AppMutationOptions
 │   └── use-app-query.ts            → useAppQuery
-└── session/                        ── one subject folder per slice
+├── session/                        ── one subject folder per slice
+│   ├── index.ts
+│   ├── session.queries.ts          → SessionQueries
+│   └── session.mutations.ts        → SessionMutations
+├── account/
+│   ├── index.ts
+│   ├── account.queries.ts          → AccountQueries
+│   └── account.mutations.ts        → AccountMutations
+├── member/
+│   ├── index.ts
+│   ├── member.queries.ts           → MemberQueries
+│   └── member.mutations.ts         → MemberMutations
+├── organization/
+│   ├── index.ts
+│   └── organization.mutations.ts   → OrganizationMutations
+└── rbac/
     ├── index.ts
-    ├── session.queries.ts          → SessionQueries
-    └── session.mutations.ts        → SessionMutations
+    └── role.queries.ts             → RoleQueries
 ```
 
 Two role folders and one subject folder, the same split
@@ -86,7 +100,7 @@ server hand it an in-process transport and the browser an HTTP one, with nothing
 differing:
 
 ```ts
-transport: ApiClient.overHttp(Env.apiUrl, new CookieAuthStrategy())   // browser
+transport: ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy())  // browser
 transport: ApiClient.inProcess(createServerRpcClient(request))        // SSR
 ```
 
@@ -208,15 +222,9 @@ deliberate: routing is the one thing the desktop shell replaces.
 - [Mutations and invalidation](reference/mutations.md) — invalidate-before-`onSuccess`, the three
   states of `invalidates`, and why sign-out and switch declare none.
 
-## Two things this package does not have yet
+## One thing this package does not have yet
 
-**No feature slices.** `AppContract` is `{}` until the first one lands, so there are no procedures to
-key. `QueryKeys` carries `session` and `rbac` — both of which name things that genuinely exist — and a
-slice adds a subject folder plus one barrel line. Doc 21's `QueryKeys.task` is illustrative; there is
-no task contract to mirror.
-
-**No hook tests.** `QueryKeys`, `createQueryClient` (including its retry predicate),
-`useAppQuery`'s type preservation and `SessionQueries` are covered because they are plain values,
-functions and types. `useAppMutation`,
-`ApiClientProvider` and `SessionMutations` need a React renderer, which arrives with
-[22](../../../docs/setup/22-ui-package.md)'s testing setup.
+**No caller for `QueryKeys.rbac.effective`.** The other three `rbac` keys are read by
+`RoleQueries`; `effective(userId)` is exercised only by `tests/key/query-key.spec.ts`. It names a
+procedure that exists, so the key is right — nothing reads a user's effective permissions through the
+cache yet. Doc 21's `QueryKeys.task` stays illustrative: there is no task contract to mirror.

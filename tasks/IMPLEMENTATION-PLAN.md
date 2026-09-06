@@ -636,25 +636,72 @@ it once and make the doc-drift gate (`P4.26`) check it.
     which is the reason that survived.
   - **Overlaps `P4.19`** (`scope-enum` has `db`, lacks `errors`) — that half is closed here; the
     rest of `P4.19` is untouched.
-- [ ] `P4.9` `packages/asset/docs/index.md:111` and `font.css:1-2` name `ui/src/token/token.css`
+- [x] `P4.9` `packages/asset/docs/index.md:111` and `font.css:1-2` name `ui/src/token/token.css`
   (real `theme/token/typography.css`); `apps/web/src/store/appearance.store.ts:96` names
-  `token.css` for a rule that lives in `motion.css`.
-- [ ] `P4.10` `packages/ui/docs/index.md` — `ThemeRegistry.apply` shown setting `colorScheme`
+  `token.css` for a rule that lives in `motion.css`. `done: 2026-09-06`
+  - **Already true — a verified no-op, not a skip.** All three sites name
+    `packages/ui/src/theme/token/typography.css` today, and
+    `grep -rn 'token\.css' packages apps docs` returns nothing at all. `appearance.store.ts:96` no
+    longer names a file. The rest of the page was re-checked against the tree — `svg/` holds the
+    three icons listed, `image.manifest.ts` holds the one `brand.logo` key it claims, and
+    `packages/ui/src/theme/token/typography.css:1` is the sole importer of `font.css` — so the
+    entry is stale rather than the page.
+- [x] `P4.10` `packages/ui/docs/index.md` — `ThemeRegistry.apply` shown setting `colorScheme`
   (that is `ModeRegistry.apply`; `ThemeMeta` has no such field); tree lists 5 of 11
   components; "neither Storybook nor `/kitchen-sink` picked" (`/kitchen-sink` exists); "no
   component stylesheet" contradicted by ten files in `theme/class/`; "33 tests" (53).
-- [ ] `P4.11` `packages/content/docs/index.md` — "four namespaces per locale" (eight); "eight
+  `done: 2026-09-06`
+  - **Done:** the apply snippet now shows both calls and says why `colorScheme` belongs to
+    `ModeRegistry` — it is a property of light-or-dark, not of the palette. The paragraph gained
+    `resolveMode`, which the page never mentioned and which is the reason `midnight` (`modes:
+    ["dark"]`) cannot render a page with no colours. The tree lists all eleven components.
+    `/kitchen-sink` is named as the choice that was made, with the reason (no second build, no
+    story files to keep in step). "No component stylesheet" became "no third-party design system":
+    ten of the eleven have a file in `theme/class/`, and `Can` renders no element of its own.
+  - The "33 tests" claim was already gone; the run is 61 across 10 files.
+- [x] `P4.11` `packages/content/docs/index.md` — "four namespaces per locale" (eight); "eight
   catalog cells" (fourteen); `catalog.server.ts` "blocked" and `MessageStore` "deferred" (both
   shipped); tree omits `message-store.ts`, `catalog.server.ts`, four spec files; "28 tests" (54).
-- [ ] `P4.12` `packages/api-client/docs/index.md` — tree omits `account.client.ts`,
+  `done: 2026-09-06`
+  - **Done:** eight namespaces (`common` `error` `nav` `auth` `role` `member` `organization` +
+    the server-only `email`), fourteen client cells over `Locale × ClientNamespace`, and the two
+    ☐ rows are ✅ with their callers named — `Container`/`TestContainer` for `SERVER_CATALOG`,
+    `apps/web/src/router.tsx` and `feature`'s `MessageProvider` for `MessageStore`. 55 tests.
+  - **The paragraph under the table was inverted, not just restated.** It argued
+    `SERVER_CATALOG` should wait; it now carries the reason the shipped file gives — static
+    imports, because a dynamic specifier makes rollup emit an `email` chunk into the public assets
+    directory even after the catalog is tree-shaken out. That is also why
+    `router.tsx` still constructs `new StaticContentSource()` with no argument.
+  - The `nav.data.ts` ban is no longer "passing vacuously" — the file exists, so the ESLint
+    `PermissionKey` ban does work.
+- [x] `P4.12` `packages/api-client/docs/index.md` — tree omits `account.client.ts`,
   `organization.client.ts`, the normalizer, 3 of 5 specs; "no namespace accessors" (has
   `role`, `member`); `inProcess` "used by SSR loaders" (used by nothing — `P5.10`).
-- [ ] `P4.13` `packages/query/docs/index.md` — tree lists 3 of 7 folders; `Env.apiUrl` example
+  `done: 2026-09-06`
+  - **Done:** the tree names all nine source files and all five specs. "No namespace accessors"
+    became "two, and the rest go through `raw`".
+  - **`inProcess` is recorded as unwired, not as working.** `createServerRpcClient` has no caller
+    either, so every read goes over HTTP today, SSR loaders included — the loopback hop the factory
+    exists to remove is still being paid. The factory table row is annotated rather than deleted;
+    `P5.10` is what closes it.
+- [x] `P4.13` `packages/query/docs/index.md` — tree lists 3 of 7 folders; `Env.apiUrl` example
   (no such field); "no feature slices"; "no hook tests … arrives with 22" (22 arrived);
-  `QueryKeys.rbac.effective` headline example has no caller until `P5.2`.
-- [ ] `P4.14` `packages/feature/docs/index.md` — tree lists 7 of 27 files (`account/`,
+  `QueryKeys.rbac.effective` headline example has no caller until `P5.2`. `done: 2026-09-06`
+  - **Done:** all seven folders in the tree. `Env.apiUrl` became `Endpoint.rpc`, which is what
+    `apps/web/src/router.tsx:34` actually passes — and the distinction matters, since `Env` is
+    server-only and cannot reach the client bundle at all.
+  - The two "does not have" items were both false and are replaced by the one that is true:
+    `QueryKeys.rbac.effective` is read by no caller outside its own spec. Left as a fact about the
+    key rather than a defect — the procedure it names exists; nothing reads effective permissions
+    through the cache yet.
+- [x] `P4.14` `packages/feature/docs/index.md` — tree lists 7 of 27 files (`account/`,
   `member/`, `organization/` and six `auth/` files absent); "12 tests" (29); "no feature
-  slices".
+  slices". `done: 2026-09-06`
+  - **Done:** all 27 files across the five slice folders. 62 tests across 14 spec files.
+  - **"No feature slices" is wrong in a way worth naming.** Five slices ship; none of them is a
+    *product* slice. Identity, membership and authorization are what a product needs before it has
+    a product, so the honest claim is that nothing here reads a domain procedure yet and doc 23
+    §23.5 is still an unwalked path.
 
 ### Root and `tasks/`
 

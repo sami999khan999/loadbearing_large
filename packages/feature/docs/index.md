@@ -26,16 +26,40 @@ shell mount these components under a different routing shell.
 
 ```
 packages/feature/src/
-├── index.ts                           ← "use client" on line 1
-├── import.ts                          ← the two bans, made visible
-├── i18n/message.context.tsx           → MessageProvider, useMessages
+├── index.ts                                → "use client" on line 1
+├── import.ts                               → the two bans, made visible
+├── i18n/message.context.tsx                → MessageProvider, useMessages
 ├── auth/
-│   ├── session.context.tsx            → SessionProvider, useSession, useCapabilities
-│   ├── session.guard.tsx              → SessionGuard
-│   ├── sign-in.form.tsx               → SignInForm
-│   └── two-factor.form.tsx            → TwoFactorForm
+│   ├── session.context.tsx                 → SessionProvider, useSession, useCapabilities
+│   ├── session.guard.tsx                   → SessionGuard
+│   ├── sign-in.form.tsx                    → SignInForm
+│   ├── sign-up.form.tsx                    → SignUpForm
+│   ├── sign-out.button.tsx                 → SignOutButton
+│   ├── social-sign-in.tsx                  → SocialSignIn
+│   ├── forgot-password.form.tsx            → ForgotPasswordForm
+│   ├── reset-password.form.tsx             → ResetPasswordForm
+│   ├── password-pair.tsx                   → the shared confirm-and-strength control
+│   ├── two-factor.form.tsx                 → TwoFactorForm
+│   └── verify-email.notice.tsx             → VerifyEmailNotice
+├── account/
+│   ├── profile.form.tsx                    → ProfileForm
+│   ├── change-email.form.tsx               → ChangeEmailForm
+│   ├── change-password.form.tsx            → ChangePasswordForm
+│   ├── two-factor.panel.tsx                → TwoFactorPanel
+│   ├── two-factor.setup.tsx                → TwoFactorSetup
+│   ├── active-session.list.tsx             → ActiveSessionList
+│   └── linked-account.list.tsx             → LinkedAccountList
+├── organization/
+│   ├── create-organization.form.tsx        → CreateOrganizationForm
+│   ├── organization-switcher.tsx           → OrganizationSwitcher
+│   └── invitation-accept.tsx               → InvitationAccept, InvitationPreview
+├── member/
+│   ├── member-list.tsx                     → MemberList
+│   ├── invite-member.form.tsx              → InviteMemberForm
+│   └── invitation-list.tsx                 → InvitationList
 └── rbac/
-    ├── permission-matrix.tsx          → PermissionMatrix, MatrixSubject
+    ├── permission-matrix.tsx               → PermissionMatrix, MatrixSubject
+    ├── role-matrix.tsx                     → RoleMatrix
     └── effective-permissions.inspector.tsx → EffectivePermissionsInspector
 ```
 
@@ -192,10 +216,11 @@ not exist yet. `StaticContentSource` gives the same snapshot asynchronously and 
 `vitest.setup.ts` runs `afterEach(cleanup)`, which is **not optional** with `globals: false` — see
 [`ui`](../../ui/docs/index.md) for the failure it prevents.
 
-## Two things this package does not have
+## One thing this package does not have
 
-**No feature slices.** `AppContract` is `{}`, so there is nothing to query. The shape a slice takes
-is in doc 23 §23.5.
+**No product slice.** Everything here is identity, membership and authorization — the surfaces every
+product needs before it has a product. Nothing yet reads a domain procedure, so the twelve-step
+checklist in doc 23 §23.5 is still the unwalked path rather than a description of what shipped.
 
 **No cache-library import.** A slice reads through
 [`useAppQuery`](../../query/docs/index.md) — a three-line pass-through in `query` that exists so this

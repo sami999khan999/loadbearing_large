@@ -37,7 +37,8 @@ packages/content/
 │   │   └── locale.ts              → Locale, Locales
 │   ├── translator/
 │   │   ├── index.ts
-│   │   └── translator.ts          → Translator, MessageSnapshot
+│   │   ├── translator.ts          → Translator, MessageSnapshot
+│   │   └── message-store.ts       → MessageStore; `ensure()` adds a namespace after first paint
 │   ├── source/
 │   │   ├── index.ts
 │   │   ├── content-source.ts      → ContentSource (abstract) — all four shapes
@@ -61,19 +62,22 @@ packages/content/
 │       ├── namespace.ts           → MessageKey, ShellMessageKey, NamespaceBundle, MessageParams
 │       ├── catalog.ts             → CLIENT_CATALOG  (locale × namespace → loader)
 │       ├── error-copy.ts          → ERROR_COPY, FIELD_RULE_COPY, ErrorCopy
+│       ├── catalog.server.ts      → SERVER_CATALOG  (spreads the client one, adds `email`)
 │       ├── en/                    ← as const; the key union is derived from these
-│       │   ├── common.ts · nav.ts · auth.ts · error.ts
+│       │   ├── common.ts · error.ts · nav.ts · auth.ts
+│       │   └── role.ts · member.ts · organization.ts · email.ts
 │       └── bn/                    ← NamespaceBundle<N>; Partial by design
-│           └── common.ts · nav.ts · auth.ts · error.ts
+│           └── the same eight
 └── tests/
-    ├── primitive/
-    │   └── locale.spec.ts
-    ├── translator/
-    │   └── translator.spec.ts
+    ├── primitive/locale.spec.ts
+    ├── translator/translator.spec.ts
     ├── source/
+    │   ├── content-source.shapes.spec.ts
     │   └── static-content.source.spec.ts
-    └── message/
-        └── error-copy.spec.ts
+    ├── media/static-media.resolver.spec.ts
+    ├── collection/nav.data.spec.ts
+    ├── document/document.entity.spec.ts
+    └── message/error-copy.spec.ts
 ```
 
 ---
@@ -99,7 +103,7 @@ t("error.frobidden");   // compile error
 
 `MessageKey` is derived from **type-only** imports of the English files. A typo at a call site is a
 build failure, and `ERROR_COPY` is total over `ErrorCode` — even though the runtime data lives in
-four separate chunks that no module imports statically.
+one chunk per locale × namespace that no module imports statically.
 
 ### 3. Two namespaces are guaranteed; everything else is lazy
 
@@ -114,8 +118,8 @@ raw key on the one screen that cannot afford a wiring bug.
 ### 4. Content references the security surface; it never defines it
 
 Nav items will carry `module: "rbac"`, never `permission: "rbac.role.read"`. An editor can reorder a
-menu; an editor cannot change what gates it. ESLint bans importing `PermissionKey` here, and the ban
-is configured and passing today — vacuously, until `nav.data.ts` exists.
+menu; an editor cannot change what gates it. ESLint bans importing `PermissionKey` here, and
+`nav.data.ts` is what makes the ban do work rather than pass vacuously.
 
 ---
 
@@ -160,24 +164,25 @@ repository permitted to carry a message. Moving it here cost nothing and removed
 | Area | State |
 | --- | --- |
 | `locale.ts`, `translator.ts` | ✅ final |
-| `message/en/*`, `message/bn/*` — `common`, `nav`, `auth`, `error` | ✅ four namespaces per locale |
-| `message/namespace.ts` | ◐ four namespaces; gains the server-only `email` as a union member |
-| `message/catalog.ts` | ◐ eight cells, total over `Locale × ClientNamespace` |
+| `message/en/*`, `message/bn/*` — `common`, `error`, `nav`, `auth`, `role`, `member`, `organization`, `email` | ✅ eight namespaces per locale |
+| `message/namespace.ts` | ✅ eight namespaces; `email` is `ServerNamespace`, outside `ClientNamespace` |
+| `message/catalog.ts` | ✅ fourteen cells, total over `Locale × ClientNamespace` |
 | `message/error-copy.ts` | ✅ final |
 | `content-source.ts`, `static-content.source.ts` | ✅ all four shapes declared and implemented |
 | `media/` — `MediaResolver`, `StaticMediaResolver` | ✅ final |
 | `collection/nav/` — `NavContract`, `navItems` | ✅ final |
 | `document/` — `DocumentContract`, `DocumentEntity` | ✅ shape declared; `document()` answers `null` |
-| `message/catalog.server.ts` — `SERVER_CATALOG` | ☐ **blocked**: nothing to add until `email` copy exists, and the worker (25) is what defines it |
-| `translator/message-store.ts` — `MessageStore` | ☐ deferred until a route loader calls `ensure()` (24) |
+| `message/catalog.server.ts` — `SERVER_CATALOG` | ✅ final; `Container` and `TestContainer` pass it to `StaticContentSource` |
+| `translator/message-store.ts` — `MessageStore` | ✅ final; `apps/web/src/router.tsx` constructs it, `feature`'s `MessageProvider` reads it |
 | `bundled.content-source.ts` — `BundledContentSource` | ☐ lands with the desktop app (30) |
 
-**A `SERVER_CATALOG` identical to `CLIENT_CATALOG` would be a boundary that looks enforced and
-enforces nothing**, which is why it waits for `email` rather than shipping empty. It is also the
-first thing that makes `Namespace` wider than `ClientNamespace` — the first time `MessageCatalog`
-being `Partial` over `Namespace` does any work. Until then,
-[`Container`](../../composition/docs/reference/container.md) constructs
-`new StaticContentSource()` with no argument.
+**`SERVER_CATALOG` is what makes `Namespace` wider than `ClientNamespace`**, and the first thing
+that makes `MessageCatalog` being `Partial` over `Namespace` do any work. It spreads
+`CLIENT_CATALOG` and adds `email` — with **static** imports rather than `import()`, because a
+dynamic specifier makes rollup emit a chunk that lands in the public assets directory even after the
+catalog is tree-shaken out. `apps/web/src/router.tsx` constructs `new StaticContentSource()` with no
+argument for exactly that reason; only
+[`Container`](../../composition/docs/reference/container.md) passes the server one.
 
 **Widening `Namespace` is additive.** `ShellNamespace`, `NamespaceKeys`, `MessageKey`,
 `ShellMessageKey`, `NamespaceBundle`, `MessageBundle` and `MessageParams` are untouched by it, and no
@@ -194,7 +199,7 @@ on a rewrite.
 
 ## Testing
 
-28 tests.
+55 tests.
 
 ```bash
 pnpm --filter @loadbearing/content test
