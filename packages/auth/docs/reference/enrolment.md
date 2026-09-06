@@ -135,6 +135,13 @@ The founder opens its transaction on `this.db` rather than on the pool. Called f
 enroller's locked transaction that is a savepoint, so the lock and the idempotency check above still
 cover it; called from the endpoint it is a transaction of its own.
 
+**The port carries the optional `slug`.** The personal enroller passes `u-<userId>`, and for a while
+the port's `found(userId, name)` could not express that — so `Container` held the concrete
+`PgOrganizationFounder` beside the port field purely to reach past it. A port whose only caller has
+to bypass it is one the composition root bypasses too, which is where the ban on naming a concrete
+adapter outside `composition` quietly stops meaning anything. `slug` is optional and derived from
+the new id when absent; nothing routes by it.
+
 Making that reuse possible is why the runnable seed script lives at
 `packages/infrastructure/seed.ts`, above `src/`. It used to be `src/pg/seed/index.ts` — the folder
 barrel — so importing it for `SystemRoleSeed` would have connected to Postgres and called
