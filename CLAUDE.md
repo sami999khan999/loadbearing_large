@@ -7,8 +7,13 @@ whole rulebook before it reads a line of code and never has to know to go lookin
 rule is present, both are tables pointing at things already in context. They stay for agents that
 do not read this file.
 
+`AGENTS.md` is imported rather than restated. It is the brief every other tool loads unprompted,
+and a second copy here would be the one that drifts.
+
 This list is checked: `check-architecture.mjs` §12 fails if a file lands in `docs/ai/rules/` and no
 `@` line here imports it.
+
+@AGENTS.md
 
 @docs/ai/rules/layering.md
 @docs/ai/rules/files.md

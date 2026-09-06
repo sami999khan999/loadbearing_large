@@ -158,7 +158,7 @@ than throwing, which is what makes the omission visible in review instead of at 
 > **The same twelve steps as a run book:** [`docs/ai/skills/add-slice.md`](../ai/skills/add-slice.md) — what to write,
 > what to check, what to commit, without the reasoning. This section is why the order is what it
 > is; that page is the checklist you work from. `.claude/skills/add-slice/` points at it so Claude
-> Code surfaces it as a skill, `.agents/add-slice.md` does the same for other tools, and there is
+> Code surfaces it as `/add-slice`; any other tool opens the file by path. Either way there is
 > still only one copy.
 
 ---

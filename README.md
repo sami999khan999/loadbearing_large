@@ -13,9 +13,10 @@ a boot failure rather than a 500 an hour later.
     pnpm install
     node -e "require('fs').copyFileSync('.env.example', '.env')"
 
-**2 · Host ports, if any are taken.** Compose reads its overrides from `infra/.env` — not the root
-`.env`; with `-f infra/docker-compose.yml`, `infra/` is the project directory. Add the override
-there and change the matching URL in the root `.env`:
+**2 · Host ports, if any are taken.** Every published port has a default in the compose file, so
+`infra/.env` does not exist until you need one — create it, and note that compose reads it rather
+than the root `.env`: with `-f infra/docker-compose.yml`, `infra/` is the project directory. Add the
+override there and change the matching URL in the root `.env`:
 
     # infra/.env                    # .env
     POSTGRES_PORT=15432             DATABASE_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
@@ -23,7 +24,8 @@ there and change the matching URL in the root `.env`:
     REDIS_QUEUE_PORT=16380          REDIS_QUEUE_URL=redis://localhost:16380
 
 `POSTGRES_PORT` `REDIS_CACHE_PORT` `REDIS_QUEUE_PORT` `S3_PORT` `MINIO_CONSOLE_PORT` `SMTP_PORT`
-`MAILPIT_UI_PORT` `LOKI_PORT` `ALLOY_PORT` are all overridable. For the web app itself, change
+`MAILPIT_UI_PORT` `LOKI_PORT` `ALLOY_PORT` `CLICKHOUSE_HTTP_PORT` `CLICKHOUSE_NATIVE_PORT` are all
+overridable. For the web app itself, change
 `--port` in `apps/web/package.json` and keep `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` in step — Better
 Auth signs cookies against the first and the CORS layer reads the second.
 
@@ -59,11 +61,21 @@ the root `.env` themselves.
 | Readiness probe | http://localhost:3000/api/health |
 | Drizzle Studio | `pnpm db:studio` |
 
-**6 · First sign-in.** Sign up at `/sign-in`. `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on, so
-the verification mail lands in Mailpit — open it and click through. `BOOTSTRAP_ORGANIZATION_SLUG`
-enrols you into the seeded organization, and the **first** user through the door gets `owner`
-(everyone after gets `member`). `owner` holds `rbac.role.read`, so `/settings/roles` renders; a
-`member` account is redirected to `/forbidden`, which is the fastest way to watch both guards work.
+**6 · First sign-in.** Sign up at `/sign-up`. `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on, so
+the verification mail lands in Mailpit — open it and click through.
+
+**No session is ever issued without a membership**, so how you acquire one is a decision the
+template makes for you: `AUTH_ENROLMENT_MODE=personal` ships as the default, which makes you the
+`owner` of an organization of your own with the same four system roles `pnpm db:seed` creates. It is
+the only mode that works against an empty database. The other two are `bootstrap` (everyone joins
+the one organization `BOOTSTRAP_ORGANIZATION_SLUG` names, first in as `owner`) and `invite` (an
+invitation is the only door — the production posture). Whichever mode is set, an address with a
+pending invitation joins the organization that invited it instead.
+
+`owner` holds `rbac.role.read`, so `/settings/roles` renders. Invite a second address from
+`/settings/members`, accept it in another browser profile, and that `member` account is redirected
+to `/forbidden` — the fastest way to watch both the route guard and the use-case gate work on the
+same decision.
 
 **Before committing.**
 
@@ -77,7 +89,7 @@ enrols you into the seeded organization, and the **first** user through the door
 | 500 on first request, a `ZodError` naming env keys | `.env` missing or incomplete — redo step 1 |
 | `/api/health` returns 503 | a container is not up, or a URL in `.env` names the wrong host port |
 | `ECONNREFUSED` from `db:migrate` | Postgres not healthy yet, or something else holds 5432 |
-| Signed up, but the shell still renders signed-out | no membership: `BOOTSTRAP_ORGANIZATION_SLUG` unset, or `db:seed` never ran |
+| Signed up, but the shell still renders signed-out | no membership: under `bootstrap`, `BOOTSTRAP_ORGANIZATION_SLUG` is unset or `db:seed` never ran; under `invite`, there is no invitation for the address |
 
 **Two stores are wired but off.** ClickHouse (`AnalyticsReader`, `AnalyticsProjector`) and Loki's read
 side (`LogReader`) have working adapters, a projection consumer, and a nightly reconciliation — and
@@ -88,12 +100,14 @@ to be wrong about. See
 
 ## Documentation
 
-- **[`AGENTS.md`](AGENTS.md)** — what a coding agent reads first. A router and nothing else: one
-  row per task, pointing at the file that answers it. `CLAUDE.md` imports it.
-- **[`docs/ai/`](docs/ai/index.md)** — everything written for agents rather than for people.
-  [`rules/`](docs/ai/rules/index.md) is the rulebook, one file per topic and none over ~650 tokens;
-  [`skills/`](docs/ai/skills/add-slice.md) holds the run books, reached through `.claude/skills/`
-  and `.agents/`.
+- **[`AGENTS.md`](AGENTS.md)** — what a coding agent reads first, and the only file most tools load
+  unprompted. A brief and nothing else: four rules that cost the most when broken, then a pointer
+  to the task router. `CLAUDE.md` `@`-imports it rather than restating it.
+- **[`docs/ai/`](docs/ai/index.md)** — everything written for agents rather than for people. This
+  page is the task router, one row per thing you might be about to do.
+  [`rules/`](docs/ai/rules/index.md) is the rulebook, one file per topic and none over ~900 tokens;
+  [`skills/`](docs/ai/skills/add-slice.md) holds the run books, surfaced in Claude Code through
+  `.claude/skills/`.
 - **[`docs/setup/`](docs/setup/00-README.md)** — the build order, walked once. Thirty-one documents
   from an empty directory to a running app: `01`–`27` build the kit (`09b` included), `28` and `29`
   are reference, and `30` adds the desktop shell.

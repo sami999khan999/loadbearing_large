@@ -705,16 +705,39 @@ it once and make the doc-drift gate (`P4.26`) check it.
 
 ### Root and `tasks/`
 
-- [ ] `P4.15` `README.md` — "Sign up at `/sign-in`" (there is `/sign-up`); step 6 and the
+- [x] `P4.15` `README.md` — "Sign up at `/sign-in`" (there is `/sign-up`); step 6 and the
   troubleshooting row describe `bootstrap` enrolment while `.env.example` ships
   `AUTH_ENROLMENT_MODE=personal`; "`AGENTS.md` … one row per task" (it is twelve `@` lines,
   byte-identical to `CLAUDE.md`); `.agents/` referenced as committed (also `.gitignore:27`,
   `docs/setup/27:161`) and does not exist; readers sent to an `infra/.env` the repo does not
   template; no mention of organizations, members, invitations, enrolment modes; token budget
-  "~650" vs `docs/ai/rules/index.md` "~850" vs `docs/index.md` "~400".
-- [ ] `P4.16` `docs/ai/index.md:57-59` draws `CLAUDE.md ├── @AGENTS.md` — false; `:86-89`
+  "~650" vs `docs/ai/rules/index.md` "~850" vs `docs/index.md` "~400". `done: 2026-09-06`
+  - **Step 6 was the one that would strand a reader**, and it is rewritten around the shipped
+    default. `personal` is what `.env.example` sets and the only mode that works against an empty
+    database; the page now leads with *no session is issued without a membership*, which is why the
+    mode is a decision at all, then names `bootstrap` and `invite` and the invitation override that
+    beats all three. The `/settings/members` → second account → `/forbidden` walk replaces the old
+    first-user-gets-owner story, so the reader watches the route guard and the use-case gate decide
+    the same thing.
+  - The troubleshooting row now splits by mode rather than naming `BOOTSTRAP_ORGANIZATION_SLUG`
+    unconditionally — under `invite` the cause is a missing invitation, not a missing slug.
+  - `/sign-in` → `/sign-up`. `~650` → `~900`, measured. `.agents/` removed from all three files
+    that named it. `infra/.env` is described as a file you create, since every published port has a
+    default in the compose file — and `CLICKHOUSE_HTTP_PORT` / `CLICKHOUSE_NATIVE_PORT` were
+    missing from the overridable list.
+- [x] `P4.16` `docs/ai/index.md:57-59` draws `CLAUDE.md ├── @AGENTS.md` — false; `:86-89`
   claims one copy of every document while `AGENTS.md` duplicates `CLAUDE.md` verbatim. Make
   `AGENTS.md` a one-line pointer or an `@` import of `CLAUDE.md`, and fix the tree.
+  `done: 2026-09-06`
+  - **The diagram was made true rather than redrawn.** `CLAUDE.md` now `@`-imports `AGENTS.md`, and
+    `AGENTS.md` is the brief the diagram always described — what the repo is, four rules that cost
+    the most when broken, and the route into `docs/ai/index.md`. ~340 tokens.
+  - **A pointer would have been the wrong fix.** `AGENTS.md` is the only file most non-Claude tools
+    load unprompted, so a one-line redirect leaves them holding nothing; the twelve `@` lines it
+    used to carry were worse — unresolvable tokens for any tool that does not implement the
+    syntax. A brief works for both readers, and §12 already asserts it points at a router.
+  - Token budgets across `docs/ai/index.md`, `docs/ai/rules/index.md` and `README.md` were
+    re-measured rather than reconciled: twelve rule files are ~7,700 tokens, 410–890 each.
 - [ ] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
   "11/11 assertions" (13); "388 tests across 65 files" (542 / 94); "20 projects" (17 declare
   `typecheck`); "Every task T-001–T-024 is done" (through T-029); `/permissions` ×3 (is
