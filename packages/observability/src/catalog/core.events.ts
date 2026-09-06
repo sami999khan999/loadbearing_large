@@ -23,10 +23,6 @@ export const coreEvents = {
   "maintenance.partitions.ensured": { level: "info" },
   "maintenance.partition.archived": { level: "info" },
 
-  // Reconciles against Postgres rather than job history, which ages out long before a
-  // nightly run.
-  "queue.sweep.completed": { level: "info" },
-
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.
   "dependency.request.failed": { level: "warn" },
@@ -36,8 +32,6 @@ export const coreEvents = {
   "email.send.failed": { level: "error" },
 
   "cache.entry.corrupt": { level: "warn" },
-  "db.query.slow": { level: "warn" },
-  "storage.upload.failed": { level: "error" },
   "embedding.request.failed": { level: "error" },
 
   // `lagged` is the one that matters: the realistic failure is a consumer that died

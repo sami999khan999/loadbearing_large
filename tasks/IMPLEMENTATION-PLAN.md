@@ -1240,13 +1240,42 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
   exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI).
-- [ ] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
+- [x] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
   been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
   consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
   (provider), `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
   (consumer catch). **Delete** `queue.sweep.completed`, `db.query.slow`,
   `storage.upload.failed` from `core.events.ts` and `event-shape.ts`.
-  **Docs:** `observability/docs/reference/catalog.md`.
+  **Docs:** `observability/docs/reference/catalog.md`. `done: 2026-09-06`
+  - **Five wired, three deleted, and the count re-derived rather than trusted:** twenty-four codes
+    were declared, eight had no production call site, and twenty-one ship now with every one emitted.
+  - **`queue.job.failed` is emitted *beside* `logger.failure`, not instead of it.** The three
+    consumers already logged the error; what they had no way to produce was a countable signal.
+    The event gives one `event_code`, so queue health is a rate; the `error.raised` line beside it
+    carries the normalised code, cause and stack. One without the other is either a number nobody
+    can explain or an explanation nobody can alert on.
+  - **`http.request.completed` / `.failed` go in `errorMiddleware`**, inside the oRPC chain rather
+    than at the adapter — the same reason the error interceptor is there, since an adapter-level
+    hook has no `traceId` and no request-scoped logger. The `path` field is the **procedure** path:
+    every RPC arrives at `/api/rpc`, so the URL would make every line identical. The failure line
+    is emitted before `ErrorInterceptor.toTransport`, which never returns.
+  - **`embedding.request.failed` needed a seam that already existed.** `OpenAiEmbeddingProvider`
+    had no logger; it now takes an optional one exactly as `LokiLogReader` does, wired in
+    `Container`. It fires on both failure branches — a non-`ok` response and a short batch — and
+    carries the *batch* size, because a run that fails on its fourth batch has already embedded
+    three.
+  - **`analytics.projection.failed`'s declared shape wanted an `eventId` the projector cannot
+    produce**, since `project(records)` works in batches. The checkpoint is read *before* the run
+    and reported on failure: it is where a replay resumes, which is the question a failed
+    projection cannot otherwise be asked. The catch rethrows — BullMQ's retry is driven by
+    rejection.
+  - **The three deletions each name a thing the system does not do:** `queue.sweep.completed` (the
+    recovery sweep has no file), `db.query.slow` (no query timing exists; that is Postgres's own
+    `log_min_duration_statement`, a deployment setting), `storage.upload.failed` (the gateway
+    presigns and never uploads, so that failure happens in the browser).
+  - **Filed `T-033`:** an assertion that every declared code has an emitter. Left out of this entry
+    deliberately — a sixteenth assertion means renumbering "fifteen" across four files, which is
+    churn worth doing once rather than mid-phase.
 - [ ] `P5.15` **Zero-consumer symbols** — decide per symbol and record in the owning
   `docs/index.md`: `SessionGuard` (delete — `RouteGuard` is the surface), `SessionQueries`
   (delete — `SessionStore` owns it), `FontRegistry` (wire into `appearance.store` or delete),

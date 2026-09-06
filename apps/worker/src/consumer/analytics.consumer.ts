@@ -39,6 +39,16 @@ export class AnalyticsConsumer {
     );
 
     worker.on("failed", (job, error) => {
+      // Two lines, and they answer different questions. This one is the countable
+      // signal: one `event_code`, so queue health is a rate rather than a grep.
+      this.container.logger.emit("queue.job.failed", {
+        queue: QueueName.ANALYTICS,
+        jobId: job?.id ?? "unknown",
+        attempt: job?.attemptsMade ?? 0,
+      });
+
+      // And this one is the diagnosis — normalised code, cause and stack, at the level
+      // the error catalog decides.
       this.container.logger.failure(error, {
         queue: QueueName.ANALYTICS,
         jobId: job?.id ?? "unknown",
@@ -56,11 +66,29 @@ export class AnalyticsConsumer {
   public async handle(job: Job): Promise<void> {
     switch (job.name) {
       case "project":
-        return this.project();
+        return this.projectOrReport();
       case "reconcile":
         return this.reconcile();
       default:
         throw new Error(`Unknown analytics job: ${job.name}`);
+    }
+  }
+
+  // Rethrows: BullMQ's retry is driven by rejection, so the line is a report and never
+  // a `catch` that swallows.
+  private async projectOrReport(): Promise<void> {
+    // Read before the run rather than after the throw, because the destination is what
+    // a failed run cannot be asked. It is where the replay resumes.
+    const checkpoint = await this.container.projector.checkpoint();
+
+    try {
+      await this.project();
+    } catch (error: unknown) {
+      this.container.logger.emit("analytics.projection.failed", {
+        projection: AnalyticsConsumer.PROJECTION,
+        eventId: checkpoint.lastId ?? "none",
+      });
+      throw error;
     }
   }
 

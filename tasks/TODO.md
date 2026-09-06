@@ -89,6 +89,22 @@ probe.
 
 ## 📋 Backlog
 
+- [ ] `T-033` **Assert that every event code has an emitter** `@unassigned` `P3` `~1h` `#tooling`
+  - **Goal:** `P5.14` found eight of twenty-four declared codes with no production call site. A
+    declared code that nothing emits is a dashboard panel that stays empty forever, and an empty
+    panel is indistinguishable from a healthy system. The catalog is clean today and nothing stops
+    it drifting again.
+  - **Done when:** `check-architecture.mjs` gains an assertion — every key in `EVENT_CATALOG` has at
+    least one `logger.emit("<code>"` outside `core.events.ts`, `event-shape.ts` and `tests/`. The
+    grep is the one `P5.14` used:
+    `grep -rn '"<code>"' packages apps --include=*.ts | grep -v node_modules | grep -v dist`.
+  - **Notes:** deliberately not done inside `P5.14`. A new assertion means renumbering "fifteen
+    assertions" across `docs/ai/rules/workflow.md`, `docs/setup/26`, `AGENTS.md` and the `TODO.md`
+    state table, which is churn worth doing once rather than mid-phase. The same shape would serve
+    `permissions`: every key in `CATALOG` used by at least one `PROCEDURE_PERMISSIONS` entry, which
+    is Phase 5's own exit criterion.
+
+
 - [ ] `T-032` **The production SSR bundle throws `jsxDEV is not a function`** `@unassigned` `P1` `~3h` `#ui`
   - **Goal:** `pnpm --filter @loadbearing/web build` succeeds and `node .output/server/index.mjs`
     returns 500 on **every** page. `RootDocument` in `__root.tsx` calls

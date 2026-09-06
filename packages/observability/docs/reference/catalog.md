@@ -99,6 +99,29 @@ one spread line here.
 reason: a log line records something that already happened. See
 [Opinions · Vocabulary](../../../../docs/opinions/vocabulary.md).
 
+## Every code has an emitter, and eight did not
+
+The catalog is a declaration, and a declared code with nothing emitting it is a dashboard panel that
+stays empty forever — indistinguishable from a healthy system. Twenty-one codes ship and every one
+has a production call site; three were deleted rather than wired, because nothing in the system does
+the thing they described:
+
+| Deleted | Why |
+|---|---|
+| `queue.sweep.completed` | The recovery sweep has no file. Nothing publishes the kind of job it would re-enqueue ([25](../../../../docs/setup/25-worker-app.md)) |
+| `db.query.slow` | No query timing exists. Slow-query detection is Postgres's own `log_min_duration_statement`, which is a deployment setting rather than an application line |
+| `storage.upload.failed` | `S3StorageGateway` presigns and never uploads, so the failure it names happens in the browser |
+
+**`queue.job.failed` is emitted beside `logger.failure`, not instead of it**, and the pair is
+deliberate. The event is the countable signal — one `event_code`, so queue health is a rate. The
+`error.raised` line beside it is the diagnosis: normalised code, cause, stack. One without the other
+is either a number you cannot explain or an explanation you cannot alert on.
+
+**`http.request.completed` and `http.request.failed` are emitted by `errorMiddleware`**, which is
+inside the oRPC chain rather than at the adapter — the same reason the error interceptor is there.
+The `path` field is the **procedure** path, not the URL: every RPC arrives at `/api/rpc`, so the URL
+would make every line identical.
+
 ## `error.raised` is not in the catalog
 
 The one exception, and it is deliberate. `Logger.failure()` emits under `error.raised`, and its

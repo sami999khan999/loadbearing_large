@@ -27,6 +27,16 @@ export class MaintenanceConsumer {
     );
 
     worker.on("failed", (job, error) => {
+      // Two lines, and they answer different questions. This one is the countable
+      // signal: one `event_code`, so queue health is a rate rather than a grep.
+      this.container.logger.emit("queue.job.failed", {
+        queue: QueueName.MAINTENANCE,
+        jobId: job?.id ?? "unknown",
+        attempt: job?.attemptsMade ?? 0,
+      });
+
+      // And this one is the diagnosis — normalised code, cause and stack, at the level
+      // the error catalog decides.
       this.container.logger.failure(error, {
         queue: QueueName.MAINTENANCE,
         jobId: job?.id ?? "unknown",

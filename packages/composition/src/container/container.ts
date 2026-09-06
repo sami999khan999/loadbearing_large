@@ -189,7 +189,7 @@ export class Container {
     // Each reads a `driver` rather than naming a class: the alternative is named in a
     // switch a compiler checks, not in a document.
     this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
-    this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
+    this.embeddings = new OpenAiEmbeddingProvider(config.embedding, this.logger);
 
     // Opt-in and stopped by default. Building the connection only when configured is
     // what keeps the seam honest rather than aspirational.
