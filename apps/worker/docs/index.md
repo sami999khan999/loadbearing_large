@@ -18,6 +18,7 @@ One failure mode shapes almost every decision in it:
 | --- | --- |
 | **Package** | `@loadbearing/worker` (private, never published) |
 | **Entrypoint** | `src/main.ts` — nothing imports this app |
+| **Loose at `src/`** | `main.ts` and `env.ts` only, both resolved by name — see [Folders](../../../docs/opinions/folders.md) |
 | **Depends on** | `@loadbearing/{application,composition,content,contracts,infrastructure,permissions}`, plus `bullmq` |
 | **Environment** | node only. The one process that reads `SERVER_CATALOG` |
 | **Setup doc** | [25 · The worker app](../../../docs/setup/25-worker-app.md) |
@@ -29,22 +30,27 @@ apps/worker/
 │   ├── main.ts                       ← the entrypoint; signals, boot, exit
 │   ├── env.ts                        → Env      (the second of two process.env readers)
 │   ├── import.ts                     ← the one outside surface
-│   ├── worker-bootstrap.ts           → WorkerBootstrap
-│   ├── system-principal.ts           → SystemPrincipal
+│   ├── bootstrap/
+│   │   ├── index.ts
+│   │   ├── worker-bootstrap.ts       → WorkerBootstrap
+│   │   └── system-principal.ts       → SystemPrincipal
 │   ├── consumer/
+│   │   ├── index.ts
 │   │   ├── analytics.consumer.ts     → AnalyticsConsumer   (project · reconcile)
 │   │   ├── embedding.consumer.ts     → EmbeddingConsumer
 │   │   └── maintenance.consumer.ts   → MaintenanceConsumer (sweep · partitions · archive)
 │   ├── schedule/
+│   │   ├── index.ts
 │   │   ├── archive.schedule.ts       04:00 on the first
 │   │   ├── cleanup.schedule.ts       03:00 daily
 │   │   ├── partitions.schedule.ts    02:00 on the first
 │   │   ├── projection.schedule.ts    every five minutes
 │   │   └── reconcile.schedule.ts     05:00 daily
 │   └── notification/
+│       ├── index.ts
 │       └── digest.composer.ts        → DigestComposer
 └── tests/
-    ├── system-principal.spec.ts
+    ├── bootstrap/system-principal.spec.ts
     ├── consumer/maintenance.consumer.spec.ts
     └── notification/digest.composer.spec.ts
 ```

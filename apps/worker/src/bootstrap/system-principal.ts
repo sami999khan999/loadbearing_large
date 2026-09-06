@@ -5,7 +5,7 @@ import {
   PermissionRegistry,
   Principal,
   type UserId,
-} from "./import.js";
+} from "../import.js";
 
 export class SystemPrincipal {
   private constructor() {}

@@ -1,6 +1,6 @@
 import { PermissionRegistry } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
-import { SystemPrincipal } from "../src/system-principal.js";
+import { SystemPrincipal } from "../../src/bootstrap/system-principal.js";
 
 const ORG = "018f8c00-0000-7000-8000-000000000010";
 

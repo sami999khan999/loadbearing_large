@@ -1,13 +1,13 @@
-import { AnalyticsConsumer } from "./consumer/analytics.consumer.js";
-import { EmbeddingConsumer } from "./consumer/embedding.consumer.js";
-import { MaintenanceConsumer } from "./consumer/maintenance.consumer.js";
-import { Env } from "./env.js";
-import type { Container, RedisConnection, Worker } from "./import.js";
-import { ArchiveSchedule } from "./schedule/archive.schedule.js";
-import { CleanupSchedule } from "./schedule/cleanup.schedule.js";
-import { PartitionsSchedule } from "./schedule/partitions.schedule.js";
-import { ProjectionSchedule } from "./schedule/projection.schedule.js";
-import { ReconcileSchedule } from "./schedule/reconcile.schedule.js";
+import { AnalyticsConsumer, EmbeddingConsumer, MaintenanceConsumer } from "../consumer/index.js";
+import { Env } from "../env.js";
+import type { Container, RedisConnection, Worker } from "../import.js";
+import {
+  ArchiveSchedule,
+  CleanupSchedule,
+  PartitionsSchedule,
+  ProjectionSchedule,
+  ReconcileSchedule,
+} from "../schedule/index.js";
 
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
