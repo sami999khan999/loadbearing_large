@@ -38,7 +38,7 @@ packages/content/src/
 ├── source/
 │   ├── content-source.ts         → ContentSource (abstract)              ✅  all four shapes
 │   ├── static-content.source.ts  → StaticContentSource   ← split; dynamic import   ✅
-│   └── bundled.content-source.ts → BundledContentSource  ← every locale, static    ☐
+│   └── bundled-content.source.ts → BundledContentSource  ← every locale, static    ☐
 ├── media/                        ── shape 2: media references            ✅
 │   ├── index.ts
 │   ├── media-ref.ts              → MediaResolver, ResolvedMedia
@@ -876,7 +876,7 @@ original bug; loading it for the four namespaces in play is just the fallback do
 > sites, no rule exemption, and it stops the method from claiming asynchrony it does not have.
 > `messages()` and `translator()` genuinely await, so they stay `async`.
 
-**`packages/content/src/source/bundled.content-source.ts`** ☐ *not written yet — it lands with
+**`packages/content/src/source/bundled-content.source.ts`** ☐ *not written yet — it lands with
 [30](30-desktop-app.md), the app that needs it.*
 
 ```ts
@@ -1107,7 +1107,7 @@ each of which is additive:
 | 5 | `collection/nav/` — `NavContract`, `navItems` | `zod` (already a dependency), `ModuleKey` from `permissions` | `ContentSource.nav()`, the barrel |
 | 6 | `document/` — `DocumentContract`, `DocumentEntity` | — | `ContentSource.document()`, the barrel |
 | 7 | `translator/message-store.ts` — `MessageStore` | [23](23-feature-package.md)'s `MessageProvider` is the caller | the barrel |
-| 8 | `bundled.content-source.ts` — `BundledContentSource` | **[30](30-desktop-app.md)** | the barrel |
+| 8 | `bundled-content.source.ts` — `BundledContentSource` | **[30](30-desktop-app.md)** | the barrel |
 
 **Items 1, 2, 4, 5 and 6 are unblocked and go in together.** Doing them as one pass is what makes
 `ContentSource` declare all four shapes at once — which matters, because an abstract method with no

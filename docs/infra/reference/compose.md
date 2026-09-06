@@ -154,13 +154,21 @@ ports: ["${MINIO_CONSOLE_PORT:-9001}:9001"]
 ```
 
 Port collisions on a developer machine are not hypothetical — this stack met one on its first run,
-where `9001` was already held by an unrelated tool. The fix is a line in `infra/.env`, which Compose
-reads automatically because it sits beside the compose file:
+where `9001` was already held by an unrelated tool. The fix is a line in `infra/.env` — a file that
+is **not in the repository**, because every port above already has a default and a template of
+defaults would be a file to keep in step for no gain. Create it when you need one; Compose reads it
+automatically, because with `-f infra/docker-compose.yml` the project directory is `infra/` and not
+the repository root:
 
 ```ini
-# infra/.env — gitignored, this machine only
+# infra/.env — you create this; gitignored, this machine only
 MINIO_CONSOLE_PORT=9003
 ```
+
+**It is not the root `.env`, and confusing the two is the common failure.** The root `.env` is what
+the *applications* read through `env.ts`; `infra/.env` is what *Compose* reads. Override a port in
+one and you must change the matching URL in the other — `MINIO_CONSOLE_PORT` has no counterpart, but
+`POSTGRES_PORT` and `DATABASE_URL` do.
 
 | Variable | Default | Variable | Default |
 |---|---|---|---|

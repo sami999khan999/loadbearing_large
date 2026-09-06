@@ -164,6 +164,41 @@ connection.
 **`--maxmemory 512mb` on the cache** is what makes `allkeys-lru` mean anything. Without a ceiling the
 policy never triggers and the cache grows until the box does.
 
+### Readiness: `depends_on` is the start of the answer, not the whole of it
+
+`depends_on: { postgres: { condition: service_healthy } }` gets the container *started* in the right
+order. It says nothing about whether the app inside it can serve a request — the process still has to
+parse its environment, build a container, and open its own connections.
+
+**`GET /api/health` is that answer**, and it is the endpoint a load balancer, an orchestrator, or a
+`caddy` health check should be pointed at rather than at the port being open:
+
+```yaml
+  web:
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+```
+
+**It is a readiness probe, and the distinction decides what happens on a 503.** Readiness means *do
+not send me traffic yet* — a rolling deploy holds the instance out of the pool while Postgres is
+still starting, and puts it back when the answer changes. A liveness probe on the same endpoint kills
+the container instead, which is the wrong response to a dependency that is merely slow, and turns one
+slow database into a restart loop across every instance.
+
+The report names `database`, `cache`, `queue` and `analytics`; `analytics` is `null` when ClickHouse
+is not configured, which is neither healthy nor degraded. **Loki is deliberately not in it** — logs
+are lossy by design, so a collector being down is not a reason to drain an instance that is serving
+correctly ([Data and scale](../opinions/data-and-scale.md)).
+
+**The worker has no HTTP surface and therefore no equivalent.** Its liveness signal is the
+`process.started` line it emits with its consumer count, and its readiness is that it consumes —
+which is why the `analytics-reconcile` schedule exists ([25](../setup/25-worker-app.md)): a worker
+that died quietly on a Tuesday is not something a probe finds.
+
 ### The one thing that gets simpler in production
 
 **The applications are containers here, and they were not locally.** `pnpm dev` runs on the host, so

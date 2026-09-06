@@ -591,25 +591,61 @@ it once and make the doc-drift gate (`P4.26`) check it.
 
 ### Package docs
 
-- [ ] `P4.1` `packages/errors/docs` — `reference/catalog.md:40` says `RATE_LIMITED` and
+- [x] `P4.1` `packages/errors/docs` — `reference/catalog.md:40` says `RATE_LIMITED` and
   `UNAVAILABLE` have no class (both exist and are exported); `index.md` tree lists 8 of 11
-  error files.
-- [ ] `P4.2` `packages/core/docs/index.md` — "four exports"; `Token` is the fifth, missing
+  error files. `done: 2026-09-06`
+  - **Done:** the two rows say **yes** with the class named; the `index.md` tree lists all twelve
+    files in `src/error/`. The catalog page's own point survives the fix — `RATE_LIMITED` is
+    `expected` (someone tried something they cannot do) and `UNAVAILABLE` is `unexpected` (we are
+    broken), which is what decides the log level, and neither claim depended on the class being
+    absent.
+- [x] `P4.2` `packages/core/docs/index.md` — "four exports"; `Token` is the fifth, missing
   from tree, exports section and tests list; `reference/token.md` does not exist.
-- [ ] `P4.3` `packages/permissions/docs/index.md` — trees omit `core.permissions.ts`,
+  `done: 2026-09-06`
+  - **Done:** five exports, `Token` in the tree, the exports section and the tests list.
+  - **`reference/token.md` was written rather than the mention dropped**, and registered in
+    `reference/meta.json`. `Token` is the one export in this package where the *how* matters —
+    an opaque random string and the digest of one, which is what lets an invitation token be
+    stored as a hash and compared without ever holding the plaintext.
+- [x] `P4.3` `packages/permissions/docs/index.md` — trees omit `core.permissions.ts`,
   `ai.permissions.ts`, `account.routes.ts`, `organization.routes.ts`; "four exports" is five.
-- [ ] `P4.4` `packages/contracts/docs/index.md` — "none ship yet" (`role/`, `member/` ship);
-  `InvitationId` absent from the identifiers line; two spec files missing.
-- [ ] `P4.5` `packages/application/docs` — `meta.json` and `index.md:3` say "ten ports", the
+  `done: 2026-09-06`
+  - **Done:** all four files in the trees, five exports.
+  - **The two `*.routes.ts` files carry the more interesting note** now they are visible:
+    `account.routes.ts` and `organization.routes.ts` deliberately have **no gate**, because your
+    own password is not a capability and founding your own tenant is not either. A route table
+    whose every entry had a gate would be one nobody could read for the exceptions.
+- [x] `P4.4` `packages/contracts/docs/index.md` — "none ship yet" (`role/`, `member/` ship);
+  `InvitationId` absent from the identifiers line; two spec files missing. `done: 2026-09-06`
+  - **Done:** `role/` and `member/` named as shipping, `InvitationId` on the identifiers line, both
+    spec files in the tree. "None ship yet" was the load-bearing error — it is the sentence that
+    sends a reader looking for a worked example the package has two of.
+- [x] `P4.5` `packages/application/docs` — `meta.json` and `index.md:3` say "ten ports", the
   table lists fifteen, `src/port/` holds sixteen; tree omits `email.sender.ts`, `ai/`,
   `member/`, `rbac/` and their tests; `index.md:89` says `EventBus` is implemented in
   composition (it is not — `composition/docs/index.md:120` is right); example port path
-  `src/task/task.repository.ts` does not exist.
-- [ ] `P4.6` `packages/infrastructure/docs` — `index.md` tree omits `smtp/`;
-  `reference/unit-of-work.md` (rewritten by `P2.1`).
-- [ ] `P4.7` `packages/composition/docs` — "two exports" is three (`HealthReport`); 9 of 15
+  `src/task/task.repository.ts` does not exist. `done: 2026-09-06`
+  - **Done:** sixteen ports counted from `src/port/` in both `meta.json` and `index.md`, and the
+    table lists all sixteen. The tree gained `email.sender.ts`, `ai/`, `member/`, `rbac/` and their
+    tests. The example port path is a slice that exists.
+  - **`EventBus` was the claim worth correcting rather than deleting.** `index.md` said composition
+    implements it; nothing does. It is now stated as the port to watch — `composition` wires
+    `RecordingEventBus` into `TestContainer` and binds nothing in the real one, so the seam is
+    exercised by tests and unused in production, which is a different thing from unimplemented.
+- [x] `P4.6` `packages/infrastructure/docs` — `index.md` tree omits `smtp/`;
+  `reference/unit-of-work.md` (rewritten by `P2.1`). `done: 2026-09-06`
+  - **Done:** `smtp/` in the tree with `SmtpEmailSender`, and `reference/unit-of-work.md` rewritten
+    against the shipped class.
+- [x] `P4.7` `packages/composition/docs` — "two exports" is three (`HealthReport`); 9 of 15
   fakes listed; `reference/test-container.md` says eleven fakes, ten ports, "one entry per
-  port" (it also carries `content`).
+  port" (it also carries `content`). `done: 2026-09-06`
+  - **Done:** three exports (`Container`, `ContainerConfig`, `HealthReport`), all fifteen fakes.
+  - **`test-container.md`'s "one entry per port" was a rule the file itself breaks**, and the
+    exception is the interesting part: it also carries `content`, because `StaticContentSource` is
+    the one port whose *real* implementation is the test double — there is no fake worth writing
+    for a class that reads a catalog out of memory.
+  - Carries the `P3.8` refusal: migrating `application/tests/**` onto `TestContainer` would make
+    `application` depend on `composition`, inverting the layering. Recorded in that page.
 - [x] `P4.8` **stale `db` package** — named in `observability`, `contracts`, `permissions`,
   `application` docs, `auth/src/apikey/api-key.resolver.ts:25`, `docs/setup/00:120,124`,
   `docs/setup/26:243`, `docs/setup/27:72-73`, `docs/setup/28` (bare `├── db/` and `:164,896`).
@@ -897,12 +933,29 @@ it once and make the doc-drift gate (`P4.26`) check it.
   - **Deferred to `P4.25`:** the full `apps/desktop/` tree, which is one item in a change that also
     touches doc 29, doc 30, both `env.ts` files, `.env.example` and a Biome glob. Splitting it
     across two entries would leave the tree gone and the env var still parsed.
-- [ ] `P4.22` **wrong backticked paths** — `15:247,320,347,468,494` (`src/{cache,storage,queue}`
+- [x] `P4.22` **wrong backticked paths** — `15:247,320,347,468,494` (`src/{cache,storage,queue}`
   → `redis/ s3/ bullmq/`, which contradicts `layering.md`'s own vendor rule); `14:233`
   (`src/embedding/` → `src/openai/`); `12:177,193,210` (`application/src/error/` → `errors/`);
   `20:879` (`bundled.content-source.ts` → `static.`); `05:565` and `00:36` (Prettier, not
   used); `10:171,245,310,372` and `24:560` (`task` slice → `role`);
   `docs/infra/deployment.md:89` (`docker-compose.prod.yml`); `30:228` (`apps/desktop`).
+  `done: 2026-09-06`
+  - **Every path corrected against the tree, and §15 is now what stops the next one.** The vendor
+    paths in `15` and `14` and the `application/src/error/` block went with the first pass; this one
+    closed the rest.
+  - **Three were not path typos but stale claims underneath a path**, which is why the entry is
+    worth more than a find-and-replace: `00:36` still sold doc 05 as "Prettier" for a page whose
+    whole subject is replacing it; `10`'s two `illustrative` markers said "the starter kit ships no
+    feature slices" while `role/` and `member/` sit in that package; and `12`'s
+    `application/src/error/` paths were correct-as-history but the `<summary>` did not say so, so
+    §15's `<details>` exemption was carrying a reader who could not see why.
+  - **`bundled.content-source.ts` was a naming-rule violation, not a wrong path.** The role suffix
+    is `.source`, so the technology joins with a hyphen: `bundled-content.source.ts`, matching the
+    `static-content.source.ts` beside it. Written the other way, `*.source.ts` misses the file —
+    which is exactly the failure `docs/ai/rules/files.md` names. Fixed in three places in doc 20 and
+    in `packages/content/docs/`.
+  - `deployment.md:89` already reads "illustrative; write it on the host, it is not in the
+    repository", and `30:228` is now under that page's not-built banner (`P4.25`).
 - [x] `P4.23` **shipped features with no setup page** — `AUTH_ENROLMENT_MODE` appears in zero
   files under `docs/`; organization plugin, `PgOrganizationFounder`, `PgInvitationClaimer`,
   `InvitationClaimingEnroller`, `MemberRouter`, `OrganizationSwitcher`, `/settings/members`,
@@ -990,14 +1043,39 @@ it once and make the doc-drift gate (`P4.26`) check it.
     `apps/desktop` imports `@tanstack/react-router` directly while `apps/web` never installs it —
     the reverse of the manifests. Four `Used by … apps/desktop` rows in package docs, and the Tauri
     catalog comment, now say what is installed.
-- [ ] `P4.26` **doc-drift gate** `~2h` — `check-architecture` **§15**: every backticked
+- [x] `P4.26` **doc-drift gate** `~2h` — `check-architecture` **§15**: every backticked
   repo-relative path in `docs/**`, `README.md`, `AGENTS.md`, `packages/*/docs/**`,
   `apps/*/docs/**` must exist on disk (exclude fenced code blocks and paths ending in
   `<placeholder>`). ~25 of the findings above would have been caught by it.
-  **Docs:** `docs/setup/26`, `docs/ai/rules/workflow.md` (fifteen).
-- [ ] `P4.27` `docs/infra` — `reference/compose.md:157-171` and `README.md:16-26` describe an
+  **Docs:** `docs/setup/26`, `docs/ai/rules/workflow.md` (fifteen). `done: 2026-09-06`
+  - **§15 ships and has been the working gate for this whole phase** — it caught prose in
+    `docs/setup/26` on the commit that introduced it, and has failed on something in most of the
+    passes since. The estimate that it would catch ~25 of the findings held.
+  - Resolution is owner-relative: a `docs/…` span tries the owning package, then every source dir,
+    then the root, so `docs/reference/<page>.md` written generically in an opinions page passes if
+    any package has one. Fenced blocks, `<details>` blocks, and any line or heading marked
+    `illustrative` / `not written yet` / `does not exist` / `removed` / `deleted` / `☐` are skipped
+    — the last is what lets a page show a planned file without lying about it.
+  - `apps/desktop` and `apps/api` are exempt by name, and `P4.25` is what made the first of those an
+    exemption for a directory nothing claims exists rather than a hole in the gate.
+- [x] `P4.27` `docs/infra` — `reference/compose.md:157-171` and `README.md:16-26` describe an
   `infra/.env` that `P8.19` ships; `deployment.md` describes readiness without naming
-  `/api/health`.
+  `/api/health`. `done: 2026-09-06`
+  - **`infra/.env` is documented as a file you create, not one `P8.19` will ship.** Every published
+    port already has a default in the compose file, so a template of defaults would be one more file
+    to keep in step for no gain. What the page was missing is the distinction that actually catches
+    people: the root `.env` is what the *applications* read through `env.ts`, `infra/.env` is what
+    *Compose* reads, and overriding a port in one means changing the matching URL in the other.
+  - **`deployment.md` gained a readiness section**, because `depends_on: service_healthy` gets a
+    container *started* in the right order and says nothing about whether the app inside it can
+    serve — it still has to parse its environment, build a container and open its own connections.
+    `/api/health` is that answer, with a Compose `healthcheck` block, and the readiness-versus-
+    liveness distinction stated in terms of what happens on a 503: held out of the pool, or killed.
+    A liveness probe on this endpoint turns one slow database into a restart loop.
+  - **The worker's absence from that section is the point**, not an omission: it has no HTTP surface,
+    so its liveness signal is the `process.started` line with its consumer count and its readiness is
+    that it consumes — which is why `analytics-reconcile` exists. A worker that died quietly on a
+    Tuesday is not something a probe finds.
 
 **Exit.** `pnpm check:architecture` §15 zero failures; a fresh reader can follow `README.md`
 step 6 under the default enrolment mode and land where it says.

@@ -172,7 +172,7 @@ What stays true here is the discipline, and it is worth restating because this p
 That single rule is most of what keeps the transport swappable, and it is also what lets the worker catch a `ForbiddenError` and log it rather than trying to interpret an HTTP artifact in a process that has no HTTP.
 
 <details>
-<summary>The original listing, for reference</summary>
+<summary>The original listing, for reference — these paths no longer exist; the classes live in <code>packages/errors/src/error/</code></summary>
 
 **`packages/application/src/error/domain.error.ts`**
 

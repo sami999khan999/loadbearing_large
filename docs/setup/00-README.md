@@ -33,7 +33,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | 02 | [Repository Skeleton](02-repo-skeleton.md) | Four top-level folders, six root files, first commit |
 | 03 | [Workspace & Catalogs](03-workspace-and-catalogs.md) | `pnpm install` succeeds; topological scripts replace Turborepo |
 | 04 | [TypeScript Configs](04-typescript-configs.md) | Four shared `tsconfig` bases |
-| 05 | [Lint & Format](05-lint-and-format.md) | Prettier, and the ESLint rules that mechanically enforce OOP + the server-only boundary |
+| 05 | [Lint & Format](05-lint-and-format.md) | Biome, and the six ESLint rules that mechanically enforce OOP + the server-only boundary |
 | 06 | [Package Anatomy](06-package-anatomy.md) | The shape every package copies, and the one-shot scaffold script |
 
 ### Phase B — the shared kernel

@@ -174,7 +174,7 @@ repository permitted to carry a message. Moving it here cost nothing and removed
 | `document/` — `DocumentContract`, `DocumentEntity` | ✅ shape declared; `document()` answers `null` |
 | `message/catalog.server.ts` — `SERVER_CATALOG` | ✅ final; `Container` and `TestContainer` pass it to `StaticContentSource` |
 | `translator/message-store.ts` — `MessageStore` | ✅ final; `apps/web/src/router.tsx` constructs it, `feature`'s `MessageProvider` reads it |
-| `bundled.content-source.ts` — `BundledContentSource` | ☐ lands with the desktop app (30) |
+| `bundled-content.source.ts` — `BundledContentSource` | ☐ lands with a second shell — [30](../../../docs/setup/30-desktop-app.md), which is a plan |
 
 **`SERVER_CATALOG` is what makes `Namespace` wider than `ClientNamespace`**, and the first thing
 that makes `MessageCatalog` being `Partial` over `Namespace` do any work. It spreads
