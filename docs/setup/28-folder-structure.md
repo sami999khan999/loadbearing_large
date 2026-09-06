@@ -894,28 +894,19 @@ apps/worker/
 
 ---
 
-### `apps/desktop`
+### `apps/desktop` — not built
 
-```
-apps/desktop/
-├── package.json                        ← @loadbearing/desktop
-├── tsconfig.json
-├── tauri.conf.json                     ← CSP: API origin in connect-src, nothing else
-├── src-tauri/
-│   ├── Cargo.toml
-│   └── src/
-│       ├── main.rs
-│       └── token.rs                    ← keychain commands, the only secret store
-└── src/
-    ├── config.ts                       → Config   ★ import.meta.env, NOT process.env
-    ├── token-provider.ts               → TauriTokenProvider  (implements TokenProvider)
-    ├── api.ts                          → ApiClient + QueryClient singletons
-    ├── router.tsx                      ← memory or hash history, its own route tree
-    └── route/
-        └── -nav-routes.ts              ← asserts ROUTES exist in this tree
-```
+**There is no `apps/desktop` directory.** [30](30-desktop-app.md) is the plan for one, and the whole
+measure of everything above is that building it would cost one app directory and no changes to any
+package. Nothing in this tree is waiting on it: the two pieces it needs — `BearerAuthStrategy` and
+the abstract `TokenProvider` — already ship in
+[`api-client`](../../packages/api-client/docs/index.md), unused, which is what makes the claim
+checkable rather than aspirational.
 
-**No `env.ts`, and that is the interesting part.** There is no Node runtime in the webview, so `process.env` does not exist — configuration arrives through `import.meta.env` in `config.ts`. The "exactly two `process.env` readers" assertion in [26](26-hygiene-and-ci.md) therefore needs no new exemption for a third app ([30](30-desktop-app.md)).
+**It would have no `env.ts`, and that is the interesting part.** There is no Node runtime in a
+webview, so `process.env` does not exist — configuration would arrive through `import.meta.env`. The
+`process.env` assertion in [26](26-hygiene-and-ci.md) therefore needs no new exemption for a third
+app, which is a property of the boundary rather than a coincidence.
 
 ---
 

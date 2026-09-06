@@ -938,17 +938,58 @@ it once and make the doc-drift gate (`P4.26`) check it.
   - `docs/ai/rules/workflow.md` gained `check:contrast`, `deps:check`, `repo:check`, `smoke`,
     `auth:tables`, `infra:up:analytics` and Mailpit, and "fourteen assertions" became fifteen.
   - §27.4's second slice was closed by `P4.20`.
-- [ ] `P4.24` **rules ↔ opinions disagreements** — comments scope (`opinions/comments.md:10`
+- [x] `P4.24` **rules ↔ opinions disagreements** — comments scope (`opinions/comments.md:10`
   says anywhere in src/tests, `:128` scopes enforcement to `packages/*`); `classes.md`
   free-function ban in tests (opinions scope to `src/`, rules silent —
   `apps/worker/tests/consumer/maintenance.consumer.spec.ts` has three); rulebook size
   (`data-and-scale.md` is 613 lines vs "~2 000 tokens"). Settle each in the opinion, mirror in
-  the rule. **Depends on:** `P1.11`.
-- [ ] `P4.25` **`apps/desktop` does not exist** — `docs/setup/30-desktop-app.md`, `28:127-148`,
+  the rule. **Depends on:** `P1.11`. `done: 2026-09-06`
+  - **Two of the three were already settled and one was real.** The comments scope agrees in all
+    three places today — `opinions/comments.md` says `{src,tests}` under `packages/*` or `apps/*` in
+    both the statement and the enforcement section, `rules/comments.md` says the same, and
+    `sourceDirs()` in the script walks exactly that. The "~2 000 tokens" claim is not in the tree at
+    all any more; `P1.11` and `P4.16`'s re-measurement took it out.
+  - **The free-function ban was genuinely wrong, and in a way a reader could not resolve.** The
+    opinion's package list was eleven and omitted `observability`, which the ESLint glob has had all
+    along — so the page said one thing and the config another with nothing to arbitrate. And neither
+    file stated the *scope*, which is why `apps/worker/tests/…spec.ts`'s three local helpers read as
+    violations: the glob is `packages/{…}/src/**`, so `tests/` is outside it and `apps/*` is outside
+    it twice over.
+  - **Settled in the opinion, mirrored in the rule**, as the entry asks: the ban is on the shipped
+    surface — exported, and `src/` only. Both halves carry their reason. A spec has no public API to
+    keep coherent, so forcing a `harness()` into a class buys nothing; a module-private helper beside
+    the class that uses it is fine. What the rule prevents is a barrel that is half classes and half
+    loose functions, where there is no answer to *where does the next one go*.
+- [x] `P4.25` **`apps/desktop` does not exist** — `docs/setup/30-desktop-app.md`, `28:127-148`,
   `29:354`, `26:429`, `25:92`, `biome-config/src/base.json:75`,
   `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` (required in both `env.ts`, read by nothing). Add a
   "not yet built" banner to `30`, remove the desktop trees from `28`/`29`, drop the env key
-  from `env.ts` and `.env.example`, drop the biome glob.
+  from `env.ts` and `.env.example`, drop the biome glob. `done: 2026-09-06`
+  - **`AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` was the item with teeth.** It was **required** — no
+    default — in `apps/web/src/env.ts`, so every deployment had to supply a value that nothing in
+    the repository reads. A required env var nobody can explain is worse than a missing one: the
+    first person to meet it either invents a number or copies the example, and neither is a
+    decision. Dropped from the schema, `.env.example`, `apps/web/vitest.config.ts` and three docs.
+  - **Both server-only globs dropped** — Biome's and ESLint's, though the entry named only Biome;
+    leaving one would have re-created the disagreement. By the repo's own tie-breaker this is
+    clear-cut: the retrofit is *local*, one line in an existing array. Doc 05's CAUTION stays and
+    now says exactly that, because the CAUTION is what prevents the real mistake — adding a
+    separate `apps/desktop/**` override, which replaces the whole `paths` map rather than adding to
+    it and silently unbans every server-only package.
+  - **Doc 30 keeps its content and gains a banner that does the useful half of the work**: what is
+    real today (the abstract `TokenProvider`, `BearerAuthStrategy`, the `surface` column, the shared
+    route table — each of which earns its place on the web app's own terms), and what is not (no
+    globs, no env key, no CI workflow), with the one-line cost of each named. "A glob matching
+    nothing and an env key nothing reads are not preparation — they are a rule a reader cannot
+    verify and a required value nobody can explain."
+  - Doc 28's tree and doc 29's §1.22 became "if a desktop shell arrives" sections rather than
+    deletions: the naming decisions in them are already load-bearing on the pages before them, and
+    deleting them would lose the reason `ROUTES` is shared and `surface` exists.
+  - **Also swept, since a stale config claim is the same defect:** doc 20 said the `SERVER_CATALOG`
+    ESLint ban covers `packages/feature` and `apps/desktop` (it covers neither), and doc 03 said
+    `apps/desktop` imports `@tanstack/react-router` directly while `apps/web` never installs it —
+    the reverse of the manifests. Four `Used by … apps/desktop` rows in package docs, and the Tauri
+    catalog comment, now say what is installed.
 - [ ] `P4.26` **doc-drift gate** `~2h` — `check-architecture` **§15**: every backticked
   repo-relative path in `docs/**`, `README.md`, `AGENTS.md`, `packages/*/docs/**`,
   `apps/*/docs/**` must exist on disk (exclude fenced code blocks and paths ending in

@@ -14,7 +14,7 @@ lives here, keyed and translated.
 | **Package** | `@loadbearing/content` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/errors` (type-only), `@loadbearing/asset`, `@loadbearing/permissions` (`ModuleKey`, type-only), `zod` |
-| **Used by** | `composition`, `feature`, `apps/web`, `apps/worker`, `apps/desktop` |
+| **Used by** | `composition`, `feature`, `apps/web`, `apps/worker` |
 | **Environment** | isomorphic and **React-free** — the worker renders email copy with the same class the browser uses |
 | **Build** | `tsup` → one chunk per locale × namespace, plus the entry |
 

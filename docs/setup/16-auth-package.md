@@ -687,20 +687,31 @@ signed cookie cache   ← 60s max
 
 An in-process LRU is the tier that surprises people, because a Redis `DEL` cannot reach it — twenty app instances hold twenty copies. Keep its TTL short enough that correctness never depends on invalidating it, which is why it is seconds rather than minutes.
 
-**Three values, and they are answered — as environment variables, not literals.** The defaults below ship in `.env.example`; a staging box and production are not obliged to agree, which is the whole reason they are not constants in `AuthFactory`.
+**Two values, and they are answered — as environment variables, not literals.** The defaults below ship in `.env.example`; a staging box and production are not obliged to agree, which is the whole reason they are not constants in `AuthFactory`.
 
 | Value | Variable | Default | Note |
 | --- | --- | --- | --- |
 | Web session lifetime | `AUTH_SESSION_MAX_AGE_SECONDS` | 7 days | |
 | Slides on activity? | — | Yes | `updateAge` is a quarter of the lifetime, so a session in daily use is never interrupted while an abandoned one still expires on schedule. A sliding window and a short cookie-cache TTL interact — the cache delays revocation regardless |
-| Desktop token lifetime | `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` | 30 days | Longer, which is what makes the next paragraph mandatory rather than nice to have |
 | Revocation window | `AUTH_COOKIE_CACHE_MAX_AGE_SECONDS` | 60s | Capped at 60 in the env schema ([24](24-web-app.md)), because the pressure to raise it always arrives as a performance argument |
 
-**A longer-lived desktop token needs independent revocation**, because "sign out all devices" has to actually reach a machine that may be offline. That is what the `surface` column on `sessions` is for (Step 16.2): every session records whether it was opened from the web or the desktop shell, so revoking one class is `DELETE FROM sessions WHERE user_id = $1 AND surface = 'desktop'` against `sessions_user_surface_idx` — not a scan, and not a guess made from a user-agent string months after the fact.
+**A second surface will want a longer-lived token than a web session, and that needs independent
+revocation** — "sign out all devices" has to reach a machine that may be offline. That is what the
+`surface` column on `sessions` is for (Step 16.2): every session records where it was opened from,
+so revoking one class is `DELETE FROM sessions WHERE user_id = $1 AND surface = 'desktop'` against
+`sessions_user_surface_idx` — not a scan, and not a guess made from a user-agent string months after
+the fact. Today every row says `web`, and the column costs a byte.
 
-Deciding this at the same time as the lifetime is the point. The mechanism is cheap now and expensive on the afternoon somebody loses a laptop.
+**Deciding this at the same time as the lifetime is the point**, and it is the exception
+[Simplicity](../opinions/simplicity.md) names: a seam earns its place early when the retrofit is
+spread rather than local. Adding `surface` to a table with a year of sessions in it, and then
+backfilling a value nobody recorded, is not a migration anyone wants to write. The mechanism is
+cheap now and expensive on the afternoon somebody loses a laptop.
 
-**The desktop path has no cookie**, so the first tier of that chain does not exist for it ([30](30-desktop-app.md)). A bearer-token client pays a full capability resolution on every cache miss, and the in-process LRU is the only thing absorbing it. Worth knowing before the load test, because desktop traffic and web traffic have genuinely different cost profiles per request.
+**A bearer-token client would have no cookie**, so the first tier of the chain above does not exist
+for it ([30](30-desktop-app.md)) — it pays a full capability resolution on every cache miss, and the
+in-process LRU is the only thing absorbing it. Worth knowing before the load test: the two surfaces
+have genuinely different cost profiles per request.
 
 ---
 

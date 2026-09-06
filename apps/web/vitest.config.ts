@@ -29,7 +29,6 @@ const ENV = {
   // thing in it".
   AUTH_TRUSTED_ORIGINS: "http://localhost:3000,tauri://localhost",
   AUTH_SESSION_MAX_AGE_SECONDS: "604800",
-  AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: "2592000",
   AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: "60",
 
   EMBEDDING_MODEL: "text-embedding-3-small",

@@ -6,8 +6,28 @@
 
 **Prerequisite:** [29 · Naming and boundaries](29-naming-and-boundaries.md)
 
+> [!IMPORTANT]
+> **This document is a plan. `apps/desktop` does not exist in this repository.** Every other page in
+> `docs/setup/` describes something you can open; this one describes something you would build, and
+> it is kept because the decisions in it are already load-bearing on the pages before it. Read it as
+> the specification for a directory, not as a description of one.
+>
+> **What is real today** is everything the shell would need and nothing it would contain: the
+> abstract `TokenProvider` and `BearerAuthStrategy` in
+> [`api-client`](../../packages/api-client/docs/index.md), the `surface` column on `sessions`
+> ([16](16-auth-package.md)), the shared route table in [08](08-permissions-package.md), and every
+> `feature` and `ui` component being framework-shaped rather than router-shaped. None of it is
+> speculative structure: each earns its place on the web app's own terms, and the desktop shell is
+> what would make the seams visible.
+>
+> **What is not real:** there is no `apps/desktop` glob in the Biome or ESLint server-only overrides
+> ([05](05-lint-and-format.md)), no `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` in either `env.ts`, and no
+> desktop workflow in CI. Each is one line, added the day the directory appears. A glob matching
+> nothing and an env key nothing reads are not preparation — they are a rule a reader cannot verify
+> and a required value nobody can explain.
+
 > [!NOTE]
-> **Tauri is the desktop shell — decided, not proposed.** Earlier documents are written on that basis rather than hedging against it: the bearer plugin and both Tauri origins are configured on day one in [16](16-auth-package.md) and [24](24-web-app.md), the shared route table in [08](08-permissions-package.md) exists partly so two shells cannot disagree about a path, and `apps/desktop` appears in the canonical tree in [28](28-folder-structure.md). Nothing in this document modifies work from an earlier one.
+> **Tauri is the shell this plan assumes — decided, not surveyed.** Earlier documents are written on that basis rather than hedging against it: the bearer plugin and both Tauri origins are configured on day one in [16](16-auth-package.md) and [24](24-web-app.md), and the shared route table in [08](08-permissions-package.md) exists partly so two shells cannot disagree about a path. Nothing in this document modifies work from an earlier one.
 
 ---
 

@@ -101,7 +101,7 @@ Each entry names a framework. Each is quarantined to the one layer allowed to na
 |---|---|---|
 | `@orpc/server` | `apps/*/src/server/` | The transport seam. This is the file that changes when the backend framework does; nothing above it moves. |
 | `@tanstack/react-router` | `apps/` | Routing is app-shaped, not product-shaped. A Next app brings its own and reads paths from `@loadbearing/permissions`. |
-| `@tauri-apps/api` | `apps/desktop` | Desktop shell only. |
+| `@tauri-apps/api` | `apps/desktop` | Desktop shell only, and not installed — the app does not exist ([30](../setup/30-desktop-app.md)). |
 | `@tanstack/react-query`, `@orpc/tanstack-query` | `packages/{query,ui,feature}` | React-scoped, which is inside the target set — all three front-end targets are React. |
 | `better-auth` | `packages/auth` | Multi-framework by export map: `./node` covers Node, Express, Fastify, Nest; `./next-js` and `./tanstack-start` cover two front-ends; the core web handler covers Hono. |
 

@@ -68,13 +68,21 @@ up.
 
 ## No exported free functions in the OOP packages
 
-`core`, `permissions`, `errors`, `contracts`, `application`, `infrastructure`, `auth`,
-`composition`, `api-client`, `asset`, `content` export classes. A namespace of static methods on a
-class with a private constructor is the shape — `Locales`, `Results`, `ErrorNormalizer`. Enforced by
-ESLint `no-restricted-syntax`; Biome's `complexity/noStaticOnlyClass` is switched off precisely to
-allow it.
+`core`, `permissions`, `errors`, `observability`, `contracts`, `application`, `infrastructure`,
+`auth`, `composition`, `api-client`, `asset`, `content` export classes. A namespace of static methods
+on a class with a private constructor is the shape — `Locales`, `Results`, `ErrorNormalizer`.
+Enforced by ESLint `no-restricted-syntax` over `packages/{…}/src/**/*.ts`
+(`tooling/eslint-config/src/index.js`); Biome's `complexity/noStaticOnlyClass` is switched off
+precisely to allow it.
 
-`ui`, `query`, and `feature` are exempt: React components and hooks are functions.
+**The scope is the shipped surface, and both halves of that are deliberate.** `src/` only, so a
+spec's local `harness()` is not a violation — a test file has no public API to keep coherent, and
+forcing one into a class buys nothing. Exported only, so a module-private helper beside the class
+that uses it is fine; what the rule prevents is a package whose barrel is half classes and half
+loose functions, where there is no answer to *where does the next one go*.
+
+**`ui`, `query`, and `feature` are exempt**, and `apps/*` is outside the glob entirely: React
+components and hooks are functions, and an app is framework-shaped by definition.
 
 ## No static mutable state
 

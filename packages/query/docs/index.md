@@ -33,7 +33,7 @@ this package.
 | **Entrypoint** | `src/index.ts` — opens with `"use client"` |
 | **Depends on** | `@loadbearing/api-client`, `@loadbearing/errors`, `@tanstack/react-query` |
 | **Peers** | `react`, `react-dom` — never dependencies |
-| **Used by** | `feature`, `apps/web`, `apps/desktop`. **Not** `apps/worker` — it calls use-cases in-process |
+| **Used by** | `feature`, `apps/web`. **Not** `apps/worker` — it calls use-cases in-process |
 
 ```
 packages/query/src/

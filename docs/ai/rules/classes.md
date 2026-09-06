@@ -16,7 +16,9 @@ description: Role nouns for seams, technology prefixes for implementations, the 
   them is how a UI check silently becomes the only check.
 - **Explicit accessibility on every member.** An unmarked member is public by accident.
 - **No exported free functions in the OOP packages** — a class with a private constructor and static
-  methods is the shape. `ui`, `query`, `feature` are exempt (React).
+  methods is the shape. Scope is the shipped surface: **exported**, and **`src/` only**, so a spec's
+  local helper is not a violation. `ui`, `query`, `feature` are exempt (React), and `apps/*` is
+  outside the glob.
 - **No static mutable state.** `static readonly` holding a `Map` is mutable state wearing a keyword.
   Build derived lookups once at module load and freeze them.
 

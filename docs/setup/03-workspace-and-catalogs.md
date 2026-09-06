@@ -100,18 +100,19 @@ The list is short on purpose, and Tauri ([30](30-desktop-app.md)) is why it stay
 ### The desktop and router entries
 
 ```yaml
-  # ── TanStack Router — apps/web gets it through Start, apps/desktop imports it
-  #    directly. Catalogued so the two shells cannot resolve different versions
-  #    while sharing the same `feature` components. ──
-  "@tanstack/react-router": ^1.135.0
+  # ── TanStack Router — apps/web declares it explicitly even though Start brings
+  #    it transitively, so a second shell cannot resolve a different version while
+  #    rendering the same `feature` components. ──
+  "@tanstack/react-router": ^1.170.32
 
-  # ── Tauri — the desktop shell. Verify against the current 2.x release when you
-  #    scaffold; the native half is a Rust crate and needs no allowBuilds entry. ──
+  # ── Tauri — for a desktop shell, if one is built. Not installed by any package
+  #    today. Verify against the current 2.x release when you scaffold; the native
+  #    half is a Rust crate and needs no allowBuilds entry. ──
   "@tauri-apps/api": ^2.9.0
   "@tauri-apps/cli": ^2.9.0
 ```
 
-**`@tanstack/react-router` is the one worth explaining.** `apps/web` never installs it explicitly — TanStack Start brings it transitively — while `apps/desktop` imports it directly, because routing is the one thing the desktop shell replaces ([21](21-query-package.md)). Two shells resolving different router versions while rendering the same `feature` components is a bad afternoon, and one catalog line removes the possibility.
+**`@tanstack/react-router` is the one worth explaining.** TanStack Start brings it transitively, so `apps/web` need not declare it — and does, from the catalog, because routing is the one thing a second shell would replace ([21](21-query-package.md)). Two shells resolving different router versions while rendering the same `feature` components is a bad afternoon, and one catalog line removes the possibility before there is a second shell to argue about it with.
 
 Pin the Tauri versions against the current 2.x release when you scaffold rather than trusting the numbers above — same caveat as the prerequisites page in [30](30-desktop-app.md).
 

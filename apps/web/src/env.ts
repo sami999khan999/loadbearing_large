@@ -24,7 +24,6 @@ const Schema = z
     AUTH_URL: z.url(),
     AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
     AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-    AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
     // The revocation window, capped in the schema rather than by convention: a deploy
     // that raises it fails at boot instead of widening the gap silently.
     AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: z.coerce.number().int().positive().max(60),

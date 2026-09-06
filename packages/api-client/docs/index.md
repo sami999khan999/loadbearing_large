@@ -22,7 +22,7 @@ sidecar. **One React import makes all of those impossible.**
 | **Package** | `@loadbearing/api-client` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
 | **Depends on** | `@loadbearing/contracts`, plus `@orpc/client`, `@orpc/contract`, `better-auth` |
-| **Used by** | `query`, `feature` (type-only), `apps/web`, `apps/desktop` |
+| **Used by** | `query`, `feature` (type-only), `apps/web` |
 | **Environment** | isomorphic — browser, Tauri webview, Node. **No `ServerOnly.assert()`** |
 
 ```

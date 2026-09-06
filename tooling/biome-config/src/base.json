@@ -73,8 +73,7 @@
         "packages/errors/**",
         "packages/content/**",
         "packages/asset/**",
-        "apps/web/src/**",
-        "apps/desktop/src/**"
+        "apps/web/src/**"
       ],
       "linter": {
         "rules": {

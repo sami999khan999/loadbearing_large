@@ -77,7 +77,7 @@ Nothing here creates a feature. When you finish [27](27-verification-and-first-f
 | 25 | [`apps/worker`](25-worker-app.md) | BullMQ consumers and repeatable schedules |
 | 26 | [Hygiene & CI](26-hygiene-and-ci.md) | Hooks, commit scopes, pipeline, bundle-leak assertion |
 | 27 | [Verification & First Feature](27-verification-and-first-feature.md) | Architecture checks, commit sequence, the add-a-module checklist |
-| 30 | [`apps/desktop`](30-desktop-app.md) | Tauri: one app directory, zero new packages |
+| 30 | [`apps/desktop`](30-desktop-app.md) | **A plan, not a build.** Tauri: what one app directory and zero new packages would take |
 
 > 30 is numbered last because it is read last — it depends on every package above it. It is not optional: Tauri is the desktop shell, and 16, 24 and 28 are written on that basis.
 

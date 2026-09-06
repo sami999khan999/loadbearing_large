@@ -455,9 +455,9 @@ export const SERVER_CATALOG: MessageCatalog = {
 > [!NOTE]
 > **The ESLint bans on importing `SERVER_CATALOG` are already in place** in
 > `tooling/eslint-config/src/index.js` ([05](05-lint-and-format.md) Step 5.3), for `packages/ui`,
-> `packages/query`, `packages/feature`, `apps/web` and `apps/desktop`. A `no-restricted-imports`
-> entry naming an export that does not exist yet costs nothing and cannot be forgotten later, which
-> is the right order for a boundary.
+> `packages/query` and `apps/web`. A `no-restricted-imports` entry naming an export that does not
+> exist yet costs nothing and cannot be forgotten later, which is the right order for a boundary —
+> unlike a glob naming a *directory* that does not exist, which is a rule no reader can verify.
 
 **`MessageCatalog` is `Partial` over `Namespace`, and each catalog is not.** That split is the
 point: `CLIENT_CATALOG` is declared with an exact `Record<ClientNamespace, …>` so a missing cell

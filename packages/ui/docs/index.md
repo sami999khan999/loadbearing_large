@@ -23,7 +23,7 @@ different routing shell.
 | **Depends on** | `@loadbearing/asset` — **the only runtime workspace dependency** |
 | **Type-only** | `@loadbearing/permissions`, a `devDependency` because both imports are erased |
 | **Peers** | `react`, `react-dom` |
-| **Used by** | `feature`, `apps/web`, `apps/desktop` |
+| **Used by** | `feature`, `apps/web` |
 
 ```bash
 grep -rn "@tanstack\|@loadbearing/query\|@loadbearing/contracts" packages/ui/src

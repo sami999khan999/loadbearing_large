@@ -127,7 +127,6 @@ AUTH_TRUSTED_ORIGINS=http://localhost:3000,tauri://localhost,http://tauri.localh
 AUTH_SESSION_MAX_AGE_SECONDS=604800
 # Longer than the web session, which is what makes independent revocation
 # mandatory: "sign out all devices" has to reach a machine that may be offline. 30 days.
-AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS=2592000
 # This is the revocation window, not a performance dial. Signed session data lives
 # in the cookie for this long, so removed access keeps working until it expires.
 # Sixty seconds, and no longer — the same ceiling the capability cache is held to.

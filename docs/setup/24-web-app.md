@@ -269,7 +269,6 @@ const Schema = z.object({
   AUTH_URL: z.url(),
   AUTH_TRUSTED_ORIGINS: z.string().transform((v) => v.split(",").map((s) => s.trim())),
   AUTH_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
-  AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS: z.coerce.number().int().positive(),
   // The revocation window. Capped in the schema, not by convention — a deploy that
   // raises it to "improve cache hit rate" fails at boot instead of quietly widening
   // the gap between removing access and access stopping.
@@ -351,7 +350,7 @@ export class Env {
 
 **Session lifetimes come from the environment, and the cookie cache is capped here rather than trusted.** A staging box and production do not want the same session length, so these are not literals in a factory. The `.max(60)` on the cookie cache is the load-bearing one: that value *is* the revocation window ([16](16-auth-package.md) §16.9), and the pressure to raise it always arrives as a performance argument. A schema that refuses to boot is a better answer than a comment asking people not to.
 
-**`AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` is parsed here but not consumed by `containerConfig()`.** It belongs to the desktop token policy ([30](30-desktop-app.md)), and it is validated at boot alongside the rest so a malformed value fails in one place rather than at first use on a machine nobody is watching.
+**Not every parsed key reaches `containerConfig()`.** `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` are read by Better Auth's own configuration rather than by an adapter, and they are still validated at boot alongside the rest — one place to fail is the entire point of the schema, and a malformed value found at first use is a value found on a machine nobody is watching.
 
 **`AUTH_TRUSTED_ORIGINS` carries the Tauri origins from the first deployment**, not from whenever the desktop app is built:
 

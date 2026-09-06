@@ -145,7 +145,7 @@ This is the rule that keeps database code out of the browser, and it lives entir
   {
     "includes": [
       "packages/ui/**", "packages/feature/**", "packages/query/**", "packages/errors/**",
-      "apps/web/src/**", "apps/desktop/src/**"
+      "packages/content/**", "packages/asset/**", "apps/web/src/**"
     ],
     "linter": {
       "rules": {
@@ -189,12 +189,13 @@ This is the rule that keeps database code out of the browser, and it lives entir
 
 **Order matters: later overrides win.** The escape hatch must come after the ban, or it does nothing.
 
-**`apps/desktop/src/**` is in the *same* block, not a second one.** That is not tidiness — see
+**A second client app goes in the *same* block, not a second one.** That is not tidiness — see
 the CAUTION below. A separate override matching `apps/desktop/**` would replace the whole
 `paths` map rather than adding to it, and every server-only package would be silently unbanned
-wherever it matched. The desktop app is a client ([30](30-desktop-app.md)); it gets the same
+wherever it matched. A desktop shell ([30](30-desktop-app.md)) is a client: it wants the same
 ban list as `apps/web` and, unlike `apps/web`, no escape hatch at all — there is no
-`src/server/**` inside a Tauri bundle to exempt.
+`src/server/**` inside a Tauri bundle to exempt. Add its glob to the array above when the
+directory exists; a glob matching nothing today is one more line to read and no protection.
 
 > [!CAUTION]
 > **Biome replaces rule options across overrides; it does not merge them.** If two `overrides` blocks both match a file and both set `noRestrictedImports`, only the last one's `paths` apply — the earlier map is discarded.
@@ -373,7 +374,6 @@ export default tseslint.config(
     files: [
       "packages/{ui,query}/src/**/*.{ts,tsx}",
       "apps/web/src/**/*.{ts,tsx}",
-      "apps/desktop/src/**/*.{ts,tsx}",
     ],
     rules: {
       "no-restricted-imports": [

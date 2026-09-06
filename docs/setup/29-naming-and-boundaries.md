@@ -351,13 +351,16 @@ The Postgres side gets its own section because it is the largest folder in the p
 
 ---
 
-## 1.22 Inside `apps/desktop`
+## 1.22 If a desktop shell arrives
 
-- **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything here is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
+**`apps/desktop` does not exist.** [30](30-desktop-app.md) is the plan for it, and the rules below
+are what the naming above already decides, recorded so the shell is a day rather than a debate.
+
+- **`src/config.ts`** — `Config`, reading `import.meta.env`. **Not** a `process.env` reader, because there is no Node runtime in a webview. Everything there is baked into the shipped bundle and readable by anyone who unzips the app, so it holds base URLs and flags and **never** a secret.
 - **`src-tauri/src/token.rs`** — the OS keychain commands, and the only place a credential is stored. The token never touches `localStorage`, where an injected script could read it.
-- **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. This file plus `BearerAuthStrategy` is the *entire* difference between the desktop client and the browser client.
+- **`src/token-provider.ts`** — `TauriTokenProvider`, implementing the abstract `TokenProvider` from `api-client` in two methods, `get()` and `set()`. That file plus `BearerAuthStrategy` is the *entire* difference between a desktop client and the browser client — both of which ship today, unused, which is the claim this section exists to keep honest.
 - **`src/router.tsx`** — its own `@tanstack/react-router` instance on memory or hash history, because the webview serves from a custom protocol with no server to resolve a cold path against. Its own route tree; **not** its own paths — destinations come from `ROUTES` in `permissions`, and keeping the strings identical to web's is what lets a `<Link>` inside a `feature` component be correct in both shells.
-- **Holds no container.** No `composition`, no `application`, no `infrastructure`, no `auth`. It is a client, and the server-only ESLint boundary applies here with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt.
+- **Holds no container.** No `composition`, no `application`, no `infrastructure`, no `auth`. It is a client, and it wants the server-only ESLint boundary with no escape hatch at all — unlike `apps/web` there is no `src/server/**` to exempt. Its glob is **not** in `tooling/biome-config/src/base.json` today, and adding it is one line in an existing array rather than a new override ([05](05-lint-and-format.md)).
 - **Smell:** a `process.env` reference; a secret in `config.ts`; a hand-written route path; anything imported from `composition` or `application`.
 
 ---
@@ -540,4 +543,4 @@ Given a feature name and a layer, you can write the file path and the class name
 
 ---
 
-[← Folder Structure](28-folder-structure.md) · [`apps/desktop` →](30-desktop-app.md)
+[← Folder Structure](28-folder-structure.md) · [A desktop shell, if one arrives →](30-desktop-app.md)
