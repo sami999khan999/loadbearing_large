@@ -6,7 +6,7 @@ import {
   type UserId,
 } from "@loadbearing/contracts";
 import { SystemClock, Token, Uuid } from "@loadbearing/core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
@@ -16,6 +16,14 @@ import { invitations, organizations, roles, users } from "../../src/pg/schema/in
 import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 
+class CountingLogger implements Logger {
+  public count = 0;
+  public logQuery(): void {
+    this.count += 1;
+  }
+}
+
+const counter = new CountingLogger();
 let database: Database;
 const created: UserId[] = [];
 const founded: OrganizationId[] = [];
@@ -42,7 +50,7 @@ const newInvitation = (email: string, overrides: { expiresAt?: Date } = {}) => (
 });
 
 beforeAll(async () => {
-  database = openDatabase();
+  database = openDatabase(counter);
   ada = Identifiers.userId.parse(Uuid.v7());
   await database.client
     .insert(users)
@@ -96,6 +104,16 @@ describe("PgInvitationRepository", () => {
     // invited person's.
     expect(Object.keys(page.items[0] ?? {})).not.toContain("token");
     expect(Object.keys(page.items[0] ?? {})).not.toContain("tokenHash");
+  });
+
+  // "Two queries" decays silently — a name lifted per row inside the map makes it 2 + N,
+  // invisible at one invitation and the whole request at four hundred.
+  it("lists in exactly two queries", async () => {
+    counter.count = 0;
+
+    await repository().list(acme, { limit: 25, offset: 0 });
+
+    expect(counter.count).toBe(2);
   });
 
   // `invitations_email_uq` on (organization_id, email): a second invitation to the same

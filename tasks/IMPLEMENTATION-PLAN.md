@@ -1654,12 +1654,27 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 - [ ] `P6.4` **forms** — `sign-in.form` (the 2FA fork), `reset-password`, `change-password`,
   `change-email`, `two-factor.setup` (codes shown once), `linked-account.list` (last
   credential rule), `active-session.list`, `invite-member.form`, `organization-switcher`.
-- [ ] `P6.5` **`T-026`** — `pg-activity-replay.reader.spec.ts` walks from the table start in
+- [x] `P6.5` **`T-026`** — `pg-activity-replay.reader.spec.ts` walks from the table start in
   ten batches of two and fails once twenty unrelated rows exist. Seed into a dedicated
-  partition window and read from a checkpoint just before it.
-- [ ] `P6.6` **query-count assertions** — `SystemRoleSeed.run` (after `P7.1`: one `IN` query),
+  partition window and read from a checkpoint just before it. `done: 2026-09-06`
+  - **Already shipped, and the ledger said so from the other side.** `T-026` was closed on
+    2026-09-05 with exactly this fix — every read starts from a checkpoint one millisecond before
+    the spec's 2031-03 instant, the partition is created for that month and dropped afterwards.
+    The two entries pointed at each other and neither was ticked.
+  - **Verified rather than reasoned about.** The database these specs run against now holds
+    **4,047** rows in `activity_log`, all of them written at a real "now" that sorts before the
+    checkpoint, and the suite is green. That is the "several hundred unrelated rows" the `T-026`
+    exit line asked for.
+- [x] `P6.6` **query-count assertions** — `SystemRoleSeed.run` (after `P7.1`: one `IN` query),
   `PgInvitationRepository.list`, `PgMemberRepository.list`, using the `DatabaseConfig.logger`
-  seam `pg-capability.repository.spec.ts:31-43` already uses.
+  seam `pg-capability.repository.spec.ts:31-43` already uses. `done: 2026-09-06`
+  - **Two of the three were already in.** `P7.1` added the seed's pair, watched failing at 11 and
+    7 against the previous implementation, and `PgMemberRepository.list` has had its "exactly two
+    queries" assertion since it was written. Counted before writing anything.
+  - **`PgInvitationRepository.list` is the one that was missing**, and it is the one where the
+    regression is easiest to introduce: the list joins the role and the inviter, so lifting either
+    name per row inside the `map` turns two queries into 2 + N with no visible change at one
+    invitation.
 - [x] `P6.7` **no package typechecks its own tests** — `tsconfig.json` includes `src/**` only,
   in `apps/worker` and in every other package. Add `tsconfig.test.json`, and drop
   `--passWithNoTests` from the worker's test script. `done: 2026-09-06`
@@ -2010,7 +2025,11 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     assumed.
   - Two specs against the live database, both watched failing: the counts including invitations, and
     the address being freed.
-- [ ] `P8.5` **structure** — see `P3.20`.
+- [x] `P8.5` **structure** — closed by `P3.20`. `done: 2026-09-06`
+  - Re-checked rather than taken on trust: `apps/worker/src` holds `env.ts`, `import.ts` and
+    `main.ts` and nothing else loose, all four folders carry a barrel, and
+    `docs/opinions/folders.md` states the apps-root rule and lists `bootstrap/` in the folder
+    vocabulary.
 
 ### `tooling/scripts`
 
