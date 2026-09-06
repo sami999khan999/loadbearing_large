@@ -13,6 +13,7 @@ import {
 } from "~/import.js";
 import { Pending } from "~/route/-boundary.js";
 import { RouteGuard } from "~/route/-guard.js";
+import { LocaleSwitcher } from "~/route/-locale.js";
 import { refreshSession } from "~/route/-session.js";
 
 // `nav` for the gated destinations below; `auth` for everything else the header says.
@@ -50,7 +51,7 @@ function AuthenticatedLayout() {
   const capabilities = useCapabilities();
   const navigate = useNavigate();
   const router = useRouter();
-  const { session, queryClient } = Route.useRouteContext();
+  const { session, queryClient, appearance, appearanceSnapshot } = Route.useRouteContext();
 
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
@@ -99,6 +100,7 @@ function AuthenticatedLayout() {
             </Link>
           )}
         />
+        <LocaleSwitcher appearance={appearance} current={appearanceSnapshot.locale} />
         <SignOutButton auth={auth} onSignedOut={signedOut} />
       </header>
       <Outlet />

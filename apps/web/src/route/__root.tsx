@@ -27,6 +27,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       context.session.ensure(fetchSession),
       context.appearance.ensure(fetchAppearance),
     ]);
+
+    // Before the loader below, which is what makes the ordering load-bearing: `ensure`
+    // fetches a namespace for whatever locale the store holds when it is called.
+    context.messages.setLocale(context.appearance.current.locale);
+
     return {
       user: context.session.user,
       capabilities: context.session.dto,

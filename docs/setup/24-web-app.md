@@ -986,10 +986,18 @@ rather than something to remember.
 > fetch whatever the first navigation asks for. Added to `content` in
 > [20](20-content-package.md).
 >
-> **Locale negotiation is the piece this step does not wire.** `Locales.negotiate(acceptLanguage,
-> cookie)` needs the request, and `getRouter()` does not receive one. Reading it inside a root-route
-> `beforeLoad` — which does — and calling `messages.ensure()` there is the shape that fits this
-> version; until then the store starts at `"en"` and the fallback layer covers every locale.
+> **Locale negotiation happens later, in the root route, and that is not a workaround.**
+> `Locales.negotiate(acceptLanguage, cookie)` needs the request and `getRouter()` does not receive
+> one, so the store is seeded with `Locales.DEFAULT` here and the root's `beforeLoad` calls
+> `messages.setLocale()` once `fetchAppearance` has read the header and the cookie. The ordering is
+> load-bearing: `beforeLoad` completes before the loader below it, and `ensure()` fetches a
+> namespace for whatever locale the store holds when it is called. Reverse the two and the first
+> paint is English.
+>
+> **The locale rides `AppearanceSnapshot`**, beside theme, mode and font — same cookie, same
+> server-resolved-so-the-first-byte-is-right argument. It is the one of the four that is not a CSS
+> variable, which is why the switcher calls `router.invalidate()`: the copy has to be fetched, not
+> restyled.
 
 ### Why there is no second fetch
 

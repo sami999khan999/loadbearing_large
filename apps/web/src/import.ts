@@ -18,6 +18,8 @@ export {
 export {
   type ClientNamespace,
   ContentSource,
+  type Locale,
+  Locales,
   type MessageSnapshot,
   MessageStore,
   StaticContentSource,

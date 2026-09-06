@@ -36,8 +36,9 @@ export type MessageKey = NamespaceKeys[Namespace];
 // Only the always-loaded keys, so `ERROR_COPY` cannot point at a lazy namespace.
 export type ShellMessageKey = NamespaceKeys[ShellNamespace];
 
-// One locale's copy for one namespace. Partial: translations arrive incrementally.
-export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+// One locale's copy for one namespace, and **total**: a key added to `en` without a
+// translation is a compile error here rather than an English sentence in a Bengali page.
+export type NamespaceBundle<N extends Namespace> = Record<NamespaceKeys[N], string>;
 
 // A flat slice across whatever namespaces are loaded.
 export type MessageBundle = Partial<Record<MessageKey, string>>;

@@ -1317,7 +1317,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     every locale that inflects. Caught by reading the rendered page.
   - **`/settings` had to be declared in `ROUTES`**, which `P5.7`'s new spec caught on the first run:
     a route file whose path no fragment declares is one a `<Link>` cannot be typed against.
-- [ ] `P5.9` **Locale** `P2` `~4h` `#ui`
+- [x] `P5.9` **Locale** `P2` `~4h` `#ui`
   - **Goal:** `bn/` (eight files) is unreachable: `MessageStore.empty("en")` is hardcoded,
     `Locales.negotiate` has zero callers, no locale cookie, no switcher. `bn` is also missing
     `error.*` ×8, `common.*` ×4 (`state.empty`, `state.error` are rendered by six components),
@@ -1326,7 +1326,38 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `Locales.negotiate(Accept-Language, cookie)`, a header switcher exists, and every `en` key
     has a `bn` cell (make the locale record total, not `Partial`, so a missing cell will not
     compile).
-  - **Docs:** `content/docs/reference/namespace.md`, `docs/setup/20`.
+  - **Docs:** `content/docs/reference/namespace.md`, `docs/setup/20`. `done: 2026-09-06`
+  - **The locale is a fourth axis on `AppearanceSnapshot`**, beside theme, mode and font: same
+    cookie mechanism, same argument for resolving it server-side, and `fetchAppearance` was already
+    holding the request headers `Accept-Language` arrives in.
+  - **It is the one axis that is not a CSS variable**, which is the whole difference. Theme and font
+    are attributes the cascade applies in the same frame; a locale change has to *fetch* copy, so
+    the switcher calls `router.invalidate()` and the root re-runs.
+  - **The ordering in `__root.tsx` is load-bearing and is commented as such.** `beforeLoad` awaits
+    appearance, then calls `MessageStore.setLocale`; the loader's `ensure(SHELL)` runs after it.
+    Reversed, the first paint is English and corrects itself in front of the reader.
+  - **`setLocale` drops every loaded namespace rather than merging.** They are the previous locale's
+    copy, and a merge leaves the old sentences under keys the new bundle also has.
+  - **Fifteen missing `bn` cells, and four of them were `common`** — `state.empty` and `state.error`
+    are rendered by six components, so a Bengali page fell back to English at exactly the moments a
+    reader is already confused. `error.*` was missing eight of twelve.
+  - **`NamespaceBundle` is now `Record`, not `Partial`.** Verified by removing a key and watching
+    `tsc` fail. **`tsup`'s DTS build does not catch it — only `pnpm typecheck` does**, which is
+    worth knowing before trusting a green `pnpm build`.
+  - **Four specs pinned the *absence* of a translation** as their fixture for the English fallback
+    layer, so doing the translations broke them. That is the spec depending on incomplete data:
+    rewritten against a local fixture catalog, plus one that now asserts every `ErrorCode` renders
+    non-ASCII in `bn` — a runtime check of what the type promises. Verified by reverting one value
+    to English and watching it fail.
+  - **`Locales.label()` returns endonyms**, and the switcher never translates them: "বাংলা" is what
+    a reader who cannot read the current locale is scanning for.
+  - **Verified end to end against a live server**, all six negotiation cases: no cookie and no
+    header → `en`; `Accept-Language: bn` → `bn`; a cookie beating a conflicting header; a cookie
+    naming a locale with no catalog → `en`; a header naming one → `en`. `/sign-in` server-renders
+    Bengali including the switcher's own label.
+  - **`T-035` filed:** the English fallback layer is now unreachable for anything that compiles, and
+    it doubles the message payload on every non-English page. The fix is a decision, not an edit —
+    drop the base layer, or relax the totality — and shipping both would be the wrong answer twice.
 - [x] `P5.10` **SSR uses the in-process client** `P1` `~2h` `#ui`
   - **Goal:** `createServerRpcClient` / `ApiClient.inProcess` have no caller; `router.tsx`
     builds `ApiClient.overHttp("/api/rpc")` for both sides, so the first loader

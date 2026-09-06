@@ -5,6 +5,7 @@ import {
   createIsomorphicFn,
   createQueryClient,
   createRouter as createTanStackRouter,
+  Locales,
   type MessageSnapshot,
   MessageStore,
   StaticContentSource,
@@ -35,7 +36,9 @@ const transport = createIsomorphicFn()
 export function getRouter() {
   // The client catalog, never the server one: `email` is server-only.
   const content = new StaticContentSource();
-  const messages = new MessageStore(content, MessageStore.empty("en"));
+  // Seeded with the default; `__root.tsx`'s `beforeLoad` calls `setLocale` once the
+  // cookie and `Accept-Language` have been read, before any namespace is fetched.
+  const messages = new MessageStore(content, MessageStore.empty(Locales.DEFAULT));
   const session = new SessionStore();
   const appearance = new AppearanceStore();
   const { queryClient, apiClient } = createQueryClient({ transport: transport() });

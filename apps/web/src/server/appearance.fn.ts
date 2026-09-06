@@ -10,5 +10,11 @@ const HINT = "sec-ch-prefers-color-scheme";
 // right colour: a cookie the server can read beats a preference only the client knows.
 export const fetchAppearance = createServerFn({ method: "GET" }).handler((): AppearanceSnapshot => {
   const { headers } = getRequest();
-  return AppearanceStore.fromCookieHeader(headers.get("cookie"), headers.get(HINT) === "dark");
+  return AppearanceStore.fromCookieHeader(
+    headers.get("cookie"),
+    headers.get(HINT) === "dark",
+    // The only place `Accept-Language` is read. A first visit with no cookie gets the
+    // browser's language rather than English-and-a-switcher-to-find.
+    headers.get("accept-language"),
+  );
 });

@@ -10,6 +10,7 @@ import {
   useMessages,
   useState,
 } from "~/import.js";
+import { LocaleSwitcher } from "~/route/-locale.js";
 import { RedirectSearch } from "~/route/-redirect.js";
 import { completeSignIn } from "~/route/-session.js";
 
@@ -31,7 +32,7 @@ function SignInPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const search = Route.useSearch();
-  const { session, googleEnabled } = Route.useRouteContext();
+  const { session, googleEnabled, appearance, appearanceSnapshot } = Route.useRouteContext();
   // Which leg of the flow is on screen. The state lives here because neither form owns
   // the transition between them.
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
@@ -50,6 +51,11 @@ function SignInPage() {
 
   return (
     <main>
+      {
+        // The one signed-out page that needs it: a reader who cannot read this form is
+        // not going to find a switcher behind it.
+      }
+      <LocaleSwitcher appearance={appearance} current={appearanceSnapshot.locale} />
       {needsTwoFactor ? (
         <TwoFactorForm auth={auth} onSuccess={complete} />
       ) : (

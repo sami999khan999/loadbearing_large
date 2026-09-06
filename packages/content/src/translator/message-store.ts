@@ -39,6 +39,15 @@ export class MessageStore {
     this.cached = new Translator(snapshot);
   }
 
+  // Drops every loaded namespace, because they are the *previous* locale's copy — a
+  // merge would leave the old sentences in place under keys the new bundle also has.
+  public setLocale(locale: Locale): void {
+    if (this.snapshot.locale === locale) return;
+
+    this.restore(MessageStore.empty(locale));
+    for (const listener of this.listeners) listener();
+  }
+
   // Idempotent, and resolves immediately when nothing is missing — which is the common
   // case on a navigation between two routes that declare the same namespaces.
   public async ensure(namespaces: readonly Namespace[]): Promise<void> {

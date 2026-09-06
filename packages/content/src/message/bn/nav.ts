@@ -1,6 +1,7 @@
 import type { NamespaceBundle } from "../namespace.js";
 
-// Partial by design — anything missing falls back to English.
+// Total, not partial: `NamespaceBundle` is a `Record`, so an `en` key added without a
+// translation fails `tsc` rather than rendering an English sentence on a Bengali page.
 export const nav: NamespaceBundle<"nav"> = {
   "nav.roles": "ভূমিকা",
   "nav.members": "সদস্যরা",

@@ -126,6 +126,25 @@ probe.
     carries no dev build and never checks that the server bundle runs at all.
 
 
+- [ ] `T-035` **The English fallback layer is now dead payload** `@unassigned` `P3` `~3h` `#ui`
+  - **Goal:** `StaticContentSource` loads English *beneath* every locale, per namespace, so a key
+    the locale had not translated still rendered a sentence. `P5.9` made `NamespaceBundle` a total
+    `Record`, so a bundle with a gap no longer compiles — and the layer beneath it can no longer be
+    reached by anything that ships.
+  - **What it costs:** every non-English page carries both copies. Measured on `/sign-in` under
+    `locale=bn`: the dehydrated payload holds the full `common` + `error` + `auth` English bundle
+    *and* the full Bengali one, roughly doubling the message bytes on the wire and in memory.
+  - **Why this is not just "delete it".** The layer is also what makes a *partially loaded* set of
+    namespaces work, and it is the safety net if copy ever arrives from somewhere `tsc` does not
+    see — a CMS behind `ContentSource`, which is the swap that seam exists for. Removing it makes
+    adding a locale all-or-nothing at runtime as well as at compile time, which is a real barrier
+    to a contributor landing a third language incrementally.
+  - **Done when:** one of two decisions is made and written down — either the base layer is dropped
+    for a locale whose bundles are statically known total (and `StaticContentSource` gains the test
+    that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
+    `check-architecture` assertion counting the gap instead. Do not ship both.
+
+
 - [ ] `T-034` **Bring back an analytics reader, with the first dashboard** `@unassigned` `P3` `~8h` `#api` `#db`
   - **Goal:** Nothing reads the analytics store. `P5.12` deleted `AnalyticsReader`, both its
     implementations, its two rollup tables and the `ANALYTICS_DRIVER` flag, because nothing ever

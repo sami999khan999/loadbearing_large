@@ -54,7 +54,7 @@ packages/content/src/
 │   │   ├── auth.ts                                                       ✅
 │   │   ├── error.ts                                                      ✅
 │   │   └── email.ts              ← the worker's namespace, server-only    ☐  lands with [25](25-worker-app.md)
-│   └── bn/                       ← same files; NamespaceBundle<N> each     ◐  four, all Partial
+│   └── bn/                       ← same files; NamespaceBundle<N> each     ●  eight, all total
 ├── collection/                   ── shape 3: repeating records            ✅
 │   ├── index.ts
 │   └── nav/
@@ -292,8 +292,9 @@ export type MessageKey = NamespaceKeys[Namespace];
 // loaded namespace and render as a raw key on a route that never asked for it.
 export type ShellMessageKey = NamespaceKeys[ShellNamespace];
 
-// One locale's copy for one namespace. Partial: translations arrive incrementally.
-export type NamespaceBundle<N extends Namespace> = Partial<Record<NamespaceKeys[N], string>>;
+// One locale's copy for one namespace, and total: a key added to `en` with no
+// translation is a compile error rather than English inside a Bengali page.
+export type NamespaceBundle<N extends Namespace> = Record<NamespaceKeys[N], string>;
 
 // A flat slice across whatever namespaces are loaded.
 export type MessageBundle = Partial<Record<MessageKey, string>>;

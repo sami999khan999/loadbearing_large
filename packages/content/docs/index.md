@@ -62,7 +62,7 @@ packages/content/
 │       ├── en/                    ← as const; the key union is derived from these
 │       │   ├── common.ts · error.ts · nav.ts · auth.ts
 │       │   └── role.ts · member.ts · organization.ts · email.ts
-│       └── bn/                    ← NamespaceBundle<N>; Partial by design
+│       └── bn/                    ← NamespaceBundle<N>; total, checked by tsc
 │           └── the same eight
 └── tests/
     ├── primitive/locale.spec.ts
