@@ -1,3 +1,4 @@
+import { PasswordPair, passwordPairReady } from "../auth/password-pair.js";
 import { useMessages } from "../i18n/index.js";
 import {
   type AccountClient,
@@ -9,8 +10,6 @@ import {
   Input,
   useState,
 } from "../import.js";
-
-const MIN_PASSWORD_LENGTH = 12;
 
 export interface ChangePasswordFormProps {
   readonly account: AccountClient;
@@ -24,12 +23,11 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
 
   const change = AccountMutations.useChangePassword(account);
 
-  const mismatch = confirmation.length > 0 && confirmation !== next;
-  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+  const ready = passwordPairReady(next, confirmation);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (mismatch || tooShort) return;
+    if (!ready) return;
     change.mutate(
       { currentPassword: current, newPassword: next },
       {
@@ -57,36 +55,14 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
         />
       </Field>
 
-      <Field
+      <PasswordPair
+        idPrefix="new"
         label={t("auth.resetNewPassword")}
-        htmlFor="new-password"
-        error={tooShort ? t("auth.passwordTooShort") : undefined}
-      >
-        <Input
-          id="new-password"
-          type="password"
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD_LENGTH}
-          value={next}
-          onChange={(event) => setNext(event.target.value)}
-          required
-        />
-      </Field>
-
-      <Field
-        label={t("auth.confirmPassword")}
-        htmlFor="new-password-confirmation"
-        error={mismatch ? t("auth.passwordMismatch") : undefined}
-      >
-        <Input
-          id="new-password-confirmation"
-          type="password"
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(event) => setConfirmation(event.target.value)}
-          required
-        />
-      </Field>
+        password={next}
+        confirmation={confirmation}
+        onPasswordChange={setNext}
+        onConfirmationChange={setConfirmation}
+      />
 
       {
         // The copy says other devices were signed out because they were:
@@ -95,7 +71,7 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
       {change.isSuccess ? <Callout tone="success">{t("auth.changePasswordDone")}</Callout> : null}
       {change.isError ? <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout> : null}
 
-      <Button type="submit" disabled={change.isPending || mismatch || tooShort}>
+      <Button type="submit" disabled={change.isPending || !ready}>
         {t("auth.changePassword")}
       </Button>
     </form>

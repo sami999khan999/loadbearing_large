@@ -2,6 +2,7 @@ import { useMessages } from "../i18n/index.js";
 import {
   Callout,
   DataTable,
+  DateFormat,
   EmptyState,
   type MemberDto,
   MemberQueries,
@@ -21,10 +22,6 @@ export interface MemberListProps {
 interface MemberRow extends MemberDto {
   readonly id: string;
 }
-
-// ISO, not locale-formatted: the server renders it first and the browser hydrates it,
-// and a mismatch is a hydration warning on every members page.
-const day = (date: Date): string => date.toISOString().slice(0, 10);
 
 export function MemberList({ limit = 25 }: MemberListProps) {
   const { t } = useMessages("member");
@@ -59,7 +56,11 @@ export function MemberList({ limit = 25 }: MemberListProps) {
       },
       { key: "email", header: t("member.column.email"), cell: (row) => row.email },
       { key: "role", header: t("member.column.role"), cell: (row) => row.roleName },
-      { key: "joined", header: t("member.column.joined"), cell: (row) => day(row.joinedAt) },
+      {
+        key: "joined",
+        header: t("member.column.joined"),
+        cell: (row) => DateFormat.day(row.joinedAt),
+      },
     ],
     [t],
   );

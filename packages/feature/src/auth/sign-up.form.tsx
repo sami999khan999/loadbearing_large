@@ -9,10 +9,7 @@ import {
   SessionMutations,
   useState,
 } from "../import.js";
-
-// Kept in step with `minPasswordLength` in `AuthFactory`. Checked here too, because a
-// rejected sign-up that clears the form is a worse way to learn it.
-const MIN_PASSWORD_LENGTH = 12;
+import { PasswordPair, passwordPairReady } from "./password-pair.js";
 
 export interface SignUpFormProps {
   // A prop, not a module import. The instance differs per environment, and a module
@@ -37,8 +34,7 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
   // Derived, not state: a validity flag stored beside its own inputs gets out of step for
   // one render.
-  const mismatch = confirmation.length > 0 && confirmation !== password;
-  const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const ready = passwordPairReady(password, confirmation);
 
   // Branch on the code, never the message: matching prose is already broken in every
   // locale but English.
@@ -46,7 +42,7 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (mismatch || tooShort) return;
+    if (!ready) return;
 
     signUp.mutate(
       { name, email, password, callbackURL: verifyCallbackUrl },
@@ -79,38 +75,14 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         />
       </Field>
 
-      <Field
+      <PasswordPair
+        idPrefix="sign-up"
         label={t("auth.password")}
-        htmlFor="sign-up-password"
-        error={tooShort ? t("auth.passwordTooShort") : undefined}
-      >
-        <Input
-          id="sign-up-password"
-          type="password"
-          // `new-password`, not `current-password`: it tells a password manager to offer
-          // to generate one rather than fill the old one in.
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD_LENGTH}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
-      </Field>
-
-      <Field
-        label={t("auth.confirmPassword")}
-        htmlFor="sign-up-confirmation"
-        error={mismatch ? t("auth.passwordMismatch") : undefined}
-      >
-        <Input
-          id="sign-up-confirmation"
-          type="password"
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(event) => setConfirmation(event.target.value)}
-          required
-        />
-      </Field>
+        password={password}
+        confirmation={confirmation}
+        onPasswordChange={setPassword}
+        onConfirmationChange={setConfirmation}
+      />
 
       {
         // The one flow that cannot hide whether an address is registered: the
@@ -122,7 +94,7 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         </p>
       ) : null}
 
-      <Button type="submit" disabled={signUp.isPending || mismatch || tooShort}>
+      <Button type="submit" disabled={signUp.isPending || !ready}>
         {signUp.isPending ? t("auth.signingUp") : t("auth.signUp")}
       </Button>
     </form>

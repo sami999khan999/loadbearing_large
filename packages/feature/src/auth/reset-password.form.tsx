@@ -3,15 +3,11 @@ import {
   type AuthClient,
   Button,
   Callout,
-  Field,
   type FormEvent,
-  Input,
   SessionMutations,
   useState,
 } from "../import.js";
-
-// The same floor `SignUpForm` and `AuthFactory` state.
-const MIN_PASSWORD_LENGTH = 12;
+import { PasswordPair, passwordPairReady } from "./password-pair.js";
 
 export interface ResetPasswordFormProps {
   readonly auth: AuthClient;
@@ -28,54 +24,31 @@ export function ResetPasswordForm({ auth, token, onSuccess }: ResetPasswordFormP
 
   const reset = SessionMutations.useResetPassword(auth);
 
-  const mismatch = confirmation.length > 0 && confirmation !== password;
-  const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const ready = passwordPairReady(password, confirmation);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (mismatch || tooShort) return;
+    if (!ready) return;
     reset.mutate({ token, newPassword: password }, { onSuccess });
   };
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field
+      <PasswordPair
+        idPrefix="reset"
         label={t("auth.resetNewPassword")}
-        htmlFor="reset-password"
-        error={tooShort ? t("auth.passwordTooShort") : undefined}
-      >
-        <Input
-          id="reset-password"
-          type="password"
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD_LENGTH}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
-      </Field>
-
-      <Field
-        label={t("auth.confirmPassword")}
-        htmlFor="reset-confirmation"
-        error={mismatch ? t("auth.passwordMismatch") : undefined}
-      >
-        <Input
-          id="reset-confirmation"
-          type="password"
-          autoComplete="new-password"
-          value={confirmation}
-          onChange={(event) => setConfirmation(event.target.value)}
-          required
-        />
-      </Field>
+        password={password}
+        confirmation={confirmation}
+        onPasswordChange={setPassword}
+        onConfirmationChange={setConfirmation}
+      />
 
       {
         // One message for expired and already-spent alike: both mean "ask for another".
       }
       {reset.isError ? <Callout tone="danger">{t("auth.resetFailed")}</Callout> : null}
 
-      <Button type="submit" disabled={reset.isPending || mismatch || tooShort}>
+      <Button type="submit" disabled={reset.isPending || !ready}>
         {t("auth.resetSubmit")}
       </Button>
     </form>

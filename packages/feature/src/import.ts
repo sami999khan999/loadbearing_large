@@ -15,9 +15,9 @@ export type {
   Translator,
 } from "@loadbearing/content";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-// The shapes the server returns. Types only — this package renders them and has no
-// opinion about how they arrived.
-export type { InvitationDto, MemberDto, RoleDto } from "@loadbearing/contracts";
+// The shapes the server returns, plus the one value: `Password` carries the bounds the
+// server enforces, so a form cannot advertise a different floor.
+export { type InvitationDto, type MemberDto, Password, type RoleDto } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { ErrorNormalizer } from "@loadbearing/errors";
@@ -52,6 +52,7 @@ export {
   Can,
   CodeList,
   DataTable,
+  DateFormat,
   EmptyState,
   Field,
   Input,

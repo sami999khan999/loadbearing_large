@@ -117,6 +117,22 @@ the moment someone reworded the copy, and would already be broken in every local
 addresses are registered without needing a password. A small copy decision with a real security
 consequence.
 
+## Three forms set a password, and they ask the same two questions once
+
+`PasswordPair` renders the new-password and confirm fields together with both rules on them: the
+floor, and equality. It takes an `idPrefix` rather than fixed ids, so two on one page stay distinct,
+and `passwordPairReady(password, confirmation)` is the submit guard beside it — sign-up, reset and
+change each derived that boolean their own way.
+
+**The floor is `Password.MIN_LENGTH` from `contracts`, and `AuthFactory` reads the same constant.**
+It was the literal `12` in four places. A form advertising a shorter floor than the server's turns a
+rejection into an unexplained failure; a longer one refuses a password the server would have taken.
+One authority, and both sides import it.
+
+`DateFormat.day` in [`ui`](../../ui/docs/index.md) is the same move at a smaller scale: two lists
+declared the same `toISOString().slice(0, 10)` helper, and the reason it is ISO rather than
+locale-formatted — the server renders it and the browser hydrates it — is worth stating once.
+
 ## Every list renders four states, in one order
 
 Pending → error → empty → the list, and the order is the whole point: `data` is `undefined` until

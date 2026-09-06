@@ -4,6 +4,7 @@ import {
   Button,
   Callout,
   Can,
+  DateFormat,
   EmptyState,
   type InvitationDto,
   MemberMutations,
@@ -15,8 +16,6 @@ import {
 export interface InvitationListProps {
   readonly limit?: number;
 }
-
-const day = (date: Date): string => date.toISOString().slice(0, 10);
 
 // Hiding the revoke button is a courtesy: the use-case asserts the same key, so a
 // request without it is FORBIDDEN whether or not the button rendered.
@@ -46,7 +45,7 @@ export function InvitationList({ limit = 25 }: InvitationListProps) {
           <span>{invitation.email}</span> <span>{invitation.roleName}</span>{" "}
           <small>
             {t("member.invitation.invitedBy", { name: invitation.inviterName })} ·{" "}
-            {t("member.invitation.expires", { date: day(invitation.expiresAt) })}
+            {t("member.invitation.expires", { date: DateFormat.day(invitation.expiresAt) })}
           </small>{" "}
           <Can permission="member.invite" capabilities={capabilities}>
             <Button
