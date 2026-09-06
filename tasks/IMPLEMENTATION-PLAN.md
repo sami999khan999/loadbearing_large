@@ -850,19 +850,53 @@ it once and make the doc-drift gate (`P4.26`) check it.
     `@orpc/server@1.15.0` depends on `@orpc/shared@1.15.0` exactly, not `^`. That is precisely why a
     skew between our four catalog ranges puts two copies in the tree rather than resolving to one —
     the page said "they pin", which sent a reader looking for a line that does not exist.
-- [ ] `P4.20` `docs/setup/27-verification-and-first-feature.md` — "Fifteen commits" over
+- [x] `P4.20` `docs/setup/27-verification-and-first-feature.md` — "Fifteen commits" over
   eighteen lines, two with scope `db`, `prettier` named; `/permissions` (`/settings/roles`);
   "one slice" (two); "three applications" (two); "`process.env` in exactly two files" (ten,
   eight exempt; repeated `28:148,160`); §27.4 "permission migration" describes a mechanism the
   shipped slices do not use (`SystemRoleSeed` at seed time); `member` slice and organization
-  plugin absent from the twelve-step map.
-- [ ] `P4.21` `docs/setup/28-folder-structure.md` — "after step 26" vs 27; sixteen packages
+  plugin absent from the twelve-step map. `done: 2026-09-06`
+  - **"Fifteen commits" over eighteen lines** — eighteen, with the two `db` scopes already retired
+    by `P4.8` and `prettier` replaced by `biome and eslint`, which is what the repo runs.
+  - **The worked-example paragraph was the substantive fix.** It claimed one slice and a permission
+    *migration*. Two slices ship, and neither uses a migration: `SystemRoleSeed` grants at seed
+    time, which is idempotent and re-runnable, so a grant added later reaches an existing database
+    on the next `pnpm db:seed`. `member` is now named as the one worth reading second — it has the
+    writes, so it exercises the `UnitOfWork`, the in-transaction activity entry, and mail that goes
+    out only after commit, none of which `role` touches.
+  - **The organization plugin is named as deliberately not a slice.** Reading it as one is the
+    mistake the page invited: those actions are identity-gated, no permission a non-owner holds
+    could gate them, and only an endpoint holding Better Auth's `ctx` can call `setSessionCookie`.
+  - **"`process.env` in exactly two files" was the checklist item most likely to fail on a clean
+    tree.** Eight source files read it; six are exempt, and the shape of the exemption is the point
+    — every one sits *outside* an app or package's `src/`, so a folder barrel cannot execute a
+    script on import. The box now says that rather than a number a reader would trip over.
+  - `/permissions` → `/settings/roles`. "Three applications" → two, with doc 30 named as a plan for
+    a third rather than as something built.
+- [x] `P4.21` `docs/setup/28-folder-structure.md` — "after step 26" vs 27; sixteen packages
   incl. `db/`; four `ServerOnly` markers named wrongly (real: application, composition, auth,
   infrastructure); malformed infra block with non-existent `postgres/init/01-extensions.sql`,
   missing `check-contrast.mjs`; "5 steps" CI (thirteen + a job); `(shell)/` 3 of 8 files,
   `server/` 2 of 3 fn files ("two" ×2 in prose), settings/organization routes missing, worker
   tree minimal, `tests/` and `vitest.config.ts` absent for both apps; full `apps/desktop/`
-  tree.
+  tree. `done: 2026-09-06`
+  - **Both app trees listed a fraction of what exists** and are now complete: `apps/web` at 3 of 8
+    `(shell)/` files, missing every `settings/` and `organization/` route, missing
+    `invitation.fn.ts`, `-redirect.ts` and `-session.ts`, and naming a generic `<subject>.router.ts`
+    where `role` and `member` ship. `apps/worker` was missing `bootstrap/`, every folder barrel and
+    four of five schedules. Both gained `tests/` and `vitest.config.ts` — a page whose whole claim
+    is *the complete tree* cannot omit the directory the file rules say must mirror `src/`.
+  - **The infra block was malformed and named a file that does not exist:** a stray second `└──`
+    hung `postgres/init/01-extensions.sql` off `infra/`, where the real file is
+    `infra/postgres.init.sql`. `tooling/scripts/` listed one script of three and called them "the
+    thirteen CI greps".
+  - "after step 26" → 27; CI "5 steps" → two jobs; the `(shell)` paragraph now says why the
+    invitation landing page is there — an anonymous visitor must be able to preview one; "the two
+    `*.fn.ts` files" → three, in both places the prose says it. The sixteen-package list and the
+    `ServerOnly` roll-call were already closed by `P4.8`.
+  - **Deferred to `P4.25`:** the full `apps/desktop/` tree, which is one item in a change that also
+    touches doc 29, doc 30, both `env.ts` files, `.env.example` and a Biome glob. Splitting it
+    across two entries would leave the tree gone and the env var still parsed.
 - [ ] `P4.22` **wrong backticked paths** — `15:247,320,347,468,494` (`src/{cache,storage,queue}`
   → `redis/ s3/ bullmq/`, which contradicts `layering.md`'s own vendor rule); `14:233`
   (`src/embedding/` → `src/openai/`); `12:177,193,210` (`application/src/error/` → `errors/`);
