@@ -30,9 +30,11 @@ packages/contracts/
 │   ├── import.ts                    ← zod, @orpc/contract, @loadbearing/permissions
 │   ├── primitive/
 │   │   ├── index.ts
-│   │   ├── identifiers.ts           → Identifiers, OrganizationId, UserId, RoleId, GoalId, TaskId, ApiKeyId
+│   │   ├── identifiers.ts           → Identifiers, OrganizationId, UserId, RoleId, GoalId,
+│   │   │                                TaskId, ApiKeyId, InvitationId
 │   │   ├── envelope.ts              → Envelope
-│   │   └── pagination.ts            → Pagination, PaginationQuery
+│   │   ├── pagination.ts            → Pagination, PaginationQuery
+│   │   └── password.ts              → Password   ← the bounds AuthFactory enforces
 │   ├── procedure/
 │   │   └── index.ts                 → contract, AppContract   ← merges every slice's procedures
 │   ├── catalog/
@@ -40,7 +42,7 @@ packages/contracts/
 │   ├── registry/
 │   │   ├── index.ts
 │   │   └── procedure-permissions.ts → ProcedurePermissions
-│   └── <subject>/                   ← one folder per domain subject; none ship yet
+│   └── <subject>/                   ← one folder per domain subject; `role/` and `member/` ship
 │       ├── index.ts
 │       ├── <subject>.contract.ts    → <Subject>Contract   (Zod shapes)
 │       ├── <subject>.entity.ts      → <Subject>Entity     (behaviour, no I/O)
@@ -50,6 +52,8 @@ packages/contracts/
     │   ├── identifiers.spec.ts
     │   ├── envelope.spec.ts
     │   └── pagination.spec.ts
+    ├── role/role.contract.spec.ts
+    ├── member/member.contract.spec.ts
     └── registry/
         └── procedure-permissions.spec.ts
 ```

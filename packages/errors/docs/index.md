@@ -21,12 +21,15 @@ packages/errors/
 │   │   ├── forbidden.error.ts · not-found.error.ts · conflict.error.ts
 │   │   ├── unauthorized.error.ts · two-factor-required.error.ts
 │   │   ├── validation.error.ts · internal.error.ts
+│   │   ├── rate-limited.error.ts · unavailable.error.ts  ★ thrown by adapters only
 │   │   └── server-only.error.ts   ★ thrown by core, at module load
 │   ├── normalizer/
 │   │   └── error-normalizer.ts → ErrorNormalizer
 │   └── transport/
 │       └── http.ts           → HTTP_STATUS   ★ adapters only, never the domain
 └── tests/
+    ├── error/{app,server-only,validation}.error.spec.ts
+    └── normalizer/error-normalizer.spec.ts
 ```
 
 Zero dependencies — the root of the workspace graph. Any dependency would exclude one of those four

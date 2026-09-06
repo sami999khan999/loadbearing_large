@@ -47,7 +47,9 @@ packages/permissions/
 │   └── route/                       ← same pattern for destinations
 │       ├── index.ts                 → ROUTES, AppRoute, RoutePath
 │       ├── shell.routes.ts          ←   platform-owned: home, sign-in, forbidden
-│       └── rbac.routes.ts
+│       ├── rbac.routes.ts
+│       ├── account.routes.ts        ←   no gate: your own password is not a capability
+│       └── organization.routes.ts   ←   no gate: founding your own tenant is not either
 └── tests/
     ├── registry/
     │   ├── permission-registry.spec.ts
@@ -60,7 +62,11 @@ packages/permissions/
 
 ---
 
-## The four exports
+## The four seams
+
+The barrel has five `export` statements: these four, plus `CATALOG` and `GATES` — the raw tables
+the registries wrap, out here because the registries' own specs and `content`'s `ModuleKey` read
+them directly.
 
 ### [`PermissionRegistry`](reference/permission-registry.md) — the vocabulary
 
