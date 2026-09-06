@@ -1,6 +1,6 @@
 ---
 title: Test container
-description: The eleven fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
+description: The sixteen fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
 ---
 
 # `TestContainer`
@@ -29,8 +29,10 @@ is a much smaller and much less flaky set.
 `files.md` says tests mirror `src/` and never live inside it. This is not a test — it is a
 **compile-time completeness check**, and it has to be inside `src/` for `tsc` to see it.
 
-`TestPorts` has one entry per abstract class in `packages/application/src/port/`. Add an eleventh
-port there and this file stops compiling until it has a double. That is the whole claim of
+`TestPorts` has one entry per abstract class in `packages/application/src/port/` — sixteen of them —
+plus `content`, which is a `ContentSource` from a package to `application`'s left rather than a port
+of its own. Seventeen entries, and adding a seventeenth port makes this file stop compiling until it
+has a double. That is the whole claim of
 [17](../../../../docs/setup/17-composition-container.md) §17.4 — *"adding a port to `application`
 shows up here as one line rather than as a compile error in forty specs"* — and it only holds if the
 check is `tsc`'s rather than a spec's.

@@ -35,14 +35,21 @@ packages/composition/src/
 │   ├── container.config.ts           → ContainerConfig
 │   ├── container.ts                  → Container
 │   └── test-container.ts             → TestContainer, TestPorts   (off the barrel)
-└── fake/
+└── fake/                             ← one per port, all sixteen
     ├── index.ts
+    ├── direct-unit-of-work.ts        → DirectUnitOfWork
+    ├── in-memory-activity-replay.reader.ts → InMemoryActivityReplayReader
+    ├── in-memory-analytics.projector.ts    → InMemoryAnalyticsProjector
     ├── in-memory-cache.store.ts      → InMemoryCacheStore
+    ├── in-memory-log.reader.ts       → InMemoryLogReader
     ├── in-memory-storage.gateway.ts  → InMemoryStorageGateway
     ├── in-memory-vector.store.ts     → InMemoryVectorStore
-    ├── recording-activity.logger.ts  → RecordingActivityLogger
+    ├── recording-activity.logger.ts  → RecordingActivityLogger, RecordedActivity
+    ├── recording-activity-archive.gateway.ts → RecordingActivityArchiveGateway
+    ├── recording-email.sender.ts     → RecordingEmailSender
     ├── recording-event.bus.ts        → RecordingEventBus
-    ├── recording-queue.publisher.ts  → RecordingQueuePublisher
+    ├── recording-maintenance.gateway.ts → RecordingMaintenanceGateway
+    ├── recording-queue.publisher.ts  → RecordingQueuePublisher, PublishedJob
     ├── stub-analytics.reader.ts      → StubAnalyticsReader
     ├── stub-embedding.provider.ts    → StubEmbeddingProvider
     └── stub-session.resolver.ts      → StubSessionResolver
@@ -58,7 +65,9 @@ and its implementation exactly once is the whole deliverable.
 **`fake/` and `test-container.ts` live in `src/`, and never reach `dist/`.** `tsup` builds from
 `src/index.ts`, which names neither, so nothing is bundled — but `tsc` still checks them, and that is
 the point: a port added to `application` is a **compile error** in `test-container.ts` until it has a
-double. Verify with `grep -c "TestContainer\|InMemory" dist/index.js` → `0`.
+double. They do reach `dist/index.js` now that the barrel exports the harness, and neither of
+`apps/web`'s bundles carries them: `tsup` emits ESM, so a consumer importing only `Container`
+shakes the rest out.
 
 ## What it wires
 

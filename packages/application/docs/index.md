@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/application"
-description: Principal, Authorizer, and the ten abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
+description: Principal, Authorizer, and the sixteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
 ---
 
 # `@loadbearing/application`
@@ -35,25 +35,44 @@ packages/application/
 │   │   ├── index.ts
 │   │   ├── principal.ts          → Principal, PrincipalKind
 │   │   └── authorizer.ts         → Authorizer
-│   └── port/                     ← abstract classes only, zero implementations
-│       ├── index.ts
-│       ├── activity.logger.ts    → ActivityLogger
-│       ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
-│       ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
-│       │                                 ProjectionCheckpoint, DailyCount
-│       ├── analytics.projector.ts → AnalyticsProjector
-│       ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
-│       ├── cache.store.ts        → CacheStore
-│       ├── embedding.provider.ts → EmbeddingProvider
-│       ├── event.bus.ts          → EventBus, DomainEvent
-│       ├── log.reader.ts         → LogReader, LogQuery, LogEntry
-│       ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
-│       ├── queue.publisher.ts    → QueuePublisher, JobOptions
-│       ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
-│       ├── storage.gateway.ts    → StorageGateway, StoredObject
-│       ├── unit-of-work.ts       → UnitOfWork
-│       └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
-└── tests/primitive/
+│   ├── port/                     ← abstract classes only, zero implementations
+│   │   ├── index.ts
+│   │   ├── activity.logger.ts    → ActivityLogger
+│   │   ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
+│   │   ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
+│   │   │                                 ProjectionCheckpoint, DailyCount
+│   │   ├── analytics.projector.ts → AnalyticsProjector
+│   │   ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
+│   │   ├── cache.store.ts        → CacheStore
+│   │   ├── email.sender.ts       → EmailSender, EmailMessage
+│   │   ├── embedding.provider.ts → EmbeddingProvider
+│   │   ├── event.bus.ts          → EventBus, DomainEvent
+│   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
+│   │   ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
+│   │   ├── queue.publisher.ts    → QueuePublisher, JobOptions
+│   │   ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
+│   │   ├── storage.gateway.ts    → StorageGateway, StoredObject
+│   │   ├── unit-of-work.ts       → UnitOfWork
+│   │   └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
+│   ├── ai/
+│   │   └── index-document.use-case.ts  → IndexDocumentUseCase
+│   ├── member/                   ← a slice: its repository ports live with it
+│   │   ├── member.repository.ts        → MemberRepository, MemberRecord, MemberPage
+│   │   ├── invitation.repository.ts    → InvitationRepository, InvitationRecord
+│   │   ├── invitation.mailer.ts        → InvitationMailer, InvitationMail
+│   │   ├── invite-member.use-case.ts   → InviteMemberUseCase
+│   │   ├── list-members.use-case.ts    → ListMembersUseCase
+│   │   ├── list-invitations.use-case.ts → ListInvitationsUseCase
+│   │   └── revoke-invitation.use-case.ts → RevokeInvitationUseCase
+│   └── rbac/
+│       ├── role.repository.ts          → RoleRepository, RoleRecord, RolePage
+│       ├── capability.repository.ts    → CapabilityRepository
+│       └── list-roles.use-case.ts      → ListRolesUseCase
+└── tests/
+    ├── primitive/{principal,authorizer}.spec.ts
+    ├── ai/index-document.use-case.spec.ts
+    ├── rbac/list-roles.use-case.spec.ts
+    └── member/{invite-member,list-members,revoke-invitation}.use-case.spec.ts
 ```
 
 ## This package does not log
@@ -85,8 +104,9 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `AnalyticsReader` | `PgAnalyticsReader` | `ClickHouseAnalyticsReader` — **written** |
 | `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
 | `CacheStore` | `RedisCacheStore` | managed Redis |
+| `EmailSender` | `SmtpEmailSender` | any provider that speaks SMTP |
 | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
-| `EventBus` | in-process dispatch — `composition` | a broker |
+| `EventBus` | **nothing** — see below | an in-process dispatcher, then a broker |
 | `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |
 | `MaintenanceGateway` | `PgMaintenanceGateway` | never |
 | `QueuePublisher` | `BullMqQueuePublisher` | managed Redis |
@@ -94,13 +114,27 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `StorageGateway` | `S3StorageGateway` | S3, R2 |
 | `UnitOfWork` | `PgUnitOfWork` | never |
 | `VectorStore` | `PgVectorStore` | a dedicated vector database |
+| `VectorStore` | `PgVectorStore` | a dedicated vector database |
 
 Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts` and
-every name lines up with one binding. **Repository ports are not here** — each lives with its feature
-slice, `src/task/task.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
+every name lines up with one binding — with one exception, which is the point of the row that says
+so. **Repository ports are not here** — each lives with its feature slice,
+`src/member/member.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
 `AnalyticsReader` and `VectorStore` are the exception because they are one cross-cutting read seam
 that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
 or a *file*.
+
+### `EventBus` is a port with no implementation, and that is the one to watch
+
+Nothing extends it. `composition` wires `RecordingEventBus` into `TestContainer` and binds nothing
+in `Container`, so a use-case that published an event would publish into a fake in tests and into
+nothing at all in production. It is listed here because it is exported and reachable, not because
+it works — [`composition`](../../composition/docs/index.md) says the same, and this page used to
+claim `composition` implemented it.
+
+A seam with no implementation and no caller is the shape
+[Simplicity](../../../docs/opinions/simplicity.md) argues against: it costs nothing today and
+teaches the next reader that events are a thing this system does.
 
 ### Three ports are split read-from-write, and each split is a guard
 
