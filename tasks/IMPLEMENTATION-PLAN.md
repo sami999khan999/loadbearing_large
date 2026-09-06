@@ -1641,9 +1641,28 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ## Phase 6 — Tests for what is risky and untested
 
-- [ ] `P6.1` **`Container`** (zero tests, 513 lines) — three enrolment branches, the analytics
+- [x] `P6.1` **`Container`** (zero tests, 513 lines) — three enrolment branches, the analytics
   driver throw, six throwing getters, `dispose()` order (the comment says a wrong order hangs).
-  `composition/tests/container/container.spec.ts` against `TestContainer`-style doubles.
+  `composition/tests/container/container.spec.ts`. `done: 2026-09-06`
+  - **Against the real container, not doubles.** `TestContainer` builds ports; it cannot say
+    anything about the class that binds them, which is the whole of what this entry is about. The
+    constructor opens two Redis clients and nothing else — `pg`, the S3 client, nodemailer and the
+    embedding provider are all lazy — so the specs need the two Redis services CI already declares
+    and the Postgres it already runs. `tests/support/config.ts` pins all three URLs the way
+    `infrastructure`'s harness pins its own, and `docs/setup/26` says so next to the service list.
+  - **The enrolment branch is read at the seam it crosses.** The enroller is a local in the
+    constructor, so the spec spies on `AuthFactory.create` — calling through, so the container is
+    the real one — and reads the argument. All three modes assert both halves: which enroller was
+    chosen, and that every one of them is wrapped in `InvitationClaimingEnroller`, which is what
+    makes an invited address join the organization that invited it before the mode is consulted.
+  - **`dispose()` order needed the private fields, and says why.** A wrong order is a deadlock —
+    closing Redis while BullMQ holds blocking connections hangs the shutdown — and nothing on the
+    public surface can observe which `close()` went first. The four are wrapped through a cast,
+    with the reason on the line.
+  - **The vector driver's `never` branch is reachable from a spec and from nowhere else.** The
+    union has one member, so only a cast can produce the case the exhaustiveness check exists for.
+  - **Forty tests, and the two that matter watched failing.** Reversing the first two `close()`
+    calls and pointing `personal` at the null enroller each turn exactly one red.
 - [ ] `P6.2` **application and auth** — `IndexDocumentUseCase` (chunk overlap arithmetic, the
   short-vector path from `P2.5`), `ListInvitationsUseCase`, `Token.random`, `PrincipalBuilder`
   (api-key-before-cookie precedence at `principal.builder.ts:16-21` — a security decision with

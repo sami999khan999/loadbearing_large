@@ -349,6 +349,9 @@ jobs:
 > **`POSTGRES_DB` is `ratchet`, not `ratchet_test`.** `packages/infrastructure/tests/support/database.ts`
 > pins the scratch URL, so a differently-named database fails every infrastructure spec with a
 > connection error rather than an assertion — which reads as infrastructure being down.
+> `packages/composition/tests/support/config.ts` pins the same one, plus both Redis URLs: a
+> `Container` opens a cache client and a queue client in its constructor, so its specs need the
+> two Redis services the job already declares, and nothing beyond them.
 >
 > ClickHouse is absent for a different reason. Its adapters *are* written, but nothing in the unit
 > tiers touches them — `ClickHouseAnalyticsProjector` is covered by the smoke check, which runs
