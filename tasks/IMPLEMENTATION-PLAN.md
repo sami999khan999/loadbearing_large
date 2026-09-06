@@ -474,13 +474,22 @@ match a decision the tree already made.
 - [x] `P3.6` done: 2026-09-05 · **`OrganizationFounder` port lacks `slug`** `~30m` — add `slug?: string` to
   `auth/src/session/organization.founder.ts:7`; `Container` holds the port, not
   `PgOrganizationFounder`. Update `auth/docs/reference/enrolment.md`.
-- [ ] `P3.7` **fakes diverge from adapters** `~1h` — `InMemoryVectorStore.search` applies
+- [x] `P3.7` done: 2026-09-05 · **fakes diverge from adapters** `~1h` — `InMemoryVectorStore.search` applies
   `MIN_SCORE`; `InMemoryStorageGateway.get` throws `NotFoundError`; `TestContainer.build`
   wires `SERVER_CATALOG`. Spec each divergence in `composition/tests/fake/fake.spec.ts`.
-- [ ] `P3.8` **`TestContainer` unreachable outside `composition`** `~2h` — export
+- [x] `P3.8` done: 2026-09-05 · **`TestContainer` unreachable outside `composition`** `~2h` — export
   `TestContainer` and `TestPorts` from `composition/src/index.ts` (no subpath); migrate
   `application/tests/**` off hand-rolled doubles. Update `composition/docs/index.md`
   ("two exports"), `docs/reference/test-container.md`.
+  - **Done:** the barrel exports `TestContainer`, `TestPorts`, `TestHarness`, `FixedClock` and the
+    seventeen fakes; `apps/worker/tests/consumer/maintenance.consumer.spec.ts` drops the object
+    literal it cast `as unknown as Container`. Both `apps/web` bundles still contain none of the
+    names — tsup emits ESM and a consumer importing only `Container` shakes the rest out.
+  - **Not done, and refused rather than deferred:** `application/tests/**` keeps its hand-rolled
+    doubles. `composition` imports `application`, so the reverse edge is a cycle in the workspace
+    graph and inverts the layering `docs/ai/rules/layering.md` states. Fixing it means moving the
+    fakes into a package left of `application`, which is a package decision rather than a file
+    move — recorded in `composition/docs/reference/test-container.md`.
 - [ ] `P3.9` **duplication in `feature` and `apps/web`** `~3h` — `MIN_PASSWORD_LENGTH` ×3 and
   the password/confirm `<Field>` pair ×3 → `feature/src/auth/password-pair.tsx` with the
   floor imported from `contracts` (one authority); `day()` ×2 → `ui/src/format/date-format.ts`;
