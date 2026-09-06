@@ -1734,8 +1734,21 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - Spec is on `SmtpEmailSender.close()` rather than on `Container.dispose()`, which would need a
     live Postgres, Redis and S3 to construct. It fails without the fix by not compiling, which is
     the stronger failure. `boot-smoke` re-run after the change: still a clean drain.
-- [ ] `P7.9` `MessageStore.ensure` has no in-flight de-duplication (`SessionStore.ensure` has)
-  — share the promise per namespace set.
+- [x] `P7.9` `MessageStore.ensure` has no in-flight de-duplication (`SessionStore.ensure` has)
+  — share the promise per namespace set. `done: 2026-09-06`
+  - **Per namespace, not per set**, which is a deliberate departure from the entry. Two routes
+    rarely declare the same set and often overlap: `["nav", "auth"]` and `["auth", "role"]` should
+    be two requests covering three namespaces, not two covering four. Keying on the set would
+    de-duplicate only the exact repeat.
+  - **`SessionStore` needs one `inFlight` field because it loads one thing**; a store whose unit of
+    work is a set needs a map, and the map is keyed by locale *and* namespace so a load still
+    running when the locale changes cannot be joined by a caller that now wants the other language.
+  - **It found a second bug while being fixed.** `load()` re-checks the locale before merging: a
+    bundle arriving after `setLocale()` is the previous language's copy, and merging it puts old
+    sentences under keys the new bundle also has. That failure is silent — the page renders fluent
+    text in the wrong language rather than a missing key — and the old code had it too.
+  - Five specs; three fail against the previous implementation, including the locale race, which is
+    what says it was real rather than hypothetical. `docs/setup/20` carries both arguments.
 - [ ] `P7.10` `auth` namespace is 82 keys and every one loads for `/forgot-password` — split
   `auth` (sign-in/up/recovery) from `account` (settings). **Docs:** `content/docs/reference/namespace.md`.
 - [ ] `P7.11` `useAppMutation` gains `onMutate`/rollback so revoke-invitation, unlink-account

@@ -9,6 +9,9 @@ export class MessageStore {
   private snapshot: MessageSnapshot;
   private cached: Translator;
   private readonly listeners = new Set<() => void>();
+  // Keyed by locale *and* namespace, so a load still running when the locale changes
+  // cannot be joined by a caller that now wants the other language's copy.
+  private readonly inFlight = new Map<string, Promise<void>>();
 
   // A factory rather than a constant, because a snapshot carries its locale — and
   // `namespaces: []` is what makes `ensure()` fetch what the first navigation asks for.
@@ -51,12 +54,45 @@ export class MessageStore {
   // Idempotent, and resolves immediately when nothing is missing — which is the common
   // case on a navigation between two routes that declare the same namespaces.
   public async ensure(namespaces: readonly Namespace[]): Promise<void> {
+    const { locale } = this.snapshot;
     const missing = namespaces.filter((name) => !this.snapshot.namespaces.includes(name));
     if (missing.length === 0) return;
 
-    const added = await this.content.messages(this.snapshot.locale, missing);
-    this.restore(Translator.merge(this.snapshot, added));
-    for (const listener of this.listeners) listener();
+    // Per namespace, not per requested set: two routes asking for overlapping sets in the
+    // same tick share the fetch for what they have in common instead of both asking.
+    const fresh = missing.filter((name) => !this.inFlight.has(MessageStore.key(locale, name)));
+
+    if (fresh.length > 0) {
+      const load = this.load(locale, fresh);
+      for (const name of fresh) this.inFlight.set(MessageStore.key(locale, name), load);
+    }
+
+    const waits: Promise<void>[] = [];
+    for (const name of missing) {
+      const pending = this.inFlight.get(MessageStore.key(locale, name));
+      if (pending) waits.push(pending);
+    }
+
+    await Promise.all(waits);
+  }
+
+  private async load(locale: Locale, namespaces: readonly Namespace[]): Promise<void> {
+    try {
+      const added = await this.content.messages(locale, namespaces);
+
+      // The locale can change while this is in flight, and what came back is the previous
+      // one's copy. Merging it puts the old sentences under keys the new bundle also has.
+      if (this.snapshot.locale !== locale) return;
+
+      this.restore(Translator.merge(this.snapshot, added));
+      for (const listener of this.listeners) listener();
+    } finally {
+      for (const name of namespaces) this.inFlight.delete(MessageStore.key(locale, name));
+    }
+  }
+
+  private static key(locale: Locale, namespace: Namespace): string {
+    return `${locale}:${namespace}`;
   }
 
   public subscribe(listener: () => void): () => void {
