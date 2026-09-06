@@ -1670,8 +1670,22 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ## Phase 7 — Improvements
 
-- [ ] `P7.1` `SystemRoleSeed.run` issues one SELECT per role (four) and runs on every
+- [x] `P7.1` `SystemRoleSeed.run` issues one SELECT per role (four) and runs on every
   organization creation — one `IN` query and one batched insert. **Docs:** `docs/setup/13`.
+  `done: 2026-09-06`
+  - **Eleven round trips, measured, not four.** Four SELECTs, four role INSERTs and three grant
+    INSERTs on a fresh tenant; seven on a re-seed. Now three either way, and the count does not
+    grow when a fifth role is added.
+  - **Write first, read after.** `onConflictDoNothing` makes one insert correct for a tenant that
+    has these rows and for one that does not, which a per-role existence check is not. The read
+    back is not optional: `onConflictDoNothing` does not say which rows it skipped, so the
+    generated ids are only correct for the rows that landed — and reading `(organization_id, key)`
+    afterwards is also what makes two requests creating the same tenant safe against each other.
+  - **This takes the `onConflictDoNothing` half of `P8.17`** with it; the transaction and the
+    reconciliation of removed permissions are still open there.
+  - Four specs, two of them the query-count assertion `P6.6` asks for, both watched failing against
+    the previous implementation (11 and 7). They run against a tenant this spec creates rather than
+    the seeded one, because a count is only stable if nothing else is seeding the same rows.
 - [x] `P7.2` `PgApiKeyRepository.touch` writes `last_used_at` on every authenticated API
   request, awaited — throttle to once per minute (`WHERE last_used_at < now() - interval '1 minute'`).
   `done: 2026-09-06` — closed by `P5.4`, whose feature put the write on a path anyone could reach.

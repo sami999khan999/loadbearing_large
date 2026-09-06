@@ -671,7 +671,7 @@ An N+1 caught by a failing assertion costs a minute. The same N+1 caught by a pr
 **`packages/infrastructure/src/pg/seed/system-role.seed.ts`**
 
 ```ts
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Uuid } from "@loadbearing/core";
 import type { OrganizationId } from "@loadbearing/contracts";
 import { PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
@@ -698,48 +698,68 @@ export class SystemRoleSeed extends BaseRepository {
     { key: "guest", name: "Guest", scope: "org", permissions: [] },
   ];
 
+  private static readonly KEYS: readonly string[] = SystemRoleSeed.ROLES.map((r) => r.key);
+
   // Idempotent: safe to run on every deploy. Runs per organization, because
   // system roles are rows in a tenant's table rather than global constants.
   public async run(organizationId: OrganizationId): Promise<void> {
-    for (const definition of SystemRoleSeed.ROLES) {
-      const existing = await this.db
-        .select({ id: roles.id })
-        .from(roles)
-        .where(
-          and(
-            eq(roles.organizationId, organizationId),
-            eq(roles.key, definition.key),
-          ),
-        )
-        .limit(1);
-
-      const roleId = existing[0]?.id ?? Uuid.v7();
-
-      if (!existing[0]) {
-        await this.db.insert(roles).values({
-          id: roleId,
+    // Write first, read after: `on conflict do nothing` makes one statement correct
+    // for a tenant that has these rows and for one that does not.
+    await this.db
+      .insert(roles)
+      .values(
+        SystemRoleSeed.ROLES.map((definition) => ({
+          id: Uuid.v7(),
           organizationId,
           key: definition.key,
           name: definition.name,
           scope: definition.scope,
           isSystem: true,
-        });
-      }
+        })),
+      )
+      .onConflictDoNothing({ target: [roles.organizationId, roles.key] });
+
+    // One `IN` for all four ids, including any a concurrent seed inserted a moment
+    // ago — which is why this reads the table rather than trusting the ids above.
+    const rows = await this.db
+      .select({ id: roles.id, key: roles.key })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.organizationId, organizationId),
+          inArray(roles.key, SystemRoleSeed.KEYS),
+        ),
+      );
+
+    const idByKey = new Map(rows.map((row) => [row.key, row.id]));
+
+    const grants = SystemRoleSeed.ROLES.flatMap((definition) => {
+      const roleId = idByKey.get(definition.key);
+      if (!roleId) return [];
 
       const permissions =
         definition.permissions === "all"
           ? PermissionRegistry.instance.all()
           : definition.permissions;
 
-      if (permissions.length === 0) continue;
+      return permissions.map((permission) => ({ organizationId, roleId, permission }));
+    });
 
-      await this.db
-        .insert(rolePermissions)
-        .values(permissions.map((permission) => ({ organizationId, roleId, permission })))
-        .onConflictDoNothing();
-    }
+    if (grants.length === 0) return;
+
+    await this.db.insert(rolePermissions).values(grants).onConflictDoNothing();
   }
 }
+```
+
+**Three statements, and the count does not grow with the number of roles.** The obvious shape — check whether each role exists, insert it if not, then insert its grants — is eleven round trips for four roles on a fresh tenant and seven on a re-seed, on a path that runs on **every organization creation**, which on `personal` enrolment means every sign-up. Write-then-read gets it to three and keeps it there when a fifth role is added.
+
+**The read is not optional, and skipping it is the subtle bug.** `onConflictDoNothing` does not tell you which rows it skipped, so the ids generated above are correct only for the rows that actually landed. Reading `(organization_id, key)` back afterwards is also what makes a concurrent seed safe: two requests creating the same tenant race on `roles_key_uq`, one loses the insert, and both then read the same winning ids.
+
+**Assert the statement count in an integration test**, for the same reason [Step 13.7](#step-137--repositories) argues it for `resolveFor`: "three statements" is a claim that decays the first time someone adds a lookup inside a loop.
+
+```ts
+expect(counter.count).toBe(3);
 ```
 
 **`permissions: "all"` for owner resolves through `PermissionRegistry.all()` at seed time.** That means every new permission a feature adds is automatically granted to owners when the seed re-runs, which is what you want — and it is why the seed must be idempotent and re-run on every deploy rather than once at install.
