@@ -738,13 +738,30 @@ it once and make the doc-drift gate (`P4.26`) check it.
     syntax. A brief works for both readers, and §12 already asserts it points at a router.
   - Token budgets across `docs/ai/index.md`, `docs/ai/rules/index.md` and `README.md` were
     re-measured rather than reconciled: twelve rule files are ~7,700 tokens, 410–890 each.
-- [ ] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
+- [x] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
   "11/11 assertions" (13); "388 tests across 65 files" (542 / 94); "20 projects" (17 declare
   `typecheck`); "Every task T-001–T-024 is done" (through T-029); `/permissions` ×3 (is
   `/settings/roles`); T-001 names `PgMembershipEnroller` (is `PgBootstrapMembershipEnroller`)
   and `seed/index.ts` (now a barrel); T-005 names `route/sign-in.tsx` (is `(shell)/`); no
   2026-09-03 changelog row; T-029 cites `~/.claude/plans/…` outside the repo for ten owed
   verification steps — copy the steps into the task. **Depends on:** `P1` (re-measure after).
+  `done: 2026-09-06`
+  - **Every number re-run, not adjusted.** 15 packages build · 17 typecheck projects · 716 lint
+    files · **659 tests across 114 files** · 15/15 assertions with `build:packages` and the web
+    build done first, so nothing skipped · `deps:check` and `repo:check` silent. Dated 2026-09-06.
+  - **`infrastructure` is inside the total now.** It ran against a live Postgres on this machine
+    (83 tests), so the "needs live Postgres — covered in CI" row is gone rather than reworded.
+  - **The callout that replaced it says the opposite of what the old one did.** The old note
+    deferred three acceptance criteria to CI; CI has never run, on this branch or on the default
+    one — both jobs die in ~20s at `pnpm/action-setup@v4` because the root manifest declares
+    `devEngines.packageManager` and the action reads `packageManager`. So the table now says
+    plainly that "covered in CI" is not an answer any task may give until `P8.12` lands.
+  - `T-029`'s ten manual steps are copied into the task, with step 5 named as the one that matters:
+    the sixty-second `session.cookieCache` window is what a switch has to invalidate, and nothing
+    unit-testable proves it does. The plan file it pointed at was outside the repository.
+  - Also: `/permissions` → `/settings/roles` ×3, `PgBootstrapMembershipEnroller`,
+    `seed/system-role.seed.ts`, `factory/auth.factory.ts`, `(shell)/sign-in.tsx`, and three missing
+    changelog rows (2026-09-03, 2026-09-05, 2026-09-06).
 
 ### `docs/setup`
 

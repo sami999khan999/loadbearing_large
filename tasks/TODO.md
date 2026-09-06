@@ -53,35 +53,33 @@ Only **Goal** and **Done when** are required. Drop the rest when empty.
 
 ---
 
-## State of the repo — 2026-08-29
+## State of the repo — 2026-09-06
 
-Verified by running the pipeline end to end on this tree:
+Verified by running the pipeline end to end on this tree, with `build:packages` and the web build
+done first so no assertion skips:
 
 | Check | Result |
 | --- | --- |
 | `pnpm build:packages` | ✅ 15 packages build |
-| `pnpm typecheck` | ✅ 20 projects clean |
-| `pnpm lint` (biome + eslint) | ✅ 538 files, no findings |
-| `pnpm test` (excl. `infrastructure`) | ✅ 388 tests across 65 files |
+| `pnpm typecheck` | ✅ 17 projects clean |
+| `pnpm lint` (biome + eslint) | ✅ 716 files, no findings |
+| `pnpm test` | ✅ 659 tests across 114 files, `infrastructure` included |
 | `pnpm --filter @loadbearing/web build` | ✅ builds `.output/` |
-| `pnpm check:architecture` | ✅ 11/11 assertions |
-| `pnpm deps:check` / `pnpm repo:check` | ✅ silent, and now blocking in CI |
-| `pnpm test` (`infrastructure`) | ⚠️ needs live Postgres — Docker not running locally, covered in CI |
+| `pnpm check:architecture` | ✅ 15/15 assertions, none skipped |
+| `pnpm deps:check` / `pnpm repo:check` | ✅ silent, and blocking in CI |
 
-**Every task `T-001`–`T-024` is done.** The kit now authenticates a user end to end, ships one
-feature slice through all twelve steps of `27.4`, has a transactional mail transport, a readiness
-probe, and documentation that names directories which exist.
+**Every task `T-001`–`T-030` is done.** The kit authenticates a user end to end, enrols them by one
+of three modes, brings a second person in by invitation, moves between organizations, ships one
+feature slice through all twelve steps of `27.4`, has a transactional mail transport and a readiness
+probe.
 
 > [!IMPORTANT]
-> **Three things could not be verified on this machine and are verified by CI instead.** Docker was
-> not running, so nothing below was exercised against a live Postgres, Redis or Mailpit:
->
-> - `T-001`'s end-to-end sign-up → sign-in against `/api/auth`, and the membership row it writes
-> - `T-002`'s owner-renders / member-redirects behaviour on `/permissions`
-> - `T-004`'s verification message landing in Mailpit
->
-> Every one of them typechecks, builds, lints, and passes its unit tests. CI runs `db:migrate` and
-> `db:seed` against a real Postgres and will exercise the rest on the next push.
+> **CI has never been green, and the reason is not this tree.** Both jobs die in ~20s at
+> `pnpm/action-setup@v4` with "No pnpm version is specified" — the root `package.json` declares
+> `devEngines.packageManager` rather than the `packageManager` field the action reads. It fails
+> identically on every run of the default branch, so nothing here has ever been verified by CI.
+> `P8.12` in [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
+> lands, "covered in CI" is not an answer any task may give.
 
 ---
 
@@ -117,7 +115,20 @@ probe, and documentation that names directories which exist.
   - **Goal:** A user in two organizations could reach only the one the session was pinned to, nothing let anyone create a second organization, and an existing account holding an invitation link had no way to accept it.
   - **Done when:** `POST /api/auth/organization/{switch,create}` and `/api/auth/invitation/accept` rebind the session and re-issue the cookie cache so the very next RPC resolves the new tenant; the header switcher lists every membership; `/organization/new` founds and switches; `/invitation/$token` previews for an anonymous visitor and accepts for a signed-in one; `/sign-in?redirect=` returns there; a sign-in lands in the last-used organization.
   - **Files:** `packages/auth/src/plugin/organization.plugin.ts`, `packages/api-client/src/auth/organization.client.ts`, `packages/query/src/organization/`, `packages/feature/src/organization/`, `apps/web/src/server/{session,invitation}.fn.ts`, `apps/web/src/route/-redirect.ts`, `apps/web/src/route/(shell)/invitation/$token.tsx`, `apps/web/src/route/(app)/_authenticated/organization/new.tsx`
-  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The ten-step manual pass in the plan (`~/.claude/plans/sprightly-kindling-dongarra.md`, "Verification") is still owed, in particular step 5 — a switch followed immediately by an RPC that must answer for the new tenant.
+  - **Done:** Typecheck, lint, `check:architecture` 13/13 against a fresh web bundle, and every unit suite green — including the plugin's endpoint spec, the client spec with its two error-code mappings, the redirect schema spec (rejects `//evil.test`, absolute URLs, `javascript:`), and five render states of `InvitationAccept`. **Not exercised against the live stack: Docker was down.** The manual pass below is still owed, and step 5 is the one that matters — the cookie cache is what a switch has to invalidate, and nothing unit-testable proves it does.
+
+    1. Sign up two accounts; invite the second into the first's organization.
+    2. Accept the invitation while signed in as the second account, from `/invitation/$token`.
+    3. Confirm the switcher lists both memberships for the second account.
+    4. Switch organizations from the header.
+    5. **Immediately** issue an RPC that reads tenant-scoped data and confirm it answers for the
+       new organization, not the old one — within the sixty-second `session.cookieCache` window.
+    6. Reload; confirm the session is still pinned to the switched organization.
+    7. Sign out and back in; confirm the sign-in lands in the last-used organization.
+    8. Found a second organization at `/organization/new`; confirm it switches on creation.
+    9. Open `/invitation/$token` signed out; confirm the anonymous preview renders and
+       `/sign-in?redirect=` returns to it after sign-in.
+    10. Confirm `users.last_active_organization_id` matches the switcher on every step above.
   - **Notes:** A Better Auth plugin rather than oRPC, for two verified reasons: these actions are identity-gated and no permission a non-owner holds could gate them, and only an endpoint with Better Auth's `ctx` can call `setSessionCookie` — without that, `session.cookieCache` keeps resolving the old tenant for up to sixty seconds after a switch. `rebind` does what Better Auth's own organization plugin does for `setActiveOrganization`, plus writes `users.last_active_organization_id`. `SessionUser` now carries `activeOrganizationId` and `organizations`, resolved in `fetchSession` in one extra indexed query. The sign-in page's `?redirect=` is validated to a rooted single-slash path. `auth` gained a `zod` dependency for the plugin's request bodies.
 
 - [x] `T-028` **Member slice: invite, list members, list and revoke invitations, members page** `@sami` `P1` `~8h` `#api` `#ui` `done: 2026-09-03`
@@ -144,15 +155,15 @@ probe, and documentation that names directories which exist.
 - [x] `T-001` **Create a membership row so sign-in can succeed** `@sami` `P0` `~3h` `#db` `done: 2026-08-29`
   - **Goal:** Nothing in the repository ever inserts into `memberships`, so every sign-in is aborted before a session exists.
   - **Done when:** A fresh `pnpm db:migrate && pnpm db:seed` followed by a sign-up and sign-in against `/api/auth` returns a session whose `activeOrganizationId` is the seeded organization.
-  - **Files:** `packages/infrastructure/src/pg/seed/index.ts`, `packages/auth/src/auth.factory.ts`, `packages/infrastructure/src/pg/repository/pg-membership.reader.ts`
-  - **Done:** `MembershipEnroller` (port, `packages/auth/src/session/`) and `PgMembershipEnroller` (`packages/infrastructure/src/pg/repository/`), bound in `Container`. Enrolment runs from `session.create.before`, **not** `user.create.after` — Better Auth queues `create.after` until the whole sign-up endpoint has finished, which is after the session hook has already refused. Gated on `BOOTSTRAP_ORGANIZATION_SLUG`, which the seed reads too so the two cannot drift; first user in gets `owner`, everyone after `member`, behind a `pg_advisory_xact_lock`. Not exercised against a live database on this machine.
+  - **Files:** `packages/infrastructure/src/pg/seed/system-role.seed.ts`, `packages/auth/src/factory/auth.factory.ts`, `packages/infrastructure/src/pg/repository/pg-membership.reader.ts`
+  - **Done:** `MembershipEnroller` (port, `packages/auth/src/session/`) and `PgBootstrapMembershipEnroller` (`packages/infrastructure/src/pg/repository/`), bound in `Container`. Enrolment runs from `session.create.before`, **not** `user.create.after` — Better Auth queues `create.after` until the whole sign-up endpoint has finished, which is after the session hook has already refused. Gated on `BOOTSTRAP_ORGANIZATION_SLUG`, which the seed reads too so the two cannot drift; first user in gets `owner`, everyone after `member`, behind a `pg_advisory_xact_lock`. Not exercised against a live database on this machine.
 
 - [x] `T-002` **Resolve the session into the router context** `@sami` `P0` `~4h` `#ui` `done: 2026-08-29`
   - **Goal:** `RouteGuard` and `SessionProvider` are both inert, so two of the four enforcement surfaces named in `docs/setup/23` do nothing.
   - **Done when:** `RouterContext` carries `user` and `capabilities`, a root loader resolves them server-side during SSR, and `RouteGuard.requirePermission("rbac.role.read")` on a test route redirects a member to `/forbidden` while an owner renders it.
   - **Files:** `apps/web/src/route/-context.ts`, `apps/web/src/route/__root.tsx`, `apps/web/src/route/-guard.ts`, `apps/web/src/router.tsx`
 
-  - **Done:** `RouterContext` carries `user`, `capabilities` (as the DTO) and a `SessionStore`; the root's `beforeLoad` resolves them through `fetchSession`, a `createServerFn` in `src/server/`. The DTO rather than a `CapabilitySet` because TanStack dehydrates a `beforeLoad` return value and rejects anything carrying a method — `RouteGuard` rebuilds the class, so `can()` stays the one decision. `SessionStore` rides the same dehydrate/hydrate payload as the message snapshot, so the browser refetches nothing; `/sign-in` invalidates both on success. `/permissions` is the gated route: `requireSession()` then `requirePermission("rbac.role.read")`.
+  - **Done:** `RouterContext` carries `user`, `capabilities` (as the DTO) and a `SessionStore`; the root's `beforeLoad` resolves them through `fetchSession`, a `createServerFn` in `src/server/`. The DTO rather than a `CapabilitySet` because TanStack dehydrates a `beforeLoad` return value and rejects anything carrying a method — `RouteGuard` rebuilds the class, so `can()` stays the one decision. `SessionStore` rides the same dehydrate/hydrate payload as the message snapshot, so the browser refetches nothing; `/sign-in` invalidates both on success. `/settings/roles` is the gated route: `requireSession()` then `requirePermission("rbac.role.read")`.
 
 - [x] `T-003` **Fix the `auth:generate` root script** `@agent` `P1` `~5m` `#tooling` `done: 2026-08-29`
   - **Goal:** `pnpm auth:generate` fails, because the root script calls a package script that does not exist.
@@ -169,8 +180,8 @@ probe, and documentation that names directories which exist.
 - [x] `T-005` **Make the two-factor flow reachable** `@sami` `P1` `~3h` `#ui` `done: 2026-08-29`
   - **Goal:** The 2FA half of sign-in is written end to end and can never fire — the branch that would trigger it is unreachable.
   - **Done when:** A user with TOTP enrolled who submits `SignInForm` is shown `TwoFactorForm`, and a valid code completes the sign-in.
-  - **Files:** `packages/api-client/src/auth/auth.client.ts`, `packages/feature/src/auth/sign-in.form.tsx`, `apps/web/src/route/sign-in.tsx`
-  - **Done:** Three breaks, three fixes. `AuthClient.signIn` throws `TwoFactorRequiredError` on `data.twoFactorRedirect === true` — a *successful* response, which is why inspecting `error` alone resolved and navigated away — and throws `UnauthorizedError` rather than a bare `Error`, so `ErrorNormalizer` stops flattening every failure to `INTERNAL`. `sign-in.tsx` passes `onNeedsTwoFactor` and renders `TwoFactorForm`. `SignInForm` tracks the fork separately from `isError`, so the hand-off does not render “sign-in failed” under a form that is about to be replaced. Cost one new dependency: `api-client` → `errors`.
+  - **Files:** `packages/api-client/src/auth/auth.client.ts`, `packages/feature/src/auth/sign-in.form.tsx`, `apps/web/src/route/(shell)/sign-in.tsx`
+  - **Done:** Three breaks, three fixes. `AuthClient.signIn` throws `TwoFactorRequiredError` on `data.twoFactorRedirect === true` — a *successful* response, which is why inspecting `error` alone resolved and navigated away — and throws `UnauthorizedError` rather than a bare `Error`, so `ErrorNormalizer` stops flattening every failure to `INTERNAL`. `(shell)/sign-in.tsx` passes `onNeedsTwoFactor` and renders `TwoFactorForm`. `SignInForm` tracks the fork separately from `isError`, so the hand-off does not render “sign-in failed” under a form that is about to be replaced. Cost one new dependency: `api-client` → `errors`.
 
 - [x] `T-006` **Give `packages/auth` a test suite** `@sami` `P1` `~5h` `#api` `done: 2026-08-29`
   - **Goal:** The only package with no tests is the one holding every credential path.
@@ -287,7 +298,7 @@ probe, and documentation that names directories which exist.
   - **Goal:** `contract` and `appRouter` are both empty, so `/api/rpc` answers 404 to everything and none of the transport wiring has been exercised against a real procedure.
   - **Done when:** One slice exists end to end through all twelve steps of `27.4`, its procedures appear in `ProcedurePermissions`, the coverage test passes against the real contract rather than only against its fixture, and its route renders behind a `RouteGuard`.
   - **Files:** `packages/contracts/src/procedure/index.ts`, `packages/contracts/src/catalog/index.ts`, `apps/web/src/server/orpc/app.router.ts`
-  - **Done:** The `role` slice, end to end through all twelve steps: `contracts/src/role/` plus the procedure and permission merge points, `RoleRepository` and `ListRolesUseCase` in `application/src/rbac/`, `PgRoleRepository` (three fixed queries, never one per role), `RoleQueries`, an `ApiClient.role` accessor, a new `role` message namespace in both locales, `RoleMatrix` in `feature`, `RoleRouter`, and `/permissions` behind the guard. `Envelope.paginated` now marks `items` readonly so a handler never copies an array to widen it. The coverage tests run against a real contract, and `handler.ts`'s explicit context annotation is gone as its comment promised. Also fixed doc `24.6`, which documented `implement(x).use(authed)` — `.use()` takes a middleware, not a builder.
+  - **Done:** The `role` slice, end to end through all twelve steps: `contracts/src/role/` plus the procedure and permission merge points, `RoleRepository` and `ListRolesUseCase` in `application/src/rbac/`, `PgRoleRepository` (three fixed queries, never one per role), `RoleQueries`, an `ApiClient.role` accessor, a new `role` message namespace in both locales, `RoleMatrix` in `feature`, `RoleRouter`, and `/settings/roles` behind the guard. `Envelope.paginated` now marks `items` readonly so a handler never copies an array to widen it. The coverage tests run against a real contract, and `handler.ts`'s explicit context annotation is gone as its comment promised. Also fixed doc `24.6`, which documented `implement(x).use(authed)` — `.use()` takes a middleware, not a builder.
 
 - [x] `T-000` **Build steps 01–26 of the setup guide** `@sami` `P1` `#repo` `done: 2026-08-28`
   - **Done when:** `pnpm build:packages`, `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm check:architecture` all pass on a clean tree.
@@ -306,4 +317,7 @@ probe, and documentation that names directories which exist.
 | 2026-08-28 | @sami   | Created the list from a full audit of the tree at `c681449` |
 | 2026-08-29 | @agent  | Closed `T-001`–`T-024`. Three acceptance criteria need a live stack and are covered by CI |
 | 2026-09-01 | @sami   | Closed `T-025`. Every auth flow verified against a live stack on this machine, not deferred to CI |
+| 2026-09-03 | @sami   | Closed `T-027`–`T-029`: invitations, the member slice, and the organization plugin |
 | 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
+| 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
+| 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |
