@@ -5,6 +5,7 @@ import { ForbiddenError } from "../../src/error/forbidden.error.js";
 import { NotFoundError } from "../../src/error/not-found.error.js";
 import { ValidationError } from "../../src/error/validation.error.js";
 import { HTTP_STATUS } from "../../src/transport/http.js";
+import { TraceIds } from "../../src/transport/trace-id.js";
 
 describe("AppError", () => {
   // The rule the whole package is built on. If a message string ever appears
@@ -96,5 +97,22 @@ describe("traceId", () => {
   it("is never invented by a server-thrown error", () => {
     // The id belongs to the request, not to the failure. The adapter stamps it.
     expect(new ForbiddenError("task.read").toJSON()).not.toHaveProperty("traceId");
+  });
+
+  // The envelope arrives from the network and this value then rides every log line that
+  // mentions the error, so `from()` checks it rather than adopting whatever was sent.
+  it("drops a trace id that is not shaped like one", () => {
+    for (const sent of ['" or 1=1 --', "a\nlevel=error", "spaces here", "\u0000", "  "]) {
+      const rebuilt = AppError.from({ code: "INTERNAL", context: {}, traceId: sent });
+      expect(rebuilt?.toJSON()).not.toHaveProperty("traceId");
+    }
+  });
+
+  it("truncates one that is merely too long", () => {
+    const rebuilt = AppError.from({ code: "INTERNAL", context: {}, traceId: "a".repeat(500) });
+
+    // Truncated rather than dropped: an over-long id is still probably the upstream's,
+    // and half a trace is more use than none.
+    expect(rebuilt?.toJSON().traceId).toHaveLength(TraceIds.MAX_LENGTH);
   });
 });

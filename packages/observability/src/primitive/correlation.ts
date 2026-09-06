@@ -1,4 +1,4 @@
-import { Uuid } from "../import.js";
+import { TraceIds, Uuid } from "../import.js";
 
 // A plain string, not a branded id: it has to survive arriving from a proxy that minted
 // its own, in whatever shape.
@@ -11,12 +11,10 @@ export class Correlation {
   // one trace.
   public static readonly HEADER = "x-request-id";
 
-  // Bounded and character-checked: it arrives from the network and then rides every log
-  // line for the life of the request.
+  // Bounded and character-checked, and the rule lives in `errors` rather than here:
+  // `AppError.from` rebuilds a trace id off the wire too, and one rule cannot drift.
   public static sanitise(value: string | null | undefined): TraceId | null {
-    if (!value) return null;
-    const trimmed = value.trim().slice(0, 128);
-    return trimmed.length > 0 && /^[\w.:-]+$/.test(trimmed) ? trimmed : null;
+    return TraceIds.sanitise(value);
   }
 
   // v7, so a trace id sorts by time — the same reason every id in this repo is v7.

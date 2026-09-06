@@ -1755,10 +1755,24 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   and revoke-session can be optimistic. **Docs:** `query/docs/reference/mutations.md`.
 - [ ] `P7.12` a11y — `PermissionMatrix` empty `<th>` (`aria-label`), `<header>`/`<nav>`
   landmarks and a skip link in `_authenticated.tsx`, `aria-busy` on the two raw `<select>`s.
-- [ ] `P7.13` `AppError.from` adopts a client-supplied `traceId` — only on the client path;
-  the server mints its own.
-- [ ] `P7.14` `LokiLogReader implements LogReader` while every sibling `extends` — align, and
-  drop the `type` import in `infrastructure/src/import.ts`.
+- [x] `P7.13` `AppError.from` adopts a client-supplied `traceId` — only on the client path;
+  the server mints its own. `done: 2026-09-06`
+  - **Sanitised rather than refused.** Adopting is correct on the client path — a trace id the user
+    can quote back is the whole point — so the fix is that `from()` applies the same bound and
+    charset check the request path already applies, instead of trusting the envelope.
+  - **The rule moved to `TraceIds` in `errors`, and `Correlation.sanitise` now delegates to it.**
+    Two copies of a bound-and-charset check is the pair that drifts, and the dependency direction
+    settles which package holds it: `observability` imports `errors`, never the reverse. Callers of
+    `Correlation.sanitise` are unchanged.
+  - **Over-long is truncated, wrongly shaped is dropped.** An over-long id is still probably the
+    upstream's and half a trace beats none; a malformed one has nothing worth keeping.
+  - Exposure today is zero — `AppError.from` has no production caller, only its spec — so this
+    closes a door rather than a hole. Two specs, both watched failing against the old form.
+- [x] `P7.14` `LokiLogReader implements LogReader` while every sibling `extends` — align, and
+  drop the `type` import in `infrastructure/src/import.ts`. `done: 2026-09-06`
+  - `implements` on an abstract class buys nothing and costs the `override` checking: a port method
+    renamed leaves the old one behind as a new public method, and nothing says so. Both methods now
+    carry `override`, which is what makes that a compile error.
 - [ ] `P7.15` `AnalyticsConsumer` lag: `lagSeconds` is 0 forever on an empty destination —
   compute from the oldest unprojected row; `reconcile` emits `completed` with a `drifted`
   count instead of returning early.

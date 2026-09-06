@@ -39,6 +39,12 @@ and a fresh id minted.
 Without that, a caller controls a string that appears in every log line, which is a log-injection
 primitive and an unbounded field on a per-request basis.
 
+**The rule itself lives in `TraceIds`, in `@loadbearing/errors`, and `sanitise` delegates to it.**
+The request header is not the only door: `AppError.from()` rebuilds a trace id out of an envelope
+that arrived over the same network, and for a while adopted it verbatim. One rule in two packages is
+the pair that drifts, and the dependency direction settles which one holds it — `observability`
+imports `errors`, never the reverse.
+
 **Unbounded per request is also why `traceId` must never become a log label.** A Loki label creates
 one stream per distinct value, so labelling the trace id means one stream per request. It stays in
 the body and is reached with `| json | traceId="…"` after the selector has narrowed the streams. The

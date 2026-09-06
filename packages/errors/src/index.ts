@@ -23,4 +23,4 @@ export {
   ValidationError,
 } from "./error/index.js";
 export { ErrorNormalizer } from "./normalizer/index.js";
-export { HTTP_STATUS } from "./transport/index.js";
+export { HTTP_STATUS, TraceIds } from "./transport/index.js";

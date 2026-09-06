@@ -10,4 +10,5 @@ export {
   ErrorNormalizer,
   type ErrorSeverity,
   type FieldViolation,
+  TraceIds,
 } from "@loadbearing/errors";
