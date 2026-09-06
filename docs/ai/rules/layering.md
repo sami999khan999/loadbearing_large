@@ -8,9 +8,11 @@ description: The one-way dependency graph, the server-only boundary, and where a
 Dependencies point one way. A package may import from anything to its left, never to its right.
 
 ```
-errors → core → permissions · observability → contracts → application → infrastructure → auth → composition
-                                                                                                     ↓
-                                    asset → ui · content → api-client → query → feature → apps/{web,worker}
+errors → core → permissions · observability → contracts → asset · content
+                                                             ↓
+                                     application → infrastructure → auth → composition
+                                                                              ↓
+                                     ui → api-client → query → feature → apps/{web,worker}
 ```
 
 - **`packages/application` is the domain.** It names **no framework** — no `@orpc/*`, `@tanstack/*`,
@@ -21,11 +23,15 @@ errors → core → permissions · observability → contracts → application �
   `bullmq/`, `openai/`, `clickhouse/`, `loki/`, `smtp/`. `rm -r src/clickhouse/` is the complete
   answer to a swap. Naming by capability breaks the moment a port gets a second implementation.
 - **`packages/composition` is the DI root** — the only place a concrete adapter is named.
+- **`asset` and `content` sit left of `application`, not right of `composition`.** `composition`
+  imports `content` for the two mailers, so the old ordering said the DI root may not name what it
+  is built out of. Both are isomorphic and reach the client bundle, which is why both carry the
+  server-only ban.
 - **`apps/*` are thin, deletable, framework-shaped.** Business logic never lands there.
 
 ### Server-only boundary
 
-These are a Biome error inside `packages/{ui,feature,query,errors}` and `apps/*/src`:
+These are a Biome error inside `packages/{ui,feature,query,errors,content,asset}` and `apps/*/src`:
 `@loadbearing/{infrastructure,auth,composition,application}`, `drizzle-orm`, `pg`, `ioredis`,
 `bullmq`, `better-auth`.
 

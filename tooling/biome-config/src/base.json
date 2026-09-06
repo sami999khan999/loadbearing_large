@@ -71,6 +71,8 @@
         "packages/feature/**",
         "packages/query/**",
         "packages/errors/**",
+        "packages/content/**",
+        "packages/asset/**",
         "apps/web/src/**",
         "apps/desktop/src/**"
       ],
