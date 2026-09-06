@@ -36,11 +36,13 @@ packages/auth/
 ├── src/
 │   ├── index.ts                          ← ServerOnly.assert() first among the statements
 │   ├── import.ts                         ← every external symbol, better-auth included
-│   ├── auth.config.ts                    → AuthConfig
-│   ├── auth.factory.ts                   → AuthFactory, AuthInstance
 │   ├── apikey/
 │   │   ├── api-key.hasher.ts             → ApiKeyHasher, GeneratedApiKey
-│   │   └── api-key.resolver.ts           → ApiKeyResolver, ApiKeyRepository, ApiKeyRecord
+│   │   ├── api-key.repository.ts         → ApiKeyRepository, ApiKeyRecord
+│   │   └── api-key.resolver.ts           → ApiKeyResolver
+│   ├── factory/
+│   │   ├── auth.config.ts                → AuthConfig
+│   │   └── auth.factory.ts               → AuthFactory, AuthInstance
 │   ├── mail/
 │   │   └── auth.mailer.ts                → AuthMailer                        (port)
 │   ├── plugin/
@@ -61,6 +63,7 @@ packages/auth/
 └── tests/
     ├── support/doubles.ts
     ├── apikey/{api-key.hasher,api-key.resolver}.spec.ts
+    ├── factory/auth.factory.spec.ts
     ├── principal/{capability.cache,principal.builder}.spec.ts
     └── session/{better-auth.session-resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
 ```

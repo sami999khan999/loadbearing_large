@@ -9,8 +9,7 @@ export {
   ApiKeyResolver,
   type GeneratedApiKey,
 } from "./apikey/index.js";
-export type { AuthConfig } from "./auth.config.js";
-export { AuthFactory, type AuthInstance } from "./auth.factory.js";
+export { type AuthConfig, AuthFactory, type AuthInstance } from "./factory/index.js";
 export { AuthMailer } from "./mail/index.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export {

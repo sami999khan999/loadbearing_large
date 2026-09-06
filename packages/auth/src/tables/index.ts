@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AuthFactory } from "../auth.factory.js";
+import { AuthFactory } from "../factory/index.js";
 import { type CacheStore, Database, getSchema, type OrganizationId } from "../import.js";
 import { AuthMailer } from "../mail/auth.mailer.js";
 import { InvitationClaimer, type InvitationPreview } from "../session/invitation.claimer.js";

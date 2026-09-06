@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AuthInstance } from "../../src/auth.factory.js";
+import type { AuthInstance } from "../../src/factory/auth.factory.js";
 import { BetterAuthSessionResolver } from "../../src/session/better-auth.session-resolver.js";
 
 // The double is the API surface this resolver touches and nothing else: a real instance

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AuthConfig } from "../src/auth.config.js";
-import { AuthFactory } from "../src/auth.factory.js";
-import type { CacheStore, Database, OrganizationId } from "../src/import.js";
-import { AuthMailer } from "../src/mail/auth.mailer.js";
-import { InvitationClaimer, type InvitationPreview } from "../src/session/invitation.claimer.js";
-import { MembershipEnroller } from "../src/session/membership.enroller.js";
-import { MembershipReader, type OrganizationSummary } from "../src/session/membership.reader.js";
-import { OrganizationFounder } from "../src/session/organization.founder.js";
+import type { AuthConfig } from "../../src/factory/auth.config.js";
+import { AuthFactory } from "../../src/factory/auth.factory.js";
+import type { CacheStore, Database, OrganizationId } from "../../src/import.js";
+import { AuthMailer } from "../../src/mail/auth.mailer.js";
+import { InvitationClaimer, type InvitationPreview } from "../../src/session/invitation.claimer.js";
+import { MembershipEnroller } from "../../src/session/membership.enroller.js";
+import { MembershipReader, type OrganizationSummary } from "../../src/session/membership.reader.js";
+import { OrganizationFounder } from "../../src/session/organization.founder.js";
 
 // Nothing here connects: this spec reads `auth.options` back, the only way to assert on
 // configuration that has no behaviour until a request arrives.

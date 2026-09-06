@@ -1,4 +1,3 @@
-import type { AuthConfig } from "./auth.config.js";
 import {
   type BetterAuthOptions,
   bearer,
@@ -9,13 +8,16 @@ import {
   twoFactor,
   type UserId,
   Uuid,
-} from "./import.js";
-import type { AuthMailer } from "./mail/auth.mailer.js";
-import { OrganizationPlugin } from "./plugin/index.js";
-import type { InvitationClaimer } from "./session/invitation.claimer.js";
-import type { MembershipEnroller } from "./session/membership.enroller.js";
-import type { MembershipReader } from "./session/membership.reader.js";
-import type { OrganizationFounder } from "./session/organization.founder.js";
+} from "../import.js";
+import type { AuthMailer } from "../mail/index.js";
+import { OrganizationPlugin } from "../plugin/index.js";
+import type {
+  InvitationClaimer,
+  MembershipEnroller,
+  MembershipReader,
+  OrganizationFounder,
+} from "../session/index.js";
+import type { AuthConfig } from "./auth.config.js";
 
 // Both, because the scheme differs by platform — shipping one produces an app that
 // works for half your team. See docs/reference/auth-factory.md.

@@ -1,4 +1,4 @@
-import type { AuthInstance } from "../auth.factory.js";
+import type { AuthInstance } from "../factory/index.js";
 import {
   type OrganizationId,
   type RequestHeaders,

@@ -474,8 +474,9 @@ swap expensive again. The same grep for `ClickHouseAnalyticsReader` must answer 
 packages/auth/src/
 ├── index.ts                                 ← ServerOnly.assert()
 ├── import.ts                                ← every external symbol
-├── auth.config.ts                           → AuthConfig
-├── auth.factory.ts                          → AuthFactory.create(...)
+├── factory/
+│   ├── auth.config.ts                       → AuthConfig
+│   └── auth.factory.ts                      → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
 │   ├── better-auth.session-resolver.ts      → BetterAuthSessionResolver

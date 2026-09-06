@@ -43,8 +43,9 @@
 packages/auth/src/
 ├── index.ts                              ← ServerOnly.assert()
 ├── import.ts                             ← every external symbol, better-auth included
-├── auth.config.ts                        → AuthConfig
-├── auth.factory.ts                       → AuthFactory.create(...)
+├── factory/
+│   ├── auth.config.ts                    → AuthConfig
+│   └── auth.factory.ts                   → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
 │   ├── better-auth.session-resolver.ts   → BetterAuthSessionResolver
@@ -131,7 +132,7 @@ Deleting a user cascades their role assignments, which is what you want. It also
 
 ## Step 16.2 — `AuthConfig` and `AuthFactory`
 
-**`packages/auth/src/auth.config.ts`**
+**`packages/auth/src/factory/auth.config.ts`**
 
 ```ts
 export interface AuthConfig {
@@ -146,7 +147,7 @@ export interface AuthConfig {
 
 **Every value comes from the environment**, through `ContainerConfig` ([24](24-web-app.md)). None of them are literals in the factory: session lifetime differs between a staging box and production, and burying it in code makes it a deploy rather than a variable.
 
-**`packages/auth/src/auth.factory.ts`**
+**`packages/auth/src/factory/auth.factory.ts`**
 
 ```ts
 export class AuthFactory {
