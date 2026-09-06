@@ -1,28 +1,28 @@
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
-// Large enough that ClickHouse merges a few big parts rather than many small ones —
-// see docs/reference/consumers.md.
-const BATCH_SIZE = 5_000;
-
-// A ceiling on one job, not on the backlog: the checkpoint means the next run resumes
-// exactly where this one ended.
-const MAX_BATCHES_PER_RUN = 20;
-
-// Two runs of the schedule: one late run is a slow batch, two is a consumer that has
-// stopped.
-const LAG_WARNING_MS = 10 * 60 * 1_000;
-
-// Long enough to catch a consumer that died over a weekend, short enough that the
-// comparison is two cheap aggregates.
-const RECONCILE_DAYS = 7;
-
-// The label on every line this file emits, so a second projection does not change the
-// event shape and a dashboard filters on it rather than on the queue name.
-const PROJECTION = "activity_events";
-
 // What makes ClickHouse derived rather than authoritative: `project` moves the rows and
 // `reconcile` notices when it has not. See docs/reference/consumers.md.
 export class AnalyticsConsumer {
+  // Large enough that ClickHouse merges a few big parts rather than many small ones —
+  // see docs/reference/consumers.md.
+  private static readonly BATCH_SIZE = 5_000;
+
+  // A ceiling on one job, not on the backlog: the checkpoint means the next run resumes
+  // exactly where this one ended.
+  private static readonly MAX_BATCHES_PER_RUN = 20;
+
+  // Two runs of the schedule: one late run is a slow batch, two is a consumer that has
+  // stopped.
+  private static readonly LAG_WARNING_MS = 10 * 60 * 1_000;
+
+  // Long enough to catch a consumer that died over a weekend, short enough that the
+  // comparison is two cheap aggregates.
+  private static readonly RECONCILE_DAYS = 7;
+
+  // The label on every line this file emits, so a second projection does not change the
+  // event shape and a dashboard filters on it rather than on the queue name.
+  private static readonly PROJECTION = "activity_events";
+
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
@@ -74,8 +74,11 @@ export class AnalyticsConsumer {
     let projected = 0;
     let batches = 0;
 
-    while (batches < MAX_BATCHES_PER_RUN) {
-      const records = await this.container.activityReplay.since(checkpoint, BATCH_SIZE);
+    while (batches < AnalyticsConsumer.MAX_BATCHES_PER_RUN) {
+      const records = await this.container.activityReplay.since(
+        checkpoint,
+        AnalyticsConsumer.BATCH_SIZE,
+      );
       if (records.length === 0) break;
 
       projected += await projector.project(records);
@@ -87,7 +90,7 @@ export class AnalyticsConsumer {
 
       // A short batch means caught up: continuing issues one more query to learn what
       // this length already said.
-      if (records.length < BATCH_SIZE) break;
+      if (records.length < AnalyticsConsumer.BATCH_SIZE) break;
     }
 
     const now = this.container.clock.now();
@@ -97,20 +100,20 @@ export class AnalyticsConsumer {
     const lagSeconds = Math.round(lagMs / 1_000);
 
     this.container.logger.emit("analytics.projection.completed", {
-      projection: PROJECTION,
+      projection: AnalyticsConsumer.PROJECTION,
       events: projected,
       durationMs: now.getTime() - startedAt.getTime(),
       lagSeconds,
-      capped: batches >= MAX_BATCHES_PER_RUN,
+      capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
     });
 
     // `warn`, not `debug`: a projection that throws is already an error line, and one
     // falling quietly behind produces nothing at all.
-    if (lagMs > LAG_WARNING_MS) {
+    if (lagMs > AnalyticsConsumer.LAG_WARNING_MS) {
       this.container.logger.emit("analytics.projection.lagged", {
-        projection: PROJECTION,
+        projection: AnalyticsConsumer.PROJECTION,
         lagSeconds,
-        thresholdSeconds: LAG_WARNING_MS / 1_000,
+        thresholdSeconds: AnalyticsConsumer.LAG_WARNING_MS / 1_000,
       });
     }
   }
@@ -120,7 +123,7 @@ export class AnalyticsConsumer {
   private async reconcile(): Promise<void> {
     const now = this.container.clock.now();
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const from = new Date(to.getTime() - RECONCILE_DAYS * 24 * 60 * 60 * 1_000);
+    const from = new Date(to.getTime() - AnalyticsConsumer.RECONCILE_DAYS * 24 * 60 * 60 * 1_000);
 
     const [source, derived] = await Promise.all([
       this.container.activityReplay.dailyCounts(from, to),

@@ -1,3 +1,4 @@
+import type { Readable } from "node:stream";
 import { Uuid } from "@loadbearing/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -26,8 +27,10 @@ class FakeStorage implements Partial<StorageGateway> {
   public failOnPut = false;
   public present = true;
   public uploaded = 0;
+  public body: Readable | undefined;
 
   public async putStream(key: string, body: AsyncIterable<Uint8Array>): Promise<unknown> {
+    this.body = body as Readable;
     if (this.failOnPut) throw new Error("s3 is down");
 
     let bytes = 0;
@@ -126,6 +129,10 @@ describe("PgActivityArchiveGateway", () => {
 
     expect(await partitionExists()).toBe(true);
     expect(await isAttached()).toBe(true);
+
+    // The regression guard within the guard: the stream was left pulling pages out of a
+    // partition nobody was uploading, until `afterEach` dropped it under the query.
+    expect(storage.body?.destroyed).toBe(true);
   });
 
   it("re-attaches when the uploaded object cannot be verified", async () => {

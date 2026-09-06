@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { Database } from "../../src/pg/primitive/index.js";
 import { organizations } from "../../src/pg/schema/index.js";
 
@@ -10,10 +11,22 @@ const URL = DATABASE_URL;
 export const openDatabase = (logger?: ConstructorParameters<typeof Database>[0]["logger"]) =>
   new Database(logger ? { url: URL, logger } : { url: URL });
 
-// Every spec here runs against the seeded organization rather than creating one, so
-// a failed run leaves no rows behind to confuse the next.
+// The slug `seed.ts` writes, which is what makes this resolve to one row rather than to
+// whichever row Postgres returns first.
+const SEED_SLUG = "loadbearing";
+
+// Every spec here runs against the seeded organization rather than creating one, so a
+// failed run leaves no rows behind to confuse the next.
+
+// By slug and not by `limit(1)`: specs that found their own tenant run beside these, and
+// an unordered pick hands one of those out to be deleted underneath its owner.
 export const seedOrganizationId = async (database: Database) => {
-  const rows = await database.client.select({ id: organizations.id }).from(organizations).limit(1);
+  const rows = await database.client
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.slug, SEED_SLUG))
+    .limit(1);
+
   const id = rows[0]?.id;
   if (!id) throw new Error("run `pnpm db:seed` first");
   return id;

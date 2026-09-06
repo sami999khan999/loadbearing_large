@@ -1,16 +1,16 @@
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
-// Three, not one: a table with no partition for today rejects every insert, so one
-// month of runway makes a missed run an outage. See docs/reference/consumers.md.
-const MONTHS_AHEAD = 3;
-
-// Thirteen months keeps a full year queryable in Postgres and archives the month that
-// has just fallen out of it.
-const RETAIN_MONTHS = 13;
-
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
 export class MaintenanceConsumer {
+  // Three, not one: a table with no partition for today rejects every insert, so one
+  // month of runway makes a missed run an outage. See docs/reference/consumers.md.
+  private static readonly MONTHS_AHEAD = 3;
+
+  // Thirteen months keeps a full year queryable in Postgres and archives the month that
+  // has just fallen out of it.
+  private static readonly RETAIN_MONTHS = 13;
+
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
@@ -77,7 +77,9 @@ export class MaintenanceConsumer {
   // month rather than one relative to the retry.
   private async archive(): Promise<void> {
     const now = this.container.clock.now();
-    const period = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - RETAIN_MONTHS, 1));
+    const period = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - MaintenanceConsumer.RETAIN_MONTHS, 1),
+    );
 
     const archived = await this.container.activityArchive.archive(period);
 
@@ -91,13 +93,13 @@ export class MaintenanceConsumer {
   private async partitions(): Promise<void> {
     const created = await this.container.maintenance.ensureActivityPartitions(
       this.container.clock.now(),
-      MONTHS_AHEAD,
+      MaintenanceConsumer.MONTHS_AHEAD,
     );
 
     this.container.logger.emit("maintenance.partitions.ensured", {
       table: "activity_log",
       created: created.length,
-      monthsAhead: MONTHS_AHEAD,
+      monthsAhead: MaintenanceConsumer.MONTHS_AHEAD,
     });
   }
 }

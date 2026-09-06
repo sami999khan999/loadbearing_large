@@ -5,6 +5,7 @@
 export { AsyncLocalStorage } from "node:async_hooks";
 export { Buffer } from "node:buffer";
 export { createHash } from "node:crypto";
+export { once } from "node:events";
 export { Readable } from "node:stream";
 export { createGzip } from "node:zlib";
 
@@ -87,6 +88,9 @@ export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
 
+// ── @loadbearing/observability ───────────────────────────────────────────────
+export { Logger } from "@loadbearing/observability";
+
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 export {
   CapabilitySet,
@@ -110,7 +114,7 @@ export {
   gte,
   inArray,
   isNull,
-  type Logger,
+  type Logger as DrizzleLogger,
   lt,
   or,
   type SQL,

@@ -21,7 +21,7 @@ VectorStore (abstract)              packages/application/src/port/vector.store.t
     └── InMemoryVectorStore         composition/src/fake/
 
 EmbeddingProvider (abstract)        packages/application/src/port/embedding.provider.ts
-    ├── OpenAiEmbeddingProvider     infrastructure/src/openai/openai.embedding-provider.ts
+    ├── OpenAiEmbeddingProvider     infrastructure/src/openai/openai-embedding.provider.ts
     └── StubEmbeddingProvider       composition/src/fake/
 ```
 
@@ -230,7 +230,7 @@ Note that `deleteBySource` takes it too. A delete keyed only on a caller-supplie
 
 ## Step 14.3 — The embedding provider
 
-**`packages/infrastructure/src/embedding/openai.embedding-provider.ts`**
+**`packages/infrastructure/src/embedding/openai-embedding.provider.ts`**
 
 ```ts
 import { EmbeddingProvider } from "@loadbearing/application";

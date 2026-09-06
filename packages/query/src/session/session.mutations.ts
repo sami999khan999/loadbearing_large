@@ -10,7 +10,7 @@ export class SessionMutations {
   public static useSignIn(auth: AuthClient) {
     return useAppMutation<void, { email: string; password: string }>({
       mutationFn: ({ email, password }) => auth.signIn(email, password),
-      invalidates: [QueryKeys.session],
+      invalidates: [QueryKeys.session.all()],
     });
   }
 
@@ -48,13 +48,45 @@ export class SessionMutations {
   public static useResetPassword(auth: AuthClient) {
     return useAppMutation<void, { token: string; newPassword: string }>({
       mutationFn: ({ token, newPassword }) => auth.resetPassword(token, newPassword),
-      invalidates: [QueryKeys.session],
+      invalidates: [QueryKeys.session.all()],
     });
   }
 
   public static useResendVerification(auth: AuthClient) {
     return useAppMutation<void, { email: string; callbackURL: string }>({
       mutationFn: ({ email, callbackURL }) => auth.sendVerificationEmail(email, callbackURL),
+    });
+  }
+
+  // The three ways to finish a sign-in that answered TWO_FACTOR_REQUIRED. Each completes
+  // one, so each invalidates the session the route is about to re-read.
+
+  public static useVerifyTotp(auth: AuthClient) {
+    return useAppMutation<void, { code: string }>({
+      mutationFn: ({ code }) => auth.verifyTwoFactor(code),
+      invalidates: [QueryKeys.session.all()],
+    });
+  }
+
+  public static useVerifyBackupCode(auth: AuthClient) {
+    return useAppMutation<void, { code: string }>({
+      mutationFn: ({ code }) => auth.verifyBackupCode(code),
+      invalidates: [QueryKeys.session.all()],
+    });
+  }
+
+  public static useVerifyOtp(auth: AuthClient) {
+    return useAppMutation<void, { code: string }>({
+      mutationFn: ({ code }) => auth.verifyTwoFactorOtp(code),
+      invalidates: [QueryKeys.session.all()],
+    });
+  }
+
+  // No `invalidates`: it sends a code and completes nothing, so there is no session yet
+  // to refetch.
+  public static useSendOtp(auth: AuthClient) {
+    return useAppMutation<void, void>({
+      mutationFn: () => auth.sendTwoFactorOtp(),
     });
   }
 

@@ -6,6 +6,7 @@ import {
   Field,
   type FormEvent,
   Input,
+  SessionMutations,
   useState,
 } from "../import.js";
 
@@ -22,26 +23,22 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
   const { t } = useMessages("auth");
   const [method, setMethod] = useState<Method>("totp");
   const [code, setCode] = useState("");
-  const [failed, setFailed] = useState(false);
-  const [pending, setPending] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
-  // Plain promises rather than `useAppMutation`: there is no session to invalidate until
-  // this succeeds, and the route's `complete()` is what refetches it.
-  const run = (work: Promise<void>, after?: () => void) => {
-    setFailed(false);
-    setPending(true);
-    work
-      .then(after ?? onSuccess)
-      .catch(() => setFailed(true))
-      .finally(() => setPending(false));
-  };
+  // Defined mutations rather than raw client calls with hand-rolled pending and error
+  // state — the same seam every other form in this package goes through.
+  const totp = SessionMutations.useVerifyTotp(auth);
+  const backupCode = SessionMutations.useVerifyBackupCode(auth);
+  const otp = SessionMutations.useVerifyOtp(auth);
+  const sendOtp = SessionMutations.useSendOtp(auth);
+
+  const verify = method === "backup" ? backupCode : method === "otp" ? otp : totp;
+  const pending = verify.isPending || sendOtp.isPending;
+  const failed = verify.isError || sendOtp.isError;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (method === "backup") return run(auth.verifyBackupCode(code));
-    if (method === "otp") return run(auth.verifyTwoFactorOtp(code));
-    return run(auth.verifyTwoFactor(code));
+    verify.mutate({ code }, { onSuccess });
   };
 
   // Switching method clears the code: a half-typed TOTP carried into the backup-code
@@ -49,7 +46,15 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
   const switchTo = (next: Method) => {
     setMethod(next);
     setCode("");
-    setFailed(false);
+    // Each mutation keeps its own `isError`, so the message the reader is looking at
+    // belongs to the method they have left.
+    totp.reset();
+    backupCode.reset();
+    otp.reset();
+    sendOtp.reset();
+    // The "we sent you a code" notice belongs to the OTP leg. The caller that switches
+    // *to* OTP sets it back in the same handler.
+    setOtpSent(false);
   };
 
   const backup = method === "backup";
@@ -58,11 +63,11 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
     <form onSubmit={submit} noValidate>
       <Field
         label={backup ? t("auth.twoFactorBackupCode") : t("auth.twoFactorCode")}
-        htmlFor="code"
+        htmlFor="two-factor-code"
         hint={backup ? t("auth.twoFactorBackupHint") : t("auth.twoFactorHint")}
       >
         <Input
-          id="code"
+          id="two-factor-code"
           autoComplete="one-time-code"
           // A backup code is alphanumeric and longer, so only the numeric methods get the
           // keypad and the six-character ceiling.
@@ -88,16 +93,18 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
       </Button>
 
       {
-        // Both alternatives stay reachable from every method, so there is no order to
-        // get stuck in.
+        // One button per method that is not the current one. A ternary on `totp` left
+        // backup codes unreachable from the emailed one-time code.
       }
-      {method === "totp" ? (
-        <Button variant="ghost" onClick={() => switchTo("backup")}>
-          {t("auth.twoFactorUseBackup")}
-        </Button>
-      ) : (
+      {method === "totp" ? null : (
         <Button variant="ghost" onClick={() => switchTo("totp")}>
           {t("auth.twoFactorUseTotp")}
+        </Button>
+      )}
+
+      {method === "backup" ? null : (
+        <Button variant="ghost" onClick={() => switchTo("backup")}>
+          {t("auth.twoFactorUseBackup")}
         </Button>
       )}
 
@@ -106,9 +113,11 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
           variant="ghost"
           disabled={pending}
           onClick={() =>
-            run(auth.sendTwoFactorOtp(), () => {
-              switchTo("otp");
-              setOtpSent(true);
+            sendOtp.mutate(undefined, {
+              onSuccess: () => {
+                switchTo("otp");
+                setOtpSent(true);
+              },
             })
           }
         >

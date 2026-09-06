@@ -1,4 +1,6 @@
+import { NotFoundError } from "@loadbearing/errors";
 import { describe, expect, it } from "vitest";
+import { TestContainer } from "../../src/container/test-container.js";
 import {
   DirectUnitOfWork,
   InMemoryCacheStore,
@@ -132,6 +134,39 @@ describe("InMemoryVectorStore", () => {
     await vectors.deleteBySource(ORG, "source-a");
 
     expect(vectors.countFor(ORG)).toBe(1);
+  });
+});
+
+// Each of these pins a place a fake once answered differently from the adapter it stands
+// in for. A divergence here is a green suite over a broken deployment.
+describe("the fakes agree with their adapters", () => {
+  // `PgVectorStore` refuses anything under 0.3. Without the same floor a fake hands back
+  // the least-unrelated chunk in the corpus and the caller's empty branch never runs.
+  it("applies the same score floor the pg store applies", async () => {
+    const vectors = new InMemoryVectorStore();
+    await vectors.upsert(ORG, [chunk("a", [1, 0], null), chunk("b", [0, 1], null)]);
+
+    const hits = await vectors.search(ORG, [1, 0], [], 10);
+
+    expect(hits.map((hit) => hit.id)).toEqual(["a"]);
+  });
+
+  // `S3StorageGateway.get` throws `NotFoundError`. A bare `Error` lets a catch-by-code
+  // branch pass against the fake and fail against S3.
+  it("throws NotFoundError for an object that is not there", async () => {
+    const storage = new InMemoryStorageGateway();
+
+    await expect(storage.get("missing/key")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // `Container` wires `SERVER_CATALOG`; the default is the client one, which carries no
+  // `email` namespace — so a spec touching either mailer resolved nothing.
+  it("wires the catalog the container wires", async () => {
+    const translator = await TestContainer.build().content.translator("en", ["email"]);
+
+    expect(translator.t("email.invitation.subject", { organization: "Acme" })).not.toContain(
+      "email.invitation.subject",
+    );
   });
 });
 

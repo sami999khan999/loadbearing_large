@@ -2,10 +2,15 @@ import { CapabilitySet, PermissionRegistry } from "@loadbearing/permissions";
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PermissionMatrix } from "../../src/rbac/permission-matrix.js";
-import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import {
+  CORE_KEYS,
+  capabilitiesWith,
+  GRANTABLE,
+  renderWithFakes,
+} from "../support/render-with-fakes.js";
 
 const ALL = PermissionRegistry.instance.all();
-const FIRST = ALL[0];
+const FIRST = GRANTABLE[0];
 
 describe("PermissionMatrix", () => {
   // The same component, two capability fixtures, a different answer — which exercises the
@@ -27,7 +32,9 @@ describe("PermissionMatrix", () => {
       capabilitiesWith([]),
     );
 
-    expect(screen.getAllByText("Allowed")).toHaveLength(1);
+    // One cell for the grant, plus both subjects' `core.*` rows: every principal holds
+    // those, which is exactly what the matrix should show.
+    expect(screen.getAllByText("Allowed")).toHaveLength(1 + CORE_KEYS.length * 2);
     expect(screen.getAllByText("Denied").length).toBeGreaterThan(1);
   });
 

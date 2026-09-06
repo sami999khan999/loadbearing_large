@@ -36,9 +36,9 @@ export function ForgotPasswordForm({ auth, resetUrl }: ForgotPasswordFormProps) 
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.email")} htmlFor="email">
+      <Field label={t("auth.email")} htmlFor="forgot-email">
         <Input
-          id="email"
+          id="forgot-email"
           type="email"
           autoComplete="email"
           value={email}

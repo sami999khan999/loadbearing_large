@@ -1,6 +1,6 @@
+import { WorkerBootstrap } from "./bootstrap/index.js";
 import { Env } from "./env.js";
 import { Container, RedisConnection } from "./import.js";
-import { WorkerBootstrap } from "./worker-bootstrap.js";
 
 const config = Env.containerConfig();
 const container = new Container(config);

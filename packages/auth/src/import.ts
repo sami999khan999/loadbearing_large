@@ -12,7 +12,7 @@ export {
 } from "@loadbearing/application";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-export type { OrganizationId, UserId } from "@loadbearing/contracts";
+export { type OrganizationId, Password, type UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { ServerOnly, Uuid } from "@loadbearing/core";

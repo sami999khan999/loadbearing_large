@@ -1,6 +1,6 @@
 ---
 title: capability-set
-description: CapabilitySet — deny-by-default permission resolution, the four rules, and why intersect() is the method an RBAC model gets quietly defeated through.
+description: CapabilitySet — deny-by-default permission resolution, the five rules, and why intersect() is the method an RBAC model gets quietly defeated through.
 ---
 
 # `CapabilitySet`
@@ -23,14 +23,17 @@ export class CapabilitySet {
 
 ---
 
-## The four resolution rules
+## The five resolution rules
 
-1. **Deny by default.** Absence of a grant is a denial. There is no "allow unless denied" path.
+1. **Deny by default.** Absence of a grant is a denial. There is no "allow unless denied" path —
+   except the one named in rule 5, which is a closed module rather than a path.
 2. **Explicit deny beats every grant**, including the wildcard. This is what makes a per-user
    override usable as a suspension mechanism without unpicking role assignments.
 3. **A goal-scoped permission with no `goalId` is `false`.** Not an error, not a throw — `false`.
    Forgetting the scope fails closed.
 4. **Wildcard is checked after denies.** A superuser explicitly denied one permission is denied it.
+5. **Every `core.*` permission is held by any resolved principal**, checked in the same place the
+   wildcard is — after denies, so rule 2 is still the rule nothing is above.
 
 ```ts
 CapabilitySet.empty().can("rbac.role.read");   // false — rule 1
@@ -46,6 +49,28 @@ caps.can("rbac.role.read");                    // true
 
 A goal-level deny is checked before the org-level grant that would otherwise cover it, so a
 principal can hold a permission org-wide and be denied it in exactly one goal.
+
+### Why the `core` module is exempt
+
+```ts
+CapabilitySet.empty().can("core.activity.write");   // true — rule 5
+```
+
+`core.activity.write` describes acting at all: every principal that reaches a use-case writes an
+audit row, so the question "may this principal write one?" has no answer other than yes. Granting it
+through a role makes that a decision somebody can get wrong, and somebody did — only `owner`'s
+wildcard carried it, `IndexDocumentUseCase` asserted it and the member use-cases deliberately did
+not, so whether an audit row could be written depended on which use-case you were in.
+
+The exemption is a lookup against `PermissionMeta.module`, never a string prefix: a key named
+`core.something` in another module is not exempt, and a `core` key renamed stays exempt. It is
+checked **after** denies and beside the wildcard, so an operator can still suspend it the same way
+they suspend anything else — and `intersect()` needs no special case, because the rule lives in
+`can()` rather than in the DTO the narrowing operates on.
+
+The alternative — `PgCapabilityRepository.resolveFor` adding the keys to every row it returns —
+puts the rule in the store rather than in the resolver, where the SSR payload and the Redis cache
+would each have to carry it too.
 
 ---
 

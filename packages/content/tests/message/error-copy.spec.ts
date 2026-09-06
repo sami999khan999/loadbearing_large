@@ -7,7 +7,7 @@ import {
 } from "@loadbearing/errors";
 import { describe, expect, it } from "vitest";
 import { ERROR_COPY, ErrorCopy, FIELD_RULE_COPY } from "../../src/message/error-copy.js";
-import { StaticContentSource } from "../../src/source/static.content-source.js";
+import { StaticContentSource } from "../../src/source/static-content.source.js";
 
 const translator = (locale: "en" | "bn" = "en") => new StaticContentSource().translator(locale, []);
 
@@ -89,6 +89,16 @@ describe("ErrorCopy", () => {
     ]).toJSON();
 
     expect(ErrorCopy.fields(t, envelope)).toEqual(["reason must be at least 10 characters."]);
+  });
+
+  // The regression guard: every `error.field.*` template opens with `{field}`, so a
+  // violation naming none rendered as " is not valid." — a sentence starting on a space.
+  it("falls back rather than opening a sentence on a space", async () => {
+    const t = await translator();
+    const rendered = ErrorCopy.field(t, { field: "", rule: "invalid" });
+
+    expect(rendered).toBe("Something went wrong. Please try again.");
+    expect(rendered.startsWith(" ")).toBe(false);
   });
 
   it("falls back for a rule it has never heard of", async () => {

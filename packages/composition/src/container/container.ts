@@ -178,7 +178,7 @@ export class Container {
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
 
-    this.cache = new RedisCacheStore(this.redis.client());
+    this.cache = new RedisCacheStore(this.redis.client(), this.logger);
     this.storage = new S3StorageGateway(config.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
@@ -194,7 +194,7 @@ export class Container {
     // Opt-in and stopped by default. Building the connection only when configured is
     // what keeps the seam honest rather than aspirational.
     this.clickhouse = config.analytics.clickhouse
-      ? new ClickHouseConnection(config.analytics.clickhouse)
+      ? new ClickHouseConnection(config.analytics.clickhouse, this.logger)
       : undefined;
 
     // Otherwise a `clickhouse` driver with no block degrades to Postgres silently, out
@@ -218,12 +218,12 @@ export class Container {
 
     // Its absence changes nothing about what is written: `JsonLogger` goes to stdout
     // either way.
-    this.logReader = config.logs ? new LokiLogReader(config.logs) : undefined;
+    this.logReader = config.logs ? new LokiLogReader(config.logs, this.logger) : undefined;
 
     // The only catalog carrying the `email` namespace the worker's digests read. A
     // client bundle cannot reach it.
     this.content = new StaticContentSource(SERVER_CATALOG);
-    this.email = new SmtpEmailSender(config.email);
+    this.email = new SmtpEmailSender(config.email, this.logger);
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
@@ -235,10 +235,11 @@ export class Container {
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
     this.memberships = new PgMembershipReader(this.database, this.transactions);
-    // Held concretely too: the personal enroller calls `found` with a slug the port does
-    // not expose.
-    const founder = new PgOrganizationFounder(this.database, this.transactions, this.activity);
-    this.organizationFounder = founder;
+    this.organizationFounder = new PgOrganizationFounder(
+      this.database,
+      this.transactions,
+      this.activity,
+    );
     this.invitationClaimer = new PgInvitationClaimer(
       this.database,
       this.transactions,
@@ -261,7 +262,7 @@ export class Container {
         config.auth.bootstrapOrganizationSlug,
         this.database,
         this.transactions,
-        founder,
+        this.organizationFounder,
         this.invitationClaimer,
       );
 
@@ -275,7 +276,7 @@ export class Container {
         // `content` owes no transport.
         new ContentAuthMailer(this.content, this.email),
         this.invitationClaimer,
-        founder,
+        this.organizationFounder,
       );
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
@@ -341,7 +342,9 @@ export class Container {
     bootstrapOrganizationSlug: string | undefined,
     database: Database,
     transactions: TransactionScope,
-    founder: PgOrganizationFounder,
+    // The port, not `PgOrganizationFounder`: the personal enroller declares the same
+    // shape structurally, which is what lets this stay the one place a class is named.
+    founder: OrganizationFounder,
     claimer: InvitationClaimer,
   ): MembershipEnroller {
     const inner = ((): MembershipEnroller => {
@@ -349,7 +352,9 @@ export class Container {
         case "personal":
           return new PgPersonalOrganizationEnroller(database, transactions, founder);
         case "bootstrap":
-          return new PgBootstrapMembershipEnroller(database, transactions).withOrganizationSlug(
+          return new PgBootstrapMembershipEnroller(
+            database,
+            transactions,
             bootstrapOrganizationSlug,
           );
         case "invite":

@@ -58,11 +58,9 @@ afterAll(async () => {
   await database.close();
 });
 
-// `withOrganizationSlug` rather than a constructor argument, which is what the container
-// does today — `P3.3` turns that setter into one.
 const enrollerFor = (slug: string | undefined) => {
   const { scope } = scoped();
-  return new PgBootstrapMembershipEnroller(database, scope).withOrganizationSlug(slug);
+  return new PgBootstrapMembershipEnroller(database, scope, slug);
 };
 
 const membershipsOf = (userId: string) =>

@@ -177,5 +177,13 @@ React package.
 | Dependency ordering in `package.json` | `sherif` |
 | No version published in the last 24h | pnpm `minimumReleaseAge` |
 | Tier placement, and the port rule for node-only | Review |
+| The server-only packages stay out of a client bundle | `biome` `noRestrictedImports`, `check-architecture.mjs` §8 |
 
-The last row is the one to shrink.
+The second-to-last row is the one to shrink.
+
+**The ban list is the layering graph, written where a linter can read it.** `ui`, `feature`,
+`query`, `errors`, `content` and `asset` may not name `application`, `infrastructure`, `auth` or
+`composition`, nor `drizzle-orm`, `pg`, `ioredis`, `bullmq` or `better-auth` — every one of which
+sits to their right in [Layering](../ai/rules/layering.md). `content` and `asset` were missing from
+it for as long as the graph put them to the right of `composition`, which was itself wrong:
+`composition` imports `content` to build the two mailers.

@@ -1,6 +1,11 @@
 import { Identifiers, type InvitationId, type RoleId } from "@loadbearing/contracts";
 import { FixedClock, Token } from "@loadbearing/core";
-import { ConflictError, ForbiddenError, NotFoundError } from "@loadbearing/errors";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnavailableError,
+} from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import type { InvitationMail, InvitationMailer } from "../../src/member/invitation.mailer.js";
@@ -105,8 +110,10 @@ class RecordingInvitationRepository implements InvitationRepository {
 
 class RecordingMailer implements InvitationMailer {
   public readonly sent: InvitationMail[] = [];
+  public failing = false;
 
   public send(mail: InvitationMail): Promise<void> {
+    if (this.failing) return Promise.reject(new UnavailableError("smtp"));
     this.sent.push(mail);
     return Promise.resolve();
   }
@@ -246,5 +253,21 @@ describe("InviteMemberUseCase", () => {
     ).rejects.toThrow("commit failed");
 
     expect(h.mailer.sent).toEqual([]);
+  });
+
+  // The other side of the same ordering: past the commit there is a live invitation, so
+  // a transport failure is not a reason to answer 5xx over it. The adapter records why.
+  it("returns the invitation when the mail cannot be sent", async () => {
+    const h = harness();
+    h.mailer.failing = true;
+
+    const result = await h.useCase.execute(actorHolding("member.invite"), {
+      email: "b@example.test",
+      roleId: ROLE,
+    });
+
+    expect(result.email).toBe("b@example.test");
+    expect(h.invitations.saved).toHaveLength(1);
+    expect(h.activity.records).toHaveLength(1);
   });
 });

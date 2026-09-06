@@ -11,6 +11,7 @@ import {
   useState,
 } from "~/import.js";
 import { RedirectSearch } from "~/route/-redirect.js";
+import { completeSignIn } from "~/route/-session.js";
 
 // One local const referenced twice: `staticData` is what a prefetcher can read without
 // executing anything, and deriving one from the other reaches into `ctx.route.options`.
@@ -40,10 +41,12 @@ function SignInPage() {
 
   // The cookie exists now and nothing else knows, so invalidating both is what makes the
   // root ask again. `href`, because the destination is a validated string.
-  const complete = () => {
-    session.invalidate();
-    void router.invalidate().then(() => navigate({ href: RedirectSearch.target(search) }));
-  };
+  const complete = () =>
+    completeSignIn(
+      session,
+      () => router.invalidate(),
+      () => void navigate({ href: RedirectSearch.target(search) }),
+    );
 
   return (
     <main>

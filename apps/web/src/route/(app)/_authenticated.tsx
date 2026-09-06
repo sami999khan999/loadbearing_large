@@ -12,6 +12,7 @@ import {
   useMessages,
 } from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
+import { refreshSession } from "~/route/-session.js";
 
 // `nav` for the gated destinations below; `auth` for everything else the header says.
 const MESSAGES = ["auth", "nav"] as const satisfies readonly ClientNamespace[];
@@ -38,21 +39,18 @@ function AuthenticatedLayout() {
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
-  // Clear the cache, invalidate the session store, re-run the root loader — in that
-  // order. See packages/query/docs/reference/mutations.md.
-  const signedOut = () => {
-    queryClient.clear();
-    session.invalidate();
-    void router.invalidate().then(() => navigate({ to: "/sign-in" }));
-  };
+  const refresh = (to: "/" | "/sign-in") => () =>
+    refreshSession({
+      queryClient,
+      session,
+      invalidateRouter: () => router.invalidate(),
+      go: () => void navigate({ to }),
+    });
 
-  // The same three steps: after a switch every cached row belongs to the tenant just
-  // left, and the snapshot names the old one.
-  const switched = () => {
-    queryClient.clear();
-    session.invalidate();
-    void router.invalidate().then(() => navigate({ to: "/" }));
-  };
+  // After a switch every cached row belongs to the tenant just left, and the snapshot
+  // names the old one — the same reason a sign-out clears.
+  const signedOut = refresh("/sign-in");
+  const switched = refresh("/");
 
   return (
     <>

@@ -1,1 +1,1 @@
-export { type LokiConfig, LokiLogReader } from "./loki.log-reader.js";
+export { type LokiConfig, LokiLogReader } from "./loki-log.reader.js";

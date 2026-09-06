@@ -83,6 +83,12 @@ was sent to is the credential. Without the verification check anyone could regis
 email and walk into the tenant, which is why the check lives in `PgInvitationClaimer`'s query rather
 than in a caller that might forget it.
 
+**A failed invitation mail does not undo the invitation.** The send happens after the commit — a
+message about a row that rolled back is a link to nothing — so by the time the transport can fail
+there is a live row and an audit entry. `InviteMemberUseCase` returns the record rather than
+answering 5xx over it; `SmtpEmailSender` emits `email.send.failed` with the transport's own reason,
+and the operator action is to invite again, which replaces the row.
+
 It follows that **invitations require email verification**. Under
 `AUTH_REQUIRE_EMAIL_VERIFICATION=false` no user row is ever verified, so no claim ever matches and
 an invited person falls through to the mode's own answer. That is fail-closed, and it is deliberate:
@@ -128,6 +134,13 @@ would first show up as one tenant being unable to use a feature every other tena
 The founder opens its transaction on `this.db` rather than on the pool. Called from inside the
 enroller's locked transaction that is a savepoint, so the lock and the idempotency check above still
 cover it; called from the endpoint it is a transaction of its own.
+
+**The port carries the optional `slug`.** The personal enroller passes `u-<userId>`, and for a while
+the port's `found(userId, name)` could not express that — so `Container` held the concrete
+`PgOrganizationFounder` beside the port field purely to reach past it. A port whose only caller has
+to bypass it is one the composition root bypasses too, which is where the ban on naming a concrete
+adapter outside `composition` quietly stops meaning anything. `slug` is optional and derived from
+the new id when absent; nothing routes by it.
 
 Making that reuse possible is why the runnable seed script lives at
 `packages/infrastructure/seed.ts`, above `src/`. It used to be `src/pg/seed/index.ts` — the folder

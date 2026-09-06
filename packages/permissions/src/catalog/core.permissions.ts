@@ -1,7 +1,7 @@
 import type { PermissionMeta } from "../registry/index.js";
 
-// Platform-level, held by every principal that writes an audit row — including the
-// worker's. Deliberately not granted through a role: it is a property of acting at all.
+// Held by every resolved principal, in `CapabilitySet.can()` rather than through a role —
+// a role that granted it could be missing it. See docs/reference/capability-set.md.
 export const corePermissions = {
   "core.activity.write": {
     scope: "org",

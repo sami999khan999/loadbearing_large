@@ -46,9 +46,11 @@ missing while it exists.
 **`DateTime64(3)` is `YYYY-MM-DD HH:MM:SS.mmm`.** An ISO string's `T` and `Z` are rejected. That
 failure is at least loud — a 400 with a parse error — unlike the alternative of a silently wrong hour.
 
-Errors carry ClickHouse's response body, because the status is usually a bare 500 and the body is the
-whole message. It is truncated at 500 characters: a failed `INSERT` echoes the offending row, and an
-audit payload does not belong in a log line.
+**The response body is logged, never thrown.** The status is usually a bare 500 and the body is the
+whole message — so the body goes to `dependency.request.failed` at **warn**, truncated at 500
+characters, and the caller gets `UnavailableError("clickhouse", status)`. It cannot be carried on the
+error: `AppError.toJSON()` serialises `ErrorContext` to the client, and a failed `INSERT` echoes the
+offending row.
 
 ---
 

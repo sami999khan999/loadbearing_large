@@ -1,6 +1,6 @@
 ---
 title: The activity archive
-description: Detach, stream, record, verify, drop — the order a partition leaves Postgres in, why NDJSON, and the two defects the shipped implementation still has.
+description: Detach, stream, record, verify, drop — the order a partition leaves Postgres in, why NDJSON, and what the unwind has to put back.
 ---
 
 # `PgActivityArchiveGateway`
@@ -84,3 +84,14 @@ injection surface.
 
 The re-attach swallows its own failure on purpose: the caller needs the error that started the
 unwind, and a partition that will not go back is an operator's problem either way.
+
+## The unwind stops the stream first, and waits for it
+
+`Readable.from` starts pulling the moment it is piped, so by the time `putStream` rejects the
+keyset loop is already paging. Nothing consumes those pages: in production a full scan of the month
+that is thrown away, and in the spec a query still in flight when `afterEach` drops the partition —
+an unhandled rejection reported beside a green suite rather than as a failure.
+
+So the unwind destroys the gzip stream and its source **and awaits `close`** before re-attaching.
+`destroy()` returns before the page already in flight does, and the caller drops the partition the
+instant `archive()` throws. Waiting is what makes "no query is outstanding" true rather than likely.

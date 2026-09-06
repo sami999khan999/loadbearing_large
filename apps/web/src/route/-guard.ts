@@ -22,8 +22,18 @@ export class RouteGuard {
   }
 
   public static requireSession() {
-    return ({ context }: { context: { user: SessionUser | null } }): void => {
-      if (!context.user) throw redirect({ to: "/sign-in" });
+    return ({
+      context,
+      location,
+    }: {
+      context: { user: SessionUser | null };
+      location: { href: string };
+    }): void => {
+      // The destination travels, or a deep link lands on `/` after the sign-in it
+      // triggered. `href` is path and search, which is the shape `RedirectSearch` accepts.
+      if (!context.user) {
+        throw redirect({ to: "/sign-in", search: { redirect: location.href } });
+      }
     };
   }
 }

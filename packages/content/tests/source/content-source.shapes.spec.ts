@@ -2,7 +2,7 @@ import { ImageManifest } from "@loadbearing/asset";
 import { describe, expect, it } from "vitest";
 import { navItems } from "../../src/collection/index.js";
 import { SERVER_CATALOG } from "../../src/message/index.js";
-import { StaticContentSource } from "../../src/source/static.content-source.js";
+import { StaticContentSource } from "../../src/source/static-content.source.js";
 
 const source = new StaticContentSource();
 

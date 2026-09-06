@@ -8,7 +8,7 @@ export class SessionQueries {
 
   public static current(auth: AuthClient) {
     return queryOptions({
-      queryKey: QueryKeys.session,
+      queryKey: QueryKeys.session.all(),
       queryFn: () => auth.session(),
       staleTime: 60_000,
       // Never. A signed-out user is an answer, not a failure to retry.

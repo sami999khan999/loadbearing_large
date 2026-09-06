@@ -25,7 +25,9 @@ export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    change.mutate({ newEmail, callbackURL: callbackUrl });
+    // Cleared on success, so the button below is disabled until a different address is
+    // typed: submitting the same one again sends a second link to the same inbox.
+    change.mutate({ newEmail, callbackURL: callbackUrl }, { onSuccess: () => setNewEmail("") });
   };
 
   return (
@@ -47,7 +49,7 @@ export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) 
       }
       {change.isSuccess ? <Callout tone="info">{t("auth.changeEmailSent")}</Callout> : null}
 
-      <Button type="submit" disabled={change.isPending}>
+      <Button type="submit" disabled={change.isPending || newEmail.length === 0}>
         {t("auth.changeEmail")}
       </Button>
     </form>

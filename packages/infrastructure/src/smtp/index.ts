@@ -1,1 +1,1 @@
-export { type SmtpConfig, SmtpEmailSender } from "./smtp.email-sender.js";
+export { type SmtpConfig, SmtpEmailSender } from "./smtp-email.sender.js";

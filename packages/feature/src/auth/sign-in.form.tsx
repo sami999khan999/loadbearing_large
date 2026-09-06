@@ -49,9 +49,9 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.email")} htmlFor="email">
+      <Field label={t("auth.email")} htmlFor="sign-in-email">
         <Input
-          id="email"
+          id="sign-in-email"
           type="email"
           // What password managers key on: omitting it is a usability cost for users who
           // will not report it.
@@ -62,9 +62,9 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
         />
       </Field>
 
-      <Field label={t("auth.password")} htmlFor="password">
+      <Field label={t("auth.password")} htmlFor="sign-in-password">
         <Input
-          id="password"
+          id="sign-in-password"
           type="password"
           autoComplete="current-password"
           value={password}

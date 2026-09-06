@@ -74,7 +74,7 @@ packages/infrastructure/src/
 ├── redis/
 │   ├── index.ts
 │   ├── redis.connection.ts               → RedisConnection
-│   └── redis.cache-store.ts              → RedisCacheStore
+│   └── redis-cache.store.ts              → RedisCacheStore
 ├── s3/
 │   ├── index.ts
 │   ├── s3-storage.gateway.ts             → S3StorageGateway
@@ -82,21 +82,21 @@ packages/infrastructure/src/
 ├── bullmq/
 │   ├── index.ts
 │   ├── queue-name.ts                     → QueueName
-│   └── bullmq.queue-publisher.ts         → BullMqQueuePublisher
+│   └── bullmq-queue.publisher.ts         → BullMqQueuePublisher
 ├── openai/
 │   ├── index.ts
-│   └── openai.embedding-provider.ts      → OpenAiEmbeddingProvider
+│   └── openai-embedding.provider.ts      → OpenAiEmbeddingProvider
 ├── clickhouse/                           ← opt-in: built only when configured
 │   ├── index.ts
 │   ├── clickhouse.connection.ts          → ClickHouseConnection
-│   ├── clickhouse.analytics-reader.ts    → ClickHouseAnalyticsReader
-│   └── clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
+│   ├── clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
+│   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
 ├── loki/                                 ← opt-in: built only when LOKI_URL is set
 │   ├── index.ts
-│   └── loki.log-reader.ts                → LokiLogReader
+│   └── loki-log.reader.ts                → LokiLogReader
 ├── smtp/
 │   ├── index.ts
-│   └── smtp.email-sender.ts               → SmtpEmailSender  ← behind the EmailSender port
+│   └── smtp-email.sender.ts               → SmtpEmailSender  ← behind the EmailSender port
 └── smoke/
     └── index.ts                          ← the wiring check, run against live containers
 ```
@@ -108,7 +108,7 @@ this package depend on?" in one line. The filenames already led with the technol
 The folders used to name the *seam* — `cache/`, `storage/`, `queue/`, `embedding/`, `analytics/` — and
 that broke the first time a port got a second implementation. `pg/analytics/` beside `clickhouse/`
 reads as two different things; `pg/repository/pg-analytics.reader.ts` beside
-`clickhouse/clickhouse.analytics-reader.ts` reads as what it is. **One axis, and it is the vendor.**
+`clickhouse/clickhouse-analytics.reader.ts` reads as what it is. **One axis, and it is the vendor.**
 
 > [!NOTE]
 > **A folder here means the seam is implemented, not that the store is running.** `clickhouse/` and
@@ -244,7 +244,7 @@ The reason it is one class taking two URLs rather than two classes: **which conn
 
 ## Step 15.2 — `RedisCacheStore`
 
-**`packages/infrastructure/src/cache/redis.cache-store.ts`**
+**`packages/infrastructure/src/cache/redis-cache.store.ts`**
 
 ```ts
 import type { Redis } from "ioredis";
@@ -491,7 +491,7 @@ export class QueueName {
 
 **`ANALYTICS` is its own concern because it is allowed to fall behind.** Projecting domain events into snapshot tables is the one workload here where lag is acceptable and throughput matters more than latency — nobody is waiting on a dashboard row. Sharing a queue with notifications would let a backlog of projections delay something a user is actually waiting for. It is also the queue whose depth is the health signal for the derived store: a consumer that died on Tuesday shows up here before it shows up in a wrong quarterly number ([Data and scale](../opinions/data-and-scale.md) §2).
 
-**`packages/infrastructure/src/queue/bullmq.queue-publisher.ts`**
+**`packages/infrastructure/src/queue/bullmq-queue.publisher.ts`**
 
 ```ts
 import { Queue } from "bullmq";
@@ -609,7 +609,7 @@ Details in [reference/loki](../../packages/infrastructure/docs/reference/loki.md
 
 ```ts
 // packages/infrastructure/src/redis/index.ts
-export { RedisCacheStore } from "./redis.cache-store.js";
+export { RedisCacheStore } from "./redis-cache.store.js";
 export { type RedisConfig, RedisConnection, type RedisRole } from "./redis.connection.js";
 ```
 
@@ -621,20 +621,20 @@ export { StorageKey } from "./storage-key.js";
 
 ```ts
 // packages/infrastructure/src/bullmq/index.ts
-export { BullMqQueuePublisher } from "./bullmq.queue-publisher.js";
+export { BullMqQueuePublisher } from "./bullmq-queue.publisher.js";
 export { QueueName } from "./queue-name.js";
 ```
 
 ```ts
 // packages/infrastructure/src/clickhouse/index.ts
-export { ClickHouseAnalyticsProjector } from "./clickhouse.analytics-projector.js";
-export { ClickHouseAnalyticsReader } from "./clickhouse.analytics-reader.js";
+export { ClickHouseAnalyticsProjector } from "./clickhouse-analytics.projector.js";
+export { ClickHouseAnalyticsReader } from "./clickhouse-analytics.reader.js";
 export { type ClickHouseConfig, ClickHouseConnection } from "./clickhouse.connection.js";
 ```
 
 ```ts
 // packages/infrastructure/src/loki/index.ts
-export { type LokiConfig, LokiLogReader } from "./loki.log-reader.js";
+export { type LokiConfig, LokiLogReader } from "./loki-log.reader.js";
 ```
 
 ```ts
@@ -642,7 +642,7 @@ export { type LokiConfig, LokiLogReader } from "./loki.log-reader.js";
 export {
   type OpenAiEmbeddingConfig,
   OpenAiEmbeddingProvider,
-} from "./openai.embedding-provider.js";
+} from "./openai-embedding.provider.js";
 ```
 
 Folder barrels name their exports for the same reason root barrels do — and here it buys something concrete: a vendor adapter can keep its private helpers exported for a sibling file without those helpers becoming part of `@loadbearing/infrastructure`.
@@ -667,7 +667,7 @@ The Loki probe runs a real `query_range` and prints what came back, but delibera
 about a particular line — that would make the check depend on something having been logged recently,
 which is a flaky test rather than a wiring check.
 
-**`packages/infrastructure/src/smoke/index.ts`**
+**`packages/infrastructure/smoke.ts`**
 
 ```ts
 import "dotenv/config";
@@ -714,7 +714,7 @@ pnpm add --filter @loadbearing/infrastructure -D dotenv tsx@catalog:
 pnpm --filter @loadbearing/infrastructure run smoke
 ```
 
-It lives in `src/smoke/` rather than loose at `src/` root, for the same reason `db` has `migrate/` — [Folders](../opinions/folders.md) keeps the root to `index.ts`, `import.ts`, and folders. `tsup` only builds `src/index.ts`, so it never reaches `dist/`.
+It lives **above** `src/`, beside `drizzle.config.ts`, `migrate.ts` and `seed.ts` — a runnable script is a build-time artefact rather than library code, and one that lives in a folder makes that folder's barrel execute a script when somebody imports it. That is the failure `seed.ts` was moved out for. `tsup` only builds `src/index.ts`, so none of them reaches `dist/` either way.
 
 **Keep it.** It is cheap to re-run after any infrastructure change, and it is the only thing that exercises these classes against real containers. Assert a read-back *after* `deletePrefix` — without that line the prune above reported success while deleting nothing.
 

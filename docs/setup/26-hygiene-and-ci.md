@@ -240,8 +240,9 @@ Every other `process.env` read is an unvalidated string that becomes `undefined`
 > **This exemption list and Biome's `noProcessEnv` overrides must stay in step.** They are two
 > statements of the same rule in two tools, and a path exempted in one and not the other is either a
 > gate that passes while the rule is broken, or a build that fails for no reason. The set is:
-> `apps/*/src/env.ts`, any `*.config.*`, `db/src/migrate/`, `db/src/seed/`, `*/src/smoke/`, and
-> `auth/src/tables/` — the last being schema inspection run by hand against a throwaway URL
+> `apps/*/src/env.ts`, any `*.config.*`, and the four runnable scripts above `src/` —
+> `infrastructure/{migrate,seed,smoke}.ts` and `auth/tables.ts`, the last being schema inspection
+> run by hand against a throwaway URL
 > ([16](16-auth-package.md)), which had a Biome exemption and no matching one here.
 
 ### 4 — Every `@orpc/*` entry is on one version line

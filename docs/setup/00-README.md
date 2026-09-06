@@ -9,7 +9,7 @@
 
 ## How to use these documents
 
-Work through them **in order**. Each one ends with a **✅ Gate** — a concrete, checkable condition. The order is a real dependency chain: `core → permissions → contracts → application → db → infrastructure → auth → composition → api-client → asset → content → query → ui → feature → apps`. pnpm derives build ordering from the workspace graph, so nothing declares it.
+Work through them **in order**. Each one ends with a **✅ Gate** — a concrete, checkable condition. The order is a real dependency chain: `core → permissions → contracts → asset → content → application → infrastructure → auth → composition → api-client → query → ui → feature → apps`. pnpm derives build ordering from the workspace graph, so nothing declares it.
 
 Nothing here creates a feature. When you finish [27](27-verification-and-first-feature.md) you have a repo that boots, authenticates, stores files, caches, embeds, enforces permissions, records an audit trail inside the transaction, and is tenant-scoped from the first migration — and contains zero business logic. Feature 01 is then the first thing you write on top.
 

@@ -420,26 +420,26 @@ packages/infrastructure/
     │   ├── transaction/
     │   │   ├── transaction-scope.ts          → TransactionScope
     │   │   └── pg-unit-of-work.ts            → PgUnitOfWork
-    │   ├── migrate/index.ts                  ← the migration runner
+    │   ├── (migrate.ts is above src/)          ← the migration runner
     │   └── seed/system-role.seed.ts          ← idempotent
     ├── redis/
     │   ├── redis.connection.ts               → RedisConnection (cache + queue)
-    │   └── redis.cache-store.ts              → RedisCacheStore
+    │   └── redis-cache.store.ts              → RedisCacheStore
     ├── s3/
     │   ├── storage-key.ts                    → StorageKey
     │   └── s3-storage.gateway.ts             → S3StorageGateway
     ├── bullmq/
     │   ├── queue-name.ts                     → QueueName
-    │   └── bullmq.queue-publisher.ts         → BullMqQueuePublisher
+    │   └── bullmq-queue.publisher.ts         → BullMqQueuePublisher
     ├── openai/
-    │   └── openai.embedding-provider.ts      → OpenAiEmbeddingProvider
+    │   └── openai-embedding.provider.ts      → OpenAiEmbeddingProvider
     ├── clickhouse/                           ← opt-in: built only when configured
     │   ├── clickhouse.connection.ts          → ClickHouseConnection
-    │   ├── clickhouse.analytics-reader.ts    → ClickHouseAnalyticsReader
-    │   └── clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
+    │   ├── clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
+    │   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
     ├── loki/                                 ← opt-in: built only when LOKI_URL is set
-    │   └── loki.log-reader.ts                → LokiLogReader
-    └── smoke/index.ts                        ← the wiring check, against live containers
+    │   └── loki-log.reader.ts                → LokiLogReader
+    (smoke.ts is above src/)                   ← the wiring check, against live containers
 ```
 
 **`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not
@@ -459,7 +459,7 @@ are not:
   by drizzle-kit generating `DROP TABLE`.
 
 **Every filename leads with its technology.** That is the second naming exemption:
-`redis.cache-store.ts`, not `cache-store.redis.ts`. You should be able to see what you would delete
+`redis-cache.store.ts`, not `cache-store.redis.ts`. You should be able to see what you would delete
 when you swap a vendor — and with the folders naming the vendor too, `rm -r src/clickhouse/` is the
 complete answer.
 
@@ -474,11 +474,12 @@ swap expensive again. The same grep for `ClickHouseAnalyticsReader` must answer 
 packages/auth/src/
 ├── index.ts                                 ← ServerOnly.assert()
 ├── import.ts                                ← every external symbol
-├── auth.config.ts                           → AuthConfig
-├── auth.factory.ts                          → AuthFactory.create(...)
+├── factory/
+│   ├── auth.config.ts                       → AuthConfig
+│   └── auth.factory.ts                      → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
-│   ├── better-auth.session-resolver.ts      → BetterAuthSessionResolver
+│   ├── better-auth-session.resolver.ts      → BetterAuthSessionResolver
 │   └── membership.reader.ts                 → MembershipReader
 ├── principal/
 │   ├── index.ts
@@ -583,7 +584,7 @@ packages/content/src/
 ├── source/
 │   ├── index.ts
 │   ├── content-source.ts            → ContentSource  (abstract, all methods async)
-│   ├── static.content-source.ts     → StaticContentSource   ← split; dynamic import
+│   ├── static-content.source.ts     → StaticContentSource   ← split; dynamic import
 │   └── bundled.content-source.ts    → BundledContentSource  ← every locale, static
 ├── translator/
 │   ├── index.ts
@@ -592,7 +593,7 @@ packages/content/src/
 ├── media/                           ── shape 2: media references
 │   ├── index.ts
 │   ├── media-ref.ts                 → MediaResolver, ResolvedMedia
-│   └── static.media-resolver.ts     → StaticMediaResolver
+│   └── static-media.resolver.ts     → StaticMediaResolver
 ├── message/                         ── shape 1: short keyed strings
 │   ├── index.ts
 │   ├── namespace.ts                 ← MessageKey closed union, from type-only imports
@@ -627,7 +628,7 @@ packages/content/tests/
 ├── primitive/
 │   └── locale.spec.ts
 ├── source/
-│   └── static.content-source.spec.ts  ← the shell arrives unasked; English is the fallback
+│   └── static-content.source.spec.ts  ← the shell arrives unasked; English is the fallback
 ├── translator/
 │   ├── translator.spec.ts
 │   └── message-store.spec.ts
@@ -639,7 +640,7 @@ packages/content/tests/
 > **This tree is the finished package; the error slice of it is what exists today.** `locale.ts`,
 > `translator.ts`, `message/error-copy.ts`, `message/namespace.ts`, `message/catalog.ts`, the
 > `common` and `error` namespaces in both locales, and `content-source.ts` +
-> `static.content-source.ts` far enough to hand out a `Translator` were written early, because
+> `static-content.source.ts` far enough to hand out a `Translator` were written early, because
 > [09](09-errors-package.md) has no other half. [20](20-content-package.md) marks each file and
 > lists what the second pass adds.
 
@@ -647,7 +648,7 @@ packages/content/tests/
 
 ```
 packages/query/src/
-├── index.tsx                      ← "use client" on line 1
+├── index.ts                         ← "use client" on line 1
 ├── import.ts                      ← every external symbol
 ├── key/
 │   ├── index.ts
@@ -851,7 +852,7 @@ apps/worker/
     │   ├── embedding.consumer.ts       → EmbeddingConsumer
     │   └── <name>.consumer.ts
     ├── notification/
-    │   └── digest.composer.ts          → DigestComposer  (the only email-namespace reader)
+    │   └── notification-digest.composer.ts          → DigestComposer  (the only email-namespace reader)
     └── schedule/
         └── cleanup.schedule.ts         → CleanupSchedule  (fixed jobId)
 ```

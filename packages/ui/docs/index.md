@@ -19,7 +19,7 @@ different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/ui` (private, never published) |
-| **Entrypoint** | `src/index.tsx` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
+| **Entrypoint** | `src/index.ts` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
 | **Depends on** | `@loadbearing/asset` — **the only runtime workspace dependency** |
 | **Type-only** | `@loadbearing/permissions`, a `devDependency` because both imports are erased |
 | **Peers** | `react`, `react-dom` |
@@ -36,7 +36,7 @@ packages/ui/
 ├── ui.d.ts                    ← declare module "*.svg"; named in tsconfig `include`
 ├── vitest.setup.ts            ← afterEach(cleanup)
 └── src/
-    ├── index.tsx              ← "use client" on line 1
+    ├── index.ts               ← "use client" on line 1
     ├── import.ts              ← two workspace entries, both type-only but one
     ├── theme/
     │   ├── theme.css          ← entry: @imports token/ and color/
@@ -141,7 +141,7 @@ runs whether or not the button was ever rendered.
 > renaming the prop would hide the pass-through behind a word nobody can grep for. Doc 22's
 > domain-noun gate excludes `src/can/can.tsx` for exactly this, and nothing else.
 
-## Four rules for every component here
+## Five rules for every component here
 
 1. **Props in, markup out.** No fetching, no context beyond theme, no global state.
 2. **Every string is a prop.** No literals anywhere — copy lives in
@@ -152,6 +152,11 @@ runs whether or not the button was ever rendered.
    to a mouse and not to a keyboard is the most common accessibility bug in a data table.
 4. **Headless primitives for anything with hard interaction semantics.** Which is why there is no
    `Dialog` — see below.
+5. **A control is associated with the words written about it.** `Field` computes a `-hint` and an
+   `-error` id, puts them on the paragraphs **and clones its child** with `aria-describedby` and
+   `aria-invalid`. Computing the ids and pointing nothing at them is markup that reads as accessible
+   in a diff and announces nothing — every form in `feature` inherited exactly that. The child's own
+   `aria-describedby` is joined rather than replaced, because the attribute is a list.
 
 ## Three things this package does not have
 
@@ -163,7 +168,7 @@ wrapper here when that is made. A dialog that traps focus incorrectly is worse t
 exist, because the first ships.
 
 **No Storybook, and no `*.stories.tsx`.** Doc 22 offers Storybook or a `/kitchen-sink` route in
-`apps/web` and says to pick one deliberately. Neither is picked. What ships instead is 33 component
+`apps/web` and says to pick one deliberately. Neither is picked. What ships instead is the component
 tests under `tests/`, on `jsdom` and `@testing-library/react` — which assert *behaviour* where a story
 shows *appearance*. You want both; this is the half that automates.
 
@@ -175,7 +180,7 @@ a design pass builds on, and shipping a default look here would be a third decis
 ## Testing
 
 ```bash
-pnpm --filter @loadbearing/ui test     # 33 tests
+pnpm --filter @loadbearing/ui test
 ```
 
 This is the first package in the repository that needs a DOM. `vitest.config.ts` sets

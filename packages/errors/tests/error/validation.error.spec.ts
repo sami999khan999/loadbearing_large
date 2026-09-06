@@ -20,6 +20,22 @@ describe("ValidationError", () => {
     ]);
   });
 
+  // The regression guard: the first bound found returned early, so a `min().max()`
+  // issue lost `max` and `error.field.tooLong` rendered the placeholder.
+  it("keeps both bounds when an issue carries both", () => {
+    const error = ValidationError.fromIssues([
+      { path: ["password"], code: "too_big", minimum: 8, maximum: 64 },
+    ]);
+
+    expect(error.fields?.[0]?.params).toEqual({ min: 8, max: 64 });
+  });
+
+  it("carries a maximum on its own", () => {
+    const error = ValidationError.fromIssues([{ path: ["name"], code: "too_big", maximum: 120 }]);
+
+    expect(error.fields?.[0]).toEqual({ field: "name", rule: "tooLong", params: { max: 120 } });
+  });
+
   it("joins a nested path into a field name", () => {
     const error = ValidationError.fromIssues([
       { path: ["assignee", "email"], code: "invalid_format" },

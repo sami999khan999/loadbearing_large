@@ -37,7 +37,7 @@ packages/asset/
     │   ├── image.manifest.ts       → ImageManifest, ImageKey, ImageAsset
     │   └── file/brand/logo.svg
     └── font/
-        └── font.css                ← self-hosted, font-display: swap
+        └── font.css                ← the @font-face to add; no binary ships
 ```
 
 ## Three entrypoints, and why this package is the exception
@@ -108,18 +108,23 @@ are eventually asked about measures.
 **Self-hosted, never Google Fonts.** A third-party font CDN is a privacy exposure, a GDPR question, a
 third-party outage in your critical path, and no faster than your own CDN under HTTP/2.
 
-`font.css` is imported exactly once, by `packages/ui/src/token/token.css`
+`font.css` is imported exactly once, by `packages/ui/src/theme/token/typography.css`
 ([22](../../../docs/setup/22-ui-package.md)).
 
 > [!IMPORTANT]
-> **The two `.woff2` files are not in the repository yet.** `font.css` declares `Inter` and
-> `JetBrains Mono`; neither binary ships. The build reports it on every run —
-> `fonts: 2 declared, 0 present` — and text falls back to the next family in the stack until they are
-> dropped into `src/font/`.
+> **No binary ships, and so no `@font-face` is declared.** `font.css` carries the block to add,
+> commented, and nothing else; the build reports `fonts: 0 declared, 0 present`. The stacks in
+> `typography.css` still name `Inter` and `JetBrains Mono` first, so dropping
+> `inter-variable.woff2` into `src/font/` and uncommenting one block is the whole of adding a face —
+> and the same stack already resolves to the family when the reader's system has it.
 >
-> This reports rather than fails, unlike the icon checks, and the difference is the failure mode. A
-> missing font is visibly degraded to anyone who looks at the page. A hardcoded icon colour is
-> invisible *only in dark mode*, which is how it survives for weeks.
+> It declared both faces against files that were never committed, which is not neutral: the browser
+> requests each one, takes a 404, and falls back — a request per face per cold load, buying nothing.
+>
+> The check reports rather than fails, unlike the icon checks, and the difference is the failure
+> mode. A missing font is visibly degraded to anyone who looks at the page. A hardcoded icon colour
+> is invisible *only in dark mode*, which is how it survives for weeks. It strips CSS comments
+> before it looks, so the example block above is not read as a declaration.
 
 ## What changes when assets move to a CDN
 

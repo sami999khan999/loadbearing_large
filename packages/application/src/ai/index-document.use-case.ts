@@ -33,7 +33,6 @@ export class IndexDocumentUseCase {
 
   public async execute(actor: Principal, input: IndexDocumentInput): Promise<IndexDocumentResult> {
     this.authorizer.assert(actor, "ai.embedding.write");
-    this.authorizer.assert(actor, "core.activity.write");
 
     const texts = IndexDocumentUseCase.split(input.text);
     if (texts.length === 0) {

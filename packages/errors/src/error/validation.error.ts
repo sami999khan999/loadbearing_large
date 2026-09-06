@@ -44,9 +44,13 @@ export class ValidationError extends AppError {
     }
   }
 
+  // Both bounds, not the first one found: a `min(8).max(64)` issue carries `minimum` and
+  // `maximum`, and `error.field.tooLong` renders `{max}` literally when it is missing.
   private static paramsFor(issue: SchemaIssue): Record<string, number> | undefined {
-    if (issue.minimum !== undefined) return { min: Number(issue.minimum) };
-    if (issue.maximum !== undefined) return { max: Number(issue.maximum) };
-    return undefined;
+    const params: Record<string, number> = {};
+    if (issue.minimum !== undefined) params.min = Number(issue.minimum);
+    if (issue.maximum !== undefined) params.max = Number(issue.maximum);
+
+    return Object.keys(params).length > 0 ? params : undefined;
   }
 }

@@ -29,7 +29,10 @@ again the first time someone introduces one because "it is just a cache."
 **Non-negotiable in any new schema:** `organization_id` on every domain table as a branded
 `OrganizationId` · an index on **every** foreign key and filtered column, since Postgres does not
 auto-index FKs · append-only tables **partitioned in the first migration**, because converting later
-is a rewrite with downtime · query-count assertions in integration tests for anything that loops.
+is a rewrite with downtime · query-count assertions in integration tests for anything that loops ·
+**every tenant foreign key `ON DELETE CASCADE`**, because that column is the only handle a tenant
+delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected
+by its own check. The audit trail is the one table that names no actor by foreign key.
 
 **Do not build in advance:** starting ClickHouse, a dedicated vector DB, sharding, a broker. *"The
 seam is implemented"* and *"the store is running"* are two decisions, and only the second costs

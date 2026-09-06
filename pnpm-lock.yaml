@@ -445,9 +445,6 @@ importers:
       '@loadbearing/application':
         specifier: workspace:*
         version: link:../../packages/application
-      '@loadbearing/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
       '@loadbearing/composition':
         specifier: workspace:*
         version: link:../../packages/composition
@@ -729,6 +726,9 @@ importers:
       '@loadbearing/core':
         specifier: workspace:*
         version: link:../core
+      '@loadbearing/errors':
+        specifier: workspace:*
+        version: link:../errors
       '@loadbearing/infrastructure':
         specifier: workspace:*
         version: link:../infrastructure
@@ -947,6 +947,9 @@ importers:
       '@loadbearing/errors':
         specifier: workspace:*
         version: link:../errors
+      '@loadbearing/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@loadbearing/permissions':
         specifier: workspace:*
         version: link:../permissions

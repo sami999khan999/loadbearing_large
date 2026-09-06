@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf dist",
-    "auth:tables": "tsx src/tables/index.ts"
+    "auth:tables": "tsx tables.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",

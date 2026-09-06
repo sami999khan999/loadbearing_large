@@ -48,11 +48,16 @@ export class BetterAuthErrorNormalizer {
     switch (error?.status) {
       case 429:
         return new RateLimitedError("auth");
+      // No violation entry, because there is no field to name: one with an empty `field`
+      // rendered as " is not valid.", a sentence opening on a space.
       case 400:
-        return new ValidationError([{ field: "", rule: "invalid" }]);
+        return new ValidationError([]);
       case 401:
-      case 403:
         return new UnauthorizedError("rejected");
+      // Not `UNAUTHORIZED`: a 403 is a signed-in user who may not, and `error.unauthorized`
+      // says "please sign in" — advice that cannot help and reads as a broken session.
+      case 403:
+        return new ForbiddenError("rejected");
       default:
         return new InternalError();
     }

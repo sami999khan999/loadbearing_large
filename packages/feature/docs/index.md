@@ -19,14 +19,14 @@ shell mount these components under a different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/feature` (private, never published) |
-| **Entrypoint** | `src/index.tsx` — opens with `"use client"` |
+| **Entrypoint** | `src/index.ts` — opens with `"use client"` |
 | **Depends on** | `content`, `contracts`, `errors`, `permissions`, `query`, `ui` |
 | **Type-only** | `api-client` — a `devDependency`, because `AuthClient` arrives as a prop |
 | **Peers** | `react`, `react-dom` |
 
 ```
 packages/feature/src/
-├── index.tsx                          ← "use client" on line 1
+├── index.ts                           ← "use client" on line 1
 ├── import.ts                          ← the two bans, made visible
 ├── i18n/message.context.tsx           → MessageProvider, useMessages
 ├── auth/
@@ -117,6 +117,47 @@ the moment someone reworded the copy, and would already be broken in every local
 addresses are registered without needing a password. A small copy decision with a real security
 consequence.
 
+## Three forms set a password, and they ask the same two questions once
+
+`PasswordPair` renders the new-password and confirm fields together with both rules on them: the
+floor, and equality. It takes an `idPrefix` rather than fixed ids, so two on one page stay distinct,
+and `passwordPairReady(password, confirmation)` is the submit guard beside it — sign-up, reset and
+change each derived that boolean their own way.
+
+**The floor is `Password.MIN_LENGTH` from `contracts`, and `AuthFactory` reads the same constant.**
+It was the literal `12` in four places. A form advertising a shorter floor than the server's turns a
+rejection into an unexplained failure; a longer one refuses a password the server would have taken.
+One authority, and both sides import it.
+
+`DateFormat.day` in [`ui`](../../ui/docs/index.md) is the same move at a smaller scale: two lists
+declared the same `toISOString().slice(0, 10)` helper, and the reason it is ISO rather than
+locale-formatted — the server renders it and the browser hydrates it — is worth stating once.
+
+## Every list renders four states, in one order
+
+Pending → error → empty → the list, and the order is the whole point: `data` is `undefined` until
+the first answer, so any component that reads `data ?? []` and asks "is it empty?" first tells every
+reader their account has no linked providers and their organization no members, for as long as the
+request takes. A failed request answers the same way, which is worse — "there are no members" is the
+one thing a members page must not say when it does not know.
+
+```tsx
+if (query.isPending) return <EmptyState title={shell.t("state.loading")} />;
+if (query.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+if (rows.length === 0) return <EmptyState title={t("member.empty")} />;
+```
+
+`shell` is `useMessages("common")` beside the screen's own namespace — the states are shared copy,
+and the namespace is what keeps a typo a compile error. `MemberList` renders `DataTable.Skeleton`
+rather than a loading sentence, because it knows its own shape.
+
+**`ActiveSessionList` has a fifth state and it is per row.** `ActiveSession.current` says which
+session the tab is holding — the endpoint flags none, and the cookie carrying the token is httpOnly,
+so `AccountClient.listSessions` is the only place the comparison can happen. The current row gets
+the badge and **no** Revoke: signing yourself out of the page you are reading is what "Sign out on
+all devices" is for. Before that flag existed, the badge was rendered once after the list, attached
+to no device at all.
+
 ## The two RBAC components need no query at all
 
 That is the interesting part, and the one deliberate departure from the fetch-here pattern. The
@@ -136,7 +177,7 @@ namespace — and carry `data-allowed` for a design pass to hang an icon on. Bio
 ## Testing
 
 ```bash
-pnpm --filter @loadbearing/feature test     # 12 tests
+pnpm --filter @loadbearing/feature test
 ```
 
 **The test doc 23 names as the one worth writing first** is in `tests/rbac/`: render the same

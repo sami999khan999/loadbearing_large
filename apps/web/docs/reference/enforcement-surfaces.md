@@ -66,6 +66,16 @@ implementation of `can()` is a second answer.
 The leading hyphen in `-guard.ts` keeps the file out of the route tree. Framework naming wins inside
 `src/route/`.
 
+**`requireSession()` carries the destination it interrupted.** `redirect({ to: "/sign-in" })` alone
+lands every deep link on `/` after the sign-in it triggered — although `/sign-in` already declares
+`validateSearch: RedirectSearch.schema` and reads `redirect` back on success. The guard passes
+`location.href`, which is path and search: exactly the shape that schema accepts.
+
+**`RedirectSearch` rejects a backslash anywhere, not only a leading double slash.** A browser
+resolves `/\evil.test` with `evil.test` as the host, the same way it resolves `//evil.test` — a
+backslash is a path separator, so a rule that only refuses `//` is half a rule. The shape is one
+leading slash, no second separator of either kind, and no backslash later in the string.
+
 ## 4. `<Can>`
 
 Hiding a button is a courtesy. The check is `Authorizer.assert()` in the use-case, and it runs whether

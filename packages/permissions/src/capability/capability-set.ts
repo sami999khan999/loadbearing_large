@@ -2,6 +2,10 @@
 // which imports this folder back.
 import { type PermissionKey, PermissionRegistry } from "../registry/permission-registry.js";
 
+// Held by every resolved principal rather than granted through a role. Named once here
+// so the rule is a lookup against `PermissionMeta.module`, never a string prefix.
+const CORE_MODULE = "core";
+
 export interface ScopedSetDto {
   readonly grants: readonly PermissionKey[];
   readonly denies: readonly PermissionKey[];
@@ -22,12 +26,12 @@ class ScopedSet {
     this.denies = new Set(dto.denies);
   }
 
-  public grantsPermission(p: PermissionKey): boolean {
-    return this.grants.has(p);
+  public grantsPermission(permission: PermissionKey): boolean {
+    return this.grants.has(permission);
   }
 
-  public deniesPermission(p: PermissionKey): boolean {
-    return this.denies.has(p);
+  public deniesPermission(permission: PermissionKey): boolean {
+    return this.denies.has(permission);
   }
 }
 
@@ -53,8 +57,11 @@ export class CapabilitySet {
     return new CapabilitySet({ wildcard: false, org: { grants: [], denies: [] }, goals: {} });
   }
 
-  private static union(a: readonly PermissionKey[], b: readonly PermissionKey[]): PermissionKey[] {
-    return [...new Set([...a, ...b])];
+  private static union(
+    left: readonly PermissionKey[],
+    right: readonly PermissionKey[],
+  ): PermissionKey[] {
+    return [...new Set([...left, ...right])];
   }
 
   private static known(keys: readonly PermissionKey[]): PermissionKey[] {
@@ -90,7 +97,7 @@ export class CapabilitySet {
       const goal = this.goalSets.get(goalId);
       if (goal?.deniesPermission(permission)) return false;
       if (this.orgSet.deniesPermission(permission)) return false;
-      if (this.dto.wildcard) return true;
+      if (this.dto.wildcard || CapabilitySet.isCore(permission)) return true;
       return (
         (goal?.grantsPermission(permission) ?? false) || this.orgSet.grantsPermission(permission)
       );
@@ -100,11 +107,11 @@ export class CapabilitySet {
   }
 
   public canAll(permissions: readonly PermissionKey[], goalId?: string): boolean {
-    return permissions.every((p) => this.can(p, goalId));
+    return permissions.every((permission) => this.can(permission, goalId));
   }
 
   public canAny(permissions: readonly PermissionKey[], goalId?: string): boolean {
-    return permissions.some((p) => this.can(p, goalId));
+    return permissions.some((permission) => this.can(permission, goalId));
   }
 
   // The candidate set is required because this object cannot produce it: a wildcard or
@@ -122,7 +129,9 @@ export class CapabilitySet {
     return CapabilitySet.from({
       wildcard: this.dto.wildcard && other.dto.wildcard,
       org: {
-        grants: orgCandidates.filter((p) => this.allowsAtOrg(p) && other.allowsAtOrg(p)),
+        grants: orgCandidates.filter(
+          (permission) => this.allowsAtOrg(permission) && other.allowsAtOrg(permission),
+        ),
         denies: CapabilitySet.union(this.dto.org.denies, other.dto.org.denies),
       },
       goals: Object.fromEntries(
@@ -134,7 +143,7 @@ export class CapabilitySet {
             goalId,
             {
               grants: CapabilitySet.union(mine?.grants ?? [], theirs?.grants ?? []).filter(
-                (p) => this.can(p, goalId) && other.can(p, goalId),
+                (permission) => this.can(permission, goalId) && other.can(permission, goalId),
               ),
               denies: CapabilitySet.union(mine?.denies ?? [], theirs?.denies ?? []),
             },
@@ -151,7 +160,13 @@ export class CapabilitySet {
   // `can()` for an org-scoped permission — and the org half of a goal-scoped one.
   private allowsAtOrg(permission: PermissionKey): boolean {
     if (this.orgSet.deniesPermission(permission)) return false;
-    if (this.dto.wildcard) return true;
+    if (this.dto.wildcard || CapabilitySet.isCore(permission)) return true;
     return this.orgSet.grantsPermission(permission);
+  }
+
+  // The one exception to deny-by-default, and it is checked after denies like the
+  // wildcard is — see docs/reference/capability-set.md.
+  private static isCore(permission: PermissionKey): boolean {
+    return PermissionRegistry.instance.meta(permission)?.module === CORE_MODULE;
   }
 }

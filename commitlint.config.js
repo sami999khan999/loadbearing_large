@@ -10,6 +10,7 @@ export default {
         "errors",
         "core",
         "permissions",
+        "observability",
         "contracts",
         "application",
         "infrastructure",

@@ -31,30 +31,42 @@ for.
 | **Environment** | server-only; `ServerOnly.assert()` is the runtime tripwire |
 
 ```
-packages/infrastructure/src/
-├── index.ts
-├── import.ts                          ← every external symbol, vendor SDKs included
-├── pg/                                Postgres — the biggest tenant
-│   ├── primitive/   database.ts        → Database, DrizzleClient
-│   │                base.repository.ts → BaseRepository
-│   ├── schema/      *.schema.ts       ← drizzle tables + the barrel drizzle-kit reads
-│   ├── repository/  pg-*.ts           → every adapter, one file each, flat
-│   ├── transaction/ pg-unit-of-work.ts → PgUnitOfWork, TransactionScope
-│   ├── migrate/     index.ts          ← the migration runner
-│   └── seed/        index.ts          ← system roles, idempotent
-├── clickhouse/ clickhouse.connection.ts          → ClickHouseConnection
-│              clickhouse.analytics-reader.ts     → ClickHouseAnalyticsReader
-│              clickhouse.analytics-projector.ts  → ClickHouseAnalyticsProjector
-├── loki/      loki.log-reader.ts       → LokiLogReader
-├── redis/     redis.connection.ts      → RedisConnection, RedisConfig
-│              redis.cache-store.ts     → RedisCacheStore
-├── s3/        s3-storage.gateway.ts    → S3StorageGateway, S3Config
-│              storage-key.ts           → StorageKey
-├── bullmq/    bullmq.queue-publisher.ts → BullMqQueuePublisher
-│              queue-name.ts            → QueueName
-├── openai/    openai.embedding-provider.ts → OpenAiEmbeddingProvider
-└── smoke/     index.ts                 ← the wiring check, run against live containers
+packages/infrastructure/
+├── drizzle.config.ts                      ← build-time artefacts, above src/
+├── migrate.ts                             ← the migration runner
+├── seed.ts                                ← system roles, idempotent
+├── smoke.ts                               ← the wiring check, run against live containers
+└── src/
+    ├── index.ts
+    ├── import.ts                          ← every external symbol, vendor SDKs included
+    ├── pg/                                Postgres — the biggest tenant
+    │   ├── primitive/   database.ts        → Database, DrizzleClient
+    │   │                base.repository.ts → BaseRepository
+    │   ├── schema/      *.schema.ts       ← drizzle tables + the barrel drizzle-kit reads
+    │   ├── repository/  pg-*.ts           → every adapter, one file each, flat
+    │   ├── transaction/ pg-unit-of-work.ts → PgUnitOfWork, TransactionScope
+    │   └── seed/        system-role.seed.ts → SystemRoleSeed
+    ├── clickhouse/ clickhouse.connection.ts          → ClickHouseConnection
+    │               clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
+    │               clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
+    ├── loki/      loki-log.reader.ts       → LokiLogReader
+    ├── redis/     redis.connection.ts      → RedisConnection, RedisConfig
+    │              redis-cache.store.ts     → RedisCacheStore
+    ├── s3/        s3-storage.gateway.ts    → S3StorageGateway, S3Config
+    │              storage-key.ts           → StorageKey
+    ├── bullmq/    bullmq-queue.publisher.ts → BullMqQueuePublisher
+    │              queue-name.ts            → QueueName
+    ├── smtp/      smtp-email.sender.ts     → SmtpEmailSender
+    └── openai/    openai-embedding.provider.ts → OpenAiEmbeddingProvider
 ```
+
+**The four runnable scripts sit above `src/`.** A script inside a folder makes that folder's barrel
+execute it on import — the failure that moved `seed.ts` out when `PgPersonalOrganizationEnroller`
+needed `SystemRoleSeed`. `src/pg/seed/` keeps the class; `seed.ts` is the thing you run.
+
+**The four runnable scripts sit above `src/`.** A script inside a folder makes that folder's barrel
+execute it on import — the failure that moved `seed.ts` out when `PgPersonalOrganizationEnroller`
+needed `SystemRoleSeed`. `src/pg/seed/` keeps the class; `seed.ts` is the thing you run.
 
 **One folder per external system**, so `ls src/` answers "what does this package depend on?" in one
 line. The filenames already led with the technology ([Files](../../../docs/opinions/files.md) — *"you
@@ -68,7 +80,7 @@ files. They were flattened for two reasons.
 The first is [Simplicity](../../../docs/opinions/simplicity.md): a folder holding one file is a path,
 not a subject. The second is what happens when a port gets a second implementation. `pg/analytics/`
 beside `clickhouse/` reads as two different things; `pg/repository/pg-analytics.reader.ts` beside
-`clickhouse/clickhouse.analytics-reader.ts` reads as what it is — two implementations of one port,
+`clickhouse/clickhouse-analytics.reader.ts` reads as what it is — two implementations of one port,
 one per store, each named after the store it speaks to. **The technology is the axis this package
 sorts on, and naming the subject twice broke that.**
 
@@ -190,9 +202,11 @@ a user keeps permissions after their role changed.
 
 ## Other decisions worth knowing
 
-**A corrupt cache entry is a miss, not a throw.** Deserialisation failures happen after a deploy that
-changed a DTO shape. Throwing turns a stale cache into an outage; evicting and falling through turns
-it into a latency bump.
+**A corrupt cache entry is a miss, not a throw — and a logged one.** Deserialisation failures happen
+after a deploy that changed a DTO shape. Throwing turns a stale cache into an outage; evicting and
+falling through turns it into a latency bump. Silently is the part that was wrong: a deploy that
+halves the hit rate looks exactly like one that does not, so the eviction emits
+`cache.entry.corrupt` with the key.
 
 **`SCAN` + `UNLINK`, never `KEYS` + `DEL`.** `KEYS` is O(n) over the whole keyspace and blocks the
 server while it runs; `UNLINK` frees memory off the main thread.
@@ -246,7 +260,7 @@ variable came back undefined — which looks exactly like an unconfigured stack.
 - [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
   the `ORDER BY` that stops the index being used.
 - [The activity archive](reference/activity-archive.md) — detach, stream, record, verify, drop, and
-  the two defects the shipped implementation still has.
+  what the unwind has to put back.
 - [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
   adopted in.
 - [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to

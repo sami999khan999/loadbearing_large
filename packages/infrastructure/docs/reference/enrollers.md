@@ -101,6 +101,17 @@ administer.
 The audit row is written as the tenant that was just created, not the caller's current one, with an
 empty capability set: the logger reads only the organization and the actor off the principal.
 
+The file also restates `OrganizationFounder` as an interface, for the same reason
+`PgInvitationClaimer` restates `InvitationPreview`: the port lives in `auth`, which is downstream of
+this package. `PgPersonalOrganizationEnroller` takes that shape rather than the concrete class, so
+`Container` can pass its port field and stay the one place a class is named.
+
+## `PgBootstrapMembershipEnroller` takes its slug in the constructor
+
+It used to take it from `withOrganizationSlug`, a setter returning `this`. An enroller between
+construction and that call is one that enrols nobody and says nothing about it — and a fluent setter
+on a class the container builds once buys nothing that an argument does not.
+
 ## `PgInvitationClaimer`: the verified address is the credential
 
 Deliberately **not** tenant-scoped. The caller arrives holding a token or a user id and no
@@ -119,6 +130,12 @@ that is the documented behaviour rather than an oversight.
 Expiry is compared against database time, the same clock the row was written by. The insert is
 idempotent under `memberships_uq (organization_id, user_id)`: someone who is already a member keeps
 the role they have, and the invitation is consumed either way.
+
+**The address predicate compares the column, never `lower()` over it.** `InviteMemberUseCase`
+lowercases once, on the way in, which is what makes `invitations_email_uq (organization_id, email)`
+see one address as one row. Wrapping the column in the query undoes that at read time: the predicate
+is then an expression, `invitations_email_idx` cannot serve it, and `claimPending` seq-scans every
+pending invitation in the deployment on every sign-up.
 
 `InvitationPreview` is restated here rather than imported for the same dependency-direction reason as
 the ports themselves.

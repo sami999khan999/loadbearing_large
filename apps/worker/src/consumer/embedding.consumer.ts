@@ -1,5 +1,5 @@
+import { SystemPrincipal } from "../bootstrap/index.js";
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
-import { SystemPrincipal } from "../system-principal.js";
 
 interface EmbeddingJobData {
   readonly organizationId: string;

@@ -217,7 +217,7 @@ line-by-line during the audit.
 
 ### Server
 
-- [ ] `P2.1` **(verified) `PgUnitOfWork` opens a second transaction on nested `run()`** `P0` `~1h`
+- [x] `P2.1` done: 2026-09-05 · **(verified) `PgUnitOfWork` opens a second transaction on nested `run()`** `P0` `~1h`
   - **Goal:** `run()` always calls `this.database.client.transaction` (the pool), never the
     scope's current handle, so a `run()` inside a `run()` is a second connection: the inner unit
     commits when the outer rolls back, and the two can deadlock on rows the outer locked.
@@ -228,7 +228,7 @@ line-by-line during the audit.
   - **Docs:** `packages/infrastructure/docs/reference/unit-of-work.md` — the section
     "Nesting joins, it does not nest" asserts the behaviour the code does not have; also fix
     the spec path it names.
-- [ ] `P2.2` **(verified) `permission_overrides_uq` cannot enforce uniqueness** `P0` `~2h`
+- [x] `P2.2` done: 2026-09-05 · **(verified) `permission_overrides_uq` cannot enforce uniqueness** `P0` `~2h`
   - **Goal:** `UNIQUE (user_id, goal_id, permission)` with a nullable `goal_id` accepts
     unlimited duplicate org-scope rows, so a `grant` and a `deny` for one `(user, permission)`
     coexist and `PgCapabilityRepository.resolveFor` decides authorization by row order. The
@@ -242,7 +242,7 @@ line-by-line during the audit.
   - **Docs:** `docs/opinions/vocabulary.md` and `docs/ai/rules/vocabulary.md` (exemption list:
     `organizations_slug_uq`, `api_keys_hash_uq`, `invitations_token_uq`, and the auth tables);
     `invitation.schema.ts` comment "second unique index" is wrong — delete it.
-- [ ] `P2.3` **(verified) `PgVectorStore.search` cannot use the HNSW index** `P1` `~1h`
+- [x] `P2.3` done: 2026-09-05 · **(verified) `PgVectorStore.search` cannot use the HNSW index** `P1` `~1h`
   - **Goal:** the query orders by `desc(1 - cosineDistance(...))`; pgvector serves the index
     only for `ORDER BY embedding <=> $1 ASC`. Every search is a tenant-wide sequential scan.
   - **Done when:** ordering is `asc(cosineDistance(...))` and the floor is
@@ -250,14 +250,14 @@ line-by-line during the audit.
     scan.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-vector.store.ts`.
   - **Docs:** new `infrastructure/docs/reference/pgvector.md` (from `P1.8`).
-- [ ] `P2.4` **(verified) bootstrap enroller returns another tenant's organization** `P1` `~30m`
+- [x] `P2.4` done: 2026-09-05 · **(verified) bootstrap enroller returns another tenant's organization** `P1` `~30m`
   - **Goal:** the idempotency check is `where(eq(memberships.userId, userId))` with no
     organization filter; a user already in any organization is handed that one back.
   - **Done when:** the check is scoped by `organizationId`; spec added to
     `tests/rbac/pg-bootstrap-membership.enroller.spec.ts`.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-bootstrap-membership.enroller.ts`.
   - **Docs:** `packages/auth/docs/reference/enrolment.md`.
-- [ ] `P2.5` **short embedding response wipes the corpus** `P1` `~1h`
+- [x] `P2.5` done: 2026-09-05 · **short embedding response wipes the corpus** `P1` `~1h`
   - **Goal:** `embedding: vectors[index] ?? []` — a provider returning fewer vectors than texts
     inserts empty vectors; `vector(1536)` rejects them after `deleteBySource` has run, so a
     re-index deletes and writes nothing back.
@@ -266,7 +266,7 @@ line-by-line during the audit.
     (the use-case has none today — see `P6.2`).
   - **Files:** `packages/infrastructure/src/openai/openai.embedding-provider.ts`,
     `packages/application/src/ai/index-document.use-case.ts`.
-- [ ] `P2.6` **activity archive counts before detach and never re-attaches** `P1` `~2h`
+- [x] `P2.6` done: 2026-09-05 · **activity archive counts before detach and never re-attaches** `P1` `~2h`
   - **Goal:** `countOf(name)` runs before `DETACH PARTITION`, so rows inserted in between are
     streamed to S3 but missing from `activity_archive.row_count` (permanent drift). A failed
     `putStream` or insert leaves the partition detached and invisible.
@@ -275,7 +275,7 @@ line-by-line during the audit.
     exists (none today) and covers both.
   - **Files:** `packages/infrastructure/src/pg/repository/pg-activity-archive.gateway.ts`.
   - **Docs:** new `infrastructure/docs/reference/activity-archive.md`.
-- [ ] `P2.7` **vendor error bodies reach the wire** `P2` `~30m`
+- [x] `P2.7` done: 2026-09-05 · **vendor error bodies reach the wire** `P2` `~30m`
   - **Goal:** `new UnavailableError(\`ClickHouse request failed (...): ${detail}\`)` puts the
     response body (which echoes the offending row on a failed INSERT) into `ErrorContext`,
     which `AppError.toJSON()` serialises to the client. The `status` parameter is discarded.
@@ -283,7 +283,7 @@ line-by-line during the audit.
     `("loki", status)`, body logged at `warn`.
   - **Files:** `packages/infrastructure/src/clickhouse/clickhouse.connection.ts:106`,
     `packages/infrastructure/src/loki/loki.log-reader.ts:59`.
-- [ ] `P2.8` **invitation tokens stored in plaintext** `P1` `~2h`
+- [x] `P2.8` done: 2026-09-05 · **invitation tokens stored in plaintext** `P1` `~2h`
   - **Goal:** `invitations.token` is the raw bearer locator; `api_keys.token_hash` two files
     over stores a digest so a dump holds no credential.
   - **Done when:** column becomes `token_hash`, `Token.random()` output is hashed with the
@@ -294,16 +294,16 @@ line-by-line during the audit.
     `pg-invitation.claimer.ts`, `pg-invitation.repository.ts`,
     `packages/application/src/member/invite-member.use-case.ts`.
   - **Docs:** `packages/auth/docs/reference/enrolment.md`.
-- [ ] `P2.9` **`ValidationError.paramsFor` drops `max`** `P3` `~15m`
+- [x] `P2.9` done: 2026-09-05 · **`ValidationError.paramsFor` drops `max`** `P3` `~15m`
   - **Files:** `packages/errors/src/error/validation.error.ts:47-51`; spec in
     `tests/error/validation.error.spec.ts`.
-- [ ] `P2.10` **`RedisCacheStore.get` swallows corruption silently** `P3` `~30m`
+- [x] `P2.10` done: 2026-09-05 · **`RedisCacheStore.get` swallows corruption silently** `P3` `~30m`
   - **Goal:** deletes the key and returns null; `cache.entry.corrupt` is in `EVENT_CATALOG`
     with `{ key }` and is never emitted anywhere.
   - **Done when:** the store takes a `Logger` (or returns a `Result`) and the event is emitted.
   - **Files:** `packages/infrastructure/src/redis/redis.cache-store.ts`,
     `packages/composition/src/container/container.ts`.
-- [ ] `P2.11` **FK and cascade inconsistencies** `P2` `~1h`
+- [x] `P2.11` done: 2026-09-05 · **FK and cascade inconsistencies** `P2` `~1h`
   - **Goal:** `document_chunks.organization_id` has no FK; `invitations.role_id` has no
     `ON DELETE`; `roles`, `memberships`, `role_permissions`, `goal_members`,
     `permission_overrides` → `organizations` are `NO ACTION` while `api_keys`, `sessions`,
@@ -313,13 +313,13 @@ line-by-line during the audit.
     missing FK; a spec deletes an organization and asserts nothing is left.
   - **Files:** `packages/infrastructure/src/pg/schema/{vector,invitation,rbac}.schema.ts`.
   - **Docs:** `docs/opinions/data-and-scale.md` (deletion semantics).
-- [ ] `P2.12` **no index for the projection reader** `P1` `~30m`
+- [x] `P2.12` done: 2026-09-05 · **no index for the projection reader** `P1` `~30m`
   - **Goal:** `PgActivityReplayReader.since` and `dailyCounts` order by `(occurred_at, id)`
     across all tenants; the only index is `(organization_id, occurred_at DESC)`, so every
     projection batch scans every partition.
   - **Done when:** migration adds `activity_log (occurred_at, id)`; spec asserts an index scan.
   - **Files:** `packages/infrastructure/src/pg/schema/activity.schema.ts`.
-- [ ] `P2.13` **invite: mail failure after commit; `lower(email)` defeats the index** `P2` `~1h`
+- [x] `P2.13` done: 2026-09-05 · **invite: mail failure after commit; `lower(email)` defeats the index** `P2` `~1h`
   - **Goal:** `InviteMemberUseCase` commits, then `mailer.send` throws → 5xx with a live
     invitation. `PgInvitationClaimer.claim` compares `lower(invitations.email)` although the
     column is stored lowercased, so `invitations_email_idx` is unusable.
@@ -327,7 +327,7 @@ line-by-line during the audit.
     is still returned; the claimer compares the column directly. Specs for both.
   - **Files:** `packages/application/src/member/invite-member.use-case.ts`,
     `packages/infrastructure/src/pg/repository/pg-invitation.claimer.ts`.
-- [ ] `P2.14` **`core.activity.write` is asserted inconsistently — closes `T-030`** `P2` `~1h`
+- [x] `P2.14` done: 2026-09-05 · **`core.activity.write` is asserted inconsistently — closes `T-030`** `P2` `~1h`
   - **Goal:** `IndexDocumentUseCase` asserts it; the member use-cases deliberately do not.
     Only `owner` holds it.
   - **Done when:** `CapabilitySet.can()` treats every `core.*` key as held by any resolved
@@ -340,7 +340,7 @@ line-by-line during the audit.
 
 ### Client and web
 
-- [ ] `P2.15` **(verified) two-factor status never reaches the security page** `P1` `~1h`
+- [x] `P2.15` done: 2026-09-05 · **(verified) two-factor status never reaches the security page** `P1` `~1h`
   - **Goal:** `SessionUser` carries `id, email, name, activeOrganizationId, organizations`;
     `settings/security.tsx` reads `user.twoFactorEnabled` through a structural cast, so it is
     always `false`: an enrolled user sees the wizard and `TwoFactorPanel` (disable /
@@ -349,40 +349,42 @@ line-by-line during the audit.
     is deleted, and a route spec renders the panel for an enrolled user.
   - **Files:** `apps/web/src/store/session.store.ts`, `apps/web/src/server/session.fn.ts`,
     `apps/web/src/route/(app)/_authenticated/settings/security.tsx`.
-- [ ] `P2.16` **(verified) list query keys ignore their params** `P1` `~30m`
+- [x] `P2.16` done: 2026-09-05 · **(verified) list query keys ignore their params** `P1` `~30m`
   - **Goal:** `QueryKeys.member.list()`, `.invitations()`, `.rbac.roles()` take no argument
     while the fetch passes `params`; page 2 reads page 1 from cache.
   - **Done when:** keys take `params` last (`["member", "list", params]`), per
     `query/docs/index.md:118`; `query/tests/key/query-key.spec.ts` covers it.
   - **Files:** `packages/query/src/key/query-key.ts`, `src/member/member.queries.ts`,
     `src/rbac/role.queries.ts`.
-- [ ] `P2.17` **(verified) 403 renders as "please sign in"; 400 renders " is not valid"** `P2` `~30m`
+- [x] `P2.17` done: 2026-09-05 · **(verified) 403 renders as "please sign in"; 400 renders " is not valid"** `P2` `~30m`
   - **Files:** `packages/api-client/src/auth/better-auth-error-normalizer.ts:57-67` — 403 →
     `ForbiddenError`; 400 → a `ValidationError` with no field entries (or a `rule` without
     `field`), and `ErrorCopy.field` must not emit a leading space.
   - **Docs:** `api-client/docs/reference/better-auth.md`.
-- [ ] `P2.18` **(verified) `requireSession()` drops the destination** `P2` `~30m`
+- [x] `P2.18` done: 2026-09-05 · **(verified) `requireSession()` drops the destination** `P2` `~30m`
   - **Goal:** `throw redirect({ to: "/sign-in" })` without `search: { redirect }`, although
     `RedirectSearch` and `complete()` already honour it. Deep links land on `/`.
   - **Done when:** the guard passes the current `location.href` as `redirect`; a `RouteGuard`
     spec exists (none today).
   - **Files:** `apps/web/src/route/-guard.ts`, new `apps/web/tests/route/guard.spec.ts`.
-- [ ] `P2.19` **open-redirect regex admits a backslash** `P2` `~15m`
+- [x] `P2.19` done: 2026-09-05 · **open-redirect regex admits a backslash** `P2` `~15m`
   - **Files:** `apps/web/src/route/-redirect.ts:15` (`/^\/(?![\/\\])/` and reject `\`
     anywhere), `apps/web/tests/route/redirect.spec.ts` (add `/\evil.test`).
-- [ ] `P2.20` **`SessionGuard` navigates during render** `P3` `~30m`
+- [!] `P2.20` **`SessionGuard` navigates during render** `P3` `~30m`
   - **Goal:** `onUnauthenticated()` / `onForbidden()` are called in the render body.
   - **Done when:** moved into `useEffect`, or the component is deleted under `P5.15` (nothing
     consumes it). Decide in `P5.15` first. **Depends on:** `P5.15`.
+  - **Blocked by:** `P5.15`, by this item's own instruction. Fixing a component that phase
+    may delete is work either way, and the fix is thirty minutes once the decision exists.
   - **Files:** `packages/feature/src/auth/session.guard.tsx`.
-- [ ] `P2.21` **`Field` never associates hint and error with the input** `P2` `~1h`
+- [x] `P2.21` done: 2026-09-05 · **`Field` never associates hint and error with the input** `P2` `~1h`
   - **Goal:** `hintId`/`errorId` are computed and placed on the `<p>` elements, but no
     `aria-describedby` / `aria-invalid` is ever emitted; every form inherits this.
   - **Done when:** `Field` clones its child with both attributes (or `Input` accepts them);
     `ui/tests/field/field.spec.tsx` asserts the association.
   - **Files:** `packages/ui/src/field/field.tsx`, `packages/ui/src/input/input.tsx`.
   - **Docs:** `packages/ui/docs/index.md` (Field section).
-- [ ] `P2.22` **list components: loading, error, empty, current-session** `P2` `~2h`
+- [x] `P2.22` done: 2026-09-05 · **list components: loading, error, empty, current-session** `P2` `~2h`
   - **Goal:** `ActiveSessionList` lets you revoke the current session and renders the
     "current" badge detached from any row; `LinkedAccountList` shows the empty state while
     pending; `InvitationList` returns `null` while pending; `MemberList` has no error branch.
@@ -391,7 +393,7 @@ line-by-line during the audit.
     hidden. Specs for each (`P6.4`).
   - **Files:** `packages/feature/src/account/active-session.list.tsx`,
     `linked-account.list.tsx`, `packages/feature/src/member/{invitation-list,member-list}.tsx`.
-- [ ] `P2.23` **form state defects** `P2` `~2h`
+- [x] `P2.23` done: 2026-09-05 · **form state defects** `P2` `~2h`
   - **Goal:** `TwoFactorForm` cannot reach backup codes from OTP mode (`totp→backup`,
     everything else `→totp`); `ChangeEmailForm` never resets and allows a second submit;
     `TwoFactorPanel` keeps showing regenerated codes after a disable; `InviteMemberForm`'s
@@ -400,15 +402,48 @@ line-by-line during the audit.
   - **Files:** `packages/feature/src/auth/two-factor.form.tsx:95-103`,
     `packages/feature/src/account/change-email.form.tsx`, `two-factor.disable.tsx:58-65`,
     `packages/feature/src/member/invite-member.form.tsx:34-38`.
-- [ ] `P2.24` **`AuthClient.signOut()` ignores the error** `P3` `~15m`
+- [x] `P2.24` done: 2026-09-05 · **`AuthClient.signOut()` ignores the error** `P3` `~15m`
   - **Files:** `packages/api-client/src/auth/auth.client.ts:81-83` — throw through the
     normalizer so `onDone` does not clear a cache the server still honours.
-- [ ] `P2.25` **`font.css` references two missing `.woff2` files** `P3` `~30m`
+- [x] `P2.25` done: 2026-09-05 · **`font.css` references two missing `.woff2` files** `P3` `~30m`
   - **Files:** `packages/asset/src/font/font.css:6,14`. Either commit the variable fonts or
     remove the `@font-face` blocks; update `asset/docs/index.md:114-122` either way.
 
-**Exit.** `pnpm test` green including `packages/infrastructure` against a live Postgres;
-every item's spec file named in its commit message.
+### Found while executing
+
+- [x] `P2.26` done: 2026-09-05 · **the archive's row stream keeps querying a partition nobody is uploading** `P2` `~1h`
+  - **Goal:** `archive()` hands `gzip(this.rows(name))` to `putStream`, and `Readable.from` starts
+    pulling as soon as it is piped. A `putStream` that rejects leaves that generator paging the
+    detached partition with no consumer: in production a full scan of the month nothing reads, and
+    in `tests/analytics/pg-activity-archive.gateway.spec.ts` an unhandled rejection once the
+    partition is dropped — `pnpm test` reports "1 error" beside a green suite, which is what
+    P2.6's exit line missed.
+  - **Done when:** the source is destroyed and awaited before `reattach`, so no query is in flight
+    when the caller sees the failure; the spec's unhandled error is gone.
+  - **Files:** `packages/infrastructure/src/pg/repository/pg-activity-archive.gateway.ts`.
+  - **Docs:** `infrastructure/docs/reference/activity-archive.md`.
+
+**Exit.** `pnpm test` green including `packages/infrastructure` against a live Postgres, with no
+unhandled errors beside a passing suite; every item's spec file named in its commit message.
+
+**Closed 2026-09-05**, with `P2.20` left `[!]` on `P5.15` by its own instruction. Every other item
+is done and every one ships a spec that fails before and passes after — each was run against the
+reverted source to prove it. 14/14 architecture assertions, `pnpm typecheck`, `pnpm lint` and
+`pnpm test` green, the infrastructure suite included, against a live Postgres 16 with pgvector.
+
+**Three things the work turned up that the audit had not.**
+
+1. `P2.26`, above: the archive's row stream kept paging a partition after the upload that was
+   reading it had failed. It surfaced as vitest's "1 error" beside a green suite — the shape of
+   report that gets read as noise, which is why `P2.6`'s exit line missed it.
+2. `commitlint.config.js` has no `observability` scope, so no commit could name a package that has
+   shipped since `09b`. Filed and fixed as `P8.23`, out of phase order, because it blocked `P2.7`.
+3. `docs/setup/08-permissions-package.md` listed five resolution rules under a heading that said
+   four. Corrected with `P2.14`'s sixth rather than filed.
+
+Two items grew a second half the audit had not named, and both are in the same commit as the first:
+`P2.24` (a refused sign-out now says so, rather than re-enabling a button in silence) and `P2.25`
+(the wrong `font.css` import path, which `P4.9` also names).
 
 ---
 
@@ -417,54 +452,63 @@ every item's spec file named in its commit message.
 **Goal.** The tree matches `docs/ai/rules` and `docs/opinions`, or the opinion is updated to
 match a decision the tree already made.
 
-- [ ] `P3.1` **loose files under `packages/auth/src`** `~30m` — `auth.config.ts`,
+- [x] `P3.1` done: 2026-09-05 · **loose files under `packages/auth/src`** `~30m` — `auth.config.ts`,
   `auth.factory.ts` → `src/factory/`. Update `src/index.ts`, `auth/docs/index.md` tree.
-- [ ] `P3.2` **barrels that are scripts** `~1h` — `auth/src/tables/index.ts` (137 lines,
+- [x] `P3.2` done: 2026-09-05 · **barrels that are scripts** `~1h` — `auth/src/tables/index.ts` (137 lines,
   dotenv, `console.log`) and `infrastructure/src/smoke/index.ts` (130 lines) → move above
   `src/` as `packages/auth/tables.mts` and `packages/infrastructure/smoke.mts` beside
   `drizzle.config.ts` and `seed.ts`; `pg/migrate/index.ts` likewise → `migrate.mts`. This
   removes the three `dotenv` imports, six `process.env` reads and eighteen `console.log`
   calls from `src/` at once. Update `package.json` scripts, `check-architecture` §3 exemption
   list, `biome-config/src/base.json` override, `docs/setup/26:243`, `docs/setup/13`, `15`, `16`.
-- [ ] `P3.3` **`withOrganizationSlug` mutable setter → constructor arg** `~30m` —
+- [x] `P3.3` done: 2026-09-05 · **`withOrganizationSlug` mutable setter → constructor arg** `~30m` —
   `packages/infrastructure/src/pg/repository/pg-bootstrap-membership.enroller.ts`,
   `composition/src/container/container.ts`.
-- [ ] `P3.4` **static mutable state** `~15m` — freeze `SystemRoleSeed.ROLES`
+- [x] `P3.4` done: 2026-09-05 · **static mutable state** `~15m` — freeze `SystemRoleSeed.ROLES`
   (`system-role.seed.ts:22`) and `QueueName.ALL` (`queue-name.ts:14`) at module load, as
   `permission-registry.ts:13` does.
-- [ ] `P3.5` **two classes per file** `~30m` — split `ApiKeyRepository` out of
+- [x] `P3.5` done: 2026-09-05 · **two classes per file** `~30m` — split `ApiKeyRepository` out of
   `auth/src/apikey/api-key.resolver.ts` into `api-key.repository.ts`; rename
   `feature/src/account/two-factor.disable.tsx` → `two-factor.panel.tsx` (exports
   `TwoFactorPanel`). Update barrels and both `docs/index.md` trees.
-- [ ] `P3.6` **`OrganizationFounder` port lacks `slug`** `~30m` — add `slug?: string` to
+- [x] `P3.6` done: 2026-09-05 · **`OrganizationFounder` port lacks `slug`** `~30m` — add `slug?: string` to
   `auth/src/session/organization.founder.ts:7`; `Container` holds the port, not
   `PgOrganizationFounder`. Update `auth/docs/reference/enrolment.md`.
-- [ ] `P3.7` **fakes diverge from adapters** `~1h` — `InMemoryVectorStore.search` applies
+- [x] `P3.7` done: 2026-09-05 · **fakes diverge from adapters** `~1h` — `InMemoryVectorStore.search` applies
   `MIN_SCORE`; `InMemoryStorageGateway.get` throws `NotFoundError`; `TestContainer.build`
   wires `SERVER_CATALOG`. Spec each divergence in `composition/tests/fake/fake.spec.ts`.
-- [ ] `P3.8` **`TestContainer` unreachable outside `composition`** `~2h` — export
+- [x] `P3.8` done: 2026-09-05 · **`TestContainer` unreachable outside `composition`** `~2h` — export
   `TestContainer` and `TestPorts` from `composition/src/index.ts` (no subpath); migrate
   `application/tests/**` off hand-rolled doubles. Update `composition/docs/index.md`
   ("two exports"), `docs/reference/test-container.md`.
-- [ ] `P3.9` **duplication in `feature` and `apps/web`** `~3h` — `MIN_PASSWORD_LENGTH` ×3 and
+  - **Done:** the barrel exports `TestContainer`, `TestPorts`, `TestHarness`, `FixedClock` and the
+    seventeen fakes; `apps/worker/tests/consumer/maintenance.consumer.spec.ts` drops the object
+    literal it cast `as unknown as Container`. Both `apps/web` bundles still contain none of the
+    names — tsup emits ESM and a consumer importing only `Container` shakes the rest out.
+  - **Not done, and refused rather than deferred:** `application/tests/**` keeps its hand-rolled
+    doubles. `composition` imports `application`, so the reverse edge is a cycle in the workspace
+    graph and inverts the layering `docs/ai/rules/layering.md` states. Fixing it means moving the
+    fakes into a package left of `application`, which is a package decision rather than a file
+    move — recorded in `composition/docs/reference/test-container.md`.
+- [x] `P3.9` done: 2026-09-05 · **duplication in `feature` and `apps/web`** `~3h` — `MIN_PASSWORD_LENGTH` ×3 and
   the password/confirm `<Field>` pair ×3 → `feature/src/auth/password-pair.tsx` with the
   floor imported from `contracts` (one authority); `day()` ×2 → `ui/src/format/date-format.ts`;
   the "clear cache, invalidate session, re-run root, navigate" block ×4 (`_authenticated.tsx:50,58`,
   `organization/new.tsx:34`, `invitation/$token.tsx:46`; `sign-in.tsx:52` omits the clear) →
   `apps/web/src/route/-session.ts` `refreshSession()`. Update `feature/docs/index.md`,
   `apps/web/docs`.
-- [ ] `P3.10` **`TwoFactorForm` bypasses the query seam** `~1h` — four raw `AuthClient` calls
+- [x] `P3.10` done: 2026-09-05 · **`TwoFactorForm` bypasses the query seam** `~1h` — four raw `AuthClient` calls
   with hand-rolled pending state → `SessionMutations.{verifyTotp,verifyBackupCode,verifyOtp,sendOtp}`.
   Update `query/docs/reference/mutations.md`.
-- [ ] `P3.11` **`QueryKeys.session` is a bare array** `~15m` → `{ all() }` like its siblings;
+- [x] `P3.11` done: 2026-09-05 · **`QueryKeys.session` is a bare array** `~15m` → `{ all() }` like its siblings;
   fix `account.mutations.ts:52`.
-- [ ] `P3.12` **barrels named `index.tsx` with no JSX** `~15m` — `ui`, `query`, `feature` →
+- [x] `P3.12` done: 2026-09-05 · **barrels named `index.tsx` with no JSX** `~15m` — `ui`, `query`, `feature` →
   `index.ts`; `package.json` `exports`/tsup entry.
-- [ ] `P3.13` **duplicate DOM ids across auth forms** `~30m` — `id="email"` / `id="password"`
+- [x] `P3.13` done: 2026-09-05 · **duplicate DOM ids across auth forms** `~30m` — `id="email"` / `id="password"`
   in sign-in, sign-up, forgot, reset → prefixed (`sign-in-email`), as the account forms do.
-- [ ] `P3.14` **unused dependency** `~5m` — remove `@loadbearing/auth` from
+- [x] `P3.14` done: 2026-09-05 · **unused dependency** `~5m` — remove `@loadbearing/auth` from
   `apps/web/package.json`; `pnpm deps:check`.
-- [ ] `P3.15` **role-suffix vocabulary** `~2h`
+- [x] `P3.15` done: 2026-09-05 · **role-suffix vocabulary** `~2h`
   - **Goal:** `docs/opinions/files.md` lists 25 suffixes and calls the set closed; the tree uses
     ~30 more (`.enroller .founder .claimer .mailer .factory .plugin .config .seed .events .cache
     .hasher .builder .connection .unit-of-work .form .list .queries .mutations .client .guard
@@ -479,26 +523,58 @@ match a decision the tree already made.
     `notification-digest.composer.ts` (subject-folder prefix rule).
   - **Docs:** `infrastructure/docs/index.md`, `composition/docs/index.md`, `docs/setup/15`,
     `docs/setup/28`.
-- [ ] `P3.16` **layering graph vs `composition → content`** `~30m` — `layering.md` puts
+- [x] `P3.16` done: 2026-09-05 · **layering graph vs `composition → content`** `~30m` — `layering.md` puts
   `content` to the right of `composition`; `composition` imports it for the two mailers. Move
   `content` beside `contracts` in `docs/ai/rules/layering.md` and
   `docs/opinions/dependencies.md`; add an `eslint` boundary entry that matches.
-- [ ] `P3.17` **abbreviated params in the authorization kernel** `~15m` —
+- [x] `P3.17` done: 2026-09-05 · **abbreviated params in the authorization kernel** `~15m` —
   `permissions/src/capability/capability-set.ts:26,30,104,108,128,140` (`p s a b`).
-- [ ] `P3.18` **`permission` module grammar** `~30m` — `member.*` and `apikey.*` declare
+- [x] `P3.18` done: 2026-09-05 · **`permission` module grammar** `~30m` — `member.*` and `apikey.*` declare
   `module: "rbac"` (`rbac.permissions.ts:26-38`) against `<module>.<subject>.<action>`. Either
   register `member` and `apikey` modules in `ModuleRegistry` or rename the keys
   `rbac.member.invite` etc. Recommend registering the modules (fewer renames, keys are already
   in `PROCEDURE_PERMISSIONS`). Update `permissions/docs/reference/module-registry.md`.
-- [ ] `P3.19` **missing `override`** `~5m` — `auth/src/session/null-membership.enroller.ts:19`.
-- [ ] `P3.20` **`apps/worker` folder rules** `~1h` — four loose files under `src/`, no
+- [x] `P3.19` done: 2026-09-05 · **missing `override`** `~5m` — `auth/src/session/null-membership.enroller.ts:19`.
+- [x] `P3.20` done: 2026-09-05 · **`apps/worker` folder rules** `~1h` — four loose files under `src/`, no
   `index.ts` in `consumer/`, `schedule/`, `notification/`; consts vs `private static readonly`
   split. `env.ts` and `main.ts` stay (framework-dictated); `worker-bootstrap.ts` and
   `system-principal.ts` → `src/bootstrap/`; add barrels; pick `private static readonly` for
   every constant. Record the apps-folder rule in `docs/opinions/folders.md`.
 
+### Found while executing
+
+- [x] `P3.21` done: 2026-09-05 · **the Postgres harness picks whichever tenant Postgres
+  returns first** `P2` `~15m`
+  - **Goal:** `seedOrganizationId` is `select id from organizations limit 1` with no ordering,
+    and it is what fourteen specs scope their rows by. It was right while the seed wrote the
+    only organization; `P2.11`'s cascade spec and the founder specs both create their own, so
+    the pick is now a coin flip that can hand one spec a tenant another is about to delete.
+  - **Done when:** the lookup matches `seed.ts`'s own slug.
+  - **Files:** `packages/infrastructure/tests/support/database.ts`.
+
 **Exit.** `pnpm lint`, `pnpm check:architecture`, `pnpm deps:check`, `pnpm repo:check` all
 green; `docs/ai/rules/*.md` and `docs/opinions/*.md` agree (§12).
+
+**Closed 2026-09-05.** All twenty items plus `P3.21`. The exit line holds: `pnpm lint`,
+`check:architecture` 14/14, `deps:check`, `repo:check`, `typecheck` and the full suite green,
+infrastructure included against a live Postgres.
+
+**Three items ended somewhere the audit did not predict.**
+
+1. `P3.8` did half of what it asked, and the other half is refused rather than deferred — see the
+   item. `application` cannot import `composition` without inverting the layer, so its specs keep
+   their hand-rolled doubles; `apps/worker` was the consumer that actually needed the harness and
+   now uses it.
+2. `P3.15` renamed nineteen files, not the seven the audit counted. Every vendor adapter outside
+   `pg/` and `s3/` wrote the role into the subject (`redis.cache-store.ts`), and so did every fake
+   standing in for one, both content mailers, and content's own two static implementations. The
+   suffix table records sixty roles against the twenty-five it claimed were closed.
+3. `P3.16`'s "eslint boundary entry" is a Biome one: there is no boundaries plugin, and the machinery
+   that already expresses the graph is the server-only ban list — which `content` and `asset` were
+   missing from for exactly as long as the graph put them downstream of `composition`.
+
+`P3.21` was filed from a defect `P2.11`'s spec created: `seedOrganizationId` picked whichever tenant
+Postgres returned first, which stopped being one row the moment a second spec founded its own.
 
 ---
 
@@ -762,10 +838,10 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
   exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI).
-- [ ] `P5.14` **Event codes never emitted** — nine of twenty. Emit the ones with an obvious
-  site: `queue.job.failed` (every consumer's `failed` handler — today they call
-  `logger.failure`), `embedding.request.failed` (provider), `cache.entry.corrupt` (`P2.10`),
-  `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
+- [ ] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
+  been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
+  consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
+  (provider), `http.request.completed/failed` (`errorMiddleware`), `analytics.projection.failed`
   (consumer catch). **Delete** `queue.sweep.completed`, `db.query.slow`,
   `storage.upload.failed` from `core.events.ts` and `event-shape.ts`.
   **Docs:** `observability/docs/reference/catalog.md`.
@@ -974,6 +1050,11 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **Goal:** the glob is `*.{js,jsx,ts,tsx,json,jsonc,css}`. Every script in `tooling/scripts/` is
     `.mjs`, so none is formatted on commit — `pnpm lint` catches them, the hook does not.
   - **Done when:** `mjs` and `cjs` are in the glob.
+- [x] `P8.23` done: 2026-09-05 · **`scope-enum` has no `observability`** `P2` `~5m`
+  - **Goal:** the package has shipped since `09b` and no commit can name it; the enum still
+    carries `db`, which `P4.8` retires. Taken out of phase order because it blocked `P2.7`.
+  - **Done when:** `observability` is in `commitlint.config.js`. `db` leaves with `P4.8`, and
+    `docs/setup/26:81-85` is corrected by `P4.19`.
 
 **Exit.** `pnpm check:architecture` 17/17 with no skip; CI green with the MinIO service and
 both app builds; `infra:up` reports every container healthy on Linux and Windows.
@@ -1003,4 +1084,6 @@ grep hits exactly `infrastructure` and `composition`; no repository method queri
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-05 | @sami | Created from a full audit of the tree at `6463935` |
+| 2026-09-05 | @sami | Phase 3 closed. All twenty items plus `P3.21`, filed from a defect `P2.11`'s spec created. `P3.15` grew from seven renames to nineteen; `P3.8` did half and recorded why the other half is refused |
+| 2026-09-05 | @sami | Phase 2 closed but for `P2.20`, blocked on `P5.15` by its own instruction. 25 of 26 items done, each with a spec proven to fail before the fix. `P2.26` filed and fixed from a defect the work surfaced; `P8.23` taken out of phase order because it blocked a commit. `T-030` and `T-026` closed in `TODO.md`, whose backlog is now empty |
 | 2026-09-05 | @sami | Phase 1 closed. §14 shipped and §5 widened; 524 blocks to 0, density 18.8 % → 13.0 %; eleven reference pages and two app `docs/` trees written. Phase 1's density target revised — see the note under its exit line. `P8.21` and `P8.22` filed from defects the work surfaced |

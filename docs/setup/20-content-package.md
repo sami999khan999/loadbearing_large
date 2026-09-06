@@ -37,12 +37,12 @@ packages/content/src/
 │   └── message-store.ts          → MessageStore  ← the SSR → client carrier ✅
 ├── source/
 │   ├── content-source.ts         → ContentSource (abstract)              ✅  all four shapes
-│   ├── static.content-source.ts  → StaticContentSource   ← split; dynamic import   ✅
+│   ├── static-content.source.ts  → StaticContentSource   ← split; dynamic import   ✅
 │   └── bundled.content-source.ts → BundledContentSource  ← every locale, static    ☐
 ├── media/                        ── shape 2: media references            ✅
 │   ├── index.ts
 │   ├── media-ref.ts              → MediaResolver, ResolvedMedia
-│   └── static.media-resolver.ts  → StaticMediaResolver
+│   └── static-media.resolver.ts  → StaticMediaResolver
 ├── message/                      ── shape 1: short keyed strings
 │   ├── namespace.ts              → Namespace, NamespaceKeys, MessageKey  ◐  four namespaces
 │   ├── catalog.ts                → CLIENT_CATALOG   (locale × namespace → loader)  ◐
@@ -651,7 +651,7 @@ export abstract class MediaResolver {
 }
 ```
 
-**`packages/content/src/media/static.media-resolver.ts`**
+**`packages/content/src/media/static-media.resolver.ts`**
 
 ```ts
 import { ImageManifest, type ImageKey } from "@loadbearing/asset";
@@ -796,7 +796,7 @@ there" is a property of the seam rather than a convention every call site has to
 `DbContentSource` inherits it for free, and a route that declares `["auth"]` still gets working
 error copy.
 
-**`packages/content/src/source/static.content-source.ts`**
+**`packages/content/src/source/static-content.source.ts`**
 
 ```ts
 import { ContentSource } from "./content-source.js";

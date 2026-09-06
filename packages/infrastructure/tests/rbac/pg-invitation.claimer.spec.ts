@@ -1,6 +1,6 @@
 import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { SystemClock, Token, Uuid } from "@loadbearing/core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
@@ -17,6 +17,17 @@ import {
 import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 
+// Captures the SQL the claimer actually issued, so the predicate assertion below is
+// against the query under test rather than a copy of it that can drift.
+class RecordingLogger implements Logger {
+  public readonly queries: string[] = [];
+
+  public logQuery(query: string): void {
+    this.queries.push(query);
+  }
+}
+
+const recorder = new RecordingLogger();
 let database: Database;
 const created: string[] = [];
 const founded: OrganizationId[] = [];
@@ -81,7 +92,7 @@ const invitationById = (id: string) =>
   database.client.select({ id: invitations.id }).from(invitations).where(eq(invitations.id, id));
 
 beforeAll(async () => {
-  database = openDatabase();
+  database = openDatabase(recorder);
   inviter = await makeUser("Inviter");
   home = await withScope().founder.found(Identifiers.userId.parse(inviter), "Home");
   founded.push(home);
@@ -230,5 +241,22 @@ describe("PgInvitationClaimer", () => {
     });
     expect((await claimer.preview(stale.token))?.expired).toBe(true);
     expect(await claimer.preview("no-such-token")).toBeNull();
+  });
+
+  // The regression guard: the predicate was `lower(invitations.email)` although the
+  // column is stored lowercased, which made `invitations_email_idx` unusable.
+  it("matches the email column itself, never an expression over it", async () => {
+    const userId = await makeUser();
+    await invite(emailOf(userId));
+
+    recorder.queries.length = 0;
+    await withScope().claimer.claimPending(userId);
+
+    const lookup = recorder.queries.filter(
+      (query) => query.includes('from "invitations"') && query.includes('"email"'),
+    );
+
+    expect(lookup).not.toHaveLength(0);
+    expect(lookup.some((query) => /lower\(/i.test(query))).toBe(false);
   });
 });

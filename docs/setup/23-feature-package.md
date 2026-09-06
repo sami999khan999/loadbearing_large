@@ -18,7 +18,7 @@ Both are enforced by a `files`-scoped block in the root ESLint config ([05](05-l
 
 ```
 packages/feature/src/
-├── index.tsx                      ← "use client" on line 1
+├── index.ts                       ← "use client" on line 1
 ├── import.ts                      ← every external symbol. The two bans, made visible
 ├── i18n/
 │   ├── index.ts
@@ -514,7 +514,7 @@ The test worth writing first: **render the same component with two different `Ca
 
 ## Step 23.7 — The barrel
 
-**`packages/feature/src/index.tsx`**
+**`packages/feature/src/index.ts`**
 
 ```tsx
 "use client";

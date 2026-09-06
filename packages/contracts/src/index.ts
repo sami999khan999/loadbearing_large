@@ -16,6 +16,7 @@ export {
   type OrganizationId,
   Pagination,
   type PaginationQuery,
+  Password,
   type RoleId,
   type TaskId,
   type UserId,

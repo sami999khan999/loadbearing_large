@@ -4,6 +4,7 @@ import type { NamespaceBundle } from "../namespace.js";
 export const auth: NamespaceBundle<"auth"> = {
   "auth.signIn": "সাইন ইন",
   "auth.signOut": "সাইন আউট",
+  "auth.signOutFailed": "সাইন আউট করা যায়নি। আবার চেষ্টা করুন।",
   "auth.signingIn": "সাইন ইন করা হচ্ছে…",
   "auth.email": "ইমেইল",
   "auth.password": "পাসওয়ার্ড",

@@ -2,7 +2,7 @@ import { eq, type OrganizationId, sql, type UserId } from "../../import.js";
 import { BaseRepository, type Database } from "../primitive/index.js";
 import { memberships, users } from "../schema/index.js";
 import type { TransactionScope } from "../transaction/index.js";
-import type { PgOrganizationFounder } from "./pg-organization.founder.js";
+import type { OrganizationFounder } from "./pg-organization.founder.js";
 
 // The same fixed namespace the bootstrap enroller and the claimer use, so a claim and an
 // enrolment for one user serialise against each other.
@@ -22,7 +22,7 @@ export class PgPersonalOrganizationEnroller extends BaseRepository {
   public constructor(
     database: Database,
     scope: TransactionScope,
-    private readonly founder: PgOrganizationFounder,
+    private readonly founder: OrganizationFounder,
   ) {
     super(database, scope);
   }

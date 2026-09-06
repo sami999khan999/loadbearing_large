@@ -31,7 +31,7 @@ export const roles = pgTable(
     id: uuid("id").primaryKey(),
     organizationId: uuid("organization_id")
       .notNull()
-      .references(() => organizations.id),
+      .references(() => organizations.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     name: text("name").notNull(),
     description: text("description"),
@@ -50,7 +50,7 @@ export const rolePermissions = pgTable(
   {
     organizationId: uuid("organization_id")
       .notNull()
-      .references(() => organizations.id),
+      .references(() => organizations.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "cascade" }),
@@ -70,16 +70,18 @@ export const memberships = pgTable(
     id: uuid("id").primaryKey(),
     organizationId: uuid("organization_id")
       .notNull()
-      .references(() => organizations.id),
+      .references(() => organizations.id, { onDelete: "cascade" }),
     // Declared here rather than in a hand-authored migration: drizzle-kit diffs this file
     // against the history, so a constraint it cannot see is one the next migration drops.
     userId: uuid("user_id")
       .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // `no action` and not `restrict`: deleting a tenant cascades roles and memberships in
+    // one statement, and `restrict` is checked before that statement finishes.
     roleId: uuid("role_id")
       .notNull()
-      .references(() => roles.id),
+      .references(() => roles.id, { onDelete: "no action" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -98,7 +100,7 @@ export const goalMembers = pgTable(
     id: uuid("id").primaryKey(),
     organizationId: uuid("organization_id")
       .notNull()
-      .references(() => organizations.id),
+      .references(() => organizations.id, { onDelete: "cascade" }),
     goalId: uuid("goal_id").notNull(),
     userId: uuid("user_id")
       .$type<UserId>()
@@ -106,7 +108,7 @@ export const goalMembers = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     roleId: uuid("role_id")
       .notNull()
-      .references(() => roles.id),
+      .references(() => roles.id, { onDelete: "no action" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -124,7 +126,7 @@ export const permissionOverrides = pgTable(
     id: uuid("id").primaryKey(),
     organizationId: uuid("organization_id")
       .notNull()
-      .references(() => organizations.id),
+      .references(() => organizations.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .$type<UserId>()
       .notNull()

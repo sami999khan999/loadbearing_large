@@ -36,11 +36,13 @@ packages/auth/
 ├── src/
 │   ├── index.ts                          ← ServerOnly.assert() first among the statements
 │   ├── import.ts                         ← every external symbol, better-auth included
-│   ├── auth.config.ts                    → AuthConfig
-│   ├── auth.factory.ts                   → AuthFactory, AuthInstance
 │   ├── apikey/
 │   │   ├── api-key.hasher.ts             → ApiKeyHasher, GeneratedApiKey
-│   │   └── api-key.resolver.ts           → ApiKeyResolver, ApiKeyRepository, ApiKeyRecord
+│   │   ├── api-key.repository.ts         → ApiKeyRepository, ApiKeyRecord
+│   │   └── api-key.resolver.ts           → ApiKeyResolver
+│   ├── factory/
+│   │   ├── auth.config.ts                → AuthConfig
+│   │   └── auth.factory.ts               → AuthFactory, AuthInstance
 │   ├── mail/
 │   │   └── auth.mailer.ts                → AuthMailer                        (port)
 │   ├── plugin/
@@ -49,20 +51,20 @@ packages/auth/
 │   │   ├── principal.builder.ts          → PrincipalBuilder
 │   │   └── capability.cache.ts           → CapabilityCache
 │   ├── session/
-│   │   ├── better-auth.session-resolver.ts → BetterAuthSessionResolver
+│   │   ├── better-auth-session.resolver.ts → BetterAuthSessionResolver
 │   │   ├── membership.reader.ts          → MembershipReader, OrganizationSummary   (port)
 │   │   ├── membership.enroller.ts        → MembershipEnroller                (port)
 │   │   ├── invitation.claimer.ts         → InvitationClaimer, InvitationPreview   (port)
 │   │   ├── organization.founder.ts       → OrganizationFounder               (port)
 │   │   ├── invitation-claiming.enroller.ts → InvitationClaimingEnroller      (decorator)
 │   │   └── null-membership.enroller.ts   → NullMembershipEnroller
-│   └── tables/
-│       └── index.ts                      ← a script. Never exported, never built
+├── tables.ts                             ← a script, above src/. Never exported, never built
 └── tests/
     ├── support/doubles.ts
     ├── apikey/{api-key.hasher,api-key.resolver}.spec.ts
+    ├── factory/auth.factory.spec.ts
     ├── principal/{capability.cache,principal.builder}.spec.ts
-    └── session/{better-auth.session-resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
+    └── session/{better-auth-session.resolver,invitation-claiming.enroller,null-membership.enroller}.spec.ts
 ```
 
 ---
@@ -153,7 +155,7 @@ argument, the `rebind()` order and the refusal semantics are in
 |---|---|
 | The organization plugin | No. `organizations`, `memberships` and `goal_members` are yours, and they point at your own `roles` table. The plugin would add a parallel `member.role` string meaning something else, and reconciling the two is worse than not having it. The one thing it does that nothing else can — rebind a session and re-issue its cookie — is sixty lines in `plugin/organization.plugin.ts`, against your tables. |
 | `better-auth/react` | No, and not in `api-client` either. It keeps its own cache with its own invalidation rules, which puts two caching systems in one app — and they disagree on sign-out, showing a signed-in shell around a run of 401s. |
-| `@better-auth/cli` | No. It trails the library's release line, and a generator behind the runtime writes a schema that is wrong exactly where it matters. `src/tables/` prints the truth from the pinned runtime instead. |
+| `@better-auth/cli` | No. It trails the library's release line, and a generator behind the runtime writes a schema that is wrong exactly where it matters. `tables.ts` prints the truth from the pinned runtime instead. |
 | Secondary storage for sessions | Redis in **front** of Postgres, never instead of it. `storeSessionInDatabase: true` and `verification.storeInDatabase: true` are both non-default and both load-bearing: without them an ordinary cache eviction is a random sign-out, or a reset link that stops working with no error on either side. |
 
 ---

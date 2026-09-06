@@ -48,13 +48,23 @@ describe("BetterAuthErrorNormalizer — status fallback", () => {
     expect(error.retryable).toBe(true);
   });
 
-  it("maps both rejection statuses onto UNAUTHORIZED", () => {
+  it("separates the two rejection statuses", () => {
     expect(codeOf({ status: 401 })).toBe("UNAUTHORIZED");
-    expect(codeOf({ status: 403 })).toBe("UNAUTHORIZED");
+    // The regression guard: both mapped to UNAUTHORIZED, whose copy is "please sign in"
+    // — advice that cannot help a signed-in user who simply may not.
+    expect(codeOf({ status: 403 })).toBe("FORBIDDEN");
   });
 
   it("maps an unrecognised rejection onto BAD_REQUEST", () => {
     expect(codeOf({ status: 400 })).toBe("BAD_REQUEST");
+  });
+
+  // The other half: a violation with an empty `field` rendered as " is not valid.",
+  // because every `error.field.*` template opens with `{field}`.
+  it("names no field when it has none to name", () => {
+    const error = BetterAuthErrorNormalizer.normalize({ status: 400 } as never);
+
+    expect(error.fields).toEqual([]);
   });
 
   // Including `null` and `undefined` — the `!data` branch on every read in

@@ -2,6 +2,7 @@ import {
   type ActivityArchiveGateway,
   type ArchivedPartition,
   createGzip,
+  once,
   Readable,
   type StorageGateway,
   sql,
@@ -54,6 +55,13 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       sql`alter table ${sql.identifier("activity_log")} detach partition ${sql.identifier(name)} concurrently`,
     );
 
+    // Built before the try so the failure path can stop them. `Readable.from` pulls as
+    // soon as it is piped, and a rejected upload leaves it paging a partition nobody reads.
+    const source = Readable.from(this.rows(name));
+    // Gzipped in between the database and S3 rather than at either end: neither ever
+    // holds the month.
+    const body = source.pipe(createGzip());
+
     // Everything from here to the drop re-attaches on failure: a detached partition is
     // invisible to every query against the parent, and nothing else puts it back.
     try {
@@ -63,11 +71,7 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
 
       // ── 2. stream to S3 as gzipped NDJSON ──
       // NDJSON, so ClickHouse reads it back with `s3(…, 'JSONEachRow', …)` directly.
-      const stored = await this.storage.putStream(
-        key,
-        PgActivityArchiveGateway.gzip(this.rows(name)),
-        "application/x-ndjson+gzip",
-      );
+      const stored = await this.storage.putStream(key, body, "application/x-ndjson+gzip");
 
       // ── 3. record, before anything is destroyed ──
       await this.db
@@ -94,8 +98,24 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
 
       return { period: PgActivityArchiveGateway.iso(period), key: stored.key, rowCount };
     } catch (error: unknown) {
+      await PgActivityArchiveGateway.stop(source, body);
       await this.reattach(name, period);
       throw error;
+    }
+  }
+
+  // Awaited, not only asked for: `destroy()` returns before the page already in flight
+  // does, and the caller drops the partition the moment this method throws.
+  private static async stop(source: Readable, body: Readable): Promise<void> {
+    body.destroy();
+    if (source.destroyed) return;
+    source.destroy();
+
+    try {
+      await once(source, "close");
+    } catch {
+      // Swallowed for the same reason `reattach` swallows: the caller is waiting on the
+      // failure that started this, not on why the cursor would not close.
     }
   }
 
@@ -163,12 +183,6 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       if (!last || page.length < PAGE) return;
       after = { occurredAt: last.occurred_at, id: last.id };
     }
-  }
-
-  private static gzip(source: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
-    // Between the database and S3 rather than at either end, so neither ever holds the
-    // month. A `Gzip` stream is already an AsyncIterable of chunks.
-    return Readable.from(source).pipe(createGzip());
   }
 
   private static partitionName(period: Date): string {

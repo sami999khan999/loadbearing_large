@@ -3,7 +3,11 @@
 export class QueryKeys {
   private constructor() {}
 
-  public static readonly session = ["session"] as const;
+  // `{ all() }` like every namespace below, so a call site reads the same everywhere and
+  // adding a key under `session` needs no change at the four places that invalidate it.
+  public static readonly session = {
+    all: () => ["session"] as const,
+  };
 
   // `all()` on every namespace, because TanStack matches by prefix — one call catches
   // every list and detail below it, and that is what makes invalidation trustworthy.
