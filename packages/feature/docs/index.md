@@ -26,7 +26,7 @@ shell mount these components under a different routing shell.
 
 ```
 packages/feature/src/
-├── index.ts                             ← "use client" on line 1
+├── index.ts                           ← "use client" on line 1
 ├── import.ts                          ← the two bans, made visible
 ├── i18n/message.context.tsx           → MessageProvider, useMessages
 ├── auth/

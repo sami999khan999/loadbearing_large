@@ -1,7 +1,7 @@
 import type { AccountClient } from "@loadbearing/api-client";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { TwoFactorPanel } from "../../src/account/two-factor.disable.js";
+import { TwoFactorPanel } from "../../src/account/two-factor.panel.js";
 import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
 
 const CODES = ["aaaa-bbbb", "cccc-dddd"];

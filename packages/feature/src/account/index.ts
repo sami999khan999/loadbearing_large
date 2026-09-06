@@ -3,5 +3,5 @@ export { ChangeEmailForm, type ChangeEmailFormProps } from "./change-email.form.
 export { ChangePasswordForm, type ChangePasswordFormProps } from "./change-password.form.js";
 export { LinkedAccountList, type LinkedAccountListProps } from "./linked-account.list.js";
 export { ProfileForm, type ProfileFormProps } from "./profile.form.js";
-export { TwoFactorPanel, type TwoFactorPanelProps } from "./two-factor.disable.js";
+export { TwoFactorPanel, type TwoFactorPanelProps } from "./two-factor.panel.js";
 export { TwoFactorSetup, type TwoFactorSetupProps } from "./two-factor.setup.js";
