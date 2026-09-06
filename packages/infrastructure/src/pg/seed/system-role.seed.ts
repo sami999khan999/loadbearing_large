@@ -16,25 +16,28 @@ interface SystemRole {
   readonly permissions: readonly PermissionKey[] | "all";
 }
 
-export class SystemRoleSeed extends BaseRepository {
-  // Only `owner` is a wildcard. A role that grants "everything in module X" keeps
-  // granting new things as X grows — that is how a reviewer acquires write access.
-  private static readonly ROLES: readonly SystemRole[] = [
-    { key: "owner", name: "Owner", scope: "org", permissions: "all" },
-    {
-      key: "admin",
-      name: "Administrator",
-      scope: "org",
-      permissions: ["rbac.role.read", "rbac.role.manage", "member.read", "member.invite"],
-    },
-    { key: "member", name: "Member", scope: "org", permissions: ["member.read"] },
-    { key: "guest", name: "Guest", scope: "org", permissions: [] },
-  ];
+// Only `owner` is a wildcard: a role granting "everything in module X" keeps granting new
+// things as X grows, which is how a reviewer acquires write access.
 
+// Frozen at module load rather than left a `static readonly`, which freezes the binding
+// and not the array — the shape `docs/ai/rules/classes.md` bans.
+const ROLES: readonly SystemRole[] = Object.freeze([
+  { key: "owner", name: "Owner", scope: "org", permissions: "all" },
+  {
+    key: "admin",
+    name: "Administrator",
+    scope: "org",
+    permissions: ["rbac.role.read", "rbac.role.manage", "member.read", "member.invite"],
+  },
+  { key: "member", name: "Member", scope: "org", permissions: ["member.read"] },
+  { key: "guest", name: "Guest", scope: "org", permissions: [] },
+]);
+
+export class SystemRoleSeed extends BaseRepository {
   // Idempotent: safe to run on every deploy. Per organization, because system roles
   // are rows in a tenant's table rather than global constants.
   public async run(organizationId: OrganizationId): Promise<void> {
-    for (const definition of SystemRoleSeed.ROLES) {
+    for (const definition of ROLES) {
       const existing = await this.db
         .select({ id: roles.id })
         .from(roles)
