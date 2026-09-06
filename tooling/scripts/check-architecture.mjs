@@ -70,6 +70,12 @@ function rel(file) {
   return relative(ROOT, file).replaceAll("\\", "/");
 }
 
+// The most recently modified file among `files`, as epoch milliseconds. 0 for none, so a
+// caller comparing two of these treats "nothing there" as "older than anything".
+function newestMtime(files) {
+  return files.reduce((newest, file) => Math.max(newest, statSync(file).mtimeMs), 0);
+}
+
 // Import specifiers only — static, dynamic, and re-export. A specifier inside a
 // comment or a string still counts, which is the correct bias for a boundary grep.
 function specifiers(source) {
@@ -86,6 +92,73 @@ function specifiers(source) {
   }
 
   return found;
+}
+
+// Comments blanked, newlines kept, so a line number still means what it says. Strings
+// are walked rather than skipped over, or a `//` inside one would blank the rest of a line.
+function withoutComments(source) {
+  let out = "";
+
+  for (let i = 0; i < source.length; i += 1) {
+    const rest = source.slice(i, i + 2);
+
+    if (rest === "//") {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      out += "\n";
+      continue;
+    }
+
+    if (rest === "/*") {
+      const end = source.indexOf("*/", i + 2);
+      const skipped = source.slice(i, end === -1 ? source.length : end + 2);
+      out += skipped.replaceAll(/[^\n]/g, " ");
+      i += skipped.length - 1;
+      continue;
+    }
+
+    const char = source[i];
+    if (char === '"' || char === "'" || char === "`") {
+      out += char;
+      i += 1;
+      while (i < source.length && source[i] !== char) {
+        out += source[i];
+        i += source[i] === "\\" ? 2 : 1;
+      }
+      out += source[i] ?? "";
+      continue;
+    }
+
+    out += char;
+  }
+
+  return out;
+}
+
+// The line of the first `await` outside every brace, bracket and paren, or null. Depth,
+// not a column-0 anchor: `tsup` indents a wrapped module and minification has no columns.
+function topLevelAwait(source) {
+  const clean = withoutComments(source);
+  let depth = 0;
+  let line = 1;
+
+  for (let i = 0; i < clean.length; i += 1) {
+    const char = clean[i];
+
+    if (char === "\n") line += 1;
+    else if (char === "{" || char === "(" || char === "[") depth += 1;
+    else if (char === "}" || char === ")" || char === "]") depth -= 1;
+    else if (
+      depth === 0 &&
+      char === "a" &&
+      clean.startsWith("await", i) &&
+      !/[\w$]/.test(clean[i - 1] ?? " ") &&
+      !/[\w$]/.test(clean[i + 5] ?? " ")
+    ) {
+      return line;
+    }
+  }
+
+  return null;
 }
 
 function lineOf(source, needle) {
@@ -254,7 +327,11 @@ assert("`application` does not log", (failures) => {
 // no reason. Change one, change the other.
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
-  /\.config\.(ts|mts|js|mjs)$/,
+  // A repo, package or app root config — never one inside `src/`. The bare
+  // `*.config.*` glob exempted `composition/src/container/container.config.ts` and
+  // `auth/src/factory/auth.config.ts`, which are runtime code with a role suffix.
+  /^[^/]+\.config\.(ts|mts|js|mjs)$/,
+  /^(packages|apps)\/[^/]+\/[^/]+\.config\.(ts|mts|js|mjs)$/,
   // Every runnable script sits above `src/`, so a folder barrel can be imported without
   // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
   /^packages\/auth\/tables\.ts$/,
@@ -271,7 +348,9 @@ assert("only `env.ts` reads `process.env`", (failures) => {
       const path = rel(file);
       if (ENV_EXEMPT.some((pattern) => pattern.test(path))) continue;
 
-      const source = readFileSync(file, "utf8");
+      // Comments stripped first: a line explaining that `process.env` is banned here is
+      // not a read of it, and this assertion used to fail on its own documentation.
+      const source = withoutComments(readFileSync(file, "utf8"));
       if (/\bprocess\s*\.\s*env\b/.test(source)) {
         failures.push(`${path}:${lineOf(source, "process.env")} reads process.env`);
       }
@@ -336,13 +415,10 @@ assert("no top-level await in a built barrel", (failures) => {
     if (!existsSync(bundle)) continue;
     checked += 1;
 
-    readFileSync(bundle, "utf8")
-      .split("\n")
-      .forEach((line, index) => {
-        if (/^(await |(var|let|const) \w+ = await )/.test(line)) {
-          failures.push(`${rel(bundle)}:${index + 1} top-level await breaks require() from CJS`);
-        }
-      });
+    const line = topLevelAwait(readFileSync(bundle, "utf8"));
+    if (line) {
+      failures.push(`${rel(bundle)}:${line} top-level await breaks require() from CJS`);
+    }
   }
 
   if (checked === 0) return "no dist/ found — run `pnpm build:packages` first";
@@ -419,6 +495,17 @@ assert("no server code in the client bundle", (failures) => {
     return null;
   }
 
+  // The whole assertion is a grep over an artefact, so it is only worth as much as the
+  // artefact is current. A green run against a bundle built before the edit under review
+  // is how the client boundary was last reported clean while it was not.
+  const sources = walk(join(ROOT, "apps/web/src"), [".ts", ".tsx", ".css"]);
+  if (newestMtime(sources) > newestMtime(assets)) {
+    failures.push(
+      "apps/web/.output is older than apps/web/src — rebuild before trusting this assertion",
+    );
+    return null;
+  }
+
   for (const file of assets) {
     const source = readFileSync(file, "utf8");
 
@@ -463,6 +550,11 @@ const TENANT_EXEMPT = new Set([
   "accounts",
   "verifications",
   "two_factors",
+  // `sessions` carries `active_organization_id`, which is which tenant the session is
+  // pointed at rather than which owns the row — the same distinction that keeps `users`
+  // off this list despite `last_active_organization_id`. It passed until §9 stopped
+  // matching the tenant column as a substring, and had never actually been checked.
+  "sessions",
   "__drizzle_migrations",
   // `activity_log` is partitioned by time, not by tenant, so one monthly partition
   // holds every organization's rows and the archive object recording it is global.
@@ -474,22 +566,19 @@ assert("every domain table declares `organization_id`", (failures) => {
   const dir = join(ROOT, "packages/infrastructure/src");
   if (!existsSync(dir)) return "packages/infrastructure has no src/ yet";
 
-  const files = walk(dir, [".ts"]).filter((f) => f.endsWith(".schema.ts"));
-  if (files.length === 0) return "no *.schema.ts files yet";
+  const blocks = pgTableBlocks();
+  if (!blocks) return "no *.schema.ts files yet";
 
-  for (const file of files) {
-    const source = readFileSync(file, "utf8");
+  for (const block of blocks) {
+    if (TENANT_EXEMPT.has(block.table)) continue;
 
-    // Both call shapes Biome produces: `pgTable("x", {...});` closes on `\n});`,
-    // and the three-argument form with an index callback closes on `\n);`.
-    // Matching only the latter is how this check silently passes on half the tables.
-    for (const match of source.matchAll(/pgTable\(\s*["'`]([^"'`]+)["'`]([\s\S]*?)\n\}?\);/g)) {
-      const [, table, body] = match;
-      if (TENANT_EXEMPT.has(table)) continue;
-      if (body.includes("organization_id")) continue;
+    // The same bracket-matched parse §17 and §18 use, and the same whole-name test: the
+    // regex this replaced anchored on `\n});` at column 0, so a table Biome wrapped
+    // differently was skipped silently, and a substring match would count
+    // `last_active_organization_id` as a tenant column.
+    if (columnsOf(block).some((column) => column.column === "organization_id")) continue;
 
-      failures.push(`${rel(file)}: table "${table}" has no organization_id`);
-    }
+    failures.push(`${rel(block.file)}: table "${block.table}" has no organization_id`);
   }
 
   return null;
@@ -501,12 +590,20 @@ assert("every domain table declares `organization_id`", (failures) => {
 // eleven other files said ActivityLogger. Two names for the audit port reads as
 // two things, which is the exact confusion the audit/diagnostic split prevents.
 
+// The two pages that state the ban, and therefore have to spell the banned name. Anywhere
+// else it is the drift this assertion exists to catch.
+const AUDIT_NAME_EXEMPT = new Set(["docs/setup/26-hygiene-and-ci.md", "docs/opinions/index.md"]);
+
 assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
-  for (const base of ["packages", "apps"]) {
+  // `docs/` included: the drift this was written for lived in the observability prose, and
+  // walking only the packages meant the assertion could not see the thing it was about.
+  for (const base of ["packages", "apps", "docs"]) {
     const dir = join(ROOT, base);
     if (!existsSync(dir)) continue;
 
     for (const file of walk(dir, [".ts", ".tsx", ".md"])) {
+      if (AUDIT_NAME_EXEMPT.has(rel(file))) continue;
+
       const source = readFileSync(file, "utf8");
       if (source.includes("AuditTrail")) {
         failures.push(`${rel(file)}:${lineOf(source, "AuditTrail")} names AuditTrail`);

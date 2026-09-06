@@ -1997,15 +1997,45 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - `process.env` in a tooling script needs a Biome exemption; `check-architecture.mjs` joins the
     four scripts already named in `tooling/biome-config/src/base.json` rather than a `tooling/**`
     glob, so each stays a decision.
-- [ ] `P8.7` **§8 cannot see a stale bundle** `P2` `~30m` — the local 13/13 observed during
+- [x] `P8.7` **§8 cannot see a stale bundle** `P2` `~30m` — the local 13/13 observed during
   the audit ran against an `.output` predating T-027..029. Fail when the newest file under
-  `apps/web/src` is newer than `apps/web/.output`.
-- [ ] `P8.8` **assertion blind spots** `P2` `~2h` — §5 walks `packages/*` only (`P1.10`);
+  `apps/web/src` is newer than `apps/web/.output`. `done: 2026-09-06`
+  - Exactly as specified. Verified both ways: `touch apps/web/src/router.tsx` fails the assertion
+    with "rebuild before trusting this assertion", and a rebuild clears it.
+  - **Scoped to `apps/web/src`, and the limit is stated in `docs/setup/26`.** A package change that
+    reaches the bundle is not caught, on the grounds that it needs `build:packages` before the web
+    build can see it anyway; the case this exists for is editing a route and re-running the checks.
+- [x] `P8.8` **assertion blind spots** `P2` `~2h` — §5 walks `packages/*` only (`P1.10`);
   §10 (`AuditTrail`) does not walk `docs/`, where the drift it was written for lives; §3's
   `*.config.*` exemption matches `src/**/container.config.ts` (narrow to root and package-root
   configs; mirror in `biome-config/src/base.json:122`); §3's regex hits `process.env` inside
   comments (strip comments first); §6 and §9 regexes are column-0 dependent and pass silently
-  on nested or minified output.
+  on nested or minified output. `done: 2026-09-06`
+  - **The §5 clause was already stale** — it walks `sourceDirs()`, which includes `apps/*`. Closed
+    by `P1.10` as the entry itself suspected. Checked rather than assumed.
+  - **Widening §10 to `docs/` found two live hits immediately**, which is the entry's own claim
+    proved: for its whole life the assertion could not see the category of drift it was written for.
+    Both are pages that *state* the ban and therefore have to spell the name, so they are exempt by
+    name — the same shape as `ENV_EXEMPT`.
+  - **Narrowing §3's config glob is a security-shaped fix.** `**/*.config.ts` also exempted
+    `composition/src/container/container.config.ts` and `auth/src/factory/auth.config.ts` — runtime
+    code let off a rule by an accident of naming. Neither currently reads `process.env`, so nothing
+    was hiding; verified the narrowing bites by adding a read to one and watching it fail.
+    `biome-config` carries the same three anchored shapes, because §3 exists to keep them in step.
+  - **§6 now tracks bracket depth** through strings and comments rather than anchoring `await` to
+    column zero. Verified with an indented top-level `await` appended to a real barrel, which the
+    old form walked straight past.
+  - **§9 now shares the parser with §17 and §18, and that closed two holes.** The regex closed on
+    `\n});` at column zero, so a differently-wrapped table was skipped silently; and it matched
+    `organization_id` as a *substring*, which is how **`sessions` passed for its whole life** on the
+    strength of `active_organization_id`. That column is which tenant a session points at, not which
+    owns the row — so `sessions` is now exempt by name with the reason, rather than by accident.
+  - **It also surfaced a race I had introduced in `P8.4`.** The new invitation sweep made
+    `pg-maintenance.gateway.spec.ts` — which sweeps at 2030, because `sweepExpired` takes a clock
+    and no tenant — delete the invitations `pg-invitation.repository.spec.ts` was holding, in
+    parallel, against one database. It passed on the run before this one by ordering luck, and CI
+    passed on `a3c9537` the same way. The sweep spec's clock moves to 2020; three consecutive runs
+    of both files now pass.
 - [x] `P8.9` **new schema assertions** `P1` `~3h` — **§17** every unique index on a table
   carrying `organization_id` leads with it, with the documented exemption list; **§18** every FK
   column in a `pgTable` has an index. Both are stated as non-negotiable in

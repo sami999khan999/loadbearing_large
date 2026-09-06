@@ -423,6 +423,18 @@ Every other `process.env` read is an unvalidated string that becomes `undefined`
 > run by hand against a throwaway URL
 > ([16](16-auth-package.md)), which had a Biome exemption and no matching one here.
 
+> [!NOTE]
+> **The `*.config.*` exemption is anchored, not a bare glob.** `**/*.config.ts` also matched
+> `composition/src/container/container.config.ts` and `auth/src/factory/auth.config.ts` — runtime
+> code carrying a role suffix, exempted from a security-shaped rule by an accident of naming. The
+> pattern now matches a config at the repository root, a package root or an app root and nowhere
+> else, and `biome-config/src/base.json` carries the same three shapes: a path exempted in one and
+> not the other is either a gate that passes while the rule is broken, or a build that fails for no
+> reason.
+>
+> **Comments are stripped before the test**, because a line explaining that `process.env` is banned
+> in a file is not a read of it — and this assertion used to fail on its own documentation.
+
 ### 4 — Every `@orpc/*` entry is on one version line
 
 ```js
@@ -454,6 +466,13 @@ Generated files are skipped by name (`*.gen.ts`, `*.gen.tsx`). `apps/web/src/rou
 The default NestJS and Express scaffold is CommonJS, and a CJS consumer reaches an ESM package through `require(esm)` — unflagged on Node 22.12+, which this repo's `engines` floor guarantees. It refuses any module graph containing a top-level `await`.
 
 So a TLA in a package barrel breaks every CJS consumer, with an error naming the wrong thing. Nothing today has one; this is what keeps it that way. **Skips when no `dist/` exists**, so run it after `build:packages`.
+
+> [!NOTE]
+> **Depth, not column zero.** The original test anchored `await` to the start of a line, which is
+> what an unwrapped `tsup` barrel happens to emit and nothing guarantees: a bundler that indents a
+> wrapped module, or any minified output, walks straight past it. It now tracks bracket depth
+> through strings and comments and reports the first `await` at depth zero — so an `await` inside a
+> function is still fine, which is the distinction the anchor was standing in for.
 
 ### 7 — `"use client"` only in `ui`, `query`, `feature`
 
@@ -555,13 +574,28 @@ const TENANT_EXEMPT = new Set([
 
 Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTable` returns the same type whichever columns you pass, and there is no compile error available — which is precisely the category of rule this file exists for.
 
+**It shares its parser with 17 and 18, and that fixed two silent holes.** The original regex closed on `\n});` at column zero, so a table Biome wrapped differently was skipped without a word; and it tested for `organization_id` as a *substring*, which is how `sessions` passed for its whole life on the strength of `active_organization_id`. That column is which tenant a session points at, not which owns the row — the same distinction that keeps `users` off the list despite `last_active_organization_id` — so `sessions` is now exempt by name, with the reason, rather than by accident.
+
+> [!NOTE]
+> **It refuses to run against a stale bundle.** This is a grep over an artefact, so it is worth
+> exactly as much as the artefact is current — and a green run against an `.output` built before the
+> edit under review is how the client boundary was last reported clean while it was not. If anything
+> under `apps/web/src` is newer than the newest asset, the assertion fails and says to rebuild
+> rather than reporting on a build nobody made.
+>
+> It compares against `apps/web/src` only. A change in a package that reaches the bundle is not
+> caught, on the grounds that such a change needs `build:packages` before the web build can see it
+> anyway — the case this exists for is editing a route and re-running the checks.
+
 ### 10 — The audit port is `ActivityLogger`
 
 ```js
 // fail on the identifier AuditTrail anywhere in packages/** or apps/**
 ```
 
-Cheap, and it exists because the name drifted once already: the observability docs said `AuditTrail` while eleven other files said `ActivityLogger`, and nothing caught it because both are prose in Markdown until the class exists.
+Cheap, and it exists because the name drifted once already: the observability docs said the wrong one while eleven other files said `ActivityLogger`, and nothing caught it because both are prose in Markdown until the class exists.
+
+**It walks `docs/` as well as `packages/` and `apps/`**, which it did not originally — so for its whole life it could not see the category of drift it was written for. Two pages are exempt by name: this one and `docs/opinions/index.md`, which state the ban and therefore have to spell the banned name. Anywhere else, it is the drift.
 
 Two names for the audit port is worse than an ugly name. The whole point of [Data and scale](../opinions/data-and-scale.md) §1 is that a business fact and a diagnostic go to different places for different reasons, and a reader who sees two names reasonably assumes there are two things.
 

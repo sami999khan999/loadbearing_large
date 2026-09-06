@@ -116,9 +116,11 @@ const invitation = (expiresAt: Date) => {
 };
 
 describe("PgMaintenanceGateway.sweepExpired", () => {
-  const now = new Date("2030-01-01T00:00:00.000Z");
-  const expired = new Date("2029-12-31T23:59:59.000Z");
-  const live = new Date("2030-01-01T00:00:01.000Z");
+  // Deliberately in the past, not the future: `sweepExpired` takes a clock and no tenant,
+  // so sweeping at 2030 deletes the rows every other spec is holding.
+  const now = new Date("2020-01-01T00:00:00.000Z");
+  const expired = new Date("2019-12-31T23:59:59.000Z");
+  const live = new Date("2020-01-01T00:00:01.000Z");
 
   it("counts the rows it deleted, not the rows it read back", async () => {
     // Cleared first: the count is exact only against a table holding no expired row this
