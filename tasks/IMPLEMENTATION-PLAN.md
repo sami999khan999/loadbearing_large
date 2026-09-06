@@ -497,7 +497,7 @@ match a decision the tree already made.
   `organization/new.tsx:34`, `invitation/$token.tsx:46`; `sign-in.tsx:52` omits the clear) →
   `apps/web/src/route/-session.ts` `refreshSession()`. Update `feature/docs/index.md`,
   `apps/web/docs`.
-- [ ] `P3.10` **`TwoFactorForm` bypasses the query seam** `~1h` — four raw `AuthClient` calls
+- [x] `P3.10` done: 2026-09-05 · **`TwoFactorForm` bypasses the query seam** `~1h` — four raw `AuthClient` calls
   with hand-rolled pending state → `SessionMutations.{verifyTotp,verifyBackupCode,verifyOtp,sendOtp}`.
   Update `query/docs/reference/mutations.md`.
 - [x] `P3.11` done: 2026-09-05 · **`QueryKeys.session` is a bare array** `~15m` → `{ all() }` like its siblings;
@@ -535,7 +535,7 @@ match a decision the tree already made.
   `rbac.member.invite` etc. Recommend registering the modules (fewer renames, keys are already
   in `PROCEDURE_PERMISSIONS`). Update `permissions/docs/reference/module-registry.md`.
 - [x] `P3.19` done: 2026-09-05 · **missing `override`** `~5m` — `auth/src/session/null-membership.enroller.ts:19`.
-- [ ] `P3.20` **`apps/worker` folder rules** `~1h` — four loose files under `src/`, no
+- [x] `P3.20` done: 2026-09-05 · **`apps/worker` folder rules** `~1h` — four loose files under `src/`, no
   `index.ts` in `consumer/`, `schedule/`, `notification/`; consts vs `private static readonly`
   split. `env.ts` and `main.ts` stay (framework-dictated); `worker-bootstrap.ts` and
   `system-principal.ts` → `src/bootstrap/`; add barrels; pick `private static readonly` for
