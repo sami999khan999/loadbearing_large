@@ -1,6 +1,6 @@
 ---
 title: Shutdown
-description: What stop() drains, the race that bounds it, the order everything closes in — and the defect that makes a second signal cut a drain short.
+description: What stop() drains, the race that bounds it, the order everything closes in, and why a second signal joins the drain instead of ending it.
 ---
 
 # Shutdown
@@ -30,16 +30,24 @@ loop alive once every worker has already drained.
    [`composition/docs/reference/container.md`](../../../packages/composition/docs/reference/container.md)
    for why `dispose()` itself closes in reverse construction order.
 
-## `stop()` is idempotent
+## `stop()` is idempotent, and the second caller *joins*
 
 A SIGINT arriving during a SIGTERM drain must not close everything twice, which surfaces as an
-unhandled rejection from an already-closed client.
+unhandled rejection from an already-closed client. `stop()` memoises the drain in `draining` and
+returns it, so the second call awaits the same work.
 
-> [!WARNING]
-> **The guard returns `undefined` rather than the in-flight promise** (`P8.1` in
-> `tasks/IMPLEMENTATION-PLAN.md`). `main.ts` chains `.then(() => process.exit(0))` onto the result, so
-> a second signal during a drain resolves immediately and exits the process **mid-close**. The fix is
-> for `stop()` to return the promise the first call is already awaiting.
+> [!IMPORTANT]
+> **Returning the promise is half the guard, not a refinement of it.** A guard that returns nothing
+> still prevents the double close — and hands the second caller a promise that is already resolved.
+> `main.ts` chains `.then(() => process.exit(0))` onto whatever `stop()` returns, so the second
+> signal exits the process **mid-close**: workers still draining, Redis still open, no
+> `process.stopped` line. `??=` is what makes the two callers share one drain.
+
+> [!NOTE]
+> **A `close()` that rejects after the backstop is logged, not fatal.** The rejection handler is
+> attached to the `Promise.all` *before* the race, because once the timeout has won the drain moves
+> on and a late rejection has nowhere to land but `unhandledRejection` — which exits 1 over a
+> shutdown that had already succeeded.
 
 ## The worker's own Redis connection
 
@@ -61,9 +69,10 @@ The shutdown `.catch` logs rather than swallowing, for the same reason: a bare
 `.catch(() => process.exit(1))` turns every shutdown failure into an exit code, which is unreadable
 in a container log.
 
-> [!NOTE]
-> The signal handlers are registered **after** `await bootstrap.start()`, so a signal arriving during
-> boot is unhandled, and the losing side of the `Promise.race` has no `.catch` — `P8.2`.
+The signal handlers are registered against the `start()` promise rather than after awaiting it, so a
+signal arriving **during** boot drains rather than getting Node's default handling on a worker with
+consumers running and schedules half registered. The handler waits on that promise before calling
+`stop()`: there is nothing to drain until the consumers exist.
 
 Top-level `await` works here because the package is ESM and the tsconfig targets ES2024 under
 NodeNext resolution.

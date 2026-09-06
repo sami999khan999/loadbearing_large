@@ -442,7 +442,7 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 ```ts
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
-  private stopping = false;
+  private draining: Promise<void> | null = null;
 
   public constructor(
     private readonly container: Container,
@@ -485,21 +485,29 @@ export class WorkerBootstrap {
     });
   }
 
-  // Idempotent: closing twice surfaces as an unhandled rejection from an
-  // already-closed client.
-  public async stop(signal: string): Promise<void> {
-    if (this.stopping) return;
-    this.stopping = true;
+  // Idempotent, and a second signal *joins* the drain already running. Returning
+  // early resolves at once, and `main.ts` exits on that — mid-close.
+  public stop(signal: string): Promise<void> {
+    this.draining ??= this.drain(signal);
+    return this.draining;
+  }
 
+  private async drain(signal: string): Promise<void> {
     this.container.logger.emit("process.stopping", { service: "worker", signal });
     const startedAt = this.container.clock.now();
 
+    // Handled before the race, never after: once the timeout has won, a rejection
+    // arriving late has nowhere to land but `unhandledRejection`.
+    const closed = Promise.all(this.workers.map((w) => w.close())).then(
+      () => undefined,
+      (error: unknown) => {
+        this.container.logger.failure(error, { service: "worker", phase: "close" });
+      },
+    );
+
     // `close()` drains; the race is the backstop, because a job that never returns
     // must not hold the process past the platform's SIGKILL timer.
-    await Promise.race([
-      Promise.all(this.workers.map((w) => w.close())),
-      WorkerBootstrap.after(Env.shutdownTimeoutMs),
-    ]);
+    await Promise.race([closed, WorkerBootstrap.after(Env.shutdownTimeoutMs)]);
 
     await this.redis.close();
 
@@ -525,7 +533,8 @@ export class WorkerBootstrap {
 > [!IMPORTANT]
 > **Three things in `stop()` are each a separate incident when left out.**
 >
-> - **The `stopping` guard.** A container platform that sends `SIGTERM` and then `SIGINT` calls this twice, and the second `close()` on an already-closed client rejects with nothing to catch it.
+> - **The `draining` memo, and the fact that it is *returned*.** A container platform that sends `SIGTERM` and then `SIGINT` calls this twice: without a guard the second `close()` on an already-closed client rejects with nothing to catch it, and with a guard that returns nothing the second caller gets a promise that is already resolved — `main.ts` chains `process.exit(0)` onto it and cuts the first drain short. Both halves are one line, and only together are they a guard.
+> - **The rejection handler on `closed`, attached before the race rather than after.** When the timeout wins, the drain moves on and the `close()` promise is still pending; a rejection landing afterwards has no handler, reaches `unhandledRejection`, and exits 1 over a shutdown that had already emitted `process.stopped`.
 > - **The race against `WORKER_SHUTDOWN_TIMEOUT_MS`.** `close()` drains, and a job that never returns drains forever — past the platform's own SIGKILL timer, which then kills the process in the state graceful shutdown existed to avoid.
 > - **`container.clock.now()` on both sides of the duration, never `Date.now()`.** The clock is a port precisely so a test can freeze it; mixing the two makes the one number the shutdown emits untestable.
 
@@ -563,17 +572,15 @@ process.on("uncaughtException", (error: unknown) => {
   process.exit(1);
 });
 
-try {
-  await bootstrap.start();
-} catch (error: unknown) {
-  container.logger.failure(error, { service: "worker", phase: "start" });
-  process.exit(1);
-}
+// Started but not yet awaited, so the handlers below exist while boot is still
+// running. A signal in that window drains instead of killing a half-built worker.
+const started = bootstrap.start();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    void bootstrap
-      .stop(signal)
+    void started
+      // Boot first: there is nothing to drain until the consumers are registered.
+      .then(() => bootstrap.stop(signal))
       .then(() => process.exit(0))
       .catch((error: unknown) => {
         // Logged, never swallowed: a bare `.catch(() => process.exit(1))` turns
@@ -583,7 +590,16 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
       });
   });
 }
+
+try {
+  await started;
+} catch (error: unknown) {
+  container.logger.failure(error, { service: "worker", phase: "start" });
+  process.exit(1);
+}
 ```
+
+**`start()` is called, then the signal handlers are registered, and only then is it awaited.** Registering them after the `await` leaves a window — the whole of boot — in which `SIGTERM` gets Node's default handling and kills a worker that has consumers running and schedules half registered. Splitting the promise from the `await` closes it in three lines, and the handler waits on `started` before draining because there is nothing to drain until the consumers exist.
 
 **The two process-level handlers are registered before `start()`, not after.** A container that fails to reach Postgres throws during boot, and without them Node prints a raw stack to stderr — unparseable by the collector, so the one failure you most need in the log stream is the one that misses it. The same reasoning puts a `try` around `start()` and a `.catch` on `stop()`.
 

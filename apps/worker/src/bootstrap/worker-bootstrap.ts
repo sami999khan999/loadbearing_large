@@ -11,7 +11,7 @@ import {
 
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
-  private stopping = false;
+  private draining: Promise<void> | null = null;
 
   public constructor(
     private readonly container: Container,
@@ -66,21 +66,29 @@ export class WorkerBootstrap {
     });
   }
 
-  // Idempotent: closing twice surfaces as an unhandled rejection from an already-closed
-  // client. See docs/reference/shutdown.md.
-  public async stop(signal: string): Promise<void> {
-    if (this.stopping) return;
-    this.stopping = true;
+  // Idempotent, and a second signal *joins* the drain already running. Returning early
+  // resolves at once, and `main.ts` exits on that — mid-close. See docs/reference/shutdown.md.
+  public stop(signal: string): Promise<void> {
+    this.draining ??= this.drain(signal);
+    return this.draining;
+  }
 
+  private async drain(signal: string): Promise<void> {
     this.container.logger.emit("process.stopping", { service: "worker", signal });
     const startedAt = this.container.clock.now();
 
+    // Handled before the race, never after: once the timeout has won, a rejection arriving
+    // late has nowhere to land but `unhandledRejection`, which exits 1 over a clean drain.
+    const closed = Promise.all(this.workers.map((w) => w.close())).then(
+      () => undefined,
+      (error: unknown) => {
+        this.container.logger.failure(error, { service: "worker", phase: "close" });
+      },
+    );
+
     // `close()` drains; the race is the backstop, because a job that never returns must
     // not hold the process past the platform's SIGKILL timer.
-    await Promise.race([
-      Promise.all(this.workers.map((w) => w.close())),
-      WorkerBootstrap.after(Env.shutdownTimeoutMs),
-    ]);
+    await Promise.race([closed, WorkerBootstrap.after(Env.shutdownTimeoutMs)]);
 
     await this.redis.close();
 

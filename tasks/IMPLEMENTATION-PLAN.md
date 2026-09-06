@@ -1712,16 +1712,38 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### `apps/worker`
 
-- [ ] `P8.1` **(verified) second signal hard-kills a graceful drain** `P1` `~30m`
+- [x] `P8.1` **(verified) second signal hard-kills a graceful drain** `P1` `~30m`
   - **Goal:** `stop()` returns `undefined` when `stopping` is already true; `main.ts` chains
     `.then(() => process.exit(0))`, so SIGINT during a SIGTERM drain exits mid-close.
   - **Done when:** `stop()` returns the in-flight promise; spec in
-    `apps/worker/tests/worker-bootstrap.spec.ts`.
-  - **Files:** `apps/worker/src/worker-bootstrap.ts:79-81`, `apps/worker/src/main.ts:41-52`.
+    `apps/worker/tests/bootstrap/worker-bootstrap.spec.ts`. `done: 2026-09-06`
+  - **Files:** `apps/worker/src/bootstrap/worker-bootstrap.ts`, `apps/worker/src/main.ts`.
   - **Docs:** `apps/worker/docs/reference/shutdown.md`, `docs/setup/25`.
-- [ ] `P8.2` **(verified) signal handlers registered after `start()`; losing race promise
+  - **`draining ??= this.drain(signal)`**, and `stop()` returns it. The boolean guard already
+    prevented the double close; what it did not do was give the second caller anything to wait on.
+    Both halves are one line and only together are they a guard — `docs/setup/25` says so at the
+    listing, because the version with the boolean looks finished.
+  - **Four specs, and the two that matter were watched failing** against the previous
+    implementation: promise identity, and the late rejection. The other two — one
+    `process.stopping` per drain, every worker closed — pass either way, which is the point of
+    having them.
+- [x] `P8.2` **(verified) signal handlers registered after `start()`; losing race promise
   unhandled** `P2` `~30m` — register before `await bootstrap.start()`; attach `.catch` to the
-  `Promise.all(close)` so a late rejection is logged, not fatal.
+  `Promise.all(close)` so a late rejection is logged, not fatal. `done: 2026-09-06`
+  - **`const started = bootstrap.start()`, handlers, then `await started`.** The handler waits on
+    that promise before draining: there is nothing to drain until the consumers exist. Closing the
+    window costs three lines and removes the case where SIGTERM during boot gets Node's default
+    handling on a worker with consumers running and schedules half registered.
+  - **The rejection handler goes on before the race, not after.** Once the backstop wins, the drain
+    moves on and `close()` is still pending; a rejection landing later reaches
+    `unhandledRejection`, which `main.ts` turns into `process.exit(1)` — over a shutdown that had
+    already emitted `process.stopped`.
+  - **`apps/worker/vitest.config.ts` gains a `test.env` block**, the same shape and for the same
+    reason as `apps/web`'s: `Env` parses at module load, so importing `WorkerBootstrap` at all
+    needs a complete environment. `WORKER_SHUTDOWN_TIMEOUT_MS` is 20ms there so a spec can let the
+    backstop win without waiting on the 25s production default.
+  - **Verified against the real process too**, not only in vitest: SIGTERM and SIGINT delivered
+    back to back to the built worker drains once and exits 0, and `boot-smoke` still passes.
 - [ ] `P8.3` **worker requires SMTP for a digest it never sends** `P2` `~4h`
   - **Goal:** `env.ts` requires `SMTP_URL`/`EMAIL_FROM` "for the scheduled digest";
     `DigestComposer` is constructed only in its spec; `QueueName.NOTIFICATION` and
