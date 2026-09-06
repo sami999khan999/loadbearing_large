@@ -86,7 +86,7 @@ merges them left to right:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-**`infra/docker-compose.prod.yml`**
+**`infra/docker-compose.prod.yml`** — illustrative; write it on the host, it is not in the repository.
 
 ```yaml
 services:
@@ -178,7 +178,7 @@ the pipeline reads that label from the log body rather than from the container n
 
 ### TLS
 
-**`infra/Caddyfile`**
+**`infra/Caddyfile`** — illustrative; write it on the host, it is not in the repository.
 
 ```
 example.com {

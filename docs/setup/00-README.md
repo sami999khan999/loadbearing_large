@@ -152,7 +152,7 @@ Every package is `@loadbearing/*` so these documents line up with the architectu
 **Then the three defaults that are baked into shipped code rather than into local config**, none of
 which a find-and-replace on `@loadbearing/` will reach:
 
-- `advanced.cookiePrefix` in `packages/auth/src/auth.factory.ts` — user-visible in the browser, and
+- `advanced.cookiePrefix` in `packages/auth/src/factory/auth.factory.ts` — user-visible in the browser, and
   changing it later invalidates every cookie already issued
 - the `keyPrefix` default in `packages/infrastructure/src/redis/redis.connection.ts` — a stale one is
   a cache that reads nothing, with no error anywhere

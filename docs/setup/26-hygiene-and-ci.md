@@ -191,9 +191,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The fourteen architectural assertions
+## Step 26.4 — The fifteen architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Fourteen greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Fifteen greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -438,6 +438,34 @@ Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generat
 
 > [!NOTE]
 > **`pnpm check:comments` is the companion report, and it never fails.** `tooling/scripts/comment-density.mjs` prints per-package comment percentage, block count and the twenty-five files carrying the most comment lines. A package drifting toward the ceiling is visible there long before any single file trips §14 — and after the phase-1 sweep the tree sits at 13 % overall with zero blocks.
+
+### 15 — Every backticked path in the docs exists
+
+```js
+// fail if a backticked repo-relative path in docs/**, README.md, AGENTS.md or a
+// package's docs/** names nothing on disk
+```
+
+The cheapest kind of documentation rot and the one a reader trusts most: a path in backticks reads
+as a fact about the tree. [15](15-infrastructure-package.md) sent people to `src/cache/` and `src/queue/` for months —
+folders this repository has never had, because `infrastructure` is organised by vendor
+([Layering](../ai/rules/layering.md)). Twenty-one paths were wrong when this was first run, and six
+of them had been correct until a refactor moved the file and left the sentence behind.
+
+**Three things keep it from crying wolf**, because a check with false positives teaches people to
+add exemptions rather than fix paths:
+
+- **Fenced blocks are skipped.** An ASCII tree is full of names that are not paths, and a snippet's
+  imports resolve against the file it would live in, not against the repository root.
+- **A page may say a path is not real, and the check believes it.** `illustrative`, `not written
+  yet`, `does not exist`, `removed`, `deleted` or `☐` on the line — or on the heading above a list,
+  which is what `## What this removed` in [05](05-lint-and-format.md) is. A collapsed `<details>`
+  block is skipped whole: it is the one place a page deliberately shows a tree that is gone.
+- **A `docs/reference/<page>.md` span resolves against the package that wrote it.** The opinions pages say "the
+  package's `docs/reference/`" generically, so the span passes if any package has one.
+
+`apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
+move there, and doc [30](30-desktop-app.md) is a plan for one of them.
 
 ---
 

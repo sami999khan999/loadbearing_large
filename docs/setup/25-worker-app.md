@@ -129,7 +129,7 @@ Adapt `containerConfig()` to return the same shape minus `auth`, and make the `a
 
 Jobs have no user. They still need a principal, because `Authorizer.assert()` is not optional.
 
-**`apps/worker/src/system-principal.ts`**
+**`apps/worker/src/bootstrap/system-principal.ts`**
 
 ```ts
 import { Principal } from "@loadbearing/application";
@@ -392,7 +392,7 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 
 ## Step 25.7 — Bootstrap and entrypoint
 
-**`apps/worker/src/worker-bootstrap.ts`**
+**`apps/worker/src/bootstrap/worker-bootstrap.ts`**
 
 ```ts
 export class WorkerBootstrap {

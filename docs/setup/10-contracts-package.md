@@ -242,7 +242,7 @@ export type TaskStatus = z.infer<typeof TaskContract.status>;
 
 ## Step 10.4 — A domain entity
 
-**`packages/contracts/src/task/task.entity.ts`**
+**`packages/contracts/src/task/task.entity.ts`** — illustrative, as in 10.3.
 
 ```ts
 // `Clock` and `CapabilitySet` join `src/import.ts` when this file lands — the first
@@ -307,7 +307,7 @@ export class TaskEntity {
 
 ## Step 10.5 — The oRPC contract
 
-**`packages/contracts/src/task/task.procedures.ts`**
+**`packages/contracts/src/task/task.procedures.ts`** — illustrative, as in 10.3.
 
 ```ts
 import { oc } from "../import.js";
@@ -369,7 +369,7 @@ The router object is the one place a plain `export const` appears in this packag
 
 ## Step 10.6 — `ProcedurePermissions`
 
-**`packages/contracts/src/catalog/task.permissions.ts`** — the slice's fragment.
+**`packages/contracts/src/catalog/task.permissions.ts`** — illustrative; the slice's fragment.
 
 > [!NOTE]
 > This one file lives in `catalog/` rather than in the subject folder alongside the other three, which is the single exception to the folder-prefix rule. It is a **cross-check** — "does every declared procedure have a gate" — rather than part of the subject's own definition. `catalog/` is the same name `@loadbearing/permissions` and `@loadbearing/errors` give the same pattern: team-owned fragments plus a platform-owned index that merges them.

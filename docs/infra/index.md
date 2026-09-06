@@ -45,7 +45,7 @@ to say about each — which is what earns structure ([Simplicity](../opinions/si
 This is the opposite answer from the one `packages/infrastructure/src/` gives, and the difference is
 what each directory holds. There, ClickHouse and Loki each got a folder, because each is several
 TypeScript modules and the folder is the unit of "what does this package depend on". Here, each is
-one mounted file — and `infra/clickhouse/clickhouse.init.sql` states nothing that
+one mounted file — and a `clickhouse/` folder holding that one file would state nothing
 `infra/clickhouse.init.sql` does not. **Structure is earned by contents, not by symmetry with another
 directory.**
 

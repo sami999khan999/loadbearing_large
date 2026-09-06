@@ -244,7 +244,7 @@ The reason it is one class taking two URLs rather than two classes: **which conn
 
 ## Step 15.2 — `RedisCacheStore`
 
-**`packages/infrastructure/src/cache/redis-cache.store.ts`**
+**`packages/infrastructure/src/redis/redis-cache.store.ts`**
 
 ```ts
 import type { Redis } from "ioredis";
@@ -317,7 +317,7 @@ export class RedisCacheStore extends CacheStore {
 
 ## Step 15.3 — `S3StorageGateway`
 
-**`packages/infrastructure/src/storage/storage-key.ts`**
+**`packages/infrastructure/src/s3/storage-key.ts`**
 
 ```ts
 import { Uuid } from "@loadbearing/core";
@@ -344,7 +344,7 @@ export class StorageKey {
 
 **Date-partitioned** because lifecycle rules, cost reports, and bulk deletes all work on prefixes. A flat bucket with a million objects is painful in a way that only becomes apparent when you need to delete last year's.
 
-**`packages/infrastructure/src/storage/s3-storage.gateway.ts`**
+**`packages/infrastructure/src/s3/s3-storage.gateway.ts`**
 
 ```ts
 import {
@@ -465,7 +465,7 @@ The gateway supports both, and which one a feature uses is a domain decision:
 
 ## Step 15.4 — `BullMqQueuePublisher`
 
-**`packages/infrastructure/src/queue/queue-name.ts`**
+**`packages/infrastructure/src/bullmq/queue-name.ts`**
 
 ```ts
 export class QueueName {
@@ -491,7 +491,7 @@ export class QueueName {
 
 **`ANALYTICS` is its own concern because it is allowed to fall behind.** Projecting domain events into snapshot tables is the one workload here where lag is acceptable and throughput matters more than latency — nobody is waiting on a dashboard row. Sharing a queue with notifications would let a backlog of projections delay something a user is actually waiting for. It is also the queue whose depth is the health signal for the derived store: a consumer that died on Tuesday shows up here before it shows up in a wrong quarterly number ([Data and scale](../opinions/data-and-scale.md) §2).
 
-**`packages/infrastructure/src/queue/bullmq-queue.publisher.ts`**
+**`packages/infrastructure/src/bullmq/bullmq-queue.publisher.ts`**
 
 ```ts
 import { Queue } from "bullmq";

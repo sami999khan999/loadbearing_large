@@ -230,7 +230,7 @@ Note that `deleteBySource` takes it too. A delete keyed only on a caller-supplie
 
 ## Step 14.3 — The embedding provider
 
-**`packages/infrastructure/src/embedding/openai-embedding.provider.ts`**
+**`packages/infrastructure/src/openai/openai-embedding.provider.ts`**
 
 ```ts
 import { EmbeddingProvider } from "@loadbearing/application";
