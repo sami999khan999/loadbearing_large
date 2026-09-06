@@ -48,11 +48,11 @@ apps/worker/
 │   │   └── reconcile.schedule.ts     05:00 daily
 │   └── notification/
 │       ├── index.ts
-│       └── digest.composer.ts        → DigestComposer
+│       └── notification-digest.composer.ts        → DigestComposer
 └── tests/
     ├── bootstrap/system-principal.spec.ts
     ├── consumer/maintenance.consumer.spec.ts
-    └── notification/digest.composer.spec.ts
+    └── notification/notification-digest.composer.spec.ts
 ```
 
 ---

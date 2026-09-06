@@ -1,1 +1,1 @@
-export { DigestComposer } from "./digest.composer.js";
+export { DigestComposer } from "./notification-digest.composer.js";

@@ -1,6 +1,6 @@
 import { SERVER_CATALOG, StaticContentSource } from "@loadbearing/content";
 import { describe, expect, it } from "vitest";
-import { DigestComposer } from "../../src/notification/digest.composer.js";
+import { DigestComposer } from "../../src/notification/notification-digest.composer.js";
 
 // `SERVER_CATALOG`, not the client one: `email` is reachable through it and nothing
 // else, so a composer on the client source renders raw keys.
