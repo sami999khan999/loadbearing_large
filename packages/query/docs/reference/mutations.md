@@ -30,6 +30,7 @@ marked stale, or the destination renders the value the mutation just changed.
 | `useVerifyTotpEnrolment` | `["session"]` | The moment two-factor actually becomes true — `user.twoFactorEnabled` is what the security page renders |
 | `useChangePassword` | the session **list** | `revokeOtherSessions` is set, so every other device is gone and the list on screen is wrong. This tab's own session survives, which is why `QueryKeys.session` is absent |
 | `useInvite`, `useRevokeInvitation` | `member.all()` | A re-invite replaces a pending row and the member list sits beside it, so both refetch together |
+| `useVerifyTotp`, `useVerifyBackupCode`, `useVerifyOtp` | `session.all()` | Each one completes a sign-in that answered `TWO_FACTOR_REQUIRED`, so the session the route is about to read is the one that just came into being |
 
 **Nothing, because nothing changed yet.** These are not omissions:
 
@@ -39,8 +40,22 @@ marked stale, or the destination renders the value the mutation just changed.
 | `useChangeEmail` | A confirmation was sent to the *old* address; the address on the session moves only once that link is followed |
 | `useEnableTwoFactor` | Two-factor is not on yet. Invalidating here makes the page claim protection the account does not have |
 | `useSignInWithGoogle`, `useLinkGoogle` | The success path is a full-page navigation to Google. Nothing in this cache survives to be invalidated; the settings page refetches when the browser returns |
+| `useSendOtp` | It sends a code and completes nothing. There is no session yet to refetch |
 
 **Nothing, because the whole cache has to go.** Sign-out and the three organization actions.
+
+### `TwoFactorForm` went through the client for a while, and that is the shape to recognise
+
+Four raw `AuthClient` calls behind a hand-rolled `pending`/`failed` pair, with a comment saying
+there was "no session to invalidate until this succeeds". Half true: the *verification* is exactly
+the moment one comes into being, and the route's own `complete()` was carrying what an
+`invalidates` line says in one place.
+
+The tell is not the raw call — it is the local `useState` that reimplements `isPending` and
+`isError` beside it. A form doing that is a form the seam is not serving, and the fix is a defined
+mutation rather than better local state. `mutation.reset()` is the piece the hand-rolled version had
+no equivalent for: four mutations each keep their own `isError`, and switching method must not leave
+the reader looking at a failure that belongs to the method they left.
 
 ## Sign-out and switch clear the cache at the call site
 
