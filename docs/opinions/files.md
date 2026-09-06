@@ -24,24 +24,70 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.repository.ts` | `task.repository.ts` | `TaskRepository` |
 | `.gateway.ts` | `s3-storage.gateway.ts` | `S3StorageGateway` |
 | `.store.ts` | `pg-vector.store.ts` | `PgVectorStore` |
-| `.reader.ts` | `analytics.reader.ts` | `AnalyticsReader` |
-| `.logger.ts` | `activity.logger.ts` | `ActivityLogger` |
-| `.provider.ts` | `embedding.provider.ts` | `EmbeddingProvider` |
-| `.publisher.ts` | `queue.publisher.ts` | `QueuePublisher` |
-| `.resolver.ts` | `session.resolver.ts` | `SessionResolver` |
+| `.reader.ts` | `loki-log.reader.ts` | `LokiLogReader` |
+| `.logger.ts` | `pg-activity.logger.ts` | `PgActivityLogger` |
+| `.provider.ts` | `openai-embedding.provider.ts` | `OpenAiEmbeddingProvider` |
+| `.publisher.ts` | `bullmq-queue.publisher.ts` | `BullMqQueuePublisher` |
+| `.resolver.ts` | `better-auth-session.resolver.ts` | `BetterAuthSessionResolver` |
+| `.projector.ts` | `clickhouse-analytics.projector.ts` | `ClickHouseAnalyticsProjector` |
+| `.sender.ts` | `smtp-email.sender.ts` | `SmtpEmailSender` |
+| `.mailer.ts` | `content-auth.mailer.ts` | `ContentAuthMailer` |
+| `.source.ts` | `static-content.source.ts` | `StaticContentSource` |
 | `.bus.ts` | `event.bus.ts` | `EventBus` |
+| `.unit-of-work.ts` | `pg-unit-of-work.ts` | `PgUnitOfWork` |
+| `.connection.ts` | `redis.connection.ts` | `RedisConnection` |
+| `.cache.ts` | `capability.cache.ts` | `CapabilityCache` |
+| `.hasher.ts` | `api-key.hasher.ts` | `ApiKeyHasher` |
+| `.builder.ts` | `principal.builder.ts` | `PrincipalBuilder` |
+| `.factory.ts` | `auth.factory.ts` | `AuthFactory` |
+| `.seed.ts` | `system-role.seed.ts` | `SystemRoleSeed` |
+| `.enroller.ts` | `pg-personal-organization.enroller.ts` | `PgPersonalOrganizationEnroller` |
+| `.founder.ts` | `pg-organization.founder.ts` | `PgOrganizationFounder` |
+| `.claimer.ts` | `pg-invitation.claimer.ts` | `PgInvitationClaimer` |
 | `.policy.ts` | `overdue-lock.policy.ts` | `OverdueLockPolicy` |
 | `.strategy.ts` | `bearer-auth.strategy.ts` | `BearerAuthStrategy` |
+| `.plugin.ts` | `organization.plugin.ts` | `OrganizationPlugin` |
 | `.router.ts` | `task.router.ts` | `TaskRouter` |
+| `.interceptor.ts` | `error.interceptor.ts` | `ErrorInterceptor` |
 | `.consumer.ts` | `embedding.consumer.ts` | `EmbeddingConsumer` |
 | `.schedule.ts` | `cleanup.schedule.ts` | `CleanupSchedule` |
+| `.composer.ts` | `notification-digest.composer.ts` | `DigestComposer` |
 | `.error.ts` | `forbidden.error.ts` | `ForbiddenError` |
 | `.schema.ts` | `rbac.schema.ts` | Drizzle tables |
+| `.config.ts` | `auth.config.ts` | `AuthConfig` |
+| `.manifest.ts` | `image.manifest.ts` | `ImageManifest` |
 | `.permissions.ts` | `task.permissions.ts` | a catalog fragment |
 | `.errors.ts` | `core.errors.ts` | an error-catalog fragment |
+| `.events.ts` | `core.events.ts` | an event-catalog fragment |
 | `.gate.ts` | `rbac.gate.ts` | a module-gate fragment |
 | `.routes.ts` | `rbac.routes.ts` | a route fragment |
+| `.data.ts` | `nav.data.ts` | a content record |
 | `.spec.ts` | `reactivate-task.use-case.spec.ts` | tests, in the package's `tests/` |
+
+**React and the client packages add their own**, and they name a kind of component or hook rather
+than a layer role:
+
+| Role suffix | Example file | Exports |
+|---|---|---|
+| `.form.tsx` | `sign-in.form.tsx` | `SignInForm` |
+| `.list.tsx` | `member-list.tsx`, `active-session.list.tsx` | a list component |
+| `.panel.tsx` | `two-factor.panel.tsx` | `TwoFactorPanel` |
+| `.button.tsx` | `sign-out.button.tsx` | `SignOutButton` |
+| `.notice.tsx` | `verify-email.notice.tsx` | `VerifyEmailNotice` |
+| `.setup.tsx` | `two-factor.setup.tsx` | `TwoFactorSetup` |
+| `.inspector.tsx` | `effective-permissions.inspector.tsx` | `EffectivePermissionsInspector` |
+| `.guard.tsx` | `session.guard.tsx` | `SessionGuard` |
+| `.context.tsx` | `session.context.tsx` | a provider plus its hooks |
+| `.client.ts` | `account.client.ts` | `AccountClient` |
+| `.queries.ts` | `member.queries.ts` | `MemberQueries` |
+| `.mutations.ts` | `session.mutations.ts` | `SessionMutations` |
+| `.fn.ts` | `session.fn.ts` | a TanStack server function |
+| `.server.ts` | `container.server.ts` | anything the server-only ban exempts by name |
+
+**The set is closed, and closing it is the point.** A file whose role is not on either table is
+either a plain kebab-case file with no layer role, or a decision to be made here first. The failure
+this prevents is quiet: a role invented per package means `grep -l '\.reader\.ts'` stops answering
+"where are the read seams", which is the question the suffix exists to answer.
 
 **Files with no layer role stay plain kebab-case**: `permission-registry.ts`, `capability-set.ts`,
 `clock.ts`, `container.ts`. This is why `core` and `permissions` read differently from
@@ -58,9 +104,19 @@ Mechanically: strip the role suffix from the class name, kebab-case the remainde
 `task-reactivate.use-case.ts`. The class is `ReactivateTaskUseCase`, and mirroring the class
 outranks folder-prefix symmetry.
 
-**2. Implementation files lead with the technology.** `pg-vector.store.ts`, `redis.cache-store.ts`,
+**2. Implementation files lead with the technology.** `pg-vector.store.ts`, `redis-cache.store.ts`,
 `s3-storage.gateway.ts`, `bearer-auth.strategy.ts`. You should be able to see what you would delete
 when a vendor changes.
+
+> [!IMPORTANT]
+> **The technology is joined with a hyphen, and only the role takes the dot.** `redis-cache.store.ts`,
+> never `redis.cache-store.ts`. Both read the same aloud and only the first is greppable: the second
+> spells the role `cache-store`, so `*.store.ts` misses it and the closed set above grows a synonym
+> nobody decided on.
+>
+> Nineteen files were written the second way — every vendor adapter outside `pg/` and `s3/`, and
+> their fakes in `composition/src/fake/`. That is what an unenforced convention looks like after a
+> few months: the two files somebody checked are right, and the ones written beside them are not.
 
 ## Framework-dictated filenames win
 

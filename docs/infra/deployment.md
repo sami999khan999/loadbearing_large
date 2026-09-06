@@ -408,7 +408,7 @@ third, the store is not derived at all, whatever the documentation claims.
 ### What changes in the code — and it is genuinely small
 
 ```ts
-// packages/infrastructure/src/analytics/clickhouse.analytics-reader.ts
+// packages/infrastructure/src/analytics/clickhouse-analytics.reader.ts
 export class ClickHouseAnalyticsReader extends AnalyticsReader { … }
 ```
 

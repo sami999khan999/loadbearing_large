@@ -48,7 +48,7 @@ packages/auth/src/
 │   └── auth.factory.ts                   → AuthFactory.create(...)
 ├── session/
 │   ├── index.ts
-│   ├── better-auth.session-resolver.ts   → BetterAuthSessionResolver
+│   ├── better-auth-session.resolver.ts   → BetterAuthSessionResolver
 │   └── membership.reader.ts              → MembershipReader
 ├── principal/
 │   ├── index.ts
@@ -311,7 +311,7 @@ Both are `input: false`. That is what stops a sign-up body from naming its own t
 
 ## Step 16.3 — `BetterAuthSessionResolver` and `MembershipReader`
 
-**`packages/auth/src/session/better-auth.session-resolver.ts`**
+**`packages/auth/src/session/better-auth-session.resolver.ts`**
 
 ```ts
 export class BetterAuthSessionResolver extends SessionResolver {

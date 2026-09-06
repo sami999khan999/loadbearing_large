@@ -35,7 +35,7 @@ apps/worker/
     │   ├── maintenance.consumer.ts   → MaintenanceConsumer
     │   └── analytics.consumer.ts     → AnalyticsConsumer   (registered only when configured)
     ├── notification/
-    │   └── digest.composer.ts        → DigestComposer  (the only email-namespace reader)
+    │   └── notification-digest.composer.ts        → DigestComposer  (the only email-namespace reader)
     └── schedule/
         ├── cleanup.schedule.ts       → CleanupSchedule
         ├── partitions.schedule.ts    → PartitionsSchedule
@@ -256,7 +256,7 @@ The listener observes without swallowing, so BullMQ still sees the rejection and
 The worker is the only process that reads the `email` namespace, and it reads it the same way
 every other consumer reads copy — through `ContentSource`.
 
-**`apps/worker/src/notification/digest.composer.ts`**
+**`apps/worker/src/notification/notification-digest.composer.ts`**
 
 ```ts
 import type { ContentSource, Locale } from "@loadbearing/content";
