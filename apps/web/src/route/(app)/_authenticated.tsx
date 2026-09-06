@@ -28,8 +28,15 @@ export const Route = createFileRoute("/(app)/_authenticated")({
   // The menu is content, so it is loaded like content. Both in parallel: neither
   // depends on the other and the header needs both before it renders.
   loader: async ({ context }) => {
-    const [, nav] = await Promise.all([context.messages.ensure(MESSAGES), context.content.nav()]);
-    return { nav };
+    // The logo goes through `ContentSource.media()` rather than importing the file:
+    // content records hold `"brand.logo"`, never a path, so a CDN is one adapter.
+    const [, nav, logo] = await Promise.all([
+      context.messages.ensure(MESSAGES),
+      context.content.nav(),
+      context.content.media("brand.logo"),
+    ]);
+
+    return { nav, logo };
   },
   component: AuthenticatedLayout,
   // Covers every page below, so a leaf whose loader prefetches — `/settings/roles`
@@ -39,7 +46,7 @@ export const Route = createFileRoute("/(app)/_authenticated")({
 
 function AuthenticatedLayout() {
   const { t } = useMessages("auth");
-  const { nav } = Route.useLoaderData();
+  const { nav, logo } = Route.useLoaderData();
   const capabilities = useCapabilities();
   const navigate = useNavigate();
   const router = useRouter();
@@ -64,6 +71,7 @@ function AuthenticatedLayout() {
   return (
     <>
       <header>
+        <img src={logo.src} width={logo.width} height={logo.height} alt={logo.alt} />
         <OrganizationSwitcher
           organization={organization}
           onSwitched={switched}

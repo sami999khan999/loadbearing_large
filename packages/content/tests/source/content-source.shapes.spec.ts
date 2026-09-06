@@ -61,9 +61,6 @@ describe("the other three shapes", () => {
 
   // Not a stub that throws: the shape exists to come from a database, and a missing slug
   // is a 404.
-  it("has no documents", async () => {
-    expect(await source.document("terms-of-service")).toBeNull();
-  });
 });
 
 // Tested against the two real catalogs rather than a hand-built empty one.

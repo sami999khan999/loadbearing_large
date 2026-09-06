@@ -16,4 +16,4 @@ export {
   useAppMutation,
   useAppQuery,
 } from "./runtime/index.js";
-export { SessionMutations, SessionQueries } from "./session/index.js";
+export { SessionMutations } from "./session/index.js";

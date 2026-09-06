@@ -89,6 +89,8 @@ export {
   DataTable,
   EmptyState,
   Field,
+  type FontKey,
+  FontRegistry,
   Icon,
   Input,
   type ModeKey,

@@ -1,11 +1,11 @@
 ---
 title: The four content shapes
-description: Why media, nav and documents are three shapes rather than one — and the rule that keeps a content edit from becoming a privilege escalation.
+description: Why media and nav are separate shapes rather than one — and the rule that keeps a content edit from becoming a privilege escalation.
 ---
 
-# Media, collections, documents
+# Media and collections
 
-`ContentSource` declares four shapes because they have four different edit models, four different
+`ContentSource` declares three shapes because they have three different edit models, three different
 validation stories, and four different answers to "what happens when this moves to a CMS".
 
 | Shape | Folder | Who edits it | Validated by |
@@ -13,7 +13,6 @@ validation stories, and four different answers to "what happens when this moves 
 | Keyed strings | `message/` | a translator, per locale | the `MessageKey` union, at compile time |
 | Media references | `media/` | nobody — a key resolves to a manifest entry | `ImageKey`, at compile time |
 | Repeating records | `collection/` | a content editor | Zod, at module load |
-| Long-form editorial | `document/` | a content editor | Zod, at the boundary |
 
 ## The rule: content references the security surface, it never defines it
 
@@ -87,21 +86,16 @@ CMS would change every call site, which is the cost this abstraction exists to a
 binaries into the worker's bundle. `ImageManifest` is a value import and reaches only
 `StaticMediaResolver`.
 
-## `document()` returns `null`, and that is the design
+## There is no `document()` shape, and there was
 
-There are no static documents. Long-form editorial is precisely the shape that exists to come from a
-database — a terms page an editor changes without a deploy — so `StaticContentSource.document()`
-answers `null` for every slug, and a missing document is a 404 rather than an exception.
+Long-form editorial was declared as a fourth shape: `document(slug)` on the source, a
+`DocumentContract` and a `DocumentEntity` to parse a row that no adapter ever returned. Nothing
+called it, `StaticContentSource` answered `null` for every slug, and the argument for keeping it —
+"this is precisely the shape that exists to come from a database" — is an argument for building it
+*with* that database rather than before one.
 
-That is different from a stub that throws, which doc 20 argues is worse than a seam with fewer
-methods. `null` is a real answer with a defined meaning; a throw is a promise the seam cannot keep.
+It was deleted. Re-adding it is one abstract method, one implementation and one contract, which is
+the same cost it was carrying while doing nothing. What the deletion buys is that every method on
+`ContentSource` now has a caller, so a reader can tell the declared shapes from the aspirational
+ones without reading the adapter.
 
-> [!NOTE]
-> **Doc 20 names `DocumentContract` and `DocumentEntity` and specifies neither.** The schema on disk
-> is the minimum a database-backed `document()` would have to parse — an addressable slug, a title, a
-> markdown body, and when it last changed. `document()` returns `string | null` (the body) as doc 20
-> specifies, which is narrower than the entity; expect that to widen when a `DbContentSource` exists.
-
-`DocumentEntity` has a private constructor and one factory, so an unvalidated row cannot become one.
-The slug regex rejects a slash: a document is *addressed*, not nested, because nesting is a routing
-decision and this package does not make those.

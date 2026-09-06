@@ -2,7 +2,9 @@ import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/reac
 import {
   ApiClientProvider,
   ContentSource,
+  type CSSProperties,
   classCss,
+  FontRegistry,
   MessageProvider,
   QueryClientProvider,
   type ReactNode,
@@ -56,19 +58,21 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootDocument({ children }: { children: ReactNode }) {
   const { messages, queryClient, api, user, capabilities, appearanceSnapshot } =
     Route.useRouteContext();
-  const { theme, mode, preference } = appearanceSnapshot;
+  const { theme, mode, preference, font } = appearanceSnapshot;
 
   // Only when the server guessed, and only upgrading light to dark — so it cannot fight
   // an explicit choice or strand a dark-only theme.
   const correctsMode = preference === "system" && ThemeRegistry.supports(theme, "dark");
 
+  // The font override on the server-rendered element rather than after hydration: a
+  // face that swaps in front of the reader reflows the whole page.
+  const style = {
+    colorScheme: mode,
+    "--font-sans": FontRegistry.meta(font).stack,
+  } as CSSProperties;
+
   return (
-    <html
-      lang={messages.translator.locale}
-      data-theme={theme}
-      data-mode={mode}
-      style={{ colorScheme: mode }}
-    >
+    <html lang={messages.translator.locale} data-theme={theme} data-mode={mode} style={style}>
       <head>
         <HeadContent />
         {correctsMode ? <script dangerouslySetInnerHTML={{ __html: SYSTEM_MODE_SCRIPT }} /> : null}

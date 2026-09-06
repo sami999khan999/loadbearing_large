@@ -31,8 +31,4 @@ export abstract class ContentSource {
   // Shape 3: repeating records. `module` is the one field an editor cannot repoint,
   // because `ModuleRegistry` owns the gate.
   public abstract nav(): Promise<readonly NavItem[]>;
-
-  // Shape 4: long-form editorial, by slug. `null` rather than a throw — a missing terms
-  // page is a 404.
-  public abstract document(slug: string): Promise<string | null>;
 }

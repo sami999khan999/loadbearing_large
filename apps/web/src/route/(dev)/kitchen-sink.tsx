@@ -10,6 +10,8 @@ import {
   DataTable,
   EmptyState,
   Field,
+  type FontKey,
+  FontRegistry,
   Icon,
   Input,
   type ModePreference,
@@ -162,14 +164,14 @@ function Pair({ fg, bg, label }: { fg: string; bg: string; label: string }) {
 
 function KitchenSink() {
   const { appearance, appearanceSnapshot } = Route.useRouteContext();
-  const { theme, mode, preference } = appearanceSnapshot;
+  const { theme, mode, preference, font } = appearanceSnapshot;
 
-  // No state and no re-render: the picker writes two attributes on <html> and the
+  // No state and no re-render: the picker writes three properties on <html> and the
   // cascade does the rest.
-  const choose = (next: ThemeKey, wanted: ModePreference): void => {
+  const choose = (next: ThemeKey, wanted: ModePreference, face: FontKey = font): void => {
     const prefersDark =
       typeof matchMedia === "function" && matchMedia("(prefers-color-scheme:dark)").matches;
-    appearance.choose(next, wanted, prefersDark);
+    appearance.choose(next, wanted, prefersDark, face);
   };
 
   return (
@@ -200,8 +202,20 @@ function KitchenSink() {
             </Button>
           ))}
         </div>
+        <div style={gap} />
+        <div style={row}>
+          {FontRegistry.all().map((key) => (
+            <Button
+              key={key}
+              variant={key === font ? "primary" : "secondary"}
+              onClick={() => choose(theme, preference, key)}
+            >
+              {FontRegistry.meta(key).label}
+            </Button>
+          ))}
+        </div>
         <p style={{ color: "var(--fg-muted)", fontSize: "var(--text-sm)" }}>
-          {`rendering ${theme} / ${mode}, preference ${preference}`}
+          {`rendering ${theme} / ${mode} / ${font}, preference ${preference}`}
         </p>
       </Section>
 

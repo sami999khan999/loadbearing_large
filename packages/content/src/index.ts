@@ -1,5 +1,4 @@
 export { NavContract, type NavItem, navItems } from "./collection/index.js";
-export { DocumentContract, DocumentEntity, type DocumentRecord } from "./document/index.js";
 export { MediaResolver, type ResolvedMedia, StaticMediaResolver } from "./media/index.js";
 export {
   type BundleLoader,

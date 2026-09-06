@@ -16,7 +16,6 @@ export class QueryKeys {
   // refetch three lists every time a session is refreshed.
   public static readonly account = {
     all: () => ["account"] as const,
-    twoFactor: () => ["account", "two-factor"] as const,
     accounts: () => ["account", "linked", "list"] as const,
     sessions: () => ["account", "session", "list"] as const,
   };

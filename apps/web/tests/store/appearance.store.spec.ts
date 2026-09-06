@@ -8,7 +8,12 @@ const parse = (cookie: string | null, prefersDark = false): AppearanceSnapshot =
 
 describe("AppearanceStore.fromCookieHeader", () => {
   it("falls back to the palette that seeds :root when there is no cookie", () => {
-    expect(parse(null)).toEqual({ theme: "slate", mode: "light", preference: "system" });
+    expect(parse(null)).toEqual({
+      theme: "slate",
+      mode: "light",
+      preference: "system",
+      font: "sans",
+    });
   });
 
   it("reads a palette and a mode back out", () => {
@@ -16,7 +21,15 @@ describe("AppearanceStore.fromCookieHeader", () => {
       theme: "ocean",
       mode: "dark",
       preference: "dark",
+      font: "sans",
     });
+  });
+
+  // The third axis, and the reason it is a token override rather than a theme: it moves
+  // independently, so a serif reader keeps whatever palette they picked.
+  it("reads a font back out, and rejects one the registry does not know", () => {
+    expect(parse("theme=ocean; mode=dark; font=serif").font).toBe("serif");
+    expect(parse("font=comic").font).toBe("sans");
   });
 
   it("ignores everything it does not recognise", () => {

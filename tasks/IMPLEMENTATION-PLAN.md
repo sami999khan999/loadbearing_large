@@ -1394,14 +1394,45 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **Filed `T-033`:** an assertion that every declared code has an emitter. Left out of this entry
     deliberately — a sixteenth assertion means renumbering "fifteen" across four files, which is
     churn worth doing once rather than mid-phase.
-- [ ] `P5.15` **Zero-consumer symbols** — decide per symbol and record in the owning
+- [x] `P5.15` **Zero-consumer symbols** — decide per symbol and record in the owning
   `docs/index.md`: `SessionGuard` (delete — `RouteGuard` is the surface), `SessionQueries`
   (delete — `SessionStore` owns it), `FontRegistry` (wire into `appearance.store` or delete),
   `IconRegistry` (keep — `<Icon>` should validate against it; add the check), `ImageManifest`
   / `MediaResolver` / `ContentSource.media()` / `brand.logo` (wire the logo into the header),
   `DocumentEntity` / `ContentSource.document()` hardcoded `null` (delete),
   `ApiClient.raw` (keep, documented escape hatch), `QueryKeys.account.twoFactor` (delete or
-  use for `P2.15`).
+  use for `P2.15`). `done: 2026-09-06`
+  - **Deleted:** `SessionGuard` (+ spec), `SessionQueries` (+ spec), `DocumentEntity`,
+    `DocumentContract`, `ContentSource.document()` and its `StaticContentSource` implementation,
+    `QueryKeys.account.twoFactor`.
+  - **`SessionGuard` and `RouteGuard` were two statements of one rule.** The guard ran *after* a
+    component mounted and called back; `RouteGuard` runs in the loader, before the page renders at
+    all. Doc 23's "four enforcement surfaces" list now names `<Can>` alone as this package's.
+  - **`SessionQueries` put the session in two places** — the cache and `SessionStore`, which rides
+    the SSR payload. Two copies of the answer that gates every other read is one too many, and the
+    store is the one that resolves server-side. `SessionMutations` stays: signing in is a write.
+  - **`document()` is the one I nearly kept.** It was correct — `null` is an honest answer — and
+    heavily defended in `content-shapes.md` as "the shape that exists to come from a database".
+    That is an argument for building it *with* the database rather than before one: nothing called
+    it, no adapter returned a row, and the contract and entity beside it parsed nothing. Re-adding
+    it is one abstract method, one implementation and one contract — the same cost it was carrying
+    while doing nothing. Three shapes now, each with a caller.
+  - **`FontRegistry` was wired, not deleted**, because it is a complete third axis with the same
+    shape as the other two. `appearance.store` gained a `font` cookie, snapshot field and
+    `FontRegistry.apply` in `choose`; `__root.tsx` sets `--font-sans` on the *server-rendered*
+    element, because a face that swaps after hydration reflows the whole page. A picker sits in
+    the kitchen sink, and a spec pins that an unknown cookie value falls back.
+  - **`IconRegistry` gained its check** as part of `P5.7`: `ModuleNav` validates a content row's
+    icon name through `isKnown` rather than casting, so an unknown name renders no icon instead of
+    a `<use>` pointing at nothing. That needed `ui` to re-export it.
+  - **The logo is wired through the seam, not imported.** `_authenticated`'s loader resolves
+    `ContentSource.media("brand.logo")`, which is what gives `ImageManifest`, `MediaResolver` and
+    `media()` a consumer at once — content records hold a key, never a path, so a CDN is one adapter.
+  - **`ApiClient.raw` kept**, already documented as the escape hatch for a namespace with no
+    accessor (`P4.12`).
+  - **§15 caught the doc drift immediately**, naming two setup pages that showed the deleted files.
+    Both sections were rewritten to say what was removed and why rather than deleted, since the
+    reasoning is what a reader of a build guide is there for.
 - [x] `P5.16` **`/kitchen-sink` ships to production** — `(dev)` is a pathless group, not a
   build condition. Gate: `loader: () => { if (!import.meta.env.DEV) throw notFound() }`; add
   `Callout`, `CodeList`, `QrCode` (three of eleven primitives missing); translate its eleven

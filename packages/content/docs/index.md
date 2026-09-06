@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/content"
-description: Every user-visible string, document, and structured record, split by locale and namespace so no runtime downloads words it cannot use. All four content shapes are declared; three items wait on the apps that call them.
+description: Every user-visible string, image reference, and structured record, split by locale and namespace so no runtime downloads words it cannot use. Three content shapes, each with a consumer.
 ---
 
 # `@loadbearing/content`
@@ -53,10 +53,6 @@ packages/content/
 │   │       ├── index.ts
 │   │       ├── nav.schema.ts      → NavContract, NavItem
 │   │       └── nav.data.ts        → navItems
-│   ├── document/                  ── shape 4: long-form editorial
-│   │   ├── index.ts
-│   │   ├── document.schema.ts     → DocumentContract
-│   │   └── document.entity.ts     → DocumentEntity, DocumentRecord
 │   └── message/                   ── shape 1: short keyed strings
 │       ├── index.ts
 │       ├── namespace.ts           → MessageKey, ShellMessageKey, NamespaceBundle, MessageParams
@@ -76,7 +72,6 @@ packages/content/
     │   └── static-content.source.spec.ts
     ├── media/static-media.resolver.spec.ts
     ├── collection/nav.data.spec.ts
-    ├── document/document.entity.spec.ts
     └── message/error-copy.spec.ts
 ```
 
@@ -171,7 +166,6 @@ repository permitted to carry a message. Moving it here cost nothing and removed
 | `content-source.ts`, `static-content.source.ts` | ✅ all four shapes declared and implemented |
 | `media/` — `MediaResolver`, `StaticMediaResolver` | ✅ final |
 | `collection/nav/` — `NavContract`, `navItems` | ✅ final |
-| `document/` — `DocumentContract`, `DocumentEntity` | ✅ shape declared; `document()` answers `null` |
 | `message/catalog.server.ts` — `SERVER_CATALOG` | ✅ final; `Container` and `TestContainer` pass it to `StaticContentSource` |
 | `translator/message-store.ts` — `MessageStore` | ✅ final; `apps/web/src/router.tsx` constructs it, `feature`'s `MessageProvider` reads it |
 | `bundled-content.source.ts` — `BundledContentSource` | ☐ lands with a second shell — [30](../../../docs/setup/30-desktop-app.md), which is a plan |

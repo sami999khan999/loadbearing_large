@@ -21,8 +21,6 @@ export {
   type ForgotPasswordFormProps,
   ResetPasswordForm,
   type ResetPasswordFormProps,
-  SessionGuard,
-  type SessionGuardProps,
   type SessionOrganization,
   SessionProvider,
   type SessionProviderProps,

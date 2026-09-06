@@ -112,7 +112,7 @@ When they disagree — and they do, on sign-out — the UI shows a signed-in she
 of `UNAUTHORIZED` responses.
 
 Wrapping the vanilla client here puts session state in the same cache as everything else, through
-`SessionQueries` in [21](../../../docs/setup/21-query-package.md). One owner, one invalidation story.
+`SessionStore` in `apps/web`, which rides the SSR payload. One owner, one invalidation story.
 
 **`AuthClient` throws rather than returning `{ data, error }`.** Better Auth's client returns the
 pair; the rest of this codebase throws. Normalising at the boundary means a `SignInForm` uses the same
