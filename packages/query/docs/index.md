@@ -30,14 +30,14 @@ this package.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/query` (private, never published) |
-| **Entrypoint** | `src/index.tsx` — opens with `"use client"` |
+| **Entrypoint** | `src/index.ts` — opens with `"use client"` |
 | **Depends on** | `@loadbearing/api-client`, `@loadbearing/errors`, `@tanstack/react-query` |
 | **Peers** | `react`, `react-dom` — never dependencies |
 | **Used by** | `feature`, `apps/web`, `apps/desktop`. **Not** `apps/worker` — it calls use-cases in-process |
 
 ```
 packages/query/src/
-├── index.tsx                       ← "use client" on line 1
+├── index.ts                          ← "use client" on line 1
 ├── import.ts                       ← every external symbol. The router package is not on it
 ├── key/
 │   ├── index.ts

@@ -19,7 +19,7 @@ different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/ui` (private, never published) |
-| **Entrypoint** | `src/index.tsx` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
+| **Entrypoint** | `src/index.ts` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
 | **Depends on** | `@loadbearing/asset` — **the only runtime workspace dependency** |
 | **Type-only** | `@loadbearing/permissions`, a `devDependency` because both imports are erased |
 | **Peers** | `react`, `react-dom` |
@@ -36,7 +36,7 @@ packages/ui/
 ├── ui.d.ts                    ← declare module "*.svg"; named in tsconfig `include`
 ├── vitest.setup.ts            ← afterEach(cleanup)
 └── src/
-    ├── index.tsx              ← "use client" on line 1
+    ├── index.ts                 ← "use client" on line 1
     ├── import.ts              ← two workspace entries, both type-only but one
     ├── theme/
     │   ├── theme.css          ← entry: @imports token/ and color/

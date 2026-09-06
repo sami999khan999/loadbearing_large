@@ -647,7 +647,7 @@ packages/content/tests/
 
 ```
 packages/query/src/
-├── index.tsx                      ← "use client" on line 1
+├── index.ts                         ← "use client" on line 1
 ├── import.ts                      ← every external symbol
 ├── key/
 │   ├── index.ts

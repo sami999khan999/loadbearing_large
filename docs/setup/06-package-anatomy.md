@@ -183,7 +183,7 @@ importing `<Can>` or `useSession` from a package that never declares a boundary 
 So three packages carry the directive on the first line of their barrel:
 
 ```ts
-// packages/ui/src/index.tsx
+// packages/ui/src/index.ts
 "use client";
 
 export { Icon } from "./icon/index.js";

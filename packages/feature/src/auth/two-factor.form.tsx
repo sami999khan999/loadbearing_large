@@ -61,11 +61,11 @@ export function TwoFactorForm({ auth, onSuccess }: TwoFactorFormProps) {
     <form onSubmit={submit} noValidate>
       <Field
         label={backup ? t("auth.twoFactorBackupCode") : t("auth.twoFactorCode")}
-        htmlFor="code"
+        htmlFor="two-factor-code"
         hint={backup ? t("auth.twoFactorBackupHint") : t("auth.twoFactorHint")}
       >
         <Input
-          id="code"
+          id="two-factor-code"
           autoComplete="one-time-code"
           // A backup code is alphanumeric and longer, so only the numeric methods get the
           // keypad and the six-character ceiling.

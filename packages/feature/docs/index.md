@@ -19,14 +19,14 @@ shell mount these components under a different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/feature` (private, never published) |
-| **Entrypoint** | `src/index.tsx` — opens with `"use client"` |
+| **Entrypoint** | `src/index.ts` — opens with `"use client"` |
 | **Depends on** | `content`, `contracts`, `errors`, `permissions`, `query`, `ui` |
 | **Type-only** | `api-client` — a `devDependency`, because `AuthClient` arrives as a prop |
 | **Peers** | `react`, `react-dom` |
 
 ```
 packages/feature/src/
-├── index.tsx                          ← "use client" on line 1
+├── index.ts                             ← "use client" on line 1
 ├── import.ts                          ← the two bans, made visible
 ├── i18n/message.context.tsx           → MessageProvider, useMessages
 ├── auth/

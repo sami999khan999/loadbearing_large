@@ -56,9 +56,9 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.name")} htmlFor="name">
+      <Field label={t("auth.name")} htmlFor="sign-up-name">
         <Input
-          id="name"
+          id="sign-up-name"
           autoComplete="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -66,9 +66,9 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
         />
       </Field>
 
-      <Field label={t("auth.email")} htmlFor="email">
+      <Field label={t("auth.email")} htmlFor="sign-up-email">
         <Input
-          id="email"
+          id="sign-up-email"
           type="email"
           // What password managers key on: omitting it is a usability cost for users who
           // will not report it.
@@ -81,11 +81,11 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
       <Field
         label={t("auth.password")}
-        htmlFor="password"
+        htmlFor="sign-up-password"
         error={tooShort ? t("auth.passwordTooShort") : undefined}
       >
         <Input
-          id="password"
+          id="sign-up-password"
           type="password"
           // `new-password`, not `current-password`: it tells a password manager to offer
           // to generate one rather than fill the old one in.
@@ -99,11 +99,11 @@ export function SignUpForm({ auth, verifyCallbackUrl, onSuccess }: SignUpFormPro
 
       <Field
         label={t("auth.confirmPassword")}
-        htmlFor="confirmation"
+        htmlFor="sign-up-confirmation"
         error={mismatch ? t("auth.passwordMismatch") : undefined}
       >
         <Input
-          id="confirmation"
+          id="sign-up-confirmation"
           type="password"
           autoComplete="new-password"
           value={confirmation}

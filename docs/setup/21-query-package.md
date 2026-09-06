@@ -14,7 +14,7 @@
 
 ```
 packages/query/src/
-├── index.tsx                   ← "use client" on line 1
+├── index.ts                      ← "use client" on line 1
 ├── import.ts                   ← every external symbol
 ├── key/
 │   ├── index.ts
@@ -35,8 +35,10 @@ Two role folders and one subject folder — the same split `contracts` has, and 
 there is exactly one `QueryKeys` and one client factory, and one queries/mutations pair *per slice*
 ([Folders](../opinions/folders.md), which lists `query` as subject-organised).
 
-**The barrel is `index.tsx`, not `index.ts`.** It is what the scaffolded `exports` map and the `tsup`
-entry both name ([06](06-package-anatomy.md)), the same as `ui`'s.
+**The barrel is `index.ts`.** It was `index.tsx` here, in `ui` and in `feature` — matching the
+scaffolded `exports` map and the `tsup` entry ([06](06-package-anatomy.md)) — but none of the three
+contains JSX, and the extension is what a reader uses to tell a component file from a re-export.
+The `exports` map and the `tsup` entry name the barrel either way.
 
 ---
 
@@ -371,7 +373,7 @@ export class TaskMutations {
 
 ## Step 21.7 — The barrel
 
-**`packages/query/src/index.tsx`**
+**`packages/query/src/index.ts`**
 
 ```tsx
 "use client";

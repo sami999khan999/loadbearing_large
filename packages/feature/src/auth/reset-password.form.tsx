@@ -41,11 +41,11 @@ export function ResetPasswordForm({ auth, token, onSuccess }: ResetPasswordFormP
     <form onSubmit={submit} noValidate>
       <Field
         label={t("auth.resetNewPassword")}
-        htmlFor="password"
+        htmlFor="reset-password"
         error={tooShort ? t("auth.passwordTooShort") : undefined}
       >
         <Input
-          id="password"
+          id="reset-password"
           type="password"
           autoComplete="new-password"
           minLength={MIN_PASSWORD_LENGTH}
@@ -57,11 +57,11 @@ export function ResetPasswordForm({ auth, token, onSuccess }: ResetPasswordFormP
 
       <Field
         label={t("auth.confirmPassword")}
-        htmlFor="confirmation"
+        htmlFor="reset-confirmation"
         error={mismatch ? t("auth.passwordMismatch") : undefined}
       >
         <Input
-          id="confirmation"
+          id="reset-confirmation"
           type="password"
           autoComplete="new-password"
           value={confirmation}
