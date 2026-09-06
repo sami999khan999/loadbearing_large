@@ -1721,9 +1721,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     claims happens. One character, and the spec that found it was watched failing against the old
     form. Thirteen more: `revokeOtherSessions: true` on every password change, the `totpURI`
     rename, ISO normalisation of `createdAt`, and which single row a session list marks.
-- [ ] `P6.4` **forms** — `sign-in.form` (the 2FA fork), `reset-password`, `change-password`,
+- [x] `P6.4` **forms** — `sign-in.form` (the 2FA fork), `reset-password`, `change-password`,
   `change-email`, `two-factor.setup` (codes shown once), `linked-account.list` (last
   credential rule), `active-session.list`, `invite-member.form`, `organization-switcher`.
+  `done: 2026-09-06`
+  - **Four of the nine had specs**, and two of those did not cover the behaviour the entry
+    names. `linked-account.list` had loading, error and listing and nothing about the last
+    credential; `two-factor.panel` covers the panel and not `two-factor.setup`, which is a
+    different component and the one that shows the codes.
+  - **The 2FA fork gets six tests, because it is a rejection that is not a failure.** Both legs
+    share one path so the second factor arrives as an error, and rendering the sign-in notice
+    under it would tell someone their password was wrong when it was right. Also pinned: every
+    other refusal — bad credentials, a server failure — renders the same generic sentence, because
+    distinguishing them is an account-enumeration oracle; the branch is on the code and **not** on
+    a message that merely contains the words; and the fork is cleared before a second attempt, so
+    a later failure still shows its notice.
+  - **`two-factor.setup` is the three-step flow, and the codes are the point.** They are shown
+    once and never again — `viewBackupCodes` is server-only and unreachable from the client — so
+    the spec asserts they are absent at the scan step, absent when the code is refused, and
+    present only after the enrolment is verified. Plus the two the comments claim: the button
+    cannot be pressed without a password, and the password is not carried into the next step.
+  - **`change-password` pins the thing the copy promises.** The success notice says other devices
+    were signed out, which is true only because `AccountClient` sets `revokeOtherSessions` — that
+    call is asserted in `api-client`, and here the fields are asserted to empty on success and to
+    stay filled on failure, so correcting one of three does not mean retyping all three.
+  - **`organization-switcher` is off the session snapshot, not a query**, so it renders every
+    membership on the first painted byte; the spec pins that, the switch call, `aria-busy` riding
+    with `disabled` — `disabled` alone removes the control from the tab order and says nothing
+    about why — and that a visitor gets nothing at all rather than an empty select.
+  - Twenty-six tests across five files; `packages/feature` goes 63 → 89.
 - [x] `P6.5` **`T-026`** — `pg-activity-replay.reader.spec.ts` walks from the table start in
   ten batches of two and fails once twenty unrelated rows exist. Seed into a dedicated
   partition window and read from a checkpoint just before it. `done: 2026-09-06`

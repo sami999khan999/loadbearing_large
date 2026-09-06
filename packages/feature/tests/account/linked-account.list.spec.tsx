@@ -50,4 +50,26 @@ describe("LinkedAccountList", () => {
     await waitFor(() => expect(screen.getByText("google")).toBeDefined());
     expect(screen.getByText("credential")).toBeDefined();
   });
+
+  // Absent rather than disabled: unlinking the only credential is how someone locks
+  // themselves out, and Better Auth's `allowUnlinkingAll` is only the backstop.
+  it("offers no unlink control at all when one account is left", async () => {
+    await render(() => Promise.resolve([account("credential")]));
+
+    await waitFor(() => expect(screen.getByText("credential")).toBeDefined());
+    expect(screen.queryByRole("button", { name: "Unlink" })).toBeNull();
+    expect(
+      screen.getByText("This is the only way you can sign in, so it cannot be unlinked."),
+    ).toBeDefined();
+  });
+
+  it("offers it beside each of two, because either one leaves a way in", async () => {
+    await render(() => Promise.resolve([account("credential"), account("google")]));
+
+    await waitFor(() => expect(screen.getByText("google")).toBeDefined());
+    expect(screen.getAllByRole("button", { name: "Unlink" })).toHaveLength(2);
+    expect(
+      screen.queryByText("This is the only way you can sign in, so it cannot be unlinked."),
+    ).toBeNull();
+  });
 });
