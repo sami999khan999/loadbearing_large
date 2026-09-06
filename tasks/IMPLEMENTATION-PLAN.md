@@ -808,7 +808,7 @@ it once and make the doc-drift gate (`P4.26`) check it.
     bootstrap snippet now reads three of them. Two are capped or defaulted to `1` for reasons that
     are silent when wrong — a second maintenance job deadlocks on the same partition, a second
     projection run interleaves keyset batches.
-- [ ] `P4.19` `docs/setup/26-hygiene-and-ci.md` — `scope-enum` block has `db`, lacks `errors`
+- [x] `P4.19` `docs/setup/26-hygiene-and-ci.md` — `scope-enum` block has `db`, lacks `errors`
   (its own `fix(db):` example is rejected); CI YAML omits the extensions step,
   `deps:check`/`repo:check`, migrate/seed, `check:contrast`, the `audit` job, uses
   `ratchet_test` where `ci.yml:18-21` explains why not; "required by rule 3" (rule 8);
@@ -817,7 +817,39 @@ it once and make the doc-drift gate (`P4.26`) check it.
   12 description omits the `CLAUDE.md` import clause; promises `actions/cache`, compose smoke
   job, `pnpm peers`, `pnpm sbom`, desktop workflow — none exist; `check:contrast` gate
   undocumented; "`@orpc/shared` pinned exactly" — no such catalog entry (also
-  `docs/ai/rules/dependencies.md:26`, `pnpm-workspace.yaml:114`).
+  `docs/ai/rules/dependencies.md:26`, `pnpm-workspace.yaml:114`). `done: 2026-09-06`
+  - **The CI block is now the file, copied verbatim from `.github/workflows/ci.yml`** rather than a
+    paraphrase that had drifted eight steps. Paraphrasing a workflow is what let it drift; a reader
+    diffing the page against the repo now gets nothing.
+  - **The most useful thing on the page is a new caution: this workflow has never run.**
+    `pnpm/action-setup@v4` reads the root manifest's `packageManager` field and nothing else, and
+    the root declares only `devEngines.packageManager` — so both jobs die in ~20s, on every branch,
+    before a single check executes. It is easy to miss because it is not a check failing. Repo-side
+    fix is `P8.12`; the page says to declare both fields or pass `version:` on the action, and the
+    ✅ Gate now asks whether `verify` got *past* setup, not only whether a check reported red.
+  - **Four steps the old block dropped are each restored with the hole they close:** the extensions
+    step (compose mounts `postgres.init.sql` as an initdb script, and a `services:` container starts
+    before checkout, so there is nothing to mount), `db:migrate` + `db:seed` (the infrastructure
+    specs read the seeded organization rather than creating one), `deps:check` + `repo:check`
+    before the build (pure file reads, seconds, caught by nothing else), and `check:contrast`. The
+    `audit` job moved out of "optional but worth it" — it ships.
+  - **`ratchet_test` was worse than a typo.** `tests/support/database.ts` pins the scratch URL, so a
+    differently-named database fails every infrastructure spec with a connection error rather than
+    an assertion — which reads as infrastructure being down. The page says so now.
+  - **`check:contrast` had no section at all**, and it is the one gate that computes rather than
+    greps: 117 pairings over five themes × two modes, WCAG AA, plus the sRGB-gamut check nobody
+    expects — an out-of-gamut `oklch()` does not error, the browser clips it differently per engine,
+    and the symptom is a palette that looks muddy in one theme.
+  - Also corrected against their sources: the framework ban list (twelve entries, not seven — the
+    doc's copy predated `@nestjs/`, `pg`, `express`, `fastify`, `hono`), `EMAIL_FINGERPRINTS` (five,
+    not one), `ENV_FINGERPRINTS` (five, not three — the two missing are `GOOGLE_CLIENT_SECRET` and
+    `AUTH_ENROLMENT_MODE`), the assertion-12 description (it also checks the `CLAUDE.md` `@`-import
+    list, which is the clause the routers cannot see), the `scope-enum` block, `~650` → `~900`, and
+    the desktop-workflow bullet.
+  - **`@orpc/shared` is not a catalog entry and should not be.** The pinning is upstream's:
+    `@orpc/server@1.15.0` depends on `@orpc/shared@1.15.0` exactly, not `^`. That is precisely why a
+    skew between our four catalog ranges puts two copies in the tree rather than resolving to one —
+    the page said "they pin", which sent a reader looking for a line that does not exist.
 - [ ] `P4.20` `docs/setup/27-verification-and-first-feature.md` — "Fifteen commits" over
   eighteen lines, two with scope `db`, `prettier` named; `/permissions` (`/settings/roles`);
   "one slice" (two); "three applications" (two); "`process.env` in exactly two files" (ten,
