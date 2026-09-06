@@ -160,6 +160,20 @@ import { Principal } from "@loadbearing/application";
 import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 
+// Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all(), and
+// no core.*: every resolved principal already holds those.
+const DECLARED: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
+
+// Checked once at module load, which is what "at boot" has to mean.
+const GRANTS: readonly PermissionKey[] = Object.freeze(
+  DECLARED.map((key) => {
+    if (!PermissionRegistry.instance.isKnown(key)) {
+      throw new Error(`System principal references unknown permission: ${key}`);
+    }
+    return key;
+  }),
+);
+
 export class SystemPrincipal {
   private constructor() {}
 
@@ -167,26 +181,13 @@ export class SystemPrincipal {
   // holding a tenant id reads as a user.
   public static readonly USER_ID = "00000000-0000-7000-8000-000000000001";
 
-  // Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all(), and
-  // no core.*: every resolved principal already holds those.
-  private static readonly GRANTS: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
-
   public static forOrganization(organizationId: string): Principal {
-    const registry = PermissionRegistry.instance;
-
-    const grants: PermissionKey[] = SystemPrincipal.GRANTS.map((key) => {
-      if (!registry.isKnown(key)) {
-        throw new Error(`System principal references unknown permission: ${key}`);
-      }
-      return key;
-    });
-
     return Principal.system(
       organizationId as OrganizationId,
       SystemPrincipal.USER_ID as UserId,
       CapabilitySet.from({
         wildcard: false,
-        org: { grants, denies: [] },
+        org: { grants: GRANTS, denies: [] },
         goals: {},
       }),
     );
@@ -199,7 +200,8 @@ export class SystemPrincipal {
 >
 > - **`CapabilitySet.from(dto)`, never `new CapabilitySet(...)`** — the constructor is private ([08](08-permissions-package.md)), and the argument is a `CapabilitySetDto`, not a list of `{ permission, goalId }` pairs.
 > - **`PermissionRegistry.instance.isKnown(...)`** — `isKnown` is an instance method on the singleton, not a static.
-> - **`GRANTS` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+> - **`DECLARED` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+> - **The validated list is module-level and frozen, not a `static readonly` field.** That is the same rule `PermissionRegistry` follows for its own derived views: static mutable state is banned ([Rules · Classes](../ai/rules/classes.md)), and `Object.freeze` is what makes "derived once" true rather than intended.
 > - **`Principal.system` takes three arguments** — organization, actor, capabilities. Passing the organization id as the user id compiles only until the brands diverge, and lands a tenant id in the audit trail's actor column.
 >
 > Both keys above are real: `ai.embedding.write` and `ai.embedding.read` ship in `packages/permissions/src/catalog/ai.permissions.ts`. Name one that does not and this throws at boot, which is the rule working — a system principal referencing a permission that does not exist should never start.
@@ -208,7 +210,7 @@ export class SystemPrincipal {
 
 **A wildcard here would erase every authorization guarantee in the codebase.** The moment `SystemPrincipal` carries `PermissionRegistry.all()`, any bug that lets user input reach a job path becomes a full privilege escalation. Two named permissions, added deliberately, reviewed like any other grant.
 
-**The `isKnown()` check runs on every `forOrganization` call**, not once at boot — the registry is a singleton and the map is cheap, but a renamed permission therefore surfaces on the first job rather than at start-up. Either way it is a loud failure rather than a job that silently stops passing authorization.
+**The `isKnown()` check runs once, at module load.** It used to run inside `forOrganization`, which is to say on every job: the registry is a singleton and the lookup is cheap, so the cost was never the argument — the problem was that a renamed permission then surfaced on the first job at 3am rather than at start-up, while the comment above it said "at boot". `CATALOG` is a compile-time constant with no dynamic registration, so there is no import-order window in which this can see a half-built registry.
 
 **Every job carries an organization.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
 
