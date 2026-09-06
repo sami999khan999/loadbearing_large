@@ -14,7 +14,6 @@
   "dependencies": {
     "@loadbearing/api-client": "workspace:*",
     "@loadbearing/application": "workspace:*",
-    "@loadbearing/auth": "workspace:*",
     "@loadbearing/composition": "workspace:*",
     "@loadbearing/content": "workspace:*",
     "@loadbearing/contracts": "workspace:*",
