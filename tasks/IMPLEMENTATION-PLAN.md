@@ -1663,10 +1663,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     union has one member, so only a cast can produce the case the exhaustiveness check exists for.
   - **Forty tests, and the two that matter watched failing.** Reversing the first two `close()`
     calls and pointing `personal` at the null enroller each turn exactly one red.
-- [ ] `P6.2` **application and auth** — `IndexDocumentUseCase` (chunk overlap arithmetic, the
+- [x] `P6.2` **application and auth** — `IndexDocumentUseCase` (chunk overlap arithmetic, the
   short-vector path from `P2.5`), `ListInvitationsUseCase`, `Token.random`, `PrincipalBuilder`
   (api-key-before-cookie precedence at `principal.builder.ts:16-21` — a security decision with
   no test), `OrganizationPlugin` (three endpoints, the only tenant-switch authorization).
+  `done: 2026-09-06`
+  - **Three of the five were already covered**, counted before writing anything: the short-vector
+    path in both directions, `ListInvitationsUseCase` under `ListMembersUseCase`'s describe, and
+    the api-key-before-cookie precedence — including the half that matters more, that a *rejected*
+    key does not fall back to the cookie.
+  - **The chunk arithmetic is asserted from both sides.** 1,500-character windows on a 1,300
+    stride, so the shared 200 characters are compared as the tail of one chunk against the head of
+    the next rather than recomputed from the constants. The `break` gets its own cases at 1,500,
+    1,501 and 2,900, because what it prevents is a tail chunk that is entirely overlap — a
+    duplicate embedding and a duplicate hit. Watched failing with the stride set to the window.
+    Whitespace-only text is the fourth: it must be refused before the provider is called at all.
+  - **`Token` had no spec of any kind.** The padding case is the one worth having: a byte under
+    `0x10` renders as one character without `padStart`, so a token that is sometimes 63 characters
+    is one that sometimes collides on a fixed-width column. The digest is pinned against the
+    published SHA-256 of `""` and `"abc"`, so a changed algorithm, encoding or truncation fails
+    here rather than as a lookup that stops matching.
+  - **The plugin's endpoints are invoked, not merely enumerated.** `auth.factory.spec.ts` already
+    checked that the three paths are mounted; this calls each handler with a fabricated
+    better-auth context. `setSessionCookie` is the one step that needs the whole request — signing
+    keys, cookie options, the response — and it is stubbed at `src/import.ts`, which is what this
+    package's outside surface is for. Ten tests: both refusals with their codes, the two argument
+    trails through `updateSession` and `updateUser`, the body validation on each, and the one that
+    matters most — **no cookie is written when the session row was not updated**, because a
+    browser holding a tenant the server disagrees with is worse than a failed switch. The two
+    authorization guards were watched failing.
 - [ ] `P6.3` **query and client** — `RouteGuard`, `useAppMutation` (invalidate before
   `onSuccess`), `AccountMutations`, `MemberMutations`, `OrganizationMutations`,
   `MemberQueries`, `RoleQueries`, `AccountClient` (no spec at all), `MessageStore`.
