@@ -39,6 +39,10 @@ files drifting from `docs/opinions/`, a `docs/` folder with no `index.md`, a com
 two lines, a backticked path in the docs that names nothing on disk, and the two pnpm version
 declarations disagreeing.
 
+**On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
+`pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every
+route file fails to typecheck with an error that names none of this.
+
 **Two assertions need artefacts first** — `pnpm build:packages` for the barrel check and
 `pnpm --filter @loadbearing/web build` for the bundle check. They print `○ skipped` otherwise, and
 the summary counts them apart from the passes — **under `CI=true` a skip fails the run**, because
