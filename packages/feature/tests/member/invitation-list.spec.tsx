@@ -41,7 +41,9 @@ describe("InvitationList", () => {
   it("says something went wrong rather than saying there are none", async () => {
     await render(() => Promise.reject(new Error("nope")));
 
-    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText("Something went wrong. Please try again.")).toBeDefined(),
+    );
   });
 
   it("says there are none only when there are none", async () => {

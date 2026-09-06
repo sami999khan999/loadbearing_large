@@ -1,3 +1,4 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   type AccountClient,
@@ -18,6 +19,9 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
   const { t } = useMessages("auth");
   // `common` for the states every list shares, `auth` for this screen's own copy.
   const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const sessions = useAppQuery(AccountQueries.sessions(account));
 
   const revoke = AccountMutations.useRevokeSession(account);
@@ -28,7 +32,7 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
   // Pending before empty: `data` is undefined until the first answer, so the empty state
   // used to render for everyone with sessions while the request was still in flight.
   if (sessions.isPending) return <EmptyState title={shell.t("state.loading")} />;
-  if (sessions.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+  if (sessions.isError) return <Callout tone="danger">{describe(sessions.error)?.message}</Callout>;
   if (rows.length === 0) return <EmptyState title={t("auth.sessions")} />;
 
   return (
@@ -61,7 +65,7 @@ export function ActiveSessionList({ account }: ActiveSessionListProps) {
         ))}
       </ul>
 
-      {revoke.isError ? <Callout tone="danger">{shell.t("state.error")}</Callout> : null}
+      {revoke.isError ? <Callout tone="danger">{describe(revoke.error)?.message}</Callout> : null}
 
       {revokeOthers.isSuccess ? (
         <Callout tone="success">{t("auth.signOutEverywhereDone")}</Callout>

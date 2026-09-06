@@ -222,6 +222,14 @@ not exist yet. `StaticContentSource` gives the same snapshot asynchronously and 
 product needs before it has a product. Nothing yet reads a domain procedure, so the twelve-step
 checklist in doc 23 §23.5 is still the unwalked path rather than a description of what shipped.
 
+**No copy of its own for a failure.** `useErrorMessage` normalises what a query or mutation threw and
+renders it through [`ErrorCopy`](../../content/docs/reference/error-copy.md), so the sentence a user
+reads is keyed to the code the server sent. Nine components rendered `state.error` — one generic
+sentence — against an envelope that already said which failure it was.
+
+`useTranslator` exists for that hook alone: `useMessages(namespace)` narrows keys to one namespace,
+and `ErrorCopy` picks its own shell key from the code, so there is nothing to scope.
+
 **No cache-library import.** A slice reads through
 [`useAppQuery`](../../query/docs/index.md) — a three-line pass-through in `query` that exists so this
 package never names `@tanstack/*`. The invariant is asserted over `packages/*/src`: `import.ts`

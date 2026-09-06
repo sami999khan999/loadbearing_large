@@ -42,7 +42,13 @@ export {
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
-export { MessageProvider, type MessageProviderProps, useMessages } from "./i18n/index.js";
+export { type ErrorMessage, useErrorMessage } from "./error/index.js";
+export {
+  MessageProvider,
+  type MessageProviderProps,
+  useMessages,
+  useTranslator,
+} from "./i18n/index.js";
 export {
   InvitationList,
   type InvitationListProps,

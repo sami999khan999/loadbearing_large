@@ -1,3 +1,4 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Callout,
@@ -25,8 +26,9 @@ interface MemberRow extends MemberDto {
 
 export function MemberList({ limit = 25 }: MemberListProps) {
   const { t } = useMessages("member");
-  // `common` for the states every list shares, `member` for this screen's own copy.
-  const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const client = useApiClient();
   const members = useAppQuery(MemberQueries.list(client, { limit, offset: 0 }));
 
@@ -68,7 +70,7 @@ export function MemberList({ limit = 25 }: MemberListProps) {
   if (members.isPending) return <DataTable.Skeleton rows={3} columns={4} />;
   // A failed list rendered as "no members yet", which is the one answer a members page
   // must not give when it does not know.
-  if (members.isError) return <Callout tone="danger">{shell.t("state.error")}</Callout>;
+  if (members.isError) return <Callout tone="danger">{describe(members.error)?.message}</Callout>;
   if (rows.length === 0) return <EmptyState title={t("member.empty")} />;
 
   return <DataTable columns={columns} rows={rows} caption={t("member.title")} />;

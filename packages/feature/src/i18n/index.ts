@@ -1,1 +1,6 @@
-export { MessageProvider, type MessageProviderProps, useMessages } from "./message.context.js";
+export {
+  MessageProvider,
+  type MessageProviderProps,
+  useMessages,
+  useTranslator,
+} from "./message.context.js";

@@ -12,6 +12,7 @@ import {
 } from "~/import.js";
 import { fetchAppearance } from "~/server/appearance.fn.js";
 import { fetchSession } from "~/server/session.fn.js";
+import { ErrorBoundary, NotFound } from "./-boundary.js";
 import type { RouterContext } from "./-context.js";
 
 // The one case the cookie cannot answer: "system" with no client hint. Synchronous and
@@ -46,6 +47,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
   }),
   shellComponent: RootDocument,
+  // On the root, so every route inherits them: a boundary declared per page is one
+  // somebody forgets, and an unhandled throw in TanStack Router renders a bare stack.
+  errorComponent: ErrorBoundary,
+  notFoundComponent: NotFound,
 });
 
 function RootDocument({ children }: { children: ReactNode }) {

@@ -1,3 +1,4 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   CapabilitySet,
@@ -25,6 +26,9 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   // `common` for the shared states, `role` for this screen's copy. The namespace is what
   // makes the key type narrow enough for a typo to be a compile error.
   const shell = useMessages("common");
+  // Renders the code the server sent rather than one generic sentence: a 403 and a
+  // 409 are different things to be told.
+  const describe = useErrorMessage();
   const client = useApiClient();
   const roles = useAppQuery(RoleQueries.list(client, { limit, offset: 0 }));
 
@@ -56,7 +60,7 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   }, [roles.data]);
 
   if (roles.isPending) return <EmptyState title={shell.t("state.loading")} />;
-  if (roles.isError) return <EmptyState title={shell.t("state.error")} />;
+  if (roles.isError) return <EmptyState title={describe(roles.error)?.message ?? ""} />;
   if (subjects.length === 0) return <EmptyState title={t("role.empty")} />;
 
   return (

@@ -56,6 +56,7 @@ export {
   TwoFactorPanel,
   TwoFactorSetup,
   useCapabilities,
+  useErrorMessage,
   useMessages,
   VerifyEmailNotice,
 } from "@loadbearing/feature";

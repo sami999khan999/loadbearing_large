@@ -11,6 +11,7 @@ import {
   useMemo,
   useMessages,
 } from "~/import.js";
+import { Pending } from "~/route/-boundary.js";
 import { RouteGuard } from "~/route/-guard.js";
 import { refreshSession } from "~/route/-session.js";
 
@@ -26,6 +27,9 @@ export const Route = createFileRoute("/(app)/_authenticated")({
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
   component: AuthenticatedLayout,
+  // Covers every page below, so a leaf whose loader prefetches — `/settings/roles`
+  // does — has a state to show rather than a blank frame.
+  pendingComponent: Pending,
 });
 
 function AuthenticatedLayout() {

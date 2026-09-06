@@ -1,5 +1,6 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { MemberDto } from "@loadbearing/contracts";
+import { ForbiddenError } from "@loadbearing/errors";
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MemberList } from "../../src/member/member-list.js";
@@ -33,15 +34,28 @@ describe("MemberList", () => {
   it("says something went wrong rather than saying there are no members", async () => {
     await render(() => Promise.reject(new Error("nope")));
 
-    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText("Something went wrong. Please try again.")).toBeDefined(),
+    );
     expect(screen.queryByText("Nobody here yet.")).toBeNull();
+  });
+
+  // The point of `useErrorMessage`: the server said *why*, and a generic sentence
+  // discards it. A member reaching a page they may not read is told exactly that.
+  it("renders the copy for the code the server sent, not one generic sentence", async () => {
+    await render(() => Promise.reject(new ForbiddenError("member.read")));
+
+    await waitFor(() =>
+      expect(screen.getByText("You do not have permission to do that.")).toBeDefined(),
+    );
+    expect(screen.queryByText("Something went wrong. Please try again.")).toBeNull();
   });
 
   it("says the organization is empty only when it is", async () => {
     await render(() => Promise.resolve({ items: [], total: 0 }));
 
     await waitFor(() => expect(screen.getByText("Nobody here yet.")).toBeDefined());
-    expect(screen.queryByText("Something went wrong")).toBeNull();
+    expect(screen.queryByText("Something went wrong. Please try again.")).toBeNull();
   });
 
   it("lists what came back", async () => {

@@ -37,7 +37,9 @@ describe("LinkedAccountList", () => {
   it("says something went wrong rather than saying there is nothing", async () => {
     await render(() => Promise.reject(new Error("nope")));
 
-    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText("Something went wrong. Please try again.")).toBeDefined(),
+    );
   });
 
   it("lists what came back", async () => {
