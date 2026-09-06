@@ -726,6 +726,9 @@ importers:
       '@loadbearing/core':
         specifier: workspace:*
         version: link:../core
+      '@loadbearing/errors':
+        specifier: workspace:*
+        version: link:../errors
       '@loadbearing/infrastructure':
         specifier: workspace:*
         version: link:../infrastructure
