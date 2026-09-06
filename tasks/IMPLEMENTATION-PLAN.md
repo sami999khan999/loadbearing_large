@@ -1137,14 +1137,37 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     a minimal `/documents` page (paste text → index → search). `ai.document.searched` event.
   - **Docs:** `infrastructure/docs/reference/pgvector.md`, `docs/setup/14`, `25` (the Gate at
     `25:477` finally has a producer).
-- [ ] `P5.6` **Error surfaces** `P1` `~4h` `#ui`
+- [x] `P5.6` **Error surfaces** `P1` `~4h` `#ui`
   - **Goal:** `ErrorCopy`, `ERROR_COPY`, `FIELD_RULE_COPY` have zero consumers; no
     `errorComponent`, `notFoundComponent` or `pendingComponent` anywhere; forms fall back to
     `shell.t("state.error")`.
   - **Done when:** `__root.tsx` has `errorComponent` and `notFoundComponent` rendering
     `ErrorCopy`; `feature/src/error/use-error-message.ts` maps an `AppError` to copy; every
     form's error callout uses it; `pendingComponent` on `(app)/_authenticated`.
-  - **Docs:** `content/docs/reference/error-copy.md`, `feature/docs/index.md`.
+  - **Docs:** `content/docs/reference/error-copy.md`, `feature/docs/index.md`. `done: 2026-09-06`
+  - **The defect was worse than "unused exports".** Nine components rendered
+    `shell.t("state.error")` — "Something went wrong" — against an envelope that had travelled from
+    the server carrying the exact code. A `FORBIDDEN` and a `CONFLICT` reached the component as
+    different things and left it as the same sentence.
+  - **`useErrorMessage` is the seam**, in a new `feature/src/error/`. It normalises whatever was
+    thrown, renders the code through `ERROR_COPY` and the violations through `FIELD_RULE_COPY`, and
+    returns `{ message, fields, envelope }` — `fields` always an array, so a caller renders it
+    without asking what kind of failure it holds.
+  - **`useTranslator` was needed and is a real addition, not a convenience.**
+    `useMessages(namespace)` narrows keys to one namespace, and `ErrorCopy` picks its own shell key
+    from the code — there is nothing to scope, so the narrowed hook cannot express it.
+  - **The two branching call sites keep their branch.** An invitation that is `NOT_FOUND` and an
+    invite that is `CONFLICT` have their own copy in their slice namespace, which is more specific
+    than the shared sentence. They now fall through to `ErrorCopy` instead of to `state.error`, so
+    the branch adds a sentence rather than replacing the mechanism.
+  - **`errorComponent` and `notFoundComponent` go on the root**, not per page: a boundary declared
+    per route is one somebody forgets, and an unhandled throw in TanStack Router renders a bare
+    stack. `pendingComponent` goes on `(app)/_authenticated`, which covers every gated page —
+    including `/settings/roles`, whose loader now prefetches (`P5.10`) and so has a visible wait.
+  - **Four specs asserted the bug.** They pinned "Something went wrong", which is `state.error` —
+    the exact string this replaces. They now assert the catalog's sentence, and a new spec rejects
+    with a `ForbiddenError` and asserts "You do not have permission to do that." appears while the
+    generic one does not. That is the assertion the old specs could not make.
 - [ ] `P5.7` **Navigation from data** `P2` `~3h` `#ui`
   - **Goal:** `_authenticated.tsx` hardcodes two `<Can>`/`<Link>` pairs; `ROUTES` is never
     imported by `apps/web`; the `nav` collection, `ContentSource.nav()` and `rbacGates` have no
