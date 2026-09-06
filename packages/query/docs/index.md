@@ -65,7 +65,8 @@ packages/query/src/
 │   └── organization.mutations.ts   → OrganizationMutations
 └── rbac/
     ├── index.ts
-    └── role.queries.ts             → RoleQueries
+    ├── role.queries.ts             → RoleQueries
+    └── role.mutations.ts           → RoleMutations
 ```
 
 Two role folders and one subject folder, the same split
@@ -231,9 +232,12 @@ deliberate: routing is the one thing the desktop shell replaces.
 - [Mutations and invalidation](reference/mutations.md) — invalidate-before-`onSuccess`, the three
   states of `invalidates`, and why sign-out and switch declare none.
 
-## One thing this package does not have yet
+## Every `rbac` key now has a caller
 
-**No caller for `QueryKeys.rbac.effective`.** The other three `rbac` keys are read by
-`RoleQueries`; `effective(userId)` is exercised only by `tests/key/query-key.spec.ts`. It names a
-procedure that exists, so the key is right — nothing reads a user's effective permissions through the
-cache yet. Doc 21's `QueryKeys.task` stays illustrative: there is no task contract to mirror.
+`roles(params)` is read by `RoleQueries.list` and written through by all five of `RoleMutations`;
+`effective(userId)` is read by `EffectivePermissionsInspector` when it is inspecting someone other
+than the viewer. Doc 21's `QueryKeys.task` stays illustrative: there is no task contract to mirror.
+
+**`RoleMutations.useGrant` and `useRevoke` invalidate `QueryKeys.member.all()` as well as
+`rbac.all()`.** A grant changes what the effective-permissions inspector answers for every member
+holding that role, and that key hangs off the member namespace.

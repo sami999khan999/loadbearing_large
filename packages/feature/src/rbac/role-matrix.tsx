@@ -1,17 +1,22 @@
-import { useErrorMessage } from "../error/index.js";
+import { useCapabilities } from "../auth/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
+  Callout,
   CapabilitySet,
   EmptyState,
+  type PermissionKey,
   PermissionRegistry,
   type RoleDto,
+  RoleMutations,
   RoleQueries,
   StatusBadge,
   useApiClient,
   useAppQuery,
+  useCallback,
   useMemo,
 } from "../import.js";
 import { type MatrixSubject, PermissionMatrix } from "./permission-matrix.js";
+import { useRoleFailure } from "./use-role-failure.js";
 
 export interface RoleMatrixProps {
   // Paged rather than unbounded: `Pagination.query` caps `limit` at 100, so asking for
@@ -26,24 +31,32 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   // `common` for the shared states, `role` for this screen's copy. The namespace is what
   // makes the key type narrow enough for a typo to be a compile error.
   const shell = useMessages("common");
-  // Renders the code the server sent rather than one generic sentence: a 403 and a
-  // 409 are different things to be told.
-  const describe = useErrorMessage();
+  const failureCopy = useRoleFailure();
   const client = useApiClient();
+  const capabilities = useCapabilities();
   const roles = useAppQuery(RoleQueries.list(client, { limit, offset: 0 }));
+  const grant = RoleMutations.useGrant(client);
+  const revoke = RoleMutations.useRevoke(client);
+
+  // Annotated rather than inferred: `ApiClient`'s procedure types are reconstructed
+  // through two packages, and a break anywhere degrades to `any` silently.
+  const items: readonly RoleDto[] = roles.data?.items ?? [];
+
+  // Both, not either: one checkbox is two writes depending on its current state, and a
+  // box that can be ticked but not unticked is a worse answer than a read-only one.
+  const editable =
+    capabilities.can("rbac.permission.grant") && capabilities.can("rbac.permission.revoke");
 
   // The same class and method the server runs inside `Authorizer.assert()`, which is why
   // this screen is not a second model of the rules.
   const subjects = useMemo<readonly MatrixSubject[]>(() => {
     const registry = PermissionRegistry.instance;
 
-    // Annotated rather than inferred: `ApiClient`'s procedure types are reconstructed
-    // through two packages, and a break anywhere degrades to `any` silently.
-    const items: readonly RoleDto[] = roles.data?.items ?? [];
-
     return items.map((role) => ({
       id: role.id,
       label: role.name,
+      // Seeded rows are rewritten on every deploy, so the use-case refuses to edit one.
+      editable: editable && !role.isSystem,
       capabilities: CapabilitySet.from({
         // Never a wildcard, even for `owner`: the seed writes every permission as a real
         // grant, so this shows what is stored.
@@ -57,23 +70,38 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
         goals: {},
       }),
     }));
-  }, [roles.data]);
+  }, [items, editable]);
+
+  const toggle = useCallback(
+    (roleId: string, permission: PermissionKey) => {
+      const role = items.find((candidate) => candidate.id === roleId);
+      if (!role) return;
+
+      const input = { roleId: role.id, permission };
+      if (role.permissions.includes(permission)) revoke.mutate(input);
+      else grant.mutate(input);
+    },
+    [items, grant, revoke],
+  );
+
+  const failure = failureCopy(grant.error ?? revoke.error);
 
   if (roles.isPending) return <EmptyState title={shell.t("state.loading")} />;
-  if (roles.isError) return <EmptyState title={describe(roles.error)?.message ?? ""} />;
+  if (roles.isError) return <EmptyState title={failureCopy(roles.error) ?? ""} />;
   if (subjects.length === 0) return <EmptyState title={t("role.empty")} />;
 
   return (
     <section>
       <p>{t("role.subtitle")}</p>
-      {
-        // Read-only: no `onToggle`. Editing a grant is a different permission and a
-        // different procedure, and a checkbox that does nothing is worse than honesty.
-      }
-      <PermissionMatrix subjects={subjects} />
-      {roles.data?.items.some((role) => role.key === "owner") ? (
+      {failure ? <Callout tone="danger">{failure}</Callout> : null}
+      <PermissionMatrix subjects={subjects} onToggle={editable ? toggle : undefined} />
+      {items.some((role) => role.key === "owner") ? (
         <StatusBadge tone="neutral">{t("role.hint.owner")}</StatusBadge>
       ) : null}
+      {items.some((role) => role.isSystem) ? (
+        <StatusBadge tone="neutral">{t("role.hint.system")}</StatusBadge>
+      ) : null}
+      {editable ? null : <StatusBadge tone="neutral">{t("role.hint.readOnly")}</StatusBadge>}
     </section>
   );
 }

@@ -66,11 +66,15 @@ export {
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
 export {
+  CreateRoleForm,
   EffectivePermissionsInspector,
   type EffectivePermissionsInspectorProps,
   type MatrixSubject,
   PermissionMatrix,
   type PermissionMatrixProps,
+  RoleList,
+  type RoleListProps,
   RoleMatrix,
   type RoleMatrixProps,
+  useRoleFailure,
 } from "./rbac/index.js";

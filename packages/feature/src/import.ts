@@ -51,6 +51,7 @@ export {
   MemberMutations,
   MemberQueries,
   OrganizationMutations,
+  RoleMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,

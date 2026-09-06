@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Can,
   type ClientNamespace,
+  CreateRoleForm,
   EffectivePermissionsInspector,
+  RoleList,
   RoleMatrix,
   RoleQueries,
+  useCapabilities,
   useMessages,
 } from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
@@ -33,10 +37,19 @@ export const Route = createFileRoute("/(app)/_authenticated/settings/roles")({
 
 function Roles() {
   const { t } = useMessages("role");
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("role.title")}</h1>
+      {
+        // Names and lifecycle first: the matrix below is twenty rows tall, and a create
+        // form under it is a form nobody finds.
+      }
+      <RoleList />
+      <Can permission="rbac.role.manage" capabilities={capabilities}>
+        <CreateRoleForm />
+      </Can>
       {
         // Server state: the half a guard cannot fake, because the API answers FORBIDDEN
         // to the same key the guard checked.

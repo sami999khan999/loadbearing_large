@@ -134,16 +134,33 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
 
 **The kit ships two slices built exactly this way**, and they are worth reading in that order.
 
-`role` is the small one — a read-only list of the organization's roles and what each grants. It
-walks all twelve steps, reuses `rbac.role.read` rather than adding a permission, and lands at
-`/settings/roles` behind a `RouteGuard`. The same key gates the procedure in
-`PROCEDURE_PERMISSIONS`, the use-case through `Authorizer.assert()`, the route through
-`RouteGuard.requirePermission`, and the nav through `<Can>`. Steps 1 and 2 are empty for it, which
-is the common case rather than a shortcut.
+`role` is the one to read first. Its list is the smallest possible walk of all twelve steps — it
+reuses `rbac.role.read` rather than adding a permission, and lands at `/settings/roles` behind a
+`RouteGuard`. The same key gates the procedure in `PROCEDURE_PERMISSIONS`, the use-case through
+`Authorizer.assert()`, the route through `RouteGuard.requirePermission`, and the nav through `<Can>`.
 
-`member` is the one with writes — invite, list, revoke — so it exercises what `role` does not: a
-`UnitOfWork`, an activity entry written in the same transaction as the state change, and mail that
-goes out only after that transaction commits. It adds `member.*` keys, so step 1 is not empty.
+Its writes — create, rename, delete, grant, revoke — are where the three rules an RBAC slice cannot
+be correct without live, and each is a `ConflictError` with a reason rather than a driver error:
+
+- **Seeded roles are immutable.** `SystemRoleSeed` rewrites them on every deploy, so an accepted
+  edit disappears at the next one with no error and no trace.
+- **A reserved key cannot be created**, even before the seed has run. The seed resolves its rows by
+  `(organization_id, key)` and grants `owner` every permission in the catalog, so a user-created
+  `owner` would collect the wildcard on the next deploy.
+- **A role somebody holds cannot be deleted.** `memberships.role_id` and `goal_members.role_id` are
+  `on delete no action`, so the alternative to the check is a driver error no UI can render.
+
+`GrantPermissionUseCase` adds a fourth that is not about the database: **it refuses to hand out a
+permission the actor does not hold**. Without that, `rbac.permission.grant` is the only key anyone
+ever needs — hold it and you can write every other one into a role you hold. An owner's wildcard
+answers `can()` for everything, so the rule never obstructs the role that is meant to grant anything.
+
+Every one of those writes calls `CapabilityInvalidator` **after** the transaction commits
+([16](16-auth-package.md) Step 16.8). A revoke that does not flush keeps working for a minute.
+
+`member` is the one whose writes cross a slice — invite, revoke, change role, deactivate — so it
+exercises what `role` does not: mail that goes out only after the transaction commits, and the
+last-owner rule, which is the refusal that keeps a tenant recoverable from inside the product.
 
 The organization plugin (switch, create, accept) is deliberately **not** a slice, and reading it as
 one is a mistake: those actions are identity-gated, no permission a non-owner holds could gate them,

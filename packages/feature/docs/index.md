@@ -60,6 +60,9 @@ packages/feature/src/
 └── rbac/
     ├── permission-matrix.tsx               → PermissionMatrix, MatrixSubject
     ├── role-matrix.tsx                     → RoleMatrix
+    ├── role-list.tsx                       → RoleList
+    ├── create-role.form.tsx                → CreateRoleForm
+    ├── use-role-failure.ts                 → useRoleFailure
     └── effective-permissions.inspector.tsx → EffectivePermissionsInspector
 ```
 
@@ -182,16 +185,22 @@ the badge and **no** Revoke: signing yourself out of the page you are reading is
 all devices" is for. Before that flag existed, the badge was rendered once after the list, attached
 to no device at all.
 
-## The two RBAC components need no query at all
+## `PermissionMatrix` fetches nothing, and that is the point
 
-That is the interesting part, and the one deliberate departure from the fetch-here pattern. The
-permission axis is `PermissionRegistry.instance` — already in the bundle — and the answer axis is
-`CapabilitySet.can()`, already in the session context. So `EffectivePermissionsInspector` takes
-nothing but an optional `goalId`, and `PermissionMatrix` takes its **subjects** as a prop.
+The permission axis is `PermissionRegistry.instance` — already in the bundle — and the answer axis is
+`CapabilitySet.can()`. So `PermissionMatrix` takes its **subjects** as a prop rather than reading
+them: rows are the catalog, which is static, and columns are whatever the caller is comparing —
+roles on an admin screen, two users in a support tool. A component that fetched its own columns
+could only ever do one of those.
 
-Rows are the catalog, which is static; columns are whatever the caller is comparing — roles on an
-admin screen, two users in a support tool. A component that fetched its own columns could only ever
-do one of those.
+`EffectivePermissionsInspector` splits on the same line. With no `userId` it answers from the
+session context with no round trip; with one it reads `RoleQueries.effective`, because *someone
+else's* resolved set is a question only the server can answer.
+
+`editable` is per subject rather than per matrix, because a page showing four roles where three are
+seeded needs one editable column and three that are not. A checkbox appears only where `onToggle`
+is given **and** that subject allows it, so the read-only case is honest rather than a control that
+silently does nothing.
 
 **Both render a word, not a glyph.** `✓` announces as "check mark", which is not an answer. Cells
 read `t("state.allowed")` / `t("state.denied")` — two keys this package added to `content`'s `common`

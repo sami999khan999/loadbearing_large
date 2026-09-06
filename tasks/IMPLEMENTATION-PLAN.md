@@ -1089,7 +1089,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Build
 
-- [ ] `P5.1` **Role management** `P1` `~12h` `#api #ui`
+- [x] `P5.1` **Role management** `P1` `~12h` `#api #ui`
   - **Goal:** `rbac.role.manage`, `rbac.permission.grant`, `rbac.permission.revoke` are keys
     with nothing behind them; `PermissionMatrix.onToggle` is a checkbox with no mutation;
     `CapabilityCache.invalidate` is never called from production code.
@@ -1106,7 +1106,49 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `packages/feature/src/rbac/`, `apps/web/src/server/orpc/role.router.ts`,
     `packages/composition/src/container/container.ts`.
   - **Docs:** `permissions/docs/reference/capability-set.md` (invalidation contract),
-    `auth/docs/reference/capability-cache.md`, `docs/setup/27` §27.4 example.
+    `auth/docs/reference/capability-cache.md`, `docs/setup/27` §27.4 example. `done: 2026-09-06`
+  - **Four refusals, and three of them are the database's.** Seeded roles are immutable
+    (`SystemRoleSeed` rewrites them on every deploy, so an accepted edit vanishes at the next one);
+    a reserved key cannot be created even before the seed has run; and a role somebody holds cannot
+    be deleted, because `memberships.role_id` and `goal_members.role_id` are `on delete no action`
+    and the alternative to the check is a driver error no UI can render.
+  - **The reserved-key rule closes a real escalation path.** `SystemRoleSeed` resolves its rows by
+    `(organization_id, key)` and grants `owner` **every permission in the catalog**. A tenant that
+    created a role keyed `owner` before the seed ran would have had it handed the wildcard on the
+    next deploy — a privilege escalation with a deploy-shaped fuse.
+  - **`GrantPermissionUseCase` refuses to hand out a permission the actor does not hold.** Not in
+    the plan and added anyway: without it `rbac.permission.grant` is the only key anyone ever needs,
+    since holding it lets you write every other one into a role you hold. An owner's wildcard
+    answers `can()` for everything, so the rule never obstructs the role meant to grant anything.
+  - **Grant validates against the registry; revoke deliberately does not.** A row left behind by a
+    renamed permission is exactly the one somebody needs to be able to remove, so the asymmetry is
+    the point rather than an oversight. Both pinned.
+  - **The invalidation is a port, and it caught a live bug on the way in.**
+    `CapabilityInvalidator` in `application/src/port/` is the sixteenth port; `Container` binds
+    `CapabilityCache` to it. Wiring it revealed that **`ChangeMemberRoleUseCase` never flushed** —
+    a demoted member kept the old role's resolved set for up to the 60s TTL. One line, two specs.
+  - **`invalidateAll()` became `invalidateOrganization(organizationId)`.** The old method had no
+    production consumer and flushed every tenant to answer a change in one; the key layout already
+    put the organization between the fixed prefix and the user id precisely so this would work.
+  - **After the commit, never inside it.** A flush issued while the old row is still the committed
+    one lets a concurrent read resolve the stale set and cache it again — the same bug the flush
+    exists to prevent, now with a race attached.
+  - **`PgRoleRepository.save` is an update-then-insert, and the first attempt was wrong.** A single
+    `on conflict (id) do update` raises rather than upserting here: an existing row trips
+    `roles_key_uq` too, and Postgres only arbitrates the named index. Caught by the integration
+    spec, not by review. The insert carries `on conflict do nothing` on `(organization_id, key)`
+    and turns a lost race into the same `CONFLICT` the use-case would have thrown.
+  - **`test-container.spec` now counts the port directory instead of restating it.** It called
+    itself "one port per abstract class in application/src/port" while being a hardcoded list, and
+    it did not notice the new port. Verified by adding a throwaway port and watching it fail.
+  - **Verified end to end against a live stack**, not only by unit test: create, duplicate key,
+    reserved key, rename and delete of a seeded role, grant, an unknown permission, grant into a
+    seeded role, revoke, revoke of a stale row, the escalation refusal, delete-in-use, and the audit
+    trail carrying all six actions. Cache invalidation checked directly in Redis — one key after a
+    read, zero after a revoke.
+  - **Two doc sections were already stale from `P5.2`** and are corrected here: `query/docs` still
+    said `QueryKeys.rbac.effective` had no caller, and `feature/docs` still said
+    `EffectivePermissionsInspector` needed no query.
 - [x] `P5.2` **Effective permissions inspector** `P2` `~4h` `#api #ui`
   - **Done when:** `rbac.effective` procedure (`rbac.effective.inspect`) returns the resolved
     `CapabilitySetDto` for a member; `EffectivePermissionsInspector` reads it via

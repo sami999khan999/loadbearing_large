@@ -1,3 +1,4 @@
+export { CreateRoleForm } from "./create-role.form.js";
 export {
   EffectivePermissionsInspector,
   type EffectivePermissionsInspectorProps,
@@ -7,4 +8,6 @@ export {
   PermissionMatrix,
   type PermissionMatrixProps,
 } from "./permission-matrix.js";
+export { RoleList, type RoleListProps } from "./role-list.js";
 export { RoleMatrix, type RoleMatrixProps } from "./role-matrix.js";
+export { useRoleFailure } from "./use-role-failure.js";
