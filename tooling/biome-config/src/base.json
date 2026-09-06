@@ -125,10 +125,10 @@
         "**/*.config.mts",
         "**/*.config.js",
         "**/*.config.mjs",
-        "packages/auth/src/tables/**",
-        "packages/infrastructure/src/pg/migrate/**",
+        "packages/auth/tables.ts",
+        "packages/infrastructure/migrate.ts",
         "packages/infrastructure/seed.ts",
-        "packages/*/src/smoke/**"
+        "packages/infrastructure/smoke.ts"
       ],
       "linter": {
         "rules": {
@@ -161,10 +161,10 @@
     {
       "includes": [
         "**/*.mjs",
-        "packages/auth/src/tables/**",
-        "packages/infrastructure/src/pg/migrate/**",
+        "packages/auth/tables.ts",
+        "packages/infrastructure/migrate.ts",
         "packages/infrastructure/seed.ts",
-        "packages/*/src/smoke/**",
+        "packages/infrastructure/smoke.ts",
         "packages/observability/src/logger/json.logger.ts"
       ],
       "linter": {

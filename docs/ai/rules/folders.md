@@ -28,7 +28,10 @@ description: What src/ may hold, role folders vs subject folders, and the two ex
   stays loose — `main.ts`, `env.ts`, `apps/web`'s `router.tsx`, `endpoint.ts` and
   `route-tree.gen.ts`. Everything else is a folder: `bootstrap/` holds what a process assembles
   before it starts working.
-- **Build-time artefacts sit above `src/`:** `drizzle.config.ts`, `migrations/`, `build-sprite.mjs`.
+- **Build-time artefacts and runnable scripts sit above `src/`:** `drizzle.config.ts`,
+  `migrations/`, `build-sprite.mjs`, and `infrastructure/{migrate,seed,smoke}.ts` ·
+  `auth/tables.ts`. A script inside a folder makes that folder's barrel execute it on import —
+  which is how importing `SystemRoleSeed` once connected to Postgres mid-sign-in.
 
 ---
 

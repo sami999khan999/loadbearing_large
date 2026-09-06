@@ -420,7 +420,7 @@ packages/infrastructure/
     │   ├── transaction/
     │   │   ├── transaction-scope.ts          → TransactionScope
     │   │   └── pg-unit-of-work.ts            → PgUnitOfWork
-    │   ├── migrate/index.ts                  ← the migration runner
+    │   ├── (migrate.ts is above src/)          ← the migration runner
     │   └── seed/system-role.seed.ts          ← idempotent
     ├── redis/
     │   ├── redis.connection.ts               → RedisConnection (cache + queue)
@@ -439,7 +439,7 @@ packages/infrastructure/
     │   └── clickhouse.analytics-projector.ts → ClickHouseAnalyticsProjector
     ├── loki/                                 ← opt-in: built only when LOKI_URL is set
     │   └── loki.log-reader.ts                → LokiLogReader
-    └── smoke/index.ts                        ← the wiring check, against live containers
+    (smoke.ts is above src/)                   ← the wiring check, against live containers
 ```
 
 **`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not

@@ -377,14 +377,14 @@ Add to **`packages/infrastructure/package.json`**:
 ```json
 "scripts": {
   "db:generate": "drizzle-kit generate",
-  "db:migrate": "tsx src/migrate/index.ts",
+  "db:migrate": "tsx migrate.ts",
   "db:push": "drizzle-kit push",
   "db:studio": "drizzle-kit studio",
   "db:seed": "tsx src/seed/index.ts"
 }
 ```
 
-**`packages/infrastructure/src/pg/migrate/index.ts`**
+**`packages/infrastructure/migrate.ts`**
 
 ```ts
 import "dotenv/config";

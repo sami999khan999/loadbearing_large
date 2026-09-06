@@ -1,11 +1,15 @@
 import "dotenv/config";
-import { AuthFactory } from "../factory/index.js";
-import { type CacheStore, Database, getSchema, type OrganizationId } from "../import.js";
-import { AuthMailer } from "../mail/auth.mailer.js";
-import { InvitationClaimer, type InvitationPreview } from "../session/invitation.claimer.js";
-import { MembershipEnroller } from "../session/membership.enroller.js";
-import { MembershipReader, type OrganizationSummary } from "../session/membership.reader.js";
-import { OrganizationFounder } from "../session/organization.founder.js";
+import { AuthFactory } from "./src/factory/index.js";
+import { type CacheStore, Database, getSchema, type OrganizationId } from "./src/import.js";
+import { AuthMailer } from "./src/mail/index.js";
+import {
+  InvitationClaimer,
+  type InvitationPreview,
+  MembershipEnroller,
+  MembershipReader,
+  OrganizationFounder,
+  type OrganizationSummary,
+} from "./src/session/index.js";
 
 // Better Auth's own tables, printed from the pinned runtime rather than by
 // `@better-auth/cli`, which trails the library. Diff against pg/schema/auth.schema.ts.

@@ -667,7 +667,7 @@ The Loki probe runs a real `query_range` and prints what came back, but delibera
 about a particular line — that would make the check depend on something having been logged recently,
 which is a flaky test rather than a wiring check.
 
-**`packages/infrastructure/src/smoke/index.ts`**
+**`packages/infrastructure/smoke.ts`**
 
 ```ts
 import "dotenv/config";
@@ -714,7 +714,7 @@ pnpm add --filter @loadbearing/infrastructure -D dotenv tsx@catalog:
 pnpm --filter @loadbearing/infrastructure run smoke
 ```
 
-It lives in `src/smoke/` rather than loose at `src/` root, for the same reason `db` has `migrate/` — [Folders](../opinions/folders.md) keeps the root to `index.ts`, `import.ts`, and folders. `tsup` only builds `src/index.ts`, so it never reaches `dist/`.
+It lives **above** `src/`, beside `drizzle.config.ts`, `migrate.ts` and `seed.ts` — a runnable script is a build-time artefact rather than library code, and one that lives in a folder makes that folder's barrel execute a script when somebody imports it. That is the failure `seed.ts` was moved out for. `tsup` only builds `src/index.ts`, so none of them reaches `dist/` either way.
 
 **Keep it.** It is cheap to re-run after any infrastructure change, and it is the only thing that exercises these classes against real containers. Assert a read-back *after* `deletePrefix` — without that line the prune above reported success while deleting nothing.
 

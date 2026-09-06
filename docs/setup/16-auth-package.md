@@ -79,11 +79,11 @@ Author the schema instead, and check it against the runtime rather than against 
 
 ```json
 "scripts": {
-  "auth:tables": "tsx src/tables/index.ts"
+  "auth:tables": "tsx tables.ts"
 }
 ```
 
-**`packages/auth/src/tables/index.ts`** builds the auth instance through `AuthFactory` — never a second copy of the options, which would describe an instance that does not exist — and prints what it needs:
+**`packages/auth/tables.ts`** builds the auth instance through `AuthFactory` — never a second copy of the options, which would describe an instance that does not exist — and prints what it needs:
 
 ```ts
 import { getSchema } from "better-auth/db";

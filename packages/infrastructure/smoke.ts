@@ -2,13 +2,13 @@
 // process cwd, which under a pnpm filter is `packages/infrastructure`.
 import { config } from "dotenv";
 
-config({ path: new URL("../../../../.env", import.meta.url) });
+config({ path: new URL("../../.env", import.meta.url) });
 
-import { BullMqQueuePublisher, QueueName } from "../bullmq/index.js";
-import { ClickHouseConnection } from "../clickhouse/index.js";
-import { LokiLogReader } from "../loki/index.js";
-import { RedisCacheStore, RedisConnection } from "../redis/index.js";
-import { S3StorageGateway, StorageKey } from "../s3/index.js";
+import { BullMqQueuePublisher, QueueName } from "./src/bullmq/index.js";
+import { ClickHouseConnection } from "./src/clickhouse/index.js";
+import { LokiLogReader } from "./src/loki/index.js";
+import { RedisCacheStore, RedisConnection } from "./src/redis/index.js";
+import { S3StorageGateway, StorageKey } from "./src/s3/index.js";
 
 // A wiring check against the running containers, not a unit test. These classes are
 // adapters, and testing an adapter against a fake tests the fake.

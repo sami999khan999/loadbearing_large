@@ -154,13 +154,10 @@ assert("`application` does not log", (failures) => {
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
   /\.config\.(ts|mts|js|mjs)$/,
-  /^packages\/infrastructure\/src\/pg\/migrate\//,
-  // The runnable seed sits above `src/` so its folder barrel can be imported without
-  // executing it — see packages/infrastructure/seed.ts.
-  /^packages\/infrastructure\/seed\.ts$/,
-  /^packages\/[^/]+\/src\/smoke\//,
-  // Schema inspection, run by hand against a throwaway URL and never built. See 16.
-  /^packages\/auth\/src\/tables\//,
+  // Every runnable script sits above `src/`, so a folder barrel can be imported without
+  // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
+  /^packages\/auth\/tables\.ts$/,
+  /^packages\/infrastructure\/(migrate|seed|smoke)\.ts$/,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {

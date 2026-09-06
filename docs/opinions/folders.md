@@ -235,7 +235,19 @@ adds a *method* to it, not a second file beside it. `TaskRepository` is the oppo
 brings its own. One cross-cutting seam that many subjects ask questions of belongs in `port/`; one
 seam per subject belongs with the subject.
 
-## Build-time artefacts sit above `src/`
+## Build-time artefacts and runnable scripts sit above `src/`
 
 `drizzle.config.ts`, `migrations/`, `build-sprite.mjs`. They are not shipped code, and `src/` is
 the shipped surface.
+
+**A runnable script belongs there too, and the reason is sharper than tidiness.** A script inside a
+folder makes that folder's barrel *execute it* the moment somebody imports a sibling — which is
+exactly what happened when `PgPersonalOrganizationEnroller` needed `SystemRoleSeed` and the seed
+was `src/pg/seed/index.ts`: importing the class connected to Postgres and called `process.exit`
+in the middle of a sign-in.
+
+So `packages/infrastructure/{migrate,seed,smoke}.ts` and `packages/auth/tables.ts` are files at the
+package root, named after what they do. The classes they use stay in `src/` where they can be
+imported safely. It is also what keeps `dotenv`, `process.env` and `console.log` out of `src/`
+entirely: the three lint exemptions those need are now four filenames rather than four globs over
+directories that also hold library code.
