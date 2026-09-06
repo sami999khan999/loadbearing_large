@@ -1197,11 +1197,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     fails both assertions; it sees all fifteen route files and resolves each URL through the group
     and pathless-layout rules. `api/` mounts, the `$token` parameter and the dev-only kitchen sink
     are excluded by name, each with the reason stated.
-- [ ] `P5.8` **Home page, `/settings` index, deep-link return** `P2` `~4h` `#ui`
+- [x] `P5.8` **Home page, `/settings` index, deep-link return** `P2` `~4h` `#ui`
   - **Goal:** `/` renders `EmptyState("Nothing here yet")` and is the target of every
     post-sign-in, post-switch, post-create navigation; `/settings` 404s.
   - **Done when:** `/` shows the organization, role, member count and gated links;
     `/settings` redirects to `/settings/account`; sign-in returns to the deep link (`P2.18`).
+  `done: 2026-09-06`
+  - **Verified against the live stack, not only by test.** A `curl` with a session cookie returns
+    `<h1>Home Probe</h1><p>You are Owner here.</p><p>Members: 1</p><nav>…` — organization, role,
+    count and gated links, all server-rendered before any JavaScript. `/settings` answers `307` to
+    `/settings/account`. Signed out, the page is a sign-in prompt rather than an empty state.
+  - **The role needed one join, not a new procedure.** `organizationsFor` already joined
+    `memberships → organizations`; it now also joins `roles` and selects the name, so the answer
+    costs no extra round trip. `roleName` sits on the *organization* row rather than on the user
+    because the same person is an owner in one tenant and a member in another.
+  - **A spec pins exactly that**, and it is the one worth having: a join on the wrong column would
+    read "Owner" for every tenant without failing anything else. Grace owns her own organization and
+    is a plain member of Ada's, and the assertion is `["Owner", "Member"]`. Ada's fixtures were left
+    alone after a first attempt broke three specs that assert which tenants she is and is not in.
+  - **The member count is prefetched only when the capability allows it.** The loader checks the
+    same `member.read` key `<Can>` checks, so an anonymous or unpermitted visit issues no member
+    query at all — and a permitted one has no loading flash, because the cache is warm before first
+    paint.
+  - **`ModuleNav` from `P5.7` is reused rather than a second nav written**, which is the payoff for
+    having built it from data.
+  - **`nav.home.members` is "Members: {count}", not "{count} members".** `Translator` interpolates
+    and does not pluralise, so the obvious phrasing renders "1 members" — and would be wrong in
+    every locale that inflects. Caught by reading the rendered page.
+  - **`/settings` had to be declared in `ROUTES`**, which `P5.7`'s new spec caught on the first run:
+    a route file whose path no fragment declares is one a `<Link>` cannot be typed against.
 - [ ] `P5.9` **Locale** `P2` `~4h` `#ui`
   - **Goal:** `bn/` (eight files) is unreachable: `MessageStore.empty("en")` is hardcoded,
     `Locales.negotiate` has zero callers, no locale cookie, no switcher. `bn` is also missing

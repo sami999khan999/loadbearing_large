@@ -5,6 +5,9 @@ export interface OrganizationSummary {
   readonly id: OrganizationId;
   readonly name: string;
   readonly slug: string;
+  // The role *this* user holds here, which differs per tenant. It comes from the join
+  // `organizationsFor` already makes rather than from a second query.
+  readonly roleName: string;
 }
 
 // Which organization is this session for, plus the two questions a switch needs.

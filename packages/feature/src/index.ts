@@ -53,6 +53,7 @@ export {
   InvitationList,
   type InvitationListProps,
   InviteMemberForm,
+  MemberCount,
   MemberList,
   type MemberListProps,
 } from "./member/index.js";

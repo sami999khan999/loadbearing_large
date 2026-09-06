@@ -11,6 +11,9 @@ import {
 export interface SessionOrganization {
   readonly id: string;
   readonly name: string;
+  // Per tenant, not per user: the same person is an owner in one organization and a
+  // member in another, so this cannot sit beside `id` on the user.
+  readonly roleName: string;
 }
 
 export interface SessionUser {

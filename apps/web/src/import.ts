@@ -40,6 +40,7 @@ export {
   InvitationList,
   InviteMemberForm,
   LinkedAccountList,
+  MemberCount,
   MemberList,
   MessageProvider,
   ModuleNav,
@@ -59,6 +60,7 @@ export {
   useCapabilities,
   useErrorMessage,
   useMessages,
+  useSession,
   VerifyEmailNotice,
 } from "@loadbearing/feature";
 
@@ -68,7 +70,12 @@ export {
 export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
-export { ApiClientProvider, createQueryClient, RoleQueries } from "@loadbearing/query";
+export {
+  ApiClientProvider,
+  createQueryClient,
+  MemberQueries,
+  RoleQueries,
+} from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
 export {
