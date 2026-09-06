@@ -18,9 +18,12 @@ import {
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  CreateRoleUseCase,
   Database,
+  DeleteRoleUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
   type InvitationClaimer,
@@ -61,6 +64,7 @@ import {
   RedisCacheStore,
   RedisConnection,
   RevokeInvitationUseCase,
+  RevokePermissionUseCase,
   S3StorageGateway,
   SERVER_CATALOG,
   type SessionResolver,
@@ -71,6 +75,7 @@ import {
   SystemClock,
   TransactionScope,
   type UnitOfWork,
+  UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
 import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
@@ -164,6 +169,11 @@ export class Container {
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
+    readonly createRole: CreateRoleUseCase;
+    readonly updateRole: UpdateRoleUseCase;
+    readonly deleteRole: DeleteRoleUseCase;
+    readonly grantPermission: GrantPermissionUseCase;
+    readonly revokePermission: RevokePermissionUseCase;
   };
   // Only with an auth config: the invitation mail needs `auth.baseUrl` for its link,
   // and the process without one is the worker, which never invites.
@@ -324,6 +334,7 @@ export class Container {
           this.authorizer,
           members,
           roles,
+          this.capabilities,
           this.activity,
           this.unitOfWork,
         ),
@@ -355,6 +366,25 @@ export class Container {
         this.authorizer,
         members,
         capabilityRepository,
+      ),
+      createRole: new CreateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      updateRole: new UpdateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      deleteRole: new DeleteRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      // `CapabilityCache` bound to the `CapabilityInvalidator` port: the domain states
+      // that a grant must flush, and this line is the only one that knows what to.
+      grantPermission: new GrantPermissionUseCase(
+        this.authorizer,
+        roles,
+        this.capabilities,
+        this.activity,
+        this.unitOfWork,
+      ),
+      revokePermission: new RevokePermissionUseCase(
+        this.authorizer,
+        roles,
+        this.capabilities,
+        this.activity,
+        this.unitOfWork,
       ),
     };
 

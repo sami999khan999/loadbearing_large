@@ -35,7 +35,7 @@ packages/composition/src/
 │   ├── container.config.ts           → ContainerConfig
 │   ├── container.ts                  → Container
 │   └── test-container.ts             → TestContainer, TestPorts   (off the barrel)
-└── fake/                             ← one per port, all fifteen
+└── fake/                             ← one per port, all sixteen
     ├── index.ts
     ├── direct-unit-of-work.ts        → DirectUnitOfWork
     ├── in-memory-activity-replay.reader.ts → InMemoryActivityReplayReader

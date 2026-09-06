@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/application"
-description: Principal, Authorizer, and the fifteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
+description: Principal, Authorizer, and the sixteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
 ---
 
 # `@loadbearing/application`
@@ -44,6 +44,7 @@ packages/application/
 │   │   ├── analytics.projector.ts → AnalyticsProjector
 │   │   ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
 │   │   ├── cache.store.ts        → CacheStore
+│   │   ├── capability.invalidator.ts → CapabilityInvalidator
 │   │   ├── email.sender.ts       → EmailSender, EmailMessage
 │   │   ├── embedding.provider.ts → EmbeddingProvider
 │   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
@@ -103,6 +104,7 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `AnalyticsReader` | `PgAnalyticsReader` | `ClickHouseAnalyticsReader` — **written** |
 | `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
 | `CacheStore` | `RedisCacheStore` | managed Redis |
+| `CapabilityInvalidator` | `CapabilityCache` — `auth` | any cache the resolver reads |
 | `EmailSender` | `SmtpEmailSender` | any provider that speaks SMTP |
 | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
 | `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |

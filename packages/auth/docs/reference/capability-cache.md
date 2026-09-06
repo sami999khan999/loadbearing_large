@@ -28,9 +28,18 @@ write:
 
 | Change | Call |
 |---|---|
-| Role permissions edited | `invalidateAll()` |
+| Role permissions edited | `invalidateOrganization(organizationId)` |
+| Membership's role changed | `invalidate(organizationId, userId)` |
 | Membership added or removed | `invalidate(organizationId, userId)` |
 | Per-user override written | `invalidate(organizationId, userId)` |
+
+The domain does not name this class. `CreateRoleUseCase` and its four siblings take a
+`CapabilityInvalidator` port from `application/src/port/`, and `Container` is the one line that binds
+this to it — the same shape as every other adapter.
+
+**The call goes after the commit, never inside it.** A flush issued while the old row is still the
+committed one lets a concurrent read resolve the stale set and put it straight back, which is the
+same bug the flush exists to prevent, now with a race attached.
 
 Getting this wrong in the stale direction means a revoked permission keeps working, which is a
 security bug wearing a caching bug's clothes. The TTL exists so that a forgotten call site costs a
@@ -47,12 +56,13 @@ minute rather than a session lifetime.
 get whichever capability set was cached first — a cross-tenant privilege bug with a one-minute fuse
 and no error anywhere. It is the kind of bug that never reproduces on a single-tenant dev database.
 
-**And it has to be in that position.** `invalidateAll()` is a `deletePrefix` on the fixed
-`capability:user:` prefix, so an organization segment placed *before* it would put every entry out of
-that flush's reach. A role edit affects everyone holding the role, and enumerating them is more
-expensive and more forgettable than flushing.
+**And it has to be in that position.** `invalidateOrganization()` is a `deletePrefix` on
+`capability:user:<org>:`, so an organization segment placed *before* the fixed part would put the
+tenant's entries out of that flush's reach — and one placed *after* the user id would make the flush
+unable to name a tenant at all. A role edit affects everyone holding the role, and enumerating them
+is more expensive and more forgettable than flushing.
 
-## `invalidateAll()` is a flush, not a scan
+## `invalidateOrganization()` is a flush, not a scan
 
 `RedisCacheStore.deletePrefix` uses `SCAN` plus `UNLINK`, and it has a trap documented in
 [15](../../../../docs/setup/15-infrastructure-package.md): ioredis applies `keyPrefix` to key
@@ -65,4 +75,5 @@ and deletes nothing. The prefix is stripped before the delete for exactly that r
 `tests/principal/capability.cache.spec.ts` pins the key layout directly rather than through
 behaviour, because the layout *is* the behaviour: one assertion on
 `capability:user:<org>:<user>`, one that the same user in two tenants gets two answers and two
-repository calls, and one that `invalidateAll()` leaves unrelated keys alone.
+repository calls, and one that `invalidateOrganization()` takes the named tenant's entries and
+leaves both the other tenant's and unrelated keys alone.

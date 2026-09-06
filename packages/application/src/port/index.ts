@@ -14,6 +14,7 @@ export {
   type TrendPoint,
 } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
+export { CapabilityInvalidator } from "./capability.invalidator.js";
 export { type EmailMessage, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";

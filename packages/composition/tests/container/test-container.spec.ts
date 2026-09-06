@@ -1,6 +1,16 @@
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TestContainer } from "../../src/container/test-container.js";
 import { RecordingActivityLogger, RecordingQueuePublisher } from "../../src/fake/index.js";
+
+// Resolved from this file rather than `process.cwd()`, so the assertion holds whether
+// vitest is run from the package or from the workspace root.
+const PORT_DIR = fileURLToPath(new URL("../../../application/src/port/", import.meta.url));
+
+// The harness entries that are not ports: three shared primitives, plus the content
+// source, whose abstract class lives in `@loadbearing/content`.
+const NOT_PORTS = ["authorizer", "clock", "content", "logger"] as const;
 
 describe("TestContainer", () => {
   it("builds every port without touching infrastructure", () => {
@@ -13,11 +23,17 @@ describe("TestContainer", () => {
     }
   });
 
+  // Counted off the directory rather than restated, which is the difference between a
+  // list that goes stale and one that fails the run the next port is added.
   it("builds one port per abstract class in application/src/port", () => {
     const harness = TestContainer.build();
+    const ports = readdirSync(PORT_DIR).filter(
+      (file) => file.endsWith(".ts") && file !== "index.ts",
+    );
 
-    // `content` has no port file — `ContentSource` is `@loadbearing/content`'s, and
-    // its real implementation is the test double. The rest are one-for-one.
+    // `content` has no port file — `ContentSource` is `@loadbearing/content`'s, and its
+    // real implementation is the test double. The other three are shared primitives.
+    expect(Object.keys(harness)).toHaveLength(ports.length + NOT_PORTS.length);
     expect(Object.keys(harness).sort()).toEqual([
       "activity",
       "activityArchive",
@@ -26,6 +42,7 @@ describe("TestContainer", () => {
       "analyticsProjector",
       "authorizer",
       "cache",
+      "capabilities",
       "clock",
       "content",
       "email",

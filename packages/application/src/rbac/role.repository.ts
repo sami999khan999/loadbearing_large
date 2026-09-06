@@ -32,4 +32,21 @@ export abstract class RoleRepository {
     organizationId: OrganizationId,
     roleId: RoleId,
   ): Promise<RoleRecord | null>;
+
+  // By the slug rather than the id, which is what `roles_key_uq` is on: a create checks
+  // this before it inserts, so a duplicate is a CONFLICT and not a driver error.
+  public abstract findByKey(
+    organizationId: OrganizationId,
+    key: string,
+  ): Promise<RoleRecord | null>;
+
+  // One write for the row *and* its grants, reconciled to `role.permissions`. Four
+  // narrower methods would let a caller rename a role and leave its grants behind.
+  public abstract save(organizationId: OrganizationId, role: RoleRecord): Promise<void>;
+
+  public abstract delete(organizationId: OrganizationId, roleId: RoleId): Promise<void>;
+
+  // Memberships and goal memberships both reference `roles` with `on delete no action`,
+  // so a delete of a role somebody holds is a driver error rather than a refusal.
+  public abstract countAssignments(organizationId: OrganizationId, roleId: RoleId): Promise<number>;
 }

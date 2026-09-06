@@ -27,9 +27,13 @@ export { type AppContract, contract } from "./procedure/index.js";
 export { ProcedurePermissions } from "./registry/index.js";
 export {
   type CapabilitiesDto,
+  type ChangeRolePermissionInput,
+  type CreateRoleInput,
+  type DeleteRoleInput,
   type InspectEffectiveInput,
   RoleContract,
   type RoleDto,
   RoleEntity,
   RoleProcedures,
+  type UpdateRoleInput,
 } from "./role/index.js";

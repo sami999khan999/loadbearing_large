@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError, type RoleId, type UserId } from "../import.js";
-import type { ActivityLogger, UnitOfWork } from "../port/index.js";
+import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRepository } from "../rbac/index.js";
 import type { MemberRecord, MemberRepository } from "./member.repository.js";
@@ -17,6 +17,7 @@ export class ChangeMemberRoleUseCase {
     private readonly authorizer: Authorizer,
     private readonly members: MemberRepository,
     private readonly roles: RoleRepository,
+    private readonly capabilities: CapabilityInvalidator,
     private readonly activity: ActivityLogger,
     private readonly unitOfWork: UnitOfWork,
   ) {}
@@ -47,6 +48,10 @@ export class ChangeMemberRoleUseCase {
         toRoleId: role.id,
       });
     });
+
+    // The new role decides what this person may do, and the old set is cached for a
+    // minute. After the commit, so a concurrent read cannot re-cache what was replaced.
+    await this.capabilities.invalidate(actor.organizationId, member.userId);
 
     return { ...member, roleId: role.id, roleKey: role.key, roleName: role.name };
   }

@@ -38,9 +38,10 @@ export class CapabilityCache {
     await this.cache.delete(CapabilityCache.keyFor(organizationId, userId));
   }
 
-  // A role edit affects everyone holding it — cheaper to flush than to enumerate.
-  public async invalidateAll(): Promise<void> {
-    await this.cache.deletePrefix(CapabilityCache.PREFIX);
+  // A role edit affects everyone holding it, and the holders are not known here —
+  // cheaper to flush the tenant than to enumerate them, and never wider than one.
+  public async invalidateOrganization(organizationId: OrganizationId): Promise<void> {
+    await this.cache.deletePrefix(`${CapabilityCache.PREFIX}${organizationId}:`);
   }
 
   // The organization sits between prefix and user id: in the key or a user in two of them

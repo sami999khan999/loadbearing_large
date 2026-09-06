@@ -22,6 +22,6 @@ export {
   UnavailableError,
   ValidationError,
 } from "@loadbearing/errors";
-
-// ── @loadbearing/permissions ─────────────────────────────────────────────────
 export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
+// ── @loadbearing/permissions ─────────────────────────────────────────────────
+export { PermissionRegistry } from "@loadbearing/permissions";

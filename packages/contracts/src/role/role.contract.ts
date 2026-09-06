@@ -40,8 +40,44 @@ export class RoleContract {
   });
 
   public static readonly inspect = z.object({ userId: Identifiers.userId });
+
+  // The stable handle a rule can name — `MemberRules.OWNER_KEY` is a string comparison
+  // against this column, so it is a slug and it never changes after creation.
+  public static readonly key = z
+    .string()
+    .min(2)
+    .max(64)
+    .regex(/^[a-z][a-z0-9_-]*$/);
+
+  public static readonly create = z.object({
+    key: RoleContract.key,
+    name: z.string().min(1).max(120),
+    description: z.string().max(500).nullable().default(null),
+    scope: RoleContract.scope,
+  });
+
+  // No `key` and no `scope`: both are what other rows point at by meaning, and an
+  // editable key turns every `roleKey === "owner"` test into a race with a rename.
+  public static readonly update = z.object({
+    roleId: Identifiers.roleId,
+    name: z.string().min(1).max(120),
+    description: z.string().max(500).nullable().default(null),
+  });
+
+  public static readonly remove = z.object({ roleId: Identifiers.roleId });
+
+  // The permission stays a raw string here, as `entity.permissions` does. The use-case
+  // rejects an unknown one against the registry, which is where a real key list lives.
+  public static readonly changePermission = z.object({
+    roleId: Identifiers.roleId,
+    permission: z.string().min(1).max(120),
+  });
 }
 
 export type RoleDto = z.infer<typeof RoleContract.entity>;
 export type CapabilitiesDto = z.infer<typeof RoleContract.capabilities>;
 export type InspectEffectiveInput = z.infer<typeof RoleContract.inspect>;
+export type CreateRoleInput = z.infer<typeof RoleContract.create>;
+export type UpdateRoleInput = z.infer<typeof RoleContract.update>;
+export type DeleteRoleInput = z.infer<typeof RoleContract.remove>;
+export type ChangeRolePermissionInput = z.infer<typeof RoleContract.changePermission>;

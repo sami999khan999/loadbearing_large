@@ -402,9 +402,10 @@ export class CapabilityCache {
     await this.cache.delete(`${CapabilityCache.PREFIX}${organizationId}:${userId}`);
   }
 
-  // Role edits affect everyone holding it — cheaper to flush than to enumerate.
-  public async invalidateAll(): Promise<void> {
-    await this.cache.deletePrefix(CapabilityCache.PREFIX);
+  // Role edits affect everyone holding it — cheaper to flush than to enumerate, and
+  // the tenant in the key is what keeps that flush inside the organization.
+  public async invalidateOrganization(organizationId: OrganizationId): Promise<void> {
+    await this.cache.deletePrefix(`${CapabilityCache.PREFIX}${organizationId}:`);
   }
 }
 ```
@@ -415,15 +416,18 @@ Every one of these must evict:
 
 | Event | Evict |
 |---|---|
-| Role's permissions changed | `invalidateAll()` |
-| Role deleted | `invalidateAll()` |
+| Role's permissions changed | `invalidateOrganization(organizationId)` |
+| Role deleted | `invalidateOrganization(organizationId)` |
+| Membership's role changed | `invalidate(userId)` |
 | Membership added or removed | `invalidate(userId)` |
 | Goal member added or removed | `invalidate(userId)` |
 | Permission override written or deleted | `invalidate(userId)` |
 | User deactivated | `invalidate(userId)` |
 | API key created or revoked | `invalidate(issuerId)` |
 
-**Get this wrong in the stale direction and a revoked permission keeps working until the TTL expires.** That is a security bug, not a caching bug. Every one of these events is already written to the activity log, so the eviction hook has an obvious home next to that write.
+**Get this wrong in the stale direction and a revoked permission keeps working until the TTL expires.** That is a security bug, not a caching bug. Every one of these events is already written to the activity log, so the eviction hook has an obvious home next to that write — but *after* the transaction commits, not inside it: a flush issued while the old row is still committed lets a concurrent read cache the stale set again.
+
+**The domain never names this class.** The use-cases take a `CapabilityInvalidator` port from `application/src/port/`, and `Container` binds `CapabilityCache` to it — `application` may not import `auth`, which is what makes the port the only way this call can exist in a use-case at all.
 
 **The cache key carries the organization, and that is not decoration.** A key of `capability:user:<id>` means a user who belongs to two organizations gets whichever capability set was cached first — a cross-tenant privilege bug with a one-minute fuse and no error anywhere. The prefix scheme still supports `deletePrefix`, because the organization segment sits between the fixed prefix and the user id.
 

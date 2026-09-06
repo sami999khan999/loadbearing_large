@@ -55,8 +55,8 @@ describe("CapabilityCache", () => {
     const { cache, store } = cacheWith(new Map([[`${ORG_A}:${USER}`, holding("member.read")]]));
     await cache.forUser(ORG_A, USER);
 
-    // The position matters as much as the presence: `invalidateAll` deletes by the fixed
-    // prefix, so an organization segment before it would put the entry out of its reach.
+    // The position matters as much as the presence: `invalidateOrganization` deletes by
+    // prefix, so the tenant has to sit between the fixed part and the user id.
     expect([...store.entries.keys()]).toEqual([`capability:user:${ORG_A}:${USER}`]);
   });
 
@@ -75,7 +75,7 @@ describe("CapabilityCache", () => {
     expect([...store.entries.keys()]).toEqual([`capability:user:${ORG_B}:${USER}`]);
   });
 
-  it("flushes every tenant on invalidateAll", async () => {
+  it("flushes one tenant on invalidateOrganization and leaves the other standing", async () => {
     const { cache, store } = cacheWith(
       new Map([
         [`${ORG_A}:${USER}`, holding("member.read")],
@@ -88,10 +88,13 @@ describe("CapabilityCache", () => {
     store.entries.set("unrelated:key", "kept");
 
     // A role edit affects everyone holding it — cheaper to flush than to enumerate. The
-    // prefix is what keeps that flush from taking the rest of the cache with it.
-    await cache.invalidateAll();
+    // tenant in the prefix is what keeps the flush inside the organization that changed.
+    await cache.invalidateOrganization(ORG_A);
 
-    expect([...store.entries.keys()]).toEqual(["unrelated:key"]);
+    expect([...store.entries.keys()]).toEqual([
+      `capability:user:${ORG_B}:${USER}`,
+      "unrelated:key",
+    ]);
   });
 
   it("re-reads the repository after an invalidation", async () => {

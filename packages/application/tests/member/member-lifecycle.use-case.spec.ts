@@ -9,7 +9,7 @@ import type {
   MemberRepository,
 } from "../../src/member/member.repository.js";
 import { SetMemberActiveUseCase } from "../../src/member/set-member-active.use-case.js";
-import type { ActivityLogger, UnitOfWork } from "../../src/port/index.js";
+import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
@@ -89,6 +89,22 @@ class StubRoles implements RoleRepository {
     throw new Error("not under test");
   }
 
+  public findByKey(): Promise<RoleRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public save(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public delete(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public countAssignments(): Promise<number> {
+    throw new Error("not under test");
+  }
+
   public findById(organizationId: OrganizationId, roleId: RoleId): Promise<RoleRecord | null> {
     if (organizationId !== ORG) return Promise.resolve(null);
     if (roleId === OWNER_ROLE) {
@@ -120,12 +136,32 @@ class DirectUnitOfWork implements UnitOfWork {
   }
 }
 
-const changeRole = (members: RecordingMembers, activity = new RecordingActivityLogger()) => ({
+class RecordingCapabilities implements CapabilityInvalidator {
+  public readonly flushed: string[] = [];
+
+  public invalidate(organizationId: OrganizationId, userId: UserId): Promise<void> {
+    this.flushed.push(`${organizationId}:${userId}`);
+    return Promise.resolve();
+  }
+
+  public invalidateOrganization(organizationId: OrganizationId): Promise<void> {
+    this.flushed.push(organizationId);
+    return Promise.resolve();
+  }
+}
+
+const changeRole = (
+  members: RecordingMembers,
+  activity = new RecordingActivityLogger(),
+  capabilities = new RecordingCapabilities(),
+) => ({
   activity,
+  capabilities,
   useCase: new ChangeMemberRoleUseCase(
     new Authorizer(),
     members,
     new StubRoles(),
+    capabilities,
     activity,
     new DirectUnitOfWork(),
   ),
@@ -183,6 +219,33 @@ describe("ChangeMemberRoleUseCase", () => {
     expect(result.roleKey).toBe("member");
     expect(members.roleChanges).toEqual([{ userId: TARGET, roleId: MEMBER_ROLE }]);
     expect(activity.records.map((r) => r.action)).toEqual(["member.role.changed"]);
+  });
+
+  // Without this the demotion is invisible for a minute: `CapabilityCache` keeps the
+  // old role's resolved set, so the demoted member keeps acting as an owner.
+  it("flushes the cached capability set for the member whose role moved", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase, capabilities } = changeRole(members);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: MEMBER_ROLE,
+    });
+
+    expect(capabilities.flushed).toEqual([`${ORG}:${TARGET}`]);
+  });
+
+  // The one path that writes nothing must also flush nothing, or every no-op role
+  // change costs the member a re-resolve.
+  it("flushes nothing when the role is already the one asked for", async () => {
+    const { useCase, capabilities } = changeRole(new RecordingMembers(member(), 2));
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: OWNER_ROLE,
+    });
+
+    expect(capabilities.flushed).toEqual([]);
   });
 
   // Promotion is never the last-owner case, so the count is not even read.

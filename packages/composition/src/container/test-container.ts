@@ -8,6 +8,7 @@ import {
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
+  RecordingCapabilityInvalidator,
   RecordingEmailSender,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
@@ -23,6 +24,7 @@ import {
   type AnalyticsReader,
   Authorizer,
   type CacheStore,
+  type CapabilityInvalidator,
   type ContentSource,
   type EmailSender,
   type EmbeddingProvider,
@@ -51,6 +53,7 @@ export interface TestPorts {
   // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
+  readonly capabilities: CapabilityInvalidator;
   readonly content: ContentSource;
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
@@ -92,6 +95,7 @@ export class TestContainer {
       analytics: overrides.analytics ?? new StubAnalyticsReader(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
+      capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),
       // The one port whose real implementation is the test double, and `SERVER_CATALOG`
       // like `Container`: the client default carries no `email` namespace.
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),

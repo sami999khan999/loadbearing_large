@@ -86,7 +86,7 @@ export {
 export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
+export { ConflictError, InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
 
 // ── @loadbearing/observability ───────────────────────────────────────────────
 export { Logger } from "@loadbearing/observability";
@@ -108,6 +108,7 @@ export {
   and,
   asc,
   cosineDistance,
+  count,
   desc,
   eq,
   gt,
@@ -116,6 +117,7 @@ export {
   isNull,
   type Logger as DrizzleLogger,
   lt,
+  not,
   or,
   type SQL,
   sql,

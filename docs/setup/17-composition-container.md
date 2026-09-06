@@ -298,7 +298,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 ---
 
 > [!NOTE]
-> **Every port `application` declares is wired here — all fifteen, no exceptions.** That is a
+> **Every port `application` declares is wired here — all sixteen, no exceptions.** That is a
 > property worth checking rather than assuming: read `packages/application/src/port/` against the
 > fields on this class and the two lists should line up name for name.
 >
