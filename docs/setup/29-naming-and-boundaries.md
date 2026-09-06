@@ -178,7 +178,7 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 ## 1.9 Inside `packages/application`
 
 - **`error/`** — the domain error hierarchy. Each carries a `code` string, which is the *only* thing the transport layer maps. No HTTP status codes anywhere in this folder.
-- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, analytics, embeddings, sessions, activity, unit of work, event bus. One file per capability, all abstract, zero implementations.
+- **`port/`** — abstract classes for cross-cutting infrastructure: cache, storage, queue, vector store, analytics, embeddings, sessions, activity, email, maintenance, logs, unit of work. One file per capability, all abstract, zero implementations — and every one bound in `Container`.
 - **`<slice>/`** — one folder per feature slice, holding that slice's use-cases, its policies, **and its repository port**.
 - **Repository ports live in the slice, not in `port/`.** `port/` is for capabilities the whole system shares; `TaskRepository` is meaningful only next to the use-cases that need it. Putting it in `port/` would make that folder grow by one file per feature forever.
 - **Every use-case has one public method, `execute(principal, input)`**, following load → authorize → work → persist.

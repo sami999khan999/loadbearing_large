@@ -89,7 +89,35 @@ probe.
 
 ## 📋 Backlog
 
-*(nothing in the backlog — open work is tracked in `tasks/IMPLEMENTATION-PLAN.md`)*
+- [ ] `T-031` **Transactional outbox for cross-slice events** `@unassigned` `P3` `~12h` `#api` `#db`
+  - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
+    notification slice. Without a seam for that, slice ownership decays into a call graph where
+    every team's code reaches into every other team's. An `EventBus` port was declared for this and
+    deleted by `P5.11` — it had no adapter and no publisher, so a use-case that published would have
+    published into a recording fake under test and into nothing at all in production.
+  - **Why an outbox and not a bus.** The event and the state change that caused it must commit or
+    fail together. Publishing to a broker inside the transaction cannot be rolled back; publishing
+    after it commits loses the event on a crash in between. An outbox table written in the same
+    transaction, drained by the worker, is the only shape with neither hole — and this repository
+    already has the `UnitOfWork` that makes it one line at the call site.
+  - **Done when:** an `outbox` table (`organization_id`, partitioned, `published_at` nullable with
+    the two partial indexes that a nullable column in a unique index needs); an `EventPublisher`
+    port whose `publish` enrols in the ambient `UnitOfWork`; a `PgOutboxPublisher`; a worker
+    consumer that drains and marks; one real publisher and one real subscriber, all in one change.
+    A port, an adapter and a `Container` line land together or not at all — that is what `P5.11`
+    established.
+  - **Build the interface broker-shaped**, because these four are what Kafka or Redis Streams
+    cannot give back later ([Data and scale](../docs/opinions/data-and-scale.md) §7):
+    - `publish` is async and returns nothing — a caller reading a return value is doing RPC.
+    - Handlers are idempotent, keyed on a stable event id: at-least-once is what every broker offers.
+    - No ordering assumptions. Two events published in order may be handled out of order.
+    - No handler exception reaches the publisher. In-process dispatch *could* propagate one; a
+      broker cannot, so a use-case that catches a handler failure depends on semantics that will
+      disappear.
+  - **Notes:** re-adds the `.bus.ts` role suffix to `docs/opinions/files.md` and
+    `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
+    file that exists. The analytics projection is the second consumer class and already works
+    without this: it reads `activity_log`, which is a different stream with a different guarantee.
 
 ## ⛔ Blocked
 

@@ -352,7 +352,6 @@ packages/application/src/
 │   ├── analytics.reader.ts       → AnalyticsReader
 │   ├── cache.store.ts            → CacheStore
 │   ├── embedding.provider.ts     → EmbeddingProvider
-│   ├── event.bus.ts              → EventBus
 │   ├── queue.publisher.ts        → QueuePublisher
 │   ├── session.resolver.ts       → SessionResolver
 │   ├── storage.gateway.ts        → StorageGateway

@@ -1177,9 +1177,31 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Cut (delete code and docs together) or wire
 
-- [ ] `P5.11` **`EventBus`** — port, `RecordingEventBus`, `TestPorts.events`,
+- [x] `P5.11` **`EventBus`** — port, `RecordingEventBus`, `TestPorts.events`,
   `application/docs` row, `composition/docs` sentence. No adapter, no publisher, no
   `Container` field. **Delete.** Record the outbox design as a `TODO.md` backlog item.
+  `done: 2026-09-06`
+  - **Deleted:** `application/src/port/event.bus.ts`, `composition/src/fake/recording-event.bus.ts`,
+    both barrel lines, both `import.ts` lines, `TestPorts.events` and its default.
+    `grep -rn 'EventBus\|DomainEvent'` over `packages` and `apps` returns nothing.
+  - **The design is preserved as `T-031` in `TODO.md`, and it is an outbox rather than a bus.** The
+    four broker-shaped properties move there intact, because they are the part a Kafka or Redis
+    Streams implementation cannot give back later. What the entry adds is why the deleted port was
+    the wrong shape anyway: the event and the state change that caused it must commit or fail
+    together, and neither publishing inside the transaction nor publishing after it has that
+    property. The `UnitOfWork` this repo already has is what makes an outbox one line at a call site.
+  - **A spec was quietly not doing its job, and that is the finding worth keeping.**
+    `test-container.spec.ts`'s "one assertion per port — this is the completeness check" listed
+    twelve of sixteen: `activityArchive`, `activityReplay`, `analyticsProjector`, `logs` and
+    `maintenance` had all been added to `TestPorts` without the check noticing. It now iterates
+    `Object.entries(harness)`, and a second spec pins the exact key set — a hand-written subset is
+    a completeness check that passes while being incomplete, which is how it drifted.
+  - **Counts corrected in the same pass**, since they all derived from the deleted port: sixteen
+    ports → fifteen in `application/docs/{index.md,meta.json}` and `composition/docs`, and
+    `packages/application/docs/index.md` had `VectorStore` listed twice.
+  - **The `.bus.ts` role suffix left the closed set** in `docs/opinions/files.md` and
+    `docs/ai/rules/files.md`. Every other row in that table names a file that exists, and the set is
+    closed precisely so an entry means something. `T-031` re-adds it.
 - [ ] `P5.12` **Analytics rollups** — `AnalyticsReader.goalRiskScores` / `reliabilityTrend`,
   `goal_risk_daily`, `user_reliability_daily`, both readers' implementations, the fake, and the
   `ANALYTICS_DRIVER` switch for reads: nothing reads them and nothing writes the tables. Keep

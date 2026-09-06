@@ -9,7 +9,6 @@ import {
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingEmailSender,
-  RecordingEventBus,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
   StubAnalyticsReader,
@@ -27,7 +26,6 @@ import {
   type ContentSource,
   type EmailSender,
   type EmbeddingProvider,
-  type EventBus,
   FixedClock,
   type Logger,
   type LogReader,
@@ -56,7 +54,6 @@ export interface TestPorts {
   readonly content: ContentSource;
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
-  readonly events: EventBus;
   readonly logs: LogReader;
   readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
@@ -100,7 +97,6 @@ export class TestContainer {
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),
       email: overrides.email ?? new RecordingEmailSender(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
-      events: overrides.events ?? new RecordingEventBus(),
       logs: overrides.logs ?? new InMemoryLogReader(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),

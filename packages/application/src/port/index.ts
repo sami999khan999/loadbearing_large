@@ -16,7 +16,6 @@ export {
 export { CacheStore } from "./cache.store.js";
 export { type EmailMessage, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
-export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";

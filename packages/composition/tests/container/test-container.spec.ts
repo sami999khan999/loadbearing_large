@@ -6,20 +6,39 @@ describe("TestContainer", () => {
   it("builds every port without touching infrastructure", () => {
     const harness = TestContainer.build();
 
-    // One assertion per port: this is the completeness check, and a port wired to
-    // `undefined` fails right on this line.
-    expect(harness.activity).toBeDefined();
-    expect(harness.analytics).toBeDefined();
-    expect(harness.cache).toBeDefined();
-    expect(harness.content).toBeDefined();
-    expect(harness.email).toBeDefined();
-    expect(harness.embeddings).toBeDefined();
-    expect(harness.events).toBeDefined();
-    expect(harness.queue).toBeDefined();
-    expect(harness.sessions).toBeDefined();
-    expect(harness.storage).toBeDefined();
-    expect(harness.unitOfWork).toBeDefined();
-    expect(harness.vectors).toBeDefined();
+    // Every key, from the object rather than by hand: a listed subset passes while
+    // a port added to `TestPorts` goes unbuilt, which is what this once did.
+    for (const [name, port] of Object.entries(harness)) {
+      expect(port, `${name} is not built`).toBeDefined();
+    }
+  });
+
+  it("builds one port per abstract class in application/src/port", () => {
+    const harness = TestContainer.build();
+
+    // `content` has no port file — `ContentSource` is `@loadbearing/content`'s, and
+    // its real implementation is the test double. The rest are one-for-one.
+    expect(Object.keys(harness).sort()).toEqual([
+      "activity",
+      "activityArchive",
+      "activityReplay",
+      "analytics",
+      "analyticsProjector",
+      "authorizer",
+      "cache",
+      "clock",
+      "content",
+      "email",
+      "embeddings",
+      "logger",
+      "logs",
+      "maintenance",
+      "queue",
+      "sessions",
+      "storage",
+      "unitOfWork",
+      "vectors",
+    ]);
   });
 
   it("freezes the clock at the same instant every run", () => {

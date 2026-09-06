@@ -524,10 +524,18 @@ Worth naming, because it is most of the system. At every scale on this page:
 - **Event handlers** — moving from in-process dispatch to a broker changes the dispatcher, not the
   subscribers.
 
-That last one has a condition attached. **Keep the event bus interface broker-shaped:** async
-`publish`, no return value, idempotent handlers, no ordering assumptions. A handler that starts
-depending on synchronous in-process semantics is the one thing that would make the broker swap
-expensive.
+That last one has a condition attached, and it applies to the interface that does not exist yet:
+**when an event bus is built, build it broker-shaped** — async `publish`, no return value,
+idempotent handlers keyed on a stable event id, no ordering assumptions, and no handler exception
+reaching the publisher. Each of those is something a Kafka or Redis Streams implementation cannot
+give back later, and a handler that starts depending on synchronous in-process semantics is the one
+thing that would make the swap expensive.
+
+**Shape is not a reason to declare the port early.** One was declared here, faked in
+`TestContainer`, and bound nowhere, which meant a use-case that published would have published into
+nothing in production while reading as correct. It was deleted. The retrofit for this seam is local
+— a port file, an adapter, one `Container` line — so it lands with its first publisher, together,
+and `tasks/TODO.md` carries the design until then.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "@loadbearing/application"
-description: Principal, Authorizer, and the sixteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
+description: Principal, Authorizer, and the fifteen abstract ports. Zero framework imports and no third-party runtime dependency — the package that makes every infrastructure decision reversible.
 ---
 
 # `@loadbearing/application`
@@ -46,7 +46,6 @@ packages/application/
 │   │   ├── cache.store.ts        → CacheStore
 │   │   ├── email.sender.ts       → EmailSender, EmailMessage
 │   │   ├── embedding.provider.ts → EmbeddingProvider
-│   │   ├── event.bus.ts          → EventBus, DomainEvent
 │   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
 │   │   ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
 │   │   ├── queue.publisher.ts    → QueuePublisher, JobOptions
@@ -106,7 +105,6 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `CacheStore` | `RedisCacheStore` | managed Redis |
 | `EmailSender` | `SmtpEmailSender` | any provider that speaks SMTP |
 | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
-| `EventBus` | **nothing** — see below | an in-process dispatcher, then a broker |
 | `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |
 | `MaintenanceGateway` | `PgMaintenanceGateway` | never |
 | `QueuePublisher` | `BullMqQueuePublisher` | managed Redis |
@@ -114,27 +112,14 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `StorageGateway` | `S3StorageGateway` | S3, R2 |
 | `UnitOfWork` | `PgUnitOfWork` | never |
 | `VectorStore` | `PgVectorStore` | a dedicated vector database |
-| `VectorStore` | `PgVectorStore` | a dedicated vector database |
 
-Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts` and
-every name lines up with one binding — with one exception, which is the point of the row that says
-so. **Repository ports are not here** — each lives with its feature slice,
+Everything unattributed is in `@loadbearing/infrastructure`. Read that list against `container.ts`
+and every name lines up with exactly one binding, with no exceptions — which is the property this
+table exists to make checkable. **Repository ports are not here** — each lives with its feature slice,
 `src/member/member.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
 `AnalyticsReader` and `VectorStore` are the exception because they are one cross-cutting read seam
 that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
 or a *file*.
-
-### `EventBus` is a port with no implementation, and that is the one to watch
-
-Nothing extends it. `composition` wires `RecordingEventBus` into `TestContainer` and binds nothing
-in `Container`, so a use-case that published an event would publish into a fake in tests and into
-nothing at all in production. It is listed here because it is exported and reachable, not because
-it works — [`composition`](../../composition/docs/index.md) says the same, and this page used to
-claim `composition` implemented it.
-
-A seam with no implementation and no caller is the shape
-[Simplicity](../../../docs/opinions/simplicity.md) argues against: it costs nothing today and
-teaches the next reader that events are a thing this system does.
 
 ### Three ports are split read-from-write, and each split is a guard
 

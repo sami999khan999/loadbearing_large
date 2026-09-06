@@ -8,7 +8,6 @@ export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";
 export { RecordingActivityArchiveGateway } from "./recording-activity-archive.gateway.js";
 export { RecordingEmailSender } from "./recording-email.sender.js";
-export { RecordingEventBus } from "./recording-event.bus.js";
 export { RecordingMaintenanceGateway } from "./recording-maintenance.gateway.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export { StubAnalyticsReader } from "./stub-analytics.reader.js";

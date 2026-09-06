@@ -178,7 +178,6 @@ export class Container {
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
   public readonly content: ContentSource;
-  // `EventBus` is the tenth port and is deliberately absent — see below.
 
   // ── auth ──────────────────────────────────────────────────
   public readonly auth: AuthInstance;
@@ -299,15 +298,17 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 ---
 
 > [!NOTE]
-> **Fifteen of the sixteen ports are wired here. `EventBus` is not.** `application` declares it for
-> cross-slice side effects — a finance use-case publishes `invoice.approved` rather than importing the
-> notification slice ([12](12-application-package.md)) — and nothing publishes one yet, so there is no
-> adapter in `infrastructure` and no field on this class. Adding one is a field plus a
-> constructor line, exactly like the rest.
+> **Every port `application` declares is wired here — all fifteen, no exceptions.** That is a
+> property worth checking rather than assuming: read `packages/application/src/port/` against the
+> fields on this class and the two lists should line up name for name.
 >
-> A fake for it exists regardless, in `TestContainer` — which is the point of that file: the first
-> use-case that publishes an event is testable on the day it is written, without a port double being
-> the thing that blocks it.
+> It has not always held. `EventBus` was declared for cross-slice side effects — a finance use-case
+> publishing `invoice.approved` rather than importing the notification slice — with no adapter in
+> `infrastructure` and no field here. A use-case that published would have published into a
+> recording fake under test and into nothing at all in production, which is worse than a missing
+> feature: it reads as working. It was deleted; the transactional outbox it was reserving is a
+> backlog item in `tasks/TODO.md`, and it lands as a port, an adapter and a `Container` line
+> together or not at all.
 
 ---
 
@@ -354,7 +355,6 @@ export interface TestPorts {
   readonly cache: CacheStore;
   readonly content: ContentSource;
   readonly embeddings: EmbeddingProvider;
-  readonly events: EventBus;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
@@ -388,7 +388,6 @@ export class TestContainer {
       // to fake. The one port whose real implementation is the test double.
       content: overrides.content ?? new StaticContentSource(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
-      events: overrides.events ?? new RecordingEventBus(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
@@ -418,8 +417,6 @@ No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test build
 **A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that.
 
 **Two of them carry real logic anyway, and both earn it.** `InMemoryVectorStore` computes actual cosine, because a fake that scored every hit identically would let *"the top result is the right one"* pass either way — the one assertion a retrieval use-case is worth testing. And `RecordingQueuePublisher` honours `jobId` deduplication, because "enqueue OCR for this receipt, once" is a business rule the use-case is responsible for, not queue configuration.
-
-**`RecordingEventBus` exists even though `Container` wires no `EventBus`.** That is the point of the file rather than an inconsistency: the first use-case that publishes a domain event is testable on the day it is written.
 
 **Query counts belong in that integration set.** A fake repository cannot tell you that `resolveFor` became 3 + N queries — only a real adapter against a real database can. That is the assertion [13](13-infrastructure-postgres.md) adds next to the repository, and it is the reason the integration tier exists at all rather than being a slower copy of the unit tier.
 

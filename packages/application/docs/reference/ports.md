@@ -163,4 +163,3 @@ ambient one.
 | `QueuePublisher` | The deduplication id is a domain rule ("enqueue OCR for this receipt, once"), not queue configuration |
 | `UnitOfWork` | The implementation must genuinely enrol the repositories running inside `work()`; one that does not is worse than none |
 | `VectorStore.search` | `goalIds` is required so the permission filter runs on the **input** set. Filtering results means the model already saw what the actor cannot |
-| `EventBus` | Broker-shaped while dispatch is still in-process: async, returns nothing, no ordering guarantee, no handler exception reaching the publisher. A broker cannot give those back |

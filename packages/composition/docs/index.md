@@ -35,7 +35,7 @@ packages/composition/src/
 │   ├── container.config.ts           → ContainerConfig
 │   ├── container.ts                  → Container
 │   └── test-container.ts             → TestContainer, TestPorts   (off the barrel)
-└── fake/                             ← one per port, all sixteen
+└── fake/                             ← one per port, all fifteen
     ├── index.ts
     ├── direct-unit-of-work.ts        → DirectUnitOfWork
     ├── in-memory-activity-replay.reader.ts → InMemoryActivityReplayReader
@@ -47,7 +47,6 @@ packages/composition/src/
     ├── recording-activity.logger.ts  → RecordingActivityLogger, RecordedActivity
     ├── recording-activity-archive.gateway.ts → RecordingActivityArchiveGateway
     ├── recording-email.sender.ts     → RecordingEmailSender
-    ├── recording-event.bus.ts        → RecordingEventBus
     ├── recording-maintenance.gateway.ts → RecordingMaintenanceGateway
     ├── recording-queue.publisher.ts  → RecordingQueuePublisher, PublishedJob
     ├── stub-analytics.reader.ts      → StubAnalyticsReader
@@ -115,21 +114,17 @@ That is what lets you construct the entire system in a test with a fake database
 and what lets the same code run in a web server and a background worker without either fighting over
 environment variables.
 
-## Three things this package does not have yet
+## Every port has exactly one binding
 
-**No use-cases.** The container has no feature fields, because no feature slice exists. They arrive
-as eagerly-constructed `public readonly` fields, grouped by slice — the shape is in
-[`reference/container.md`](reference/container.md).
+`Container` constructs an implementation for every port `application` declares — no exceptions, no
+`undefined` fields, nothing reachable that resolves to nothing. That is a property worth checking
+rather than assuming: read the port list in
+[`application/docs`](../../application/docs/index.md) against `container.ts` and the two should line
+up name for name.
 
-**`content` takes no catalog.** `new StaticContentSource()` defaults to `CLIENT_CATALOG`.
-`SERVER_CATALOG` and the `email` namespace arrive with
-[20](../../../docs/setup/20-content-package.md); until then a server catalog would be a copy of the
-client one, and the line becomes `new StaticContentSource(SERVER_CATALOG)`.
-
-**`EventBus` has no implementation, so `Container` wires fifteen of the sixteen ports.** `application`
-declares it for cross-slice side effects — a finance use-case publishes `invoice.approved` rather
-than importing the notification slice — and nothing publishes one yet. It has no adapter in `infrastructure` and no field here. `RecordingEventBus` exists anyway, so the first use-case that
-does publish is testable the day it is written. **This is a gap in the setup docs**, not a decision:
-[12](../../../docs/setup/12-application-package.md) says the barrel lists "every port the composition
-root must supply an implementation for", and [17](../../../docs/setup/17-composition-container.md)'s
-`Container` omits this one.
+It has not always been true. `EventBus` was declared, faked in `TestContainer`, and bound nowhere —
+so a use-case that published an event would have published into a recording fake under test and into
+nothing at all in production. It was deleted rather than implemented, because a seam with no
+implementation and no caller is what [Simplicity](../../../docs/opinions/simplicity.md) argues
+against: it costs nothing today and teaches the next reader that events are a thing this system
+does. The design it was reserving — a transactional outbox — is in `tasks/TODO.md`.

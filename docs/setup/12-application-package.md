@@ -43,7 +43,6 @@ packages/application/src/
     ├── analytics.reader.ts   → AnalyticsReader
     ├── cache.store.ts        → CacheStore
     ├── embedding.provider.ts → EmbeddingProvider
-    ├── event.bus.ts          → EventBus
     ├── queue.publisher.ts    → QueuePublisher
     ├── session.resolver.ts   → SessionResolver
     ├── storage.gateway.ts    → StorageGateway
@@ -498,35 +497,6 @@ export abstract class UnitOfWork {
 >
 > **The implementation must genuinely enrol the repositories that run inside `work()`.** A `run()` that opens a transaction the repositories never join is worse than no `UnitOfWork` at all: every call site reads as atomic and none of it is, and the first symptom is a state change with no audit row after a restart. [13](13-infrastructure-postgres.md) is where that is made real.
 
-### `EventBus`
-
-```ts
-// packages/application/src/port/event.bus.ts
-export interface DomainEvent {
-  // Stable identity, so a handler that runs twice can tell that it has.
-  readonly id: string;
-  readonly name: string;
-  readonly occurredAt: Date;
-  readonly payload: Readonly<Record<string, unknown>>;
-}
-
-export abstract class EventBus {
-  public abstract publish(event: DomainEvent): Promise<void>;
-}
-```
-> The seam for cross-slice side effects. A finance use-case should not import a notification use-case; it publishes `invoice.approved` and the notification slice subscribes. Without this, slice ownership decays into a call graph where every team's code reaches into every other team's.
-
-The analytics projection is the second consumer class: the worker subscribes to domain events and writes snapshot rows, which is what keeps the analytics store derived rather than written to directly ([13](13-infrastructure-postgres.md)).
-
-**Keep this interface broker-shaped**, even while dispatch is in-process. Four properties, and each one is a thing a Kafka or Redis Streams implementation cannot give back later:
-
-- **`publish` is async and returns nothing.** A caller that reads a return value is a caller doing RPC.
-- **Handlers are idempotent.** At-least-once delivery is what every broker offers; `id` is what makes deduplication possible.
-- **No ordering assumptions.** Two events published in order may be handled out of order.
-- **No handler exceptions reaching the publisher.** In-process dispatch could propagate them; a broker cannot, so a use-case that catches an event-handler failure is depending on semantics that will disappear.
-
-A handler that starts relying on synchronous in-process behaviour is the one thing that would make the broker swap expensive — [Data and scale](../opinions/data-and-scale.md) §7.
-
 ### The barrel
 
 ```ts
@@ -535,7 +505,6 @@ export { ActivityLogger } from "./activity.logger.js";
 export { AnalyticsReader, type DateRange } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
-export { type DomainEvent, EventBus } from "./event.bus.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export {
   type RequestHeaders,
@@ -590,9 +559,7 @@ export {
   CacheStore,
   type DateRange,
   type DocumentChunk,
-  type DomainEvent,
   EmbeddingProvider,
-  EventBus,
   type JobOptions,
   QueuePublisher,
   type RequestHeaders,
@@ -609,7 +576,7 @@ export { Principal, type PrincipalKind } from "./principal.js";
 
 **Yes, that is twenty-odd lines, and that is the point.** This package's public surface really is twenty-odd symbols — every seam the composition root wires. `export *` did not make the surface smaller, only invisible. Read this file top to bottom and you have read the contract `Container` has to satisfy ([17](17-composition-container.md)).
 
-**One port on that list has no implementation yet, deliberately.** `EventBus` is declared because the *shape* is what a broker cannot give back later (see below), not because something publishes an event today — so `Container` wires nine of these ten and gains an `events` field with the first use-case that needs one. A port is a declaration of what the domain may ask for; it is not a promise that an adapter exists on the day it is written.
+**Every port on that list has exactly one implementation in `Container`**, and keeping it that way is a decision this package has already got wrong once. `EventBus` sat here for a while with no adapter and no publisher — declared because the *shape* is what a broker cannot give back later, which is a real argument and not a sufficient one. A port with no binding does not read as absent; it reads as working, right up until a use-case publishes into nothing. It was deleted, and the outbox design it was reserving is a backlog item in `tasks/TODO.md` — to land as a port, an adapter and a `Container` line in one change.
 
 **Repository ports are not on the list.** `TaskRepository` lives in its slice and is exported through the barrel only when a consumer outside the package genuinely needs the type — `Container` does, `apps/web` does not.
 

@@ -25,7 +25,6 @@ export {
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingEmailSender,
-  RecordingEventBus,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
   StubAnalyticsReader,
