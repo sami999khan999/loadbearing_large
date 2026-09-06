@@ -18,7 +18,7 @@ export interface TwoFactorPanelProps {
 // Turning two-factor off, or replacing the backup codes. Both take the password: a
 // stolen session must not remove the factor protecting the account.
 export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   const [password, setPassword] = useState("");
   const [fresh, setFresh] = useState<readonly string[]>([]);
 
@@ -45,9 +45,9 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
 
   return (
     <form onSubmit={spend} noValidate>
-      <Callout tone="success">{t("auth.twoFactorOn")}</Callout>
+      <Callout tone="success">{t("account.twoFactorOn")}</Callout>
 
-      <Field label={t("auth.twoFactorConfirmPassword")} htmlFor="disable-password">
+      <Field label={t("account.twoFactorConfirmPassword")} htmlFor="disable-password">
         <Input
           id="disable-password"
           type="password"
@@ -59,7 +59,7 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
       </Field>
 
       {disable.isError || regenerate.isError ? (
-        <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout>
+        <Callout tone="danger">{t("account.changePasswordFailed")}</Callout>
       ) : null}
 
       {
@@ -68,10 +68,10 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
       }
       {fresh.length > 0 ? (
         <>
-          <Callout tone="warning" title={t("auth.backupCodesRegenerated")}>
-            {t("auth.backupCodesHint")}
+          <Callout tone="warning" title={t("account.backupCodesRegenerated")}>
+            {t("account.backupCodesHint")}
           </Callout>
-          <CodeList values={fresh} label={t("auth.backupCodes")} />
+          <CodeList values={fresh} label={t("account.backupCodes")} />
         </>
       ) : null}
 
@@ -90,11 +90,11 @@ export function TwoFactorPanel({ account }: TwoFactorPanelProps) {
           )
         }
       >
-        {t("auth.backupCodesRegenerate")}
+        {t("account.backupCodesRegenerate")}
       </Button>
 
       <Button type="submit" variant="danger" disabled={pending || password.length === 0}>
-        {t("auth.twoFactorDisable")}
+        {t("account.twoFactorDisable")}
       </Button>
     </form>
   );

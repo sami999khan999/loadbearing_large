@@ -1,4 +1,16 @@
 export const nav = {
+  // ── the shell around every signed-in page ──
+  // Here rather than in `auth` or `account`: the header and the settings sidebar render
+  // on every signed-in page, and `nav` is the namespace that layout already loads.
+  "nav.signOut": "Sign out",
+  // Shown when the server refuses the sign-out: the session is still live, so the shell
+  // must not act as though it is gone.
+  "nav.signOutFailed": "Could not sign out. Please try again.",
+  "nav.account": "Account",
+  "nav.security": "Security",
+  "nav.organization": "Organization",
+  "nav.organizationNew": "New organization",
+
   "nav.roles": "Roles",
   "nav.members": "Members",
   "nav.apiKeys": "API keys",

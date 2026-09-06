@@ -34,8 +34,8 @@ export const renderWithFakes = async (
   ui: ReactNode,
   capabilities: CapabilitySetDto,
   user: SessionUser | null = TEST_USER,
-  // `auth` by default, because most components under test read it. A spec elsewhere names
-  // its own namespace, as a route would.
+  // `auth` by default; a spec elsewhere names its own, as a route would. A component
+  // reading a namespace nobody loaded renders the raw key, which is the failure to want.
   namespaces: readonly ClientNamespace[] = ["auth"],
   // Only for components that read a procedure. Omitted, nothing provides one, and a
   // component reaching for it throws — which is the honest answer for a spec that forgot.

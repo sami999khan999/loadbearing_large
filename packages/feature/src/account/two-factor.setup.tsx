@@ -22,7 +22,7 @@ export interface TwoFactorSetupProps {
 }
 
 export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   const [step, setStep] = useState<Step>("password");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -61,7 +61,7 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
           // The password stops a stolen session enrolling its own authenticator and
           // locking the owner out permanently.
         }
-        <Field label={t("auth.twoFactorConfirmPassword")} htmlFor="enable-password">
+        <Field label={t("account.twoFactorConfirmPassword")} htmlFor="enable-password">
           <Input
             id="enable-password"
             type="password"
@@ -72,10 +72,12 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
           />
         </Field>
 
-        {enable.isError ? <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout> : null}
+        {enable.isError ? (
+          <Callout tone="danger">{t("account.changePasswordFailed")}</Callout>
+        ) : null}
 
         <Button type="submit" disabled={enable.isPending || password.length === 0}>
-          {t("auth.twoFactorEnable")}
+          {t("account.twoFactorEnable")}
         </Button>
       </form>
     );
@@ -84,21 +86,21 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
   if (step === "verify") {
     return (
       <form onSubmit={finish} noValidate>
-        <QrCode value={totpUri} label={t("auth.twoFactorScan")} />
-        <p className="ui-field__hint">{t("auth.twoFactorScan")}</p>
+        <QrCode value={totpUri} label={t("account.twoFactorScan")} />
+        <p className="ui-field__hint">{t("account.twoFactorScan")}</p>
 
         {
           // The same string the QR encodes, for an authenticator with no camera — so
           // there is nothing to keep in step.
         }
-        <Field label={t("auth.twoFactorManual")} htmlFor="totp-uri">
+        <Field label={t("account.twoFactorManual")} htmlFor="totp-uri">
           <Input id="totp-uri" readOnly value={totpUri} />
         </Field>
 
         <Field
-          label={t("auth.twoFactorCode")}
+          label={t("account.twoFactorCode")}
           htmlFor="enrolment-code"
-          hint={t("auth.twoFactorVerifyPrompt")}
+          hint={t("account.twoFactorVerifyPrompt")}
         >
           <Input
             id="enrolment-code"
@@ -114,12 +116,12 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
 
         {verify.isError ? (
           <p role="alert" className="ui-field__error">
-            {t("auth.twoFactorFailed")}
+            {t("account.twoFactorFailed")}
           </p>
         ) : null}
 
         <Button type="submit" disabled={verify.isPending || code.length === 0}>
-          {t("auth.saveChanges")}
+          {t("account.saveChanges")}
         </Button>
       </form>
     );
@@ -127,17 +129,17 @@ export function TwoFactorSetup({ account, onEnabled }: TwoFactorSetupProps) {
 
   return (
     <>
-      <Callout tone="success">{t("auth.twoFactorEnabled")}</Callout>
+      <Callout tone="success">{t("account.twoFactorEnabled")}</Callout>
 
       {
         // Shown once and never again, so the warning carries its whole weight here.
       }
-      <Callout tone="warning" title={t("auth.backupCodes")}>
-        {t("auth.backupCodesHint")}
+      <Callout tone="warning" title={t("account.backupCodes")}>
+        {t("account.backupCodesHint")}
       </Callout>
-      <CodeList values={backupCodes} label={t("auth.backupCodes")} />
+      <CodeList values={backupCodes} label={t("account.backupCodes")} />
 
-      <Button onClick={onEnabled}>{t("auth.saveChanges")}</Button>
+      <Button onClick={onEnabled}>{t("account.saveChanges")}</Button>
     </>
   );
 }

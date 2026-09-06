@@ -18,7 +18,7 @@ export interface ChangeEmailFormProps {
 }
 
 export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   const [newEmail, setNewEmail] = useState("");
 
   const change = AccountMutations.useChangeEmail(account);
@@ -32,7 +32,7 @@ export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) 
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.newEmail")} htmlFor="new-email">
+      <Field label={t("account.newEmail")} htmlFor="new-email">
         <Input
           id="new-email"
           type="email"
@@ -47,10 +47,10 @@ export function ChangeEmailForm({ account, callbackUrl }: ChangeEmailFormProps) 
         // Nothing has changed yet: a "saved" message here would be a lie until the link
         // in the old inbox is followed.
       }
-      {change.isSuccess ? <Callout tone="info">{t("auth.changeEmailSent")}</Callout> : null}
+      {change.isSuccess ? <Callout tone="info">{t("account.changeEmailSent")}</Callout> : null}
 
       <Button type="submit" disabled={change.isPending || newEmail.length === 0}>
-        {t("auth.changeEmail")}
+        {t("account.changeEmail")}
       </Button>
     </form>
   );

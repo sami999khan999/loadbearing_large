@@ -37,6 +37,10 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = ["common", "error"]
 > **Two namespaces today, five when the package is finished.** `nav`, `auth` and the server-only
 > `email` join `NamespaceShape` and the unions at their own build steps. Nothing else in this file
 > changes, and no consumer changes — see [the second pass](#what-widening-namespace-changes).
+>
+> The shipped repository has more than five, and one of them — `account` — exists because `auth`
+> grew past what a single chunk should carry. See
+> [the split](#auth-and-account-are-two-namespaces-and-the-split-is-about-the-chunk).
 
 ---
 
@@ -166,6 +170,35 @@ declarations.
 
 **This is why building the error slice early was safe.** `MessageKey` is a closed union over two
 namespaces exactly as rigorously as over five, and `ERROR_COPY` is total today.
+
+---
+
+## `auth` and `account` are two namespaces, and the split is about the chunk
+
+`auth` grew to 82 keys covering both halves of the same subject: the flows that run before there is
+a session, and the settings a signed-in person changes afterwards. Nobody is ever in both. Because a
+namespace is a chunk, `/forgot-password` — three visible strings — downloaded the two-factor
+enrolment copy, the backup-code warning, the linked-accounts list and the session table, in whatever
+language the visitor reads.
+
+The line is the session, not the feature area:
+
+| Namespace | Loaded by | Holds |
+|---|---|---|
+| `auth` | the `(shell)` sign-in routes | sign-in, sign-up, verification, reset, the two-factor *challenge*, social |
+| `account` | `settings/*` | profile, password, email, two-factor *enrolment*, backup codes, linked accounts, sessions |
+| `nav` | the signed-in layout | the chrome both halves render: sign-out, the settings links, the organization switcher |
+
+**Five strings appear in both, and that is the intended cost.** `name`, `resetNewPassword`,
+`twoFactorCode`, `twoFactorFailed` and `socialFailed` are the same English words on either side of
+the session boundary. A shared namespace to hold five short strings would be loaded by every page
+that loads either half, which is the thing being fixed; and the words being identical in English is
+not a promise that they are identical in a language that inflects for context.
+
+**The shell keys went to `nav` rather than to either half.** The header and the settings sidebar
+render on every signed-in page, and `nav` is the namespace that layout already loads — so
+`sign-out.button.tsx` reads `nav`, despite living in `feature/src/auth/`. The folder groups by
+feature; the namespace groups by *when it is downloaded*, and those are different questions.
 
 ---
 

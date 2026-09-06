@@ -17,7 +17,7 @@ import { LocaleSwitcher } from "~/route/-locale.js";
 import { refreshSession } from "~/route/-session.js";
 
 // `nav` for the gated destinations below; `auth` for everything else the header says.
-const MESSAGES = ["auth", "nav"] as const satisfies readonly ClientNamespace[];
+const MESSAGES = ["nav"] as const satisfies readonly ClientNamespace[];
 
 // The one place that says every page under `(app)` needs a session. Pathless: the
 // leading underscore keeps `_authenticated` out of the URL.
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/(app)/_authenticated")({
 });
 
 function AuthenticatedLayout() {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("nav");
   const { nav, logo } = Route.useLoaderData();
   const capabilities = useCapabilities();
   const navigate = useNavigate();
@@ -82,8 +82,8 @@ function AuthenticatedLayout() {
           // Ungated on purpose: your own account and security pages need no capability,
           // which is why `account.routes.ts` declares no gate for them.
           <nav>
-            <Link to="/settings/account">{t("auth.account")}</Link>
-            <Link to="/settings/security">{t("auth.security")}</Link>
+            <Link to="/settings/account">{t("nav.account")}</Link>
+            <Link to="/settings/security">{t("nav.security")}</Link>
           </nav>
         }
         {

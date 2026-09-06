@@ -338,6 +338,15 @@ a typo is a compile error today, and `ERROR_COPY` is total today.
 `ERROR_COPY: Record<ErrorCode, ShellMessageKey>` above is still total. Nothing about the guarantee
 changed — only where the runtime data lives.
 
+> [!NOTE]
+> **The shipped repository has more namespaces than this step declares**, and the listings here are
+> the state at this build step rather than the finished set. One of the extras is worth knowing
+> about while you are choosing where a key goes: `auth` was later split into `auth` (before there is
+> a session) and `account` (settings afterwards), because a namespace is a chunk and
+> `/forgot-password` was downloading the backup-code warning. The rule that fell out of it — group
+> keys by *when they are downloaded*, not by feature area — is in
+> [`content/docs/reference/namespace.md`](../../packages/content/docs/reference/namespace.md).
+
 > [!IMPORTANT]
 > **`NamespaceKeys` is a mapped type deliberately, and the obvious alternative silently does
 > nothing.** The tempting form is a conditional over the namespace:

@@ -18,7 +18,7 @@ export function OrganizationSwitcher({
   onSwitched,
   onCreate,
 }: OrganizationSwitcherProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("nav");
   const { user } = useSession();
   const switchTo = OrganizationMutations.useSwitch(organization, onSwitched);
 
@@ -27,7 +27,7 @@ export function OrganizationSwitcher({
   return (
     <span className="ui-organization-switcher">
       <label className="ui-field__label" htmlFor="organization-switcher">
-        {t("auth.organization")}
+        {t("nav.organization")}
       </label>{" "}
       {
         // A native select styled as an input, as the invite form's role picker is.
@@ -46,7 +46,7 @@ export function OrganizationSwitcher({
         ))}
       </select>{" "}
       <Button variant="ghost" onClick={onCreate}>
-        {t("auth.organizationNew")}
+        {t("nav.organizationNew")}
       </Button>
     </span>
   );

@@ -12,7 +12,7 @@ import {
   useState,
 } from "~/import.js";
 
-const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
+const MESSAGES = ["account"] as const satisfies readonly ClientNamespace[];
 
 // No `requirePermission`: managing your own credentials is not a capability anyone can
 // be denied, so the layout's `requireSession()` is the whole gate.
@@ -23,7 +23,10 @@ export const Route = createFileRoute("/(app)/_authenticated/settings/security")(
 });
 
 function SecurityPage() {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
+  // The heading is the same word the shell's settings link uses, and `nav` is loaded by
+  // the layout above this route rather than declared again here.
+  const { t: nav } = useMessages("nav");
   const { googleEnabled, session } = Route.useRouteContext();
 
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
@@ -36,10 +39,10 @@ function SecurityPage() {
 
   return (
     <main>
-      <h1>{t("auth.security")}</h1>
+      <h1>{nav("nav.security")}</h1>
 
       <section>
-        <h2>{t("auth.twoFactorTitle")}</h2>
+        <h2>{t("account.twoFactorTitle")}</h2>
         {enrolled ? (
           <TwoFactorPanel account={account} />
         ) : (
@@ -48,7 +51,7 @@ function SecurityPage() {
       </section>
 
       <section>
-        <h2>{t("auth.linkedAccounts")}</h2>
+        <h2>{t("account.linkedAccounts")}</h2>
         <LinkedAccountList
           account={account}
           googleEnabled={googleEnabled}

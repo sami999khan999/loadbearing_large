@@ -2,7 +2,7 @@ import type { AccountClient, LinkedAccount } from "@loadbearing/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LinkedAccountList } from "../../src/account/linked-account.list.js";
-import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import { capabilitiesWith, renderWithFakes, TEST_USER } from "../support/render-with-fakes.js";
 
 const account = (providerId: string): LinkedAccount => ({
   id: `id-${providerId}`,
@@ -22,6 +22,8 @@ const render = (listAccounts: () => Promise<readonly LinkedAccount[]>) =>
       linkCallbackUrl="/settings/security"
     />,
     capabilitiesWith([]),
+    TEST_USER,
+    ["account"],
   );
 
 describe("LinkedAccountList", () => {

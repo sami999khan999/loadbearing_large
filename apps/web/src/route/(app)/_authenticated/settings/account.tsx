@@ -12,7 +12,7 @@ import {
   useMessages,
 } from "~/import.js";
 
-const MESSAGES = ["auth"] as const satisfies readonly ClientNamespace[];
+const MESSAGES = ["account"] as const satisfies readonly ClientNamespace[];
 
 // Session-gated only, like `/settings/security` and for the same reason.
 export const Route = createFileRoute("/(app)/_authenticated/settings/account")({
@@ -22,7 +22,10 @@ export const Route = createFileRoute("/(app)/_authenticated/settings/account")({
 });
 
 function AccountPage() {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
+  // The heading is the same word the shell's settings link uses, and `nav` is loaded by
+  // the layout above this route rather than declared again here.
+  const { t: nav } = useMessages("nav");
   const { user } = Route.useRouteContext();
 
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
@@ -34,20 +37,20 @@ function AccountPage() {
 
   return (
     <main>
-      <h1>{t("auth.account")}</h1>
+      <h1>{nav("nav.account")}</h1>
 
       <section>
-        <h2>{t("auth.profile")}</h2>
+        <h2>{t("account.profile")}</h2>
         <ProfileForm account={account} currentName={user.name} />
       </section>
 
       <section>
-        <h2>{t("auth.changePassword")}</h2>
+        <h2>{t("account.changePassword")}</h2>
         <ChangePasswordForm account={account} />
       </section>
 
       <section>
-        <h2>{t("auth.changeEmail")}</h2>
+        <h2>{t("account.changeEmail")}</h2>
         {
           // The server sends the confirmation to the *current* address. This is only
           // where the link lands once the token is spent.
@@ -56,7 +59,7 @@ function AccountPage() {
       </section>
 
       <section>
-        <h2>{t("auth.sessions")}</h2>
+        <h2>{t("account.sessions")}</h2>
         <ActiveSessionList account={account} />
       </section>
     </main>

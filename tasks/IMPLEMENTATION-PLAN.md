@@ -1787,8 +1787,26 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     text in the wrong language rather than a missing key — and the old code had it too.
   - Five specs; three fail against the previous implementation, including the locale race, which is
     what says it was real rather than hypothetical. `docs/setup/20` carries both arguments.
-- [ ] `P7.10` `auth` namespace is 82 keys and every one loads for `/forgot-password` — split
+- [x] `P7.10` `auth` namespace is 82 keys and every one loads for `/forgot-password` — split
   `auth` (sign-in/up/recovery) from `account` (settings). **Docs:** `content/docs/reference/namespace.md`.
+  `done: 2026-09-06`
+  - **42 keys, not 82, on the signed-out pages.** `auth` keeps the flows that run before there is a
+    session; `account` takes the 40 keys a signed-in person reads in settings. Measured in the built
+    client bundle: `auth` is 2,259 bytes in English and 4,709 in Bengali, `account` another 2,343 and
+    4,752 — and `/forgot-password`, which renders three visible strings, used to download both.
+  - **The line is the session, not the feature area.** `sign-out.button.tsx` lives in
+    `feature/src/auth/` and now reads `nav`, because the folder groups by feature and a namespace
+    groups by when it is downloaded.
+  - **Six shell keys went to `nav`**, which the signed-in layout already loads: sign-out and its
+    failure, the two settings links, and the organization switcher's two. Putting them in either half
+    would make every signed-in page load that half.
+  - **Five strings are duplicated across `auth` and `account`** — `name`, `resetNewPassword`,
+    `twoFactorCode`, `twoFactorFailed`, `socialFailed`. A third namespace to hold them would be
+    loaded by everything that loads either half, which is the thing being fixed; and identical in
+    English is not a promise of identical in a language that inflects. Said in the reference.
+  - **The four account specs now name their namespace.** The harness defaults to `["auth"]`, and a
+    component reading a namespace nobody loaded renders the raw key — which is how those four failed
+    the moment the keys moved, and is worth keeping rather than defaulting the harness wider.
 - [ ] `P7.11` `useAppMutation` gains `onMutate`/rollback so revoke-invitation, unlink-account
   and revoke-session can be optimistic. **Docs:** `query/docs/reference/mutations.md`.
 - [ ] `P7.12` a11y — `PermissionMatrix` empty `<th>` (`aria-label`), `<header>`/`<nav>`

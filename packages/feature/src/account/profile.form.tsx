@@ -16,7 +16,7 @@ export interface ProfileFormProps {
 }
 
 export function ProfileForm({ account, currentName }: ProfileFormProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   // Seeded once, then owned here: re-syncing to the prop would discard what the user is
   // typing the moment the session query refetches.
   const [name, setName] = useState(currentName);
@@ -30,7 +30,7 @@ export function ProfileForm({ account, currentName }: ProfileFormProps) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.name")} htmlFor="profile-name">
+      <Field label={t("account.name")} htmlFor="profile-name">
         <Input
           id="profile-name"
           autoComplete="name"
@@ -40,10 +40,10 @@ export function ProfileForm({ account, currentName }: ProfileFormProps) {
         />
       </Field>
 
-      {update.isSuccess ? <Callout tone="success">{t("auth.saved")}</Callout> : null}
+      {update.isSuccess ? <Callout tone="success">{t("account.saved")}</Callout> : null}
 
       <Button type="submit" disabled={update.isPending || name === currentName}>
-        {t("auth.saveChanges")}
+        {t("account.saveChanges")}
       </Button>
     </form>
   );

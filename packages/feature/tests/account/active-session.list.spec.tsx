@@ -2,7 +2,7 @@ import type { AccountClient, ActiveSession } from "@loadbearing/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ActiveSessionList } from "../../src/account/active-session.list.js";
-import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import { capabilitiesWith, renderWithFakes, TEST_USER } from "../support/render-with-fakes.js";
 
 const session = (id: string, current: boolean): ActiveSession => ({
   id,
@@ -21,7 +21,12 @@ const clientWith = (listSessions: () => Promise<readonly ActiveSession[]>) =>
   }) as unknown as AccountClient;
 
 const render = (listSessions: () => Promise<readonly ActiveSession[]>) =>
-  renderWithFakes(<ActiveSessionList account={clientWith(listSessions)} />, capabilitiesWith([]));
+  renderWithFakes(
+    <ActiveSessionList account={clientWith(listSessions)} />,
+    capabilitiesWith([]),
+    TEST_USER,
+    ["account"],
+  );
 
 describe("ActiveSessionList", () => {
   it("says it is loading rather than showing a list it does not have", async () => {

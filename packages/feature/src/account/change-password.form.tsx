@@ -16,7 +16,7 @@ export interface ChangePasswordFormProps {
 }
 
 export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -44,7 +44,7 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <Field label={t("auth.currentPassword")} htmlFor="current-password">
+      <Field label={t("account.currentPassword")} htmlFor="current-password">
         <Input
           id="current-password"
           type="password"
@@ -57,7 +57,7 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
 
       <PasswordPair
         idPrefix="new"
-        label={t("auth.resetNewPassword")}
+        label={t("account.resetNewPassword")}
         password={next}
         confirmation={confirmation}
         onPasswordChange={setNext}
@@ -68,11 +68,13 @@ export function ChangePasswordForm({ account }: ChangePasswordFormProps) {
         // The copy says other devices were signed out because they were:
         // `revokeOtherSessions` is set on the call.
       }
-      {change.isSuccess ? <Callout tone="success">{t("auth.changePasswordDone")}</Callout> : null}
-      {change.isError ? <Callout tone="danger">{t("auth.changePasswordFailed")}</Callout> : null}
+      {change.isSuccess ? (
+        <Callout tone="success">{t("account.changePasswordDone")}</Callout>
+      ) : null}
+      {change.isError ? <Callout tone="danger">{t("account.changePasswordFailed")}</Callout> : null}
 
       <Button type="submit" disabled={change.isPending || !ready}>
-        {t("auth.changePassword")}
+        {t("account.changePassword")}
       </Button>
     </form>
   );

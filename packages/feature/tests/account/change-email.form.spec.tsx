@@ -2,13 +2,15 @@ import type { AccountClient } from "@loadbearing/api-client";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ChangeEmailForm } from "../../src/account/change-email.form.js";
-import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import { capabilitiesWith, renderWithFakes, TEST_USER } from "../support/render-with-fakes.js";
 
 const render = (changeEmail = vi.fn().mockResolvedValue(undefined)) => {
   const account = { changeEmail } as unknown as AccountClient;
   return renderWithFakes(
     <ChangeEmailForm account={account} callbackUrl="/settings/account" />,
     capabilitiesWith([]),
+    TEST_USER,
+    ["account"],
   ).then(() => ({ changeEmail }));
 };
 
