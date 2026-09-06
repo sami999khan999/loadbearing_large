@@ -14,7 +14,7 @@ export {
 export { EmptyState, type EmptyStateProps } from "./empty-state/index.js";
 export { Field, type FieldProps } from "./field/index.js";
 export { DateFormat } from "./format/index.js";
-export { Icon, type IconProps } from "./icon/index.js";
+export { Icon, type IconName, type IconProps, IconRegistry } from "./icon/index.js";
 export { Input, type InputProps } from "./input/index.js";
 export { QrCode, type QrCodeProps } from "./qr-code/index.js";
 export { type BadgeTone, StatusBadge, type StatusBadgeProps } from "./status-badge/index.js";

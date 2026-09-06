@@ -1,6 +1,7 @@
 import type {
   ApiClient,
   CapabilitySetDto,
+  ContentSource,
   MessageStore,
   QueryClient,
   SessionUser,
@@ -11,6 +12,9 @@ import type { SessionStore } from "~/store/session.store.js";
 // What every route sees. Built per request in `router.tsx`, never at module scope.
 export interface RouterContext {
   readonly messages: MessageStore;
+  // The seam, not `navItems`: the nav is content, and a CMS behind this port must not
+  // mean editing the layout that renders it.
+  readonly content: ContentSource;
   readonly queryClient: QueryClient;
   readonly api: ApiClient;
   // Here so the root's `beforeLoad` can ask whether the answer already rode in on the

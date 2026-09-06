@@ -2,8 +2,8 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouter } from "@tanstack
 import { Endpoint } from "~/endpoint.js";
 import {
   AuthClient,
-  Can,
   type ClientNamespace,
+  ModuleNav,
   OrganizationClient,
   OrganizationSwitcher,
   SignOutButton,
@@ -25,7 +25,12 @@ export const Route = createFileRoute("/(app)/_authenticated")({
   // The header renders `auth` copy on every page in this subtree, so the namespace is
   // ensured here rather than in each leaf.
   staticData: { messages: MESSAGES },
-  loader: ({ context }) => context.messages.ensure(MESSAGES),
+  // The menu is content, so it is loaded like content. Both in parallel: neither
+  // depends on the other and the header needs both before it renders.
+  loader: async ({ context }) => {
+    const [, nav] = await Promise.all([context.messages.ensure(MESSAGES), context.content.nav()]);
+    return { nav };
+  },
   component: AuthenticatedLayout,
   // Covers every page below, so a leaf whose loader prefetches — `/settings/roles`
   // does — has a state to show rather than a blank frame.
@@ -34,7 +39,7 @@ export const Route = createFileRoute("/(app)/_authenticated")({
 
 function AuthenticatedLayout() {
   const { t } = useMessages("auth");
-  const nav = useMessages("nav");
+  const { nav } = Route.useLoaderData();
   const capabilities = useCapabilities();
   const navigate = useNavigate();
   const router = useRouter();
@@ -64,20 +69,28 @@ function AuthenticatedLayout() {
           onSwitched={switched}
           onCreate={() => void navigate({ to: "/organization/new" })}
         />
-        <nav>
-          <Link to="/settings/account">{t("auth.account")}</Link>
-          <Link to="/settings/security">{t("auth.security")}</Link>
-          {
-            // The same keys the guards and use-cases check: a link hidden here still
-            // answers FORBIDDEN if typed by hand.
-          }
-          <Can permission="member.read" capabilities={capabilities}>
-            <Link to="/settings/members">{nav.t("nav.members")}</Link>
-          </Can>
-          <Can permission="rbac.role.read" capabilities={capabilities}>
-            <Link to="/settings/roles">{nav.t("nav.roles")}</Link>
-          </Can>
-        </nav>
+        {
+          // Ungated on purpose: your own account and security pages need no capability,
+          // which is why `account.routes.ts` declares no gate for them.
+          <nav>
+            <Link to="/settings/account">{t("auth.account")}</Link>
+            <Link to="/settings/security">{t("auth.security")}</Link>
+          </nav>
+        }
+        {
+          // The gated half, from `ContentSource.nav()` joined to `MODULE_GATES`. A link
+          // hidden here still answers FORBIDDEN if the path is typed by hand.
+        }
+        <ModuleNav
+          items={nav}
+          capabilities={capabilities}
+          renderLink={(route, label, icon) => (
+            <Link key={route} to={route}>
+              {icon}
+              {label}
+            </Link>
+          )}
+        />
         <SignOutButton auth={auth} onSignedOut={signedOut} />
       </header>
       <Outlet />

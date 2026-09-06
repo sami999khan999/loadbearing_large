@@ -42,6 +42,7 @@ export {
   LinkedAccountList,
   MemberList,
   MessageProvider,
+  ModuleNav,
   OrganizationSwitcher,
   ProfileForm,
   ResetPasswordForm,

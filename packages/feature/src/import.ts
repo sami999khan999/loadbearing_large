@@ -10,6 +10,7 @@ export type {
   MessageParams,
   MessageStore,
   NamespaceKeys,
+  NavItem,
   ShellNamespace,
   Translator,
 } from "@loadbearing/content";
@@ -29,6 +30,8 @@ export { type ErrorEnvelope, ErrorNormalizer } from "@loadbearing/errors";
 export {
   CapabilitySet,
   type CapabilitySetDto,
+  type ModuleKey,
+  ModuleRegistry,
   type PermissionKey,
   PermissionRegistry,
 } from "@loadbearing/permissions";
@@ -58,6 +61,8 @@ export {
   DateFormat,
   EmptyState,
   Field,
+  Icon,
+  IconRegistry,
   Input,
   QrCode,
   StatusBadge,

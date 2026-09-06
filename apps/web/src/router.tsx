@@ -51,6 +51,7 @@ export function getRouter() {
     // `empty()`, which denies.
     context: {
       messages,
+      content,
       queryClient,
       api: apiClient,
       session,

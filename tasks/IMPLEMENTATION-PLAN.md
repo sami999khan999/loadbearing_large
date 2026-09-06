@@ -1168,13 +1168,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     the exact string this replaces. They now assert the catalog's sentence, and a new spec rejects
     with a `ForbiddenError` and asserts "You do not have permission to do that." appears while the
     generic one does not. That is the assertion the old specs could not make.
-- [ ] `P5.7` **Navigation from data** `P2` `~3h` `#ui`
+- [x] `P5.7` **Navigation from data** `P2` `~3h` `#ui`
   - **Goal:** `_authenticated.tsx` hardcodes two `<Can>`/`<Link>` pairs; `ROUTES` is never
     imported by `apps/web`; the `nav` collection, `ContentSource.nav()` and `rbacGates` have no
     consumer; five route files assert in comments that their literal equals a `ROUTES` entry.
   - **Done when:** the sidebar renders from `MODULE_GATES` + `ContentSource.nav()`;
     `apps/web/tests/route/routes.spec.ts` asserts every `createFileRoute` literal is a value in
-    `ROUTES` and every gated `ROUTES` path has a route file.
+    `ROUTES` and every gated `ROUTES` path has a route file. `done: 2026-09-06`
+  - **`ModuleNav` joins two lists on `module`, and the join is the security property.** Content
+    says what a menu holds and in what order; `ModuleRegistry` says who may see it. An editor
+    reordering a menu cannot grant access, which is why `module` is the only join key and why
+    `NavContract` deliberately types it as a wide `string` — a CMS row is wide.
+  - **The component takes `renderLink` rather than importing `<Link>`.** `feature` may not name the
+    router, so the shell passes the element. That is the same rule that keeps every other component
+    in this package mountable under a different routing shell.
+  - **The icon is validated, not cast.** `IconRegistry.isKnown` gates it, so an unknown name from a
+    content row renders no icon rather than a `<use>` pointing at nothing. That needed `ui` to
+    re-export `IconName` and `IconRegistry` — a consumer rendering `<Icon name={…}>` from data has
+    no other way to check. It also closes half of `P5.15`'s `IconRegistry` item.
+  - **`ContentSource` is on the router context now**, and the layout's loader resolves `nav()`
+    beside the message namespaces. The seam rather than `navItems` directly: a CMS behind this port
+    must not mean editing the layout that renders it.
+  - **Two links stay hardcoded and ungated, and that is the correct reading.** `/settings/account`
+    and `/settings/security` have no gate because `accountRoutes` declares none — "may I change my
+    own password" is not a capability anyone can be denied. Rendering them through a gate-driven nav
+    would have required inventing one.
+  - **The spec was verified by breaking it.** Renaming `ROUTES.rbac.roles` to `/settings/roles-typo`
+    fails both assertions; it sees all fifteen route files and resolves each URL through the group
+    and pathless-layout rules. `api/` mounts, the `$token` parameter and the dev-only kitchen sink
+    are excluded by name, each with the reason stated.
 - [ ] `P5.8` **Home page, `/settings` index, deep-link return** `P2` `~4h` `#ui`
   - **Goal:** `/` renders `EmptyState("Nothing here yet")` and is the target of every
     post-sign-in, post-switch, post-create navigation; `/settings` 404s.

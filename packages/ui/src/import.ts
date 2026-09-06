@@ -2,7 +2,7 @@
 // the sprite URL, and no cache library, router or contracts.
 
 // ── @loadbearing/asset ───────────────────────────────────────────────────────
-export type { IconName } from "@loadbearing/asset";
+export { type IconName, IconRegistry } from "@loadbearing/asset";
 export { default as spriteUrl } from "@loadbearing/asset/sprite.svg";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
