@@ -27,8 +27,9 @@ again the first time someone introduces one because "it is just a cache."
   code cannot be sharded; those belong in the analytics store from day one.
 
 **Non-negotiable in any new schema:** `organization_id` on every domain table as a branded
-`OrganizationId` · an index on **every** foreign key and filtered column, since Postgres does not
-auto-index FKs · append-only tables **partitioned in the first migration**, because converting later
+`OrganizationId` · an index **leading with** every foreign key and filtered column, since Postgres
+does not auto-index FKs and a composite that leads with the tenant cannot serve a cascade ·
+append-only tables **partitioned in the first migration**, because converting later
 is a rewrite with downtime · query-count assertions in integration tests for anything that loops ·
 **every tenant foreign key `ON DELETE CASCADE`**, because that column is the only handle a tenant
 delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected

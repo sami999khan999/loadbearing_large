@@ -1758,11 +1758,37 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   configs; mirror in `biome-config/src/base.json:122`); §3's regex hits `process.env` inside
   comments (strip comments first); §6 and §9 regexes are column-0 dependent and pass silently
   on nested or minified output.
-- [ ] `P8.9` **new schema assertions** `P1` `~3h` — **§16** every unique index on a table
-  carrying `organization_id` leads with it (parse `migrations/*.sql`, with the documented
-  exemption list); **§17** every FK column in a `pgTable` has an index. Both are stated as
-  non-negotiable in `docs/ai/rules/data.md` and checked by nothing.
-  **Docs:** `docs/setup/26`, `workflow.md` (seventeen).
+- [x] `P8.9` **new schema assertions** `P1` `~3h` — **§17** every unique index on a table
+  carrying `organization_id` leads with it, with the documented exemption list; **§18** every FK
+  column in a `pgTable` has an index. Both are stated as non-negotiable in
+  `docs/ai/rules/data.md` and were checked by nothing.
+  **Docs:** `docs/setup/26`, `workflow.md`, `AGENTS.md` (eighteen). `done: 2026-09-06`
+  - **They are §17 and §18, not §16 and §17** — `P8.12` took 16 for the pnpm declarations.
+  - **They read the drizzle schema, not `migrations/*.sql` as this entry proposed.** The schema is
+    the file a person edits and the file `db:generate` diffs against, so an index missing there is
+    missing from the next migration too; replaying migrations would additionally have to track
+    every later `DROP INDEX` to end at the live set, and get `0004`'s drop-and-recreate right, to
+    reach the same answer. The gap that leaves is a hand-edited migration, and it is a gap drizzle
+    already has: DDL the schema does not declare is DDL the next generate proposes to drop. Said in
+    `docs/setup/26` at §18.
+  - **A shared parser, because a regex over `pgTable(...)` cannot do this.** `closingBracket` walks
+    brackets while skipping strings and `//` comments; `pgTableBlocks` splits each call at the
+    columns object so a column and an index are never matched by the same pattern. Verified against
+    all sixteen tables: partial indexes, `.desc()` columns, and the HNSW index — which leads with no
+    column and is correctly absent — all parse.
+  - **§17 matches `organization_id` as a whole quoted name.** `users.last_active_organization_id`
+    ends with the string; a `String.includes` test, which is what §9 uses, makes a table carrying no
+    tenant look like one. §9 survives it only because `users` is in its exemption list.
+  - **§18 found four real gaps**, all the same shape: the FK column present inside a tenant-leading
+    composite and therefore useless to the cascade — `api_keys.issuer_id`,
+    `role_permissions.role_id`, `goal_members.user_id`, `permission_overrides.user_id`. Deleting a
+    user or a role scanned the whole child table under a lock. `0013` adds the four, named
+    `<table>_<subject>_fk_idx` so nobody later reads one as a duplicate of the composite beside it.
+  - **A second index, not a reordering.** `goal_members_user_idx` on `(organization_id, user_id)` is
+    on `CapabilityRepository.resolveFor()`'s path, which runs on essentially every request;
+    reordering it to serve the cascade trades a hot read for a rare write.
+  - **Both were verified by breaking them**: `roles_key_uq` reduced to `(key)` and
+    `memberships_role_idx` deleted, each named by exactly one failure line, then restored.
 - [ ] `P8.10` **scripts are untyped and untested** `P2` `~4h` — `// @ts-check` +
   `tsc --checkJs` in `tooling/scripts/package.json`; `tests/check-architecture.spec.mjs` runs
   each assertion against a fixture tree that violates it (`docs/setup/26:210` demands this);
@@ -1821,17 +1847,34 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Migrations and seed
 
-- [ ] `P8.14` **auth tables** `P1` `~1h` — `accounts` has no unique index on
+- [x] `P8.14` **auth tables** `P1` `~1h` — `accounts` has no unique index on
   `(provider_id, account_id)` (two rows per Google account accepted);
   `two_factors_user_idx` is not unique (two TOTP secrets per user). Migration + `auth.schema.ts`.
-  Run `pnpm auth:tables` and diff.
+  Run `pnpm auth:tables` and diff. `done: 2026-09-06`
+  - **`pnpm auth:tables` shows no column drift**, which is the useful negative result: `getSchema`
+    reports column-level uniqueness and knows nothing about composite indexes, so neither defect was
+    ever going to appear in that diff. Both are index-level and both are ours to declare.
+  - **`0012` de-duplicates before it creates**, per `P8.16`: `accounts` keeps the earliest
+    `(created_at, id)` per `(provider_id, account_id)` — the original link — and `two_factors` keeps
+    the verified enrolment over a later abandoned one. The live database held no duplicates, so the
+    de-dup was verified by inserting both collisions by hand, migrating, and checking that the row
+    meant to survive is the row that did.
+  - **`IF NOT EXISTS` on the creates, `IF EXISTS` on the drop.** Drizzle's journal runs a migration
+    once, but a migration also gets applied by hand to a branch database or a restored snapshot, and
+    the second run should be a no-op rather than an error.
+  - The recipe is now `docs/setup/13`, "writing a unique-index migration" — the other half of
+    `P8.16`.
 - [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive`. It is the only one
   left: `P5.12` deleted `goal_risk_daily` and `user_reliability_daily`. Partition by month in a
   migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
 - [ ] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
   unique indexes with no de-dup; `0004` drops `memberships_uq` before recreating it. Ship a
-  `0005` that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"
+  migration that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"
   (delete duplicates → create index, in one transaction).
+  - **The doc half is done** (`P8.14`), and `0012` is the worked example it quotes. What is left is
+    `0003` and `0004` themselves, which have already run everywhere they are going to run — so the
+    remaining work is deciding whether a replayed history is a case this repo supports at all,
+    rather than writing SQL.
 - [ ] `P8.17` **seed** `P2` `~1h` — organization insert and `SystemRoleSeed.run()` in one
   transaction; roles insert gains `onConflictDoNothing`; permissions removed from the catalog
   are reconciled off `owner` (today only ever added); `seed.ts` falls back to `"loadbearing"`

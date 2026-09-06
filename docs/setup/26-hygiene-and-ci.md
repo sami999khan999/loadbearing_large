@@ -366,9 +366,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The fifteen architectural assertions
+## Step 26.4 — The eighteen architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Fifteen greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Eighteen greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -382,7 +382,7 @@ Types cannot express "this package must not import that one across a bundle boun
 > [!IMPORTANT]
 > **A skipped assertion prints `○`, never `✓`.** Two of these depend on artefacts that may not exist yet — a built `dist/`, a built client bundle — and an assertion that quietly passes when it did not run is worse than no assertion, because it converts an unknown into a false guarantee. The same reason the bundle check fails rather than passes when it finds zero asset files.
 >
-> **Write the failing case before you trust any of them.** Each of the twelve runnable assertions here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
+> **Write the failing case before you trust any of them.** Every runnable assertion here was verified by introducing its violation and watching it fail: a `drizzle-orm` import in `application`, a `process.env` read outside `env.ts`, `@orpc/server` skewed back to `^1.13.7`, a block comment in `src/`, a top-level `await` appended to a built barrel. A grep nobody has seen fail is a grep nobody should believe.
 
 ### 1 — `application` imports no framework
 
@@ -654,6 +654,46 @@ add exemptions rather than fix paths:
 
 `apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
 move there, and doc [30](30-desktop-app.md) is a plan for one of them.
+
+### 16 — Both pnpm version declarations agree
+
+```js
+// fail unless package.json has `packageManager` and `devEngines.packageManager`
+// and the two name the same version
+```
+
+The assertion written after the discovery that **CI had never passed on any branch**. `pnpm/action-setup` reads the root `packageManager` field and nothing else; pnpm 11 reads `devEngines.packageManager`. This repository declared only the second, so both jobs died in about twenty seconds with `No pnpm version is specified`, every step after the setup was reported as `skipped`, and a run that ran nothing looked, at a glance, like a run that found nothing.
+
+Two declarations that must agree is exactly the shape a grep is for. Verified by deleting each in turn and watching the check name the missing one.
+
+### 17 — Every unique index on a tenant table leads with `organization_id`
+
+```js
+// fail if a pgTable declaring an organization_id column carries a uniqueIndex
+// whose first column is something else
+```
+
+Stated as non-negotiable in [Rules · Vocabulary](../ai/rules/vocabulary.md) and checked by nothing until now. `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner` role — and the failure does not arrive as a design review, it arrives as a duplicate-key error during someone else's signup, months later, in production.
+
+**The tenant column is matched as a whole quoted name, never a substring.** `users` carries `last_active_organization_id`; a `String.includes` test makes a table that holds no tenant look like one, and the assertion then demands an index that would be meaningless.
+
+**Two names are exempt, and the exemption is the point rather than a concession.** `invitations_token_uq` and `api_keys_hash_uq` are the two lookups that arrive holding no tenant: the request presents a token, or a hash, and the tenant is precisely what the index is being used to find. Any other exemption is a query that has not been scoped yet.
+
+### 18 — Every foreign key column has an index leading with it
+
+```js
+// fail if a column declaring .references() is not the first column of some index
+```
+
+Postgres indexes a primary key and a unique constraint. It does **not** index a foreign key, and nothing in Drizzle's schema types says so. An `ON DELETE CASCADE` with no index behind it scans the whole child table on every parent delete — which is fine at seed scale and is a lock held over a table scan at any other.
+
+**Leading, not merely present.** This is the distinction that gives the assertion its teeth: four tables here already had the column inside a composite index and were still unindexed for the cascade. `goal_members_user_idx` on `(organization_id, user_id)` answers "this tenant's members" and cannot answer "every row naming this user", because deleting a user is not a tenant-scoped operation. The fix is a second index, not a reordering of the first — the tenant-leading index is on the capability-resolution path, and reordering it to serve the cascade would trade a hot read for a rare write.
+
+Those four arrive as `<table>_<subject>_fk_idx`, a suffix that says the index exists for the foreign key rather than for a query, so nobody later reads it as a duplicate of the composite beside it and deletes it.
+
+**Both 17 and 18 read the Drizzle schema, not `migrations/*.sql`.** The schema is the file a person edits and the file `db:generate` diffs against, so an index that is missing there is missing from the next migration too. The gap this leaves is a hand-edited migration — the partitioned tables in [13](13-infrastructure-postgres.md) are the precedent — and it is a gap Drizzle already has: DDL the schema does not declare is DDL the next `db:generate` proposes to drop.
+
+---
 
 ---
 

@@ -94,6 +94,107 @@ function lineOf(source, needle) {
   return source.slice(0, index).split("\n").length;
 }
 
+// The end of the bracket that opens at `open`, which is the index of a `(` or a `{`.
+// A regex cannot do this: an index callback nests brackets and the comments hold more.
+function closingBracket(source, open) {
+  const close = source[open] === "{" ? "}" : ")";
+  let depth = 0;
+
+  for (let i = open; i < source.length; i += 1) {
+    const char = source[i];
+
+    if (char === "/" && source[i + 1] === "/") {
+      const newline = source.indexOf("\n", i);
+      if (newline === -1) return source.length - 1;
+      i = newline;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      i += 1;
+      while (i < source.length && source[i] !== char) i += source[i] === "\\" ? 2 : 1;
+      continue;
+    }
+
+    if (char === source[open]) depth += 1;
+    else if (char === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+
+  return source.length - 1;
+}
+
+// Every `pgTable(...)` in the drizzle schema, split at the columns object so that a
+// column declaration and an index declaration are never matched by the same regex.
+function pgTableBlocks() {
+  const dir = join(ROOT, "packages/infrastructure/src");
+  if (!existsSync(dir)) return null;
+
+  const files = walk(dir, [".ts"]).filter((file) => file.endsWith(".schema.ts"));
+  if (files.length === 0) return null;
+
+  const blocks = [];
+
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+
+    for (const match of source.matchAll(/\bpgTable\(\s*["'`]([^"'`]+)["'`]\s*,/g)) {
+      const open = source.indexOf("(", match.index);
+      const call = source.slice(open, closingBracket(source, open) + 1);
+      const brace = call.indexOf("{");
+      const braceEnd = closingBracket(call, brace);
+
+      blocks.push({
+        file,
+        table: match[1],
+        columns: call.slice(brace, braceEnd + 1),
+        extras: call.slice(braceEnd + 1),
+      });
+    }
+  }
+
+  return blocks;
+}
+
+// `userId: uuid("user_id").notNull().references(...)` → the property name the index
+// callback will use, the SQL name a migration will use, and whether it is a foreign key.
+function columnsOf(block) {
+  const found = [...block.columns.matchAll(/(\w+):\s*\w+\(\s*["']([^"']+)["']/g)];
+
+  return found.map((match, position) => {
+    const next = found[position + 1];
+    const declaration = block.columns.slice(match.index, next ? next.index : undefined);
+
+    return {
+      property: match[1],
+      column: match[2],
+      isForeignKey: declaration.includes(".references("),
+    };
+  });
+}
+
+// `index("x").on(t.a, t.b)` → { name, unique, columns: ["a", "b"] } in property names.
+// `.using("hnsw", t.embedding.op(...))` leads with no column and is deliberately absent.
+function indexesOf(block) {
+  const out = [];
+  const pattern = /\b(index|uniqueIndex)\(\s*["']([^"']+)["']\s*\)\s*\.on\(/g;
+
+  for (const match of block.extras.matchAll(pattern)) {
+    const open = match.index + match[0].length - 1;
+    const args = block.extras.slice(open + 1, closingBracket(block.extras, open));
+
+    out.push({
+      name: match[2],
+      unique: match[1] === "uniqueIndex",
+      columns: [...args.matchAll(/\bt\.(\w+)/g)].map((column) => column[1]),
+    });
+  }
+
+  return out;
+}
+
 function assert(name, run) {
   const failures = [];
   const skipped = run(failures);
@@ -833,6 +934,73 @@ assert("both pnpm version declarations agree", (failures) => {
   const expected = `${modern.name}@${modern.version}`;
   if (legacy !== expected) {
     failures.push(`packageManager is \`${legacy}\`, devEngines says \`${expected}\``);
+  }
+
+  return null;
+});
+
+// ── 17 — every unique index on a tenant table leads with organization_id ─────
+//
+// `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner`
+// role, and the failure arrives as a duplicate-key error on someone else's signup.
+// See docs/ai/rules/vocabulary.md.
+
+// The two lookups that arrive holding no tenant: a request presents the token, or the
+// hash, and nothing else, so the tenant is what the index is being used to find.
+const TENANT_LEADING_EXEMPT = new Set(["invitations_token_uq", "api_keys_hash_uq"]);
+
+assert("every unique index on a tenant table leads with `organization_id`", (failures) => {
+  const blocks = pgTableBlocks();
+  if (!blocks) return "packages/infrastructure has no schema files yet";
+
+  for (const block of blocks) {
+    const columns = columnsOf(block);
+    // The quoted SQL name, never a substring: `last_active_organization_id` on `users`
+    // ends with it and makes a table that carries no tenant look like one.
+    if (!columns.some((column) => column.column === "organization_id")) continue;
+
+    const tenant = columns.find((column) => column.column === "organization_id").property;
+
+    for (const index of indexesOf(block)) {
+      if (!index.unique) continue;
+      if (TENANT_LEADING_EXEMPT.has(index.name)) continue;
+      if (index.columns[0] === tenant) continue;
+
+      failures.push(
+        `${rel(block.file)}: "${index.name}" on ${block.table} leads with ` +
+          `${index.columns[0] ?? "nothing"}, not organization_id`,
+      );
+    }
+  }
+
+  return null;
+});
+
+// ── 18 — every foreign key column has an index leading with it ───────────────
+//
+// Postgres does not index a foreign key, so an `ON DELETE CASCADE` with no index
+// scans the whole child table. See docs/ai/rules/data.md.
+
+assert("every foreign key column has an index leading with it", (failures) => {
+  const blocks = pgTableBlocks();
+  if (!blocks) return "packages/infrastructure has no schema files yet";
+
+  for (const block of blocks) {
+    const leading = new Set(
+      indexesOf(block)
+        .map((index) => index.columns[0])
+        .filter(Boolean),
+    );
+
+    for (const column of columnsOf(block)) {
+      if (!column.isForeignKey) continue;
+      if (leading.has(column.property)) continue;
+
+      failures.push(
+        `${rel(block.file)}: ${block.table}.${column.column} is a foreign key with no ` +
+          "index leading with it",
+      );
+    }
   }
 
   return null;

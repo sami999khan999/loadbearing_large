@@ -406,6 +406,19 @@ Postgres does not auto-index foreign keys, which surprises people.
 ([13](../setup/13-infrastructure-postgres.md)) because `CapabilityRepository.resolveFor()` runs on essentially
 every request. The same reasoning applies to every FK added after.
 
+**The index has to *lead* with the foreign key column, and that is a second requirement rather than
+a restatement of the first.** `goal_members_user_idx` is on `(organization_id, user_id)`, which is
+right for the resolver and useless to the cascade: deleting a user is not a tenant-scoped operation,
+so Postgres cannot use a tenant-leading index for it and takes the table scan instead, holding a
+lock for the length of it. Four tables here were in exactly that state — the column present in a
+composite, the cascade unindexed — which is why this is now assertion 18 in `check:architecture`
+([26](../setup/26-hygiene-and-ci.md)) rather than a paragraph.
+
+**The answer is a second index, not a reordering of the first.** Reordering trades a hot read for a
+rare write, and the hot read is capability resolution on every request. The cascade-only indexes are
+named `<table>_<subject>_fk_idx` so that the next person to see two indexes over overlapping columns
+can tell which one exists for a query and which one exists for a delete.
+
 **Add query-count assertions to integration tests now.** N+1 queries hit at 50 users, not 5,000, and
 no database choice fixes them. It is the cheapest performance guardrail that exists.
 
