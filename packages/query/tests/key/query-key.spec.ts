@@ -37,7 +37,7 @@ describe("QueryKeys", () => {
   });
 
   it("keys the session as a bare namespace", () => {
-    expect(QueryKeys.session).toEqual(["session"]);
+    expect(QueryKeys.session.all()).toEqual(["session"]);
   });
 
   // Positional parameters shift every key when a filter is added later, which

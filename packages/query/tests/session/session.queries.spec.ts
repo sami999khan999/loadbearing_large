@@ -12,7 +12,7 @@ describe("SessionQueries.current", () => {
     // object, which is what guarantees the cache hit.
     const options = SessionQueries.current(authWith(null));
 
-    expect(options.queryKey).toEqual(QueryKeys.session);
+    expect(options.queryKey).toEqual(QueryKeys.session.all());
     expect(typeof options.queryFn).toBe("function");
   });
 

@@ -10,7 +10,7 @@ export class SessionMutations {
   public static useSignIn(auth: AuthClient) {
     return useAppMutation<void, { email: string; password: string }>({
       mutationFn: ({ email, password }) => auth.signIn(email, password),
-      invalidates: [QueryKeys.session],
+      invalidates: [QueryKeys.session.all()],
     });
   }
 
@@ -48,7 +48,7 @@ export class SessionMutations {
   public static useResetPassword(auth: AuthClient) {
     return useAppMutation<void, { token: string; newPassword: string }>({
       mutationFn: ({ token, newPassword }) => auth.resetPassword(token, newPassword),
-      invalidates: [QueryKeys.session],
+      invalidates: [QueryKeys.session.all()],
     });
   }
 

@@ -30,7 +30,7 @@ export class AccountMutations {
   public static useUpdateName(account: AccountClient) {
     return useAppMutation<void, { name: string }>({
       mutationFn: ({ name }) => account.updateName(name),
-      invalidates: [QueryKeys.session],
+      invalidates: [QueryKeys.session.all()],
     });
   }
 
@@ -47,14 +47,14 @@ export class AccountMutations {
   public static useVerifyTotpEnrolment(account: AccountClient) {
     return useAppMutation<void, { code: string }>({
       mutationFn: ({ code }) => account.verifyTotpEnrolment(code),
-      invalidates: [QueryKeys.session, QueryKeys.account.all()],
+      invalidates: [QueryKeys.session.all(), QueryKeys.account.all()],
     });
   }
 
   public static useDisableTwoFactor(account: AccountClient) {
     return useAppMutation<void, { password: string }>({
       mutationFn: ({ password }) => account.disableTwoFactor(password),
-      invalidates: [QueryKeys.session, QueryKeys.account.all()],
+      invalidates: [QueryKeys.session.all(), QueryKeys.account.all()],
     });
   }
 
