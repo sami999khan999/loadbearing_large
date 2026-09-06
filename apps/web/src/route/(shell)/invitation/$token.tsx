@@ -8,6 +8,7 @@ import {
   useMemo,
   useMessages,
 } from "~/import.js";
+import { refreshSession } from "~/route/-session.js";
 import { fetchInvitation } from "~/server/invitation.fn.js";
 
 const MESSAGES = ["organization", "auth"] as const satisfies readonly ClientNamespace[];
@@ -37,13 +38,15 @@ function InvitationPage() {
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
-  // The same three steps a switch takes: the session now points at a tenant this tab has
-  // never loaded, so nothing cached is trustworthy.
-  const accepted = () => {
-    queryClient.clear();
-    session.invalidate();
-    void router.invalidate().then(() => navigate({ to: "/" }));
-  };
+  // The session now points at a tenant this tab has never loaded, so nothing cached is
+  // trustworthy — the same unwind a switch does.
+  const accepted = () =>
+    refreshSession({
+      queryClient,
+      session,
+      invalidateRouter: () => router.invalidate(),
+      go: () => void navigate({ to: "/" }),
+    });
 
   return (
     <main>

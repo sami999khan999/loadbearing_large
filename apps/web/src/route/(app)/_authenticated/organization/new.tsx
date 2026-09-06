@@ -8,6 +8,7 @@ import {
   useMemo,
   useMessages,
 } from "~/import.js";
+import { refreshSession } from "~/route/-session.js";
 
 const MESSAGES = ["organization"] as const satisfies readonly ClientNamespace[];
 
@@ -29,12 +30,14 @@ function NewOrganizationPage() {
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
   // The session now points at the new tenant, so everything cached belongs to the old
-  // one. The same three steps a switch takes.
-  const created = () => {
-    queryClient.clear();
-    session.invalidate();
-    void router.invalidate().then(() => navigate({ to: "/" }));
-  };
+  // one — the same unwind a switch does.
+  const created = () =>
+    refreshSession({
+      queryClient,
+      session,
+      invalidateRouter: () => router.invalidate(),
+      go: () => void navigate({ to: "/" }),
+    });
 
   return (
     <main>

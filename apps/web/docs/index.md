@@ -36,6 +36,7 @@ apps/web/
 │   │   ├── -guard.ts                 → RouteGuard
 │   │   ├── -messages.ts
 │   │   ├── -redirect.ts
+│   │   ├── -session.ts               → refreshSession, completeSignIn
 │   │   ├── (shell)/                  ← anonymous: sign-in, sign-up, recovery, invitation
 │   │   ├── (app)/_authenticated/     ← settings, organization
 │   │   ├── (dev)/kitchen-sink.tsx
@@ -104,6 +105,19 @@ the other is either security theatre or a UI full of buttons that error.
 4. `<Can>` in a component — a UX affordance, never a check.
 
 See [`reference/enforcement-surfaces.md`](reference/enforcement-surfaces.md).
+
+## Four routes unwind the session the same way, and one deliberately does not
+
+Sign-out, organization switch, organization create and invitation accept all end with the same four
+steps in the same order — clear the cache, invalidate the session store, re-run the root loader,
+then navigate. `refreshSession` in `route/-session.ts` is that sequence. Reversed, one frame renders
+the previous tenant's rows under the new tenant's session, which is the sort of thing that gets
+noticed in a screenshot rather than in a test.
+
+**Sign-in is the exception and gets `completeSignIn`.** Nothing in the cache belongs to a previous
+session, so clearing it throws away the messages the shell has just loaded for the page the reader
+is being sent to. Naming the two separately is what stopped the fifth call site from being written
+as "the same three steps, minus one" in a comment.
 
 ## Reference
 
