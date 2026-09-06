@@ -18,10 +18,13 @@ const role = (id: string, key: string, name: string): RoleDto => ({
 const MEMBER = role("00000000-0000-7000-8000-0000000000c1", "member", "Member");
 const ADMIN = role("00000000-0000-7000-8000-0000000000c2", "admin", "Admin");
 
-const render = async (roles: readonly RoleDto[] = [MEMBER, ADMIN]) => {
+const render = async (
+  roles: readonly RoleDto[] = [MEMBER, ADMIN],
+  list: () => Promise<unknown> = () => Promise.resolve({ items: roles, total: roles.length }),
+) => {
   const invite = vi.fn().mockResolvedValue({ id: "i1" });
   const client = {
-    role: { list: () => Promise.resolve({ items: roles, total: roles.length }) },
+    role: { list },
     member: { invite },
   } as unknown as ApiClient;
 
@@ -84,5 +87,13 @@ describe("InviteMemberForm", () => {
     await waitFor(() =>
       expect(invite).toHaveBeenCalledWith({ email: "new@example.test", roleId: ADMIN.id }),
     );
+  });
+
+  // `disabled` on its own takes the control out of the tab order and says nothing about
+  // why, so a reader who tabs past it has been told the role picker does not exist.
+  it("says the role picker is busy while the roles are still loading", async () => {
+    await render([MEMBER], () => new Promise(() => undefined));
+
+    expect(screen.getByLabelText("Role").getAttribute("aria-busy")).toBe("true");
   });
 });

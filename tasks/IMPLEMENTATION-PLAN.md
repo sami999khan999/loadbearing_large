@@ -1829,8 +1829,28 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     failing with `optimistic` swapped back for `invalidates`. The rollback spec rejects on a later
     tick deliberately — an immediate rejection batches the edit and the rollback into one render,
     and the removal is never observable.
-- [ ] `P7.12` a11y — `PermissionMatrix` empty `<th>` (`aria-label`), `<header>`/`<nav>`
+- [x] `P7.12` a11y — `PermissionMatrix` empty `<th>` (`aria-label`), `<header>`/`<nav>`
   landmarks and a skip link in `_authenticated.tsx`, `aria-busy` on the two raw `<select>`s.
+  `done: 2026-09-06`
+  - **The copy for the empty `<th>` already existed.** `role.column.permission` — "Permission" — was
+    in the catalog, used by nothing, declared for exactly this column and never wired. The matrix now
+    reads `role` for it alongside `common` for the state words.
+  - **`<header>` and one `<nav>` were already there; what was missing was the rest of the set.**
+    `<main>` did not exist, so the skip link had nowhere to point, and the two `<nav>` landmarks were
+    both unnamed — announced as "navigation" twice, which is worse than one. Both carry an
+    `aria-label` now, and `ModuleNav` labels its own rather than taking it as a prop.
+  - **The skip link is moved off-screen, not hidden.** `display: none` and `visibility: hidden` both
+    remove an element from the tab order, so a skip link that hides itself that way can never be
+    focused and never works. `main` takes `tabIndex={-1}` so the anchor moves focus rather than only
+    scrolling, and `main:focus` clears the ring the base rule would draw around a whole page region.
+  - **`aria-busy` on the two selects that have a pending state** — the invite form's role picker and
+    the organization switcher. `disabled` alone takes a control out of the tab order and says nothing
+    about why, so a reader who tabs past has been told the control does not exist. The locale picker
+    has no pending state and takes none.
+  - Two specs, both watched failing: the named column header, and `aria-busy` while the roles load.
+    No spec on the skip link or the landmarks — `_authenticated.tsx` is a route layout and rendering
+    it needs a router; `apps/web`'s specs deliberately avoid that, and the plan says so here rather
+    than leaving the gap implied.
 - [x] `P7.13` `AppError.from` adopts a client-supplied `traceId` — only on the client path;
   the server mints its own. `done: 2026-09-06`
   - **Sanitised rather than refused.** Adopting is correct on the client path — a trace id the user

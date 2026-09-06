@@ -71,6 +71,13 @@ function AuthenticatedLayout() {
 
   return (
     <>
+      {
+        // First in the tab order and visible only while focused: without it a keyboard
+        // reader walks the whole header again on every navigation.
+      }
+      <a className="ui-skip-link" href="#main">
+        {t("nav.skip")}
+      </a>
       <header>
         <img src={logo.src} width={logo.width} height={logo.height} alt={logo.alt} />
         <OrganizationSwitcher
@@ -81,7 +88,7 @@ function AuthenticatedLayout() {
         {
           // Ungated on purpose: your own account and security pages need no capability,
           // which is why `account.routes.ts` declares no gate for them.
-          <nav>
+          <nav aria-label={t("nav.account")}>
             <Link to="/settings/account">{t("nav.account")}</Link>
             <Link to="/settings/security">{t("nav.security")}</Link>
           </nav>
@@ -103,7 +110,13 @@ function AuthenticatedLayout() {
         <LocaleSwitcher appearance={appearance} current={appearanceSnapshot.locale} />
         <SignOutButton auth={auth} onSignedOut={signedOut} />
       </header>
-      <Outlet />
+      {
+        // The landmark the skip link targets, and the one a screen reader jumps to.
+        // `tabIndex={-1}` so the anchor moves focus rather than only scrolling.
+      }
+      <main id="main" tabIndex={-1}>
+        <Outlet />
+      </main>
     </>
   );
 }

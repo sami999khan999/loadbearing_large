@@ -9,6 +9,8 @@ export const nav: NamespaceBundle<"nav"> = {
   "nav.security": "নিরাপত্তা",
   "nav.organization": "প্রতিষ্ঠান",
   "nav.organizationNew": "নতুন প্রতিষ্ঠান",
+  "nav.skip": "মূল বিষয়বস্তুতে যান",
+  "nav.sections": "বিভাগসমূহ",
 
   "nav.roles": "ভূমিকা",
   "nav.members": "সদস্যরা",

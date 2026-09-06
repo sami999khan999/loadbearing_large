@@ -10,6 +10,12 @@ export const nav = {
   "nav.security": "Security",
   "nav.organization": "Organization",
   "nav.organizationNew": "New organization",
+  // The first thing in the tab order, visible only while focused. Without it a keyboard
+  // reader walks the whole header before reaching the page on every navigation.
+  "nav.skip": "Skip to main content",
+  // Names the second landmark. Two unlabelled `<nav>`s are announced as "navigation"
+  // twice, which is worse than one.
+  "nav.sections": "Sections",
 
   "nav.roles": "Roles",
   "nav.members": "Members",

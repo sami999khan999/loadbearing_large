@@ -37,6 +37,8 @@ export function OrganizationSwitcher({
         className="ui-input"
         value={user.activeOrganizationId}
         disabled={switchTo.isPending}
+        // `disabled` alone removes it from the tab order and says nothing about why.
+        aria-busy={switchTo.isPending}
         onChange={(event) => switchTo.mutate({ organizationId: event.target.value })}
       >
         {user.organizations.map((candidate) => (
