@@ -1,6 +1,7 @@
 import type { apikey } from "./en/apikey.js";
 import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
+import type { document } from "./en/document.js";
 import type { email } from "./en/email.js";
 import type { error } from "./en/error.js";
 import type { member } from "./en/member.js";
@@ -18,6 +19,7 @@ interface NamespaceShape {
   readonly member: typeof member;
   readonly organization: typeof organization;
   readonly apikey: typeof apikey;
+  readonly document: typeof document;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -32,7 +34,8 @@ export type ClientNamespace =
   | "role"
   | "member"
   | "organization"
-  | "apikey";
+  | "apikey"
+  | "document";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -65,4 +68,5 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "member",
   "organization",
   "apikey",
+  "document",
 ];

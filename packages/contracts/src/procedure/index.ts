@@ -1,4 +1,5 @@
 import { ApiKeyProcedures } from "../apikey/index.js";
+import { DocumentProcedures } from "../document/index.js";
 import type { AnyContractRouter } from "../import.js";
 import { MemberProcedures } from "../member/index.js";
 import { RoleProcedures } from "../role/index.js";
@@ -9,6 +10,7 @@ export const contract = {
   role: RoleProcedures.all,
   member: MemberProcedures.all,
   apiKey: ApiKeyProcedures.all,
+  document: DocumentProcedures.all,
 } as const satisfies AnyContractRouter;
 
 export type AppContract = typeof contract;

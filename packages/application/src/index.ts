@@ -6,6 +6,11 @@ export {
   type IndexDocumentInput,
   type IndexDocumentResult,
   IndexDocumentUseCase,
+  type QueueDocumentIndexInput,
+  QueueDocumentIndexUseCase,
+  type QueuedDocumentIndex,
+  type SearchDocumentsInput,
+  SearchDocumentsUseCase,
 } from "./ai/index.js";
 export {
   type ApiKeyPage,
@@ -76,7 +81,7 @@ export {
   UnitOfWork,
   VectorStore,
 } from "./port/index.js";
-export { Authorizer, Principal, type PrincipalKind } from "./primitive/index.js";
+export { Authorizer, Principal, type PrincipalKind, QueueName } from "./primitive/index.js";
 export {
   CapabilityRepository,
   type CreateRoleInput,

@@ -4,7 +4,7 @@ ServerOnly.assert("@loadbearing/infrastructure");
 
 // One folder per external system, so `ls src/` answers "what does this depend on?". A
 // folder says the seam is implemented, not that the container is started.
-export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
+export { BullMqQueuePublisher } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
   type ClickHouseConfig,

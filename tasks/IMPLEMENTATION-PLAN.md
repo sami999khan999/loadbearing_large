@@ -1250,7 +1250,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **My first probe used `Authorization: Bearer` and got `UNAUTHORIZED`.** The header is
     `x-api-key`, checked before the session in `PrincipalBuilder` so a scoped key is never
     silently upgraded to the issuer's full session. That was a test error, not a defect.
-- [ ] `P5.5` **Document index and search** `P2` `~8h` `#api #ui`
+- [x] `P5.5` **Document index and search** `P2` `~8h` `#api #ui`
   - **Goal:** `VectorStore.search` has zero callers; `ai.embedding.read` is unused;
     `container.queue` is exposed and never called; nothing in the app can enqueue the
     embedding job that `EmbeddingConsumer` waits for.
@@ -1258,7 +1258,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `document.search` procedure calls `VectorStore.search` with the principal's goal scope;
     a minimal `/documents` page (paste text → index → search). `ai.document.searched` event.
   - **Docs:** `infrastructure/docs/reference/pgvector.md`, `docs/setup/14`, `25` (the Gate at
-    `25:477` finally has a producer).
+    `25:477` finally has a producer). `done: 2026-09-06`
+  - **`QueueName` moved from `infrastructure` to `application/src/primitive/`.** Which queue a job
+    belongs on is a domain decision — `QueueDocumentIndexUseCase` names `QueueName.EMBEDDING` — and
+    `application` cannot import `infrastructure` to say it. The alternative was passing the queue
+    name in from `Container`, which puts a domain rule in the DI root. A closed vocabulary of
+    strings belongs beside `Principal` and `Authorizer`, not beside the adapter that consumes it.
+  - **A live bug the unit tests could not catch: BullMQ rejects a `jobId` containing `:`.** The
+    dedup key was `<org>:<doc>`, the recording fake accepted it happily, and the real publish threw
+    `Custom Id cannot contain :` as a 500. Now `_`, pinned by a spec that asserts the absence of the
+    character, and stated on `JobOptions.jobId` where the next caller will read it.
+  - **Indexing is queued, and the response says so.** `DocumentContract.queued` returns the id and
+    nothing else: a shape promising chunks would be a lie the day someone reads it, since the work
+    has not happened yet. The copy says the same thing, because a search straight after indexing
+    finds nothing and the page looks broken otherwise.
+  - **`document.search` is a `POST`.** It is a read, but the query goes in the body — a search
+    string in a URL is a search string in every access log between the browser and the server — and
+    it writes an `ai.document.searched` activity row, which is what an audit asks for after a leak.
+  - **The dedup key carries the tenant.** Two organizations re-indexing documents that happen to
+    share an id must not collapse into one job; verified live by publishing the same document twice
+    and watching the queue depth stay put.
+  - **Verified end to end against live Redis and Postgres:** the job lands on `bull:embedding` with
+    the tenant on its payload and `<org>_<doc>` as its id; a duplicate is deduplicated; a blank
+    query is refused before it costs an embedding; and both procedures answer `FORBIDDEN` to a
+    plain member.
+  - **The OpenAI round trip is the one link not exercised**, because this environment has no
+    `OPENAI_API_KEY`. What that leaves covered: the use-case logic by unit test, the store by the
+    five existing `pg-vector.store.spec.ts` integration tests against real pgvector, and the
+    enqueue live. Searching with no key answers a clean `UNAVAILABLE` 503 rather than a 500, which
+    was checked rather than assumed.
 - [x] `P5.6` **Error surfaces** `P1` `~4h` `#ui`
   - **Goal:** `ErrorCopy`, `ERROR_COPY`, `FIELD_RULE_COPY` have zero consumers; no
     `errorComponent`, `notFoundComponent` or `pendingComponent` anywhere; forms fall back to

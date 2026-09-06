@@ -102,7 +102,7 @@ pnpm add --filter @loadbearing/worker -D tsx@catalog: typescript@catalog: \
 >
 > **`contracts` is here for the DTOs a use-case answers with**, not for a transport — the worker has none. `core` is not, because nothing here needs a primitive that `application` does not already re-export through its ports.
 >
-> `infrastructure` is here for `RedisConnection` and `QueueName`, and `ioredis` for the `Redis` type on the consumer constructor. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary applies to React packages and `apps/web`.
+> `infrastructure` is here for `RedisConnection`, and `ioredis` for the `Redis` type on the consumer constructor. `QueueName` comes from `application`: which queue a job belongs on is a domain decision, and `application` cannot import `infrastructure` to say it. Both are server-only, which is fine — the worker is a server process and the [05](05-lint-and-format.md) boundary applies to React packages and `apps/web`.
 >
 > **`content` is here because the worker sends email**, and email has words in it. It cannot
 > import `feature` — that is React — so it takes the plain `Translator` instead. This is the
@@ -425,6 +425,13 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 > **The recovery sweep is the one schedule described here with no file**, which is why it is absent
 > from the table above rather than listed as shipping. The gap is deliberate: nothing publishes the
 > kind of job it would re-enqueue yet. The reasoning stands for whenever the first one lands.
+
+> [!NOTE]
+> **`EmbeddingConsumer` has a producer.** `document.index` publishes to `QueueName.EMBEDDING` from
+> `QueueDocumentIndexUseCase`, so the consumer waits on a queue something fills — it spent a while
+> waiting on one nothing did. The dedup key is `<organizationId>_<documentId>`, and the separator is
+> load-bearing: **BullMQ rejects a `jobId` containing `:`** at publish time, which surfaces as a 500
+> rather than as a validation error.
 
 ---
 

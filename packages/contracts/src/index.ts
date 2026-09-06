@@ -8,6 +8,14 @@ export {
   type RevokeApiKeyInput,
 } from "./apikey/index.js";
 export {
+  DocumentContract,
+  type DocumentHitDto,
+  DocumentProcedures,
+  type IndexDocumentInput as IndexDocumentContractInput,
+  type QueuedDocumentDto,
+  type SearchDocumentsInput as SearchDocumentsContractInput,
+} from "./document/index.js";
+export {
   type ChangeMemberRoleInput,
   type InvitationDto,
   type InviteMemberInput,

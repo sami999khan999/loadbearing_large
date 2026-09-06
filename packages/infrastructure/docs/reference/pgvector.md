@@ -21,6 +21,11 @@ takes the **resolved goal scope as a parameter**, so the seam was swappable from
 remote store holds no `CapabilitySet` and can join back to nothing, so a port that filtered results
 afterwards could never have been implemented by one.
 
+`SearchDocumentsUseCase` is the caller, behind `document.search` and `/documents`. It resolves the
+scope with `capabilities.goalsWith()` before this method is reached, which is the arrangement the
+signature exists to force — and with no goal feature in the kit that resolves to `[]`, meaning the
+org-wide corpus rather than everything.
+
 ## The permission filter runs on the input set
 
 ```ts

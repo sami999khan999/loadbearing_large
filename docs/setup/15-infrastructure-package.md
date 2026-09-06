@@ -78,7 +78,6 @@ packages/infrastructure/src/
 │   └── storage-key.ts                    → StorageKey
 ├── bullmq/
 │   ├── index.ts
-│   ├── queue-name.ts                     → QueueName
 │   └── bullmq-queue.publisher.ts         → BullMqQueuePublisher
 ├── openai/
 │   ├── index.ts
@@ -119,7 +118,7 @@ import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/infrastructure");
 
-export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
+export { BullMqQueuePublisher } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
   type ClickHouseConfig,
@@ -460,7 +459,14 @@ The gateway supports both, and which one a feature uses is a domain decision:
 
 ## Step 15.4 — `BullMqQueuePublisher`
 
-**`packages/infrastructure/src/bullmq/queue-name.ts`**
+**`packages/application/src/primitive/queue-name.ts`**
+
+> [!NOTE]
+> **It lives in `application`, not here.** Which queue a job belongs on is a domain
+> decision — `QueueDocumentIndexUseCase` names `QueueName.EMBEDDING` — and `application`
+> cannot import this package. It is a closed vocabulary of strings, like the permission
+> catalog, so it sits beside `Principal` and `Authorizer` rather than beside the adapter
+> that happens to consume it.
 
 ```ts
 export class QueueName {
@@ -616,7 +622,6 @@ export { StorageKey } from "./storage-key.js";
 ```ts
 // packages/infrastructure/src/bullmq/index.ts
 export { BullMqQueuePublisher } from "./bullmq-queue.publisher.js";
-export { QueueName } from "./queue-name.js";
 ```
 
 ```ts

@@ -1,8 +1,8 @@
 export interface JobOptions {
   readonly delayMs?: number;
   readonly attempts?: number;
-  // Deduplication key: idempotency is a domain rule ("enqueue OCR for this receipt,
-  // once"), not queue configuration.
+  // Idempotency is a domain rule ("enqueue OCR for this receipt, once"), not queue
+  // configuration. **No `:`** — BullMQ keys on it and rejects the job at publish time.
   readonly jobId?: string;
 }
 

@@ -1,4 +1,5 @@
 import { ApiKeyRouter } from "./api-key.router.js";
+import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
 import { RoleRouter } from "./role.router.js";
 
@@ -8,4 +9,5 @@ export const appRouter = {
   role: RoleRouter.all,
   member: MemberRouter.all,
   apiKey: ApiKeyRouter.all,
+  document: DocumentRouter.all,
 };

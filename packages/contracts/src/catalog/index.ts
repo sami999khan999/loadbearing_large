@@ -1,5 +1,6 @@
 import type { PermissionKey } from "../import.js";
 import { apiKeyProcedurePermissions } from "./apikey.permissions.js";
+import { documentProcedurePermissions } from "./document.permissions.js";
 import { memberProcedurePermissions } from "./member.permissions.js";
 import { roleProcedurePermissions } from "./role.permissions.js";
 
@@ -9,4 +10,5 @@ export const PROCEDURE_PERMISSIONS: Readonly<Record<string, PermissionKey>> = {
   ...roleProcedurePermissions,
   ...memberProcedurePermissions,
   ...apiKeyProcedurePermissions,
+  ...documentProcedurePermissions,
 };

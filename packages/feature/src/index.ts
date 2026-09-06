@@ -46,6 +46,7 @@ export {
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
+export { DocumentSearch, IndexDocumentForm } from "./document/index.js";
 export { type ErrorMessage, useErrorMessage } from "./error/index.js";
 export {
   MessageProvider,

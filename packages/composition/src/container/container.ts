@@ -59,6 +59,7 @@ import {
   PgUnitOfWork,
   PgVectorStore,
   PrincipalBuilder,
+  QueueDocumentIndexUseCase,
   type QueuePublisher,
   RedisCacheStore,
   RedisConnection,
@@ -67,6 +68,7 @@ import {
   RevokePermissionUseCase,
   S3StorageGateway,
   SERVER_CATALOG,
+  SearchDocumentsUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
   SmtpEmailSender,
@@ -172,7 +174,11 @@ export class Container {
   // ── use-cases, one field each, constructed eagerly ────────
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
-  public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
+  public readonly ai: {
+    readonly indexDocument: IndexDocumentUseCase;
+    readonly queueIndex: QueueDocumentIndexUseCase;
+    readonly searchDocuments: SearchDocumentsUseCase;
+  };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
@@ -404,12 +410,20 @@ export class Container {
     };
 
     this.ai = {
+      // Run by the worker's consumer, off the queue the two below feed.
       indexDocument: new IndexDocumentUseCase(
         this.authorizer,
         this.embeddings,
         this.vectors,
         this.activity,
         this.unitOfWork,
+      ),
+      queueIndex: new QueueDocumentIndexUseCase(this.authorizer, this.queuePublisher),
+      searchDocuments: new SearchDocumentsUseCase(
+        this.authorizer,
+        this.embeddings,
+        this.vectors,
+        this.activity,
       ),
     };
   }

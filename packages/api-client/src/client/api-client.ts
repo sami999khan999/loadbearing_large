@@ -73,6 +73,10 @@ export class ApiClient {
     return this.rpc.apiKey;
   }
 
+  public get document(): AppClient["document"] {
+    return this.rpc.document;
+  }
+
   // The escape hatch for a namespace with no accessor yet.
   public get raw(): AppClient {
     return this.rpc;
