@@ -1623,6 +1623,20 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 `CATALOG` is used by at least one `PROCEDURE_PERMISSIONS` entry (add that as a
 `contracts` spec).
 
+**Met on 2026-09-06, except `P5.13`, which is blocked on `P8.12`.**
+- **The grep is clean.** `EventBus`, `RecordingEventBus`, `SessionGuard`, `SessionQueries`,
+  `DocumentEntity`, `AnalyticsReader` and its three implementations, `goalRiskScores`,
+  `reliabilityTrend`, `goal_risk_daily`, `user_reliability_daily`, `ANALYTICS_DRIVER`,
+  `invalidateAll`, `GeneratedApiKey` and `ApiKeyRow` return nothing outside `dist/` and the
+  migration history. One stale mention of `ApiKeyRow` survived in `docs/setup/13` and is gone.
+- **The spec is `procedure-permissions.spec.ts`**, "leaves no permission in the catalog without a
+  procedure behind it". It exempts the `core` module, because `core.activity.write` is held
+  implicitly by every principal in `CapabilitySet.can()` rather than granted through a role — no
+  procedure asserts it and none should. Verified by adding a key with no procedure and watching it
+  fail.
+- **Fourteen keys, thirteen gated.** All five `rbac.*`, all four `member.*`, both `apikey.*` and
+  both `ai.embedding.*` now sit behind a procedure that a screen can reach.
+
 ---
 
 ## Phase 6 — Tests for what is risky and untested

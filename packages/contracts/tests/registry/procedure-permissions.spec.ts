@@ -1,3 +1,4 @@
+import { CORE_MODULE, PermissionRegistry } from "@loadbearing/permissions";
 import { isContractProcedure, oc } from "@orpc/contract";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -69,5 +70,22 @@ describe("ProcedurePermissions", () => {
 
   it("answers undefined for a path nobody declared", () => {
     expect(ProcedurePermissions.required("task.list")).toBeUndefined();
+  });
+
+  // The direction the two above do not cover: they prove every *procedure* is gated,
+  // not that every *key* gates something reachable.
+  it("leaves no permission in the catalog without a procedure behind it", () => {
+    const gated = new Set<string>(
+      ProcedurePermissions.paths().map((path) => ProcedurePermissions.required(path) as string),
+    );
+
+    const orphans = PermissionRegistry.instance
+      .all()
+      // `core` is held implicitly by every principal in `CapabilitySet.can()` rather
+      // than granted through a role, so no procedure asserts it and none should.
+      .filter((key) => PermissionRegistry.instance.meta(key)?.module !== CORE_MODULE)
+      .filter((key) => !gated.has(key));
+
+    expect(orphans).toEqual([]);
   });
 });

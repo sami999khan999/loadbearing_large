@@ -91,7 +91,6 @@ export {
   type DrizzleClient,
 } from "./primitive/index.js";
 export {
-  type ApiKeyRow,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
