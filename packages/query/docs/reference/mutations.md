@@ -1,6 +1,6 @@
 ---
 title: Mutations and invalidation
-description: Why useAppMutation invalidates before onSuccess, why sign-out and organization switch declare no invalidation at all, and the rule for deciding what each mutation invalidates.
+description: Why useAppMutation invalidates before onSuccess, how a declared optimistic edit rolls itself back, why sign-out and organization switch declare no invalidation at all, and the rule for deciding what each mutation invalidates.
 ---
 
 # Mutations and invalidation
@@ -56,6 +56,41 @@ The tell is not the raw call — it is the local `useState` that reimplements `i
 mutation rather than better local state. `mutation.reset()` is the piece the hand-rolled version had
 no equivalent for: four mutations each keep their own `isError`, and switching method must not leave
 the reader looking at a failure that belongs to the method they left.
+
+## `optimistic` is a declared edit, not four steps at each call site
+
+Three mutations remove a row the user is looking at — revoke a session, revoke an invitation, unlink
+an account — and for those the row *is* the feedback. Waiting for a round trip to take away something
+the user just clicked away reads as a click that did nothing.
+
+Done by hand that is four steps, and three of them are the ones people forget:
+
+```ts
+optimistic: {
+  queryKey: QueryKeys.account.sessions(),
+  apply: (cached, { token }) => cached.filter((session) => session.token !== token),
+},
+```
+
+- **Cancel before writing.** A refetch already in flight resolves with the server's *pre*-mutation
+  answer and puts the row straight back. This is the step whose absence looks like a flicker nobody
+  can reproduce.
+- **Snapshot, and restore before the caller's `onError`.** A failure handler often renders the
+  message beside the row, and the row has to be back for that to mean anything.
+- **Invalidate the optimistic key on success, whether or not `invalidates` names it.** An edit the
+  server never confirmed would otherwise sit there until something else refetched.
+
+**`apply` receives the snapshot and must not mutate it.** It is the same object the rollback holds:
+editing in place leaves nothing to restore.
+
+**A paginated list makes the hook take its page.** `useRevokeInvitation(client, params)` needs the
+params because they are part of the cache key — an optimistic edit has to know *which* list the row
+is on, and pretending otherwise would silently edit page one while the reader is on page two. The
+component builds that object once and hands it to both the query and the mutation; building it per
+render is fine, because a query key is hashed structurally rather than by identity.
+
+**When the cached value is `undefined`, nothing happens and nothing is restored.** That is not a
+failure — it means the list is not on screen, and the invalidation on success covers it.
 
 ## Sign-out and switch clear the cache at the call site
 

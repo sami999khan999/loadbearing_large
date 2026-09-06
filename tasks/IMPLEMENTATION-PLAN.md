@@ -1807,8 +1807,28 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **The four account specs now name their namespace.** The harness defaults to `["auth"]`, and a
     component reading a namespace nobody loaded renders the raw key — which is how those four failed
     the moment the keys moved, and is worth keeping rather than defaulting the harness wider.
-- [ ] `P7.11` `useAppMutation` gains `onMutate`/rollback so revoke-invitation, unlink-account
+- [x] `P7.11` `useAppMutation` gains `onMutate`/rollback so revoke-invitation, unlink-account
   and revoke-session can be optimistic. **Docs:** `query/docs/reference/mutations.md`.
+  `done: 2026-09-06`
+  - **`onMutate` was already reachable** — `AppMutationOptions` omits only `onSuccess`, so a caller
+    could always have written this by hand. What it could not do is write it *right* four times: the
+    hook now declares `optimistic: { queryKey, apply }` and owns cancel, snapshot, rollback, and
+    invalidating the optimistic key on success.
+  - **Cancel before the write is the step whose absence is unreproducible.** A refetch already in
+    flight resolves with the server's pre-mutation answer and puts the row back; it shows up as a
+    flicker that depends on network timing.
+  - **Rollback runs before the caller's `onError`**, because a failure handler usually renders the
+    message beside the row, and the row has to be back for that to mean anything.
+  - **`useRevokeInvitation` now takes the page it revokes from.** The invitation list is paginated,
+    so the params are part of the cache key; without them the edit would silently apply to page one
+    while the reader is on page two.
+  - `Rollback` had to be exported — it lands in the inferred return type of every mutation hook, and
+    `tsc` refuses to emit a declaration naming a type it cannot reach.
+  - Two specs, through `ActiveSessionList` rather than the hook: `packages/query` has no jsdom or
+    testing-library and adding them for this would be a dependency for one file. Both watched
+    failing with `optimistic` swapped back for `invalidates`. The rollback spec rejects on a later
+    tick deliberately — an immediate rejection batches the edit and the rollback into one render,
+    and the removal is never observable.
 - [ ] `P7.12` a11y — `PermissionMatrix` empty `<th>` (`aria-label`), `<header>`/`<nav>`
   landmarks and a skip link in `_authenticated.tsx`, `aria-busy` on the two raw `<select>`s.
 - [x] `P7.13` `AppError.from` adopts a client-supplied `traceId` — only on the client path;

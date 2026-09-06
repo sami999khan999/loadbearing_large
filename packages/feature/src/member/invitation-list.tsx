@@ -29,8 +29,11 @@ export function InvitationList({ limit = 25 }: InvitationListProps) {
   const describe = useErrorMessage();
   const client = useApiClient();
   const capabilities = useCapabilities();
-  const invitations = useAppQuery(MemberQueries.invitations(client, { limit, offset: 0 }));
-  const revoke = MemberMutations.useRevokeInvitation(client);
+  // One object, read by the query and by the optimistic edit that removes a row from it.
+  // Built per render is fine: TanStack hashes a key structurally, not by identity.
+  const params = { limit, offset: 0 };
+  const invitations = useAppQuery(MemberQueries.invitations(client, params));
+  const revoke = MemberMutations.useRevokeInvitation(client, params);
 
   // Annotated rather than inferred: the client's procedure types are reconstructed
   // through two packages, and a break anywhere degrades to `any` silently.

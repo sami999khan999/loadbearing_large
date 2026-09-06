@@ -1,4 +1,4 @@
-import type { AccountClient, TwoFactorEnrolment } from "../import.js";
+import type { AccountClient, ActiveSession, LinkedAccount, TwoFactorEnrolment } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 import { useAppMutation } from "../runtime/index.js";
 
@@ -72,17 +72,34 @@ export class AccountMutations {
     });
   }
 
+  // Optimistic: the row is the whole feedback. Waiting for a round trip to remove a
+  // provider the user just unlinked reads as a click that did nothing.
   public static useUnlinkAccount(account: AccountClient) {
-    return useAppMutation<void, { providerId: string; accountId: string }>({
+    return useAppMutation<
+      void,
+      { providerId: string; accountId: string },
+      readonly LinkedAccount[]
+    >({
       mutationFn: ({ providerId, accountId }) => account.unlinkAccount(providerId, accountId),
-      invalidates: [QueryKeys.account.accounts()],
+      optimistic: {
+        queryKey: QueryKeys.account.accounts(),
+        apply: (cached, { providerId, accountId }) =>
+          cached.filter(
+            (linked) => linked.providerId !== providerId || linked.accountId !== accountId,
+          ),
+      },
     });
   }
 
+  // The one row this must not remove optimistically is the current session, and it
+  // cannot be reached: `ActiveSessionList` renders no revoke control beside it.
   public static useRevokeSession(account: AccountClient) {
-    return useAppMutation<void, { token: string }>({
+    return useAppMutation<void, { token: string }, readonly ActiveSession[]>({
       mutationFn: ({ token }) => account.revokeSession(token),
-      invalidates: [QueryKeys.account.sessions()],
+      optimistic: {
+        queryKey: QueryKeys.account.sessions(),
+        apply: (cached, { token }) => cached.filter((session) => session.token !== token),
+      },
     });
   }
 
