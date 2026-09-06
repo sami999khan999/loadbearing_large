@@ -10,3 +10,4 @@ export {
   type UserId,
 } from "./identifiers.js";
 export { Pagination, type PaginationQuery } from "./pagination.js";
+export { Password } from "./password.js";
