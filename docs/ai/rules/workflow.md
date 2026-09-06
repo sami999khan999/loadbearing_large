@@ -30,7 +30,7 @@ Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a pack
 
 ## Before you claim a change is done
 
-Run **`pnpm check:architecture`** — nineteen assertions in `tooling/scripts/check-architecture.mjs`
+Run **`pnpm check:architecture`** — twenty assertions in `tooling/scripts/check-architecture.mjs`
 that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
 domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing

@@ -131,7 +131,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(19);
+    expect(results).toHaveLength(20);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -480,6 +480,53 @@ describe("17 — every unique index on a tenant table leads with organization_id
     passes(
       run(table('index("tasks_key_idx").on(t.key)')),
       "every unique index on a tenant table leads with `organization_id`",
+    );
+  });
+});
+
+function migration(sql) {
+  return { "packages/infrastructure/migrations/0100_probe.sql": sql };
+}
+
+describe("20 — every migration is safe on a table that already holds rows", () => {
+  it("catches a unique index over a table the file does not create", () => {
+    fails(
+      run(migration('CREATE UNIQUE INDEX "roles_key_uq" ON "roles" USING btree ("key");\n')),
+      "every migration is safe on a table that already holds rows",
+      "no de-dup",
+    );
+  });
+
+  it("catches a NOT NULL column with no default", () => {
+    fails(
+      run(migration('ALTER TABLE "roles" ADD COLUMN "slug" text NOT NULL;\n')),
+      "every migration is safe on a table that already holds rows",
+      "NOT NULL with no default",
+    );
+  });
+
+  it("accepts the de-dup, a table created in the same file, and a default", () => {
+    passes(
+      run(
+        migration(
+          'DELETE FROM "roles" a USING "roles" b WHERE a."key" = b."key";\n' +
+            'CREATE UNIQUE INDEX "roles_key_uq" ON "roles" USING btree ("key");\n',
+        ),
+      ),
+      "every migration is safe on a table that already holds rows",
+    );
+    passes(
+      run(
+        migration(
+          'CREATE TABLE "tags" ("id" uuid PRIMARY KEY);\n' +
+            'CREATE UNIQUE INDEX "tags_key_uq" ON "tags" USING btree ("key");\n',
+        ),
+      ),
+      "every migration is safe on a table that already holds rows",
+    );
+    passes(
+      run(migration('ALTER TABLE "roles" ADD COLUMN "slug" text DEFAULT \'\' NOT NULL;\n')),
+      "every migration is safe on a table that already holds rows",
     );
   });
 });

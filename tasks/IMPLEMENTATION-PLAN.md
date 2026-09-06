@@ -2238,14 +2238,35 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     next reader to re-derive.
   - No migration, no code change. `docs/setup/13`'s hand-edited partition DDL stays the worked
     example for a table that does need it.
-- [ ] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
+- [x] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
   unique indexes with no de-dup; `0004` drops `memberships_uq` before recreating it. Ship a
   migration that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"
-  (delete duplicates → create index, in one transaction).
+  (delete duplicates → create index, in one transaction). `done: 2026-09-06`
   - **The doc half is done** (`P8.14`), and `0012` is the worked example it quotes. What is left is
     `0003` and `0004` themselves, which have already run everywhere they are going to run — so the
     remaining work is deciding whether a replayed history is a case this repo supports at all,
     rather than writing SQL.
+  - **The decision: it is not, and the history stays as it is.** Editing an applied migration buys
+    nothing — drizzle's migrator applies by journal timestamp and never re-reads a file it has
+    recorded, so a rewrite changes what a *fresh* clone runs and nothing else, and a fresh clone
+    runs against an empty database where all three are already correct. What is worth having is
+    that the next one cannot repeat it.
+  - **`0004` is not one of the two, and there is a third.** Its `memberships_uq` is dropped and
+    recreated in the same file, and `migrate.ts` runs a file's statements in one transaction, so
+    no window exists in which a duplicate could appear — a hazard on paper only. `0008` is the one
+    the entry did not have and the worst of them: `ALTER TABLE "invitations" ADD COLUMN
+    "token_hash" text NOT NULL` with no default fails on the first row that already exists, before
+    its unique index is reached. `0003` is the genuine index case.
+  - **Assertion 20 closes it forward.** A `CREATE UNIQUE INDEX` on a table the same migration does
+    not create, with no `DELETE FROM` that table before it, and an `ADD COLUMN` that is `NOT NULL`
+    with no `DEFAULT`. Both are what `pnpm db:generate` emits by default, which is why the trap is
+    on the happy path. The three legacy files are exempt by name with the reason on each. Verified
+    by dropping a probe migration of each shape into the folder and watching both fail; three
+    fixture cases in the spec.
+  - **`0005` was already the worked example**, hand-edited with a de-dup per index and the winner
+    rule stated — `0012` is the second. The doc quotes `0012`; `docs/setup/26` now points at `0005`
+    as the one to read before writing a new one, because it covers the harder cases: a partial
+    index over a nullable column, and a join table with no id to break the tie on.
 - [x] `P8.17` **seed** `P2` `~1h` — organization insert and `SystemRoleSeed.run()` in one
   transaction; roles insert gains `onConflictDoNothing`; permissions removed from the catalog
   are reconciled off `owner` (today only ever added); `seed.ts` falls back to `"loadbearing"`

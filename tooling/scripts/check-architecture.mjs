@@ -983,6 +983,57 @@ assert("every package with tests typechecks them", (failures) => {
   return null;
 });
 
+// ── 20 — every migration is safe on a table that already holds rows ──────────
+//
+// `pnpm db:generate` emits the unsafe form by default: `CREATE UNIQUE INDEX` over
+// whatever is there, and `ADD COLUMN ... NOT NULL` with no default. Both are correct on
+// an empty table and abort halfway through a deploy on a populated one. See
+// docs/setup/13, "Writing a unique-index migration".
+
+// The three that predate the rule, named with what each would do. They have run
+// everywhere they are going to run: this repository's history is applied to an empty
+// database, which is the decision, not an oversight.
+const REPLAY_EXEMPT = new Map([
+  ["0003_wise_shadowcat.sql", "organizations_slug_uq over existing duplicate slugs"],
+  ["0004_awesome_wraith.sql", "memberships_uq dropped and recreated in one transaction"],
+  ["0008_dry_mattie_franklin.sql", "invitations.token_hash NOT NULL with no default"],
+]);
+
+assert("every migration is safe on a table that already holds rows", (failures) => {
+  const dir = join(ROOT, "packages/infrastructure/migrations");
+  if (!existsSync(dir)) return "no migrations/ directory";
+
+  const files = readdirSync(dir).filter((name) => name.endsWith(".sql"));
+  if (files.length === 0) return "migrations/ holds no .sql files";
+
+  for (const file of files.sort()) {
+    if (REPLAY_EXEMPT.has(file)) continue;
+    const sql = readFileSync(join(dir, file), "utf8");
+
+    // A table created in the same file holds no rows yet, so an index over it is safe
+    // however it is written.
+    const fresh = new Set(
+      [...sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?"([a-z_]+)"/g)].map((m) => m[1]),
+    );
+    const deleted = new Set([...sql.matchAll(/DELETE FROM "([a-z_]+)"/g)].map((m) => m[1]));
+
+    for (const match of sql.matchAll(/CREATE UNIQUE INDEX[^;]*? ON "([a-z_]+)"/g)) {
+      const table = match[1] ?? "";
+      if (fresh.has(table) || deleted.has(table)) continue;
+      failures.push(`${file} indexes ${table} uniquely with no de-dup before it`);
+    }
+
+    for (const match of sql.matchAll(/ALTER TABLE "([a-z_]+)" ADD COLUMN "([a-z_]+)"([^;]*)/g)) {
+      const [, table = "", column = "", rest = ""] = match;
+      if (fresh.has(table)) continue;
+      if (!/\bNOT NULL\b/i.test(rest) || /\bDEFAULT\b/i.test(rest)) continue;
+      failures.push(`${file} adds ${table}.${column} NOT NULL with no default`);
+    }
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;

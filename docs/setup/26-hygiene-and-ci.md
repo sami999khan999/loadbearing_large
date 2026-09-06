@@ -377,7 +377,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The nineteen architectural assertions
+## Step 26.4 — The twenty architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Eighteen greps can.
 
@@ -762,6 +762,31 @@ type-only import of `ApiKeyRecord` from a module that has never exported it, and
 The assertion reads the config the package's own `typecheck` script names — `-p <file>` if it gives
 one, `tsconfig.json` otherwise. `apps/worker` is why: it builds with `tsc` and a `rootDir` of
 `src`, so its tests cannot live in the build config and sit in `tsconfig.test.json` instead.
+
+---
+
+### 20 — Every migration is safe on a table that already holds rows
+
+```bash
+# packages/infrastructure/migrations/*.sql: a CREATE UNIQUE INDEX on a table the same file
+# does not create, with no DELETE FROM that table before it — and an ADD COLUMN that is
+# NOT NULL with no DEFAULT.
+```
+
+**Why.** `pnpm db:generate` emits both unsafe forms by default, and both are correct on an empty
+table. On a populated one the unique index aborts over the first duplicate and the `NOT NULL`
+column aborts over the first existing row, halfway through a deploy, leaving the schema in neither
+state. `0005_giant_famine.sql` is the shape that works and is worth reading before writing a new
+one: drop, de-dup with a named winner, create.
+
+**Three migrations are exempt by name, and that is the decision this repository makes about its own
+history.** `0003` creates `organizations_slug_uq` over whatever slugs are there; `0008` adds
+`invitations.token_hash` as `NOT NULL` with no default, which fails on any invitation that already
+exists. `0004` is listed with them and is the mild one: it drops `memberships_uq` and recreates it
+in the same file, and `migrate.ts` runs a file's statements in one transaction, so there is no
+window in which a duplicate could appear. All three have run everywhere they are going to run.
+**This history is applied to an empty database and is not replayed onto a populated one** — the
+guarantee the assertion makes is about every migration written from here on.
 
 ---
 
