@@ -808,9 +808,40 @@ assert("every backticked path in the docs exists", (failures) => {
   }
 });
 
+// ── 16 — the two pnpm version declarations agree ─────────────────────────────
+//
+// `pnpm/action-setup` reads `packageManager` and nothing else; pnpm 11 reads
+// `devEngines.packageManager`. Both have to exist and say the same thing. See
+// docs/setup/26-hygiene-and-ci.md.
+
+assert("both pnpm version declarations agree", (failures) => {
+  const manifest = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const modern = manifest.devEngines?.packageManager;
+  const legacy = manifest.packageManager;
+
+  // Declaring only the modern one is what left CI red on every branch for weeks: the
+  // action fails in seconds with "No pnpm version is specified" and nothing runs.
+  if (!legacy) {
+    failures.push("package.json has no `packageManager` — `pnpm/action-setup` reads only that");
+    return null;
+  }
+  if (!modern) {
+    failures.push("package.json has no `devEngines.packageManager` — pnpm 11 reads only that");
+    return null;
+  }
+
+  const expected = `${modern.name}@${modern.version}`;
+  if (legacy !== expected) {
+    failures.push(`packageManager is \`${legacy}\`, devEngines says \`${expected}\``);
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;
+let skippedCount = 0;
 
 for (const { name, failures, skipped } of results) {
   if (failures.length > 0) {
@@ -818,6 +849,7 @@ for (const { name, failures, skipped } of results) {
     console.log(`✗ ${name}`);
     for (const detail of failures) console.log(`    ${detail}`);
   } else if (skipped) {
+    skippedCount += 1;
     console.log(`○ ${name} — skipped: ${skipped}`);
   } else {
     console.log(`✓ ${name}`);
@@ -829,4 +861,19 @@ if (failed > 0) {
   process.exit(1);
 }
 
-console.log(`\n${results.length} assertions passed.`);
+const passed = results.length - skippedCount;
+
+if (skippedCount === 0) {
+  console.log(`\n${passed} assertions passed.`);
+  process.exit(0);
+}
+
+// Counted apart, never summed: a skip is an assertion that did not run, and printing
+// "16 assertions passed" over two `○` lines is how an unbuilt artefact reads as green.
+console.log(`\n${passed} passed, ${skippedCount} skipped, of ${results.length}.`);
+
+// Locally a skip is a fast loop; in CI it is a check nobody ran and nobody will.
+if (process.env.CI === "true") {
+  console.log("A skipped assertion is unverified. Build the artefacts it needs first.");
+  process.exit(1);
+}

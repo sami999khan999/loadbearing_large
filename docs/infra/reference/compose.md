@@ -47,8 +47,9 @@ would be theatre.
 | `minio` | `minio/minio:latest` | S3 stand-in — [minio](minio.md) |
 
 `minio-init` is a fifth, and it is a **one-shot**: `minio/mc` runs an entrypoint that creates both
-buckets and exits. `exited (0)` is success. It has no `restart:` and no healthcheck, because a
-container that is supposed to stop cannot be "unhealthy".
+buckets and exits. `exited (0)` is success. It carries `restart: "no"` and no healthcheck, because a
+container that is supposed to stop cannot be "unhealthy" — and without the explicit `restart` the
+project default would keep starting a container whose whole job is to finish.
 
 ### Observability, profile `observability`
 
@@ -139,6 +140,11 @@ Two exceptions are directory mounts, and both have to be:
 - /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
+**The socket needs a group, not just a mount.** It is `root:docker` on Linux and Alloy does not run
+as root, so `group_add: ["${DOCKER_GID:-999}"]` is what makes the mount usable. Without it Alloy
+starts, reports healthy, and collects nothing — the failure says nothing about its own cause. On
+Docker Desktop the default is usually right; on Linux, `getent group docker` gives the real gid.
+
 > **A single-file bind mount does not survive an editor that replaces the file.** Some editors write
 > a new inode rather than modifying in place, and the container keeps the old one. Restart the
 > service after editing a config; every one of these is read at startup anyway.
@@ -196,7 +202,12 @@ depends_on:
   loki:       { condition: service_healthy }
 ```
 
-Three of the probes are worth knowing:
+Four of the probes are worth knowing:
+
+**MinIO** uses the HTTP `/minio/health/live` endpoint. It used to run `mc ready local`, which cannot
+work: `mc` is not in the `minio/minio` server image, and the `local` alias it names is created in
+`minio-init` — which itself waits on this healthcheck. A probe that could only ever fail, gating a
+container that could only ever wait.
 
 **Alloy** uses `bash`'s `/dev/tcp` — its image ships neither `wget` nor `curl`, a fact discovered by
 the healthcheck failing rather than by reading the Dockerfile. It proves Alloy is listening, not that

@@ -1740,9 +1740,15 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### `tooling/scripts`
 
-- [ ] `P8.6` **(verified) summary counts skipped as passed** `P1` `~30m` —
+- [x] `P8.6` **(verified) summary counts skipped as passed** `P1` `~30m` —
   `check-architecture.mjs:634-639` prints `${results.length} assertions passed` with `○`
-  lines included; print `passed / skipped`, exit 1 on any skip when `CI=true`.
+  lines included; print `passed / skipped`, exit 1 on any skip when `CI=true`. `done: 2026-09-06`
+  - Skips are counted apart and never summed into the passes, and `CI=true` turns one into a
+    failure. Verified by deleting `apps/web/.output` and running with `CI=true`: `15 passed, 1
+    skipped, of 16` and exit 1.
+  - `process.env` in a tooling script needs a Biome exemption; `check-architecture.mjs` joins the
+    four scripts already named in `tooling/biome-config/src/base.json` rather than a `tooling/**`
+    glob, so each stays a decision.
 - [ ] `P8.7` **§8 cannot see a stale bundle** `P2` `~30m` — the local 13/13 observed during
   the audit ran against an `.output` predating T-027..029. Fail when the newest file under
   `apps/web/src` is newer than `apps/web/.output`.
@@ -1765,16 +1771,42 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### CI and hooks
 
-- [ ] `P8.11` **(verified) pre-push runs only ESLint** `P1` `~15m` — `.husky/pre-push`:
+- [x] `P8.11` **(verified) pre-push runs only ESLint** `P1` `~15m` — `.husky/pre-push`:
   `pnpm lint:fast && pnpm check:architecture && pnpm check:contrast`; keep `typecheck` in CI
-  (slow). `.lintstagedrc.json` stays biome-only. **Docs:** `docs/setup/26:56`.
-- [ ] `P8.12` **`ci.yml`** `P1` `~2h` — `audit` job is `continue-on-error` at job level
+  (slow). `.lintstagedrc.json` stays biome-only. **Docs:** `docs/setup/26:56`. `done: 2026-09-06`
+  - Four checks, about a second in total, measured. `typecheck` and `test` stay in CI: a hook people
+    learn to `--no-verify` past checks nothing.
+- [x] `P8.12` **`ci.yml`** `P1` `~2h` — `audit` job is `continue-on-error` at job level
   (cannot signal): step-level plus a summary write; `env:` lacks every `S3_*`, `EMBEDDING_*`,
   `AUTH_*` key both `env.ts` schemas require (the job survives because nothing evaluates
   `Env`) — add them and a boot-smoke step per app; add a MinIO service (S3 gateway and
   activity archive have zero coverage); run `pnpm --filter @loadbearing/worker build`;
   `actions/cache` on `packages/*/dist` (promised at `26:426`); "fifteen themes" comment is
-  five; pin `pnpm/action-setup` to `packageManager`.
+  five; pin `pnpm/action-setup` to `packageManager`. `done: 2026-09-06`
+  - **CI had never passed, on any branch, ever.** `pnpm/action-setup@v4` reads the root
+    `packageManager` field and nothing else; this repo declared only `devEngines.packageManager`,
+    so both jobs died in about twenty seconds before a single check ran. Every "verified" claim in
+    this plan rested on local runs.
+  - **`docs/setup/26` already described the failure** in a CAUTION block and then contradicted
+    itself forty lines later — *"leave the action's `version` input unset"* is the advice that
+    produced the broken workflow. Both passages are reconciled.
+  - **Assertion 16 makes the drift impossible rather than unlikely:** both declarations must exist
+    and agree. Verified by removing one and watching the check fail.
+  - **The `env:` block now carries every key both schemas require**, and the boot smoke is what
+    makes that mean something — before it, nothing in CI ever evaluated `Env`, so a missing key was
+    invisible until a deploy.
+  - **`tooling/scripts/boot-smoke.mjs`** boots the built worker, waits for `process.started`, sends
+    SIGTERM and requires a clean `process.stopped` exit. Verified three ways: it passes on a good
+    boot, fails with no env at all, and fails with one key removed.
+  - **No web boot smoke.** Its server bundle throws `jsxDEV is not a function` — `T-032`. The step
+    lands with that fix, and the script's `APPS` table says so at the line someone will read.
+  - **MinIO is a `docker run` step, not a `services:` entry**, because it needs `server /data` and a
+    service container takes no command. `P5.13` is unblocked.
+  - **The `dist` cache was written and then removed.** `tsup` has no incremental mode, so a restored
+    `dist/` is rebuilt by the very next step; it would only pay off by making the build conditional
+    on a cache hit, and a stale `dist/` silently used is a worse failure than a slow job. The pnpm
+    store half is already done by `actions/setup-node`. `docs/setup/26` says this now.
+  - **"fifteen themes" was five**, and the comment now carries the real number, 117 pairings.
 - [ ] `P8.13` **doc-promised jobs** — compose smoke job, `pnpm peers check`, `pnpm sbom`
   (`26:426-432`): implement the first (boot `infra:up`, `db:migrate`, `db:seed`, hit
   `/api/health`), drop the other two from the doc.
@@ -1801,11 +1833,19 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 ### Infra
 
-- [ ] `P8.18` **compose** `P1` `~1h` — MinIO healthcheck runs `mc ready local` inside the
+- [x] `P8.18` **compose** `P1` `~1h` — MinIO healthcheck runs `mc ready local` inside the
   server image (no `mc`; the alias lives in `minio-init`) → HTTP `/minio/health/live`;
   `minio-init` gets `restart: "no"`; Alloy's docker-socket mount gets `group_add` so it
   collects on Linux; ClickHouse user/db `ratchet` vs `env.ts` default `default` — align.
-  **Docs:** `docs/infra/reference/compose.md`.
+  **Docs:** `docs/infra/reference/compose.md`. `done: 2026-09-06`
+  - The MinIO probe could only ever fail: `mc` is absent from the server image and the `local` alias
+    it names is created by `minio-init`, which waits on this healthcheck. HTTP `/minio/health/live`
+    now.
+  - **ClickHouse is aligned by a cross-field rule, not by changing the defaults.** `env.ts` explains
+    that a default naming the project would be a credential baked into shipped code — that reasoning
+    is sound, so setting `CLICKHOUSE_URL` now *requires* `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER`
+    instead. Both apps; the worker had no `superRefine` before. Verified by setting the URL with the
+    defaults left alone and watching boot refuse with both field paths.
 - [ ] `P8.19` **env templates** `P2` `~30m` — ship `infra/.env.example` with the eleven port
   overrides; remove `EMBEDDING_PROVIDER` and `WEB_PORT` from `.env.example` and
   `docs/setup/02:139,146` (read by nothing); `AUTH_DESKTOP_SESSION_MAX_AGE_SECONDS` per

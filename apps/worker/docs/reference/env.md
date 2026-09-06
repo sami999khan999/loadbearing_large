@@ -48,10 +48,16 @@ web app's.
 A driver plus the connection detail that driver needs. `Container` reads the driver and builds the
 class behind the port, so adopting a store is these variables and nothing else.
 
-The ClickHouse block is optional, and **its absence is what keeps ClickHouse stopped**. Present
-without `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection runs and the
-reconciliation reports, while reads still come from Postgres. See
+The ClickHouse block is optional, and **its absence is what keeps ClickHouse stopped**. Present, the
+projection runs and the reconciliation reports; nothing reads the store back, because there is no
+analytics reader. There is no read driver to flip, and that is the point — a flag that moved reads
+the moment the pipeline started would cut a dashboard over to a store still backfilling. See
 [`composition/docs/reference/container.md`](../../../packages/composition/docs/reference/container.md).
+
+**Setting `CLICKHOUSE_URL` makes `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER` required.** Both default
+to ClickHouse's own `default`, and the compose container is `ratchet` — so the defaults cannot reach
+the only ClickHouse this kit ships. The schema refuses them rather than letting the projection fail
+on its first run with a vendor auth error.
 
 ## Logging
 

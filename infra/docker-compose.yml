@@ -72,13 +72,19 @@ services:
     volumes:
       - miniodata:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # The HTTP probe, not `mc ready local`: `mc` is not in the server image, and the
+      # `local` alias it names is created in `minio-init` below. That check could only
+      # ever fail, so `depends_on: service_healthy` never released.
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   minio-init:
     image: minio/mc:latest
+    # One-shot: it creates buckets and exits 0. Without this the default policy keeps
+    # restarting a container whose whole job is to finish.
+    restart: "no"
     depends_on:
       minio:
         condition: service_healthy
@@ -123,6 +129,10 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    # The socket below is root:docker on Linux and Alloy does not run as root, so
+    # without the group it collects nothing and says nothing about why.
+    group_add:
+      - ${DOCKER_GID:-999}
     volumes:
       - ./alloy.config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

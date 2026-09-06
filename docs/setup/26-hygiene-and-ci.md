@@ -56,10 +56,21 @@ pnpm exec commitlint --edit "$1"
 **`.husky/pre-push`** is where the slow pass goes:
 
 ```sh
+pnpm lint:fast
 pnpm exec eslint .
+pnpm check:architecture
+pnpm check:contrast
 ```
 
 ESLint's six architecture rules still block a merge — they run here and in CI, not on every commit.
+
+**The two `check:*` scripts belong here rather than in `lint-staged`**, for the reason above
+inverted: both read the *whole* repository, so a staged-file hook cannot express them, and both
+finish in about a second, so a push hook can. Between them they catch a comment block over two
+lines, a framework import in the domain, and a palette that fails AA — none of which ESLint sees.
+
+**`typecheck` and `test` stay in CI.** Both are minutes, and a hook people learn to `--no-verify`
+past checks nothing at all.
 
 > [!NOTE]
 > ESLint 9 resolves flat config from the **working directory** rather than per file. With a single root config ([05](05-lint-and-format.md)) that is a non-issue: both this hook and CI run `eslint .` from the repo root, so there is exactly one config and one rule set.
@@ -158,10 +169,51 @@ jobs:
       SMTP_URL: smtp://localhost:1025
       EMAIL_FROM: ci@localhost
 
+      # Every remaining key both `env.ts` schemas require. Without them the job passed
+      # only because nothing ever evaluated `Env` — the boot smoke below does, so a
+      # key missing here is now a failure rather than a deploy-time surprise.
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: ratchet
+      S3_ACCESS_KEY: ratchet
+      S3_SECRET_KEY: ratchetsecret
+      S3_FORCE_PATH_STYLE: "true"
+
+      # Thirty-two characters because the schema demands it, and obviously disposable
+      # because this is a public workflow file.
+      AUTH_SECRET: ci-secret-not-a-real-key-000000000000
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUSTED_ORIGINS: http://localhost:3000
+      AUTH_SESSION_MAX_AGE_SECONDS: "604800"
+      AUTH_COOKIE_CACHE_MAX_AGE_SECONDS: "60"
+
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_DIMENSIONS: "1536"
+
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
+      # `docker run`, not a `services:` entry: MinIO needs `server /data` and a service
+      # container takes no command. The bucket is what `S3_BUCKET` above names.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=ratchet -e MINIO_ROOT_PASSWORD=ratchetsecret \
+            --health-cmd "curl -sf http://localhost:9000/minio/health/live" \
+            --health-interval 5s --health-timeout 3s --health-retries 10 \
+            minio/minio:latest server /data
+          for _ in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' minio)" = healthy ] && break
+            sleep 2
+          done
+          docker run --rm --network host --entrypoint sh minio/mc:latest -c "
+            mc alias set local http://localhost:9000 ratchet ratchetsecret &&
+            mc mb --ignore-existing local/ratchet"
+
+      # Reads the root manifest's `packageManager` field and nothing else — a root that
+      # declares only `devEngines.packageManager` fails here in seconds, before a single
+      # check runs. Assertion 16 keeps the two in step.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -196,13 +248,22 @@ jobs:
 
       - run: pnpm test
 
+      # Both apps, because `tsc -p` on the worker is the only thing that compiles it and
+      # `pnpm build:packages` filters to ./packages/*.
+      - run: pnpm --filter @loadbearing/worker build
+
+      # The one step that evaluates `Env` and opens a connection. Everything above it
+      # runs against source and cannot tell that a variable is missing.
+      - run: node tooling/scripts/boot-smoke.mjs worker
+
       # Not optional. check:architecture's bundle assertion greps the built client
       # output, and `build:packages` filters to ./packages/* — without this the
       # assertion has no directory to read and reports `○ skipped`, not a pass.
       - run: pnpm --filter @loadbearing/web build
       - run: pnpm check:architecture
-      # Every palette against every text pairing. With one theme this is judgement; with
-      # fifteen it is the only thing between a contributor and an unreadable one.
+      # Every palette against every text pairing — 117 of them across five themes and
+      # both modes. With one theme this is judgement; with five it is the only thing
+      # between a contributor and an unreadable one.
       - run: pnpm check:contrast
 
   # Deliberately its own job, and deliberately not required. Blocking a merge on a
@@ -211,7 +272,6 @@ jobs:
   # Advisories are filtered by GHSA id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
   audit:
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -222,7 +282,30 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high
+
+      # `continue-on-error` on the *step*, not the job. At job level the conclusion is
+      # always `success`, so the result is unreadable from the checks list and from any
+      # branch rule — the job cannot signal at all. Here the step is allowed to fail and
+      # the summary below says what it found.
+      - id: audit
+        continue-on-error: true
+        run: pnpm audit --audit-level high | tee audit.txt
+
+      # Where the result becomes readable. A failed step with no summary is a green job
+      # and a line nobody scrolls to.
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## pnpm audit"
+            if [ "${{ steps.audit.outcome }}" = success ]; then
+              echo "No advisories at high or above."
+            else
+              echo "Advisories at high or above. Not blocking a merge."
+              echo "Silence one deliberately with auditConfig.ignoreGhsas in package.json."
+              sed 's/^/    /' audit.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
 
 > **CI runs neither Loki nor Alloy, and that is the correct choice rather than an omission.** Both are a [Tier 0](../opinions/dependencies.md) platform dependency: no package imports them, so no test can fail because they are absent. What CI does need is `APP` and `ENV`, because they are read by `env.ts` like any other config — a missing one is a startup crash, and finding that out in CI is the entire point. `SMTP_URL` and `EMAIL_FROM` are there for the same reason and no container answers them: nothing in the job sends a message, so a shape that parses is the whole requirement.
@@ -231,9 +314,10 @@ jobs:
 > **`pnpm/action-setup@v4` reads the root manifest's `packageManager` field and nothing else.** A
 > root that declares only `devEngines.packageManager` — the newer field, and the one
 > [03](03-workspace-and-catalogs.md) writes — makes the action fail in seconds with *"No pnpm
-> version is specified"*, before a single check has run. Declare **both**, or pass `version:` on the
-> action. The failure is easy to miss precisely because it is not a check failing: the job is red
-> twenty seconds in, every time, on every branch, and the checks below it never ran at all.
+> version is specified"*, before a single check has run. Declare **both** — which this repository now
+> does, with assertion 16 keeping them in step. The failure is easy to miss precisely because it is
+> not a check failing: the job is red twenty seconds in, every time, on every branch, and the checks
+> below it never ran at all. It was, here, for weeks.
 
 > [!IMPORTANT]
 > **Four steps here look like padding and each one closes a specific hole.** The extensions step
@@ -268,7 +352,7 @@ jobs:
 
 **pnpm 11 has a `pnpm ci` command** (`pnpm clean` followed by a frozen install). It is the better choice on a runner with a persistent workspace; on GitHub's ephemeral runners there is nothing to clean, so the explicit form above costs nothing and reads more clearly.
 
-**`pnpm/action-setup` still installs pnpm**, but with `devEngines.packageManager` in `package.json` the version it installs barely matters — pnpm resolves the pinned version from the lockfile on first invocation. Leave the action's `version` input unset so the two cannot disagree.
+**`pnpm/action-setup` still installs pnpm**, and the version it installs barely matters — pnpm resolves the pinned version from the lockfile on first invocation. Leave the action's `version` input unset, but **the root must declare `packageManager` as well as `devEngines.packageManager`**: the action reads only the former, and with only the latter it fails before installing anything. That is not a hypothetical — it is what the CAUTION above describes, and this paragraph used to say the opposite. Assertion 16 in `check:architecture` now fails if the two disagree or either is missing.
 
 **Order matters.** Build before typecheck, because packages consuming `dist/` types need them to exist. Lint before test, because a lint error is a two-second answer and a failing test suite is a two-minute one.
 
@@ -602,7 +686,10 @@ The rest are not written, and each is a decision rather than an omission:
 
 - **Branch protection** requiring `verify` to pass before merge — without it every assertion above
   is advisory. This is the one to do first, and it is configured in the repository, not in a file.
-- **`actions/cache`** on the pnpm store and package `dist/` dirs, keyed by lockfile hash.
+- **`actions/cache`** on package `dist/` dirs. The pnpm store half is done — `actions/setup-node`
+  with `cache: pnpm`. The `dist/` half is deliberately not: `tsup` has no incremental mode, so a
+  restored `dist/` is rebuilt by the very next step. It would only pay off by making the build
+  conditional on a cache hit, and a stale `dist/` silently used is a worse failure than a slow job.
 - **A `docker compose up` smoke job** running the real containers and a migration, to catch drift
   the pinned CI service images hide.
 - **`pnpm peers`** to surface unmet peers, which pnpm 11 no longer prints as a tree during install.

@@ -1,6 +1,6 @@
 ---
 title: Env and Endpoint
-description: Why the schema parses eagerly, the one cross-field rule that earns its exception, why Endpoint is a separate file, and why the auth base URL ends in .invalid.
+description: Why the schema parses eagerly, the two cross-field rules that earn their exception, why Endpoint is a separate file, and why the auth base URL ends in .invalid.
 ---
 
 # `Env` and `Endpoint`
@@ -23,7 +23,7 @@ It is one of exactly two `process.env` readers in the repository; the other is
 A missing `AUTH_SECRET` should crash the process at boot with a field path, not produce a 500 on the
 first sign-in an hour later.
 
-## The one cross-field rule
+## The two cross-field rules
 
 `bootstrap` with no `AUTH_BOOTSTRAP_ORGANIZATION_SLUG` is a mode that **silently enrols nobody**:
 every sign-up succeeds, every first sign-in is refused, and nothing in either log says why. Failing
@@ -33,17 +33,24 @@ carries a refinement at all.
 There is deliberately no default for the slug. Unset means no enrolment, which is the production
 posture.
 
+**`CLICKHOUSE_URL` with the credential defaults left alone** is the second, and it is the same shape
+of failure one layer down. The compose container is `ratchet/ratchet`; the defaults below are
+ClickHouse's own `default/default`, which cannot authenticate against it. Without the rule the
+projection fails on its first run with a vendor auth error, five minutes after boot, in the worker's
+log rather than the one someone is watching.
+
 ## Values whose absence is the decision
 
 | Variable | Absent means |
 |---|---|
 | `GOOGLE_CLIENT_ID` / `_SECRET` | Google sign-in is off. A half-filled pair would be rejected at Google's consent screen, which no log line here can explain — so the container builds a provider only when both are present |
-| `CLICKHOUSE_URL` | ClickHouse stays stopped. Present *without* `ANALYTICS_DRIVER=clickhouse` is the supported half-way state: the projection runs and the reconciliation reports, while reads still come from Postgres |
+| `CLICKHOUSE_URL` | ClickHouse stays stopped. Present, the projection runs and the reconciliation reports — and nothing reads the store back, because there is no analytics reader; see [12](../../../../docs/setup/12-application-package.md). Setting it makes `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER` required |
 | `LOKI_URL` | No `LogReader`. Logs are still written to stdout and still shipped by Alloy; reading them is `docker compose logs`, which stays the break-glass path regardless |
 
 The ClickHouse credentials default to ClickHouse's own out-of-the-box database and user. A default
 naming the project would be a credential baked into shipped code, and would keep pointing at the old
-name after a rename.
+name after a rename — which is why the cross-field rule above refuses those defaults when
+`CLICKHOUSE_URL` is set, rather than the defaults being changed to match compose.
 
 ## Values with a cap rather than a default
 
