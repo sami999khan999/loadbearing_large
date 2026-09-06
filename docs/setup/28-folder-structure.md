@@ -349,7 +349,6 @@ packages/application/src/
 ├── port/                         ← abstract classes only, no implementations
 │   ├── index.ts
 │   ├── activity.logger.ts        → ActivityLogger
-│   ├── analytics.reader.ts       → AnalyticsReader
 │   ├── cache.store.ts            → CacheStore
 │   ├── embedding.provider.ts     → EmbeddingProvider
 │   ├── queue.publisher.ts        → QueuePublisher
@@ -407,7 +406,6 @@ packages/infrastructure/
     │   │   ├── pg-activity.logger.ts         → PgActivityLogger
     │   │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
     │   │   ├── pg-activity-replay.reader.ts  → PgActivityReplayReader
-    │   │   ├── pg-analytics.reader.ts        → PgAnalyticsReader
     │   │   ├── pg-api-key.repository.ts      → PgApiKeyRepository
     │   │   ├── pg-capability.repository.ts   → PgCapabilityRepository
     │   │   ├── pg-maintenance.gateway.ts     → PgMaintenanceGateway
@@ -432,7 +430,6 @@ packages/infrastructure/
     │   └── openai-embedding.provider.ts      → OpenAiEmbeddingProvider
     ├── clickhouse/                           ← opt-in: built only when configured
     │   ├── clickhouse.connection.ts          → ClickHouseConnection
-    │   ├── clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
     │   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
     ├── loki/                                 ← opt-in: built only when LOKI_URL is set
     │   └── loki-log.reader.ts                → LokiLogReader
@@ -463,7 +460,7 @@ complete answer.
 **`grep -rn "PgVectorStore" packages/ apps/` must return hits in exactly two packages** — here, and
 `composition` (twice there: `src/import.ts` and `src/container/container.ts`, since every external
 symbol enters through the one outside surface). A third package naming it is what makes a vector-store
-swap expensive again. The same grep for `ClickHouseAnalyticsReader` must answer identically.
+swap expensive again. The same grep for `ClickHouseAnalyticsProjector` must answer identically.
 
 ### `packages/auth`
 

@@ -222,15 +222,15 @@ and its two merge points are role folders — `primitive/`, `procedure/`, `catal
 because there is exactly one of each. Its subjects are subject folders, because there is one per
 slice. Nothing about the package had to choose; each folder answered the question on its own.
 
-**Two things that look like slices and are not.** `PgVectorStore` and `PgAnalyticsReader` are
+**Two things that look like slices and are not.** `PgVectorStore` and `PgActivityReplayReader` are
 infrastructure, which is why they sit in `pg/repository/` beside `PgCapabilityRepository` rather than
 inside a slice. And repository *ports* live in the slice, not in `application/src/port/` — `port/` is
 for capabilities the whole system shares, and putting `TaskRepository` there would make that folder
 grow by one file per feature forever.
 
-**The test for `port/` is what a new feature adds, not what the port is called.** `AnalyticsReader`
-lives there and looks slice-shaped — `goalRiskScores`, `reliabilityTrend` — but a second feature
-adds a *method* to it, not a second file beside it. `TaskRepository` is the opposite: every feature
+**The test for `port/` is what a new feature adds, not what the port is called.**
+`ActivityReplayReader` lives there and looks slice-shaped — `since`, `dailyCounts` — but a second
+feature adds a *method* to it, not a second file beside it. `TaskRepository` is the opposite: every feature
 brings its own. One cross-cutting seam that many subjects ask questions of belongs in `port/`; one
 seam per subject belongs with the subject.
 

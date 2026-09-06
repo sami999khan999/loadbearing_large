@@ -42,7 +42,6 @@ packages/application/
 │   │   ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
 │   │   │                                 ProjectionCheckpoint, DailyCount
 │   │   ├── analytics.projector.ts → AnalyticsProjector
-│   │   ├── analytics.reader.ts   → AnalyticsReader, DateRange, RiskScore, TrendPoint
 │   │   ├── cache.store.ts        → CacheStore
 │   │   ├── capability.invalidator.ts → CapabilityInvalidator
 │   │   ├── email.sender.ts       → EmailSender, EmailMessage
@@ -101,7 +100,6 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `ActivityLogger` | `PgActivityLogger` | never; audit is Postgres at every scale |
 | `ActivityArchiveGateway` | `PgActivityArchiveGateway` | never — it *is* the Postgres side |
 | `ActivityReplayReader` | `PgActivityReplayReader` | never — reads the source of truth |
-| `AnalyticsReader` | `PgAnalyticsReader` | `ClickHouseAnalyticsReader` — **written** |
 | `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
 | `CacheStore` | `RedisCacheStore` | managed Redis |
 | `CapabilityInvalidator` | `CapabilityCache` — `auth` | any cache the resolver reads |
@@ -119,7 +117,7 @@ Everything unattributed is in `@loadbearing/infrastructure`. Read that list agai
 and every name lines up with exactly one binding, with no exceptions — which is the property this
 table exists to make checkable. **Repository ports are not here** — each lives with its feature slice,
 `src/member/member.repository.ts`, so a slice is one glob and `CODEOWNERS` stays honest.
-`AnalyticsReader` and `VectorStore` are the exception because they are one cross-cutting read seam
+`VectorStore` is the exception because it is one cross-cutting read seam
 that many subjects query, not one per subject: the test is whether a new feature adds a *method* here
 or a *file*.
 
@@ -130,19 +128,19 @@ transaction and every use-case holds it. The reader scans in bulk, carries no `P
 reachable only from the worker. One port with both would put a cross-tenant scan on the object every
 use-case already has.
 
-**`AnalyticsReader` reads the derived store; `AnalyticsProjector` writes it.** The reader is reachable
-from a request path and the projector is not. This is the guard that keeps the analytics store
-derived: *nothing writes to it except the projection*, and a single port with both would make that
-unenforceable.
+**`AnalyticsProjector` writes the derived store, and nothing reads it.** That is the guard that
+keeps the analytics store derived: *nothing writes to it except the projection*. There was an
+`AnalyticsReader` beside it with two implementations and a driver flag; nothing called it, and it
+was deleted — see [ports.md](reference/ports.md).
 
 **`LogReader` reads diagnostics and nothing writes them from here at all.** `JsonLogger` goes to
 stdout; a collector tails it. The write path has no port because it has no dependency — which is
 exactly what makes swapping the log platform a config change.
 
-## Two ports carry a required permitted scope
+## One port carries a required permitted scope
 
-`VectorStore.search()` and `AnalyticsReader.goalRiskScores()` both take `goalIds` as a required
-parameter, and that is the security design rather than a convenience.
+`VectorStore.search()` takes `goalIds` as a required parameter, and that is the security design
+rather than a convenience.
 
 ```ts
 const orgId = actor.organizationId;

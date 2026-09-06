@@ -12,7 +12,6 @@ import {
   RecordingEmailSender,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
-  StubAnalyticsReader,
   StubEmbeddingProvider,
   StubSessionResolver,
 } from "../fake/index.js";
@@ -21,7 +20,6 @@ import {
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
-  type AnalyticsReader,
   Authorizer,
   type CacheStore,
   type CapabilityInvalidator,
@@ -48,7 +46,6 @@ export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityArchive: ActivityArchiveGateway;
   readonly activityReplay: ActivityReplayReader;
-  readonly analytics: AnalyticsReader;
   // Present even though the real container leaves them absent: a test has no opinion
   // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
@@ -92,7 +89,6 @@ export class TestContainer {
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityArchive: overrides.activityArchive ?? new RecordingActivityArchiveGateway(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
-      analytics: overrides.analytics ?? new StubAnalyticsReader(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),

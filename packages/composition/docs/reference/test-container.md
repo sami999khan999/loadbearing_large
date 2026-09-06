@@ -92,14 +92,13 @@ That is also why `fake/` has a barrel while `TestContainer` does not go on the p
 | `StorageGateway` | `InMemoryStorageGateway` | bytes in a Map; `presign*` returns a fake URL rather than throwing |
 | `QueuePublisher` | `RecordingQueuePublisher` | records, and honours `jobId` dedup because that is a domain rule |
 | `VectorStore` | `InMemoryVectorStore` | **real cosine**, goal filter applied to the input set |
-| `AnalyticsReader` | `StubAnalyticsReader` | empty arrays, and that is enough |
 | `EmbeddingProvider` | `StubEmbeddingProvider` | deterministic character histogram, no network |
 | `SessionResolver` | `StubSessionResolver` | `null` by default; a use-case test never reaches it |
 | `ActivityLogger` | `RecordingActivityLogger` | records actor, action and payload |
 | `UnitOfWork` | `DirectUnitOfWork` | runs the work, opens nothing, counts the call |
 | `ContentSource` | `StaticContentSource` | **the real one** — its catalog is a map of dynamic imports |
 
-`StubAnalyticsReader` returning empty arrays is not laziness. The value of this file is that adding a
+`StubSessionResolver` returning `null` is not laziness. The value of this file is that adding a
 port is **one line** here; a fake elaborate enough to need its own tests would defeat that.
 
 **Two exceptions worth naming.** `InMemoryVectorStore` computes cosine for real, because a fake that

@@ -1389,13 +1389,45 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   - **The `.bus.ts` role suffix left the closed set** in `docs/opinions/files.md` and
     `docs/ai/rules/files.md`. Every other row in that table names a file that exists, and the set is
     closed precisely so an entry means something. `T-031` re-adds it.
-- [ ] `P5.12` **Analytics rollups** — `AnalyticsReader.goalRiskScores` / `reliabilityTrend`,
+- [x] `P5.12` **Analytics rollups** — `AnalyticsReader.goalRiskScores` / `reliabilityTrend`,
   `goal_risk_daily`, `user_reliability_daily`, both readers' implementations, the fake, and the
   `ANALYTICS_DRIVER` switch for reads: nothing reads them and nothing writes the tables. Keep
   `activity_events` projection and reconciliation. **Delete** the two rollups and their tables
   (migration); keep the port with one method (`dailyCounts`) until a feature needs more.
   **Docs:** `infrastructure/docs/reference/clickhouse.md`, `docs/setup/15`, `25`,
-  `docs/opinions/data-and-scale.md`.
+  `docs/opinions/data-and-scale.md`. `done: 2026-09-06`
+  - **The item's own instruction could not be followed, and the premise is why.** It says to keep the
+    port with one method, `dailyCounts` — but `dailyCounts` is on `ActivityReplayReader` and
+    `AnalyticsProjector`, never on `AnalyticsReader`. Removing the two rollups leaves the port with
+    **no methods**, so "keep it" was not an available option. Confirmed with the user before acting.
+  - **Deleted in full:** both methods, `goal_risk_daily` and `user_reliability_daily` (migration
+    `0011`, and the matching pair in `infra/clickhouse.init.sql`), `AnalyticsReader`,
+    `PgAnalyticsReader`, `ClickHouseAnalyticsReader`, `StubAnalyticsReader`, `container.analytics`,
+    `TestPorts.analytics`, `DateRange`/`RiskScore`/`TrendPoint`, and `ANALYTICS_DRIVER` from both
+    `env.ts` files and `.env`/`.env.example`.
+  - **`ANALYTICS_DRIVER` had to go with it.** Its entire function was choosing between two
+    implementations of the deleted port. A flag left behind would be a lie a deployer can act on:
+    set it to `clickhouse` and believe reads had moved.
+  - **What survives is the half with a consumer.** `AnalyticsProjector`,
+    `ClickHouseAnalyticsProjector`, the projection consumer, the nightly reconciliation and
+    `activity_events` all stay; `CLICKHOUSE_URL` still turns them on. The store fills and reconciles
+    while nothing reads it, which is the state to be in before writing a reader.
+  - **Both tables were empty in the live database** before the migration ran — checked, not assumed.
+  - **`test-container.spec` caught the removal** as well as the addition in `P5.1`, because it now
+    counts the port directory. Fifteen ports again.
+  - **The doc rewrite is the bulk of this item, and one section reverses.**
+    `docs/opinions/simplicity.md` used `AnalyticsReader` as its example of a seam that earns its
+    place before the second implementation. It is now the counter-example, which is the more useful
+    version of that argument: certainty about the swap is the cheap half of the test, and the
+    expensive half — *is the retrofit spread or local?* — is the one it failed. A port nothing calls
+    has no call sites, so the cost it was insuring against did not exist.
+  - **Fourteen more pages corrected**, including `docs/setup/{00,06,11,12,13,14,15,17,27,28}`,
+    `docs/opinions/{classes,folders,dependencies,vocabulary,data-and-scale}.md`, both
+    `clickhouse.md` references, `docs/infra/deployment.md`, and the `application`, `composition` and
+    `infrastructure` package docs. Examples that named the deleted symbols moved to ones that exist
+    (`LogReader`, `ActivityReplayReader.dailyCounts`, `ClickHouseAnalyticsProjector`).
+  - **`T-034` filed:** bring the reader back with the first dashboard, against a store that has been
+    reconciling for days — and keep `goalIds` a required resolved parameter when it returns.
 - [ ] `P5.13` **`LogReader`, `StorageGateway.presign*`, `QueuePublisher.publish`** — keep
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
@@ -1645,9 +1677,9 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   `(provider_id, account_id)` (two rows per Google account accepted);
   `two_factors_user_idx` is not unique (two TOTP secrets per user). Migration + `auth.schema.ts`.
   Run `pnpm auth:tables` and diff.
-- [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive` (and
-  `goal_risk_daily`, `user_reliability_daily` unless `P5.12` deletes them). Partition by month
-  in a migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
+- [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive`. It is the only one
+  left: `P5.12` deleted `goal_risk_daily` and `user_reliability_daily`. Partition by month in a
+  migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
 - [ ] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
   unique indexes with no de-dup; `0004` drops `memberships_uq` before recreating it. Ship a
   `0005` that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"

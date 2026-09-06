@@ -73,9 +73,12 @@ it**. That restriction is the whole design: the moment a use-case writes there d
 hand-run backfill invents a row, the store stops being rebuildable and has become a source of truth
 nobody decided to create.
 
-It is split from `AnalyticsReader` rather than folded into it because **the reader is reachable from
-a request path and this is not**. A single port with both would put `project()` on the object a
-dashboard query holds.
+It has no read counterpart. One shipped — `AnalyticsReader`, with `goalRiskScores` and
+`reliabilityTrend` over two rollup tables in each store — and nothing ever called it, so the port,
+both implementations and the `ANALYTICS_DRIVER` flag that chose between them were deleted. When a
+dashboard needs one it stays a **separate** port for the reason the split existed: a reader is
+reachable from a request path and this is not, and a single port with both would put `project()` on
+the object a dashboard query holds.
 
 - `checkpoint()` reads where the last run stopped **from the derived store itself**, never from
   somewhere beside it. A checkpoint stored elsewhere can disagree with what actually landed, and the
@@ -87,13 +90,11 @@ dashboard query holds.
   The realistic failure it catches is not an outage: it is a consumer that died quietly on a Tuesday
   and was noticed a quarter later.
 
-`AnalyticsReader` is read-only by construction — a write method makes a derived store
-authoritative. `goalIds` is the caller's already-resolved permitted scope, because an analytics
-store has no `CapabilitySet` and no join back to goal membership, least of all a remote one. Scores
-run 0 to 1 as a ratio rather than a percentage, and carry the projection timestamp: without it a
-dashboard cannot tell a live score from a dead consumer's last one. Days are ISO `YYYY-MM-DD`
-strings, not `Date`s, because Postgres `date_trunc` and ClickHouse `toYYYYMM` return different
-shapes and each adapter normalises here.
+Days are ISO `YYYY-MM-DD` strings, not `Date`s, because Postgres `date_trunc` and ClickHouse
+`toYYYYMM` return different shapes and each adapter normalises here. Two decisions carry over to a
+future reader: it stays read-only by construction, since a write method makes a derived store
+authoritative; and any permitted scope arrives as a resolved parameter, because an analytics store
+has no `CapabilitySet` and no join back to goal membership, least of all a remote one.
 
 ## `LogReader` and the four labels
 

@@ -115,7 +115,6 @@ import { ServerOnly, SystemClock, type Clock } from "@loadbearing/core";
 import { JsonLogger, type LogLevel, type Logger } from "@loadbearing/observability";
 import {
   type ActivityLogger,
-  type AnalyticsReader,
   Authorizer,
   type CacheStore,
   type EmbeddingProvider,
@@ -138,7 +137,6 @@ import { ContentSource, StaticContentSource } from "@loadbearing/content";
 import {
   Database,
   PgActivityLogger,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMembershipReader,
@@ -172,7 +170,6 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
-  public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
   public readonly sessions: SessionResolver;
   public readonly activity: ActivityLogger;
@@ -213,9 +210,8 @@ export class Container {
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
 
-    // ── the three swap points ──
+    // ── the two swap points ──
     this.vectors = new PgVectorStore(this.database, this.transactions);
-    this.analytics = new PgAnalyticsReader(this.database, this.transactions);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding);
 
     // No argument until `SERVER_CATALOG` exists — the constructor already defaults to
@@ -351,7 +347,6 @@ The reason this class exists in this shape:
 // `src/` and not in a spec: it is checked by `tsc`, not by a test that runs.
 export interface TestPorts {
   readonly activity: ActivityLogger;
-  readonly analytics: AnalyticsReader;
   readonly cache: CacheStore;
   readonly content: ContentSource;
   readonly embeddings: EmbeddingProvider;
@@ -382,7 +377,6 @@ export class TestContainer {
       authorizer: new Authorizer(),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
-      analytics: overrides.analytics ?? new StubAnalyticsReader(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       // Already in-memory: its catalog is a map of dynamic imports, so there is nothing
       // to fake. The one port whose real implementation is the test double.
@@ -414,7 +408,7 @@ expect(activity.actions()).toEqual(["task.reactivated"]);
 
 No Postgres, no Redis, no S3, no Better Auth, no HTTP. Every use-case test builds a `Principal` directly with a hand-made `CapabilitySet` and asserts on behaviour. Integration tests — the ones that need real infrastructure — are then reserved for the adapters themselves and the auth routes, which is a much smaller and much less flaky set.
 
-**A fake for every port, including the ones a given test does not use.** `StubAnalyticsReader` returns empty arrays; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that.
+**A fake for every port, including the ones a given test does not use.** `StubEmbeddingProvider` returns a fixed vector; that is enough, and it means adding a port to `application` shows up here as one line rather than as a compile error in forty specs. A fake elaborate enough to need its own tests would defeat that. `tests/container/test-container.spec.ts` counts the port directory rather than restating the list, so a port added without a double fails the run.
 
 **Two of them carry real logic anyway, and both earn it.** `InMemoryVectorStore` computes actual cosine, because a fake that scored every hit identically would let *"the top result is the right one"* pass either way — the one assertion a retrieval use-case is worth testing. And `RecordingQueuePublisher` honours `jobId` deduplication, because "enqueue OCR for this receipt, once" is a business rule the use-case is responsible for, not queue configuration.
 

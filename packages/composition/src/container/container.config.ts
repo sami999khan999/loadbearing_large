@@ -53,19 +53,16 @@ export interface ContainerConfig {
     readonly dimensions: number;
   };
   // ── the swappable stores ───────────────────────────────────────────────────
-  // Three blocks, one shape, each naming a `driver` the container switches on. See
-  // docs/reference/container.md.
+  // Three blocks. `vector` and `logs` name a `driver` the container switches on;
+  // `analytics` has no reader to switch. See docs/reference/container.md.
   readonly vector: {
     // `pgvector` today. Rebuildable by re-embedding the sources, which is why a
     // dedicated store can be adopted without a migration plan.
     readonly driver: "pgvector";
   };
   readonly analytics: {
-    // `postgres` reads the nightly rollup tables; `clickhouse` reads the projected
-    // event stream. Same port, same two questions, same call sites.
-    readonly driver: "postgres" | "clickhouse";
-    // Required when the driver is `clickhouse`. Its presence also decides whether the
-    // projection pipeline exists at all, so nothing runs half-wired.
+    // No `driver`: the projection is write-only until a feature reads it, and its
+    // presence alone decides whether the pipeline exists, so nothing runs half-wired.
     readonly clickhouse?: {
       readonly url: string;
       readonly database: string;

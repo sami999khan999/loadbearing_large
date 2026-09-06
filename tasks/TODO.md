@@ -126,6 +126,31 @@ probe.
     carries no dev build and never checks that the server bundle runs at all.
 
 
+- [ ] `T-034` **Bring back an analytics reader, with the first dashboard** `@unassigned` `P3` `~8h` `#api` `#db`
+  - **Goal:** Nothing reads the analytics store. `P5.12` deleted `AnalyticsReader`, both its
+    implementations, its two rollup tables and the `ANALYTICS_DRIVER` flag, because nothing ever
+    called any of it — a shape guessed at with no consumer to check it against, kept in step by hand
+    across two adapters. The write half stayed: `AnalyticsProjector` fills `activity_events` and the
+    nightly reconciliation checks it.
+  - **The trigger, and it is not "the table is large".** Snapshot tables stop covering the questions
+    people ask — the specific moment somebody wants an aggregate nobody precomputed.
+  - **Do it in this order**, which is the whole point of having deleted the seam: set
+    `CLICKHOUSE_URL` and let the projection fill and reconcile for days first, then write the reader
+    against a store with real data in it and a dashboard with a real query.
+  - **Four decisions carry over** and should not be re-litigated:
+    - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
+      `project()` on the object a dashboard query holds.
+    - **Read-only by construction.** A write method is the moment a derived store becomes
+      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
+    - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
+      analytics store holds no `CapabilitySet` and can join back to nothing.
+    - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return
+      different shapes and each adapter normalises.
+  - **A driver flag comes back only if a second implementation does**, and only once the first has a
+    caller. Its absence is currently a feature — a flag that moved reads the moment the pipeline
+    started would cut a dashboard over to a store that is still backfilling.
+
+
 - [ ] `T-031` **Transactional outbox for cross-slice events** `@unassigned` `P3` `~12h` `#api` `#db`
   - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
     notification slice. Without a seam for that, slice ownership decays into a call graph where

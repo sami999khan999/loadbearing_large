@@ -135,7 +135,7 @@ src/<subject>/<verb>-<subject>.use-case.ts    -> <Verb><Subject>UseCase
 - Authorize with `authorizer.assert(...)`, never `can(...)`. `can()` answers a question; `assert()`
   enforces an outcome. Mixing them is how a UI check silently becomes the only check.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate belongs in the
-  analytics store, behind `AnalyticsReader`.
+  analytics store, read through a port of its own rather than from a use-case.
 
 ### 8 — Client data (`packages/api-client`, `packages/query`)
 

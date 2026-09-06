@@ -3,7 +3,6 @@ import {
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
-  type AnalyticsReader,
   ApiKeyResolver,
   AuthFactory,
   type AuthInstance,
@@ -14,7 +13,6 @@ import {
   CapabilityCache,
   ChangeMemberRoleUseCase,
   ClickHouseAnalyticsProjector,
-  ClickHouseAnalyticsReader,
   ClickHouseConnection,
   type Clock,
   type ContentSource,
@@ -45,7 +43,6 @@ import {
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
@@ -127,7 +124,6 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
-  public readonly analytics: AnalyticsReader;
   public readonly embeddings: EmbeddingProvider;
   public readonly activity: ActivityLogger;
   public readonly unitOfWork: UnitOfWork;
@@ -217,21 +213,8 @@ export class Container {
       ? new ClickHouseConnection(config.analytics.clickhouse, this.logger)
       : undefined;
 
-    // Otherwise a `clickhouse` driver with no block degrades to Postgres silently, out
-    // of the store the operator believed they had moved off.
-    if (config.analytics.driver === "clickhouse" && !this.clickhouse) {
-      throw new Error(
-        "analytics.driver is clickhouse but no analytics.clickhouse config was given.",
-      );
-    }
-
-    this.analytics =
-      config.analytics.driver === "clickhouse" && this.clickhouse
-        ? new ClickHouseAnalyticsReader(this.clickhouse)
-        : new PgAnalyticsReader(this.database, this.transactions);
-
-    // The writer follows the connection, not the driver: project first, watch the
-    // reconciliation come back clean, then flip `ANALYTICS_DRIVER`.
+    // The projector follows the connection and nothing else. There is no read driver to
+    // flip: the store is written and reconciled, and no feature reads it yet.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
       : undefined;

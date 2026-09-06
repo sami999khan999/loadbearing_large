@@ -4,8 +4,8 @@
 > opt-in stores: ClickHouse and Loki. Server-only.
 
 **Delivers:** `RedisCacheStore`, `S3StorageGateway`, `BullMqQueuePublisher`, `RedisConnection`, the
-embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsReader` /
-`ClickHouseAnalyticsProjector`, and `LokiLogReader`.
+embedding provider from [14](14-vector-store.md), `ClickHouseAnalyticsProjector`, and
+`LokiLogReader`.
 
 **Prerequisite:** [14 · Vector Storage](14-vector-store.md)
 
@@ -31,7 +31,7 @@ nothing.
 | Thing | Where | Why |
 |---|---|---|
 | Redis, S3, BullMQ, the embedding provider | **here** | A client, and a port each satisfies |
-| **ClickHouse** | **here** | `AnalyticsReader` and `AnalyticsProjector` — the same shape as Redis |
+| **ClickHouse** | **here** | `AnalyticsProjector` — write-only; the read seam is deliberately absent, see [12](12-application-package.md) |
 | **Postgres** | **here**, in `src/pg/` | Folded in from the separate database package — see [13](13-infrastructure-postgres.md) |
 | **SMTP** | **here**, in `src/smtp/` | `EmailSender`. SMTP rather than a provider's HTTP API, so a vendor swap is a URL |
 | **Loki** | **here, the read side only** | `LogReader`. Nothing in `packages/` writes to it |
@@ -86,7 +86,6 @@ packages/infrastructure/src/
 ├── clickhouse/                           ← opt-in: built only when configured
 │   ├── index.ts
 │   ├── clickhouse.connection.ts          → ClickHouseConnection
-│   ├── clickhouse-analytics.reader.ts    → ClickHouseAnalyticsReader
 │   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
 ├── loki/                                 ← opt-in: built only when LOKI_URL is set
 │   ├── index.ts
@@ -123,7 +122,6 @@ ServerOnly.assert("@loadbearing/infrastructure");
 export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
-  ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
@@ -559,8 +557,7 @@ Three files, and the split between them is a guard rather than an organisational
 
 | Class | Port | Reachable from |
 |---|---|---|
-| `ClickHouseConnection` | — | the two below |
-| `ClickHouseAnalyticsReader` | `AnalyticsReader` | a request path |
+| `ClickHouseConnection` | — | the projector below |
 | `ClickHouseAnalyticsProjector` | `AnalyticsProjector` | the worker, only |
 
 **A single class with both would put `project()` on the object a dashboard query holds.** *Nothing
@@ -625,7 +622,6 @@ export { QueueName } from "./queue-name.js";
 ```ts
 // packages/infrastructure/src/clickhouse/index.ts
 export { ClickHouseAnalyticsProjector } from "./clickhouse-analytics.projector.js";
-export { ClickHouseAnalyticsReader } from "./clickhouse-analytics.reader.js";
 export { type ClickHouseConfig, ClickHouseConnection } from "./clickhouse.connection.js";
 ```
 

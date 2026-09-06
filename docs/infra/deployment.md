@@ -420,9 +420,9 @@ Everything in Phase 2 is *the same capability, operated by somebody else*. This 
 ClickHouse on the original VPS or reach ClickHouse Cloud from a fully-managed stack; the two
 decisions do not interact.
 
-**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that
-`PgAnalyticsReader` reading snapshot tables covers every question this kit will ask for years, and
-the container in the compose file is deliberately stopped.
+**Do not start here.** [Data and scale](../opinions/data-and-scale.md) is explicit that Postgres
+covers every question this kit will ask for years, and the container in the compose file is
+deliberately stopped.
 
 ### The trigger, and the prerequisite
 
@@ -440,21 +440,17 @@ Without the first, a running ClickHouse is an empty database that looks like a d
 second, a consumer that dies quietly on a Tuesday surfaces as a wrong number in March. Without the
 third, the store is not derived at all, whatever the documentation claims.
 
-### What changes in the code — and it is genuinely small
+### What changes in the code
 
-```ts
-// packages/infrastructure/src/analytics/clickhouse-analytics.reader.ts
-export class ClickHouseAnalyticsReader extends AnalyticsReader { … }
-```
+The write half is already written: `ClickHouseAnalyticsProjector`, the projection consumer and the
+nightly reconciliation ship, and `CLICKHOUSE_URL` turns them on
+([15](../setup/15-infrastructure-package.md)).
 
-```ts
-// packages/composition/src/container.ts   — one line
-this.analytics = new ClickHouseAnalyticsReader(config.analytics);
-```
-
-`@clickhouse/client` joins the node-only tier in the catalog, `AnalyticsReader` is unchanged, and no
-use-case, contract or component knows anything happened. That is the entire point of building the
-port years before the store ([15](../setup/15-infrastructure-package.md)).
+The read half is not, and that is deliberate. Adding it is a new port in
+`packages/application/src/port/`, an adapter behind it, one line in `Container`, and the queries the
+dashboard actually asks — a day's work against a store that has been filling and reconciling for
+days. The kit shipped that port once, guessed at two questions, and deleted it unused; see
+[Simplicity](../opinions/simplicity.md).
 
 `ContainerConfig` gains an `analytics` block, and `apps/*/src/env.ts` gains the variables to fill it —
 still the only two files in the repository that read `process.env`.
@@ -530,7 +526,7 @@ Worth stating plainly, because it is most of the system.
 - **`packages/permissions`** — pure computation, identical answer in every runtime.
 - **`packages/contracts`** — unchanged.
 - **The event catalog and the four log labels** — the pipeline moves, the vocabulary does not.
-- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`, `AnalyticsReader`.
+- **Every port** — `CacheStore`, `QueuePublisher`, `StorageGateway`, `VectorStore`, `AnalyticsProjector`.
   A managed service is a different constructor argument in `Container`, one line each.
 - **`.env` as the only config surface** — enforced by `check-architecture.mjs` §3, which is why
   "move a service" is never a code search.

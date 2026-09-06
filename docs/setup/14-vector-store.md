@@ -347,8 +347,10 @@ never knew which one.
 > tried. Writing the choice as a discriminated union means step 2 above is a compiler-checked edit
 > rather than a search for every `new PgVectorStore`.
 >
-> `ANALYTICS_DRIVER` is the same mechanism with the second implementation already written
-> ([15](15-infrastructure-package.md)), which is where the shape was proven.
+> `VECTOR_DRIVER` is the only read driver the kit still ships. There used to be a second,
+> `ANALYTICS_DRIVER`, with both implementations written — and it was deleted along with the port it
+> switched, because nothing ever read through it ([12](12-application-package.md)). The difference
+> is not the mechanism; it is that `VectorStore.search()` has a caller.
 
 ### Four rules that keep it that cheap
 

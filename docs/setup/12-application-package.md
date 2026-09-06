@@ -40,7 +40,6 @@ packages/application/src/
 └── port/                     ← abstract classes only, no implementations
     ├── index.ts
     ├── activity.logger.ts    → ActivityLogger
-    ├── analytics.reader.ts   → AnalyticsReader
     ├── cache.store.ts        → CacheStore
     ├── embedding.provider.ts → EmbeddingProvider
     ├── queue.publisher.ts    → QueuePublisher
@@ -451,39 +450,17 @@ const hits = await this.vectors.search(orgId, embedding, goalIds, 20);
 
 `goalsWith()` takes the candidate set for the same reason `search()` does — a `CapabilitySet` knows only the goals its own DTO names, so a wildcard holder or an org-level grantee would otherwise resolve to `[]` and silently retrieve org-wide chunks only ([08](08-permissions-package.md)).
 
-### `AnalyticsReader`
+### The port that is not here: `AnalyticsReader`
 
-```ts
-// packages/application/src/port/analytics.reader.ts
-import type { GoalId, UserId } from "@loadbearing/contracts";
+The kit shipped one, and it was deleted. It declared `goalRiskScores` and `reliabilityTrend`, had a Postgres implementation over two rollup tables and a ClickHouse implementation over the projected event stream, and an `ANALYTICS_DRIVER` flag chose between them. **Nothing called any of it** — no use-case, no procedure, no screen.
 
-export interface DateRange {
-  readonly from: Date;
-  readonly to: Date;
-}
+That is worth a paragraph rather than a silent absence, because the argument for building it early was a good one and still turned out wrong. A column store *does* become necessary at a volume this kit will not reach for years, and by then every call site *would* have to change — but a port nothing calls has no call sites, so the retrofit it was protecting against did not exist. Meanwhile the shape was a guess: two queries and two table layouts, invented with no dashboard to check them against and kept in step by hand across two adapters.
 
-export abstract class AnalyticsReader {
-  public abstract goalRiskScores(
-    goalIds: readonly GoalId[],
-  ): Promise<readonly RiskScore[]>;
+**The write half survives, and it is the half that earns its place.** `AnalyticsProjector` ([15](15-infrastructure-clickhouse.md)) has a consumer, a checkpoint and a nightly reconciliation; `CLICKHOUSE_URL` turns it on. The store fills and proves itself while nothing reads it, which is the state you want to be in before writing a reader.
 
-  public abstract reliabilityTrend(
-    userId: UserId,
-    goalIds: readonly GoalId[],
-    window: DateRange,
-  ): Promise<readonly TrendPoint[]>;
-}
-```
+When a dashboard needs one, one decision is already made: **`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. There is no join back to `goal_members` from ClickHouse. And **nothing writes through such a port** — a write method is the moment a derived store stops being derived ([Data and scale](../opinions/data-and-scale.md) §2).
 
-Aggregate reads over time — the questions a dashboard asks, as opposed to the questions a screen asks. `PgAnalyticsReader` answers them from snapshot tables in [13](13-infrastructure-postgres.md); the reason the seam exists before a second implementation does is that a column store becomes necessary at a volume this kit will not reach for years, and by then every call site would otherwise have to change.
-
-**`goalIds` is a required parameter, for exactly the reason it is on `VectorStore.search()`.** An analytics store does not know what a `CapabilitySet` is, so the permitted scope has to arrive already resolved. That is even more true once the implementation is not Postgres: there is no join back to `goal_members` from ClickHouse.
-
-**Every method is `async` from the first day**, including any the Postgres implementation could answer synchronously. A remote store cannot be synchronous, so a synchronous seam would turn the swap into a breaking change at every call site — the same reasoning `ContentSource` uses in [20](20-content-package.md).
-
-**Nothing writes through this port.** Analytics is a derived read model, fed by the worker consuming domain events, and rebuildable by replaying the activity log. A write method here would be the moment it stopped being derived — see [Data and scale](../opinions/data-and-scale.md) §2.
-
-> **Why this sits in `port/` when `TaskRepository` does not.** The rule below is that repository ports live with their slice, and it holds: `port/` would otherwise grow one file per feature forever. `AnalyticsReader` is the other shape — one cross-cutting read seam that many subjects ask questions of, like `VectorStore`. The test is whether adding a feature adds a *method* here or a *file*; a method is fine, a file per slice is the smell.
+> See [Simplicity](../opinions/simplicity.md) — this is the counter-example that section is built around.
 
 ### `UnitOfWork`
 
@@ -502,7 +479,6 @@ export abstract class UnitOfWork {
 ```ts
 // packages/application/src/port/index.ts
 export { ActivityLogger } from "./activity.logger.js";
-export { AnalyticsReader, type DateRange } from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
@@ -555,9 +531,7 @@ export {
 } from "./error/index.js";
 export {
   ActivityLogger,
-  AnalyticsReader,
   CacheStore,
-  type DateRange,
   type DocumentChunk,
   EmbeddingProvider,
   type JobOptions,

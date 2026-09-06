@@ -114,22 +114,33 @@ honest exception, and being precise about it is what stops it becoming a licence
 
 **A seam earns its place early when the swap is certain and the retrofit is not local.**
 `ContentSource` has one implementation and is still right, because adding a CMS later would otherwise
-mean touching every screen ([20](../setup/20-content-package.md)). `AnalyticsReader` is the same
-shape: a column store becomes necessary at a volume this kit will not see for years, and by then
-every call site would have to change.
+mean touching every screen ([20](../setup/20-content-package.md)). `VectorStore` is the same shape:
+a dedicated vector database becomes necessary at a volume this kit will not see for years, and by
+then every call site would have to change.
 
 Both pass a specific test — **the cost of adding it later is spread across the codebase rather than
 concentrated in one file.** An abstraction whose future swap touches one adapter has not earned
 anything; write the adapter.
 
-The counter-example is in the same architecture: ClickHouse is in the compose file and **stopped**,
-and `CLICKHOUSE_URL` is unset even though both adapters are written. The seam is built because it is
-cheap and pervasive and because a seam with one implementation is untested by construction. The store
-is not *run*, because running one nobody needs costs an operator forever while writing the adapter
-cost a day once.
+### The exception has a real counter-example, and it is in this repository
+
+`AnalyticsReader` used to be listed here, on the same argument. It had two methods, two Postgres
+rollup tables, a ClickHouse implementation and an `ANALYTICS_DRIVER` flag to choose between them.
+**Nothing ever called it**, and the whole apparatus was deleted.
+
+It failed the test on the half that is easy to skip. The retrofit was not spread — a reader nothing
+reads has no call sites to change, so the future cost was concentrated in exactly one file. What
+made it *feel* like `ContentSource` was that the swap seemed certain; certainty about the swap is
+the cheap half of the test, and on its own it justifies anything.
+
+The rest of the pipeline is the seam done right, and it is worth seeing the two side by side.
+`AnalyticsProjector` **writes** to ClickHouse, has a consumer, has a nightly reconciliation, and
+ships. ClickHouse itself is in the compose file and **stopped**, and `CLICKHOUSE_URL` is unset.
 
 **"The seam is implemented" and "the store is started" are two decisions, and only the second one is
-expensive to be wrong about.** Preparing for a future twice would be running it.
+expensive to be wrong about.** But an unused seam is not free either: it is two implementations kept
+in step by hand, against a shape no consumer has ever tested. Preparing for a future twice would be
+running the store; preparing for it wrongly is guessing at the interface years early.
 
 ---
 

@@ -27,8 +27,8 @@ instances, S3/MinIO, Loki, the Alloy agent that ships stdout to it, and ClickHou
 not reach a bundle" and files a log aggregator under build tooling.
 
 **Some of them are reached from code, and reached over a protocol is not the same as imported.**
-`ClickHouseAnalyticsReader` and `LokiLogReader` are real adapters behind real ports, and both are
-`fetch` against a documented HTTP API — no `@clickhouse/client`, no Loki SDK, nothing added to a
+`ClickHouseAnalyticsProjector` and `LokiLogReader` are real adapters behind real ports, and both
+are `fetch` against a documented HTTP API — no `@clickhouse/client`, no Loki SDK, nothing added to a
 manifest. `OpenAiEmbeddingProvider` was the first instance of that pattern; these two are why it is a
 pattern rather than a one-off.
 

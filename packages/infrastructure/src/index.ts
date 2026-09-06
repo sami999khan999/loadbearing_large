@@ -7,7 +7,6 @@ ServerOnly.assert("@loadbearing/infrastructure");
 export { BullMqQueuePublisher, QueueName } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
-  ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
@@ -22,7 +21,6 @@ export {
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,

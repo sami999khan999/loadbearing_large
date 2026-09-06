@@ -11,7 +11,6 @@ export {
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,

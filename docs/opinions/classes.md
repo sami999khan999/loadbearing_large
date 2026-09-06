@@ -29,9 +29,9 @@ nothing. If a class fits none of `UseCase`, `Repository`, `Gateway`, `Store`, `R
 wants splitting. `Policy` is the escape valve for a domain rule too broad for one entity.
 
 The list is longer than it looks because it is descriptive: every suffix on it names a port that
-exists. A `Reader` reads and never writes — `AnalyticsReader` is the whole reason that distinction is
-worth a word, because a write method on it would silently make a derived store authoritative
-([Data and scale](data-and-scale.md) §2). Adding a suffix means adding a row here and a row in
+exists. A `Reader` reads and never writes — `LogReader` is the whole reason that
+distinction is worth a word, because a write method on it would silently make a derived store
+authoritative ([Data and scale](data-and-scale.md) §2). Adding a suffix means adding a row here and a row in
 [Files](files.md), which is the friction that keeps `Manager` out.
 
 ## Methods
@@ -48,12 +48,12 @@ worth a word, because a write method on it would silently make a derived store a
 | Boolean | `is` / `has` / `can` / `should` prefix | `isLockedFromAssignee()` |
 | Assertion (throws) | `assert<X>` | `authorizer.assert(...)` |
 | Predicate (returns) | `can<X>` | `capabilities.can(...)` |
-| Aggregate read | the metric, pluralised | `goalRiskScores(goalIds)` |
+| Aggregate read | the metric, pluralised | `dailyCounts(from, to)` |
 
 **An aggregate read is the one row with no verb prefix, and that is deliberate.** `findBy<X>` returns
-entities; these return numbers over a window, so `findByGoalRiskScore` would be a lie about what
-comes back. Name the metric and let the plural carry the "many" — and keep the permitted scope in
-the signature, because an analytics store cannot resolve a `CapabilitySet` for you.
+entities; these return numbers over a window, so `findByDailyCount` would be a lie about what comes
+back. Name the metric and let the plural carry the "many" — and keep any permitted scope in the
+signature, because a derived store cannot resolve a `CapabilitySet` for you.
 
 **The `assert` vs `can` split is worth internalising.** `can()` answers a question; `assert()`
 enforces an outcome. Mixing them produces the exact bug this architecture exists to prevent — a UI

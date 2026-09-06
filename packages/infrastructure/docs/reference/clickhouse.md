@@ -15,9 +15,9 @@ rather than a correctness one, and it survives exactly as long as the two guards
 | | |
 | --- | --- |
 | **Folder** | `packages/infrastructure/src/clickhouse/` |
-| **Ports** | `AnalyticsReader` (read), `AnalyticsProjector` (write) |
+| **Ports** | `AnalyticsProjector` (write). There is no read port — see below |
 | **Config** | `analytics.clickhouse` on `ContainerConfig`; `CLICKHOUSE_*` in the environment |
-| **Container** | `container.analytics`, `container.projector`, `container.hasProjector` |
+| **Container** | `container.projector`, `container.hasProjector` |
 | **Compose** | `--profile analytics`, stopped by default |
 | **Dependency** | none — `fetch` against the HTTP interface |
 
@@ -54,25 +54,20 @@ offending row.
 
 ---
 
-## Two adapters, not one
+## One adapter, and it only writes
 
-`ClickHouseAnalyticsReader` answers the two dashboard questions and is reachable from a request path.
-`ClickHouseAnalyticsProjector` writes, and is reachable only from the worker's schedules.
+`ClickHouseAnalyticsProjector` writes, and is reachable only from the worker's schedules. Nothing in
+a request path can reach ClickHouse at all.
 
-**A single class with both would put `project()` on the object a dashboard query holds.** The split is
-the first guard: *nothing writes to ClickHouse except the projection consumer* — no direct writes from
-use-cases, no hand-run backfills that are not replays.
+There used to be a second adapter. `ClickHouseAnalyticsReader` answered two dashboard questions
+beside a Postgres twin, behind an `AnalyticsReader` port, with `ANALYTICS_DRIVER` choosing between
+them — and nothing ever called either one, so the port, both adapters and the flag were deleted.
+The projector is the half that has a consumer.
 
-The reader is a straight parallel to `PgAnalyticsReader`, down to the awkward part:
-`goalRiskScores(goalIds)` carries no tenant, so `organization_id` is unavailable as a leading sorting
-key and `goal_risk_daily` is ordered on `(goal_id, period, organization_id)` instead. Postgres solves
-the same problem with `goal_risk_daily_goal_idx`. One port, one pair of questions, two stores — a
-driver flip changes where the answer comes from, never what it is.
-
-> [!WARNING]
-> **`reliabilityTrend` recomputes from the stored components and never averages the stored ratios.**
-> The mean of per-goal ratios is not the ratio across goals. This is the implementation where that is
-> easiest to get wrong, because a column store makes `avg(score)` look like the obvious query.
+**Keeping them separate classes still matters when the reader returns**, because a single class with
+both would put `project()` on the object a dashboard query holds. That split is the first guard:
+*nothing writes to ClickHouse except the projection consumer* — no direct writes from use-cases, no
+hand-run backfills that are not replays.
 
 ---
 
@@ -144,35 +139,38 @@ pnpm infra:up:analytics          # starts the container; nothing writes to it ye
 
 1. **Set `CLICKHOUSE_URL`.** The container builds a projector, the worker registers
    `analytics-projection` (every five minutes) and `analytics-reconcile` (nightly), and the store
-   starts filling. `ANALYTICS_DRIVER` is still `postgres`, so no dashboard has moved.
+   starts filling. Nothing reads it.
 2. **Watch `analytics.reconciliation.completed` come back clean for a few days**, and
    `analytics.projection.completed` report a `lagSeconds` that is not growing.
-3. **Flip `ANALYTICS_DRIVER=clickhouse`.** One variable, one process restart, no call site touched.
+3. **Write the reader the dashboard needs**, against a store that has been filling and reconciling
+   for days rather than one that started this morning.
 
-Doing it in one step cuts reads over to a store that is still filling. The two-variable arrangement
-exists to make the wrong order hard to reach by accident.
-
-**Not started by `pnpm infra:up`.** The seam exists, the container exists, and until step 1 nothing
-writes to it — a running analytics store with no consumer looks like a decision somebody made.
+**Not started by `pnpm infra:up`.** The pipeline exists, the container exists, and until step 1
+nothing writes to it — a running analytics store with no consumer looks like a decision somebody
+made.
 
 > [!IMPORTANT]
-> `ANALYTICS_DRIVER=clickhouse` with no `CLICKHOUSE_URL` throws at container construction. The
-> alternative is a silent fall back to Postgres: the dashboard keeps answering, out of the store the
-> operator believed they had moved off.
+> There is no read driver, and its absence is the guard. A flag that moved reads the moment the
+> pipeline started would cut a dashboard over to a store that is still backfilling; a reader that
+> does not exist cannot be flipped by accident.
 
 ---
 
 ## What is not wired, and is not meant to be
 
-`goal_risk_daily` and `user_reliability_daily` exist in ClickHouse and in Postgres, with the same
-columns and the same grain. **Neither is written yet, in either store** — the rollup job is move #2 in
-[Data and scale](../../../../docs/opinions/data-and-scale.md), and it is deliberately not built in
-advance.
+**Nothing reads ClickHouse.** The projection fills `activity_events` and the reconciliation checks
+it, and that is the whole of it.
 
-The tables are here so adopting ClickHouse is not also a schema exercise, and so the two
-`AnalyticsReader` implementations stay honestly interchangeable: both answer from rollups, and both
-answer nothing until the rollups are filled. An implementation that quietly returned real data while
-its counterpart returned none would make the driver flip a behaviour change rather than a swap.
+Two rollup tables used to sit beside `activity_events` here and in Postgres, with the same columns
+and the same grain, answering an `AnalyticsReader` port from both stores. Neither was ever written
+to, in either store — the rollup job is move #2 in
+[Data and scale](../../../../docs/opinions/data-and-scale.md) and was never built — and nothing ever
+read them. Two empty tables, two adapters and a driver flag, all kept in step by hand to serve a
+question nobody asked. They were deleted rather than filled.
+
+What survives is the part that had a consumer, and the argument for the rest is in
+[Simplicity](../../../../docs/opinions/simplicity.md): the store running and the seam existing are
+two decisions, and a seam guessed at years early is not free just because it is cheap.
 
 A materialized view computing those rollups inside ClickHouse would work and is the obvious
 shortcut. It is also the exact move

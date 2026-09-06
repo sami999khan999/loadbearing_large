@@ -472,7 +472,7 @@ pnpm add --filter @loadbearing/composition @loadbearing/core@workspace:* @loadbe
 ```
 > The DI root. It is the only package that knows both the abstract ports and every concrete implementation, because wiring them together is its entire job. Server-only.
 >
-> `observability` is on the list because `Container` constructs the `JsonLogger` and `ContainerConfig` names its `LogLevel`. `contracts` is there for the branded ids two port signatures use — `VectorStore.upsert` and `AnalyticsReader.goalRiskScores` — which `TestContainer`'s fakes cannot override without them ([17](17-composition-container.md)).
+> `observability` is on the list because `Container` constructs the `JsonLogger` and `ContainerConfig` names its `LogLevel`. `contracts` is there for the branded ids the port signatures use — `VectorStore.upsert` and `ActivityReplayReader.since` among them — which `TestContainer`'s fakes cannot override without them ([17](17-composition-container.md)).
 
 ### `@loadbearing/asset`
 ```bash

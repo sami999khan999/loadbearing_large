@@ -7,12 +7,6 @@ export {
   type ProjectionCheckpoint,
 } from "./activity-replay.reader.js";
 export { AnalyticsProjector } from "./analytics.projector.js";
-export {
-  AnalyticsReader,
-  type DateRange,
-  type RiskScore,
-  type TrendPoint,
-} from "./analytics.reader.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
 export { type EmailMessage, EmailSender } from "./email.sender.js";

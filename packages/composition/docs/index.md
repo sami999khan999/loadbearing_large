@@ -49,7 +49,6 @@ packages/composition/src/
     ├── recording-email.sender.ts     → RecordingEmailSender
     ├── recording-maintenance.gateway.ts → RecordingMaintenanceGateway
     ├── recording-queue.publisher.ts  → RecordingQueuePublisher, PublishedJob
-    ├── stub-analytics.reader.ts      → StubAnalyticsReader
     ├── stub-embedding.provider.ts    → StubEmbeddingProvider
     └── stub-session.resolver.ts      → StubSessionResolver
 

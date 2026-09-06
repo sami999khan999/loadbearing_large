@@ -8,7 +8,7 @@
 > one seam in two places. Everything below is now `packages/infrastructure/src/pg/`; the other stores
 > are [15](15-infrastructure-package.md).
 
-**Delivers:** RBAC tables with `organization_id` on every one, `CapabilityRepository`, a migration pipeline whose first migration is already partitioned, `PgAnalyticsReader`, and the four system roles.
+**Delivers:** RBAC tables with `organization_id` on every one, `CapabilityRepository`, a migration pipeline whose first migration is already partitioned, and the four system roles.
 
 **Prerequisite:** [12 · `@loadbearing/application`](12-application-package.md)
 
@@ -47,7 +47,6 @@ packages/infrastructure/
     │   ├── pg-activity.logger.ts          → PgActivityLogger
     │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
     │   ├── pg-activity-replay.reader.ts   → PgActivityReplayReader
-    │   ├── pg-analytics.reader.ts         → PgAnalyticsReader
     │   ├── pg-api-key.repository.ts       → PgApiKeyRepository
     │   ├── pg-capability.repository.ts    → PgCapabilityRepository
     │   ├── pg-maintenance.gateway.ts      → PgMaintenanceGateway
@@ -96,7 +95,6 @@ export {
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
-  PgAnalyticsReader,
   PgApiKeyRepository,
   PgCapabilityRepository,
   PgMaintenanceGateway,

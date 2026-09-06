@@ -38,7 +38,6 @@ describe("TestContainer", () => {
       "activity",
       "activityArchive",
       "activityReplay",
-      "analytics",
       "analyticsProjector",
       "authorizer",
       "cache",

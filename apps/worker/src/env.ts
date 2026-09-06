@@ -40,9 +40,8 @@ const Schema = z.object({
   // A driver plus the connection detail it needs, so adopting a store is these variables
   // and nothing else.
   VECTOR_DRIVER: z.enum(["pgvector"]).default("pgvector"),
-  ANALYTICS_DRIVER: z.enum(["postgres", "clickhouse"]).default("postgres"),
-  // Their absence keeps ClickHouse stopped. Present without the driver is the supported
-  // half-way state: the projection runs while reads come from Postgres.
+  // Their absence keeps ClickHouse stopped. Present, the projection and its
+  // reconciliation run; no feature reads the store back yet.
   CLICKHOUSE_URL: z.url().optional(),
   // ClickHouse's own out-of-the-box values: a default naming the project would be a
   // credential baked into shipped code.
@@ -120,7 +119,6 @@ export class Env {
       // Undefined unless a URL was given, which is what `Container` branches on: a
       // partly-filled object builds a connection pointed at nothing.
       analytics: {
-        driver: e.ANALYTICS_DRIVER,
         clickhouse: e.CLICKHOUSE_URL
           ? {
               url: e.CLICKHOUSE_URL,
