@@ -2112,9 +2112,25 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     the second run should be a no-op rather than an error.
   - The recipe is now `docs/setup/13`, "writing a unique-index migration" — the other half of
     `P8.16`.
-- [ ] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive`. It is the only one
+- [x] `P8.15` **unpartitioned append-only tables** `P2` — `activity_archive`. It is the only one
   left: `P5.12` deleted `goal_risk_daily` and `user_reliability_daily`. Partition by month in a
   migration; hand-edit the DDL as `activity_log` did. **Docs:** `docs/opinions/data-and-scale.md`.
+  `done: 2026-09-06` — **closed by not doing it, and the docs now say why.**
+  - **`activity_archive` gains twelve rows a year.** `period` is the primary key, one row per
+    archived month, written by the `archive-monthly` schedule (`0 4 1 * *`) and by nothing else.
+    Partitioning by month would put exactly one row in each partition; after a decade the whole
+    table is a hundred and twenty rows, which is a page.
+  - **The rule it appears to break is missing a qualifier, and that is the actual fix.**
+    `docs/opinions/data-and-scale.md` §4.2 already gives the criterion — "grow forever" *and*
+    "queried by recent time window" — but `docs/ai/rules/data.md` had compressed it to "append-only
+    tables partitioned in the first migration", which reads as covering this one. Append-only is not
+    the test; append-only **and growing with activity** is. A table that gains rows because
+    something happened is a candidate; one that gains rows because time passed is not.
+  - **It looks like a candidate because it sits beside `activity_log` and describes the same data.**
+    That is exactly why the exception is written down next to `session`'s rather than left for the
+    next reader to re-derive.
+  - No migration, no code change. `docs/setup/13`'s hand-edited partition DDL stays the worked
+    example for a table that does need it.
 - [ ] `P8.16` **migrations that fail on existing data** `P2` `~1h` — `0003` and `0004` add
   unique indexes with no de-dup; `0004` drops `memberships_uq` before recreating it. Ship a
   migration that is idempotent, and a `docs/setup/13` section "writing a unique-index migration"

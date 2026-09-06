@@ -295,6 +295,12 @@ Three consequences that are easy to miss:
 ### 4.2 Partition the append-only tables
 
 `activity_log` and `task_status_history`. Both grow forever, both are queried by recent time window.
+Only the first is a shipped table — `task_status_history` belongs to the worked `task` feature and is
+here as the second example, because one example makes a rule look like a special case.
+
+**Both halves of that sentence are the test, and the second is the one people drop.** Append-only is
+not the criterion; append-only *and growing with activity* is. A table that gains rows because
+something happened is a candidate; a table that gains rows because time passed is not.
 
 ```sql
 CREATE TABLE activity_log (
@@ -334,6 +340,17 @@ one: Better Auth updates it on refresh, deletes it on sign-out, and looks rows u
 predicate carrying no partition key, so every lookup would scan every partition. It is bounded by
 expiry instead, and a `DELETE … WHERE expires_at < now()` on the cleanup schedule is the right tool
 ([25](../setup/25-worker-app.md)).
+
+**`activity_archive` is not on it either, and it is the case the rule reads as covering.** It is
+genuinely append-only — one row per archived month, `period` as the primary key, written by the
+`archive-monthly` schedule and by nothing else. It is also **twelve rows a year**. Partitioning it
+would put one row in each partition and buy nothing at any horizon anyone will operate over: after a
+decade it is a hundred and twenty rows, which is a page.
+
+The reason it looks like a candidate is that it sits beside `activity_log` and describes the same
+data. It grows with the *calendar*, not with the audit trail — which is the distinction the sentence
+above exists to make, and the reason to state it rather than leave it to be re-derived by whoever
+notices the table next.
 
 **Decide the retention policy at the same time.** The common shape: 12–24 months of detail in
 Postgres, aggregates forever in the analytics store, older partitions detached to cold storage.
