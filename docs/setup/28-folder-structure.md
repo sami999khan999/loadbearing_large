@@ -433,7 +433,7 @@ packages/infrastructure/
     │   └── clickhouse-analytics.projector.ts → ClickHouseAnalyticsProjector
     ├── loki/                                 ← opt-in: built only when LOKI_URL is set
     │   └── loki-log.reader.ts                → LokiLogReader
-    (smoke.ts is above src/)                   ← the wiring check, against live containers
+    (tests/smoke/ is beside src/)              ← the wiring check, against live containers
 ```
 
 **`drizzle.config.ts` and `migrations/` sit above `src/`** because they are build-time artefacts, not

@@ -6,7 +6,6 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "migrate.ts",
-    "seed.ts",
-    "smoke.ts"
+    "seed.ts"
   ]
 }

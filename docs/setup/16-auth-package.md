@@ -729,7 +729,7 @@ The barrel grows with the slices below it — `MembershipEnroller`, `InvitationC
 `OrganizationFounder` and `InvitationClaimingEnroller` from `session/`, and the plugin from
 `plugin/` — each named explicitly, because `export *` would make the public surface an accident.
 
-**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `smoke.ts` ([15](15-infrastructure-package.md)).
+**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `seed.ts` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
 

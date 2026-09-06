@@ -648,80 +648,57 @@ Folder barrels name their exports for the same reason root barrels do — and he
 
 ---
 
-## Step 15.7 — A smoke test
+## Step 15.7 — A smoke suite
 
-Not a unit test — these classes are adapters and testing them against fakes tests nothing. Write one
-script that exercises every one of them against the running containers.
+Not a unit test — these classes are adapters, and testing an adapter against a fake tests the fake.
+`packages/infrastructure/tests/smoke/` exercises every one of them against the running containers,
+and it is a vitest suite rather than a script for one reason: a script that prints is checked by a
+person reading the output, and nobody reads the output of a step that exits 0.
 
-**The two opt-in stores are checked when configured and skipped with a line when they are not.** A
-smoke run against a stack that does not include them should say so and pass, rather than fail on a
-service nobody started.
+```bash
+pnpm smoke
+```
+
+It runs under its own config, `vitest.smoke.config.ts`, and the default `vitest run` excludes
+`tests/smoke/**`. The split is what lets the rest of the suite need only Postgres while this half
+needs S3, Loki and both Redis instances — and it is why `pnpm test` on a laptop with nothing running
+still tells you something. The smoke config loads the repository root `.env`, runs the files
+serially, and allows thirty seconds a test: two suites racing on the same bucket and the same queue
+key is a flake that only reproduces on a fast machine.
+
+**The two opt-in stores skip with a named reason rather than silently.** `describe.skipIf` on
+`LOKI_URL` and `CLICKHOUSE_URL`, so a stack without them reports `skipped` in the summary — a suite
+that silently contains no tests is indistinguishable from one that ran.
+
+**This is the only exercised path three ports have.** `StorageGateway.presignUpload` and
+`presignDownload` are used by the browser and by nothing in this repository, so a URL that is wrong
+is wrong in a browser and nowhere else: the suite signs one of each and actually fetches and PUTs
+through them. `QueuePublisher.publish` is the port's whole write surface, and the job is read back
+through BullMQ's own `getJob` rather than off a Redis key — the key layout is theirs to change, and
+a spec that pins it fails on an upgrade that broke nothing. `LogReader.query` runs a real
+`query_range` and asserts the shape of every entry it parses, and deliberately nothing about a
+particular line: that would make the check depend on something having been logged recently, which is
+a flaky test rather than a wiring check.
 
 The ClickHouse probe inserts **the same row twice** and expects to read back one. That is not a
 formality: the projection consumer's idempotency rests entirely on `ReplacingMergeTree` collapsing a
 redelivered batch, and an `ENGINE = MergeTree` typo in the init script stays invisible until a
 redelivery doubles a quarter's numbers.
 
-The Loki probe runs a real `query_range` and prints what came back, but deliberately asserts nothing
-about a particular line — that would make the check depend on something having been logged recently,
-which is a flaky test rather than a wiring check.
+The storage probe asserts the read-back *after* `deletePrefix` and after `delete`. Without those
+lines the prune reported success while deleting nothing — `SCAN` returns fully-prefixed keys, and
+passing them straight to `unlink` prefixes them a second time.
 
-**`packages/infrastructure/smoke.ts`**
-
-```ts
-import "dotenv/config";
-import { RedisCacheStore } from "./cache/index.js";
-import { BullMqQueuePublisher, QueueName } from "./queue/index.js";
-import { RedisConnection } from "./redis/index.js";
-import { S3StorageGateway, StorageKey } from "./storage/index.js";
-
-const redis = new RedisConnection({
-  cacheUrl: process.env.REDIS_CACHE_URL!,
-  queueUrl: process.env.REDIS_QUEUE_URL!,
-});
-
-const cache = new RedisCacheStore(redis.client());
-await cache.set("smoke:probe", { ok: true }, 30);
-console.log("cache:", await cache.get("smoke:probe"));
-await cache.deletePrefix("smoke:");
-
-const storage = new S3StorageGateway({
-  endpoint: process.env.S3_ENDPOINT!,
-  region: process.env.S3_REGION!,
-  bucket: process.env.S3_BUCKET!,
-  accessKey: process.env.S3_ACCESS_KEY!,
-  secretKey: process.env.S3_SECRET_KEY!,
-  forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
-});
-
-const key = StorageKey.build("smoke", "probe.txt", new Date());
-await storage.put(key, new TextEncoder().encode("hello"), "text/plain");
-console.log("storage:", new TextDecoder().decode(await storage.get(key)));
-console.log("presigned:", (await storage.presignDownload(key, 60)).slice(0, 80), "…");
-await storage.delete(key);
-
-const publisher = new BullMqQueuePublisher(redis.queueClient());
-await publisher.publish(QueueName.MAINTENANCE, { probe: true }, { jobId: "smoke-probe" });
-console.log("queue: published");
-
-await publisher.close();
-await redis.close();
-```
-
-```bash
-pnpm add --filter @loadbearing/infrastructure -D dotenv tsx@catalog:
-pnpm --filter @loadbearing/infrastructure run smoke
-```
-
-It lives **above** `src/`, beside `drizzle.config.ts`, `migrate.ts` and `seed.ts` — a runnable script is a build-time artefact rather than library code, and one that lives in a folder makes that folder's barrel execute a script when somebody imports it. That is the failure `seed.ts` was moved out for. `tsup` only builds `src/index.ts`, so none of them reaches `dist/` either way.
-
-**Keep it.** It is cheap to re-run after any infrastructure change, and it is the only thing that exercises these classes against real containers. Assert a read-back *after* `deletePrefix` — without that line the prune above reported success while deleting nothing.
+**The `compose` CI job runs it** ([26](26-hygiene-and-ci.md)), against the containers
+`infra/docker-compose.yml` actually starts, which is the only place `LOKI_URL` is set.
 
 ---
 
 ## ✅ Gate
 
-The smoke script prints a cache round-trip, a storage round-trip, a presigned URL, and a published job — with no errors.
+`pnpm smoke` passes against a booted stack: a cache round-trip and its prune, a storage
+round-trip, both presigned URLs actually used, a published job read back, and Loki answering a
+query — with ClickHouse skipped by name unless `CLICKHOUSE_URL` is set.
 
 ```bash
 grep -rn "ioredis\|@aws-sdk\|bullmq" packages --include=*.ts | grep -v "packages/infrastructure"

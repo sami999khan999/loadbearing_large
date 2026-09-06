@@ -1518,10 +1518,36 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     (`LogReader`, `ActivityReplayReader.dailyCounts`, `ClickHouseAnalyticsProjector`).
   - **`T-034` filed:** bring the reader back with the first dashboard, against a store that has been
     reconciling for days — and keep `goalIds` a required resolved parameter when it returns.
-- [ ] `P5.13` **`LogReader`, `StorageGateway.presign*`, `QueuePublisher.publish`** — keep
+- [x] `P5.13` **`LogReader`, `StorageGateway.presign*`, `QueuePublisher.publish`** — keep
   (they are the seams the README advertises) but make `smoke` a vitest suite under
   `packages/infrastructure/tests/smoke/` that CI's integration job runs, so each has one
-  exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI).
+  exercised path. **Depends on:** `P3.2`, `P8.12` (MinIO in CI). `done: 2026-09-06`
+  - **Thirteen tests in three files, and `smoke.ts` is gone.** A script that prints is checked by a
+    person reading the output, and nobody reads the output of a step that exits 0 — which is what
+    the old one had become the moment CI started running it.
+  - **The three ports get the paths the entry asked for.** `presignUpload` and `presignDownload`
+    are used by the browser and by nothing in this repository, so the suite signs one of each and
+    actually fetches and PUTs through them — a wrong URL is wrong in a browser and nowhere else.
+    `QueuePublisher.publish` is read back through BullMQ's own `getJob` rather than off a Redis
+    key, because the key layout is theirs to change and a spec that pins it fails on an upgrade
+    that broke nothing; a second test covers the deduplication key, which is a business rule the
+    port carries. `LogReader.query` asserts the shape of every entry it parses and deliberately
+    nothing about a particular line.
+  - **The environment is read in `vitest.smoke.config.ts` and injected**, not read in the specs.
+    `noProcessEnv` and assertion 3 both walk `tests/`, so a harness reading it directly would have
+    needed an exemption in two places — the same reasoning `apps/web`'s vitest config already
+    records. `provide`/`inject` keeps the read at one boundary and types it.
+  - **Split configs, so `pnpm test` still means something on a laptop with nothing running.** The
+    default run excludes `tests/smoke/**`; `pnpm smoke` runs them serially with a thirty-second
+    timeout. Loki and ClickHouse skip by name through `describe.skipIf`, because a suite that
+    silently contains no tests is indistinguishable from one that ran.
+  - **Not verified locally, and this is the honest half.** The container stack this environment had
+    been running went away partway through — no Docker daemon to restart it — so the suite was
+    exercised only as far as it can go without services: the config resolves and injects, the three
+    skip decisions report correctly, and the presign-shape test passes because signing needs no
+    network. Everything else is proved by CI's `compose` job, which is the only place `LOKI_URL` is
+    set. `packages/infrastructure` and `packages/composition` could not be re-run locally either,
+    for the same reason; the other 795 tests pass.
 - [x] `P5.14` **Event codes never emitted** — eight of twenty-two, `cache.entry.corrupt` having
   been closed by `P2.10`. Emit the ones with an obvious site: `queue.job.failed` (every
   consumer's `failed` handler — today they call `logger.failure`), `embedding.request.failed`
