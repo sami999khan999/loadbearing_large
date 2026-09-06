@@ -24,12 +24,20 @@ describe("PermissionRegistry", () => {
 
   it("groups keys by module and returns nothing for a module it has never seen", () => {
     // Insertion order of the fragments merged in `catalog/index.ts`.
-    expect(registry.modules()).toEqual(["core", "rbac", "ai"]);
+    expect(registry.modules()).toEqual(["core", "rbac", "member", "apikey", "ai"]);
 
     const grouped = registry.modules().flatMap((module) => registry.byModule(module));
     expect(grouped).toHaveLength(registry.all().length);
 
     expect(registry.byModule("finance")).toEqual([]);
+  });
+
+  // The regression guard: `member.*` and `apikey.*` declared `module: "rbac"`, so
+  // `byModule("member")` answered nothing about a module that has a gate.
+  it("declares the module its key opens with", () => {
+    for (const key of registry.all()) {
+      expect(key.startsWith(`${registry.meta(key)?.module}.`)).toBe(true);
+    }
   });
 
   it("carries scope on the permission rather than the check", () => {

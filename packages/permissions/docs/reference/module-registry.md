@@ -8,6 +8,18 @@ description: ModuleRegistry — nav gates as a second registry, why content may 
 The permission catalog answers "may this actor do X." The module registry answers "should this actor
 see the finance section at all," which is a different question with a different owner.
 
+**The two module vocabularies are not the same set, and that is deliberate.**
+`PermissionMeta.module` groups the catalog — it is the first segment of every key, by the grammar
+`<module>.<subject>.<action>`, and `EffectivePermissionsInspector` renders one section per value.
+`ModuleKey` is `keyof typeof GATES`: the modules something navigates to. `apikey` is a grouping
+module with no gate, the same way `accountRoutes` declares routes with no gate — nothing links to
+API keys yet.
+
+They drifted once, in the direction that is hard to see: `member.*` and `apikey.*` declared
+`module: "rbac"` while opening with their own name, so `byModule("member")` answered nothing about
+a module that has a gate, and the inspector filed five keys under a heading they do not belong to.
+A spec now asserts that every key opens with the module it declares.
+
 ```ts
 export interface ModuleGate {
   readonly permission: PermissionKey;

@@ -36,7 +36,11 @@ packages/permissions/
 │   │   └── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
 │   ├── catalog/                     ← one fragment per slice, team-owned
 │   │   ├── index.ts                 ←   merges fragments (platform-owned)
-│   │   └── rbac.permissions.ts
+│   │   ├── core.permissions.ts      ←   held by every principal (rule 5)
+│   │   ├── rbac.permissions.ts
+│   │   ├── member.permissions.ts
+│   │   ├── apikey.permissions.ts
+│   │   └── ai.permissions.ts
 │   ├── gate/                        ← same pattern for nav gates
 │   │   ├── index.ts
 │   │   └── rbac.gate.ts
