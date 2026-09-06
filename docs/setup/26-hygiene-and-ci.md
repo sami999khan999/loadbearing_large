@@ -377,7 +377,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The eighteen architectural assertions
+## Step 26.4 — The nineteen architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Eighteen greps can.
 
@@ -739,6 +739,29 @@ Those four arrive as `<table>_<subject>_fk_idx`, a suffix that says the index ex
 **Both 17 and 18 read the Drizzle schema, not `migrations/*.sql`.** The schema is the file a person edits and the file `db:generate` diffs against, so an index that is missing there is missing from the next migration too. The gap this leaves is a hand-edited migration — the partitioned tables in [13](13-infrastructure-postgres.md) are the precedent — and it is a gap Drizzle already has: DDL the schema does not declare is DDL the next `db:generate` proposes to drop.
 
 ---
+
+---
+
+### 19 — Every package with tests typechecks them
+
+```bash
+# every packages/*, apps/* and tooling/* with a tests/ dir: does the tsconfig its
+# `typecheck` script names include a tests/ pattern?
+```
+
+**Why.** A `tsconfig.json` that includes `src/**` only leaves the tests to vitest, whose transform
+erases types and checks none of them. A test double that falls behind its port then compiles, and
+keeps passing for as long as nobody calls the method it never implemented.
+
+That is not hypothetical. Turning this on across the repository surfaced **ninety-seven** errors in
+seven packages, all of them test code that had drifted: stubs missing four methods of the port they
+claimed to implement, a `SessionOrganization` fake without the `roleName` every real one carries, a
+type-only import of `ApiKeyRecord` from a module that has never exported it, and ids held as
+`string` where the column is branded.
+
+The assertion reads the config the package's own `typecheck` script names — `-p <file>` if it gives
+one, `tsconfig.json` otherwise. `apps/worker` is why: it builds with `tsc` and a `rootDir` of
+`src`, so its tests cannot live in the build config and sit in `tsconfig.test.json` instead.
 
 ---
 

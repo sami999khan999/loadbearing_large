@@ -9,10 +9,18 @@ import { ApiClientProvider } from "@loadbearing/query";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type RenderResult, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { SessionProvider, type SessionUser } from "../../src/auth/session.context.js";
+import {
+  type SessionOrganization,
+  SessionProvider,
+  type SessionUser,
+} from "../../src/auth/session.context.js";
 import { MessageProvider } from "../../src/i18n/message.context.js";
 
-export const TEST_ORGANIZATION = { id: "00000000-0000-7000-8000-0000000000a1", name: "Acme" };
+export const TEST_ORGANIZATION: SessionOrganization = {
+  id: "00000000-0000-7000-8000-0000000000a1",
+  name: "Acme",
+  roleName: "Owner",
+};
 
 export const TEST_USER: SessionUser = {
   id: "00000000-0000-7000-8000-000000000001",

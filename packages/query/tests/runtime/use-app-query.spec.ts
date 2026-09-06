@@ -18,16 +18,18 @@ describe("useAppQuery", () => {
       queryFn: () => Promise.resolve({ id: "a", count: 1 }),
     });
 
-    expectTypeOf(
-      useAppQuery<
-        { id: string; count: number },
-        Error,
-        { id: string; count: number },
-        readonly ["probe"]
-      >,
-    )
-      .parameter(0)
-      .toMatchTypeOf(options);
+    // Stated as "what `queryOptions` produces is accepted here", which is the direction
+    // the call sites depend on. The reverse reads the same and is not true of either.
+    expectTypeOf(options).toExtend<
+      Parameters<
+        typeof useAppQuery<
+          { id: string; count: number },
+          Error,
+          { id: string; count: number },
+          readonly ["probe"]
+        >
+      >[0]
+    >();
   });
 
   it("returns a result narrowed to the query's data", () => {

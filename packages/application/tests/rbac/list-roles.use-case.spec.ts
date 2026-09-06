@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 import { ListRolesUseCase } from "../../src/rbac/list-roles.use-case.js";
-import type { RolePage, RoleRepository } from "../../src/rbac/role.repository.js";
+import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
 const OTHER_ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000b0");
@@ -45,7 +45,23 @@ class RecordingRoleRepository implements RoleRepository {
     });
   }
 
-  public findById(): Promise<null> {
+  public findById(): Promise<RoleRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public findByKey(): Promise<RoleRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public save(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public delete(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public countAssignments(): Promise<number> {
     throw new Error("not under test");
   }
 }

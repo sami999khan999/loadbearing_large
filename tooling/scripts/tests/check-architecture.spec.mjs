@@ -19,7 +19,12 @@ const made = [];
 
 // A package is a directory under `packages/` with a manifest -- that is what makes it one
 // to `packageDirs()`, and a fixture without the manifest is a directory nothing walks.
-const PKG = (name) => JSON.stringify({ name: `@fixture/${name}`, private: true });
+const PKG = (name) =>
+  JSON.stringify({
+    name: `@fixture/${name}`,
+    private: true,
+    scripts: { typecheck: "tsc --noEmit" },
+  });
 
 // Enough of a repository that every assertion either passes or skips. A test adds the one
 // file that breaks the one it is about, so a failure elsewhere is never ambient.
@@ -126,7 +131,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(18);
+    expect(results).toHaveLength(19);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -475,6 +480,53 @@ describe("17 — every unique index on a tenant table leads with organization_id
     passes(
       run(table('index("tasks_key_idx").on(t.key)')),
       "every unique index on a tenant table leads with `organization_id`",
+    );
+  });
+});
+
+describe("19 — every package with tests typechecks them", () => {
+  const withTests = (config) => ({
+    "packages/application/tsconfig.json": JSON.stringify(config),
+    "packages/application/tests/probe.spec.ts": "export {};\n",
+  });
+
+  it("catches a config that includes src only", () => {
+    fails(
+      run(withTests({ include: ["src/**/*.ts"] })),
+      "every package with tests typechecks them",
+      "includes no tests/ pattern",
+    );
+  });
+
+  it("catches a package with tests and no typecheck script", () => {
+    fails(
+      run({
+        "packages/application/package.json": JSON.stringify({ name: "@fixture/application" }),
+        "packages/application/tests/probe.spec.ts": "export {};\n",
+      }),
+      "every package with tests typechecks them",
+      "no typecheck script",
+    );
+  });
+
+  it("accepts a config that includes them, and follows a named -p file", () => {
+    passes(
+      run(withTests({ include: ["src/**/*.ts", "tests/**/*.ts"] })),
+      "every package with tests typechecks them",
+    );
+    passes(
+      run({
+        "packages/application/package.json": JSON.stringify({
+          name: "@fixture/application",
+          scripts: { typecheck: "tsc --noEmit -p tsconfig.test.json" },
+        }),
+        "packages/application/tsconfig.json": JSON.stringify({ include: ["src/**/*.ts"] }),
+        "packages/application/tsconfig.test.json": JSON.stringify({
+          include: ["src/**/*.ts", "tests/**/*.ts"],
+        }),
+        "packages/application/tests/probe.spec.ts": "export {};\n",
+      }),
+      "every package with tests typechecks them",
     );
   });
 });

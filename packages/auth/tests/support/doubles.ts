@@ -1,6 +1,13 @@
-import type { CacheStore, CapabilityRepository, CapabilitySet } from "@loadbearing/application";
-import type { OrganizationId, UserId } from "@loadbearing/contracts";
-import type { ApiKeyRecord, ApiKeyRepository } from "../../src/apikey/api-key.resolver.js";
+import type {
+  ApiKeyPage,
+  ApiKeyRecord,
+  ApiKeyRepository,
+  ApiKeySummary,
+  CacheStore,
+  CapabilityRepository,
+} from "@loadbearing/application";
+import type { ApiKeyId, OrganizationId, UserId } from "@loadbearing/contracts";
+import type { CapabilitySet } from "@loadbearing/permissions";
 import type { RequestHeaders, ResolvedSession, SessionResolver } from "../../src/import.js";
 
 // Hand-written rather than `composition`'s fakes, which would close a cycle. Each
@@ -59,9 +66,25 @@ export class StubApiKeyRepository implements ApiKeyRepository {
     return Promise.resolve(this.records);
   }
 
-  public touch(id: string, at: Date): Promise<void> {
+  public touch(id: ApiKeyId, at: Date): Promise<void> {
     this.touched.push({ id, at });
     return Promise.resolve();
+  }
+
+  public listByOrganization(): Promise<ApiKeyPage> {
+    throw new Error("not under test");
+  }
+
+  public findById(): Promise<ApiKeySummary | null> {
+    throw new Error("not under test");
+  }
+
+  public create(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public revoke(): Promise<void> {
+    throw new Error("not under test");
   }
 }
 

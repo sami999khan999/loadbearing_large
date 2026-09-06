@@ -1,5 +1,5 @@
 import type { RoleRecord } from "@loadbearing/application";
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -22,10 +22,10 @@ let repository: PgRoleRepository;
 
 // Two organizations, because a repository that cannot be shown to stop at a tenant
 // boundary has not been tested — only exercised.
-const createdUsers: string[] = [];
-const createdOrgs: string[] = [];
-let here = "";
-let elsewhere = "";
+const createdUsers: UserId[] = [];
+const createdOrgs: OrganizationId[] = [];
+let here: OrganizationId;
+let elsewhere: OrganizationId;
 
 const makeUser = async () => {
   const id = Identifiers.userId.parse(Uuid.v7());

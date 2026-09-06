@@ -84,7 +84,7 @@ class StubAuthMailer extends AuthMailer {
     return unreachable();
   }
 
-  public override sendEmailChangeConfirmation(): Promise<void> {
+  public override sendEmailChangeConfirmation(_to: string, _url: string): Promise<void> {
     return unreachable();
   }
 }
@@ -148,7 +148,7 @@ describe("AuthFactory — account linking", () => {
   // `requireLocalEmailVerified` defaults to true and is deliberately never set: false
   // lets someone pre-register at a victim's address and have their identity linked in.
   it("leaves the local-verification gate at its safe default", () => {
-    expect(optionsFor().account?.accountLinking?.requireLocalEmailVerified).toBeUndefined();
+    expect("requireLocalEmailVerified" in (optionsFor().account?.accountLinking ?? {})).toBe(false);
   });
 });
 
@@ -226,10 +226,13 @@ describe("AuthFactory — organization plugin", () => {
     const plugin = (optionsFor().plugins ?? []).find(
       (candidate) => candidate.id === "organization",
     );
-    const endpoints = Object.values(plugin?.endpoints ?? {}) as {
-      path: string;
-      options: { method: string };
-    }[];
+    // Not every plugin in the union declares `endpoints`, and the one being asked for is
+    // the reason this fails if the plugin is ever renamed.
+    const mounted = (plugin && "endpoints" in plugin ? plugin.endpoints : {}) as Record<
+      string,
+      { path: string; options: { method: string } }
+    >;
+    const endpoints = Object.values(mounted);
 
     expect(
       endpoints.map((endpoint) => `${endpoint.options.method} ${endpoint.path}`).sort(),

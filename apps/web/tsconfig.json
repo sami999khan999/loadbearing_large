@@ -1,14 +1,11 @@
 {
   "extends": "@loadbearing/tsconfig/react.json",
   "compilerOptions": {
-    // Off here, and only here. The shared base turns it on because a package that emits
-    // `dist/` wants its type-only imports erased exactly as written. TanStack Start
-    // documents it as a client/server leak: the compiler keeps an import whose bindings
-    // are all types, and a `import type { Container } from "@loadbearing/composition"`
-    // in a route file becomes a real edge in the client graph.
     "verbatimModuleSyntax": false,
     "types": ["vite/client", "node"],
-    "paths": { "~/*": ["./src/*"] }
+    "paths": {
+      "~/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "web.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "web.d.ts"]
 }

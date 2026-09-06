@@ -933,6 +933,56 @@ assert("every foreign key column has an index leading with it", (failures) => {
   return null;
 });
 
+// ── 19 — every package with tests typechecks them ────────────────────────────
+//
+// A `tsconfig.json` that includes `src/**` only compiles the tests with nothing but
+// vitest's transform, which erases types and checks none of them. A test double that
+// falls behind its port then compiles, and passes for as long as nobody calls the
+// method it never implemented. See docs/setup/26.
+
+function typecheckConfig(dir) {
+  const manifest = join(dir, "package.json");
+  if (!existsSync(manifest)) return null;
+
+  const script = JSON.parse(readFileSync(manifest, "utf8")).scripts?.typecheck;
+  if (typeof script !== "string") return null;
+
+  const named = /-p\s+(\S+)/.exec(script);
+  return join(dir, named?.[1] ?? "tsconfig.json");
+}
+
+assert("every package with tests typechecks them", (failures) => {
+  const roots = ["packages", "apps", "tooling"].map((name) => join(ROOT, name));
+  let checked = 0;
+
+  for (const base of roots.filter(existsSync)) {
+    for (const name of readdirSync(base)) {
+      const dir = join(base, name);
+      if (!existsSync(join(dir, "tests"))) continue;
+
+      const config = typecheckConfig(dir);
+      if (config === null) {
+        failures.push(`${rel(dir)} has tests/ and no typecheck script to reach them`);
+        continue;
+      }
+      if (!existsSync(config)) {
+        failures.push(`${rel(dir)} typechecks against ${rel(config)}, which does not exist`);
+        continue;
+      }
+
+      checked += 1;
+      const include = JSON.parse(withoutComments(readFileSync(config, "utf8"))).include ?? [];
+
+      if (!include.some((pattern) => pattern.startsWith("tests/"))) {
+        failures.push(`${rel(config)} includes no tests/ pattern, so nothing typechecks them`);
+      }
+    }
+  }
+
+  if (checked === 0) return "no package has a tests/ directory";
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;

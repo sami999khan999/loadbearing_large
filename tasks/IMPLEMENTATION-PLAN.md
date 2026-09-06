@@ -1660,14 +1660,40 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 - [ ] `P6.6` **query-count assertions** — `SystemRoleSeed.run` (after `P7.1`: one `IN` query),
   `PgInvitationRepository.list`, `PgMemberRepository.list`, using the `DatabaseConfig.logger`
   seam `pg-capability.repository.spec.ts:31-43` already uses.
-- [ ] `P6.7` **no package typechecks its own tests** — `tsconfig.json` includes `src/**` only,
+- [x] `P6.7` **no package typechecks its own tests** — `tsconfig.json` includes `src/**` only,
   in `apps/worker` and in every other package. Add `tsconfig.test.json`, and drop
-  `--passWithNoTests` from the worker's test script.
+  `--passWithNoTests` from the worker's test script. `done: 2026-09-06`
   - **This is not theoretical, and `P7.5` walked into it.** `StubMembershipReader` in
     `auth.factory.spec.ts` had been missing `isActive` since that method was added to the port:
     an abstract member with no implementation, compiling because nothing typechecks the file, and
     passing because the spec never calls it. A third method made it two. Both are fixed there; the
     hole that let it happen is this entry.
+  - **"Every other package" was six packages too many.** `content`, `contracts`, `core`, `errors`,
+    `observability` and `permissions` already included `tests/**`; eleven did not. Counted rather
+    than assumed, and the entry is corrected here rather than in the commit alone.
+  - **Ninety-seven errors, in seven packages, every one of them test code that had drifted.**
+    Stubs missing four methods of the port they claim to implement · a `SessionOrganization` fake
+    with no `roleName` · `StubEmbeddings` with no `dimensions` · a type-only import of
+    `ApiKeyRecord` from a module that has never exported it, and of `RedisConnection` and
+    `ActivityRecord` from packages that do not re-export them · ids held as `string` where the
+    column is branded · `expectTypeOf(...).toMatchTypeOf(value)`, which `expect-type` 1.4
+    deprecated into a type-argument-only form. All of it compiled and all of it passed, because
+    vitest's transform erases types and checks none of them.
+  - **`tsconfig.test.json` was needed once, not everywhere.** Only `apps/worker` builds with `tsc`,
+    so only there does a `rootDir` of `src` make a test file an error. Every other package builds
+    with `tsup` or vite, which read entry points rather than `include`, so widening `include` is
+    the whole change — the same shape the six already had. Its `--passWithNoTests` is gone; it has
+    five spec files.
+  - **Assertion 19 makes it permanent.** Any `packages/*`, `apps/*` or `tooling/*` with a `tests/`
+    directory must name a tsconfig that includes it, read off the package's own `typecheck` script
+    so the worker's `-p tsconfig.test.json` is followed. Verified by removing the pattern from
+    `packages/errors` and watching it fail. Three fixture cases in
+    `tooling/scripts/tests/check-architecture.spec.mjs`.
+  - **One finding left as a note, not a change.** `organizations.id` is branded and the
+    `organization_id` column on `roles` and `memberships` is not, so a read loses the brand and a
+    spec has to `Identifiers.organizationId.parse` a value that came out of the tenant column.
+    Branding those columns touches every repository that reads them and is its own entry, not this
+    one.
 - [x] `P6.8` **`tooling/scripts` fixtures** — closed by `P8.10`. `done: 2026-09-06`
 
 **Exit.** Every file named above has a spec in the mirrored `tests/` path.

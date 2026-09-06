@@ -46,7 +46,7 @@ describe("ErrorInterceptor", () => {
 
   it("carries field violations through for a validation failure", () => {
     const error = thrownBy(
-      ValidationError.fromIssues([{ path: ["email"], code: "invalid_string", message: "bad" }]),
+      ValidationError.fromIssues([{ path: ["email"], code: "invalid_string" }]),
     );
 
     // `BAD_REQUEST`, not a `VALIDATION` code of its own: the catalog is closed, and a

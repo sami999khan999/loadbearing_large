@@ -1,4 +1,5 @@
-import type { ActivityRecord, Container } from "@loadbearing/composition";
+import type { ActivityRecord } from "@loadbearing/application";
+import type { Container } from "@loadbearing/composition";
 import {
   FixedClock,
   InMemoryActivityReplayReader,

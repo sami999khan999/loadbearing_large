@@ -16,7 +16,11 @@ import type {
   NewInvitation,
 } from "../../src/member/invitation.repository.js";
 import { InviteMemberUseCase } from "../../src/member/invite-member.use-case.js";
-import type { MemberPage, MemberRepository } from "../../src/member/member.repository.js";
+import type {
+  MemberPage,
+  MemberRecord,
+  MemberRepository,
+} from "../../src/member/member.repository.js";
 import type { ActivityLogger, UnitOfWork } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
@@ -61,6 +65,22 @@ class StubRoleRepository implements RoleRepository {
     const found = organizationId === this.organizationId && roleId === ROLE;
     return Promise.resolve(found ? memberRole(organizationId) : null);
   }
+
+  public findByKey(): Promise<RoleRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public save(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public delete(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public countAssignments(): Promise<number> {
+    throw new Error("not under test");
+  }
 }
 
 class StubMemberRepository implements MemberRepository {
@@ -72,6 +92,22 @@ class StubMemberRepository implements MemberRepository {
 
   public existsByEmail(_organizationId: string, email: string): Promise<boolean> {
     return Promise.resolve(this.existing.includes(email));
+  }
+
+  public findByUser(): Promise<MemberRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public changeRole(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public setDeactivatedAt(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public countActiveOwners(): Promise<number> {
+    throw new Error("not under test");
   }
 }
 

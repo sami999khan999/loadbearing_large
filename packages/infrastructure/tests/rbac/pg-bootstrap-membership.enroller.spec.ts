@@ -1,4 +1,4 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,8 +14,8 @@ let database: Database;
 
 // Two organizations are needed to say anything about tenant scoping, so this spec creates
 // its own rather than reading the seeded one. All of it is torn down.
-const users_: string[] = [];
-const orgs: string[] = [];
+const users_: UserId[] = [];
+const orgs: OrganizationId[] = [];
 
 const makeUser = async () => {
   const id = Identifiers.userId.parse(Uuid.v7());
@@ -63,7 +63,7 @@ const enrollerFor = (slug: string | undefined) => {
   return new PgBootstrapMembershipEnroller(database, scope, slug);
 };
 
-const membershipsOf = (userId: string) =>
+const membershipsOf = (userId: UserId) =>
   database.client
     .select({ organizationId: memberships.organizationId })
     .from(memberships)

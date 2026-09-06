@@ -76,6 +76,8 @@ describe("the retry predicate", () => {
   // normalises to INTERNAL — which is not retryable.
   it("normalises an unknown throw before consulting the catalog", () => {
     expect(retryOf()(0, new Error("something from a library"))).toBe(false);
-    expect(retryOf()(0, "a string nobody should have thrown")).toBe(false);
+    // Cast because the predicate is typed `Error` and nothing enforces that at runtime,
+    // which is the case this asserts.
+    expect(retryOf()(0, "a string nobody should have thrown" as unknown as Error)).toBe(false);
   });
 });

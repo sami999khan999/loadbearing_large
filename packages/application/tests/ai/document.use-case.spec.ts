@@ -36,7 +36,13 @@ class RecordingQueue implements QueuePublisher {
 }
 
 class StubEmbeddings implements EmbeddingProvider {
-  public constructor(private readonly vectors: readonly (readonly number[])[]) {}
+  public readonly dimensions: number;
+
+  public constructor(private readonly vectors: readonly (readonly number[])[]) {
+    // Read off the vectors rather than fixed at 1536, so the double cannot claim a width
+    // its own answers do not have.
+    this.dimensions = vectors[0]?.length ?? 0;
+  }
 
   public embed(): Promise<readonly (readonly number[])[]> {
     return Promise.resolve(this.vectors);

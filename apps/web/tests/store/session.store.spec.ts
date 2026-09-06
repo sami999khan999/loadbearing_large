@@ -8,7 +8,7 @@ const OWNER: SessionSnapshot = {
     email: "owner@example.com",
     name: "Owner",
     activeOrganizationId: "o1",
-    organizations: [{ id: "o1", name: "Owner Org" }],
+    organizations: [{ id: "o1", name: "Owner Org", roleName: "Owner" }],
     twoFactorEnabled: false,
   },
   capabilities: CapabilitySet.from({
@@ -16,6 +16,7 @@ const OWNER: SessionSnapshot = {
     org: { grants: ["rbac.role.read"], denies: [] },
     goals: {},
   }).toJSON(),
+  googleEnabled: false,
 };
 
 function counting(snapshot: SessionSnapshot) {

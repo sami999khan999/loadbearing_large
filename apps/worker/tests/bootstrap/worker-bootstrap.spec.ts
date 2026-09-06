@@ -1,5 +1,6 @@
-import type { Container, RedisConnection } from "@loadbearing/composition";
+import type { Container } from "@loadbearing/composition";
 import { TestContainer } from "@loadbearing/composition";
+import type { RedisConnection } from "@loadbearing/infrastructure";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkerBootstrap } from "../../src/bootstrap/worker-bootstrap.js";
 

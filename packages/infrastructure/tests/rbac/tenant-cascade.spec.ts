@@ -1,4 +1,4 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -18,8 +18,8 @@ import {
 import { openDatabase } from "../support/database.js";
 
 let database: Database;
-let userId: string;
-let organizationId: string;
+let userId: UserId;
+let organizationId: OrganizationId;
 
 const EMBEDDING = Array.from({ length: 1536 }, (_, i) => (i === 0 ? 1 : 0));
 
@@ -27,7 +27,7 @@ const EMBEDDING = Array.from({ length: 1536 }, (_, i) => (i === 0 ? 1 : 0));
 // behind if a foreign key is still `no action`.
 const seedTenant = async () => {
   const roleId = Uuid.v7();
-  organizationId = Uuid.v7();
+  organizationId = Identifiers.organizationId.parse(Uuid.v7());
 
   await database.client
     .insert(organizations)

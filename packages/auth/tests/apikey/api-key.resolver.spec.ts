@@ -1,8 +1,9 @@
+import type { ApiKeyRecord } from "@loadbearing/application";
 import { Identifiers } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
-import { type ApiKeyRecord, ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
+import { ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
 import {
   MapCacheStore,
@@ -13,11 +14,13 @@ import {
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
 const ISSUER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
 
+const KEY_ID = Identifiers.apiKeyId.parse("018f8c00-0000-7000-8000-0000000000d1");
+
 const TOKEN = "rk_1111111111111111111111111111111111111111111111111111111111111111";
 
 function record(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
   return {
-    id: "key-1",
+    id: KEY_ID,
     organizationId: ORG,
     issuerId: ISSUER,
     tokenHash: "",
@@ -59,7 +62,7 @@ describe("ApiKeyResolver", () => {
     expect(principal?.can("rbac.role.read")).toBe(true);
     expect(principal?.can("rbac.role.manage")).toBe(true);
     expect(principal?.can("member.read")).toBe(false);
-    expect(repository.touched).toEqual([{ id: "key-1", at: expect.any(Date) }]);
+    expect(repository.touched).toEqual([{ id: KEY_ID, at: expect.any(Date) }]);
   });
 
   it("re-intersects with the issuer's live capabilities rather than the scopes frozen at creation", async () => {

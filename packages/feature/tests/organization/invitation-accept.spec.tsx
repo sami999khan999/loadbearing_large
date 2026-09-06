@@ -1,6 +1,7 @@
 import type { OrganizationClient } from "@loadbearing/api-client";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { SessionUser } from "../../src/auth/session.context.js";
 import { InvitationAccept } from "../../src/organization/invitation-accept.js";
 import { capabilitiesWith, renderWithFakes, TEST_USER } from "../support/render-with-fakes.js";
 
@@ -9,7 +10,10 @@ const PREVIEW = { organizationName: "Acme", email: TEST_USER.email, expired: fal
 const clientWith = (acceptInvitation = vi.fn()) =>
   ({ acceptInvitation }) as unknown as OrganizationClient;
 
-const render = (props: Partial<Parameters<typeof InvitationAccept>[0]>, user = TEST_USER) =>
+const render = (
+  props: Partial<Parameters<typeof InvitationAccept>[0]>,
+  user: SessionUser | null = TEST_USER,
+) =>
   renderWithFakes(
     <InvitationAccept
       preview={PREVIEW}
