@@ -6,10 +6,11 @@ import { RecordingLogger } from "../support/recording.logger.js";
 // `createTransport` is called in the constructor, so the double has to be in place
 // before the sender is built — which is what this factory orders.
 const sendMail = vi.fn();
+const close = vi.fn();
 
 vi.mock("../../src/import.js", async () => {
   const actual = await vi.importActual<typeof import("../../src/import.js")>("../../src/import.js");
-  return { ...actual, createTransport: () => ({ sendMail }) };
+  return { ...actual, createTransport: () => ({ sendMail, close }) };
 });
 
 const sender = (logger?: RecordingLogger) =>
@@ -19,6 +20,7 @@ const message = { to: "b@example.test", subject: "hello", text: "body" };
 
 afterEach(() => {
   sendMail.mockReset();
+  close.mockReset();
 });
 
 describe("SmtpEmailSender", () => {
@@ -66,5 +68,13 @@ describe("SmtpEmailSender", () => {
     sendMail.mockRejectedValue(new Error("boom"));
 
     await expect(sender().send(message)).rejects.toThrow(UnavailableError);
+  });
+
+  // Nodemailer keeps sockets open between sends, so a process that exits without closing
+  // them waits on the SMTP server to time each one out. `Container.dispose()` calls this.
+  it("closes the transport", async () => {
+    await sender().close();
+
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });

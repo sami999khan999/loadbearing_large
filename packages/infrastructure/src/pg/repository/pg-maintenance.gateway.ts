@@ -6,17 +6,18 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
   public async sweepExpired(now: Date): Promise<SweepOutcome> {
     // Two statements rather than one CTE: they hit different indexes, and a failure
     // sweeping one should not hold the other's rows.
-    const expiredSessions = await this.db
-      .delete(sessions)
-      .where(lt(sessions.expiresAt, now))
-      .returning({ id: sessions.id });
+    const expiredSessions = await this.db.delete(sessions).where(lt(sessions.expiresAt, now));
 
     const expiredVerifications = await this.db
       .delete(verifications)
-      .where(lt(verifications.expiresAt, now))
-      .returning({ id: verifications.id });
+      .where(lt(verifications.expiresAt, now));
 
-    return { sessions: expiredSessions.length, verifications: expiredVerifications.length };
+    // The command tag, never `.returning()`: the caller wants a count, and returning ids
+    // ships every expired row back over the wire to be counted and thrown away.
+    return {
+      sessions: expiredSessions.rowCount ?? 0,
+      verifications: expiredVerifications.rowCount ?? 0,
+    };
   }
 
   public async ensureActivityPartitions(
