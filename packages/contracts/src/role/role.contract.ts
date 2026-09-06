@@ -23,6 +23,25 @@ export class RoleContract {
   });
 
   public static readonly listQuery = Pagination.query;
+
+  // The wire shape of `CapabilitySetDto`, declared here rather than imported: a
+  // contract is the boundary's own statement of the shape.
+  public static readonly scopedSet = z.object({
+    grants: z.array(z.string()).readonly(),
+    denies: z.array(z.string()).readonly(),
+  });
+
+  public static readonly capabilities = z.object({
+    wildcard: z.boolean(),
+    org: RoleContract.scopedSet,
+    // Keyed by goal id. A record rather than an array, because that is what
+    // `CapabilitySet` indexes and a list would be re-keyed on every read.
+    goals: z.record(z.string(), RoleContract.scopedSet),
+  });
+
+  public static readonly inspect = z.object({ userId: Identifiers.userId });
 }
 
 export type RoleDto = z.infer<typeof RoleContract.entity>;
+export type CapabilitiesDto = z.infer<typeof RoleContract.capabilities>;
+export type InspectEffectiveInput = z.infer<typeof RoleContract.inspect>;

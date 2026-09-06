@@ -20,6 +20,7 @@ export {
   EmailSender,
   EmbeddingProvider,
   IndexDocumentUseCase,
+  InspectEffectivePermissionsUseCase,
   type InvitationMail,
   InvitationMailer,
   InviteMemberUseCase,

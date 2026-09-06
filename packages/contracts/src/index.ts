@@ -25,4 +25,11 @@ export {
 } from "./primitive/index.js";
 export { type AppContract, contract } from "./procedure/index.js";
 export { ProcedurePermissions } from "./registry/index.js";
-export { RoleContract, type RoleDto, RoleEntity, RoleProcedures } from "./role/index.js";
+export {
+  type CapabilitiesDto,
+  type InspectEffectiveInput,
+  RoleContract,
+  type RoleDto,
+  RoleEntity,
+  RoleProcedures,
+} from "./role/index.js";

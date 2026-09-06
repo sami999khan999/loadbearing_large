@@ -29,6 +29,9 @@ export const member = {
   "member.action.deactivate": "Deactivate",
   "member.action.reactivate": "Reactivate",
   "member.action.changeRole": "Change role",
+  "member.action.inspect": "Why?",
+  "member.inspect.title": "What {name} can do here",
+  "member.inspect.close": "Close",
   // Two refusals worth their own sentence, because the generic conflict copy — "someone
   // else changed this first" — is wrong about both.
   "member.error.lastOwner": "This is the only active owner. Promote someone else to owner first.",

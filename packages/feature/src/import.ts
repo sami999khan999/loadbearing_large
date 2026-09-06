@@ -21,7 +21,13 @@ export { ErrorCopy } from "@loadbearing/content";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes the server returns, plus the one value: `Password` carries the bounds the
 // server enforces, so a form cannot advertise a different floor.
-export { type InvitationDto, type MemberDto, Password, type RoleDto } from "@loadbearing/contracts";
+export {
+  type CapabilitiesDto,
+  type InvitationDto,
+  type MemberDto,
+  Password,
+  type RoleDto,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { type ErrorEnvelope, ErrorNormalizer } from "@loadbearing/errors";

@@ -1107,11 +1107,30 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `packages/composition/src/container/container.ts`.
   - **Docs:** `permissions/docs/reference/capability-set.md` (invalidation contract),
     `auth/docs/reference/capability-cache.md`, `docs/setup/27` §27.4 example.
-- [ ] `P5.2` **Effective permissions inspector** `P2` `~4h` `#api #ui`
+- [x] `P5.2` **Effective permissions inspector** `P2` `~4h` `#api #ui`
   - **Done when:** `rbac.effective` procedure (`rbac.effective.inspect`) returns the resolved
     `CapabilitySetDto` for a member; `EffectivePermissionsInspector` reads it via
     `QueryKeys.rbac.effective(userId)` (today a key with no caller); reachable from a member
-    row on `/settings/members`. **Depends on:** `P5.3`.
+    row on `/settings/members`. **Depends on:** `P5.3`. `done: 2026-09-06`
+  - **The inspector answered the wrong question.** It read `useCapabilities()` — the *viewer's*
+    set, from the session — so on a members page it showed you your own permissions next to
+    somebody else's name. It now takes an optional `userId`: absent means your own, with no round
+    trip, and present means theirs, which only the server can resolve.
+  - **The procedure resolves through `CapabilityRepository`, not `CapabilityCache`.** An inspector
+    is opened to answer "why can they do that", and a cached answer is the wrong one — so the query
+    also carries `staleTime: 0`.
+  - **Membership is checked before resolving.** Without it a uuid from another tenant resolves to
+    an empty set and reads as "this person has no permissions" rather than "not a member here".
+    Verified: a cross-tenant id returns `NOT_FOUND`, not an empty grant list.
+  - **The wire type is declared in the contract, not imported from `permissions`**, and the client
+    filters unknown keys through `PermissionRegistry.isKnown` exactly as `RoleMatrix` already does.
+    A permission the catalog no longer knows is a stale row, and the boundary is where it stops
+    being trusted.
+  - **`QueryKeys.rbac.effective` has a caller now**, which `P4.13` recorded as the one thing `query`
+    was missing.
+  - **Verified live:** an owner inspecting a member gets `{"wildcard":false,"org":{"grants":
+    ["member.read"],"denies":[]},"goals":{}}` — exactly what `SystemRoleSeed` grants that role — a
+    plain member is `FORBIDDEN` on `rbac.effective.inspect`, and a cross-tenant user is `NOT_FOUND`.
 - [x] `P5.3` **Member lifecycle** `P1` `~8h` `#api #ui`
   - **Goal:** `member.deactivate` is a key with nothing behind it; a member's role cannot be
     changed; `member.badge.deactivated` copy exists and is never rendered.

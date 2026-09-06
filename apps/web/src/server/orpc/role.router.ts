@@ -9,6 +9,20 @@ export class RoleRouter {
     context.container.rbac.listRoles.execute(context.principal, input),
   );
 
+  // `toJSON()` is the four lines: the use-case answers a `CapabilitySet` because that
+  // is the domain's type, and the contract declares its wire shape.
+  public static readonly effective = authed.role.effective.handler(async ({ input, context }) => {
+    const capabilities = await context.container.rbac.inspectEffective.execute(
+      context.principal,
+      input,
+    );
+
+    return capabilities.toJSON();
+  });
+
   // The object the merge point in `app.router.ts` mounts, mirroring `RoleProcedures.all`.
-  public static readonly all = { list: RoleRouter.list } as const;
+  public static readonly all = {
+    list: RoleRouter.list,
+    effective: RoleRouter.effective,
+  } as const;
 }

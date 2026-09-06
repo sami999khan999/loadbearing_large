@@ -18,4 +18,14 @@ export class RoleQueries {
       staleTime: 60_000,
     });
   }
+
+  // Someone else's effective permissions. `staleTime: 0` on purpose: an inspector is
+  // read to answer "why can they do that", and a cached answer is the wrong one.
+  public static effective(client: ApiClient, userId: string) {
+    return queryOptions({
+      queryKey: QueryKeys.rbac.effective(userId),
+      queryFn: () => client.role.effective({ userId }),
+      staleTime: 0,
+    });
+  }
 }

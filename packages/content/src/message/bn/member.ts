@@ -29,6 +29,9 @@ export const member: NamespaceBundle<"member"> = {
   "member.action.deactivate": "নিষ্ক্রিয় করুন",
   "member.action.reactivate": "সক্রিয় করুন",
   "member.action.changeRole": "ভূমিকা পরিবর্তন",
+  "member.action.inspect": "কেন?",
+  "member.inspect.title": "{name} এখানে যা করতে পারেন",
+  "member.inspect.close": "বন্ধ করুন",
   "member.error.lastOwner": "ইনিই একমাত্র সক্রিয় মালিক। আগে অন্য কাউকে মালিক করুন।",
   "member.error.self": "আপনি নিজের সদস্যপদ নিষ্ক্রিয় করতে পারবেন না।",
 };

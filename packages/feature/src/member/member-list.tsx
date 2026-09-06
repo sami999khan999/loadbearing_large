@@ -16,7 +16,9 @@ import {
   useApiClient,
   useAppQuery,
   useMemo,
+  useState,
 } from "../import.js";
+import { EffectivePermissionsInspector } from "../rbac/index.js";
 
 export interface MemberListProps {
   // Paged rather than unbounded: `Pagination.query` caps `limit` at 100 in the schema.
@@ -39,6 +41,9 @@ export function MemberList({ limit = 25 }: MemberListProps) {
   const members = useAppQuery(MemberQueries.list(client, { limit, offset: 0 }));
   const deactivate = MemberMutations.useDeactivate(client);
   const reactivate = MemberMutations.useReactivate(client);
+  // One row at a time: the inspector issues a query, and opening every row would issue
+  // one per member on a page of twenty-five.
+  const [inspecting, setInspecting] = useState<MemberDto | null>(null);
 
   const rows = useMemo<readonly MemberRow[]>(() => {
     // Annotated rather than inferred: the client's procedure types are reconstructed
@@ -75,25 +80,34 @@ export function MemberList({ limit = 25 }: MemberListProps) {
         key: "actions",
         header: t("member.column.actions"),
         cell: (row) => (
-          <Can permission="member.deactivate" capabilities={capabilities}>
-            {
-              // Hidden for your own row, because the use-case refuses it: a button whose
-              // only outcome is a CONFLICT is a button that should not be there.
-              row.userId === user?.id ? null : (
-                <Button
-                  variant="secondary"
-                  disabled={deactivate.isPending || reactivate.isPending}
-                  onClick={() =>
-                    row.deactivated
-                      ? reactivate.mutate({ userId: row.userId })
-                      : deactivate.mutate({ userId: row.userId })
-                  }
-                >
-                  {row.deactivated ? t("member.action.reactivate") : t("member.action.deactivate")}
-                </Button>
-              )
-            }
-          </Can>
+          <>
+            <Can permission="rbac.effective.inspect" capabilities={capabilities}>
+              <Button variant="ghost" onClick={() => setInspecting(row)}>
+                {t("member.action.inspect")}
+              </Button>
+            </Can>
+            <Can permission="member.deactivate" capabilities={capabilities}>
+              {
+                // Hidden for your own row, because the use-case refuses it: a button whose
+                // only outcome is a CONFLICT is a button that should not be there.
+                row.userId === user?.id ? null : (
+                  <Button
+                    variant="secondary"
+                    disabled={deactivate.isPending || reactivate.isPending}
+                    onClick={() =>
+                      row.deactivated
+                        ? reactivate.mutate({ userId: row.userId })
+                        : deactivate.mutate({ userId: row.userId })
+                    }
+                  >
+                    {row.deactivated
+                      ? t("member.action.reactivate")
+                      : t("member.action.deactivate")}
+                  </Button>
+                )
+              }
+            </Can>
+          </>
         ),
       },
     ],
@@ -122,6 +136,19 @@ export function MemberList({ limit = 25 }: MemberListProps) {
     <>
       {refusal ? <Callout tone="danger">{refusalCopy}</Callout> : null}
       <DataTable columns={columns} rows={rows} caption={t("member.title")} />
+      {inspecting ? (
+        <section>
+          <h3>{t("member.inspect.title", { name: inspecting.name })}</h3>
+          {
+            // The resolved set for *that* member, which only the server can answer —
+            // the viewer's own comes off the session with no round trip.
+          }
+          <EffectivePermissionsInspector userId={inspecting.userId} />
+          <Button variant="secondary" onClick={() => setInspecting(null)}>
+            {t("member.inspect.close")}
+          </Button>
+        </section>
+      ) : null}
     </>
   );
 }

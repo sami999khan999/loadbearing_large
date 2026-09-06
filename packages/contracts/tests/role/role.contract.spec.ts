@@ -45,7 +45,7 @@ describe("RoleProcedures", () => {
   it("mounts every procedure it declares under `all`", () => {
     // The merge point in `procedure/index.ts` mounts `all` and nothing else, so a
     // procedure missing from it is a procedure that exists and is unreachable.
-    expect(Object.keys(RoleProcedures.all)).toEqual(["list"]);
+    expect(Object.keys(RoleProcedures.all).sort()).toEqual(["effective", "list"]);
     expect(RoleProcedures.all.list).toBe(RoleProcedures.list);
   });
 });

@@ -66,6 +66,8 @@ export {
 export { Authorizer, Principal, type PrincipalKind } from "./primitive/index.js";
 export {
   CapabilityRepository,
+  type InspectEffectivePermissionsInput,
+  InspectEffectivePermissionsUseCase,
   type ListRolesResult,
   ListRolesUseCase,
   type RolePage,

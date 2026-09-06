@@ -22,6 +22,7 @@ import {
   type EmailSender,
   type EmbeddingProvider,
   IndexDocumentUseCase,
+  InspectEffectivePermissionsUseCase,
   type InvitationClaimer,
   InvitationClaimingEnroller,
   InviteMemberUseCase,
@@ -160,7 +161,10 @@ export class Container {
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
   public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
-  public readonly rbac: { readonly listRoles: ListRolesUseCase };
+  public readonly rbac: {
+    readonly listRoles: ListRolesUseCase;
+    readonly inspectEffective: InspectEffectivePermissionsUseCase;
+  };
   // Only with an auth config: the invitation mail needs `auth.baseUrl` for its link,
   // and the process without one is the worker, which never invites.
   private readonly memberUseCases: MemberUseCases | undefined;
@@ -343,7 +347,16 @@ export class Container {
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
 
-    this.rbac = { listRoles: new ListRolesUseCase(this.authorizer, roles) };
+    this.rbac = {
+      listRoles: new ListRolesUseCase(this.authorizer, roles),
+      // The same repository `CapabilityCache` reads, deliberately un-cached: an
+      // inspector showing a stale answer is worse than one that costs a query.
+      inspectEffective: new InspectEffectivePermissionsUseCase(
+        this.authorizer,
+        members,
+        capabilityRepository,
+      ),
+    };
 
     this.ai = {
       indexDocument: new IndexDocumentUseCase(
