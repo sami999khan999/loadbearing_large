@@ -117,11 +117,20 @@ orchestrator's name for the process is incidental.
 ```ts
 await this.queuePublisher.close();
 await this.redis.close();
+await this.clickhouse?.close();
+await this.emailSender.close();
 await this.database.close();
 ```
 
 Queues before the Redis connections before Postgres. Closing Redis while BullMQ still holds blocking
 connections produces a hang on shutdown that looks like a deadlock, because it is one.
+
+**The SMTP transport is held concretely as `emailSender` and exposed as `email`**, the same split as
+`queuePublisher`/`queue`. `EmailSender` is a port and says nothing about a transport's lifetime, so
+the container keeps the implementation to close it — and for a while did not close it at all.
+Nodemailer keeps sockets open between sends, and a process that exits without closing them waits on
+the SMTP server to time each one out. Its position in the order carries no meaning beyond "before
+Postgres": nothing depends on it, which is exactly why it was the one that got forgotten.
 
 `RedisConnection.close()` quits both instances, which is why they sit behind one object rather than
 as two fields on the container. Two fields is two things to remember at every shutdown path, and the

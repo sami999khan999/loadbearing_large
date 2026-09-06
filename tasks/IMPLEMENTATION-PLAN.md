@@ -1678,9 +1678,24 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
   The throttle is a `notBefore` parameter on the port rather than an interval in the SQL, so the
   window is a domain decision (`ApiKeyRules.TOUCH_THROTTLE_MS`, five minutes) and the adapter holds
   no policy. Verified live: written once, then not rewritten inside the window.
-- [ ] `P7.3` `PgMaintenanceGateway.sweepExpired` uses `.returning({ id })` to count —
-  use the command tag row count.
-- [ ] `P7.4` `PgMembershipReader.organizationsFor` has no limit — cap at 100 and document.
+- [x] `P7.3` `PgMaintenanceGateway.sweepExpired` uses `.returning({ id })` to count —
+  use the command tag row count. `done: 2026-09-06`
+  - `rowCount` off the command tag. The old form shipped every expired session's id back over
+    the wire to be `.length`ed and dropped — on a nightly sweep that is the whole expired set
+    crossing the socket to produce one integer.
+  - **The new spec is coverage, not a regression guard, and the distinction is worth stating.**
+    Both forms return the same numbers, so nothing at this level can tell them apart; what the
+    spec pins is the contract — exact counts, unexpired rows untouched, zero on a second pass —
+    against a live database, which is where a future rewrite would go wrong.
+- [x] `P7.4` `PgMembershipReader.organizationsFor` has no limit — cap at 100 and document.
+  `done: 2026-09-06`
+  - A named constant on the reader, not a literal in the query: the number is a product decision
+    about when a switcher stops being a switcher, and past it the answer is search rather than a
+    longer list. `docs/reference/enrollers.md` says that, and says the truncation is silent on
+    purpose — the port returns a list, and no caller could act on "there were more".
+  - **No spec.** Exercising the cap needs 101 tenants for one user, and each one seeds roles and
+    ~17 permission rows; that is a slow, brittle fixture guarding a `.limit()`. Recorded rather
+    than skipped quietly.
 - [ ] `P7.5` `/organization/create` is bounded only by a 5/min rate limit; each call seeds
   roles and ~17 permission rows — per-user cap on owned organizations (`AUTH_MAX_OWNED_ORGANIZATIONS`,
   default 10). **Docs:** `auth/docs/reference/organization-plugin.md`.
@@ -1708,7 +1723,17 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     RFC 9562 defines. A v4 still passes, deliberately, and there is a spec saying so.
   - **No production callers** — `isValid` is used only by its own spec — so this is a correctness fix
     to an exported surface rather than a behaviour change to anything running.
-- [ ] `P7.8` `Container.dispose()` never closes the SMTP transport — `SmtpEmailSender.close()`.
+- [x] `P7.8` `Container.dispose()` never closes the SMTP transport — `SmtpEmailSender.close()`.
+  `done: 2026-09-06`
+  - The container now holds the sender concretely as `emailSender` and exposes it as `email`, the
+    same split `queuePublisher`/`queue` already uses: `EmailSender` is a port and says nothing
+    about a transport's lifetime, which is exactly why this one got forgotten.
+  - Nodemailer keeps sockets open between sends, so a process exiting without closing them waits
+    on the SMTP server to time each one out. `close()` is not `async` — nodemailer's is
+    synchronous, and `require-await` is right to say so.
+  - Spec is on `SmtpEmailSender.close()` rather than on `Container.dispose()`, which would need a
+    live Postgres, Redis and S3 to construct. It fails without the fix by not compiling, which is
+    the stronger failure. `boot-smoke` re-run after the change: still a clean drain.
 - [ ] `P7.9` `MessageStore.ensure` has no in-flight de-duplication (`SessionStore.ensure` has)
   — share the promise per namespace set.
 - [ ] `P7.10` `auth` namespace is 82 keys and every one loads for `/forgot-password` — split
@@ -1724,7 +1749,18 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 - [ ] `P7.15` `AnalyticsConsumer` lag: `lagSeconds` is 0 forever on an empty destination —
   compute from the oldest unprojected row; `reconcile` emits `completed` with a `drifted`
   count instead of returning early.
-- [ ] `P7.16` `SystemPrincipal.GRANTS` validated per job — once at module load, frozen.
+- [x] `P7.16` `SystemPrincipal.GRANTS` validated per job — once at module load, frozen.
+  `done: 2026-09-06`
+  - Module-level `const` and `Object.freeze`, not a `static readonly` field — the same shape
+    `PermissionRegistry` uses for its own derived views, and the one `docs/ai/rules/classes.md`
+    requires.
+  - **The cost was never the argument.** The comment above the check said "at boot rather than at
+    3am" while the code ran it per call, so a renamed permission surfaced on the first job at 3am.
+    `docs/setup/25` stated the per-call behaviour as a deliberate trade-off; it now states the
+    module-load one, and why there is no import-order window — `CATALOG` is a compile-time
+    constant with no dynamic registration.
+  - **No new spec**: once-versus-per-call is not observable without mocking the registry, and the
+    outcome — exactly two grants, no `core.*`, not a wildcard — is already pinned by four.
 
 ---
 
