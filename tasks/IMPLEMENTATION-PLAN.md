@@ -1672,8 +1672,12 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
 
 - [ ] `P7.1` `SystemRoleSeed.run` issues one SELECT per role (four) and runs on every
   organization creation — one `IN` query and one batched insert. **Docs:** `docs/setup/13`.
-- [ ] `P7.2` `PgApiKeyRepository.touch` writes `last_used_at` on every authenticated API
+- [x] `P7.2` `PgApiKeyRepository.touch` writes `last_used_at` on every authenticated API
   request, awaited — throttle to once per minute (`WHERE last_used_at < now() - interval '1 minute'`).
+  `done: 2026-09-06` — closed by `P5.4`, whose feature put the write on a path anyone could reach.
+  The throttle is a `notBefore` parameter on the port rather than an interval in the SQL, so the
+  window is a domain decision (`ApiKeyRules.TOUCH_THROTTLE_MS`, five minutes) and the adapter holds
+  no policy. Verified live: written once, then not rewritten inside the window.
 - [ ] `P7.3` `PgMaintenanceGateway.sweepExpired` uses `.returning({ id })` to count —
   use the command tag row count.
 - [ ] `P7.4` `PgMembershipReader.organizationsFor` has no limit — cap at 100 and document.
