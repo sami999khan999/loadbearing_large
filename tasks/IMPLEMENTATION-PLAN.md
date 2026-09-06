@@ -461,17 +461,17 @@ match a decision the tree already made.
   removes the three `dotenv` imports, six `process.env` reads and eighteen `console.log`
   calls from `src/` at once. Update `package.json` scripts, `check-architecture` §3 exemption
   list, `biome-config/src/base.json` override, `docs/setup/26:243`, `docs/setup/13`, `15`, `16`.
-- [ ] `P3.3` **`withOrganizationSlug` mutable setter → constructor arg** `~30m` —
+- [x] `P3.3` done: 2026-09-05 · **`withOrganizationSlug` mutable setter → constructor arg** `~30m` —
   `packages/infrastructure/src/pg/repository/pg-bootstrap-membership.enroller.ts`,
   `composition/src/container/container.ts`.
-- [ ] `P3.4` **static mutable state** `~15m` — freeze `SystemRoleSeed.ROLES`
+- [x] `P3.4` done: 2026-09-05 · **static mutable state** `~15m` — freeze `SystemRoleSeed.ROLES`
   (`system-role.seed.ts:22`) and `QueueName.ALL` (`queue-name.ts:14`) at module load, as
   `permission-registry.ts:13` does.
 - [ ] `P3.5` **two classes per file** `~30m` — split `ApiKeyRepository` out of
   `auth/src/apikey/api-key.resolver.ts` into `api-key.repository.ts`; rename
   `feature/src/account/two-factor.disable.tsx` → `two-factor.panel.tsx` (exports
   `TwoFactorPanel`). Update barrels and both `docs/index.md` trees.
-- [ ] `P3.6` **`OrganizationFounder` port lacks `slug`** `~30m` — add `slug?: string` to
+- [x] `P3.6` done: 2026-09-05 · **`OrganizationFounder` port lacks `slug`** `~30m` — add `slug?: string` to
   `auth/src/session/organization.founder.ts:7`; `Container` holds the port, not
   `PgOrganizationFounder`. Update `auth/docs/reference/enrolment.md`.
 - [ ] `P3.7` **fakes diverge from adapters** `~1h` — `InMemoryVectorStore.search` applies
@@ -491,13 +491,13 @@ match a decision the tree already made.
 - [ ] `P3.10` **`TwoFactorForm` bypasses the query seam** `~1h` — four raw `AuthClient` calls
   with hand-rolled pending state → `SessionMutations.{verifyTotp,verifyBackupCode,verifyOtp,sendOtp}`.
   Update `query/docs/reference/mutations.md`.
-- [ ] `P3.11` **`QueryKeys.session` is a bare array** `~15m` → `{ all() }` like its siblings;
+- [x] `P3.11` done: 2026-09-05 · **`QueryKeys.session` is a bare array** `~15m` → `{ all() }` like its siblings;
   fix `account.mutations.ts:52`.
-- [ ] `P3.12` **barrels named `index.tsx` with no JSX** `~15m` — `ui`, `query`, `feature` →
+- [x] `P3.12` done: 2026-09-05 · **barrels named `index.tsx` with no JSX** `~15m` — `ui`, `query`, `feature` →
   `index.ts`; `package.json` `exports`/tsup entry.
-- [ ] `P3.13` **duplicate DOM ids across auth forms** `~30m` — `id="email"` / `id="password"`
+- [x] `P3.13` done: 2026-09-05 · **duplicate DOM ids across auth forms** `~30m` — `id="email"` / `id="password"`
   in sign-in, sign-up, forgot, reset → prefixed (`sign-in-email`), as the account forms do.
-- [ ] `P3.14` **unused dependency** `~5m` — remove `@loadbearing/auth` from
+- [x] `P3.14` done: 2026-09-05 · **unused dependency** `~5m` — remove `@loadbearing/auth` from
   `apps/web/package.json`; `pnpm deps:check`.
 - [ ] `P3.15` **role-suffix vocabulary** `~2h`
   - **Goal:** `docs/opinions/files.md` lists 25 suffixes and calls the set closed; the tree uses
@@ -518,19 +518,30 @@ match a decision the tree already made.
   `content` to the right of `composition`; `composition` imports it for the two mailers. Move
   `content` beside `contracts` in `docs/ai/rules/layering.md` and
   `docs/opinions/dependencies.md`; add an `eslint` boundary entry that matches.
-- [ ] `P3.17` **abbreviated params in the authorization kernel** `~15m` —
+- [x] `P3.17` done: 2026-09-05 · **abbreviated params in the authorization kernel** `~15m` —
   `permissions/src/capability/capability-set.ts:26,30,104,108,128,140` (`p s a b`).
 - [ ] `P3.18` **`permission` module grammar** `~30m` — `member.*` and `apikey.*` declare
   `module: "rbac"` (`rbac.permissions.ts:26-38`) against `<module>.<subject>.<action>`. Either
   register `member` and `apikey` modules in `ModuleRegistry` or rename the keys
   `rbac.member.invite` etc. Recommend registering the modules (fewer renames, keys are already
   in `PROCEDURE_PERMISSIONS`). Update `permissions/docs/reference/module-registry.md`.
-- [ ] `P3.19` **missing `override`** `~5m` — `auth/src/session/null-membership.enroller.ts:19`.
+- [x] `P3.19` done: 2026-09-05 · **missing `override`** `~5m` — `auth/src/session/null-membership.enroller.ts:19`.
 - [ ] `P3.20` **`apps/worker` folder rules** `~1h` — four loose files under `src/`, no
   `index.ts` in `consumer/`, `schedule/`, `notification/`; consts vs `private static readonly`
   split. `env.ts` and `main.ts` stay (framework-dictated); `worker-bootstrap.ts` and
   `system-principal.ts` → `src/bootstrap/`; add barrels; pick `private static readonly` for
   every constant. Record the apps-folder rule in `docs/opinions/folders.md`.
+
+### Found while executing
+
+- [x] `P3.21` done: 2026-09-05 · **the Postgres harness picks whichever tenant Postgres
+  returns first** `P2` `~15m`
+  - **Goal:** `seedOrganizationId` is `select id from organizations limit 1` with no ordering,
+    and it is what fourteen specs scope their rows by. It was right while the seed wrote the
+    only organization; `P2.11`'s cascade spec and the founder specs both create their own, so
+    the pick is now a coin flip that can hand one spec a tenant another is about to delete.
+  - **Done when:** the lookup matches `seed.ts`'s own slug.
+  - **Files:** `packages/infrastructure/tests/support/database.ts`.
 
 **Exit.** `pnpm lint`, `pnpm check:architecture`, `pnpm deps:check`, `pnpm repo:check` all
 green; `docs/ai/rules/*.md` and `docs/opinions/*.md` agree (§12).
