@@ -3,6 +3,7 @@
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export type {
+  ApiKeyId,
   GoalId,
   InvitationId,
   OrganizationId,

@@ -1,6 +1,7 @@
 "use client";
 
 export { AccountMutations, AccountQueries } from "./account/index.js";
+export { ApiKeyMutations, ApiKeyQueries } from "./apikey/index.js";
 export { QueryKeys } from "./key/index.js";
 export { MemberMutations, MemberQueries } from "./member/index.js";
 export { OrganizationMutations } from "./organization/index.js";

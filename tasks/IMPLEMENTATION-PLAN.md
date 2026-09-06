@@ -1212,13 +1212,44 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `CONFLICT/lastOwner`, a successful deactivate returning the updated DTO, `UNAUTHORIZED` for the
     deactivated member's session, reactivation restoring it, and `member.deactivated` in
     `activity_log`.
-- [ ] `P5.4` **API keys** `P2` `~8h` `#api #ui`
+- [x] `P5.4` **API keys** `P2` `~8h` `#api #ui`
   - **Goal:** `apikey.read` / `apikey.manage` keys, `PgApiKeyRepository`, `ApiKeyHasher` and
     `ApiKeyResolver` all exist; nothing can create or list a key.
   - **Done when:** `apikey.list`, `apikey.create`, `apikey.revoke` procedures; `ROUTES.rbac.apiKeys
     = "/settings/api-keys"` plus route; the plaintext key is shown once; `apikey.created/revoked`
     events; `api_keys` gains `last_used_at` throttling per `P7.2`.
-  - **Docs:** `auth/docs/reference/api-key.md`.
+  - **Docs:** `auth/docs/reference/api-key.md`. `done: 2026-09-06`
+  - **`ApiKeyRepository` moved from `auth` to `application`**, and the doc's stated reason for it
+    living in `auth` — "no use-case should learn that API keys exist" — is corrected rather than
+    quietly dropped. It held exactly as long as nothing could issue a key. `auth` already imports
+    `application`, so the resolver reads the port from there and `PgApiKeyRepository` serves both.
+  - **The split that replaced it is better than the original rule.** `ApiKeyRecord` carries
+    `tokenHash` and is what authentication reads; `ApiKeySummary` is what a list renders and **has
+    no hash field at all**, so a digest cannot reach the wire through a careless DTO mapping.
+  - **Minting moved to `ApiKeyRules` in `application`**, which owns the token format — the `rk_`
+    marker and the eight-character prefix — because both layers depend on it and two copies drift
+    into a key that authenticates against nothing. `ApiKeyHasher.generate` is gone; its two specs
+    moved to `application/tests/apikey/` with it.
+  - **A key cannot be issued with a scope its issuer does not hold.** The resolver re-intersects
+    with the issuer's live capabilities, so such a scope grants nothing *today* — and silently
+    widens the key the day that person is promoted. Refused at creation instead.
+  - **`last_used_at` is throttled in the predicate, not in a branch** (`P7.2`'s item, done here
+    because the write is on the path this feature creates). Unthrottled it is one `UPDATE` per
+    authenticated request forever, to a column nothing reads more precisely than "roughly when".
+  - **Revocation is a timestamp and it is idempotent**, keeping the *first* one: that is the
+    timestamp an incident review reads, and a retry must not move it.
+  - **`CORE_MODULE` is now exported from `permissions`.** The scope picker offered
+    `core.activity.write` — a permission every principal holds implicitly, so `can()` said yes.
+    Caught by reading the rendered page, not by a test.
+  - **Verified end to end against a live stack:** create; the plaintext returned once and absent
+    from `api_keys` and `activity_log`; an unknown scope and a past expiry both refused; the key
+    authenticating `member/list` and being FORBIDDEN on `role/list`; `last_used_at` written once
+    then not rewritten inside the window; revoke making it UNAUTHORIZED; a second revoke preserving
+    the timestamp; and the escalation refusal from a principal holding `apikey.manage` but not
+    `member.deactivate`.
+  - **My first probe used `Authorization: Bearer` and got `UNAUTHORIZED`.** The header is
+    `x-api-key`, checked before the session in `PrincipalBuilder` so a scoped key is never
+    silently upgraded to the issuer's full session. That was a test error, not a defect.
 - [ ] `P5.5` **Document index and search** `P2` `~8h` `#api #ui`
   - **Goal:** `VectorStore.search` has zero callers; `ai.embedding.read` is unused;
     `container.queue` is exposed and never called; nothing in the app can enqueue the

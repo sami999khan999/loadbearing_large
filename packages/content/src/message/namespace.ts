@@ -1,3 +1,4 @@
+import type { apikey } from "./en/apikey.js";
 import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
 import type { email } from "./en/email.js";
@@ -16,6 +17,7 @@ interface NamespaceShape {
   readonly role: typeof role;
   readonly member: typeof member;
   readonly organization: typeof organization;
+  readonly apikey: typeof apikey;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -23,7 +25,14 @@ interface NamespaceShape {
 // Always present, in every snapshot, from every ContentSource. Never lazy.
 export type ShellNamespace = "common" | "error";
 // Everything a browser or desktop bundle may load. Lazy: a route declares what it needs.
-export type ClientNamespace = ShellNamespace | "nav" | "auth" | "role" | "member" | "organization";
+export type ClientNamespace =
+  | ShellNamespace
+  | "nav"
+  | "auth"
+  | "role"
+  | "member"
+  | "organization"
+  | "apikey";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -55,4 +64,5 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "role",
   "member",
   "organization",
+  "apikey",
 ];

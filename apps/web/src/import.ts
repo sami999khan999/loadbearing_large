@@ -33,8 +33,10 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   ActiveSessionList,
+  ApiKeyList,
   ChangeEmailForm,
   ChangePasswordForm,
+  CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
   EffectivePermissionsInspector,
@@ -76,6 +78,7 @@ export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadb
 // ── @loadbearing/query ───────────────────────────────────────────────────────
 export {
   ApiClientProvider,
+  ApiKeyQueries,
   createQueryClient,
   MemberQueries,
   RoleQueries,

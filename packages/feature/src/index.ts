@@ -17,6 +17,12 @@ export {
   type TwoFactorSetupProps,
 } from "./account/index.js";
 export {
+  ApiKeyList,
+  type ApiKeyListProps,
+  CreateApiKeyForm,
+  useApiKeyFailure,
+} from "./apikey/index.js";
+export {
   ForgotPasswordForm,
   type ForgotPasswordFormProps,
   ResetPasswordForm,

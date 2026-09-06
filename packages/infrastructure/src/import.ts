@@ -31,6 +31,10 @@ export {
   type ActivityRecord,
   type ActivityReplayReader,
   type AnalyticsProjector,
+  type ApiKeyPage,
+  type ApiKeyRecord,
+  type ApiKeyRepository,
+  type ApiKeySummary,
   type ArchivedPartition,
   CacheStore,
   type CapabilityRepository,
@@ -50,6 +54,7 @@ export {
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
+  type NewApiKey,
   type NewInvitation,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
@@ -69,6 +74,7 @@ export {
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
+  type ApiKeyId,
   type GoalId,
   Identifiers,
   type InvitationId,

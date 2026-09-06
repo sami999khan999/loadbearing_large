@@ -16,6 +16,7 @@ import {
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  CreateApiKeyUseCase,
   CreateRoleUseCase,
   Database,
   DeleteRoleUseCase,
@@ -28,6 +29,7 @@ import {
   InvitationClaimingEnroller,
   InviteMemberUseCase,
   JsonLogger,
+  ListApiKeysUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListRolesUseCase,
@@ -60,6 +62,7 @@ import {
   type QueuePublisher,
   RedisCacheStore,
   RedisConnection,
+  RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
   S3StorageGateway,
@@ -77,6 +80,14 @@ import {
 } from "../import.js";
 import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
+
+// The API-key slice's use-cases. Grouped like the member ones, and absent for the same
+// reason: the worker authenticates nothing and issues nothing.
+interface ApiKeyUseCases {
+  readonly listApiKeys: ListApiKeysUseCase;
+  readonly createApiKey: CreateApiKeyUseCase;
+  readonly revokeApiKey: RevokeApiKeyUseCase;
+}
 
 // The member slice's use-cases. Named so the getter can say what is absent rather than
 // handing out `undefined`.
@@ -162,6 +173,9 @@ export class Container {
   // Grouped by slice so a consumer reads `container.ai.indexDocument`. See
   // docs/reference/container.md.
   public readonly ai: { readonly indexDocument: IndexDocumentUseCase };
+  // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
+  // config there is no principal to be the issuer.
+  private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
@@ -285,6 +299,24 @@ export class Container {
 
       const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
       const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
+
+      this.apiKeyUseCases = {
+        listApiKeys: new ListApiKeysUseCase(this.authorizer, apiKeyRepository),
+        createApiKey: new CreateApiKeyUseCase(
+          this.authorizer,
+          apiKeyRepository,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
+        revokeApiKey: new RevokeApiKeyUseCase(
+          this.authorizer,
+          apiKeyRepository,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
+        ),
+      };
       this.principalBuilder = new PrincipalBuilder(
         this.sessionResolver,
         apiKeyResolver,
@@ -417,6 +449,13 @@ export class Container {
   public get auth(): AuthInstance {
     if (!this.authInstance) throw new Error("This container was built without an auth config.");
     return this.authInstance;
+  }
+
+  public get apiKey(): ApiKeyUseCases {
+    if (!this.apiKeyUseCases) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.apiKeyUseCases;
   }
 
   public get member(): MemberUseCases {

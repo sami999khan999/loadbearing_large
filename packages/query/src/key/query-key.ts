@@ -26,6 +26,13 @@ export class QueryKeys {
     effective: (userId: string) => ["rbac", "effective", userId] as const,
   };
 
+  // Create and revoke both invalidate `all()`: the list is the only read, and a new
+  // key changes it whichever way it changed.
+  public static readonly apiKey = {
+    all: () => ["apiKey"] as const,
+    list: (params: unknown) => ["apiKey", "list", params] as const,
+  };
+
   // Inviting and revoking both invalidate `all()`: an invitation becoming a membership
   // changes both lists at once.
   public static readonly member = {

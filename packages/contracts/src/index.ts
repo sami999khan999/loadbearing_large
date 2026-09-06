@@ -1,4 +1,13 @@
 export {
+  ApiKeyContract,
+  type ApiKeyDto,
+  ApiKeyEntity,
+  ApiKeyProcedures,
+  type CreateApiKeyInput,
+  type CreatedApiKeyDto,
+  type RevokeApiKeyInput,
+} from "./apikey/index.js";
+export {
   type ChangeMemberRoleInput,
   type InvitationDto,
   type InviteMemberInput,

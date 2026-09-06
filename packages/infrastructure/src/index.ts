@@ -13,7 +13,6 @@ export {
 export { type LokiConfig, LokiLogReader } from "./loki/index.js";
 export { type OpenAiEmbeddingConfig, OpenAiEmbeddingProvider } from "./openai/index.js";
 export {
-  type ApiKeyRow,
   BaseRepository,
   Database,
   type DatabaseConfig,

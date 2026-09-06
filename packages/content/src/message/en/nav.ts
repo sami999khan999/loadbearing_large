@@ -1,6 +1,7 @@
 export const nav = {
   "nav.roles": "Roles",
   "nav.members": "Members",
+  "nav.apiKeys": "API keys",
 
   // ── the home page ──
   "nav.home.title": "{organization}",

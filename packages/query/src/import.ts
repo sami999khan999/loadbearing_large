@@ -14,14 +14,18 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // Types only: this package caches what the contract describes, with no opinion about it.
 export type {
+  ApiKeyDto,
   ChangeMemberRoleInput,
   ChangeRolePermissionInput,
+  CreateApiKeyInput,
+  CreatedApiKeyDto,
   CreateRoleInput,
   DeleteRoleInput,
   InvitationDto,
   InviteMemberInput,
   MemberDto,
   PaginationQuery,
+  RevokeApiKeyInput,
   RevokeInvitationInput,
   RoleDto,
   SetMemberActiveInput,

@@ -532,30 +532,15 @@ export const apiKeys = pgTable(
 
 **`packages/auth/src/apikey/api-key.hasher.ts`**
 
+> [!NOTE]
+> **Minting is not in this file any more.** `ApiKeyRules` in `packages/application/src/apikey/`
+> owns the token format and `mint()`, because issuing a key is a use-case and both layers depend on
+> the same format — two copies drift into a key that authenticates against nothing. What is left
+> here is what *authentication* needs: `hash`, `prefixOf`, `timingSafeEqual`.
+
 ```ts
-import { Uuid } from "@loadbearing/core";
-
-export interface GeneratedApiKey {
-  // Shown to the user exactly once, at creation. Never stored.
-  readonly token: string;
-  readonly prefix: string;
-  readonly hash: string;
-}
-
 export class ApiKeyHasher {
-  private static readonly PREFIX_LENGTH = 8;
-
   private constructor() {}
-
-  public static async generate(): Promise<GeneratedApiKey> {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    const token = `rk_${[...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-    return {
-      token,
-      prefix: token.slice(0, ApiKeyHasher.PREFIX_LENGTH),
-      hash: await ApiKeyHasher.hash(token),
-    };
-  }
 
   public static async hash(token: string): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
@@ -594,9 +579,12 @@ export interface ApiKeyRecord {
   readonly revokedAt: Date | null;
 }
 
+// In `packages/application/src/apikey/` — see the note below. `notBefore` is the
+// throttle on a write that sits on the hottest read path in the system.
 export abstract class ApiKeyRepository {
   public abstract findByPrefix(prefix: string): Promise<readonly ApiKeyRecord[]>;
-  public abstract touch(id: string, at: Date): Promise<void>;
+  public abstract touch(id: ApiKeyId, at: Date, notBefore: Date): Promise<void>;
+  // …plus listByOrganization, findById, create and revoke, for the settings page.
 }
 
 export class ApiKeyResolver {
@@ -643,7 +631,9 @@ export class ApiKeyResolver {
 
 **Timing-safe comparison** even though the prefix already narrowed the candidate set. It costs nothing and removes a class of question you would otherwise have to answer in a security review.
 
-**`ApiKeyRepository` is declared here as an abstract class** and implemented in `infrastructure`. That is a slight break from "ports live in `application`," and it is deliberate: an API key is an authentication artifact, not a domain entity, and nothing in `application` should know keys exist.
+**`ApiKeyRepository` was declared here as an abstract class**, on the argument that an API key is an authentication artifact rather than a domain entity and nothing in `application` should know keys exist. **That argument did not survive the feature.** The moment the product grew `/settings/api-keys`, issuing a key became a domain operation gated on `apikey.manage`, with a scope check, an audit row and a `UnitOfWork` — so the port lives in `packages/application/src/apikey/` and `auth` imports it from there, as it already imports `SessionResolver`.
+
+What survived is better than the original rule: the *shapes* are split rather than the ports. `ApiKeyRecord` carries `tokenHash` and is what authentication reads; `ApiKeySummary` is what a list renders and has no hash field at all, so a digest cannot reach the wire through a careless DTO mapping.
 
 ---
 
@@ -728,13 +718,7 @@ import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/auth");
 
-export {
-  ApiKeyHasher,
-  type ApiKeyRecord,
-  ApiKeyRepository,
-  ApiKeyResolver,
-  type GeneratedApiKey,
-} from "./apikey/index.js";
+export { ApiKeyHasher, ApiKeyResolver } from "./apikey/index.js";
 export type { AuthConfig } from "./auth.config.js";
 export { AuthFactory, type AuthInstance } from "./auth.factory.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";

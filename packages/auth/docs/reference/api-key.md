@@ -5,9 +5,22 @@ description: Shown once, stored as a digest, looked up by prefix, compared in co
 
 # The API-key model
 
-Two classes: `ApiKeyHasher` mints and compares, `ApiKeyResolver` turns a token into a `Principal`.
-`ApiKeyRepository` is the port between them and Postgres, declared here rather than in `application`
-because no use-case should learn that API keys exist.
+`ApiKeyResolver` turns a token into a `Principal`; `ApiKeyHasher` holds what that needs from a token
+and nothing more.
+
+**`ApiKeyRepository` used to be declared here**, on the argument that no use-case should learn API
+keys exist. That argument held exactly as long as nothing could issue one. The moment the product
+grew a settings page, issuing a key became a domain operation gated on `apikey.manage` — with an
+audit row, a scope check and a `UnitOfWork` — so the port moved to `packages/application/src/apikey/`
+and `auth` imports it from there. `PgApiKeyRepository` satisfies both halves.
+
+The split that survived is in the *shapes*, not the ports: `ApiKeyRecord` carries `tokenHash` and is
+what authentication reads, while `ApiKeySummary` is what a list renders and has no hash field at all.
+A digest that cannot be in the type cannot be mapped onto the wire by a careless DTO.
+
+Minting moved with it. `ApiKeyRules` in `application` owns the token format — the `rk_` marker, the
+eight-character prefix — because both layers depend on it and two copies drift into a key that
+authenticates against nothing.
 
 ## The token is shown once and never stored
 
@@ -80,6 +93,30 @@ await this.repository.touch(record.id, now);
 
 `touch` records a *successful* use. Recording a refused one would put a last-used timestamp on a
 revoked key, which is the field an operator reads when deciding whether a leaked key was ever used.
+
+**And it is throttled, in the predicate rather than in a branch.** Unthrottled, this is one `UPDATE`
+per authenticated request forever — a write on the hottest read path in the system, to a column
+nothing reads more precisely than "roughly when". The repository takes a `notBefore` and the row is
+only rewritten if `last_used_at` is null or older than it; `ApiKeyRules.TOUCH_THROTTLE_MS` sets the
+window at five minutes.
+
+## Issuing, listing and revoking
+
+Three use-cases in `application/src/apikey/`, gated on `apikey.read` and `apikey.manage`, behind
+`/settings/api-keys`.
+
+**A key cannot be issued with a scope its issuer does not hold.** Re-intersection below already means
+such a scope would grant nothing — until the issuer is promoted, at which point the key silently
+widens. Refusing at creation is the difference between a key that means what it says and one that
+means whatever its issuer means later.
+
+**Revocation is a timestamp and the row stays.** A key that authenticated something last week is part
+of the audit trail, and a deleted row answers no question about it. Re-revoking is idempotent and
+keeps the *first* timestamp, because that is the one an incident review reads.
+
+**The plaintext exists in exactly one response shape**, `ApiKeyContract.created`, returned once. It is
+never written to the query cache, never in the list, and never in the audit row — which records the
+prefix and the scopes instead.
 
 ## What is missing on purpose
 

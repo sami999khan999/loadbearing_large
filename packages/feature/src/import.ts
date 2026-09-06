@@ -22,6 +22,8 @@ export { ErrorCopy } from "@loadbearing/content";
 // The shapes the server returns, plus the one value: `Password` carries the bounds the
 // server enforces, so a form cannot advertise a different floor.
 export {
+  type ApiKeyDto,
+  ApiKeyEntity,
   type CapabilitiesDto,
   type InvitationDto,
   type MemberDto,
@@ -36,6 +38,7 @@ export { type ErrorEnvelope, ErrorNormalizer } from "@loadbearing/errors";
 export {
   CapabilitySet,
   type CapabilitySetDto,
+  CORE_MODULE,
   type ModuleKey,
   ModuleRegistry,
   type PermissionKey,
@@ -48,6 +51,8 @@ export {
 export {
   AccountMutations,
   AccountQueries,
+  ApiKeyMutations,
+  ApiKeyQueries,
   MemberMutations,
   MemberQueries,
   OrganizationMutations,
