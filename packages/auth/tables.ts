@@ -40,6 +40,10 @@ class UnusedMembershipReader extends MembershipReader {
   public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return unreachable();
   }
+
+  public override isActive(): Promise<boolean> {
+    return unreachable();
+  }
 }
 
 class UnusedMembershipEnroller extends MembershipEnroller {

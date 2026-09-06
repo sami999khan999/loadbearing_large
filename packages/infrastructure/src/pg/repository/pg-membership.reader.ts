@@ -1,4 +1,4 @@
-import { and, asc, eq, type OrganizationId, sql, type UserId } from "../../import.js";
+import { and, asc, eq, isNull, type OrganizationId, sql, type UserId } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { memberships, organizations, roles, users } from "../schema/index.js";
 
@@ -39,6 +39,24 @@ export class PgMembershipReader extends BaseRepository {
       .select({ id: memberships.id })
       .from(memberships)
       .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
+      .limit(1);
+
+    return row !== undefined;
+  }
+
+  // One row on `memberships_uq`, and the column it reads is why deactivation is per
+  // membership: the same person stays active everywhere else.
+  public async isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organizationId, organizationId),
+          eq(memberships.userId, userId),
+          isNull(memberships.deactivatedAt),
+        ),
+      )
       .limit(1);
 
     return row !== undefined;

@@ -1112,7 +1112,7 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `CapabilitySetDto` for a member; `EffectivePermissionsInspector` reads it via
     `QueryKeys.rbac.effective(userId)` (today a key with no caller); reachable from a member
     row on `/settings/members`. **Depends on:** `P5.3`.
-- [ ] `P5.3` **Member lifecycle** `P1` `~8h` `#api #ui`
+- [x] `P5.3` **Member lifecycle** `P1` `~8h` `#api #ui`
   - **Goal:** `member.deactivate` is a key with nothing behind it; a member's role cannot be
     changed; `member.badge.deactivated` copy exists and is never rendered.
   - **Done when:** `member.changeRole` and `member.deactivate` (+ `member.reactivate`)
@@ -1120,7 +1120,37 @@ twelve steps in `docs/ai/skills/add-slice.md` and its commit sequence.
     `PrincipalBuilder` refuses a deactivated membership; "cannot deactivate or demote the last
     owner" rule with a spec; `MemberList` row actions; `member.deactivated`,
     `member.role.changed` events.
-  - **Docs:** `auth/docs/reference/principal-builder.md`, `docs/setup/27`.
+  - **Docs:** `auth/docs/reference/principal-builder.md`, `docs/setup/27`. `done: 2026-09-06`
+  - **The migration fixes a tenancy bug, not just a missing column.** `MemberDto.deactivated`
+    already existed and was read from `users.deactivated_at` — a **user-level** flag. Deactivating
+    someone in one organization would have locked them out of every organization they belong to,
+    which is a cross-tenant write dressed as a local one. `memberships.deactivated_at` is per
+    membership, and `PgMemberRepository.list` now reads that column.
+  - **`PrincipalBuilder` refuses the session, and that is the half that matters.** A deactivated
+    member's cookie is still valid, still decrypts, and still names a real organization — nothing
+    else in the stack refuses it. One row on `memberships_uq` before the capability read, because a
+    deactivated membership is not a principal with nothing granted, it is no principal at all.
+    Verified live: the same cookie that worked returns `UNAUTHORIZED` after deactivation and works
+    again after reactivation.
+  - **`PgCapabilityRepository` also skips a deactivated membership** — defence in depth, free,
+    because that query already starts from `memberships`.
+  - **The last-owner rule is enforced in two places and pinned by four specs.** Demoting the last
+    active owner and deactivating them both refuse with `CONFLICT/lastOwner`; the count is of
+    **active** owners, so a deactivated one does not keep a tenant unlockable. Promotion never
+    consults the count, and a spec asserts it is not even read.
+  - **Self-deactivation refuses with its own reason.** Locking yourself out is recoverable by a
+    colleague and still never what the click meant; the row action is hidden for your own row, since
+    a button whose only outcome is a `CONFLICT` should not be there.
+  - **Two procedures, one use-case.** `deactivate` and `reactivate` carry the direction in the path
+    so a product can gate them apart later; the column is one value, so two classes would let them
+    disagree about what "active" means. `member.role.change` is its own permission key because
+    removing someone's access and changing what they may do are different powers.
+  - **Both refusals get their own copy**, in `en` and `bn`. The catalog's generic conflict sentence
+    is "someone else changed this first", which is wrong about both.
+  - **Verified end to end against a live stack**, not only by unit test: `CONFLICT/self`,
+    `CONFLICT/lastOwner`, a successful deactivate returning the updated DTO, `UNAUTHORIZED` for the
+    deactivated member's session, reactivation restoring it, and `member.deactivated` in
+    `activity_log`.
 - [ ] `P5.4` **API keys** `P2` `~8h` `#api #ui`
   - **Goal:** `apikey.read` / `apikey.manage` keys, `PgApiKeyRepository`, `ApiKeyHasher` and
     `ApiKeyResolver` all exist; nothing can create or list a key.

@@ -45,11 +45,14 @@ describe("MemberContract", () => {
     expect(MemberContract.listQuery.parse({}).limit).toBe(25);
   });
 
-  it("mounts four procedures under the paths the permission catalog names", () => {
+  it("mounts every procedure the permission catalog names", () => {
     expect(Object.keys(MemberProcedures.all).sort()).toEqual([
+      "changeRole",
+      "deactivate",
       "invite",
       "list",
       "listInvitations",
+      "reactivate",
       "revokeInvitation",
     ]);
   });

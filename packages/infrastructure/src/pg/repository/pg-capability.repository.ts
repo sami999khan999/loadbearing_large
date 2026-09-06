@@ -4,6 +4,7 @@ import {
   CapabilitySet,
   type CapabilitySetDto,
   eq,
+  isNull,
   type OrganizationId,
   type PermissionKey,
   PermissionRegistry,
@@ -38,7 +39,15 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
       .select({ permission: rolePermissions.permission })
       .from(memberships)
       .innerJoin(rolePermissions, eq(rolePermissions.roleId, memberships.roleId))
-      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)));
+      // Deactivated grants nothing. Defence in depth: `PrincipalBuilder` already
+      // refuses the session, and this is what a bypass of it would still hit.
+      .where(
+        and(
+          eq(memberships.organizationId, organizationId),
+          eq(memberships.userId, userId),
+          isNull(memberships.deactivatedAt),
+        ),
+      );
 
     for (const row of orgRows) {
       if (registry.isKnown(row.permission)) org.grants.add(row.permission);

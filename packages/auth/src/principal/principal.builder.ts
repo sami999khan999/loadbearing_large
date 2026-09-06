@@ -1,5 +1,6 @@
 import type { ApiKeyResolver } from "../apikey/api-key.resolver.js";
 import { Principal, type RequestHeaders, type SessionResolver } from "../import.js";
+import type { MembershipReader } from "../session/membership.reader.js";
 import type { CapabilityCache } from "./capability.cache.js";
 
 // Four credential types collapse into one `Principal` here, so a single
@@ -9,6 +10,7 @@ export class PrincipalBuilder {
     private readonly sessions: SessionResolver,
     private readonly apiKeys: ApiKeyResolver,
     private readonly capabilities: CapabilityCache,
+    private readonly memberships: MembershipReader,
   ) {}
 
   public async fromHeaders(headers: RequestHeaders): Promise<Principal | null> {
@@ -19,6 +21,10 @@ export class PrincipalBuilder {
 
     const session = await this.sessions.resolve(headers);
     if (!session) return null;
+
+    // Before the capabilities, because a deactivated membership is not a principal with
+    // nothing granted — it is no principal at all. One row on `memberships_uq`.
+    if (!(await this.memberships.isActive(session.userId, session.organizationId))) return null;
 
     const capabilities = await this.capabilities.forUser(session.organizationId, session.userId);
     return new Principal(session.organizationId, session.userId, capabilities, "user");

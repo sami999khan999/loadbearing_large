@@ -24,4 +24,11 @@ export const member: NamespaceBundle<"member"> = {
   "member.invite.submit": "আমন্ত্রণ পাঠান",
   "member.invite.sent": "{email}-এ আমন্ত্রণ পাঠানো হয়েছে। এটি সাত দিন পরে মেয়াদোত্তীর্ণ হবে।",
   "member.invite.alreadyMember": "এই ঠিকানাটি ইতিমধ্যে এই প্রতিষ্ঠানের একজন সদস্যের।",
+
+  "member.column.actions": "কার্যক্রম",
+  "member.action.deactivate": "নিষ্ক্রিয় করুন",
+  "member.action.reactivate": "সক্রিয় করুন",
+  "member.action.changeRole": "ভূমিকা পরিবর্তন",
+  "member.error.lastOwner": "ইনিই একমাত্র সক্রিয় মালিক। আগে অন্য কাউকে মালিক করুন।",
+  "member.error.self": "আপনি নিজের সদস্যপদ নিষ্ক্রিয় করতে পারবেন না।",
 };

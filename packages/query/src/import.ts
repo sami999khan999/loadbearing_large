@@ -14,11 +14,14 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // Types only: this package caches what the contract describes, with no opinion about it.
 export type {
+  ChangeMemberRoleInput,
   InvitationDto,
   InviteMemberInput,
+  MemberDto,
   PaginationQuery,
   RevokeInvitationInput,
   RoleDto,
+  SetMemberActiveInput,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────

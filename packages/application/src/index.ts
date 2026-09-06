@@ -8,6 +8,7 @@ export {
   IndexDocumentUseCase,
 } from "./ai/index.js";
 export {
+  ChangeMemberRoleUseCase,
   type InvitationMail,
   InvitationMailer,
   type InvitationPage,
@@ -22,9 +23,11 @@ export {
   type MemberPage,
   type MemberRecord,
   MemberRepository,
+  MemberRules,
   type NewInvitation,
   type RevokeInvitationInput,
   RevokeInvitationUseCase,
+  SetMemberActiveUseCase,
 } from "./member/index.js";
 export {
   ActivityArchiveGateway,

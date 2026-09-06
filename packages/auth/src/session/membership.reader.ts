@@ -23,4 +23,8 @@ export abstract class MembershipReader {
 
   // Every tenant the user may switch to, oldest first. Read once per SSR pass.
   public abstract organizationsFor(userId: UserId): Promise<readonly OrganizationSummary[]>;
+
+  // False for a deactivated membership *and* for no membership at all, because the
+  // answer `PrincipalBuilder` needs is the same either way: do not issue a principal.
+  public abstract isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean>;
 }

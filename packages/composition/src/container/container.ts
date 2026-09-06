@@ -12,6 +12,7 @@ import {
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
+  ChangeMemberRoleUseCase,
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
   ClickHouseConnection,
@@ -62,6 +63,7 @@ import {
   S3StorageGateway,
   SERVER_CATALOG,
   type SessionResolver,
+  SetMemberActiveUseCase,
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
@@ -80,6 +82,10 @@ export interface MemberUseCases {
   readonly listInvitations: ListInvitationsUseCase;
   readonly inviteMember: InviteMemberUseCase;
   readonly revokeInvitation: RevokeInvitationUseCase;
+  readonly changeMemberRole: ChangeMemberRoleUseCase;
+  // One use-case behind two procedures: the direction is an argument, because the
+  // column is one value and two classes would let them disagree about "active".
+  readonly setMemberActive: SetMemberActiveUseCase;
 }
 
 // One field per dependency the deployment cannot serve requests without, plus the
@@ -286,6 +292,7 @@ export class Container {
         this.sessionResolver,
         apiKeyResolver,
         this.capabilities,
+        this.memberships,
       );
 
       // Inside the auth block because the mail's link is `auth.baseUrl`. The use-cases
@@ -308,6 +315,20 @@ export class Container {
           invitations,
           this.activity,
           this.unitOfWork,
+        ),
+        changeMemberRole: new ChangeMemberRoleUseCase(
+          this.authorizer,
+          members,
+          roles,
+          this.activity,
+          this.unitOfWork,
+        ),
+        setMemberActive: new SetMemberActiveUseCase(
+          this.authorizer,
+          members,
+          this.activity,
+          this.unitOfWork,
+          this.clock,
         ),
       };
     }

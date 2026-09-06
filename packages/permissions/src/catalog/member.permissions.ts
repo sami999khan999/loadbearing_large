@@ -10,4 +10,11 @@ export const memberPermissions = {
     module: "member",
     label: "Deactivate members",
   },
+  // Separate from `deactivate`: removing someone's access and changing what they may do
+  // are different powers, and a role that can do one need not do the other.
+  "member.role.change": {
+    scope: "org",
+    module: "member",
+    label: "Change a member's role",
+  },
 } as const satisfies Record<string, PermissionMeta>;

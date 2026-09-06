@@ -2,6 +2,7 @@ import {
   and,
   asc,
   eq,
+  isNull,
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
@@ -9,6 +10,7 @@ import {
   type PaginationQuery,
   type RoleId,
   sql,
+  type UserId,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { memberships, roles, users } from "../schema/index.js";
@@ -26,7 +28,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
         roleKey: roles.key,
         roleName: roles.name,
         joinedAt: memberships.createdAt,
-        deactivatedAt: users.deactivatedAt,
+        deactivatedAt: memberships.deactivatedAt,
       })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
@@ -55,6 +57,83 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
     }));
 
     return { items, total: counted?.total ?? 0 };
+  }
+
+  // The same projection `list` builds, for one row. Written as its own query rather than
+  // reusing `list` with a filter: a page query with `limit: 1` still counts the table.
+  public async findByUser(
+    organizationId: OrganizationId,
+    userId: UserId,
+  ): Promise<MemberRecord | null> {
+    const [row] = await this.db
+      .select({
+        userId: memberships.userId,
+        name: users.name,
+        email: users.email,
+        roleId: memberships.roleId,
+        roleKey: roles.key,
+        roleName: roles.name,
+        joinedAt: memberships.createdAt,
+        deactivatedAt: memberships.deactivatedAt,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      roleId: row.roleId as RoleId,
+      roleKey: row.roleKey,
+      roleName: row.roleName,
+      joinedAt: row.joinedAt,
+      deactivated: row.deactivatedAt !== null,
+    };
+  }
+
+  public async changeRole(
+    organizationId: OrganizationId,
+    userId: UserId,
+    roleId: RoleId,
+  ): Promise<void> {
+    await this.db
+      .update(memberships)
+      .set({ roleId })
+      // Both columns, always: without the tenant this updates by user id across every
+      // organization the person belongs to.
+      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)));
+  }
+
+  public async setDeactivatedAt(
+    organizationId: OrganizationId,
+    userId: UserId,
+    at: Date | null,
+  ): Promise<void> {
+    await this.db
+      .update(memberships)
+      .set({ deactivatedAt: at })
+      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)));
+  }
+
+  public async countActiveOwners(organizationId: OrganizationId): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(memberships)
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(
+        and(
+          eq(memberships.organizationId, organizationId),
+          eq(roles.key, "owner"),
+          isNull(memberships.deactivatedAt),
+        ),
+      );
+
+    return row?.total ?? 0;
   }
 
   public async existsByEmail(organizationId: OrganizationId, email: string): Promise<boolean> {

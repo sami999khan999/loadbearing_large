@@ -1,4 +1,5 @@
 export {
+  type ChangeMemberRoleInput,
   type InvitationDto,
   type InviteMemberInput,
   MemberContract,
@@ -6,6 +7,7 @@ export {
   MemberEntity,
   MemberProcedures,
   type RevokeInvitationInput,
+  type SetMemberActiveInput,
 } from "./member/index.js";
 export {
   type ApiKeyId,
