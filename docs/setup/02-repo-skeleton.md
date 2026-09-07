@@ -135,14 +135,12 @@ AUTH_COOKIE_CACHE_MAX_AGE_SECONDS=60
 AUTH_REQUIRE_EMAIL_VERIFICATION=true
 
 # ── AI / embeddings ──────────────────────────────────────
-EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSIONS=1536
 OPENAI_API_KEY=
 
 # ── App ──────────────────────────────────────────────────
 NODE_ENV=development
-WEB_PORT=3000
 # APP and ENV are two of the four legal log labels. They identify the stream a
 # line belongs to; everything higher-cardinality stays in the line body.
 APP=web

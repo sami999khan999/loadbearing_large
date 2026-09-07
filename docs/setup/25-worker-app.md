@@ -160,6 +160,20 @@ import { Principal } from "@loadbearing/application";
 import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import { CapabilitySet, PermissionRegistry, type PermissionKey } from "@loadbearing/permissions";
 
+// Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all(), and
+// no core.*: every resolved principal already holds those.
+const DECLARED: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
+
+// Checked once at module load, which is what "at boot" has to mean.
+const GRANTS: readonly PermissionKey[] = Object.freeze(
+  DECLARED.map((key) => {
+    if (!PermissionRegistry.instance.isKnown(key)) {
+      throw new Error(`System principal references unknown permission: ${key}`);
+    }
+    return key;
+  }),
+);
+
 export class SystemPrincipal {
   private constructor() {}
 
@@ -167,26 +181,13 @@ export class SystemPrincipal {
   // holding a tenant id reads as a user.
   public static readonly USER_ID = "00000000-0000-7000-8000-000000000001";
 
-  // Narrow, explicit, and reviewed. Never PermissionRegistry.instance.all(), and
-  // no core.*: every resolved principal already holds those.
-  private static readonly GRANTS: readonly string[] = ["ai.embedding.write", "ai.embedding.read"];
-
   public static forOrganization(organizationId: string): Principal {
-    const registry = PermissionRegistry.instance;
-
-    const grants: PermissionKey[] = SystemPrincipal.GRANTS.map((key) => {
-      if (!registry.isKnown(key)) {
-        throw new Error(`System principal references unknown permission: ${key}`);
-      }
-      return key;
-    });
-
     return Principal.system(
       organizationId as OrganizationId,
       SystemPrincipal.USER_ID as UserId,
       CapabilitySet.from({
         wildcard: false,
-        org: { grants, denies: [] },
+        org: { grants: GRANTS, denies: [] },
         goals: {},
       }),
     );
@@ -199,7 +200,8 @@ export class SystemPrincipal {
 >
 > - **`CapabilitySet.from(dto)`, never `new CapabilitySet(...)`** — the constructor is private ([08](08-permissions-package.md)), and the argument is a `CapabilitySetDto`, not a list of `{ permission, goalId }` pairs.
 > - **`PermissionRegistry.instance.isKnown(...)`** — `isKnown` is an instance method on the singleton, not a static.
-> - **`GRANTS` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+> - **`DECLARED` is `readonly string[]`, not `as const`.** A literal-union type cannot be narrowed to `PermissionKey` by the type predicate unless the keys already exist in the catalog, so `as const` makes the `.map()` fail to typecheck.
+> - **The validated list is module-level and frozen, not a `static readonly` field.** That is the same rule `PermissionRegistry` follows for its own derived views: static mutable state is banned ([Rules · Classes](../ai/rules/classes.md)), and `Object.freeze` is what makes "derived once" true rather than intended.
 > - **`Principal.system` takes three arguments** — organization, actor, capabilities. Passing the organization id as the user id compiles only until the brands diverge, and lands a tenant id in the audit trail's actor column.
 >
 > Both keys above are real: `ai.embedding.write` and `ai.embedding.read` ship in `packages/permissions/src/catalog/ai.permissions.ts`. Name one that does not and this throws at boot, which is the rule working — a system principal referencing a permission that does not exist should never start.
@@ -208,7 +210,7 @@ export class SystemPrincipal {
 
 **A wildcard here would erase every authorization guarantee in the codebase.** The moment `SystemPrincipal` carries `PermissionRegistry.all()`, any bug that lets user input reach a job path becomes a full privilege escalation. Two named permissions, added deliberately, reviewed like any other grant.
 
-**The `isKnown()` check runs on every `forOrganization` call**, not once at boot — the registry is a singleton and the map is cheap, but a renamed permission therefore surfaces on the first job rather than at start-up. Either way it is a loud failure rather than a job that silently stops passing authorization.
+**The `isKnown()` check runs once, at module load.** It used to run inside `forOrganization`, which is to say on every job: the registry is a singleton and the lookup is cheap, so the cost was never the argument — the problem was that a renamed permission then surfaced on the first job at 3am rather than at start-up, while the comment above it said "at boot". `CATALOG` is a compile-time constant with no dynamic registration, so there is no import-order window in which this can see a half-built registry.
 
 **Every job carries an organization.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
 
@@ -376,7 +378,7 @@ Each one exists because something else in the architecture assumed it would.
 
 | Schedule | Queue | Pattern | Why it exists |
 |---|---|---|---|
-| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions and stale verification rows |
+| `cleanup-daily` | maintenance | `0 3 * * *` | Expired sessions, stale verification rows, and lapsed invitations |
 | `partitions-monthly` | maintenance | `0 2 1 * *` | Creates the next few months of `activity_log` partitions |
 | `archive-monthly` | maintenance | `0 4 1 * *` | Detaches the month that aged out, ships it to S3, records it |
 | `analytics-projection` | analytics | `*/5 * * * *` | Replays `activity_log` into the derived store |
@@ -390,7 +392,13 @@ left `cleanup-daily` broken for a while. A consumer with no *store* is worse: it
 five minutes of nothing looks exactly like five minutes of work, and the first sign is a report that
 comes out wrong months later. **Absent beats no-op.**
 
-**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. `MaintenanceConsumer.MONTHS_AHEAD` is 3: each run creates the current month and the next two, so the job can miss two runs before anything breaks.
+**The invitation half of `cleanup-daily` is not housekeeping.** `invitations_email_uq` is on
+`(organization_id, email)`, so an invitation that lapsed last month keeps that address un-invitable
+— and the symptom is a re-invite refused with a conflict, which nobody connects to an expired row.
+The predicate is indexed (`invitations_expires_idx`), because a nightly delete filtering on an
+unindexed column scans every invitation in the deployment to find the few that lapsed.
+
+**`partitions-monthly` runs several months ahead, not one.** A partitioned table with no partition for the current date rejects every insert — so the failure mode of running exactly one month ahead is a total write outage at midnight on the first, and the fix is a job that was supposed to have run. `MaintenanceConsumer.MONTHS_PER_RUN` is 3: each run creates the current month and the next two, so the job can miss two runs before anything breaks. The constant is named for the count rather than the runway, because it was `MONTHS_AHEAD` for a while and read as three months of headroom it never had.
 
 **Sweeping uploads is not in `cleanup-daily`.** `MaintenanceGateway.sweepExpired` takes sessions and verification rows and nothing else — an orphaned S3 object has no row to sweep from, so finding one means listing the bucket against the table, which is a different job with a different cost. Adding it is a method on the gateway and a line in `MaintenanceConsumer.cleanup`.
 
@@ -442,7 +450,7 @@ shown since that day is wrong and the replay only works while `activity_log` sti
 ```ts
 export class WorkerBootstrap {
   private readonly workers: Worker[] = [];
-  private stopping = false;
+  private draining: Promise<void> | null = null;
 
   public constructor(
     private readonly container: Container,
@@ -485,21 +493,29 @@ export class WorkerBootstrap {
     });
   }
 
-  // Idempotent: closing twice surfaces as an unhandled rejection from an
-  // already-closed client.
-  public async stop(signal: string): Promise<void> {
-    if (this.stopping) return;
-    this.stopping = true;
+  // Idempotent, and a second signal *joins* the drain already running. Returning
+  // early resolves at once, and `main.ts` exits on that — mid-close.
+  public stop(signal: string): Promise<void> {
+    this.draining ??= this.drain(signal);
+    return this.draining;
+  }
 
+  private async drain(signal: string): Promise<void> {
     this.container.logger.emit("process.stopping", { service: "worker", signal });
     const startedAt = this.container.clock.now();
 
+    // Handled before the race, never after: once the timeout has won, a rejection
+    // arriving late has nowhere to land but `unhandledRejection`.
+    const closed = Promise.all(this.workers.map((w) => w.close())).then(
+      () => undefined,
+      (error: unknown) => {
+        this.container.logger.failure(error, { service: "worker", phase: "close" });
+      },
+    );
+
     // `close()` drains; the race is the backstop, because a job that never returns
     // must not hold the process past the platform's SIGKILL timer.
-    await Promise.race([
-      Promise.all(this.workers.map((w) => w.close())),
-      WorkerBootstrap.after(Env.shutdownTimeoutMs),
-    ]);
+    await Promise.race([closed, WorkerBootstrap.after(Env.shutdownTimeoutMs)]);
 
     await this.redis.close();
 
@@ -525,7 +541,8 @@ export class WorkerBootstrap {
 > [!IMPORTANT]
 > **Three things in `stop()` are each a separate incident when left out.**
 >
-> - **The `stopping` guard.** A container platform that sends `SIGTERM` and then `SIGINT` calls this twice, and the second `close()` on an already-closed client rejects with nothing to catch it.
+> - **The `draining` memo, and the fact that it is *returned*.** A container platform that sends `SIGTERM` and then `SIGINT` calls this twice: without a guard the second `close()` on an already-closed client rejects with nothing to catch it, and with a guard that returns nothing the second caller gets a promise that is already resolved — `main.ts` chains `process.exit(0)` onto it and cuts the first drain short. Both halves are one line, and only together are they a guard.
+> - **The rejection handler on `closed`, attached before the race rather than after.** When the timeout wins, the drain moves on and the `close()` promise is still pending; a rejection landing afterwards has no handler, reaches `unhandledRejection`, and exits 1 over a shutdown that had already emitted `process.stopped`.
 > - **The race against `WORKER_SHUTDOWN_TIMEOUT_MS`.** `close()` drains, and a job that never returns drains forever — past the platform's own SIGKILL timer, which then kills the process in the state graceful shutdown existed to avoid.
 > - **`container.clock.now()` on both sides of the duration, never `Date.now()`.** The clock is a port precisely so a test can freeze it; mixing the two makes the one number the shutdown emits untestable.
 
@@ -563,17 +580,15 @@ process.on("uncaughtException", (error: unknown) => {
   process.exit(1);
 });
 
-try {
-  await bootstrap.start();
-} catch (error: unknown) {
-  container.logger.failure(error, { service: "worker", phase: "start" });
-  process.exit(1);
-}
+// Started but not yet awaited, so the handlers below exist while boot is still
+// running. A signal in that window drains instead of killing a half-built worker.
+const started = bootstrap.start();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    void bootstrap
-      .stop(signal)
+    void started
+      // Boot first: there is nothing to drain until the consumers are registered.
+      .then(() => bootstrap.stop(signal))
       .then(() => process.exit(0))
       .catch((error: unknown) => {
         // Logged, never swallowed: a bare `.catch(() => process.exit(1))` turns
@@ -583,7 +598,16 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
       });
   });
 }
+
+try {
+  await started;
+} catch (error: unknown) {
+  container.logger.failure(error, { service: "worker", phase: "start" });
+  process.exit(1);
+}
 ```
+
+**`start()` is called, then the signal handlers are registered, and only then is it awaited.** Registering them after the `await` leaves a window — the whole of boot — in which `SIGTERM` gets Node's default handling and kills a worker that has consumers running and schedules half registered. Splitting the promise from the `await` closes it in three lines, and the handler waits on `started` before draining because there is nothing to drain until the consumers exist.
 
 **The two process-level handlers are registered before `start()`, not after.** A container that fails to reach Postgres throws during boot, and without them Node prints a raw stack to stderr — unparseable by the collector, so the one failure you most need in the log stream is the one that misses it. The same reasoning puts a `try` around `start()` and a `.catch` on `stop()`.
 

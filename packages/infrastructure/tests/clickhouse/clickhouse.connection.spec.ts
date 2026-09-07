@@ -6,6 +6,15 @@ import { RecordingLogger } from "../support/recording.logger.js";
 const failWith = (status: number, body: string) =>
   vi.fn().mockResolvedValue({ ok: false, status, text: () => Promise.resolve(body) });
 
+const ok = () => vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("") });
+
+// The URL `send()` built, read back through `URLSearchParams` so the assertion is about
+// the value ClickHouse receives rather than about percent-encoding.
+function paramOf(fetch: ReturnType<typeof vi.fn>, name: string): string | null {
+  const url = fetch.mock.calls[0]?.[0] as URL;
+  return url.searchParams.get(`param_${name}`);
+}
+
 const connection = (logger?: RecordingLogger) =>
   new ClickHouseConnection(
     { url: "http://stub:8123", database: "analytics", username: "u", password: "p" },
@@ -60,5 +69,36 @@ describe("ClickHouseConnection", () => {
     vi.stubGlobal("fetch", failWith(500, "boom"));
 
     await expect(connection().command("INSERT INTO t VALUES")).rejects.toThrow(UnavailableError);
+  });
+
+  // An array parameter is the one value sent as a literal, so an element carrying a quote
+  // used to close its own string and become two — a filter matching rows nobody named.
+  it("escapes a quote inside an array parameter rather than splitting the element", async () => {
+    const fetch = ok();
+    vi.stubGlobal("fetch", fetch);
+
+    await connection().query("SELECT 1", { ids: ["a'b", "c"] });
+
+    expect(paramOf(fetch, "ids")).toBe("['a\\'b','c']");
+  });
+
+  it("escapes a backslash before the quote it would otherwise cancel", async () => {
+    const fetch = ok();
+    vi.stubGlobal("fetch", fetch);
+
+    // Escaping the quote first would leave `\` in front of the escape and hand ClickHouse
+    // a literal quote again.
+    await connection().query("SELECT 1", { ids: ["a\\", "b'c"] });
+
+    expect(paramOf(fetch, "ids")).toBe("['a\\\\','b\\'c']");
+  });
+
+  it("sends a scalar unquoted, so nothing in it needs escaping", async () => {
+    const fetch = ok();
+    vi.stubGlobal("fetch", fetch);
+
+    await connection().query("SELECT 1", { name: "o'brien" });
+
+    expect(paramOf(fetch, "name")).toBe("o'brien");
   });
 });

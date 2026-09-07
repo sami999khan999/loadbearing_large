@@ -108,7 +108,20 @@ export class ClickHouseConnection {
   // which is at least loud.
   private static encode(value: unknown): string {
     if (value instanceof Date) return value.toISOString().replace("T", " ").replace("Z", "");
-    if (Array.isArray(value)) return `[${value.map((v) => `'${String(v)}'`).join(",")}]`;
+
+    if (Array.isArray(value)) {
+      const items = value.map((v) => `'${ClickHouseConnection.escape(String(v))}'`);
+      return `[${items.join(",")}]`;
+    }
+
+    // A scalar rides its own query-string parameter and is never quoted, so there is
+    // nothing here for an escape to protect.
     return String(value);
+  }
+
+  // An array is the one parameter sent as a literal, so an unescaped `'` splits one element
+  // into two. Backslash first, or the escape this writes gets escaped by the next pass.
+  private static escape(value: string): string {
+    return value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
   }
 }

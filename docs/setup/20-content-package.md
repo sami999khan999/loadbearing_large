@@ -338,6 +338,15 @@ a typo is a compile error today, and `ERROR_COPY` is total today.
 `ERROR_COPY: Record<ErrorCode, ShellMessageKey>` above is still total. Nothing about the guarantee
 changed — only where the runtime data lives.
 
+> [!NOTE]
+> **The shipped repository has more namespaces than this step declares**, and the listings here are
+> the state at this build step rather than the finished set. One of the extras is worth knowing
+> about while you are choosing where a key goes: `auth` was later split into `auth` (before there is
+> a session) and `account` (settings afterwards), because a namespace is a chunk and
+> `/forgot-password` was downloading the backup-code warning. The rule that fell out of it — group
+> keys by *when they are downloaded*, not by feature area — is in
+> [`content/docs/reference/namespace.md`](../../packages/content/docs/reference/namespace.md).
+
 > [!IMPORTANT]
 > **`NamespaceKeys` is a mapped type deliberately, and the obvious alternative silently does
 > nothing.** The tempting form is a conditional over the namespace:
@@ -953,6 +962,9 @@ export class MessageStore {
   private snapshot: MessageSnapshot;
   private cached: Translator;
   private readonly listeners = new Set<() => void>();
+  // Keyed by locale *and* namespace, so a load still running when the locale
+  // changes cannot be joined by a caller that now wants the other language.
+  private readonly inFlight = new Map<string, Promise<void>>();
 
   public constructor(
     private readonly content: ContentSource,
@@ -980,12 +992,45 @@ export class MessageStore {
 
   // Idempotent. Resolves immediately when nothing is missing.
   public async ensure(namespaces: readonly Namespace[]): Promise<void> {
+    const { locale } = this.snapshot;
     const missing = namespaces.filter((n) => !this.snapshot.namespaces.includes(n));
     if (missing.length === 0) return;
 
-    const added = await this.content.messages(this.snapshot.locale, missing);
-    this.restore(Translator.merge(this.snapshot, added));
-    for (const listener of this.listeners) listener();
+    // Per namespace, not per requested set: two routes asking for overlapping
+    // sets in the same tick share the fetch for what they have in common.
+    const fresh = missing.filter((n) => !this.inFlight.has(MessageStore.key(locale, n)));
+
+    if (fresh.length > 0) {
+      const load = this.load(locale, fresh);
+      for (const n of fresh) this.inFlight.set(MessageStore.key(locale, n), load);
+    }
+
+    const waits: Promise<void>[] = [];
+    for (const n of missing) {
+      const pending = this.inFlight.get(MessageStore.key(locale, n));
+      if (pending) waits.push(pending);
+    }
+
+    await Promise.all(waits);
+  }
+
+  private async load(locale: Locale, namespaces: readonly Namespace[]): Promise<void> {
+    try {
+      const added = await this.content.messages(locale, namespaces);
+
+      // The locale can change while this is in flight, and what came back is the
+      // previous one's copy.
+      if (this.snapshot.locale !== locale) return;
+
+      this.restore(Translator.merge(this.snapshot, added));
+      for (const listener of this.listeners) listener();
+    } finally {
+      for (const n of namespaces) this.inFlight.delete(MessageStore.key(locale, n));
+    }
+  }
+
+  private static key(locale: Locale, namespace: Namespace): string {
+    return `${locale}:${namespace}`;
   }
 
   public subscribe(listener: () => void): () => void {
@@ -1005,6 +1050,18 @@ user's locale to the next one.
 
 **`ensure()` is what a route loader calls**, and `dehydrate()`/`restore()` are what carry the
 result across the SSR boundary. Both are wired in [24](24-web-app.md) Step 24.10.
+
+**The `inFlight` map is what makes "idempotent" true under concurrency.** Without it, `missing`
+is computed from a snapshot that no in-flight load has updated yet, so two route loaders
+resolving in the same tick both see the namespace as absent and both fetch it. De-duplication is
+per *namespace* rather than per requested set, because two routes rarely declare the same set and
+often overlap: `["nav", "auth"]` and `["auth", "role"]` should be two requests covering three
+namespaces, not two requests covering four.
+
+**The key carries the locale, and `load()` re-checks it before merging.** A bundle that arrives
+after `setLocale()` is the previous language's copy, and merging it puts old sentences under keys
+the new bundle also has — the one failure mode here that is silent, because the page renders
+fluent text in the wrong language rather than a missing key.
 
 ---
 

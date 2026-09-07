@@ -38,7 +38,9 @@ export function ModuleNav({ items, capabilities, renderLink }: ModuleNavProps) {
   }, [items, capabilities]);
 
   return (
-    <nav>
+    // Labelled, because the shell renders a second `<nav>` for the account links and a
+    // screen reader listing two unnamed navigations has told the reader nothing.
+    <nav aria-label={t("nav.sections")}>
       {visible.map((item) => {
         const gate = ModuleRegistry.instance.gate(item.module as ModuleKey);
         // Validated, not cast: a content row is wide by design, and an unknown name

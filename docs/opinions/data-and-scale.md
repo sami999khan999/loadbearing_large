@@ -295,6 +295,12 @@ Three consequences that are easy to miss:
 ### 4.2 Partition the append-only tables
 
 `activity_log` and `task_status_history`. Both grow forever, both are queried by recent time window.
+Only the first is a shipped table — `task_status_history` belongs to the worked `task` feature and is
+here as the second example, because one example makes a rule look like a special case.
+
+**Both halves of that sentence are the test, and the second is the one people drop.** Append-only is
+not the criterion; append-only *and growing with activity* is. A table that gains rows because
+something happened is a candidate; a table that gains rows because time passed is not.
 
 ```sql
 CREATE TABLE activity_log (
@@ -334,6 +340,17 @@ one: Better Auth updates it on refresh, deletes it on sign-out, and looks rows u
 predicate carrying no partition key, so every lookup would scan every partition. It is bounded by
 expiry instead, and a `DELETE … WHERE expires_at < now()` on the cleanup schedule is the right tool
 ([25](../setup/25-worker-app.md)).
+
+**`activity_archive` is not on it either, and it is the case the rule reads as covering.** It is
+genuinely append-only — one row per archived month, `period` as the primary key, written by the
+`archive-monthly` schedule and by nothing else. It is also **twelve rows a year**. Partitioning it
+would put one row in each partition and buy nothing at any horizon anyone will operate over: after a
+decade it is a hundred and twenty rows, which is a page.
+
+The reason it looks like a candidate is that it sits beside `activity_log` and describes the same
+data. It grows with the *calendar*, not with the audit trail — which is the distinction the sentence
+above exists to make, and the reason to state it rather than leave it to be re-derived by whoever
+notices the table next.
 
 **Decide the retention policy at the same time.** The common shape: 12–24 months of detail in
 Postgres, aggregates forever in the analytics store, older partitions detached to cold storage.
@@ -405,6 +422,19 @@ Postgres does not auto-index foreign keys, which surprises people.
 `memberships_user_idx` and `goal_members_user_idx` are already called out as non-optional
 ([13](../setup/13-infrastructure-postgres.md)) because `CapabilityRepository.resolveFor()` runs on essentially
 every request. The same reasoning applies to every FK added after.
+
+**The index has to *lead* with the foreign key column, and that is a second requirement rather than
+a restatement of the first.** `goal_members_user_idx` is on `(organization_id, user_id)`, which is
+right for the resolver and useless to the cascade: deleting a user is not a tenant-scoped operation,
+so Postgres cannot use a tenant-leading index for it and takes the table scan instead, holding a
+lock for the length of it. Four tables here were in exactly that state — the column present in a
+composite, the cascade unindexed — which is why this is now assertion 18 in `check:architecture`
+([26](../setup/26-hygiene-and-ci.md)) rather than a paragraph.
+
+**The answer is a second index, not a reordering of the first.** Reordering trades a hot read for a
+rare write, and the hot read is capability resolution on every request. The cascade-only indexes are
+named `<table>_<subject>_fk_idx` so that the next person to see two indexes over overlapping columns
+can tell which one exists for a query and which one exists for a delete.
 
 **Add query-count assertions to integration tests now.** N+1 queries hit at 50 users, not 5,000, and
 no database choice fixes them. It is the cheapest performance guardrail that exists.

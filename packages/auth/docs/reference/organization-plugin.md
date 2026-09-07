@@ -10,7 +10,7 @@ Three `POST` endpoints mounted on Better Auth:
 | Path | Body | Authorization |
 |---|---|---|
 | `/organization/switch` | `{ organizationId }` | `MembershipReader.isMember` — one indexed lookup |
-| `/organization/create` | `{ name }` | a session, plus the rate limit |
+| `/organization/create` | `{ name }` | a session, the rate limit, and a cap on tenants owned |
 | `/invitation/accept` | `{ token }` | `InvitationClaimer.claimByToken` decides |
 
 Every one of them ends the same way, in `rebind()`: the session row is rebound to the new tenant,
@@ -63,12 +63,29 @@ token.
 organization created here is indistinguishable from one created at a first sign-in. See
 [`enrolment.md`](./enrolment.md).
 
+It also throws `FORBIDDEN` / `ORGANIZATION_LIMIT_REACHED` once the caller owns
+`AUTH_MAX_OWNED_ORGANIZATIONS` of them, default ten.
+
+**A rate limit bounds the rate; it does not bound the total.** Five a minute is three hundred an
+hour, and each one seeds four roles and every permission the registry defines — so a scripted client
+left running overnight fills three tables with tenants nobody meant to create, at no point doing
+anything the rate limit considers abusive. The two limits answer different questions and a
+deployment needs both.
+
+**Owning is holding the `owner` role, not having founded it.** `ownedCount` counts memberships
+joined to `roles` on `key = 'owner'`, which is the definition that survives ownership being
+transferred, and it is a `count(*)` rather than `organizationsFor().length` — that read is itself
+capped at 100, so counting it would make the check pass forever at the ceiling.
+
 ## Rate limits
 
 All three paths carry custom rules rather than the global twenty a minute, declared in
 `AuthFactory`: create and accept at 5, switch at 20. Creating a tenant seeds a role set and about
 seventeen permission rows, and accepting is a guess against a token — neither is something a person
 does five times a minute.
+
+The rate limit on create is not the whole story, and for a while it was treated as though it were —
+see the ownership cap under [Refusals](#refusals).
 
 `NAME_MAX` is 80: long enough for any real name, short enough that a pasted paragraph is refused.
 

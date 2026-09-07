@@ -140,6 +140,21 @@ pending invitation in the deployment on every sign-up.
 `InvitationPreview` is restated here rather than imported for the same dependency-direction reason as
 the ports themselves.
 
+## `organizationsFor` is capped at 100
+
+Every row it returns is rendered by the organization switcher, so an unbounded read is a list that
+grows without limit — and it is a three-table join whose cost grows with it. The limit is a named
+constant on the reader rather than a literal in the query, because the number is a product decision
+about when a switcher stops being a switcher.
+
+**Past 100, the answer is search, not a longer list.** A user who is genuinely in more tenants than
+that needs a filter box and a paged query, which is a different read with a different index. Adding
+one is the change to make when someone hits this; raising the constant is not.
+
+The truncation is silent, deliberately: `MembershipReader` returns a list, and there is no caller
+that could do anything useful with "there were more". A caller that needs to know is the same caller
+that needs the paged read.
+
 ## The uuid cast
 
 `memberships` declares its organization FK as a plain `uuid`; the brand lives on `organizations.id`.

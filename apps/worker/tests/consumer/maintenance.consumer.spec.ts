@@ -14,7 +14,11 @@ const NOW = new Date("2026-08-15T00:00:00Z");
 // `TestContainer` rather than an object literal of the four members this consumer
 // touches: a port added to the container is a compile error there, and was silence here.
 function harness() {
-  const maintenance = new RecordingMaintenanceGateway({ sessions: 3, verifications: 1 });
+  const maintenance = new RecordingMaintenanceGateway({
+    sessions: 3,
+    verifications: 1,
+    invitations: 2,
+  });
   const activityArchive = new RecordingActivityArchiveGateway();
 
   const container = {
@@ -76,7 +80,7 @@ describe("MaintenanceConsumer", () => {
 
     // A table with no partition for the current date rejects every insert, so one month
     // of runway makes a missed run an outage at midnight on the first.
-    expect(maintenance.partitionsEnsured()[0]?.monthsAhead).toBeGreaterThan(1);
+    expect(maintenance.partitionsEnsured()[0]?.months).toBeGreaterThan(1);
     expect(maintenance.partitionsEnsured()[0]?.from).toEqual(NOW);
   });
 

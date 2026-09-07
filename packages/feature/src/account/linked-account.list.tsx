@@ -26,7 +26,7 @@ export function LinkedAccountList({
   googleEnabled,
   linkCallbackUrl,
 }: LinkedAccountListProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("account");
   // `common` for the states every list shares, `auth` for this screen's own copy.
   const shell = useMessages("common");
   // Renders the code the server sent rather than one generic sentence: a 403 and a
@@ -50,13 +50,16 @@ export function LinkedAccountList({
 
   if (linked.length === 0) {
     return (
-      <EmptyState title={t("auth.linkedAccounts")} description={t("auth.linkedAccountsHint")} />
+      <EmptyState
+        title={t("account.linkedAccounts")}
+        description={t("account.linkedAccountsHint")}
+      />
     );
   }
 
   return (
     <>
-      <p className="ui-field__hint">{t("auth.linkedAccountsHint")}</p>
+      <p className="ui-field__hint">{t("account.linkedAccountsHint")}</p>
 
       <ul>
         {linked.map((entry) => (
@@ -66,7 +69,7 @@ export function LinkedAccountList({
             </StatusBadge>
 
             {isLast ? (
-              <span className="ui-field__hint">{t("auth.unlinkLast")}</span>
+              <span className="ui-field__hint">{t("account.unlinkLast")}</span>
             ) : (
               <Button
                 variant="ghost"
@@ -75,7 +78,7 @@ export function LinkedAccountList({
                   unlink.mutate({ providerId: entry.providerId, accountId: entry.accountId })
                 }
               >
-                {t("auth.unlink")}
+                {t("account.unlink")}
               </Button>
             )}
           </li>
@@ -91,11 +94,11 @@ export function LinkedAccountList({
           disabled={link.isPending}
           onClick={() => link.mutate({ callbackURL: linkCallbackUrl })}
         >
-          {t("auth.linkGoogle")}
+          {t("account.linkGoogle")}
         </Button>
       ) : null}
 
-      {unlink.isError ? <Callout tone="danger">{t("auth.socialFailed")}</Callout> : null}
+      {unlink.isError ? <Callout tone="danger">{t("account.socialFailed")}</Callout> : null}
     </>
   );
 }

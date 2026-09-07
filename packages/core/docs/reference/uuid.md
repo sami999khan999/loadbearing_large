@@ -126,20 +126,27 @@ type-level problem only.
 
 ---
 
-## `isValid` checks the variant, not the version
+## `isValid` checks the version *and* the variant, and asserts neither is v7
 
 ```ts
-/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 ```
 
-The `[89ab]` group is the RFC 9562 variant nibble. Note what this means:
+Two constrained nibbles, and they mean different things. `[1-8]` is the version — every version RFC
+9562 defines — and `[89ab]` is the variant. So:
 
 - `…-7000-0000-000000000000` is **rejected** — the variant nibble is `0`.
-- A well-formed **v4** UUID is **accepted** — the version nibble is not checked at all.
+- The nil UUID and the max UUID are **rejected** — neither carries a defined version.
+- A well-formed **v4** is **accepted**, deliberately.
 
-That is intentional. `isValid` is a cheap shape guard for untrusted input at the edge, not a
-version assertion, and the schema has to keep accepting identifiers minted before v7. If you need
-"is this specifically a v7", check `value[14] === "7"` at the call site.
+**The version group used to be `[0-9a-f]`**, which is to say the version was not checked at all: a
+string with a correct variant and a version nibble of `0` or `f` passed, and neither is an
+identifier anything mints. That was a defect, and fixing it does not make this a v7 assertion.
+
+`isValid` is a cheap shape guard for untrusted input at the edge. An identifier minted elsewhere —
+by a client, an import, an older row — is still an identifier, and rejecting it here would move a
+schema decision into a regex. If you need "is this specifically a v7", check `value[14] === "7"` at
+the call site, where the reason for wanting that is visible.
 
 ---
 

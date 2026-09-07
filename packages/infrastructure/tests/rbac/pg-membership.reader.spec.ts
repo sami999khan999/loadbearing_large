@@ -138,4 +138,17 @@ describe("PgMembershipReader", () => {
     expect(await reader().activeOrganizationFor(nobody)).toBeNull();
     expect(await reader().organizationsFor(nobody)).toEqual([]);
   });
+
+  // What bounds `/organization/create`. Grace is the case that matters: two memberships,
+  // one of them as a plain member, so a count of memberships would give the wrong answer.
+  it("counts the organizations a user owns, not the ones they belong to", async () => {
+    expect(await reader().ownedCount(ada)).toBe(2);
+    expect(await reader().ownedCount(grace)).toBe(1);
+  });
+
+  it("counts zero for a user who owns nothing", async () => {
+    const nobody = await makeUser("Nobody Else");
+
+    expect(await reader().ownedCount(nobody)).toBe(0);
+  });
 });

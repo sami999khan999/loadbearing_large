@@ -6,6 +6,7 @@ import {
   text,
   timestamp,
   type UserId,
+  uniqueIndex,
   uuid,
 } from "../../import.js";
 import { organizations } from "./rbac.schema.js";
@@ -108,7 +109,12 @@ export const accounts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("accounts_user_idx").on(t.userId)],
+  (t) => [
+    index("accounts_user_idx").on(t.userId),
+    // Better Auth resolves a sign-in by `(providerId, accountId)` and takes the first row
+    // it finds. Two rows for one Google account is two identities sharing one login.
+    uniqueIndex("accounts_provider_account_uq").on(t.providerId, t.accountId),
+  ],
 );
 
 // Exists only because `verification.storeInDatabase` is set: without it these tokens
@@ -143,5 +149,7 @@ export const twoFactors = pgTable(
     failedVerificationCount: integer("failed_verification_count").default(0),
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
   },
-  (t) => [index("two_factors_user_idx").on(t.userId)],
+  // One secret per user: a second row is an enrolment that verifies against a device the
+  // person no longer has, and the lookup would not say which of the two it used.
+  (t) => [uniqueIndex("two_factors_user_idx").on(t.userId)],
 );

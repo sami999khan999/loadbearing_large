@@ -4,11 +4,16 @@ import type {
   InvitationDto,
   InviteMemberInput,
   MemberDto,
+  PaginationQuery,
   RevokeInvitationInput,
   SetMemberActiveInput,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 import { useAppMutation } from "../runtime/index.js";
+
+// Derived, never restated: the envelope is inferred per procedure, and a local interface
+// that drifted from it would be written back into the cache by `setQueryData`.
+type InvitationPage = Awaited<ReturnType<ApiClient["member"]["listInvitations"]>>;
 
 // Static hook factories: the hook rules apply at the call site, and each is called
 // unconditionally at the top of a component.
@@ -24,10 +29,22 @@ export class MemberMutations {
     });
   }
 
-  public static useRevokeInvitation(client: ApiClient) {
-    return useAppMutation<{ ok: true }, RevokeInvitationInput>({
+  // Takes the page it is revoking from, because that is what names the cache entry: an
+  // optimistic edit has to know which list the row is on, and the list is paginated.
+  public static useRevokeInvitation(client: ApiClient, params: PaginationQuery) {
+    return useAppMutation<{ ok: true }, RevokeInvitationInput, InvitationPage>({
       mutationFn: (input) => client.member.revokeInvitation(input),
       invalidates: [QueryKeys.member.all()],
+      optimistic: {
+        queryKey: QueryKeys.member.invitations(params),
+        apply: (page, { invitationId }) => ({
+          ...page,
+          items: page.items.filter((invitation) => invitation.id !== invitationId),
+          // Kept in step, or the row count under a list that just shrank is wrong until
+          // the refetch lands — which is the moment the optimistic edit exists to cover.
+          total: Math.max(0, page.total - 1),
+        }),
+      },
     });
   }
 

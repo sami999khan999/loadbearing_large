@@ -9,20 +9,20 @@ export interface SignOutButtonProps {
 }
 
 export function SignOutButton({ auth, onSignedOut }: SignOutButtonProps) {
-  const { t } = useMessages("auth");
+  const { t } = useMessages("nav");
   const signOut = SessionMutations.useSignOut(auth, onSignedOut);
 
   return (
     <>
       <Button variant="ghost" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
-        {t("auth.signOut")}
+        {t("nav.signOut")}
       </Button>
 
       {
         // A refused sign-out leaves the session live, so `onSignedOut` does not run and
         // the shell would otherwise say nothing at all.
       }
-      {signOut.isError ? <Callout tone="danger">{t("auth.signOutFailed")}</Callout> : null}
+      {signOut.isError ? <Callout tone="danger">{t("nav.signOutFailed")}</Callout> : null}
     </>
   );
 }

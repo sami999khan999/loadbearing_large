@@ -122,6 +122,9 @@ export class Container {
   private readonly database: Database;
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
+  // Held concretely for the same reason as the two above: `dispose()` needs `close()`,
+  // and `EmailSender` is a port that says nothing about a transport's lifetime.
+  private readonly emailSender: SmtpEmailSender;
   private readonly transactions: TransactionScope;
   // Held so `health()` can ping it and `dispose()` can close it, without handing the
   // connection out.
@@ -246,7 +249,8 @@ export class Container {
     // The only catalog carrying the `email` namespace the worker's digests read. A
     // client bundle cannot reach it.
     this.content = new StaticContentSource(SERVER_CATALOG);
-    this.email = new SmtpEmailSender(config.email, this.logger);
+    this.emailSender = new SmtpEmailSender(config.email, this.logger);
+    this.email = this.emailSender;
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
@@ -544,6 +548,9 @@ export class Container {
     await this.queuePublisher.close();
     await this.redis.close();
     await this.clickhouse?.close();
+    // Before Postgres only because nothing else depends on it: an unclosed transport is
+    // its own reason to be here, not a step in the ordering above.
+    await this.emailSender.close();
     await this.database.close();
   }
 

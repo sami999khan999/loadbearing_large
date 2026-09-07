@@ -4,6 +4,8 @@
 //
 // Run: pnpm check:comments
 
+// @ts-check
+
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -166,6 +168,7 @@ for (const file of files.slice(0, TOP_FILES)) {
 }
 
 const worst = packages[0];
-console.log(
-  `\n${overall.blocks} blocks over two lines. Worst package: ${basename(worst.name)} at ${percent(worst.comment, worst.total).toFixed(1)} %.`,
-);
+const worstLine = worst
+  ? `Worst package: ${basename(worst.name)} at ${percent(worst.comment, worst.total).toFixed(1)} %.`
+  : "No packages measured.";
+console.log(`\n${overall.blocks} blocks over two lines. ${worstLine}`);

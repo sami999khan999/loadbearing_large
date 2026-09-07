@@ -30,6 +30,7 @@ export class OrganizationPlugin {
     memberships: MembershipReader,
     claimer: InvitationClaimer,
     founder: OrganizationFounder,
+    maxOwnedOrganizations: number,
   ): BetterAuthPlugin {
     return {
       id: "organization",
@@ -60,6 +61,15 @@ export class OrganizationPlugin {
           { method: "POST", body: createBody, use: [sessionMiddleware], requireHeaders: true },
           async (ctx) => {
             const { session, user } = ctx.context.session;
+
+            // The rate limit bounds the rate, not the total. Each call seeds four roles
+            // and every permission the registry defines, so the total needs a bound too.
+            if ((await memberships.ownedCount(user.id as UserId)) >= maxOwnedOrganizations) {
+              throw new APIError("FORBIDDEN", {
+                code: "ORGANIZATION_LIMIT_REACHED",
+                message: "This account owns as many organizations as it may.",
+              });
+            }
 
             // The same founder the personal enroller uses, so an organization created
             // here is indistinguishable from one created at a first sign-in.

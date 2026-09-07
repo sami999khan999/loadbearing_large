@@ -11,9 +11,17 @@ export interface OrganizationSummary {
   readonly roleName: string;
 }
 
+// The role `SystemRoleSeed` gives a founder. Owning a tenant is holding this role in it,
+// which is the only definition of "owner" that survives a role being renamed in the UI.
+const OWNER_ROLE_KEY = "owner";
+
 // Satisfies `MembershipReader` structurally, because `auth` already depends on this
 // package. See docs/reference/enrollers.md.
 export class PgMembershipReader extends BaseRepository {
+  // The switcher renders every row `organizationsFor` returns, so an unbounded read is a
+  // list that grows without limit. Past this a user needs search, not a longer list.
+  private static readonly MAX_ORGANIZATIONS = 100;
+
   // Once per sign-in, not per request. Last switched to while still a member, oldest
   // membership otherwise — so the answer is stable rather than planner-dependent.
   public async activeOrganizationFor(userId: UserId): Promise<OrganizationId | null> {
@@ -78,8 +86,21 @@ export class PgMembershipReader extends BaseRepository {
       .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
       .innerJoin(roles, eq(roles.id, memberships.roleId))
       .where(eq(memberships.userId, userId))
-      .orderBy(asc(memberships.createdAt));
+      .orderBy(asc(memberships.createdAt))
+      .limit(PgMembershipReader.MAX_ORGANIZATIONS);
 
     return rows;
+  }
+
+  // `count(*)` rather than counting `organizationsFor()`, which is itself capped — a
+  // limit on the read used to check a limit would make the check pass at the ceiling.
+  public async ownedCount(userId: UserId): Promise<number> {
+    const [row] = await this.db
+      .select({ owned: sql<number>`count(*)::int` })
+      .from(memberships)
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(and(eq(memberships.userId, userId), eq(roles.key, OWNER_ROLE_KEY)));
+
+    return row?.owned ?? 0;
   }
 }

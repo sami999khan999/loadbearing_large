@@ -1,4 +1,4 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ import { TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 
 let database: Database;
-const created: string[] = [];
+const created: UserId[] = [];
 
 const makeUser = async (name = "Ada") => {
   const id = Identifiers.userId.parse(Uuid.v7());
@@ -53,8 +53,11 @@ afterAll(async () => {
     await database.client.delete(users).where(inArray(users.id, created));
 
     for (const row of owned) {
-      await database.client.delete(roles).where(eq(roles.organizationId, row.organizationId));
-      await database.client.delete(organizations).where(eq(organizations.id, row.organizationId));
+      // The column carries no brand, and `organizations.id` does — parsed rather than
+      // cast, so a row that is not a uuid fails here instead of in the driver.
+      const organizationId = Identifiers.organizationId.parse(row.organizationId);
+      await database.client.delete(roles).where(eq(roles.organizationId, organizationId));
+      await database.client.delete(organizations).where(eq(organizations.id, organizationId));
     }
   }
   await database.close();
@@ -130,7 +133,7 @@ describe("PgOrganizationFounder", () => {
     const userId = await makeUser();
     const scope = new TransactionScope();
     const subject = founder(scope);
-    let organizationId = "";
+    let organizationId: OrganizationId | undefined;
 
     await expect(
       database.client.transaction(async (tx) =>
@@ -141,12 +144,15 @@ describe("PgOrganizationFounder", () => {
       ),
     ).rejects.toThrow("abort");
 
+    // Thrown rather than asserted: the query below needs the id, and "the founder
+    // returned nothing" is a different failure from "the row survived the rollback".
+    if (organizationId === undefined) throw new Error("found returned no organization");
+
     const rows = await database.client
       .select({ id: organizations.id })
       .from(organizations)
       .where(eq(organizations.id, organizationId));
 
-    expect(organizationId).not.toBe("");
     expect(rows).toHaveLength(0);
   });
 });

@@ -44,6 +44,10 @@ class UnusedMembershipReader extends MembershipReader {
   public override isActive(): Promise<boolean> {
     return unreachable();
   }
+
+  public override ownedCount(): Promise<number> {
+    return unreachable();
+  }
 }
 
 class UnusedMembershipEnroller extends MembershipEnroller {
@@ -104,6 +108,8 @@ const auth = AuthFactory.create(
     // The mode changes nothing about the schema — no enroller runs here — but the type
     // is closed, so stating it is how this script keeps compiling against the real config.
     enrolmentMode: "invite" as const,
+    // Any positive number: no endpoint runs here, and the schema does not depend on it.
+    maxOwnedOrganizations: 10,
     // Google deliberately absent: the provider adds no table, and supplying credentials
     // to a script anyone runs by hand is how a secret ends up in a shell history.
   },

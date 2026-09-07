@@ -1,4 +1,11 @@
 {
   "extends": "@loadbearing/tsconfig/library.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "migrate.ts", "seed.ts", "smoke.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "migrate.ts",
+    "seed.ts"
+  ]
 }

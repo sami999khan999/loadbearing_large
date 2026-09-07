@@ -11,7 +11,7 @@ pnpm build                # topological, derived from workspace:* — no order d
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
 pnpm test
-pnpm check:architecture   # 16 assertions that no linter expresses
+pnpm check:architecture   # 18 assertions that no linter expresses
 pnpm check:contrast       # WCAG AA + sRGB gamut, every theme × mode. A gate, not a report
 pnpm check:comments       # comment density and block counts; reports, never fails
 pnpm deps:check           # syncpack: one dependency, one version line
@@ -30,20 +30,29 @@ Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a pack
 
 ## Before you claim a change is done
 
-Run **`pnpm check:architecture`** — sixteen assertions in `tooling/scripts/check-architecture.mjs`
+Run **`pnpm check:architecture`** — twenty assertions in `tooling/scripts/check-architecture.mjs`
 that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
 domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
 `organization_id`, the audit port renamed, a schema file missing from the drizzle barrel, these rule
 files drifting from `docs/opinions/`, a `docs/` folder with no `index.md`, a comment block over
-two lines, a backticked path in the docs that names nothing on disk, and the two pnpm version
-declarations disagreeing.
+two lines, a backticked path in the docs that names nothing on disk, the two pnpm version
+declarations disagreeing, a unique index on a tenant table that does not lead with
+`organization_id`, and a foreign key with no index leading with it.
+
+**On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
+`pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every
+route file fails to typecheck with an error that names none of this.
 
 **Two assertions need artefacts first** — `pnpm build:packages` for the barrel check and
 `pnpm --filter @loadbearing/web build` for the bundle check. They print `○ skipped` otherwise, and
 the summary counts them apart from the passes — **under `CI=true` a skip fails the run**, because
 there a skipped assertion is one nobody will come back to build the artefact for.
 **Treat a skip as unverified, not as a pass.** Then `pnpm typecheck && pnpm lint && pnpm test`.
+
+**`.claude/` is excluded from every grep in `check-architecture`.** It is agent scratch space,
+and it has held a full worktree checkout of this repository — which every assertion walking from
+the root would have counted a second time, in a copy nobody was editing.
 
 Four things rot quietly and no green build catches them: the client bundle staying clean, a concrete
 adapter escaping `infrastructure` + `composition`, naming drift, and a repository query that forgot

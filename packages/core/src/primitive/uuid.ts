@@ -22,7 +22,9 @@ export class Uuid {
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
   }
 
+  // A shape guard for untrusted input, not a version assertion — a v4 minted elsewhere is
+  // still an identifier. `[1-8]` is every version RFC 9562 defines; `[89ab]` is the variant.
   public static isValid(value: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   }
 }

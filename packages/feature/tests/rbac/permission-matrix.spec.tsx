@@ -7,6 +7,7 @@ import {
   capabilitiesWith,
   GRANTABLE,
   renderWithFakes,
+  TEST_USER,
 } from "../support/render-with-fakes.js";
 
 const ALL = PermissionRegistry.instance.all();
@@ -30,6 +31,8 @@ describe("PermissionMatrix", () => {
         ]}
       />,
       capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
     );
 
     // One cell for the grant, plus both subjects' `core.*` rows: every principal holds
@@ -44,6 +47,8 @@ describe("PermissionMatrix", () => {
         subjects={[{ id: "a", label: "A", capabilities: CapabilitySet.empty() }]}
       />,
       capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
     );
 
     // Header row plus one per permission. The rows are the catalog, not data.
@@ -56,14 +61,33 @@ describe("PermissionMatrix", () => {
         subjects={[{ id: "a", label: "Admin", capabilities: CapabilitySet.empty() }]}
       />,
       capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
     );
 
     expect(screen.getByRole("columnheader", { name: "Admin" })).toBeDefined();
   });
 
   it("falls back to the empty state with no subjects", async () => {
-    await renderWithFakes(<PermissionMatrix subjects={[]} />, capabilitiesWith([]));
+    await renderWithFakes(<PermissionMatrix subjects={[]} />, capabilitiesWith([]), TEST_USER, [
+      "role",
+    ]);
 
     expect(screen.getByText("Nothing here yet")).toBeDefined();
+  });
+
+  // The regression: the column of permission names had an empty `<th>`, announced as
+  // blank — so a screen reader reached every row header through a column with no name.
+  it("names the column its row headers sit in", async () => {
+    await renderWithFakes(
+      <PermissionMatrix
+        subjects={[{ id: "a", label: "Admin", capabilities: CapabilitySet.empty() }]}
+      />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
+    );
+
+    expect(screen.getByRole("columnheader", { name: "Permission" })).toBeDefined();
   });
 });

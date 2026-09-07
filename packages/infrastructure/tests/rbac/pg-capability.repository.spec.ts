@@ -1,4 +1,4 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type UserId } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
 import { eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -22,7 +22,7 @@ beforeAll(() => {
   database = openDatabase(counter);
 });
 
-const created: string[] = [];
+const created: UserId[] = [];
 
 afterAll(async () => {
   if (created.length > 0) {

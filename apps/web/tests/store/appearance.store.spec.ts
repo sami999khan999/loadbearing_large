@@ -132,9 +132,16 @@ describe("AppearanceStore", () => {
   });
 
   it("round-trips through the SSR payload", () => {
+    const snapshot = {
+      theme: "plum",
+      mode: "dark",
+      preference: "system",
+      font: "sans",
+      locale: "en",
+    } as const;
     const store = new AppearanceStore();
-    store.restore({ theme: "plum", mode: "dark", preference: "system" });
+    store.restore(snapshot);
 
-    expect(store.dehydrate()).toEqual({ theme: "plum", mode: "dark", preference: "system" });
+    expect(store.dehydrate()).toEqual(snapshot);
   });
 });

@@ -4,8 +4,10 @@
 // ── @loadbearing/api-client ──────────────────────────────────────────────────
 export type {
   AccountClient,
+  ActiveSession,
   ApiClient,
   AuthClient,
+  LinkedAccount,
   OrganizationClient,
   OrganizationSwitch,
   TwoFactorEnrolment,

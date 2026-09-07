@@ -36,6 +36,13 @@ export abstract class AppError extends Error {
 }
 
 export class TransportError extends AppError {}
+
+// The wire's trace id, bounded and character-checked. `Correlation.sanitise` in
+// observability is a delegating alias — this is the one copy of the rule.
+export class TraceIds {
+  public static readonly MAX_LENGTH: number;
+  public static sanitise(value: string | null | undefined): string | null;
+}
 ```
 
 ---
@@ -107,6 +114,25 @@ inherited property would resolve to a `retryable` of `undefined`.
 
 What comes back is a `TransportError` — the code and context survive, the original class does not. That
 is deliberate and sufficient: callers switch on `code`, never on `instanceof`.
+
+**The trace id is checked on the same grounds, and used to be adopted verbatim.** It is a string from
+the same untrusted envelope, and once adopted it rides every log line that mentions the error — the
+log-injection primitive `Correlation.sanitise` exists to prevent on the request path, reachable by a
+second door. `from()` now applies the identical rule and drops what fails it:
+
+```ts
+AppError.from({ code: "INTERNAL", context: {}, traceId: 'x" level=error' }); // no traceId
+AppError.from({ code: "INTERNAL", context: {}, traceId: "a".repeat(500) })
+  ?.toJSON().traceId?.length;                                               // 128
+```
+
+Over-long is truncated rather than dropped, because an over-long id is still probably the upstream's
+and half a trace is more use than none; a wrongly *shaped* one is discarded outright, because there
+is nothing in it worth keeping.
+
+**The rule lives in `TraceIds`, in this package, and `Correlation.sanitise` delegates to it.** Two
+copies of a bound-and-charset check is exactly the pair that drifts, and the direction of the
+dependency decides which package holds it: `observability` may import `errors`, never the reverse.
 
 ---
 

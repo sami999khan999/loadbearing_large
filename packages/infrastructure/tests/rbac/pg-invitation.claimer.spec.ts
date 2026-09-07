@@ -1,4 +1,4 @@
-import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId, type RoleId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Token, Uuid } from "@loadbearing/core";
 import { and, eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -29,13 +29,13 @@ class RecordingLogger implements Logger {
 
 const recorder = new RecordingLogger();
 let database: Database;
-const created: string[] = [];
+const created: UserId[] = [];
 const founded: OrganizationId[] = [];
 
 // The organization every invitation in this file points at, and its `member` role.
 let home: OrganizationId;
-let memberRole: string;
-let inviter: string;
+let memberRole: RoleId;
+let inviter: UserId;
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -51,7 +51,7 @@ const makeUser = async (name = "Ada", verified = true) => {
   return id;
 };
 
-const emailOf = (userId: string) => `${userId}@example.test`;
+const emailOf = (userId: UserId) => `${userId}@example.test`;
 
 const invite = async (
   email: string,
@@ -82,7 +82,7 @@ const withScope = () => {
   };
 };
 
-const membershipsOf = (userId: string) =>
+const membershipsOf = (userId: UserId) =>
   database.client
     .select({ organizationId: memberships.organizationId, roleId: memberships.roleId })
     .from(memberships)
@@ -101,7 +101,7 @@ beforeAll(async () => {
     .from(roles)
     .where(and(eq(roles.organizationId, home), eq(roles.key, "member")));
   if (!role) throw new Error("SystemRoleSeed did not seed a member role");
-  memberRole = role.id;
+  memberRole = Identifiers.roleId.parse(role.id);
 });
 
 afterAll(async () => {

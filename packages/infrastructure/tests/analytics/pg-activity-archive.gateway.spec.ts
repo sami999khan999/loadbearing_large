@@ -2,7 +2,7 @@ import type { Readable } from "node:stream";
 import { Uuid } from "@loadbearing/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { StorageGateway } from "../../src/import.js";
+import type { StorageGateway, StoredObject } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgActivityArchiveGateway } from "../../src/pg/repository/pg-activity-archive.gateway.js";
@@ -29,7 +29,7 @@ class FakeStorage implements Partial<StorageGateway> {
   public uploaded = 0;
   public body: Readable | undefined;
 
-  public async putStream(key: string, body: AsyncIterable<Uint8Array>): Promise<unknown> {
+  public async putStream(key: string, body: AsyncIterable<Uint8Array>): Promise<StoredObject> {
     this.body = body as Readable;
     if (this.failOnPut) throw new Error("s3 is down");
 
@@ -37,7 +37,7 @@ class FakeStorage implements Partial<StorageGateway> {
     for await (const chunk of body) bytes += chunk.byteLength;
     this.uploaded = bytes;
 
-    return { key, checksum: `sha-${bytes}`, size: bytes };
+    return { key, checksum: `sha-${bytes}`, size: bytes, contentType: "application/x-ndjson" };
   }
 
   public exists(): Promise<boolean> {

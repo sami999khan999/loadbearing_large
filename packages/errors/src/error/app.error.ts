@@ -1,4 +1,5 @@
 import { ERROR_CATALOG, type ErrorCode } from "../catalog/index.js";
+import { TraceIds } from "../transport/index.js";
 
 // `Error.captureStackTrace` is a V8 extension, absent from `lib: ["ES2024"]`.
 type StackTraceCapture = {
@@ -41,10 +42,17 @@ export abstract class AppError extends Error {
     return Object.hasOwn(ERROR_CATALOG, value);
   }
 
-  // Rebuild from the wire. `null` for an unrecognised code rather than trusting it.
+  // Rebuild from the wire. `null` for an unrecognised code rather than trusting it, and
+  // the trace id is checked for the same reason: everything here arrived from outside.
   public static from(envelope: ErrorEnvelope): AppError | null {
     if (!AppError.isKnownCode(envelope.code)) return null;
-    return new TransportError(envelope.code, envelope.context, envelope.fields, envelope.traceId);
+
+    return new TransportError(
+      envelope.code,
+      envelope.context,
+      envelope.fields,
+      TraceIds.sanitise(envelope.traceId) ?? undefined,
+    );
   }
 
   public get retryable(): boolean {

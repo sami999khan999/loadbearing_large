@@ -1,5 +1,5 @@
 import { Identifiers } from "@loadbearing/contracts";
-import { ForbiddenError, UnavailableError } from "@loadbearing/errors";
+import { ForbiddenError, UnavailableError, ValidationError } from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { IndexDocumentUseCase } from "../../src/ai/index-document.use-case.js";
@@ -27,7 +27,10 @@ const actorHolding = (...grants: readonly PermissionKey[]) =>
 // worth pinning, because `deleteBySource` runs before `upsert`.
 class RecordingVectorStore implements VectorStore {
   public readonly calls: string[] = [];
-  public upserted: readonly { readonly embedding: readonly number[] }[] = [];
+  public upserted: readonly {
+    readonly content: string;
+    readonly embedding: readonly number[];
+  }[] = [];
 
   public upsert(_organizationId: typeof ORG, chunks: readonly never[]): Promise<void> {
     this.calls.push("upsert");
@@ -89,6 +92,21 @@ const build = (embeddings: EmbeddingProvider, vectors = new RecordingVectorStore
 // asserting it made the audit port's own permission a feature permission.
 const grants: readonly PermissionKey[] = ["ai.embedding.write"];
 
+// Distinct characters rather than one repeated, so a slice says where it came from and
+// an off-by-one in the stride is visible instead of self-consistent.
+const letters = (length: number) =>
+  Array.from({ length }, (_, index) => String.fromCharCode(97 + (index % 26))).join("");
+
+const chunkCount = async (
+  useCase: {
+    execute: (
+      actor: Principal,
+      input: { documentId: typeof DOCUMENT; text: string },
+    ) => Promise<{ chunks: number }>;
+  },
+  text: string,
+) => (await useCase.execute(actorHolding(...grants), { documentId: DOCUMENT, text })).chunks;
+
 describe("IndexDocumentUseCase", () => {
   it("chunks the text and writes one embedding per chunk", async () => {
     const { useCase, vectors, activity } = build(new StubEmbeddingProvider((t) => t.length));
@@ -102,6 +120,51 @@ describe("IndexDocumentUseCase", () => {
     expect(vectors.upserted).toHaveLength(result.chunks);
     expect(vectors.calls).toEqual(["delete", "upsert"]);
     expect(activity.actions).toEqual(["ai.document.indexed"]);
+  });
+
+  // 1,500-character windows on a 1,300 stride, so consecutive chunks share 200
+  // characters and a sentence on a boundary is retrievable from either side.
+  it("overlaps consecutive chunks by exactly the overlap width", async () => {
+    const { useCase, vectors } = build(new StubEmbeddingProvider((t) => t.length));
+    const text = letters(3_000);
+
+    await useCase.execute(actorHolding(...grants), { documentId: DOCUMENT, text });
+
+    const contents = vectors.upserted.map((chunk) => chunk.content);
+    expect(contents[0]).toBe(text.slice(0, 1_500));
+    expect(contents[1]).toBe(text.slice(1_300, 2_800));
+    // The shared window, asserted from both sides rather than by arithmetic on one.
+    expect(contents[0]?.slice(-200)).toBe(contents[1]?.slice(0, 200));
+  });
+
+  // The `break` is what stops a stride shorter than the window from emitting a tail
+  // chunk that is entirely overlap — a duplicate embedding, and a duplicate hit.
+  it("stops when the window reaches the end rather than one stride past it", async () => {
+    const { useCase } = build(new StubEmbeddingProvider((t) => t.length));
+
+    // Exactly one window: the first slice already covers the text.
+    expect(await chunkCount(useCase, letters(1_500))).toBe(1);
+    // One character more, and the second window is the 201 characters from 1,300 on.
+    expect(await chunkCount(useCase, letters(1_501))).toBe(2);
+    // Two strides plus a remainder, not three windows.
+    expect(await chunkCount(useCase, letters(2_900))).toBe(3);
+  });
+
+  it("refuses text that is only whitespace, before reaching the provider", async () => {
+    let embedded = false;
+    const { useCase, vectors } = build(
+      new StubEmbeddingProvider((t) => {
+        embedded = true;
+        return t.length;
+      }),
+    );
+
+    await expect(
+      useCase.execute(actorHolding(...grants), { documentId: DOCUMENT, text: "   \n\t  " }),
+    ).rejects.toThrow(ValidationError);
+
+    expect(embedded).toBe(false);
+    expect(vectors.calls).toEqual([]);
   });
 
   // The regression guard: `vectors[index] ?? []` padded a short response with empties

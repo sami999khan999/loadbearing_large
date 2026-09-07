@@ -324,6 +324,16 @@ remembered at the call site or not at all. **`Field.htmlFor` is required, not op
 tied to a control is decoration — a screen reader announces the input as unlabelled and clicking the
 text does nothing — and making it mandatory is what stops that shipping.
 
+> [!NOTE]
+> **`.ui-skip-link` lives in `base.css` rather than being a component**, because it is markup the
+> shell owns: one anchor, first in the tab order, pointing at the `<main>` landmark. The rule that
+> matters is that it is moved **off-screen**, not hidden — `display: none` and `visibility: hidden`
+> both remove an element from the tab order, so a skip link that hides itself that way can never be
+> focused and therefore never works. It sits at a negative `top` and returns on `:focus`.
+>
+> `main:focus` clears the ring the base rule would otherwise draw: the anchor moves focus to a whole
+> page region programmatically, and outlining the region is noise rather than information.
+
 **`packages/ui/src/empty-state/empty-state.tsx`**
 
 ```tsx

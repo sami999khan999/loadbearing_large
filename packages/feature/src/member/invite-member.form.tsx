@@ -83,6 +83,8 @@ export function InviteMemberForm() {
           value={selectedRole}
           onChange={(event) => setRoleId(event.target.value)}
           disabled={roles.isPending}
+          // `disabled` alone removes it from the tab order and says nothing about why.
+          aria-busy={roles.isPending}
         >
           {options.map((role) => (
             <option key={role.id} value={role.id}>

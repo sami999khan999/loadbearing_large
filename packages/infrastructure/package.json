@@ -26,7 +26,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx --env-file-if-exists=../../.env seed.ts",
-    "smoke": "tsx smoke.ts"
+    "smoke": "vitest run -c vitest.smoke.config.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",

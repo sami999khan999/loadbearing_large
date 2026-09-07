@@ -27,4 +27,8 @@ export abstract class MembershipReader {
   // False for a deactivated membership *and* for no membership at all, because the
   // answer `PrincipalBuilder` needs is the same either way: do not issue a principal.
   public abstract isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean>;
+
+  // How many tenants this person owns. A count rather than `organizationsFor().length`:
+  // the cap is checked on a write path, and that read is capped itself.
+  public abstract ownedCount(userId: UserId): Promise<number>;
 }

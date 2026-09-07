@@ -51,6 +51,13 @@ export class SmtpEmailSender extends EmailSender {
     }
   }
 
+  // Nodemailer keeps sockets open between sends, and a process that exits without closing
+  // them waits on the SMTP server to time each one out. Not `async`: `close()` is sync.
+  public close(): Promise<void> {
+    this.transport.close();
+    return Promise.resolve();
+  }
+
   // Truncated, because a rejected recipient list comes back as the whole message.
   private static reason(error: unknown): string {
     return (error instanceof Error ? error.message : String(error)).slice(0, 300);

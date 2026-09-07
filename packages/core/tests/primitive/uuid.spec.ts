@@ -37,6 +37,22 @@ describe("Uuid", () => {
 
   it("rejects a malformed value", () => {
     expect(Uuid.isValid("not-a-uuid")).toBe(false);
+    // Well-formed hex in the right places, variant nibble `0`.
     expect(Uuid.isValid("0195f0a0-0000-7000-0000-000000000000")).toBe(false);
+  });
+
+  it("rejects a version nibble no RFC defines, variant or not", () => {
+    // The regression: the version position was not looked at, so these passed on a
+    // correct variant alone. Neither is an identifier anything mints.
+    expect(Uuid.isValid("0195f0a0-0000-0000-8000-000000000000")).toBe(false);
+    expect(Uuid.isValid("0195f0a0-0000-9000-8000-000000000000")).toBe(false);
+    expect(Uuid.isValid("00000000-0000-0000-0000-000000000000")).toBe(false);
+    expect(Uuid.isValid("ffffffff-ffff-ffff-ffff-ffffffffffff")).toBe(false);
+  });
+
+  // Deliberately not a v7 assertion: this guards the shape of untrusted input, and an
+  // identifier minted elsewhere is still an identifier. See docs/reference/uuid.md.
+  it("accepts a well-formed v4", () => {
+    expect(Uuid.isValid("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")).toBe(true);
   });
 });

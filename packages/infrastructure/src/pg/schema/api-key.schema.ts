@@ -46,5 +46,8 @@ export const apiKeys = pgTable(
     uniqueIndex("api_keys_hash_uq").on(t.tokenHash),
     index("api_keys_prefix_idx").on(t.prefix),
     index("api_keys_issuer_idx").on(t.organizationId, t.issuerId),
+    // For the cascade, not a query: deleting a user scans every row of this table
+    // unless an index leads with the column the foreign key names.
+    index("api_keys_issuer_fk_idx").on(t.issuerId),
   ],
 );

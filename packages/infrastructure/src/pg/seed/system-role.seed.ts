@@ -1,9 +1,11 @@
 import {
   and,
   eq,
+  inArray,
   type OrganizationId,
   type PermissionKey,
   PermissionRegistry,
+  sql,
   Uuid,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -33,29 +35,40 @@ const ROLES: readonly SystemRole[] = Object.freeze([
   { key: "guest", name: "Guest", scope: "org", permissions: [] },
 ]);
 
+const KEYS: readonly string[] = Object.freeze(ROLES.map((definition) => definition.key));
+
 export class SystemRoleSeed extends BaseRepository {
   // Idempotent: safe to run on every deploy. Per organization, because system roles
   // are rows in a tenant's table rather than global constants.
   public async run(organizationId: OrganizationId): Promise<void> {
-    for (const definition of ROLES) {
-      const existing = await this.db
-        .select({ id: roles.id })
-        .from(roles)
-        .where(and(eq(roles.organizationId, organizationId), eq(roles.key, definition.key)))
-        .limit(1);
-
-      const roleId = existing[0]?.id ?? Uuid.v7();
-
-      if (!existing[0]) {
-        await this.db.insert(roles).values({
-          id: roleId,
+    // Write first, read after: `on conflict do nothing` makes one statement correct for a
+    // tenant that has these rows and for one that does not, which a per-role check is not.
+    await this.db
+      .insert(roles)
+      .values(
+        ROLES.map((definition) => ({
+          id: Uuid.v7(),
           organizationId,
           key: definition.key,
           name: definition.name,
           scope: definition.scope,
           isSystem: true,
-        });
-      }
+        })),
+      )
+      .onConflictDoNothing({ target: [roles.organizationId, roles.key] });
+
+    // One `IN` for all four ids, including any a concurrent seed inserted a moment ago —
+    // which is why this reads the table rather than trusting the ids generated above.
+    const rows = await this.db
+      .select({ id: roles.id, key: roles.key })
+      .from(roles)
+      .where(and(eq(roles.organizationId, organizationId), inArray(roles.key, KEYS)));
+
+    const idByKey = new Map(rows.map((row) => [row.key, row.id]));
+
+    const grants = ROLES.flatMap((definition) => {
+      const roleId = idByKey.get(definition.key);
+      if (!roleId) return [];
 
       // Resolved at seed time, so every permission a feature adds reaches owners on
       // the next deploy. That is why the seed must re-run rather than run once.
@@ -64,12 +77,38 @@ export class SystemRoleSeed extends BaseRepository {
           ? PermissionRegistry.instance.all()
           : definition.permissions;
 
-      if (permissions.length === 0) continue;
+      return permissions.map((permission) => ({ organizationId, roleId, permission }));
+    });
 
-      await this.db
-        .insert(rolePermissions)
-        .values(permissions.map((permission) => ({ organizationId, roleId, permission })))
-        .onConflictDoNothing();
-    }
+    if (grants.length === 0) return;
+
+    await this.db.insert(rolePermissions).values(grants).onConflictDoNothing();
+
+    // The half an insert cannot do. A permission removed from the catalog, or dropped
+    // from a role's list, stays granted forever if the seed only ever adds.
+    await this.reconcile(organizationId, [...idByKey.values()], grants);
+  }
+
+  // Scoped to the seeded roles, which is what makes a blanket delete safe: `RoleRules`
+  // refuses to edit a system role, so nothing but this seed writes their grants.
+  private async reconcile(
+    organizationId: OrganizationId,
+    roleIds: readonly string[],
+    grants: readonly { readonly roleId: string; readonly permission: string }[],
+  ): Promise<void> {
+    const pairs = sql.join(
+      grants.map((grant) => sql`(${grant.roleId}, ${grant.permission})`),
+      sql`, `,
+    );
+
+    await this.db.delete(rolePermissions).where(
+      and(
+        eq(rolePermissions.organizationId, organizationId),
+        inArray(rolePermissions.roleId, [...roleIds]),
+        // A row-value `not in`, so one statement covers every role — including `guest`,
+        // whose whole set is "none" and whose stale rows are therefore all of them.
+        sql`(${rolePermissions.roleId}, ${rolePermissions.permission}) not in (${pairs})`,
+      ),
+    );
   }
 }

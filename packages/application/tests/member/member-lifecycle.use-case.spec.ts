@@ -108,10 +108,26 @@ class StubRoles implements RoleRepository {
   public findById(organizationId: OrganizationId, roleId: RoleId): Promise<RoleRecord | null> {
     if (organizationId !== ORG) return Promise.resolve(null);
     if (roleId === OWNER_ROLE) {
-      return Promise.resolve({ id: OWNER_ROLE, key: "owner", name: "Owner", permissions: [] });
+      return Promise.resolve({
+        id: OWNER_ROLE,
+        key: "owner",
+        name: "Owner",
+        description: null,
+        scope: "org",
+        isSystem: true,
+        permissions: [],
+      });
     }
     if (roleId === MEMBER_ROLE) {
-      return Promise.resolve({ id: MEMBER_ROLE, key: "member", name: "Member", permissions: [] });
+      return Promise.resolve({
+        id: MEMBER_ROLE,
+        key: "member",
+        name: "Member",
+        description: null,
+        scope: "org",
+        isSystem: true,
+        permissions: [],
+      });
     }
     return Promise.resolve(null);
   }

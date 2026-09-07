@@ -729,7 +729,7 @@ The barrel grows with the slices below it — `MembershipEnroller`, `InvitationC
 `OrganizationFounder` and `InvitationClaimingEnroller` from `session/`, and the plugin from
 `plugin/` — each named explicitly, because `export *` would make the public surface an accident.
 
-**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `smoke.ts` ([15](15-infrastructure-package.md)).
+**`tables/` is not exported, and neither is anything under it.** `tsup` builds `src/index.ts` alone, so the schema-inspection script never reaches `dist/` — the same arrangement `infrastructure` gives `migrate.ts` and `seed.ts` ([15](15-infrastructure-package.md)).
 
 **`auth.config.ts` contributes only a type, so its line is `export type { … }`, not `export { type … }`.** Biome's `useExportType` rewrites the second form into the first automatically when every specifier is a type; run `biome check --write` and stop thinking about it.
 
@@ -815,8 +815,17 @@ own base path:
 | Endpoint | Authorization |
 |---|---|
 | `POST /organization/switch` | `memberships.isMember(user, organizationId)` — one indexed lookup, and the whole check |
-| `POST /organization/create` | A session. The caller becomes `owner`, through the same `OrganizationFounder` the personal enroller uses |
+| `POST /organization/create` | A session, **and** fewer than `AUTH_MAX_OWNED_ORGANIZATIONS` already owned. The caller becomes `owner`, through the same `OrganizationFounder` the personal enroller uses |
 | `POST /invitation/accept` | The token, claimed against the verified address |
+
+**The cap on create is a second limit, not a stricter rate limit.** Five a minute is three hundred an
+hour, and each call seeds four roles and every permission the registry defines; a scripted client
+left running overnight fills three tables without ever doing anything the rate limit considers
+abusive. `ownedCount` counts memberships joined to `roles` on `key = 'owner'` — ownership is holding
+the role, which is the definition that survives a transfer — and it is a `count(*)` rather than the
+length of `organizationsFor()`, because that read is itself capped and would make the check pass
+forever at its ceiling. See
+[`auth/docs/reference/organization-plugin.md`](../../packages/auth/docs/reference/organization-plugin.md).
 
 All three end in the same private `rebind`, and **the order inside it is the load-bearing part**:
 

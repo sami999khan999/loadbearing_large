@@ -233,7 +233,7 @@ export class AuthFactory {
         }),
         // Switch, create, accept — the three ways a session ends up pointing at a
         // different tenant. See the class for why they are endpoints, not procedures.
-        OrganizationPlugin.create(memberships, claimer, founder),
+        OrganizationPlugin.create(memberships, claimer, founder, config.maxOwnedOrganizations),
       ],
     } satisfies BetterAuthOptions;
 

@@ -4,9 +4,11 @@ import { MaintenanceGateway, type SweepOutcome } from "../import.js";
 // assertion worth writing is "the sweep ran with this clock", not "the sweep ran".
 export class RecordingMaintenanceGateway extends MaintenanceGateway {
   private readonly sweeps: Date[] = [];
-  private readonly partitionRuns: { from: Date; monthsAhead: number }[] = [];
+  private readonly partitionRuns: { from: Date; months: number }[] = [];
 
-  public constructor(private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0 }) {
+  public constructor(
+    private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
+  ) {
     super();
   }
 
@@ -15,11 +17,8 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
     return Promise.resolve(this.outcome);
   }
 
-  public override ensureActivityPartitions(
-    from: Date,
-    monthsAhead: number,
-  ): Promise<readonly string[]> {
-    this.partitionRuns.push({ from, monthsAhead });
+  public override ensureActivityPartitions(from: Date, months: number): Promise<readonly string[]> {
+    this.partitionRuns.push({ from, months });
     return Promise.resolve([]);
   }
 
@@ -27,7 +26,7 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
     return this.sweeps;
   }
 
-  public partitionsEnsured(): readonly { from: Date; monthsAhead: number }[] {
+  public partitionsEnsured(): readonly { from: Date; months: number }[] {
     return this.partitionRuns;
   }
 }

@@ -2,7 +2,7 @@ import {
   type LogEntry,
   type Logger,
   type LogQuery,
-  type LogReader,
+  LogReader,
   UnavailableError,
 } from "../import.js";
 
@@ -28,7 +28,7 @@ interface LokiResponse {
 
 // The only code that knows Loki exists — the write path is stdout, so a platform swap is
 // this file and an Alloy config line. See docs/reference/loki.md.
-export class LokiLogReader implements LogReader {
+export class LokiLogReader extends LogReader {
   private static readonly DEFAULT_TIMEOUT_MS = 15_000;
   // Loki's own ceiling is 5000. Asking for more is a 400, not a truncation.
   private static readonly MAX_LIMIT = 5_000;
@@ -36,9 +36,11 @@ export class LokiLogReader implements LogReader {
   public constructor(
     private readonly config: LokiConfig,
     private readonly logger?: Logger,
-  ) {}
+  ) {
+    super();
+  }
 
-  public async query(query: LogQuery): Promise<readonly LogEntry[]> {
+  public override async query(query: LogQuery): Promise<readonly LogEntry[]> {
     const url = new URL("/loki/api/v1/query_range", this.config.url);
     url.searchParams.set("query", LokiLogReader.toLogQl(query));
     // Nanoseconds. Milliseconds are accepted and interpreted as nanoseconds, which
@@ -73,7 +75,7 @@ export class LokiLogReader implements LogReader {
     );
   }
 
-  public async healthy(): Promise<boolean> {
+  public override async healthy(): Promise<boolean> {
     try {
       const response = await fetch(new URL("/ready", this.config.url), {
         signal: AbortSignal.timeout(this.config.timeoutMs ?? LokiLogReader.DEFAULT_TIMEOUT_MS),

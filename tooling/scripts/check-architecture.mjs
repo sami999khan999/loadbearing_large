@@ -6,13 +6,36 @@
 //
 // Run: pnpm check:architecture
 
+// @ts-check
+
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  closingBracket,
+  columnsOf,
+  indexesOf,
+  lineOf,
+  outsideFences,
+  specifiers,
+  topLevelAwait,
+  withoutComments,
+} from "./source-text.mjs";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".output", ".git", "migrations", "src-tauri"]);
+// `.claude` holds agent scratch space — skills, and at one point a full worktree checkout,
+// which every grep here would have counted twice. Excluded by construction, not by luck.
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".output",
+  ".git",
+  ".claude",
+  "migrations",
+  "src-tauri",
+]);
 
 const results = [];
 
@@ -70,28 +93,42 @@ function rel(file) {
   return relative(ROOT, file).replaceAll("\\", "/");
 }
 
-// Import specifiers only — static, dynamic, and re-export. A specifier inside a
-// comment or a string still counts, which is the correct bias for a boundary grep.
-function specifiers(source) {
-  const found = [];
-  const patterns = [
-    /\bfrom\s*["']([^"']+)["']/g,
-    /\bimport\s*\(\s*["']([^"']+)["']/g,
-    /\bimport\s+["']([^"']+)["']/g,
-    /\brequire\s*\(\s*["']([^"']+)["']/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) found.push(match[1]);
-  }
-
-  return found;
+// The most recently modified file among `files`, as epoch milliseconds. 0 for none, so a
+// caller comparing two of these treats "nothing there" as "older than anything".
+function newestMtime(files) {
+  return files.reduce((newest, file) => Math.max(newest, statSync(file).mtimeMs), 0);
 }
 
-function lineOf(source, needle) {
-  const index = source.indexOf(needle);
-  if (index === -1) return 1;
-  return source.slice(0, index).split("\n").length;
+// Every `pgTable(...)` in the drizzle schema, split at the columns object so that a
+// column declaration and an index declaration are never matched by the same regex.
+function pgTableBlocks() {
+  const dir = join(ROOT, "packages/infrastructure/src");
+  if (!existsSync(dir)) return null;
+
+  const files = walk(dir, [".ts"]).filter((file) => file.endsWith(".schema.ts"));
+  if (files.length === 0) return null;
+
+  const blocks = [];
+
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+
+    for (const match of source.matchAll(/\bpgTable\(\s*["'`]([^"'`]+)["'`]\s*,/g)) {
+      const open = source.indexOf("(", match.index);
+      const call = source.slice(open, closingBracket(source, open) + 1);
+      const brace = call.indexOf("{");
+      const braceEnd = closingBracket(call, brace);
+
+      blocks.push({
+        file,
+        table: match[1] ?? "",
+        columns: call.slice(brace, braceEnd + 1),
+        extras: call.slice(braceEnd + 1),
+      });
+    }
+  }
+
+  return blocks;
 }
 
 function assert(name, run) {
@@ -153,7 +190,11 @@ assert("`application` does not log", (failures) => {
 // no reason. Change one, change the other.
 const ENV_EXEMPT = [
   /^apps\/[^/]+\/src\/env\.ts$/,
-  /\.config\.(ts|mts|js|mjs)$/,
+  // A repo, package or app root config — never one inside `src/`. The bare
+  // `*.config.*` glob exempted `composition/src/container/container.config.ts` and
+  // `auth/src/factory/auth.config.ts`, which are runtime code with a role suffix.
+  /^[^/]+\.config\.(ts|mts|js|mjs)$/,
+  /^(packages|apps)\/[^/]+\/[^/]+\.config\.(ts|mts|js|mjs)$/,
   // Every runnable script sits above `src/`, so a folder barrel can be imported without
   // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
   /^packages\/auth\/tables\.ts$/,
@@ -170,7 +211,9 @@ assert("only `env.ts` reads `process.env`", (failures) => {
       const path = rel(file);
       if (ENV_EXEMPT.some((pattern) => pattern.test(path))) continue;
 
-      const source = readFileSync(file, "utf8");
+      // Comments stripped first: a line explaining that `process.env` is banned here is
+      // not a read of it, and this assertion used to fail on its own documentation.
+      const source = withoutComments(readFileSync(file, "utf8"));
       if (/\bprocess\s*\.\s*env\b/.test(source)) {
         failures.push(`${path}:${lineOf(source, "process.env")} reads process.env`);
       }
@@ -235,13 +278,10 @@ assert("no top-level await in a built barrel", (failures) => {
     if (!existsSync(bundle)) continue;
     checked += 1;
 
-    readFileSync(bundle, "utf8")
-      .split("\n")
-      .forEach((line, index) => {
-        if (/^(await |(var|let|const) \w+ = await )/.test(line)) {
-          failures.push(`${rel(bundle)}:${index + 1} top-level await breaks require() from CJS`);
-        }
-      });
+    const line = topLevelAwait(readFileSync(bundle, "utf8"));
+    if (line) {
+      failures.push(`${rel(bundle)}:${line} top-level await breaks require() from CJS`);
+    }
   }
 
   if (checked === 0) return "no dist/ found — run `pnpm build:packages` first";
@@ -257,7 +297,7 @@ const CLIENT_PACKAGES = new Set(["ui", "query", "feature"]);
 
 assert('`"use client"` only in ui, query, feature', (failures) => {
   for (const dir of packageDirs()) {
-    const name = dir.split(/[\\/]/).pop();
+    const name = dir.split(/[\\/]/).pop() ?? "";
     if (CLIENT_PACKAGES.has(name)) continue;
 
     for (const file of walk(join(dir, "src"), [".ts", ".tsx"])) {
@@ -318,6 +358,17 @@ assert("no server code in the client bundle", (failures) => {
     return null;
   }
 
+  // The whole assertion is a grep over an artefact, so it is only worth as much as the
+  // artefact is current. A green run against a bundle built before the edit under review
+  // is how the client boundary was last reported clean while it was not.
+  const sources = walk(join(ROOT, "apps/web/src"), [".ts", ".tsx", ".css"]);
+  if (newestMtime(sources) > newestMtime(assets)) {
+    failures.push(
+      "apps/web/.output is older than apps/web/src — rebuild before trusting this assertion",
+    );
+    return null;
+  }
+
   for (const file of assets) {
     const source = readFileSync(file, "utf8");
 
@@ -362,6 +413,11 @@ const TENANT_EXEMPT = new Set([
   "accounts",
   "verifications",
   "two_factors",
+  // `sessions` carries `active_organization_id`, which is which tenant the session is
+  // pointed at rather than which owns the row — the same distinction that keeps `users`
+  // off this list despite `last_active_organization_id`. It passed until §9 stopped
+  // matching the tenant column as a substring, and had never actually been checked.
+  "sessions",
   "__drizzle_migrations",
   // `activity_log` is partitioned by time, not by tenant, so one monthly partition
   // holds every organization's rows and the archive object recording it is global.
@@ -373,22 +429,19 @@ assert("every domain table declares `organization_id`", (failures) => {
   const dir = join(ROOT, "packages/infrastructure/src");
   if (!existsSync(dir)) return "packages/infrastructure has no src/ yet";
 
-  const files = walk(dir, [".ts"]).filter((f) => f.endsWith(".schema.ts"));
-  if (files.length === 0) return "no *.schema.ts files yet";
+  const blocks = pgTableBlocks();
+  if (!blocks) return "no *.schema.ts files yet";
 
-  for (const file of files) {
-    const source = readFileSync(file, "utf8");
+  for (const block of blocks) {
+    if (TENANT_EXEMPT.has(block.table)) continue;
 
-    // Both call shapes Biome produces: `pgTable("x", {...});` closes on `\n});`,
-    // and the three-argument form with an index callback closes on `\n);`.
-    // Matching only the latter is how this check silently passes on half the tables.
-    for (const match of source.matchAll(/pgTable\(\s*["'`]([^"'`]+)["'`]([\s\S]*?)\n\}?\);/g)) {
-      const [, table, body] = match;
-      if (TENANT_EXEMPT.has(table)) continue;
-      if (body.includes("organization_id")) continue;
+    // The same bracket-matched parse §17 and §18 use, and the same whole-name test: the
+    // regex this replaced anchored on `\n});` at column 0, so a table Biome wrapped
+    // differently was skipped silently, and a substring match would count
+    // `last_active_organization_id` as a tenant column.
+    if (columnsOf(block).some((column) => column.column === "organization_id")) continue;
 
-      failures.push(`${rel(file)}: table "${table}" has no organization_id`);
-    }
+    failures.push(`${rel(block.file)}: table "${block.table}" has no organization_id`);
   }
 
   return null;
@@ -400,12 +453,20 @@ assert("every domain table declares `organization_id`", (failures) => {
 // eleven other files said ActivityLogger. Two names for the audit port reads as
 // two things, which is the exact confusion the audit/diagnostic split prevents.
 
+// The two pages that state the ban, and therefore have to spell the banned name. Anywhere
+// else it is the drift this assertion exists to catch.
+const AUDIT_NAME_EXEMPT = new Set(["docs/setup/26-hygiene-and-ci.md", "docs/opinions/index.md"]);
+
 assert("the audit port is `ActivityLogger`, never `AuditTrail`", (failures) => {
-  for (const base of ["packages", "apps"]) {
+  // `docs/` included: the drift this was written for lived in the observability prose, and
+  // walking only the packages meant the assertion could not see the thing it was about.
+  for (const base of ["packages", "apps", "docs"]) {
     const dir = join(ROOT, base);
     if (!existsSync(dir)) continue;
 
     for (const file of walk(dir, [".ts", ".tsx", ".md"])) {
+      if (AUDIT_NAME_EXEMPT.has(rel(file))) continue;
+
       const source = readFileSync(file, "utf8");
       if (source.includes("AuditTrail")) {
         failures.push(`${rel(file)}:${lineOf(source, "AuditTrail")} names AuditTrail`);
@@ -519,7 +580,7 @@ assert("the rule files route to every opinions page", (failures) => {
   if (existsSync(claudeMd)) {
     const claudeSource = readFileSync(claudeMd, "utf8");
     const imported = new Set(
-      [...claudeSource.matchAll(/^@(\S+\.md)\s*$/gm)].map((match) => match[1]),
+      [...claudeSource.matchAll(/^@(\S+\.md)\s*$/gm)].map((match) => match[1] ?? ""),
     );
 
     for (const file of ruleFiles) {
@@ -561,23 +622,25 @@ assert("the rule files route to every opinions page", (failures) => {
   // to pass — AGENTS.md links it as `](docs/ai/rules/folders.md)`, which the backtick
   // pattern never saw, and a second file citing the same opinions page hid the gap.
   const sources = [
-    [rel(brief), briefSource, dirname(brief)],
-    ...routerPaths.filter(existsSync).map((f) => [rel(f), readFileSync(f, "utf8"), dirname(f)]),
-    ...ruleFiles.map((f) => [
-      `${RULES_DIR}/${f}`,
-      readFileSync(join(rulesDir, f), "utf8"),
-      rulesDir,
-    ]),
+    { name: rel(brief), text: briefSource, base: dirname(brief) },
+    ...routerPaths
+      .filter(existsSync)
+      .map((f) => ({ name: rel(f), text: readFileSync(f, "utf8"), base: dirname(f) })),
+    ...ruleFiles.map((f) => ({
+      name: `${RULES_DIR}/${f}`,
+      text: readFileSync(join(rulesDir, f), "utf8"),
+      base: rulesDir,
+    })),
   ];
 
-  for (const [name, text, base] of sources) {
+  for (const { name, text, base } of sources) {
     const routed = new Set();
 
     for (const match of text.matchAll(/`(docs\/[A-Za-z0-9._/-]+\.md)`/g)) {
-      routed.add(join(ROOT, match[1]));
+      routed.add(join(ROOT, match[1] ?? ""));
     }
     for (const match of text.matchAll(/\]\(([^)]+\.md)\)/g)) {
-      const target = match[1];
+      const target = match[1] ?? "";
       if (target.startsWith("http")) continue;
       routed.add(target.startsWith("docs/") ? join(ROOT, target) : resolve(base, target));
     }
@@ -611,10 +674,12 @@ assert("every folder under `docs/` has an `index.md`", (failures) => {
 
   const folders = [root];
 
-  for (let i = 0; i < folders.length; i += 1) {
-    for (const entry of readdirSync(folders[i])) {
+  // Appends while iterating, which the array iterator picks up -- a breadth-first walk
+  // with no queue of its own.
+  for (const folder of folders) {
+    for (const entry of readdirSync(folder)) {
       if (SKIP_DIRS.has(entry)) continue;
-      const full = join(folders[i], entry);
+      const full = join(folder, entry);
       if (statSync(full).isDirectory()) folders.push(full);
     }
   }
@@ -740,42 +805,6 @@ function ownerOf(file) {
   return null;
 }
 
-// A path the page already tells its reader is not on disk: a slice the setup docs teach
-// by building but do not ship, or a file a step deleted. Marking one is the author's
-// job — say so on the line that names it — and honouring the marker is this one's.
-const UNBUILT = /illustrative|not written yet|does not exist|removed|deleted|☐/i;
-
-// Fenced blocks are code and diagrams: an ASCII tree is full of names that are not
-// paths, and a snippet's imports resolve against the file it would live in, not here.
-// A collapsed `<details>` block is a historical listing kept for comparison, which is
-// the one place a page is deliberately describing a tree that is gone.
-function outsideFences(source) {
-  const kept = [];
-  let fenced = false;
-  let collapsed = false;
-  // A heading can carry the marker for the list under it — "What this removed" is a
-  // section of paths that are gone, and repeating the word per bullet reads worse.
-  let section = false;
-
-  for (const line of source.split("\n")) {
-    const trimmed = line.trimStart();
-
-    if (trimmed.startsWith("```")) {
-      fenced = !fenced;
-      kept.push("");
-      continue;
-    }
-    if (trimmed.startsWith("<details")) collapsed = true;
-    if (trimmed.startsWith("#")) section = UNBUILT.test(line);
-
-    kept.push(fenced || collapsed || section || UNBUILT.test(line) ? "" : line);
-
-    if (trimmed.startsWith("</details>")) collapsed = false;
-  }
-
-  return kept;
-}
-
 assert("every backticked path in the docs exists", (failures) => {
   for (const file of docFiles()) {
     const lines = outsideFences(readFileSync(file, "utf8"));
@@ -833,6 +862,173 @@ assert("both pnpm version declarations agree", (failures) => {
   const expected = `${modern.name}@${modern.version}`;
   if (legacy !== expected) {
     failures.push(`packageManager is \`${legacy}\`, devEngines says \`${expected}\``);
+  }
+
+  return null;
+});
+
+// ── 17 — every unique index on a tenant table leads with organization_id ─────
+//
+// `roles_key_uq` on `(key)` alone means two tenants cannot both have an `owner`
+// role, and the failure arrives as a duplicate-key error on someone else's signup.
+// See docs/ai/rules/vocabulary.md.
+
+// The two lookups that arrive holding no tenant: a request presents the token, or the
+// hash, and nothing else, so the tenant is what the index is being used to find.
+const TENANT_LEADING_EXEMPT = new Set(["invitations_token_uq", "api_keys_hash_uq"]);
+
+assert("every unique index on a tenant table leads with `organization_id`", (failures) => {
+  const blocks = pgTableBlocks();
+  if (!blocks) return "packages/infrastructure has no schema files yet";
+
+  for (const block of blocks) {
+    const columns = columnsOf(block);
+    // The quoted SQL name, never a substring: `last_active_organization_id` on `users`
+    // ends with it and makes a table that carries no tenant look like one.
+    const tenant = columns.find((column) => column.column === "organization_id")?.property;
+    if (tenant === undefined) continue;
+
+    for (const index of indexesOf(block)) {
+      if (!index.unique) continue;
+      if (TENANT_LEADING_EXEMPT.has(index.name)) continue;
+      if (index.columns[0] === tenant) continue;
+
+      failures.push(
+        `${rel(block.file)}: "${index.name}" on ${block.table} leads with ` +
+          `${index.columns[0] ?? "nothing"}, not organization_id`,
+      );
+    }
+  }
+
+  return null;
+});
+
+// ── 18 — every foreign key column has an index leading with it ───────────────
+//
+// Postgres does not index a foreign key, so an `ON DELETE CASCADE` with no index
+// scans the whole child table. See docs/ai/rules/data.md.
+
+assert("every foreign key column has an index leading with it", (failures) => {
+  const blocks = pgTableBlocks();
+  if (!blocks) return "packages/infrastructure has no schema files yet";
+
+  for (const block of blocks) {
+    const leading = new Set(
+      indexesOf(block)
+        .map((index) => index.columns[0])
+        .filter(Boolean),
+    );
+
+    for (const column of columnsOf(block)) {
+      if (!column.isForeignKey) continue;
+      if (leading.has(column.property)) continue;
+
+      failures.push(
+        `${rel(block.file)}: ${block.table}.${column.column} is a foreign key with no ` +
+          "index leading with it",
+      );
+    }
+  }
+
+  return null;
+});
+
+// ── 19 — every package with tests typechecks them ────────────────────────────
+//
+// A `tsconfig.json` that includes `src/**` only compiles the tests with nothing but
+// vitest's transform, which erases types and checks none of them. A test double that
+// falls behind its port then compiles, and passes for as long as nobody calls the
+// method it never implemented. See docs/setup/26.
+
+function typecheckConfig(dir) {
+  const manifest = join(dir, "package.json");
+  if (!existsSync(manifest)) return null;
+
+  const script = JSON.parse(readFileSync(manifest, "utf8")).scripts?.typecheck;
+  if (typeof script !== "string") return null;
+
+  const named = /-p\s+(\S+)/.exec(script);
+  return join(dir, named?.[1] ?? "tsconfig.json");
+}
+
+assert("every package with tests typechecks them", (failures) => {
+  const roots = ["packages", "apps", "tooling"].map((name) => join(ROOT, name));
+  let checked = 0;
+
+  for (const base of roots.filter(existsSync)) {
+    for (const name of readdirSync(base)) {
+      const dir = join(base, name);
+      if (!existsSync(join(dir, "tests"))) continue;
+
+      const config = typecheckConfig(dir);
+      if (config === null) {
+        failures.push(`${rel(dir)} has tests/ and no typecheck script to reach them`);
+        continue;
+      }
+      if (!existsSync(config)) {
+        failures.push(`${rel(dir)} typechecks against ${rel(config)}, which does not exist`);
+        continue;
+      }
+
+      checked += 1;
+      const include = JSON.parse(withoutComments(readFileSync(config, "utf8"))).include ?? [];
+
+      if (!include.some((pattern) => pattern.startsWith("tests/"))) {
+        failures.push(`${rel(config)} includes no tests/ pattern, so nothing typechecks them`);
+      }
+    }
+  }
+
+  if (checked === 0) return "no package has a tests/ directory";
+  return null;
+});
+
+// ── 20 — every migration is safe on a table that already holds rows ──────────
+//
+// `pnpm db:generate` emits the unsafe form by default: `CREATE UNIQUE INDEX` over
+// whatever is there, and `ADD COLUMN ... NOT NULL` with no default. Both are correct on
+// an empty table and abort halfway through a deploy on a populated one. See
+// docs/setup/13, "Writing a unique-index migration".
+
+// The three that predate the rule, named with what each would do. They have run
+// everywhere they are going to run: this repository's history is applied to an empty
+// database, which is the decision, not an oversight.
+const REPLAY_EXEMPT = new Map([
+  ["0003_wise_shadowcat.sql", "organizations_slug_uq over existing duplicate slugs"],
+  ["0004_awesome_wraith.sql", "memberships_uq dropped and recreated in one transaction"],
+  ["0008_dry_mattie_franklin.sql", "invitations.token_hash NOT NULL with no default"],
+]);
+
+assert("every migration is safe on a table that already holds rows", (failures) => {
+  const dir = join(ROOT, "packages/infrastructure/migrations");
+  if (!existsSync(dir)) return "no migrations/ directory";
+
+  const files = readdirSync(dir).filter((name) => name.endsWith(".sql"));
+  if (files.length === 0) return "migrations/ holds no .sql files";
+
+  for (const file of files.sort()) {
+    if (REPLAY_EXEMPT.has(file)) continue;
+    const sql = readFileSync(join(dir, file), "utf8");
+
+    // A table created in the same file holds no rows yet, so an index over it is safe
+    // however it is written.
+    const fresh = new Set(
+      [...sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?"([a-z_]+)"/g)].map((m) => m[1]),
+    );
+    const deleted = new Set([...sql.matchAll(/DELETE FROM "([a-z_]+)"/g)].map((m) => m[1]));
+
+    for (const match of sql.matchAll(/CREATE UNIQUE INDEX[^;]*? ON "([a-z_]+)"/g)) {
+      const table = match[1] ?? "";
+      if (fresh.has(table) || deleted.has(table)) continue;
+      failures.push(`${file} indexes ${table} uniquely with no de-dup before it`);
+    }
+
+    for (const match of sql.matchAll(/ALTER TABLE "([a-z_]+)" ADD COLUMN "([a-z_]+)"([^;]*)/g)) {
+      const [, table = "", column = "", rest = ""] = match;
+      if (fresh.has(table)) continue;
+      if (!/\bNOT NULL\b/i.test(rest) || /\bDEFAULT\b/i.test(rest)) continue;
+      failures.push(`${file} adds ${table}.${column} NOT NULL with no default`);
+    }
   }
 
   return null;

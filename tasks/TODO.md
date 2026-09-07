@@ -65,7 +65,7 @@ done first so no assertion skips:
 | `pnpm lint` (biome + eslint) | ✅ 716 files, no findings |
 | `pnpm test` | ✅ 659 tests across 114 files, `infrastructure` included |
 | `pnpm --filter @loadbearing/web build` | ✅ builds `.output/` |
-| `pnpm check:architecture` | ✅ 16/16 assertions, none skipped |
+| `pnpm check:architecture` | ✅ 18/18 assertions, none skipped |
 | `pnpm deps:check` / `pnpm repo:check` | ✅ silent, and blocking in CI |
 
 **Every task `T-001`–`T-030` is done.** The kit authenticates a user end to end, enrols them by one

@@ -8,7 +8,11 @@ import type {
 } from "../../src/member/invitation.repository.js";
 import { ListInvitationsUseCase } from "../../src/member/list-invitations.use-case.js";
 import { ListMembersUseCase } from "../../src/member/list-members.use-case.js";
-import type { MemberPage, MemberRepository } from "../../src/member/member.repository.js";
+import type {
+  MemberPage,
+  MemberRecord,
+  MemberRepository,
+} from "../../src/member/member.repository.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 
@@ -35,6 +39,22 @@ class RecordingMemberRepository implements MemberRepository {
   }
 
   public existsByEmail(): Promise<boolean> {
+    throw new Error("not under test");
+  }
+
+  public findByUser(): Promise<MemberRecord | null> {
+    throw new Error("not under test");
+  }
+
+  public changeRole(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public setDeactivatedAt(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public countActiveOwners(): Promise<number> {
     throw new Error("not under test");
   }
 }

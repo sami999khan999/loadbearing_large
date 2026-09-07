@@ -42,9 +42,15 @@ the other should be loud.
 The month to archive is computed **from the clock**, not passed in the job payload, so a redelivered
 job archives the same month rather than one relative to whenever the retry happened.
 
-> [!NOTE]
-> The runway constant says three months but the loop creates two — `P8.4` in
-> `tasks/IMPLEMENTATION-PLAN.md`.
+**`MONTHS_PER_RUN` counts partitions, not runway, and the two differ by one.** Three is the current
+month and the next two, so the job survives two consecutive missed runs and the third is a write
+outage. The constant used to be called `MONTHS_AHEAD`, which read as three months of runway and was
+never that — the log field is `months` for the same reason.
+
+**The sweep takes expired invitations as well as sessions and verifications**, and that one is not
+housekeeping: `invitations_email_uq` is on `(organization_id, email)`, so a lapsed row keeps that
+address un-invitable until something removes it. Nobody would connect "re-invite says the address
+already has an invitation" to a row that expired last month.
 
 ## `EmbeddingConsumer` catches nothing, on purpose
 
@@ -88,6 +94,18 @@ the length already said.
 **Lag is warned on separately, at `warn` rather than `debug`.** A projection that throws is already an
 error line; one that quietly falls further behind every run produces nothing at all.
 
+**Lag is the age of the oldest row still unprojected — not the age of the newest projected one.**
+Those differ in exactly the case the metric exists for. The second measures how recently anything
+happened, so a caught-up deployment that has been quiet for ninety minutes reports ninety minutes of
+lag and trips the threshold every run; and a run that stopped at its batch ceiling reports the age of
+the last row it *did* write, which understates a backlog rather than overstating it. Both readings
+are wrong in the direction that costs the most: a false alarm nobody can act on, and a real backlog
+that looks smaller than it is.
+
+Caught up means zero, and the run already knows it is caught up — a short or empty batch is what
+stopped the loop. Only a capped run pays for the answer, with one keyset query for the next row after
+the checkpoint, which is the run where knowing the true backlog age is worth a query.
+
 ### `reconcile`
 
 Counts per day on both sides and a diff. **Neither store reaches into the other** — each answers the
@@ -104,6 +122,12 @@ back to replay.
 It logs at `error`, not `warn`: every number a dashboard has shown since the first drifting day is
 wrong, and the fix is a replay — which only works while the activity log still covers the window, so
 the alert has a deadline attached.
+
+**`reconciliation.completed` is emitted whether or not anything drifted, and carries the count.** It
+used to return early on drift, which made two very different situations the same absence: a
+reconciliation that is running and finding drift, and a consumer that has stopped running at all.
+The one signal an operator needs from this job is "it ran"; making that signal conditional on the
+answer being clean is the same mistake as not having the job.
 
 The `projection` label rides every line this consumer emits. There is one projection today; the field
 exists so a second one does not change the event shape, and so a dashboard filters on it rather than

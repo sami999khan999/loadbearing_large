@@ -24,24 +24,42 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required.");
 
 const database = new Database({ url });
+const scope = new TransactionScope();
 
-// System roles are per-tenant rows, so a fresh database needs an organization to
-// hang them off before the seed has anything to write against.
-const existing = await database.client
-  .select({ id: organizations.id })
-  .from(organizations)
-  .where(eq(organizations.slug, SEED_SLUG))
-  .limit(1);
+// One transaction, because the halves are not independently useful: an organization with
+// no roles is a tenant nobody can be a member of, and a failure between them leaves one.
+const organizationId = await database.client.transaction(async (tx) =>
+  scope.within(tx, async () => {
+    // System roles are per-tenant rows, so a fresh database needs an organization to
+    // hang them off before the seed has anything to write against.
+    const existing = await tx
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.slug, SEED_SLUG))
+      .limit(1);
 
-const organizationId = existing[0]?.id ?? Identifiers.organizationId.parse(Uuid.v7());
+    const id = existing[0]?.id ?? Identifiers.organizationId.parse(Uuid.v7());
 
-if (!existing[0]) {
-  await database.client
-    .insert(organizations)
-    .values({ id: organizationId, slug: SEED_SLUG, name: "Loadbearing" });
-}
+    if (!existing[0]) {
+      await tx.insert(organizations).values({ id, slug: SEED_SLUG, name: "Loadbearing" });
+    }
 
-await new SystemRoleSeed(database, new TransactionScope()).run(organizationId);
+    await new SystemRoleSeed(database, scope).run(id);
+    return id;
+  }),
+);
+
 await database.close();
 
 console.log(`seed complete: ${organizationId}`);
+
+// Said out loud, because the alternative is someone seeding a database, signing up, and
+// landing in an organization of their own wondering where this one went.
+if ((process.env.AUTH_ENROLMENT_MODE ?? "personal") !== "bootstrap") {
+  console.log(
+    `note: AUTH_ENROLMENT_MODE is not "bootstrap", so nothing joins ${SEED_SLUG} automatically.`,
+  );
+  console.log(
+    "      It exists so a fresh database has a tenant to look at, and as the role template.",
+  );
+}

@@ -1,4 +1,4 @@
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,7 +14,7 @@ let database: Database;
 
 // This spec must create rows: the behaviour under test is what happens to a user with no
 // membership, and the seeded organization has one. All of it is torn down.
-const created: string[] = [];
+const created: UserId[] = [];
 
 const makeUser = async (name = "Ada") => {
   const id = Identifiers.userId.parse(Uuid.v7());
@@ -44,8 +44,11 @@ afterAll(async () => {
     await database.client.delete(users).where(inArray(users.id, created));
 
     for (const row of owned) {
-      await database.client.delete(roles).where(eq(roles.organizationId, row.organizationId));
-      await database.client.delete(organizations).where(eq(organizations.id, row.organizationId));
+      // The column carries no brand, and `organizations.id` does — parsed rather than
+      // cast, so a row that is not a uuid fails here instead of in the driver.
+      const organizationId = Identifiers.organizationId.parse(row.organizationId);
+      await database.client.delete(roles).where(eq(roles.organizationId, organizationId));
+      await database.client.delete(organizations).where(eq(organizations.id, organizationId));
     }
   }
   await database.close();
@@ -143,11 +146,12 @@ describe("PgPersonalOrganizationEnroller", () => {
   it("names the organization after the user", async () => {
     const userId = await makeUser("Grace Hopper");
     const organizationId = await enroller().enrol(userId);
+    if (organizationId === null) throw new Error("enrol created no organization");
 
     const [organization] = await database.client
       .select({ name: organizations.name, slug: organizations.slug })
       .from(organizations)
-      .where(eq(organizations.id, organizationId ?? ""));
+      .where(eq(organizations.id, organizationId));
 
     expect(organization?.name).toBe("Grace Hopper");
     // From the id, not the name: `organizations_slug_uq` would turn the second

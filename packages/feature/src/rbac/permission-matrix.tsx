@@ -22,6 +22,9 @@ export interface PermissionMatrixProps {
 // Doc 23 names this component and specifies no body.
 export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatrixProps) {
   const { t } = useMessages("common");
+  // The column of permission names has no visible heading, and an empty `<th>` is
+  // announced as blank. `role` is loaded by the only screen that renders this.
+  const { t: rbac } = useMessages("role");
   const registry = PermissionRegistry.instance;
   const permissions = registry.all();
 
@@ -31,11 +34,7 @@ export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatri
     <table className="ui-data-table">
       <thead>
         <tr>
-          <th scope="col">
-            {
-              // The permission column has no heading of its own.
-            }
-          </th>
+          <th scope="col" aria-label={rbac("role.column.permission")} />
           {subjects.map((subject) => (
             <th key={subject.id} scope="col">
               {subject.label}

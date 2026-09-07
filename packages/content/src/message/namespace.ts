@@ -1,3 +1,4 @@
+import type { account } from "./en/account.js";
 import type { apikey } from "./en/apikey.js";
 import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
@@ -15,6 +16,7 @@ interface NamespaceShape {
   readonly common: typeof common;
   readonly nav: typeof nav;
   readonly auth: typeof auth;
+  readonly account: typeof account;
   readonly role: typeof role;
   readonly member: typeof member;
   readonly organization: typeof organization;
@@ -31,6 +33,7 @@ export type ClientNamespace =
   | ShellNamespace
   | "nav"
   | "auth"
+  | "account"
   | "role"
   | "member"
   | "organization"

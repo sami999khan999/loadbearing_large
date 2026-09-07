@@ -38,6 +38,15 @@ out of `param_*` query-string entries. The analytics store holds every tenant's 
 an injected predicate here is a cross-tenant read — this is the one place in the package where string
 interpolation into SQL would be a security bug rather than a style one.
 
+> [!IMPORTANT]
+> **An array parameter is the exception, and it is the one that needed escaping.** A scalar rides its
+> own query-string entry and is never quoted, so nothing in it can end anything. An array has to be
+> sent as a literal — `['a','b']` — and `encode()` built that by wrapping each element in quotes with
+> no escape, so an element containing `'` closed its own string and became two. Not a route into the
+> statement, which is still bound: a route into the *value*, where a filter list silently matches rows
+> the caller never named. `escape()` handles `\` first and then `'`, in that order, because the other
+> order escapes its own escape.
+
 **Table names are qualified against the configured database on the way out.** ClickHouse resolves an
 unqualified name against the session default, which is `default` unless every request says otherwise.
 That is the same trap `clickhouse.init.sql` documents at the top, and the reason a table can look

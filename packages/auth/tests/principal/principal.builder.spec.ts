@@ -1,8 +1,9 @@
+import type { ApiKeyRecord } from "@loadbearing/application";
 import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
-import { type ApiKeyRecord, ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
+import { ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
 import { PrincipalBuilder } from "../../src/principal/principal.builder.js";
 import { MembershipReader, type OrganizationSummary } from "../../src/session/index.js";
@@ -45,6 +46,10 @@ class StubMemberships extends MembershipReader {
 
   public override isActive(): Promise<boolean> {
     return Promise.resolve(this.active);
+  }
+
+  public override ownedCount(): Promise<number> {
+    return Promise.resolve(0);
   }
 }
 
@@ -89,7 +94,7 @@ async function build(options: {
 
 async function keyRecord(): Promise<ApiKeyRecord> {
   return {
-    id: "key-1",
+    id: Identifiers.apiKeyId.parse("018f8c00-0000-7000-8000-0000000000d1"),
     organizationId: ORG,
     issuerId: KEY_ISSUER,
     tokenHash: await ApiKeyHasher.hash(TOKEN),
