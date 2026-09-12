@@ -20,9 +20,9 @@ const TEMPLATES = {
   }),
 } as const;
 
-const KEYS: readonly string[] = Object.freeze(Object.keys(TEMPLATES));
-
 export type MailTemplateKey = keyof typeof TEMPLATES;
+
+const KEYS: readonly MailTemplateKey[] = Object.freeze(Object.keys(TEMPLATES) as MailTemplateKey[]);
 
 export type MailTemplateParams<K extends MailTemplateKey> = z.infer<(typeof TEMPLATES)[K]>;
 
@@ -41,7 +41,7 @@ export class MailTemplates {
     return Object.hasOwn(TEMPLATES, key);
   }
 
-  public static keys(): readonly string[] {
+  public static keys(): readonly MailTemplateKey[] {
     return KEYS;
   }
 }

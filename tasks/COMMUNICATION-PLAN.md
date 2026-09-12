@@ -235,19 +235,29 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
 
 #### 1.C Templates and the renderer (`composition`)
 
-- [ ] `C1.10` **Mail layout** — `composition/src/mail/mail-layout.ts` → `MailLayout`: builds an
+- [x] `C1.10` **Mail layout** — `composition/src/mail/mail-layout.ts` → `MailLayout`: builds an
   HTML document and the matching plain text from a heading, paragraphs and one action link, given
   already-translated strings. A table-based shell with inline CSS, because mail clients resolve
   neither `<style>` reliably nor CSS custom properties at all — which makes this the one place in
   the repository allowed to write a literal colour. State that at the line and add the exemption
   to `docs/ai/rules/color.md` and `docs/opinions/` in the same commit, or the rule and the tree
   disagree. Spec: the text part carries the same URL as the HTML part, and no tag survives into it.
-- [ ] `C1.11` **`ContentMailRenderer`** — `composition/src/mail/content-mail.renderer.ts`
+  `done: 2026-09-12` — the exemption is recorded in `docs/ai/rules/color.md` **and**
+  `packages/ui/docs/reference/palette.md`, since that tree wins when the two disagree. The text
+  part is composed rather than derived from the HTML: stripping tags is how an `&amp;` reaches a
+  plain-text body and the link stops working, so both parts are built from the same content and
+  only one of them escapes.
+- [x] `C1.11` **`ContentMailRenderer`** — `composition/src/mail/content-mail.renderer.ts`
   `extends MailRenderer`, ctor `(content: ContentSource)`. Resolves
   `content.translator(locale, ["email"])`, picks the template through an exhaustive `switch` with
   a `never` default, composes through `MailLayout`, and takes the subject from the `email`
   namespace. One function per template key, each a handful of lines. Specs: every key renders both
   parts and carries its action URL; a key the manifest does not know is a compile error.
+  `done: 2026-09-12` — the key is widened to the union before the `switch`: TypeScript narrows a
+  union and not a type parameter, so switching on the generic directly leaves the `never` default
+  unreachable-typed and the exhaustiveness check silently useless. The spec's params are a total
+  mapped record, so a key added to the manifest fails to compile there rather than being skipped
+  by a loop that reads the manifest at runtime.
 
 #### 1.D Wiring (`composition`, `auth`)
 

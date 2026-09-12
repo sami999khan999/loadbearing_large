@@ -22,9 +22,13 @@ description: Every colour is one of the twelve custom properties, read as var().
   reaches a component. `src/theme/class/*.css` reaches `token/` and `color/` only through `var()`,
   and a literal there is a token that was never added.
 
-- **One exception, and not a precedent.** `token/shadow.css` writes `oklch(0 0 0 / <alpha>)` — a
-  shadow is opacity over what is behind it, which is why three values are right in all five themes.
-  Anything that moves with the theme is one of the twelve.
+- **Two exceptions, and neither is a precedent.** `token/shadow.css` writes
+  `oklch(0 0 0 / <alpha>)` — a shadow is opacity over what is behind it, which is why three values
+  are right in all five themes. And `packages/composition/src/mail/mail-layout.ts` writes a frozen
+  set of sRGB hexes, because **a mail client resolves no CSS custom property and honours no
+  `<style>` block reliably**: `var(--primary)` in an email renders as nothing at all. The values
+  are slate-light converted to sRGB, they are inline on the element, and they are not the twelve —
+  a message has no theme to read. Anything that moves with the theme is one of the twelve.
 
 - **Derive states, do not name them.** There is no `--primary-hover`:
   `color-mix(in oklch, var(--primary) 88%, var(--fg))` steps evenly in every theme. Twelve names is

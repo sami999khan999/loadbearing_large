@@ -85,15 +85,23 @@ export {
 // ── @loadbearing/content ─────────────────────────────────────────────────────
 export {
   type ContentSource,
+  type Locale,
   Locales,
   SERVER_CATALOG,
   StaticContentSource,
+  type Translator,
 } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ─────────────────────────────────────────────
 // Only the branded ids two port signatures name, without which `test-container.ts`
 // cannot override them.
-export type { GoalId, OrganizationId, UserId } from "@loadbearing/contracts";
+export type {
+  GoalId,
+  MailTemplateKey,
+  MailTemplateParams,
+  OrganizationId,
+  UserId,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
 export { type Clock, FixedClock, ServerOnly, SystemClock } from "@loadbearing/core";
