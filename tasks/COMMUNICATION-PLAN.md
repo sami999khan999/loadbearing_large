@@ -49,8 +49,8 @@ in the shape of `IMPLEMENTATION-PLAN.md` (IDs, `[ ]` markers, Goal / Done when /
 1. **Every mail is queued**, auth mail included. The Better Auth hooks enqueue and return; the
    worker renders and sends. Consequence stated in the plan: in development the worker must be
    running for a verification link or OTP to arrive, and a stalled worker delays sign-up mail.
-   Mitigation: auth templates are published at high priority with five attempts, and a
-   `mail-sweep` schedule re-enqueues anything stuck.
+   Mitigation: auth mail is published at high priority with five attempts, and BullMQ's own
+   exponential backoff carries the retry.
 2. **Channels: in-app + email with per-user, per-category preferences** (immediate / daily
    digest / off). Web push is a documented port, not built.
 3. **Messaging: conversations** — direct messages and group channels inside an organization,
@@ -69,11 +69,25 @@ in the shape of `IMPLEMENTATION-PLAN.md` (IDs, `[ ]` markers, Goal / Done when /
    **not** mean running Kafka, Redis Cluster or sharded Postgres in the compose stack — the
    repo's own rule (`simplicity.md`, `data.md` "do not build in advance") stands, and the plan
    says so where it matters.
-7. **react-email templates.** A new React-scoped package `packages/mail` holds the templates and
-   the renderer adapter so `content` and `application` stay React-free. It sits beside
-   `infrastructure` and `auth` in the layer graph (an adapter package), is server-only, and is
-   named only by `composition`.
-8. **Order:** mail → outbox → notifications → real-time → messaging. Each phase is mergeable
+7. **Hand-written HTML and CSS templates, and no new package.** They are plain strings, so the
+   one thing a separate package bought — a home for React in a graph whose copy and domain
+   packages are React-free — is not needed. They live in `packages/composition/src/mail/`, beside
+   the two mailers that already join translated copy to the transport and already build the
+   plain-text body by hand. Mail clients need inline CSS and table layouts whatever you author
+   in, which is most of what a component library compiles down to.
+8. **No mail table. A send is a queue job and nothing else.** The queue carries the work, the
+   database carries only what must be transactional, and at scale the mail provider carries the
+   delivery record — a dedicated mail log is something apps add for a stated reason (regulated
+   retention, an in-app resend history, a provider whose log expires too soon), not a default.
+   BullMQ here already supplies retries, exponential backoff and duplicate suppression by job id,
+   which is what a `status`/`attempts` table would re-implement. It also keeps the plaintext
+   invitation token out of Postgres, which is the whole point of storing only its hash.
+   The crash window between a commit and its enqueue is covered by a resend action, not a row.
+   **The outbox event table is the deliberate exception** and stays: Redis cannot commit
+   atomically with Postgres, so an event published from Redis can fire for a change that rolled
+   back, or vanish if the process dies in between. That is the one place the write is
+   load-bearing.
+9. **Order:** mail → outbox → notifications → real-time → messaging. Each phase is mergeable
    on its own.
 
 ### What exists and is reused (verified against the tree at `927cdec`)
@@ -114,220 +128,179 @@ in the shape of `IMPLEMENTATION-PLAN.md` (IDs, `[ ]` markers, Goal / Done when /
 | Thing | Name |
 |---|---|
 | Queues (add to `QueueName`) | `mail`, `event` (the outbox drain and deliveries), `notification` (exists, gains a consumer). Real-time is pub/sub, not a queue |
-| Tables | `mail_deliveries`, `outbox_event` (append-only, singular), `notifications`, `notification_preferences`, `conversations`, `conversation_members`, `messages` |
+| Tables | `outbox_event` (append-only, singular), `notifications`, `notification_preferences`, `conversations`, `conversation_members`, `messages` |
 | Domain events (past tense, closed catalog: `contracts/src/catalog/*.events.ts` + the `DomainEvents` registry) | `member.invited`, `member.joined`, `member.role.changed`, `conversation.created`, `message.sent`, `message.edited`, `message.deleted`, `conversation.read` |
 | Real-time event names (what the browser receives) | `notification.created`, `message.sent`, `message.edited`, `message.deleted`, `conversation.read`, `typing` |
 | Permission keys | `core.realtime.subscribe` (held by everyone, like every `core.*`), `notification.inbox.read`, `notification.inbox.update`, `notification.preference.update`, `messaging.conversation.read`, `messaging.conversation.create`, `messaging.conversation.manage`, `messaging.message.send`, `messaging.message.update` |
 | Log event codes (new, in `core.events.ts`) | `mail.delivery.queued` (debug), `mail.delivery.sent` (info), `mail.delivery.failed` (error), `mail.delivery.swept` (warn), `outbox.drain.completed` (debug), `outbox.drain.lagged` (warn), `outbox.delivery.failed` (error), `realtime.stream.opened` / `realtime.stream.closed` (debug), `realtime.publish.failed` (warn), `notification.digest.completed` (info) |
-| New file roles | `.template.tsx` (a react-email component), `.renderer.ts` (port + adapter), `.subscriber.ts` (an outbox subscriber), and `.rules.ts` recorded retroactively (`role.rules.ts` exists and the table omits it) — each in `docs/opinions/files.md`. New folder name `subscriber/` in `folders.md`. **`.bus.ts` is not re-added**: T-031 predicted a bus and the design has a publisher, a gateway and subscribers, none of which is one; the T-031 note is corrected when it closes |
+| New file roles | `.renderer.ts` (port + adapter), `.subscriber.ts` (an outbox subscriber), and `.rules.ts` recorded retroactively (`role.rules.ts` exists and the table omits it) — each in `docs/opinions/files.md`. New folder name `subscriber/` in `folders.md`. **`.bus.ts` is not re-added**: T-031 predicted a bus and the design has a publisher, a gateway and subscribers, none of which is one; the T-031 note is corrected when it closes |
 | `JobOptions` additions | `priority?: number`, `name?: string` — port, `BullMqQueuePublisher`, `RecordingQueuePublisher` |
-| New commit scope | `mail` |
 
 ---
-
 ### Phase 1 — Unified mail pipeline
 
 **Goal.** One path for every mail: a caller publishes a *mail request* (template key + typed
-params + recipient + locale); a row lands in `mail_deliveries` inside whatever transaction is
-open; the worker renders it with react-email and sends it through `EmailSender`, with retries,
-rate limiting, a delivery record and a sweep that re-enqueues anything the crash window lost.
-Better Auth's four mails and the invitation mail move onto it. `DigestComposer` is deleted.
+params + recipient + locale) and a job lands on `QueueName.MAIL`; the worker renders it to text
+and HTML and sends it through `EmailSender`, with BullMQ's retries, backoff and duplicate
+suppression, plus a rate limiter. Better Auth's four mails and the invitation mail move onto it.
+`DigestComposer` is deleted.
 
-**Design in one paragraph.** `MailPublisher` (port, `application/src/port/`) is what callers hold.
-`QueuedMailPublisher` (`composition/src/mail/`, the same "join of two ports" precedent as
-`ContentAuthMailer`) writes the row through `MailDeliveryRepository` (joins the ambient
-`UnitOfWork`) and then best-effort publishes a BullMQ job on `QueueName.MAIL` whose `jobId` is the
-delivery id (or the caller's `dedupeKey`). `MailConsumer` in the worker loads the row, calls
-`DeliverMailUseCase`, which renders through `MailRenderer` (port) → `ReactEmailMailRenderer`
-(`packages/mail`) and sends through `EmailSender`, then marks `sent` / records the attempt. A
-row the consumer cannot see yet (job published before the commit) throws `NotFoundError`, which
-BullMQ retries; `mail-sweep` runs every minute and enqueues any `queued` row with no
-`enqueued_at` older than sixty seconds, and re-enqueues rows enqueued over fifteen minutes ago
-and still `queued`. `params` is nulled at a terminal state because it carries links with tokens.
+**Design in one paragraph.** `MailPublisher` (port, `application/src/port/`) is what callers hold;
+`QueuedMailPublisher` (`composition/src/mail/`) publishes a BullMQ job and returns. There is no
+row and no delivery record — see decision 8. `MailConsumer` in the worker calls `SendMailUseCase`,
+which validates `params` against the template manifest, renders through `MailRenderer` (port) →
+`ContentMailRenderer` (`composition/src/mail/`, translated copy poured into a hand-written HTML
+layout) and sends through `EmailSender`. A throw is BullMQ's retry signal, and that is the whole
+error model: no status column, no state machine, no sweep. The `dedupeKey` a caller may pass
+becomes the job id, so "enqueue this once" is expressed where BullMQ already enforces it.
 
-#### 1.A Foundations (`core`, `application`, `infrastructure`)
+#### 1.A Foundations (`application`, `infrastructure`)
 
 - [ ] `C1.1` **`QueueName.MAIL`** — add `"mail"` to `packages/application/src/primitive/queue-name.ts`
   and `ALL`. **Docs:** `docs/opinions/vocabulary.md` queue table, `docs/setup/15`.
 - [ ] `C1.2` **`JobOptions.priority` and `JobOptions.name`** — `readonly priority?: number`
   and `readonly name?: string` (the BullMQ job name, defaulting to the queue name as today) on
-  `application/src/port/queue.publisher.ts`; `BullMqQueuePublisher` passes both through;
+  `packages/application/src/port/queue.publisher.ts`; `BullMqQueuePublisher` passes both through;
   `RecordingQueuePublisher` records them. Spec in `infrastructure/tests/smoke/` publish test.
 - [ ] `C1.3` **`EmailSender.send` returns a receipt** — `Promise<EmailReceipt>` with
   `{ messageId: string | null }` (nodemailer's `info.messageId`). Update `SmtpEmailSender`,
-  `RecordingEmailSender`, both specs. **Docs:** `application/docs/reference/ports.md`.
+  `RecordingEmailSender`, both specs. The receipt is logged rather than stored, and it is what a
+  provider webhook would later correlate against. **Docs:** `application/docs/reference/ports.md`.
 - [ ] `C1.4` **Generalise partition maintenance** — `MaintenanceGateway.ensureActivityPartitions`
   becomes `ensureMonthlyPartitions(table: PartitionedTable, from, months)` and gains
   `dropMonthlyPartitionsBefore(table, cutoff)`; `PartitionedTable` is a frozen allowlist
-  (`activity_log`, `mail_deliveries`, later `outbox_event`, `notifications`, `messages`) so a
-  table name never reaches SQL as a string. `PgMaintenanceGateway`, `PartitionsSchedule`,
-  `MaintenanceConsumer.partitions()` loop the allowlist; `activity_log` keeps archive-then-drop.
-  Spec: `pg-maintenance.gateway.spec.ts`. **Docs:** `infrastructure/docs/reference/`,
-  `apps/worker/docs/reference/schedules.md`, `docs/opinions/data-and-scale.md` §4.
+  (`activity_log`, then `outbox_event` in Phase 2, `notifications` in Phase 3, `messages` in
+  Phase 5) so a table name never reaches SQL as a string. `PgMaintenanceGateway`,
+  `PartitionsSchedule`, `MaintenanceConsumer.partitions()` loop the allowlist; `activity_log`
+  keeps archive-then-drop. Spec: `pg-maintenance.gateway.spec.ts`. **Docs:**
+  `infrastructure/docs/reference/`, `apps/worker/docs/reference/schedules.md`,
+  `docs/opinions/data-and-scale.md` §4.
+  **Depends on:** nothing, but it earns its place only from Phase 2 onward — land it here because
+  Phase 2's migration is the first caller and splitting it across two phases reads worse.
 
-#### 1.B Schema (`infrastructure`)
-
-- [ ] `C1.5` **`mail_deliveries`** — `packages/infrastructure/src/pg/schema/mail.schema.ts`:
-  `id uuid`, `created_at timestamptz` (PK `(id, created_at)`, `PARTITION BY RANGE (created_at)`,
-  hand-edited DDL as `migrations/0000` does, six months of partitions), `organization_id uuid`
-  **nullable** with a comment — a sign-up verification has no tenant yet (§9 checks the column
-  is declared; it is), `user_id uuid` nullable (no FK: a delivery record outlives the account),
-  `template text`, `locale text`, `recipient text`, `params jsonb` nullable, `priority smallint`,
-  `status text` (`queued | sent | failed`, mirrored exactly by the zod enum), `attempts int`,
-  `last_error text`, `enqueued_at`, `sent_at`, `failed_at` timestamptz nullable,
-  `provider_message_id text`. Indexes: `mail_deliveries_org_time_idx (organization_id, created_at desc)`;
-  `mail_deliveries_sweep_idx (enqueued_at, created_at) WHERE status = 'queued'` — cross-tenant
-  by design, like `activity_log_replay_idx`, with the comment saying so; `mail_deliveries_user_idx (user_id, created_at desc)`.
-  Register in `schema/index.ts` (§11). No unique index (dedupe is the BullMQ `jobId`).
-  Migration reviewed by hand; §20 safe. **Docs:** `infrastructure/docs/index.md` tree,
-  `docs/setup/13` partition list, `docs/opinions/data-and-scale.md` §9 table (a new row).
-
-#### 1.C Template catalog and ports (`content`, `application`)
+#### 1.B Template catalog and ports (`contracts`, `application`)
 
 - [ ] `C1.6` **Template manifest in `contracts`** — `packages/contracts/src/mail/{index,mail-template.manifest}.ts`
   → `MailTemplates`: a closed record `key → ZodObject` (the params) for `auth.verify`,
   `auth.reset`, `auth.change`, `auth.otp`, `member.invitation`, `notification.single` (Phase 3),
   `notification.digest` (Phase 3). Exports `MailTemplateKey` and `MailTemplateParams<K>`.
   In `contracts` rather than `content` because `application` has no `zod` and no `content`
-  dependency today, `contracts` has both properties the worker needs (zod to validate the
-  stored `params`, already a dependency of `application`), and the subject copy key is the
-  `mail` package's concern. `application/src/import.ts` gains a **type-only**
-  `Locale` from `@loadbearing/content` (a new, permitted edge — content is to its left; record it
-  in `application/package.json` and `application/docs/index.md` "Depends on").
-  **Docs:** `contracts/docs/index.md`.
+  dependency today, and `contracts` has both properties the worker needs — zod to validate the
+  params a job carries, and a home `application` already imports from.
+  `application/src/import.ts` gains a **type-only** `Locale` from `@loadbearing/content` (a new,
+  permitted edge — content is to its left; record it in `application/package.json` and
+  `application/docs/index.md` "Depends on"). **Docs:** `contracts/docs/index.md`.
 - [ ] `C1.7` **`MailPublisher` port** — `application/src/port/mail.publisher.ts`:
   `MailRequest<K> { template: K; to; locale: Locale; params: MailTemplateParams<K>; organizationId: OrganizationId | null; userId: UserId | null; priority?: "high" | "normal"; dedupeKey?: string }`,
-  `abstract publish<K>(mail: MailRequest<K>): Promise<MailDeliveryId>`. `MailDeliveryId` added to
-  `contracts/src/primitive/identifiers.ts`. **Docs:** `application/docs/reference/ports.md`
-  (port count: sixteen → seventeen, then eighteen with `C1.8`; `test-container.spec` counts the
-  directory, so the harness fails until both fakes exist).
+  `abstract publish<K>(mail: MailRequest<K>): Promise<void>`. Returns nothing: there is no row to
+  identify, and a caller reading an id would be reaching for a record that does not exist.
+  **Docs:** `application/docs/reference/ports.md` (port count: sixteen → seventeen, then eighteen
+  with `C1.8`; `test-container.spec` counts the directory, so the harness fails until both fakes
+  exist).
 - [ ] `C1.8` **`MailRenderer` port** — `application/src/port/mail.renderer.ts`:
   `RenderedMail { subject; text; html }`, `abstract render<K>(template, locale, params): Promise<RenderedMail>`.
   New suffix `.renderer.ts` recorded in `docs/opinions/files.md` and `docs/ai/rules/files.md`.
-- [ ] `C1.9` **`mail` slice in `application`** — `application/src/mail/{index,mail-delivery.repository,deliver-mail.use-case,sweep-mail.use-case}.ts`.
-  `MailDeliveryRepository` (slice port): `save(record)`, `findById(id, createdAt)` (both keys —
-  partition pruning), `findUnenqueued(olderThan, limit)`, `findStale(enqueuedBefore, maxAttempts, limit)`,
-  `markEnqueued(ids)`, `markSent(id, createdAt, messageId, at)`, `markAttemptFailed(id, createdAt, error, at, final)`.
-  `DeliverMailUseCase.execute(principal, { id, createdAt })`: load or `NotFoundError` (retryable
-  by construction — the row may not be visible yet), return early if `sent` (idempotent), validate
-  `params` against `MailTemplates[template].params`, render, send, `markSent`; on throw
-  `markAttemptFailed` and rethrow (BullMQ retries). `SweepMailUseCase.execute(principal, { now })`
-  publishes the two `find*` sets through `QueuePublisher` and marks them. Principal is
-  `SystemPrincipal.platform()` (new: the nil organization) — platform work asserts no
-  permission, like `MaintenanceGateway`. Specs for both with hand-rolled doubles as the slice
-  specs do. **Docs:** `application/docs/index.md` tree.
+- [ ] `C1.9` **`mail` slice in `application`** — `application/src/mail/{index,send-mail.use-case}.ts`.
+  `SendMailUseCase.execute(principal, request)`: validate `params` against
+  `MailTemplates[template]`, render, send, return. No repository, no status, no idempotency of its
+  own — the job id carries that. Principal is `SystemPrincipal.platform()` (new: the nil
+  organization), because platform work asserts no permission, as `MaintenanceGateway` already
+  does. Spec: an unknown template and a params mismatch both throw before the transport is
+  touched. **Docs:** `application/docs/index.md` tree.
 
-#### 1.D `packages/mail` (new, react-email)
+#### 1.C Templates and the renderer (`composition`)
 
-- [ ] `C1.10` **Package** — `packages/mail/{package.json,tsconfig.json,tsup.config.ts,vitest.config.ts}`;
-  name `@loadbearing/mail`; deps `@loadbearing/{application,content,contracts}` (`workspace:*`),
-  `@react-email/components`, `@react-email/render` (`catalog:`); `react`, `react-dom` as
-  **peerDependencies** from `catalog:react`. `src/index.ts` calls `ServerOnly.assert("@loadbearing/mail")`
-  and exports `ReactEmailMailRenderer` only. Add to: `pnpm-workspace.yaml` Tier 3 React-scoped
-  (`@react-email/components`, `@react-email/render`, exact versions to be pinned when installed),
-  the Biome server-only ban list (`tooling/biome-config/src/base.json`) and the ESLint boundary,
-  `commitlint.config.js` scope `mail`, the root `tsconfig` references / `build:packages`, CI's
-  package list, `check-architecture` `SERVER_FINGERPRINTS` (the bundle grep must reject
-  `@react-email`). **Docs:** `docs/ai/rules/layering.md` graph gains `mail` beside
-  `infrastructure`; `docs/opinions/dependencies.md` tier table; `docs/setup/28` tree;
-  `packages/mail/docs/{meta.json,index.md}` per `docs/ai/skills/add-docs.md`.
-- [ ] `C1.11` **Templates** — `packages/mail/src/template/`: `base.template.tsx` (layout: one
-  heading, paragraphs, one action link, footer; every colour a literal is fine **here only** —
-  mail clients have no CSS variables; say so in the file and add `packages/mail` to the
-  colour rule's stated exemption in `docs/ai/rules/color.md`), then one file per template key:
-  `verify-email.template.tsx`, `reset-password.template.tsx`, `change-email.template.tsx`,
-  `two-factor-otp.template.tsx`, `invitation.template.tsx`, `notification.template.tsx`,
-  `digest.template.tsx`. Each takes `{ t: Translator; params }` and reads only the `email`
-  namespace. New suffix `.template.tsx` recorded. Spec per template: renders, contains the
-  action URL, no untranslated key.
-- [ ] `C1.12` **`ReactEmailMailRenderer`** — `packages/mail/src/renderer/react-email-mail.renderer.ts`
-  `extends MailRenderer`, ctor `(content: ContentSource)`; `render` resolves
-  `content.translator(locale, ["email"])`, picks the template by key through a frozen map
-  (exhaustive `switch`, `never` default), `render()` for HTML and `render(…, { plainText: true })`
-  for text, subject from `MailTemplates[key].subject`. Spec asserts html and text both carry the
-  link and that an unknown key is a compile error.
-- [ ] `C1.13` **Optional: local preview** — `react-email` CLI as a Tier 1 dev dependency and a
-  `pnpm --filter @loadbearing/mail preview` script. Skip if it drags a Next.js install into the
-  tree; record the decision either way in `packages/mail/docs/index.md`.
+- [ ] `C1.10` **Mail layout** — `composition/src/mail/mail-layout.ts` → `MailLayout`: builds an
+  HTML document and the matching plain text from a heading, paragraphs and one action link, given
+  already-translated strings. A table-based shell with inline CSS, because mail clients resolve
+  neither `<style>` reliably nor CSS custom properties at all — which makes this the one place in
+  the repository allowed to write a literal colour. State that at the line and add the exemption
+  to `docs/ai/rules/color.md` and `docs/opinions/` in the same commit, or the rule and the tree
+  disagree. Spec: the text part carries the same URL as the HTML part, and no tag survives into it.
+- [ ] `C1.11` **`ContentMailRenderer`** — `composition/src/mail/content-mail.renderer.ts`
+  `extends MailRenderer`, ctor `(content: ContentSource)`. Resolves
+  `content.translator(locale, ["email"])`, picks the template through an exhaustive `switch` with
+  a `never` default, composes through `MailLayout`, and takes the subject from the `email`
+  namespace. One function per template key, each a handful of lines. Specs: every key renders both
+  parts and carries its action URL; a key the manifest does not know is a compile error.
 
-#### 1.E Adapters and composition (`infrastructure`, `composition`, `auth`)
+#### 1.D Wiring (`composition`, `auth`)
 
-- [ ] `C1.14` **`PgMailDeliveryRepository`** — `infrastructure/src/pg/repository/pg-mail-delivery.repository.ts`
-  `extends BaseRepository`, every write through `this.db`. Integration spec with a fixed query
-  count for `findUnenqueued` (one query, limit-bounded).
 - [ ] `C1.15` **`QueuedMailPublisher`** — `composition/src/mail/queued-mail.publisher.ts`
-  `extends MailPublisher`, ctor `(deliveries: MailDeliveryRepository, queue: QueuePublisher, clock, logger)`.
-  `publish`: `Uuid.v7()` id, `save` (joins the open transaction), then `queue.publish(QueueName.MAIL, { id, createdAt }, { jobId: dedupeKey ?? id, priority, attempts: high ? 5 : 3 })`
-  inside a `try` that logs `mail.delivery.queued { enqueued: false }` on failure — the row is
-  the truth and the sweep finishes the job. Spec: a failed enqueue still returns the id.
+  `extends MailPublisher`, ctor `(queue: QueuePublisher)`. `publish` is one call:
+  `queue.publish(QueueName.MAIL, request, { name: "send", jobId: dedupeKey, priority, attempts: high ? 5 : 3 })`.
+  It does not catch: with no row behind it there is nothing for a swallowed enqueue to be
+  secondary to, and a caller that cannot queue mail should learn that. Spec pins the job options
+  per priority.
 - [ ] `C1.16` **Auth mail moves onto the pipeline** — `AuthMailer` methods take
   `MailRecipient { email; userId: UserId | null; locale: Locale }` instead of a bare address;
   `AuthFactory` builds it from Better Auth's `user` (`locale` is already an additional field).
   `ContentAuthMailer` → `QueuedAuthMailer` (`composition/src/mail/queued-auth.mailer.ts`), one
-  `publish` per method at `priority: "high"`, `organizationId: null`. Delete the text-only
-  composition. Specs updated. **Docs:** `auth/docs/reference/auth-factory.md`,
-  `composition/docs/index.md`.
+  `publish` per method at `priority: "high"`, `organizationId: null`. Specs updated.
+  **Docs:** `auth/docs/reference/auth-factory.md`, `composition/docs/index.md`.
 - [ ] `C1.17` **Invitation mail moves onto the pipeline** — `ContentInvitationMailer` →
-  `QueuedInvitationMailer` publishing `member.invitation` with `url` built from `auth.baseUrl`
-  + `ROUTES.shell.invitation` + token, `organizationId` set. `InviteMemberUseCase` calls
-  `mailer.send` **inside** `unitOfWork.run` (the row commits with the invitation) and drops the
-  `try/catch` — an enqueue failure is now non-fatal inside the publisher. Spec: the delivery
-  row rolls back with the invitation. **Docs:** `application/docs/index.md`,
-  `auth/docs/reference/enrolment.md` (the send is queued now).
-- [ ] `C1.18` **Container** — fields `mailPublisher: MailPublisher` (public: Phase 3's
-  subscriber uses it), `mailRenderer` private, `public readonly mail: { deliver: DeliverMailUseCase; sweep: SweepMailUseCase }`
-  built in **every** process (the worker needs them; they need no auth). `ContainerConfig.email`
+  `QueuedInvitationMailer` publishing `member.invitation` with `url` built from `auth.baseUrl` +
+  `ROUTES.shell.invitation` + token, `organizationId` set. `InviteMemberUseCase` keeps the send
+  **after** the commit and keeps its `try`/`catch`: the token cannot ride a durable row, so the
+  enqueue is the one thing that cannot be made atomic with the invitation. The operator action for
+  the crash window is to invite again, which replaces the row — say so at the line, and file the
+  resend button as `C6.9`. **Docs:** `application/docs/index.md`,
+  `auth/docs/reference/enrolment.md`.
+- [ ] `C1.18` **Container** — `public readonly mailPublisher: MailPublisher` (Phase 3's subscriber
+  uses it), `mailRenderer` private, `public readonly mail: { send: SendMailUseCase }` built in
+  **every** process — the worker needs it and it needs no auth config, which is what
+  `ContentAuthMailer` being inside the `config.auth` branch got wrong. `ContainerConfig.email`
   gains `baseUrl` (env `APP_BASE_URL`, required in both `env.ts`; web's `AUTH_URL` stays Better
   Auth's own). `TestPorts` gains `mailPublisher` (`RecordingMailPublisher`, exports
-  `PublishedMail`) and `mailRenderer` (`StubMailRenderer` returning `{ subject: key, text: JSON.stringify(params), html }`).
-  `test-container.spec` key-set pin updated. **Docs:** `composition/docs/reference/container.md`,
-  `test-container.md`, `apps/web/docs/reference/env.md`, `apps/worker/docs/reference/env.md`,
-  `.env.example`, CI `env:` block (P8.12 made a missing key a boot failure).
+  `PublishedMail`) and `mailRenderer` (`StubMailRenderer`). `test-container.spec` key-set pin
+  updated. **Docs:** `composition/docs/reference/{container,test-container}.md`, both
+  `docs/reference/env.md`, `.env.example`, CI `env:` block.
 
-#### 1.F Worker
+#### 1.E Worker
 
 - [ ] `C1.19` **`MailConsumer`** — `apps/worker/src/consumer/mail.consumer.ts` on `QueueName.MAIL`,
-  `switch (job.name)`: `mail` → `container.mail.deliver.execute(SystemPrincipal.platform(), job.data)`;
-  `sweep` → `container.mail.sweep.execute(…)`; `default` throws. Worker options
+  `switch (job.name)`: `send` → `container.mail.send.execute(SystemPrincipal.platform(), job.data)`;
+  `default` throws. Worker options
   `{ concurrency: Env.mailConcurrency, limiter: { max: Env.mailRatePerMinute, duration: 60_000 } }`
-  — the provider's rate limit is a worker option, never a use-case concern. `failed` handler:
-  when `job.attemptsMade >= job.opts.attempts` emit `mail.delivery.failed`. Env:
-  `WORKER_MAIL_CONCURRENCY` (4), `WORKER_MAIL_RATE_PER_MINUTE` (600). Spec via `TestContainer`
-  as `maintenance.consumer.spec.ts` does. **Docs:** `apps/worker/docs/reference/consumers.md`
-  (the `NOTIFICATION` "no consumer" sentence changes), `env.md`.
-- [ ] `C1.20` **`MailSweepSchedule`** — `apps/worker/src/schedule/mail-sweep.schedule.ts`,
-  `jobId mail-sweep`, pattern `* * * * *`, on `QueueName.MAIL` with job name `sweep`,
-  registered after the consumer starts. **Docs:** `schedules.md`.
-- [ ] `C1.21` **Retention** — `mail_deliveries` partitions older than three months dropped by
-  the monthly partitions job (`C1.4`); `params` nulled at `sent`/`failed` by the use-case, and a
-  daily `cleanup` step nulls any `params` on rows older than seven days (belt and braces for a
-  row that never reached a terminal state). **Docs:** `data-and-scale.md` §4 retention table.
+  — a provider's rate limit is a worker option, never a use-case concern. The `failed` handler
+  emits `mail.delivery.failed` once `job.attemptsMade >= job.opts.attempts`, which is the only
+  place a permanently undelivered message is reported. Env `WORKER_MAIL_CONCURRENCY` (4),
+  `WORKER_MAIL_RATE_PER_MINUTE` (600). Spec via `TestContainer` as
+  `maintenance.consumer.spec.ts` does. **Docs:** `apps/worker/docs/reference/consumers.md` (the
+  `NOTIFICATION` "no consumer" sentence changes), `env.md`.
 - [ ] `C1.22` **Delete `DigestComposer`** — `apps/worker/src/notification/` and its spec; the
   worker's `import.ts` drops `ContentSource`/`Locale`. **Docs:** `docs/setup/25`, `28`,
   `apps/worker/docs/index.md`, `docs/opinions/files.md` example row for `.composer.ts` (keep the
   suffix, point the example at a file that exists or remove the row).
 
-#### 1.G Observability, CI, docs
+#### 1.F Observability, CI, docs
 
-- [ ] `C1.23` **Event codes** — `mail.delivery.queued` (debug), `mail.delivery.sent` (info),
-  `mail.delivery.failed` (error), `mail.delivery.swept` (warn, with a count) in
-  `observability/src/catalog/core.events.ts`; `email.send.failed` stays (the transport's own
-  line). Emitted from the consumer and the publisher, never from `application`.
-- [ ] `C1.24` **CI greps** — `EMAIL_FINGERPRINTS` gains `"email.notification."` and
-  `"email.digest."` is kept; `SERVER_FINGERPRINTS` gains `@react-email`; §12 rule-file import for
-  any new `docs/ai/rules/` file (none planned). `pnpm check:architecture` 20/20 with no skip.
+- [ ] `C1.23` **Event codes** — `mail.delivery.queued` (debug, from the publisher),
+  `mail.delivery.sent` (info, with the receipt's message id), `mail.delivery.failed` (error, final
+  attempt only) in `observability/src/catalog/core.events.ts`; `email.send.failed` stays as the
+  transport's own line. Emitted from the consumer and the publisher, never from `application`.
+  Together these are the delivery record until a provider supplies a better one.
+- [ ] `C1.24` **CI greps** — `EMAIL_FINGERPRINTS` gains `"email.notification."` and keeps
+  `"email.digest."`. No `SERVER_FINGERPRINTS` change is needed now that no mail dependency
+  exists to leak. `pnpm check:architecture` 20/20 with no skip.
 - [ ] `C1.25` **Docs** — `docs/setup/24`/`25` mail sections rewritten; a new
-  `packages/composition/docs/reference/mail-pipeline.md` carrying the argument (queued auth
-  mail, the sweep, `params` nulling, why the publisher lives in composition); `README.md`
-  feature list; `docs/ai/rules/workflow.md` Mailpit sentence gains "with the worker running".
+  `packages/composition/docs/reference/mail-pipeline.md` carrying the argument (queued auth mail,
+  why there is no table, why the invitation send stays after the commit, where the delivery record
+  actually lives); `README.md` feature list; `docs/ai/rules/workflow.md` Mailpit sentence gains
+  "with the worker running".
+
+**Ids `C1.5`, `C1.12`, `C1.13`, `C1.14`, `C1.20` and `C1.21` are retired**, not reused: they were
+the `mail_deliveries` table, the react-email package's templates, its preview tooling, its
+repository, the sweep schedule and the mail retention job. Decisions 7 and 8 say why. An id is
+never renumbered here, so the gap is the record.
 
 **Exit.** A sign-up in the local stack shows the verification mail in Mailpit **only while the
-worker runs**, with a `sent` row in `mail_deliveries` carrying Mailpit's message id; stopping SMTP
-leaves the row `queued` with `attempts` climbing and `mail.delivery.failed` after the fifth;
-`pnpm check:architecture` 20/20, `typecheck`, `lint`, `test`, `smoke` green.
+worker runs**; stopping SMTP leaves the job retrying with backoff and emits `mail.delivery.failed`
+on the final attempt, with no orphaned row to reconcile; an invitation sent twice with the same
+`dedupeKey` produces one message. `pnpm check:architecture` 20/20, `typecheck`, `lint`, `test`,
+`smoke` green.
 
 ---
-
 ### Phase 2 — Transactional outbox (closes `T-031`)
 
 **Goal.** A use-case publishes a past-tense domain event inside its unit of work and knows
@@ -638,7 +611,7 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
 **Exit.** Changing a member's role writes one `notifications` row for that member with no
 duplicate on a replayed event, the bell count moves on refocus, the row is marked read
 optimistically and stays read after refetch, an `immediate` email preference produces a
-`mail_deliveries` row and a Mailpit message, a `digest` preference produces nothing until the
+`mail.delivery.sent` line and a Mailpit message, a `digest` preference produces nothing until the
 `digest-daily` run (`pnpm --filter @loadbearing/worker` + a manual `fire`), and `check:architecture`
 is 20/20.
 
@@ -965,6 +938,19 @@ specs and the smoke suite.
 - [ ] `C6.8` **Load test** the three §6 paths at 10× (digest fan-out, notification write
   amplification, message fan-out) against the compose stack before any of this is called
   production-ready.
+- [ ] `C6.9` **Resend actions** — "resend invitation" and "resend verification". These are what
+  cover the window between a commit and its enqueue, which decision 8 takes instead of a table.
+  Small, and worth having before the first support question rather than after.
+- [ ] `C6.10` **A delivery log, if the question actually arrives.** The trigger is stated so it
+  is not built on a feeling: somebody needs to answer "was this sent" and neither
+  `mail.delivery.sent` in Loki nor the provider's own log can answer it — most likely because
+  retention is shorter than the question. Build it then, as an append-only table written by the
+  consumer, never as state the send path depends on.
+- [ ] `C6.11` **Move from SMTP to a provider API** (SES, Postmark, Resend). This is what buys
+  bounce and complaint webhooks, suppression lists and a searchable sent log — the delivery record
+  this plan deliberately does not keep. It is one adapter behind the existing `EmailSender` port,
+  which is exactly the swap that port exists for; `docs/ai/rules/dependencies.md` would move the
+  entry from Tier 0 (a protocol) to Tier 2 (an SDK behind a port).
 
 ---
 
