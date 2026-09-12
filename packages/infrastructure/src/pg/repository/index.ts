@@ -12,6 +12,8 @@ export { PgMaintenanceGateway } from "./pg-maintenance.gateway.js";
 export { PgMemberRepository } from "./pg-member.repository.js";
 export { PgMembershipReader } from "./pg-membership.reader.js";
 export { PgOrganizationFounder } from "./pg-organization.founder.js";
+export { PgOutboxGateway } from "./pg-outbox.gateway.js";
+export { PgOutboxPublisher } from "./pg-outbox.publisher.js";
 export { PgPersonalOrganizationEnroller } from "./pg-personal-organization.enroller.js";
 export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgVectorStore } from "./pg-vector.store.js";

@@ -19,6 +19,8 @@ export {
   PgMemberRepository,
   PgMembershipReader,
   PgOrganizationFounder,
+  PgOutboxGateway,
+  PgOutboxPublisher,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgVectorStore,

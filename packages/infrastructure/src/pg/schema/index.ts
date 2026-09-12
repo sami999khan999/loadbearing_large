@@ -3,5 +3,6 @@ export * from "./analytics.schema.js";
 export * from "./api-key.schema.js";
 export * from "./auth.schema.js";
 export * from "./invitation.schema.js";
+export * from "./outbox.schema.js";
 export * from "./rbac.schema.js";
 export * from "./vector.schema.js";

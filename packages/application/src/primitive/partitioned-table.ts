@@ -1,8 +1,9 @@
 const ACTIVITY_LOG = "activity_log";
+const OUTBOX_EVENT = "outbox_event";
 
 // Frozen at module load for the reason `QueueName` gives: `static readonly` freezes the
 // binding and not the array.
-const ALL = Object.freeze([ACTIVITY_LOG] as const);
+const ALL = Object.freeze([ACTIVITY_LOG, OUTBOX_EVENT] as const);
 
 // A closed union rather than `string`, and that is not style. Postgres accepts no bind
 // parameters in DDL, so the adapter inlines this value — the type is the only boundary.
@@ -14,6 +15,7 @@ export class PartitionedTable {
   private constructor() {}
 
   public static readonly ACTIVITY_LOG = ACTIVITY_LOG;
+  public static readonly OUTBOX_EVENT = OUTBOX_EVENT;
 
   public static readonly ALL = ALL;
 }

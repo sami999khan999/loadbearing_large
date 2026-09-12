@@ -1,0 +1,129 @@
+import { PartitionedTable, Principal } from "@loadbearing/application";
+import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
+import { SystemClock, Uuid } from "@loadbearing/core";
+import { CapabilitySet } from "@loadbearing/permissions";
+import { sql } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { Database } from "../../src/pg/primitive/index.js";
+import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
+import { PgOutboxGateway } from "../../src/pg/repository/pg-outbox.gateway.js";
+import { PgOutboxPublisher } from "../../src/pg/repository/pg-outbox.publisher.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { openDatabase, seedOrganizationId } from "../support/database.js";
+
+let database: Database;
+let scope: TransactionScope;
+let publisher: PgOutboxPublisher;
+let gateway: PgOutboxGateway;
+let organizationId: OrganizationId;
+let actor: Principal;
+
+beforeAll(async () => {
+  database = openDatabase();
+  scope = new TransactionScope();
+  const unitOfWork = new PgUnitOfWork(database, scope);
+
+  publisher = new PgOutboxPublisher(database, scope, new SystemClock());
+  gateway = new PgOutboxGateway(database, scope, unitOfWork);
+
+  organizationId = await seedOrganizationId(database);
+  actor = Principal.system(
+    organizationId,
+    Identifiers.userId.parse(Uuid.v7()) as UserId,
+    CapabilitySet.from({ wildcard: false, org: { grants: [], denies: [] }, goals: {} }),
+  );
+
+  // The month this spec writes into has to exist: no DEFAULT partition, on purpose.
+  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
+    PartitionedTable.OUTBOX_EVENT,
+    new Date(),
+    1,
+  );
+});
+
+afterEach(async () => {
+  await database.client.execute(
+    sql`delete from outbox_event where organization_id = ${organizationId}`,
+  );
+});
+
+afterAll(async () => {
+  await database.close();
+});
+
+const publish = () =>
+  publisher.publish(actor, {
+    name: "member.joined",
+    payload: { userId: actor.userId, roleId: Identifiers.roleId.parse(Uuid.v7()) },
+  });
+
+const pendingCount = async () => {
+  const rows = await database.client.execute<{ count: string }>(
+    sql`select count(*)::text as count from outbox_event
+        where organization_id = ${organizationId} and published_at is null`,
+  );
+  return Number(rows.rows[0]?.count ?? "0");
+};
+
+describe("PgOutboxGateway.drain", () => {
+  it("marks a batch published only after the relay resolves", async () => {
+    await publish();
+
+    expect(await gateway.drain(10, () => Promise.resolve())).toBe(1);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  // The whole reason `relay` is awaited inside the transaction. A throw has to leave the
+  // rows claimable, or a failing subscriber silently loses the event.
+  it("leaves the rows pending when the relay throws", async () => {
+    await publish();
+
+    await expect(gateway.drain(10, () => Promise.reject(new Error("queue down")))).rejects.toThrow(
+      "queue down",
+    );
+    expect(await pendingCount()).toBe(1);
+  });
+
+  // `SKIP LOCKED` is what lets two worker replicas share the drain with no coordinator.
+  // Without it the second call blocks and then hands out the same rows.
+  it("never hands the same row to two concurrent drains", async () => {
+    await publish();
+    await publish();
+
+    const seen: string[] = [];
+    const collect = (events: readonly { id: string }[]) => {
+      seen.push(...events.map((event) => event.id));
+      return Promise.resolve();
+    };
+
+    await Promise.all([gateway.drain(10, collect), gateway.drain(10, collect)]);
+
+    expect(seen).toHaveLength(2);
+    expect(new Set(seen).size).toBe(2);
+  });
+
+  it("reports nothing to drain rather than failing on an empty outbox", async () => {
+    expect(await gateway.drain(10, () => Promise.resolve())).toBe(0);
+  });
+
+  it("reports no lag when nothing is pending, which is not the same as unknown", async () => {
+    expect(await gateway.oldestPendingAt()).toBeNull();
+  });
+});
+
+describe("PgOutboxPublisher", () => {
+  // The property the whole design exists for: the row and the state change that caused
+  // it commit together or not at all.
+  it("rolls the event back with the transaction that wrote it", async () => {
+    const unitOfWork = new PgUnitOfWork(database, scope);
+
+    await expect(
+      unitOfWork.run(async () => {
+        await publish();
+        throw new Error("state change failed");
+      }),
+    ).rejects.toThrow("state change failed");
+
+    expect(await pendingCount()).toBe(0);
+  });
+});

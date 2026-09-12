@@ -40,6 +40,7 @@ export {
   type CapabilityRepository,
   type DailyCount,
   type DocumentChunk,
+  type DomainEventPublisher,
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
@@ -57,12 +58,15 @@ export {
   type MemberRepository,
   type NewApiKey,
   type NewInvitation,
+  type OutboxGateway,
   type PartitionedTableName,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
   type ProjectionCheckpoint,
   QueuePublisher,
+  type RealtimeChannel,
+  type RealtimePublisher,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
@@ -77,11 +81,15 @@ export {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
   type ApiKeyId,
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
   type GoalId,
   Identifiers,
   type InvitationId,
   type OrganizationId,
   type PaginationQuery,
+  type RealtimeMessage,
   type RoleId,
   type UserId,
 } from "@loadbearing/contracts";

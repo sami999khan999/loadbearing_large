@@ -458,6 +458,10 @@ CREATE TABLE activity_log_2026_01 PARTITION OF activity_log
 
 **Decide retention at the same time.** The usual shape is 12–24 months of detail in Postgres, aggregates kept forever in the analytics store, and older partitions detached to cold storage. Detaching a partition is instant; a `DELETE` over the same rows bloats the table and holds a lock.
 
+**Which tables are partitioned is a list, not a convention.** `PartitionedTable.ALL` in `packages/application/src/primitive/partitioned-table.ts` names them; `MaintenanceGateway.ensureMonthlyPartitions` and `dropMonthlyPartitionsBefore` take that union rather than a `string`, and the monthly schedule loops it. Two things fall out. Postgres accepts no bind parameter in DDL — not for the table and not for the range bounds — so the adapter interpolates, and a closed union is the only boundary there is. And a table partitioned in a migration but never added to the list quietly stops getting partitions the month that migration's own runway ends.
+
+`outbox_event` is the second table on that list. It is partitioned by `occurred_at` for the same reason `activity_log` is, and its indexes are partial rather than plain: the drain reads `WHERE published_at IS NULL` and the retention sweep reads `WHERE published_at IS NOT NULL`, so neither index carries rows the other will look at. Nothing is unique over `published_at`, so the pair are ordinary indexes — a nullable column in a *unique* index is the different problem [`vocabulary.md`](../opinions/vocabulary.md) warns about.
+
 ### Writing a unique-index migration
 
 `pnpm db:generate` emits `CREATE UNIQUE INDEX` and nothing else. That statement is correct on an

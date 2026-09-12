@@ -425,7 +425,7 @@ check in every layer and the browser can parse the same shapes on the stream.
 
 #### 2.B Schema (`infrastructure`)
 
-- [ ] `C2.2` **`outbox_event`** — `pg/schema/outbox.schema.ts`: `id uuid`, `occurred_at`
+- [x] `C2.2` **`outbox_event`** — `pg/schema/outbox.schema.ts`: `id uuid`, `occurred_at`
   (PK `(id, occurred_at)`, `PARTITION BY RANGE (occurred_at)`, hand-edited DDL),
   `organization_id` (FK cascade), `actor_id` (no FK), `name text`, `payload jsonb`,
   `published_at timestamptz` nullable. Indexes: `outbox_event_pending_idx (occurred_at, id) WHERE published_at IS NULL`
@@ -440,6 +440,13 @@ check in every layer and the browser can parse the same shapes on the stream.
   **Docs:** `data-and-scale.md` §9, `docs/ai/rules/data.md` stream table (a "Domain events"
   row: `DomainEventPublisher` — Postgres outbox, partitioned — in-transaction, at-least-once),
   `docs/setup/13`.
+  `done: 2026-09-12` — migration `0015`, hand-edited to `PARTITION BY RANGE (occurred_at)` with
+  six months of runway; `outbox_event` joins `PartitionedTable.ALL`, so the monthly schedule keeps
+  three ahead from here. **Retention is whole-partition drop only** — the plan's row-level
+  `sweepExpired` over `published_at` is exactly the vacuum problem partitions exist to avoid, and
+  it would have been a second mechanism doing the first one's job. The guard against dropping a
+  stuck event is `oldestPendingAt()`, checked before the cutoff.
+  **unverified:** the migration cannot be applied here. Run `pnpm infra:up && pnpm db:migrate`.
 
 #### 2.C Ports and domain (`application`)
 
@@ -493,13 +500,16 @@ check in every layer and the browser can parse the same shapes on the stream.
 
 #### 2.D Adapters, worker, composition
 
-- [ ] `C2.7` **`PgOutboxPublisher`, `PgOutboxGateway`** — `pg/repository/pg-outbox.publisher.ts`
+- [x] `C2.7` **`PgOutboxPublisher`, `PgOutboxGateway`** — `pg/repository/pg-outbox.publisher.ts`
   (`constructor(database, scope, clock)`, insert through `this.db`), `pg-outbox.gateway.ts`
   (`constructor(database, scope, unitOfWork)`: `SELECT … FOR UPDATE SKIP LOCKED` then
   `UPDATE … SET published_at = now() WHERE published_at IS NULL AND (id, occurred_at) IN (…)`
   inside one `unitOfWork.run`; a throw in `relay` rolls back and the rows are re-claimed next
   tick). Integration spec: two concurrent `drain` calls never hand out the same row; fixed
   query count of two per batch.
+  `done: 2026-09-12` — **unverified:** the whole spec needs Postgres, including the concurrency
+  case, which is the one that actually proves `SKIP LOCKED`. Run `pnpm infra:up && pnpm db:migrate
+  && pnpm --filter @loadbearing/infrastructure test`.
 - [ ] `C2.8` **`OutboxConsumer` + `OutboxDrainSchedule`** — `apps/worker/src/consumer/outbox.consumer.ts`
   on `QueueName.EVENT`, `switch (job.name)`: `drain` → loop
   `container.outbox.drain(100, relay)` until a short batch or `MAX_BATCHES_PER_RUN = 20`,
@@ -754,7 +764,7 @@ invalidation; on `resync` it invalidates every key the table names.
   and the `typing` frame land in Phase 4 with the stream that reads them; `C2.6`'s subscriber
   needs a publisher and nothing else. The wire union is `event` and `resync` for the same reason:
   `typing` names a `conversationId` that does not exist until Phase 5.
-- [ ] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
+- [x] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
   (cache client, `PUBLISH` of the JSON envelope, `id = Uuid.v7()`), `redis-realtime.subscriber.ts`
   (`constructor(redis /* subscriber role */, config: { maxStreamsPerUser; maxAgeMs; queueSize })`,
   the demux, ref counting and bounded sinks above); `RedisConnection` gains the `"subscriber"`

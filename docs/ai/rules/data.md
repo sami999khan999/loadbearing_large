@@ -12,6 +12,7 @@ description: Which store owns which data, what is derived, and what is non-negot
 |---|---|---|---|
 | Domain data | use-cases | Postgres | transactional; read-after-write |
 | Audit trail | `ActivityLogger` | Postgres, partitioned | must not be lost; **in-transaction** |
+| Domain events | `DomainEventPublisher` | Postgres outbox, partitioned | **in-transaction**, at-least-once, drained by the worker |
 | Diagnostics | `JsonLogger` | stdout → Loki | may be lost; 30-day retention |
 | Analytics | worker, from domain events | Postgres snapshots → ClickHouse | derived; rebuildable |
 

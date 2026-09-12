@@ -24,6 +24,7 @@ this page is what follows from it.
 |---|---|---|---|
 | **Domain data** — tasks, goals, RBAC | use-cases | Postgres | Transactional; read after write |
 | **Audit trail** — business facts | `ActivityLogger` | Postgres, partitioned | Must not be lost; in-transaction |
+| **Domain events** — integration facts | `DomainEventPublisher` | Postgres outbox, partitioned | In-transaction, at-least-once, drained by the worker |
 | **Diagnostics** — operator signal | `JsonLogger` | stdout → **Loki** | May be lost; 30-day retention |
 | **Analytics** — aggregates over time | worker, from domain events | Postgres snapshots → ClickHouse | Derived; rebuildable |
 
@@ -568,18 +569,29 @@ Worth naming, because it is most of the system. At every scale on this page:
 - **Event handlers** — moving from in-process dispatch to a broker changes the dispatcher, not the
   subscribers.
 
-That last one has a condition attached, and it applies to the interface that does not exist yet:
-**when an event bus is built, build it broker-shaped** — async `publish`, no return value,
-idempotent handlers keyed on a stable event id, no ordering assumptions, and no handler exception
-reaching the publisher. Each of those is something a Kafka or Redis Streams implementation cannot
-give back later, and a handler that starts depending on synchronous in-process semantics is the one
-thing that would make the swap expensive.
+That last one is now built, and it was built broker-shaped: `DomainEventPublisher.publish` is async
+and returns nothing, handlers are idempotent on a stable event id, there are no ordering
+assumptions, and no handler exception reaches the publisher. Each of those is something a Kafka or
+Redis Streams implementation cannot give back later, and a handler that started depending on
+synchronous in-process semantics is the one thing that would make the swap expensive.
 
-**Shape is not a reason to declare the port early.** One was declared here, faked in
-`TestContainer`, and bound nowhere, which meant a use-case that published would have published into
-nothing in production while reading as correct. It was deleted. The retrofit for this seam is local
-— a port file, an adapter, one `Container` line — so it lands with its first publisher, together,
-and `tasks/TODO.md` carries the design until then.
+**It is an outbox, not a bus, and the distinction is the reason it exists.** The event and the state
+change that caused it must commit or fail together. Publishing to a broker inside a transaction
+cannot be rolled back; publishing after it commits loses the event on a crash in between. A row
+written in the same transaction and drained by the worker is the only shape with neither hole — and
+`BaseRepository` already joins the ambient transaction, so it is one line at the call site.
+
+**Shape was not a reason to declare the port early**, and this is the second attempt. An `EventBus`
+port was declared here, faked in `TestContainer`, and bound nowhere, which meant a use-case that
+published would have published into nothing in production while reading as correct. It was deleted.
+What landed instead landed whole: a port, an adapter, a `Container` line, one real publisher and one
+real subscriber, in one change. The name went with it — there is no `Bus` in this design, and
+`classes.md` no longer lists one.
+
+**The in-process dispatch this section warns about is structurally impossible here.**
+`SubscriberRegistry` is consulted only by `OutboxConsumer`, which runs in the worker. A subscriber
+invoked from the web tier would be exactly the coupling that makes a broker swap expensive, and
+there is nowhere in `apps/web` that can reach one.
 
 ---
 
@@ -625,7 +637,7 @@ Postgres, sharded by organization_id
 Redis Cluster                       already split by concern before clustering
 ClickHouse                          analytics · audit search
 Qdrant                              embeddings
-Kafka or Redis Streams              the event bus
+Kafka or Redis Streams              behind `DomainEventPublisher`, replacing the Postgres outbox
 S3                                  uploads · Loki chunks
 stdout → Alloy → Loki               diagnostics
 ```
@@ -646,6 +658,7 @@ stdout → Alloy → Loki               diagnostics
 | Tasks, goals, RBAC | Postgres |
 | Task status history | Postgres, partitioned monthly |
 | Audit trail | Postgres, partitioned monthly, **in-transaction** |
+| Domain events | Postgres outbox, partitioned monthly, **in-transaction**, drained into BullMQ |
 | Auth sessions | Postgres + Redis cache |
 | Vectors | pgvector, behind `VectorStore` — `VECTOR_DRIVER` |
 | Analytics aggregates | Postgres snapshots → ClickHouse, written by `AnalyticsProjector` — `CLICKHOUSE_URL`. No reader yet; see §4.3 |
