@@ -80,6 +80,8 @@ const PARAMS: { readonly [K in MailTemplateKey]: MailTemplateParams<K> } = {
   "auth.change": { url: URL },
   "auth.otp": { code: "123456" },
   "member.invitation": { url: URL, inviter: "Ada", organization: "Acme" },
+  "notification.single": { kind: "member.joined", name: "Ada", url: URL },
+  "notification.digest": { count: 3, name: "Ada", organization: "Acme", url: URL },
 };
 
 const renderOne = <K extends MailTemplateKey>(key: K) =>

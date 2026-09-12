@@ -58,8 +58,15 @@ export {
   type MemberRepository,
   type NewApiKey,
   type NewInvitation,
+  type NewNotification,
+  type NotificationPage,
+  type NotificationPreferenceRepository,
+  type NotificationRecipientReader,
+  type NotificationRecord,
+  type NotificationRepository,
   type OutboxGateway,
   type PartitionedTableName,
+  type PreferenceRecord,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
@@ -67,6 +74,7 @@ export {
   QueuePublisher,
   type RealtimeChannel,
   type RealtimePublisher,
+  type Recipient,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
@@ -75,8 +83,14 @@ export {
   type StoredObject,
   type SweepOutcome,
   UnitOfWork,
+  type UnreadQuery,
   type VectorStore,
 } from "@loadbearing/application";
+
+// ── @loadbearing/content ─────────────────────────────────────────────────────
+// The locale type only. A recipient row carries the language its message will be
+// composed in, and `content` sits left of every package that reads one.
+export type { Locale } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
@@ -87,6 +101,8 @@ export {
   type GoalId,
   Identifiers,
   type InvitationId,
+  type NotificationCategory,
+  type NotificationId,
   type OrganizationId,
   type PaginationQuery,
   type RealtimeMessage,
@@ -129,6 +145,7 @@ export {
   count,
   desc,
   eq,
+  exists,
   gt,
   gte,
   inArray,

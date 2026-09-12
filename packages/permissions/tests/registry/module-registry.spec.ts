@@ -39,7 +39,7 @@ describe("ModuleRegistry", () => {
 
     // Everything but the denied one, in `GATES` order — a wildcard is not a licence to
     // ignore a deny.
-    expect(registry.visibleModules(caps)).toEqual(["member", "apikey", "document"]);
+    expect(registry.visibleModules(caps)).toEqual(["member", "apikey", "document", "notification"]);
   });
 
   // `visibleModules()` asks without a `goalId`, so a module gated on a goal-scoped key

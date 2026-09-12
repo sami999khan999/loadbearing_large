@@ -604,17 +604,21 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
 
 #### 3.A Permissions, routes, gate (`permissions`)
 
-- [ ] `C3.1` **Keys** — `permissions/src/catalog/notification.permissions.ts`:
+- [x] `C3.1` **Keys** — `permissions/src/catalog/notification.permissions.ts`:
   `notification.inbox.read`, `notification.inbox.update`, `notification.preference.update`
   (module `notification`, scope `org`), registered in `ModuleRegistry`. Routes
   `notification.routes.ts`: `inbox: "/notifications"`, `preferences: "/settings/notifications"`.
   Gate `notification.gate.ts` on `notification.inbox.read`. Permission migration grants all three
   to `owner`, `admin`, `member` (never `guest`) via `SystemRoleSeed` + a migration.
   **Docs:** `permissions/docs/index.md`, `docs/opinions/vocabulary.md`.
+  `done: 2026-09-12` — the backfill migration grants by **the rows a role already holds**
+  (`member.read`) rather than by its key. `owner` is seeded with every permission resolved at
+  seed time, so it holds explicit rows and excluding it by name would have left existing owners
+  without an inbox until the seed re-ran. `guest` holds nothing and is excluded for free.
 
 #### 3.B Contracts
 
-- [ ] `C3.2` **`contracts/src/notification/`** — `notification.contract.ts` (`entity`:
+- [x] `C3.2` **`contracts/src/notification/`** — `notification.contract.ts` (`entity`:
   `{ id, kind, category, params, link, readAt, createdAt }`; `listQuery` is **keyset**:
   `{ limit ≤ 50, before?: { createdAt, id }, unreadOnly? }`; `preference` + `preferenceUpdate`),
   `notification.entity.ts`, `notification.procedures.ts`: `list`, `unreadCount`, `markRead`
@@ -627,7 +631,7 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
 
 #### 3.C Schema (`infrastructure`)
 
-- [ ] `C3.3` **`notifications`** — month-partitioned on `created_at`, PK `(id, created_at)`,
+- [x] `C3.3` **`notifications`** — month-partitioned on `created_at`, PK `(id, created_at)`,
   `organization_id` (FK cascade), `user_id` (FK cascade — an inbox dies with the account),
   `event_id uuid` (the outbox event; no FK, the event row is retention-dropped first), `kind`,
   `category`, `params jsonb`, `link text`, `read_at` nullable. Indexes:
@@ -635,15 +639,19 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   `notifications_unread_idx (organization_id, user_id) WHERE read_at IS NULL` — the count;
   `notifications_dedupe_uq (organization_id, user_id, event_id, kind)` unique, tenant-leading
   (§17); `notifications_user_fk_idx (user_id)` (§18). Retention twelve months (`C1.4` allowlist).
-- [ ] `C3.4` **`notification_preferences`** — `organization_id`, `user_id`, `category`,
+  `done: 2026-09-12` — migration `0017`, hand-edited to `PARTITION BY RANGE (created_at)` with
+  six months of runway; the table joins `PartitionedTable.ALL` at twelve months' retention.
+  **unverified:** cannot be applied here. Run `pnpm infra:up && pnpm db:migrate`.
+- [x] `C3.4` **`notification_preferences`** — `organization_id`, `user_id`, `category`,
   `channel` (`in_app | email`), `mode` (`immediate | digest | off`), `updated_at`; unique
   `(organization_id, user_id, category, channel)`; FK indexes. Absent row = the category's
   default from `NotificationPolicy`. Not partitioned (bounded by users × categories).
   Migration reviewed; §20 safe. **Docs:** `data-and-scale.md` §9, `docs/setup/13`.
+  `done: 2026-09-12` — in the same migration as `C3.3`.
 
 #### 3.D Domain (`application/src/notification/`)
 
-- [ ] `C3.5` **Ports** — `notification.repository.ts` (`list(organizationId, userId, query)`,
+- [x] `C3.5` **Ports** — `notification.repository.ts` (`list(organizationId, userId, query)`,
   `countUnread`, `saveMany(records)` with `ON CONFLICT DO NOTHING` on the dedupe index,
   `markRead(organizationId, userId, id, createdAt, at)`, `markAllRead`,
   `listUnreadSince(organizationId, userId, since, limit)` for the digest),
@@ -651,13 +659,18 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   query for many users, `save`), `notification-recipient.reader.ts` (`organizationMembers`,
   `conversationMembers`, `user` — every method takes the tenant, returns `{ userId, email, locale, name }`
   pages by keyset).
-- [ ] `C3.6` **`NotificationPolicy`** — `notification.policy.ts` (suffix exists): a frozen map
+  `done: 2026-09-12` — the recipient reader filters by a correlated `EXISTS` on
+  `role_permissions`, which keeps the whole query one statement. It is deliberately the coarse
+  filter and not the resolved `CapabilitySet`: a per-user deny override could still let somebody
+  be notified about a page they cannot open. That is a wasted notification rather than a leak —
+  the frame carries no data and the row carries only the actor's id.
+- [x] `C3.6` **`NotificationPolicy`** — `notification.policy.ts` (suffix exists): a frozen map
   `DomainEventName → { kind, category, recipients, defaultMode: { in_app, email }, link: (payload) => AppRoute }`.
   First rows: `member.invited` → none (the invitee has no account), `member.joined` → org
   admins, `member.role.changed` → the member, `message.sent` (Phase 5) → conversation members
   minus author. A policy row for an event no publisher emits is a spec failure (`T-033`'s
   argument, applied here).
-- [ ] `C3.7` **Use-cases** — `list-notifications`, `count-unread-notifications`,
+- [x] `C3.7` **Use-cases** — `list-notifications`, `count-unread-notifications`,
   `mark-notification-read` (one or all), `get-notification-preferences`,
   `update-notification-preference`, `deliver-notification` (system principal per organization;
   input is the outbox event; does policy → recipients → preferences → `saveMany` → mail
@@ -667,27 +680,33 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   Unread count: `CacheStore` read-through at key `notification:unread:<org>:<user>`, TTL 60 s,
   deleted by every write for that user — Postgres is the truth, the cache is the 100k answer.
   Specs with hand-rolled doubles; the deliver spec pins idempotency (same event twice → one row).
+  `done: 2026-09-12` — the fan-out's tenant list became its own `ListDigestOrganizationsUseCase`
+  rather than a repository method the consumer reaches for: the container exposes ports and
+  use-cases, not repositories.
 
 #### 3.E Adapters, composition, worker
 
-- [ ] `C3.8` **`PgNotificationRepository`, `PgNotificationPreferenceRepository`, `PgNotificationRecipientReader`**
+- [x] `C3.8` **`PgNotificationRepository`, `PgNotificationPreferenceRepository`, `PgNotificationRecipientReader`**
   — every method tenant-scoped; integration specs with fixed query counts (`saveMany` is one
   statement for N recipients; `findFor` is one statement for N users). `saveMany` inserts in
   chunks of 1 000 (write amplification is the §6 risk — say so at the line).
-- [ ] `C3.9` **`NotificationSubscriber`** — `application/src/notification/notification.subscriber.ts`
+- [x] `C3.9` **`NotificationSubscriber`** — `application/src/notification/notification.subscriber.ts`
   (shape per `C2.5`): `events` = every name `NotificationPolicy` has a row for; `handle(event)`
   → `deliver.execute(Principal.system(event.organizationId), event)`. Joins the frozen list in
   `Container.subscribers`. `SystemPrincipal.DECLARED` gains nothing (the system principal
   asserts no inbox permission).
-- [ ] `C3.10` **Digest** — `DigestSchedule` (`digest-daily`, `0 7 * * *` UTC — a per-tenant
+  `done: 2026-09-12`
+- [x] `C3.10` **Digest** — `DigestSchedule` (`digest-daily`, `0 7 * * *` UTC — a per-tenant
   hour is a later column) on `QueueName.NOTIFICATION` job `digest-fanout`; `NotificationConsumer`
   handles `digest-fanout` (lists organizations with at least one `digest` preference, publishes
   `digest` jobs with `jobId digest_<org>_<yyyy-mm-dd>`) and `digest` (calls
   `sendNotificationDigest`). Env `WORKER_NOTIFICATION_CONCURRENCY` (2). **Docs:**
   `consumers.md`, `schedules.md`, `env.md`; `data-and-scale.md` §6 "Digest fan-out" now names
   the file that does it.
-- [ ] `C3.11` **Container** — `public readonly notification: { list; countUnread; markRead; preferences; updatePreference; deliver; sendDigest }`
+  `done: 2026-09-12` — **unverified:** the schedule and the fan-out need a live Redis.
+- [x] `C3.11` **Container** — `public readonly notification: { list; countUnread; markRead; preferences; updatePreference; deliver; sendDigest }`
   in every process. Fakes: none new (repositories are slice ports, faked in specs).
+  `done: 2026-09-12` — plus `digestOrganizations`, which the worker's fan-out reads.
 
 #### 3.F Client (`api-client`, `query`, `content`, `feature`, `web`)
 

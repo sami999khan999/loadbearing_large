@@ -4,6 +4,7 @@ export {
   type GoalId,
   Identifiers,
   type InvitationId,
+  type NotificationId,
   type OrganizationId,
   type RoleId,
   type TaskId,

@@ -1,6 +1,7 @@
 import { ApiKeyRouter } from "./api-key.router.js";
 import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
+import { NotificationRouter } from "./notification.router.js";
 import { RoleRouter } from "./role.router.js";
 
 // The merge point, mirroring `contract` from `@loadbearing/contracts` exactly — a
@@ -10,4 +11,5 @@ export const appRouter = {
   member: MemberRouter.all,
   apiKey: ApiKeyRouter.all,
   document: DocumentRouter.all,
+  notification: NotificationRouter.all,
 };

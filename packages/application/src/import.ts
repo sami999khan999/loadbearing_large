@@ -15,13 +15,23 @@ export {
   DomainEvents,
   type GoalId,
   type InvitationId,
+  type KeysetQuery,
+  type ListNotificationsInput,
   type MailTemplateKey,
   type MailTemplateParams,
   MailTemplates,
+  type MarkNotificationReadInput,
+  type NotificationCategory,
+  type NotificationChannel,
+  type NotificationDto,
+  type NotificationId,
+  type NotificationKind,
+  type NotificationMode,
   type OrganizationId,
   type PaginationQuery,
   type RealtimeMessage,
   type RoleId,
+  type UpdateNotificationPreferenceInput,
   type UserId,
 } from "@loadbearing/contracts";
 
@@ -37,6 +47,7 @@ export {
   UnavailableError,
   ValidationError,
 } from "@loadbearing/errors";
-export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
+// A value, not a type: a subscriber builds an empty set to make a system principal
+// that asserts nothing.
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
-export { PermissionRegistry } from "@loadbearing/permissions";
+export { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";

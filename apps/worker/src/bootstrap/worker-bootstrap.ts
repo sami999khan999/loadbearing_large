@@ -3,6 +3,7 @@ import {
   EmbeddingConsumer,
   MailConsumer,
   MaintenanceConsumer,
+  NotificationConsumer,
   OutboxConsumer,
 } from "../consumer/index.js";
 import { Env } from "../env.js";
@@ -10,6 +11,7 @@ import type { Container, RedisConnection, Worker } from "../import.js";
 import {
   ArchiveSchedule,
   CleanupSchedule,
+  DigestSchedule,
   OutboxDrainSchedule,
   PartitionsSchedule,
   ProjectionSchedule,
@@ -51,6 +53,14 @@ export class WorkerBootstrap {
       new OutboxConsumer(this.container, this.redis.queueClient(), Env.eventConcurrency).start(),
     );
 
+    this.workers.push(
+      new NotificationConsumer(
+        this.container,
+        this.redis.queueClient(),
+        Env.notificationConcurrency,
+      ).start(),
+    );
+
     // Before the schedules register, so an entry that fires the instant it lands has
     // somewhere to run. See docs/reference/schedules.md.
     this.workers.push(
@@ -74,6 +84,7 @@ export class WorkerBootstrap {
     }
 
     await new OutboxDrainSchedule(this.container, this.redis.queueClient()).register();
+    await new DigestSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     await new ArchiveSchedule(this.container, this.redis.queueClient()).register();

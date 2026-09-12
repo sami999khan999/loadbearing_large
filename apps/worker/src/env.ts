@@ -41,6 +41,9 @@ const Schema = z
     WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
     WORKER_MAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
     WORKER_EVENT_CONCURRENCY: z.coerce.number().int().positive().default(8),
+    // Two. The digest fan-out is one job a day and each tenant's digest is I/O bound
+    // on the mail queue, which has its own limiter.
+    WORKER_NOTIFICATION_CONCURRENCY: z.coerce.number().int().positive().default(2),
     // A provider's cap, expressed once. Ten a second is under every managed sender's
     // free tier and well under a self-hosted relay's.
     WORKER_MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(600),
@@ -134,6 +137,10 @@ export class Env {
 
   public static get eventConcurrency(): number {
     return Env.parsed.WORKER_EVENT_CONCURRENCY;
+  }
+
+  public static get notificationConcurrency(): number {
+    return Env.parsed.WORKER_NOTIFICATION_CONCURRENCY;
   }
 
   // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds

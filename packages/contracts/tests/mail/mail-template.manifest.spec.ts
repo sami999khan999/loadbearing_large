@@ -23,13 +23,15 @@ describe("MailTemplates", () => {
 
   // The keys are the wire vocabulary between a publisher and the worker, so a rename is
   // a breaking change to jobs already on the queue.
-  it("carries the five Phase 1 templates", () => {
+  it("carries every template the renderer knows", () => {
     expect([...MailTemplates.keys()].sort()).toEqual([
       "auth.change",
       "auth.otp",
       "auth.reset",
       "auth.verify",
       "member.invitation",
+      "notification.digest",
+      "notification.single",
     ]);
   });
 });

@@ -21,6 +21,14 @@ interface SystemRole {
 // Only `owner` is a wildcard: a role granting "everything in module X" keeps granting new
 // things as X grows, which is how a reviewer acquires write access.
 
+// Everyone who can hold a membership gets an inbox. Named once because `admin` and
+// `member` grant the same three, and a second copy is how the two drift.
+const NOTIFICATION: readonly PermissionKey[] = Object.freeze([
+  "notification.inbox.read",
+  "notification.inbox.update",
+  "notification.preference.update",
+]);
+
 // Frozen at module load rather than left a `static readonly`, which freezes the binding
 // and not the array — the shape `docs/ai/rules/classes.md` bans.
 const ROLES: readonly SystemRole[] = Object.freeze([
@@ -29,9 +37,17 @@ const ROLES: readonly SystemRole[] = Object.freeze([
     key: "admin",
     name: "Administrator",
     scope: "org",
-    permissions: ["rbac.role.read", "rbac.role.manage", "member.read", "member.invite"],
+    permissions: [
+      "rbac.role.read",
+      "rbac.role.manage",
+      "member.read",
+      "member.invite",
+      ...NOTIFICATION,
+    ],
   },
-  { key: "member", name: "Member", scope: "org", permissions: ["member.read"] },
+  { key: "member", name: "Member", scope: "org", permissions: ["member.read", ...NOTIFICATION] },
+  // Never `guest`: an inbox is a thing you hold, and a guest holds no memberships to
+  // be notified about.
   { key: "guest", name: "Guest", scope: "org", permissions: [] },
 ]);
 

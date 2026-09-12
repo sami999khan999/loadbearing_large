@@ -46,6 +46,8 @@ export const coreEvents = {
   "outbox.drain.lagged": { level: "warn" },
   "outbox.delivery.failed": { level: "error" },
 
+  "notification.digest.completed": { level: "info" },
+
   "cache.entry.corrupt": { level: "warn" },
   "embedding.request.failed": { level: "error" },
 

@@ -1,6 +1,6 @@
 import { DOMAIN_EVENTS } from "../catalog/index.js";
 import { z } from "../import.js";
-import { Identifiers } from "../primitive/index.js";
+import { Identifiers, type OrganizationId, type UserId } from "../primitive/index.js";
 
 export type DomainEventName = keyof typeof DOMAIN_EVENTS;
 
@@ -13,9 +13,11 @@ interface EventInputOf<N extends DomainEventName> {
 
 interface EventOf<N extends DomainEventName> {
   readonly id: string;
-  readonly organizationId: string;
+  // Branded, like every other identifier that crosses a boundary here: a subscriber
+  // handed a `string` would have to re-brand it before it could scope a query.
+  readonly organizationId: OrganizationId;
   readonly name: N;
-  readonly actorId: string;
+  readonly actorId: UserId;
   readonly occurredAt: Date;
   readonly payload: DomainEventPayload<N>;
 }

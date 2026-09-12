@@ -16,13 +16,16 @@ import {
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
   CreateRoleUseCase,
   Database,
   DeleteRoleUseCase,
+  DeliverNotificationUseCase,
   type DomainEventPublisher,
   type EmailSender,
   type EmbeddingProvider,
+  GetNotificationPreferencesUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
@@ -31,8 +34,10 @@ import {
   InviteMemberUseCase,
   JsonLogger,
   ListApiKeysUseCase,
+  ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
+  ListNotificationsUseCase,
   ListRolesUseCase,
   type Logger,
   type LogReader,
@@ -40,9 +45,12 @@ import {
   type MailPublisher,
   type MailRenderer,
   type MaintenanceGateway,
+  MarkAllNotificationsReadUseCase,
+  MarkNotificationReadUseCase,
   MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
+  NotificationSubscriber,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
   type OrganizationFounder,
@@ -58,6 +66,9 @@ import {
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgNotificationPreferenceRepository,
+  PgNotificationRecipientReader,
+  PgNotificationRepository,
   PgOrganizationFounder,
   PgOutboxGateway,
   PgOutboxPublisher,
@@ -79,6 +90,7 @@ import {
   SERVER_CATALOG,
   SearchDocumentsUseCase,
   SendMailUseCase,
+  SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
   SmtpEmailSender,
@@ -88,6 +100,7 @@ import {
   SystemClock,
   TransactionScope,
   type UnitOfWork,
+  UpdateNotificationPreferenceUseCase,
   UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
@@ -211,6 +224,19 @@ export class Container {
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
   public readonly mail: { readonly send: SendMailUseCase };
+  // In every process: the worker delivers and digests, the web tier reads. Neither
+  // half needs an auth config, which is why this sits outside that branch too.
+  public readonly notification: {
+    readonly list: ListNotificationsUseCase;
+    readonly countUnread: CountUnreadNotificationsUseCase;
+    readonly markRead: MarkNotificationReadUseCase;
+    readonly markAllRead: MarkAllNotificationsReadUseCase;
+    readonly preferences: GetNotificationPreferencesUseCase;
+    readonly updatePreference: UpdateNotificationPreferenceUseCase;
+    readonly deliver: DeliverNotificationUseCase;
+    readonly sendDigest: SendNotificationDigestUseCase;
+    readonly digestOrganizations: ListDigestOrganizationsUseCase;
+  };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
@@ -293,9 +319,60 @@ export class Container {
     this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
     this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
     this.realtime = new RedisRealtimePublisher(this.redis.client());
+
+    const notifications = new PgNotificationRepository(this.database, this.transactions);
+    const notificationPreferences = new PgNotificationPreferenceRepository(
+      this.database,
+      this.transactions,
+    );
+    const notificationRecipients = new PgNotificationRecipientReader(
+      this.database,
+      this.transactions,
+    );
+
+    this.notification = {
+      list: new ListNotificationsUseCase(this.authorizer, notifications),
+      countUnread: new CountUnreadNotificationsUseCase(this.authorizer, notifications, this.cache),
+      markRead: new MarkNotificationReadUseCase(
+        this.authorizer,
+        notifications,
+        this.cache,
+        this.clock,
+      ),
+      markAllRead: new MarkAllNotificationsReadUseCase(
+        this.authorizer,
+        notifications,
+        this.cache,
+        this.clock,
+      ),
+      preferences: new GetNotificationPreferencesUseCase(this.authorizer, notificationPreferences),
+      updatePreference: new UpdateNotificationPreferenceUseCase(
+        this.authorizer,
+        notificationPreferences,
+      ),
+      deliver: new DeliverNotificationUseCase(
+        notifications,
+        notificationPreferences,
+        notificationRecipients,
+        this.mailPublisher,
+        this.realtime,
+        this.cache,
+      ),
+      sendDigest: new SendNotificationDigestUseCase(
+        notifications,
+        notificationPreferences,
+        notificationRecipients,
+        this.mailPublisher,
+      ),
+      digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
+    };
+
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
-    this.subscribers = new SubscriberRegistry([new MemberRealtimeSubscriber(this.realtime)]);
+    this.subscribers = new SubscriberRegistry([
+      new MemberRealtimeSubscriber(this.realtime),
+      new NotificationSubscriber(this.notification.deliver),
+    ]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.

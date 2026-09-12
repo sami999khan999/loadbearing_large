@@ -78,6 +78,11 @@ export interface EventShape {
   readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
   readonly "outbox.delivery.failed": { readonly subscriber: string; readonly event: string };
 
+  readonly "notification.digest.completed": {
+    readonly organizations: number;
+    readonly day: string;
+  };
+
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };
 

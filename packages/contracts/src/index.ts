@@ -32,6 +32,20 @@ export {
   type SetMemberActiveInput,
 } from "./member/index.js";
 export {
+  type ListNotificationsInput,
+  type MarkNotificationReadInput,
+  type NotificationCategory,
+  type NotificationChannel,
+  NotificationContract,
+  type NotificationDto,
+  NotificationEntity,
+  type NotificationKind,
+  type NotificationMode,
+  type NotificationPreferenceDto,
+  NotificationProcedures,
+  type UpdateNotificationPreferenceInput,
+} from "./notification/index.js";
+export {
   type ApiKeyId,
   Envelope,
   type GoalId,
@@ -39,6 +53,7 @@ export {
   type InvitationId,
   Keyset,
   type KeysetQuery,
+  type NotificationId,
   type OrganizationId,
   Pagination,
   type PaginationQuery,

@@ -38,4 +38,12 @@ export const email = {
   "email.invitation.body":
     "{inviter} has invited you to join {organization}. Open the link below to accept. If you do not have an account yet you will be asked to create one with this address — the invitation is tied to it. It expires in seven days, and if you were not expecting this you can ignore it.",
   "email.invitation.action": "Join {organization}",
+
+  // The bell, by mail. Deliberately not a copy of the in-app copy: this one has to make
+  // sense to somebody who has not opened the app today.
+  "email.notification.subject": "There is an update in your workspace",
+  "email.notification.greeting": "Hello {name},",
+  "email.notification.body":
+    "Something changed that you asked to hear about. Open your notifications to see what it was.",
+  "email.notification.action": "Open notifications",
 } as const;

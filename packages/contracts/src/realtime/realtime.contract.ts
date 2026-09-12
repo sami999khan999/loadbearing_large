@@ -2,7 +2,7 @@ import { z } from "../import.js";
 
 // What the browser receives, so the union is closed and the client's routing table is
 // total over it: a name with no route is a compile error rather than a dropped frame.
-const eventName = z.enum(["member.changed"]);
+const eventName = z.enum(["member.changed", "notification.created"]);
 
 export type RealtimeEventName = z.infer<typeof eventName>;
 

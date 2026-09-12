@@ -40,6 +40,13 @@ export class ContentMailRenderer extends MailRenderer {
         return ContentMailRenderer.otp(t, params as MailTemplateParams<"auth.otp">);
       case "member.invitation":
         return ContentMailRenderer.invitation(t, params as MailTemplateParams<"member.invitation">);
+      case "notification.single":
+        return ContentMailRenderer.notification(
+          t,
+          params as MailTemplateParams<"notification.single">,
+        );
+      case "notification.digest":
+        return ContentMailRenderer.digest(t, params as MailTemplateParams<"notification.digest">);
       default:
         // Exhaustive: a key added to the manifest fails to compile here until it has a
         // template, which is the whole reason the manifest is closed.
@@ -81,6 +88,46 @@ export class ContentMailRenderer extends MailRenderer {
       t.t("email.invitation.subject", copy),
       [t.t("email.invitation.body", copy)],
       { label: t.t("email.invitation.action"), url: params.url },
+    );
+  }
+
+  // Deliberately says *that* something happened rather than what. The recipient may not
+  // be authorised for the thing by the time they read it, and mail cannot re-check.
+  private static notification(
+    t: Translator,
+    params: { readonly name: string; readonly url: string },
+  ): RenderedMail {
+    return ContentMailRenderer.compose(
+      t.t("email.notification.subject"),
+      [t.t("email.notification.greeting", { name: params.name }), t.t("email.notification.body")],
+      params.url ? { label: t.t("email.notification.action"), url: params.url } : undefined,
+    );
+  }
+
+  // A count and a link, not a rendered list: N rows in mail is a second layout to keep
+  // translated, and the inbox is one click away.
+  private static digest(
+    t: Translator,
+    params: {
+      readonly count: number;
+      readonly name: string;
+      readonly organization: string;
+      readonly url: string;
+    },
+  ): RenderedMail {
+    const subject =
+      params.count === 0
+        ? t.t("email.digest.subjectEmpty")
+        : t.t("email.digest.subject", { count: params.count });
+
+    return ContentMailRenderer.compose(
+      subject,
+      [
+        t.t("email.digest.greeting", { name: params.name }),
+        params.count === 0 ? t.t("email.digest.empty") : t.t("email.digest.intro"),
+        t.t("email.digest.footer", { organization: params.organization }),
+      ],
+      params.url ? { label: t.t("email.digest.viewAll"), url: params.url } : undefined,
     );
   }
 

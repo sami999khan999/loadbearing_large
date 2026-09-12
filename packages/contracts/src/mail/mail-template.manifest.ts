@@ -18,6 +18,21 @@ const TEMPLATES = {
     inviter: z.string().min(1).max(200),
     organization: z.string().min(1).max(200),
   }),
+  // One notification, sent at once. `kind` picks the copy, so the message says what
+  // happened without the params carrying the row it happened to.
+  "notification.single": z.object({
+    kind: z.string().min(1).max(64),
+    name: z.string().max(200),
+    url: z.string().max(URL_MAX),
+  }),
+  // A day of them in one message. A count rather than a list: the digest links to the
+  // inbox, and rendering N rows in mail is a second layout to keep translated.
+  "notification.digest": z.object({
+    count: z.number().int().nonnegative(),
+    name: z.string().max(200),
+    organization: z.string().min(1).max(200),
+    url: z.string().max(URL_MAX),
+  }),
 } as const;
 
 export type MailTemplateKey = keyof typeof TEMPLATES;
