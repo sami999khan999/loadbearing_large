@@ -832,7 +832,7 @@ invalidation; on `resync` it invalidates every key the table names.
   and the `typing` frame land in Phase 4 with the stream that reads them; `C2.6`'s subscriber
   needs a publisher and nothing else. The wire union is `event` and `resync` for the same reason:
   `typing` names a `conversationId` that does not exist until Phase 5.
-- [x] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
+- [ ] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
   (cache client, `PUBLISH` of the JSON envelope, `id = Uuid.v7()`), `redis-realtime.subscriber.ts`
   (`constructor(redis /* subscriber role */, config: { maxStreamsPerUser; maxAgeMs; queueSize })`,
   the demux, ref counting and bounded sinks above); `RedisConnection` gains the `"subscriber"`
@@ -842,6 +842,9 @@ invalidation; on `resync` it invalidates every key the table names.
   the last iterator closing releases the channel; a 300-message burst into a 256 queue yields
   one `resync`; a ninth stream for one user is refused. **Docs:** new
   `infrastructure/docs/reference/realtime.md`.
+  `unticked: 2026-09-12` — was marked `[x]` at the end of Phase 2, which was wrong: Phase 2
+  landed `RedisRealtimePublisher` and nothing else. The subscriber, the `"subscriber"` role and
+  every spec listed here are Phase 4's, and the tick was hiding them.
 - [ ] `C4.4` **Container + config + health** — `realtime: RealtimePublisher`,
   `realtimeSubscriber: RealtimeSubscriber` (public — the router needs it), built in every
   process; `ContainerConfig.realtime: { maxStreamsPerUser; streamMaxAgeSeconds }` from env
@@ -854,12 +857,55 @@ invalidation; on `resync` it invalidates every key the table names.
 
 #### 4.B Contract, transport, permission
 
-- [ ] `C4.5` **Verify the oRPC surface first** — `node_modules` was absent in the planning
+- [x] `C4.5` **Verify the oRPC surface first** — `node_modules` was absent in the planning
   checkout, so before any code: confirm on the installed `^1.15` line `eventIterator`
   (`@orpc/contract`), `withEventMeta` and the `lastEventId` / `signal` handler context
   (`@orpc/server`), `RPCHandler` options `eventIteratorKeepAliveEnabled` /
   `eventIteratorKeepAliveInterval`, and `ClientRetryPlugin` from `@orpc/client/plugins`. If any
   needs a newer line, bump **all four** `@orpc/*` catalog entries together (§4).
+  `done: 2026-09-12` — **all four are present on the installed `1.15.0`; no bump.** Probed by
+  importing each entrypoint from the workspace package that depends on it:
+
+  | Wanted | Found |
+  |---|---|
+  | `eventIterator` | `@orpc/contract`, alongside `getEventIteratorSchemaDetails` |
+  | `withEventMeta` | `@orpc/server`, with `getEventMeta` and `eventIteratorToStream` |
+  | `lastEventId`, `signal` | on `ProcedureHandlerOptions` **and** `MiddlewareOptions` |
+  | keep-alive options | `RPCHandlerOptions` extends `ToFetchResponseOptions` → `ToEventStreamOptions` |
+  | `ClientRetryPlugin` | `@orpc/client/plugins`, with `RetryAfterPlugin` and `DedupeRequestsPlugin` |
+
+  Four defaults the plan guessed at, now read off the types rather than assumed. Keep-alive is
+  **on by default at 5 s**, not off and not 15 s — so `C4.6` sets the interval rather than
+  enabling the feature. `ClientRetryPlugin`'s `retry` defaults to **0**, read from the *client
+  context*, which is exactly the per-call opt-in `C4.8` wants and needs no `default` in the
+  constructor. Its `retryDelay` defaults to `lastEventRetry ?? 2000`, so it already honours the
+  `retry` field `withEventMeta` writes. And there are two options the plan did not know about:
+  `eventIteratorInitialCommentEnabled` (default true) sends a comment the moment the stream
+  opens, to flush headers before the first frame — which is the thing `C4.7` is worried about,
+  already handled.
+
+  **Two corrections, both found by the probe:**
+
+  1. **Drop the `.route({ method: "GET", path: "/realtime/stream" })` from `C4.6`.** `RPCHandler`
+     dispatches on the procedure path and never reads `route()` — that is the OpenAPI handler's,
+     and this repo mounts none. Leaving it in would be a line saying something untrue about how
+     the endpoint is reached. It would also fight `strictGetMethodPluginEnabled`, which defaults
+     to true. The stream is a POST to `/api/rpc/realtime/stream` whose response body is
+     `text/event-stream`; `C4.7`'s spec is written against that, not against a GET.
+  2. **`ApiClient` needs a client-context type argument before `C4.8` can opt in per call.**
+     `AppClient` is `ContractRouterClient<AppContract>`, whose second parameter defaults to
+     `Record<never, never>` — so `stream(undefined, { context: { retry: … } })` does not
+     typecheck. It becomes `ContractRouterClient<AppContract, ClientRetryPluginContext>`: one
+     type argument in `api-client`, which puts the retry knob on every procedure and changes
+     none of them, since the default is 0.
+
+  Two facts `C4.3` and `C4.4` depend on, confirmed on the installed **ioredis 5.11.1** while the
+  probe was open: `ping` and `quit` are both in `VALID_IN_SUBSCRIBER_MODE`, so
+  `healthy("subscriber")` works on a connection that has entered subscriber mode; and `PUBLISH`
+  and `SUBSCRIBE` declare **no** key indexes, so the cache client's `keyPrefix: "app:"` is not
+  applied to a channel name and publisher and subscriber agree without either compensating.
+  `SPUBLISH` and `SSUBSCRIBE` both *do* declare them, so a later move to sharded pub/sub stays
+  symmetric too — the asymmetry that would have been silent does not exist in either direction.
 - [ ] `C4.6` **Contract + router** — `contracts/src/realtime/{index,realtime.contract,realtime.procedures}.ts`:
   `stream` = `oc.route({ method: "GET", path: "/realtime/stream" }).output(eventIterator(RealtimeContract.message))`,
   mounted as `realtime` in `procedure/index.ts`. `catalog/realtime.permissions.ts`:
