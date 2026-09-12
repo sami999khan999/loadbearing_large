@@ -211,7 +211,8 @@ probe.
   - **Done when:** Every phase in [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) reports its **Exit** line true. The plan is the checklist; this entry is the ledger row.
   - **Files:** `tasks/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
-  - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, react-email in a new `packages/mail`, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
+  - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
+  - **Revised 2026-09-12, before any of it was built.** Two Phase 1 decisions were reversed on review and the plan carries the reasoning. Templates are hand-written HTML in `packages/composition/src/mail/` rather than react-email, which removes the only new package in the plan and both of its dependencies. And a send is a BullMQ job with no `mail_deliveries` table: the queue already supplies retries, backoff and duplicate suppression, the mail provider is where a delivery record belongs at scale, and a table would put the plaintext invitation token in Postgres against the reason its hash is stored. The outbox event table stays, and the distinction is the point — Redis cannot commit atomically with Postgres. **The plan now adds no package and no dependency at all.**
 
 ## ⛔ Blocked
 
@@ -444,3 +445,4 @@ probe.
 | 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
 | 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |
 | 2026-09-12 | @sami   | Filed `T-036` and `COMMUNICATION-PLAN.md`: six phases for mail, the outbox, notifications, real-time and messaging. `T-031` annotated with the two corrections Phase 2 makes |
+| 2026-09-12 | @sami   | Revised Phase 1 on review: hand-written HTML templates instead of a react-email package, and no mail table — a send is a queue job. The plan now introduces no new package and no new dependency |
