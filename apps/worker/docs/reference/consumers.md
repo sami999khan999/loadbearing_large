@@ -9,6 +9,7 @@ description: Three consumers, all serial, all with a public handle() — the bat
 |---|---|---|---|
 | `MaintenanceConsumer` | `MAINTENANCE` | sweep · partitions · archive | always |
 | `EmbeddingConsumer` | `EMBEDDING` | index | always |
+| `MailConsumer` | `MAIL` | send | always |
 | `AnalyticsConsumer` | `ANALYTICS` | project · reconcile | only with a ClickHouse config |
 
 ## `handle()` is public on every one of them
@@ -133,16 +134,24 @@ The `projection` label rides every line this consumer emits. There is one projec
 exists so a second one does not change the event shape, and so a dashboard filters on it rather than
 on the queue name.
 
-## `DigestComposer`
+## `MailConsumer` is the only thing in this system that sends
 
-The only reader of the `email` namespace in the repository, and it reads copy the way everything else
-does — through `ContentSource` — so a subject line and a button label share one `Translator`, one
-interpolation implementation and one typo fix.
+Every message — Better Auth's four, and the invitation — is published as a job rather than sent
+inline. That buys retries, exponential backoff and duplicate suppression by job id from BullMQ, and
+it costs one thing worth saying out loud: **in development, mail only arrives while the worker is
+running.** A stopped worker is a sign-up whose verification link is queued and never rendered.
 
-The recipient's locale is a parameter, so a per-recipient subject line is a second call rather than a
-second system. Rendering per recipient is cheap; **resolving permissions per recipient is not**, so
-the caller groups recipients by capability shape and queries once per group.
+**The rate limiter is a worker option, never a use-case concern.** A provider's cap is a property
+of this queue and of nothing else, so `{ limiter: { max: Env.mailRatePerMinute, duration: 60_000 } }`
+here is what keeps it out of every caller as a sleep.
+
+**`mail.delivery.failed` is emitted from the `failed` listener, and only on the last attempt.**
+`attemptsMade` counts the one that just failed, so equality with `opts.attempts` is the final try.
+With no delivery table, that line and `mail.delivery.sent` are the whole record of what happened to
+a message — which is exactly why the sent line carries the transport's message id, the thing a
+provider webhook would later correlate against.
 
 > [!NOTE]
-> Nothing constructs `DigestComposer` outside its own spec, and `QueueName.NOTIFICATION` has no
-> consumer — `P8.3`.
+> `QueueName.NOTIFICATION` still has no consumer. It gains one in Phase 3 of
+> [`tasks/COMMUNICATION-PLAN.md`](../../../../tasks/COMMUNICATION-PLAN.md), with the digest
+> schedule. `DigestComposer`, which nothing but its own spec ever constructed, is deleted.

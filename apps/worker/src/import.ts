@@ -16,11 +16,6 @@ export {
 // itself; it asks the container.
 export { Container } from "@loadbearing/composition";
 
-// ── @loadbearing/content ─────────────────────────────────────────────────────
-// The server catalog reaches this app and no other: `DigestComposer` is the only reader
-// of the `email` namespace.
-export type { ContentSource, Locale } from "@loadbearing/content";
-
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export type { OrganizationId, UserId } from "@loadbearing/contracts";
 

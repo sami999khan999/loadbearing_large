@@ -65,6 +65,14 @@ export interface EventShape {
   // not where it belongs. The reason is truncated at the call site.
   readonly "email.send.failed": { readonly reason: string };
 
+  // No recipient on any of the three. An address is the highest-cardinality field this
+  // system holds and a log platform is not where it belongs.
+  readonly "mail.delivery.queued": { readonly template: string; readonly priority: string };
+  // The transport's id, or the empty string when it returned none: `LogValue` admits no
+  // null, and a missing id is a fact about the server rather than about the message.
+  readonly "mail.delivery.sent": { readonly template: string; readonly messageId: string };
+  readonly "mail.delivery.failed": { readonly template: string; readonly attempts: number };
+
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };
 

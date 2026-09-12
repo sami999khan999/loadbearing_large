@@ -1,5 +1,5 @@
 import { type Locale, MailTemplates, type SchemaIssue, ValidationError } from "../import.js";
-import type { EmailSender, MailRenderer } from "../port/index.js";
+import type { EmailReceipt, EmailSender, MailRenderer } from "../port/index.js";
 import type { Principal } from "../primitive/index.js";
 
 // The job's payload as it comes back off the queue: a template key that is still a
@@ -19,14 +19,14 @@ export class SendMailUseCase {
     private readonly email: EmailSender,
   ) {}
 
-  // `actor` asserts nothing, deliberately: mail belongs to no tenant, so there is no
-  // organization that could authorize it. See docs/reference/ports.md.
-  public execute(actor: Principal, input: SendMailInput): Promise<void> {
+  // `actor` asserts nothing and the receipt is the delivery record, because there is no
+  // delivery table. Both are argued in docs/reference/ports.md.
+  public execute(actor: Principal, input: SendMailInput): Promise<EmailReceipt> {
     void actor;
     return this.send(input);
   }
 
-  private async send(input: SendMailInput): Promise<void> {
+  private async send(input: SendMailInput): Promise<EmailReceipt> {
     // Both failures happen before the transport is touched, because a message that
     // cannot be rendered will not render on the retry either.
     if (!MailTemplates.isKnown(input.template)) {
@@ -38,7 +38,7 @@ export class SendMailUseCase {
 
     const rendered = await this.renderer.render(input.template, input.locale, parsed.data);
 
-    await this.email.send({
+    return this.email.send({
       to: input.to,
       subject: rendered.subject,
       text: rendered.text,

@@ -1,4 +1,9 @@
-import { AnalyticsConsumer, EmbeddingConsumer, MaintenanceConsumer } from "../consumer/index.js";
+import {
+  AnalyticsConsumer,
+  EmbeddingConsumer,
+  MailConsumer,
+  MaintenanceConsumer,
+} from "../consumer/index.js";
 import { Env } from "../env.js";
 import type { Container, RedisConnection, Worker } from "../import.js";
 import {
@@ -24,6 +29,17 @@ export class WorkerBootstrap {
         this.container,
         this.redis.queueClient(),
         Env.embeddingConcurrency,
+      ).start(),
+    );
+
+    // Unconditional, and the reason is in `.env.example`: every mail in this system is a
+    // job, so a stopped worker is a sign-up whose verification link never arrives.
+    this.workers.push(
+      new MailConsumer(
+        this.container,
+        this.redis.queueClient(),
+        Env.mailConcurrency,
+        Env.mailRatePerMinute,
       ).start(),
     );
 

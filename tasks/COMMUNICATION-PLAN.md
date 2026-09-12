@@ -304,7 +304,7 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
 
 #### 1.E Worker
 
-- [ ] `C1.19` **`MailConsumer`** — `apps/worker/src/consumer/mail.consumer.ts` on `QueueName.MAIL`,
+- [x] `C1.19` **`MailConsumer`** — `apps/worker/src/consumer/mail.consumer.ts` on `QueueName.MAIL`,
   `switch (job.name)`: `send` → `container.mail.send.execute(SystemPrincipal.platform(), job.data)`;
   `default` throws. Worker options
   `{ concurrency: Env.mailConcurrency, limiter: { max: Env.mailRatePerMinute, duration: 60_000 } }`
@@ -314,18 +314,30 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `WORKER_MAIL_RATE_PER_MINUTE` (600). Spec via `TestContainer` as
   `maintenance.consumer.spec.ts` does. **Docs:** `apps/worker/docs/reference/consumers.md` (the
   `NOTIFICATION` "no consumer" sentence changes), `env.md`.
-- [ ] `C1.22` **Delete `DigestComposer`** — `apps/worker/src/notification/` and its spec; the
+  `done: 2026-09-12` — **unverified:** the consumer's own spec runs without containers, but the
+  rate limiter, the retry ladder and the final-attempt `mail.delivery.failed` only happen against
+  a live Redis. Run `pnpm infra:up && pnpm dev`, then stop Mailpit and watch a job retry.
+- [x] `C1.22` **Delete `DigestComposer`** — `apps/worker/src/notification/` and its spec; the
   worker's `import.ts` drops `ContentSource`/`Locale`. **Docs:** `docs/setup/25`, `28`,
   `apps/worker/docs/index.md`, `docs/opinions/files.md` example row for `.composer.ts` (keep the
   suffix, point the example at a file that exists or remove the row).
+  `done: 2026-09-12` — the row was **removed**, not repointed. `files.md` says every suffix on
+  that list names a file that exists, and no `.composer.ts` does once this is deleted. Phase 3
+  re-adds it if the digest wants one. `Composer` was never in `classes.md`'s role nouns, so that
+  page needed no edit.
 
 #### 1.F Observability, CI, docs
 
-- [ ] `C1.23` **Event codes** — `mail.delivery.queued` (debug, from the publisher),
+- [x] `C1.23` **Event codes** — `mail.delivery.queued` (debug, from the publisher),
   `mail.delivery.sent` (info, with the receipt's message id), `mail.delivery.failed` (error, final
   attempt only) in `observability/src/catalog/core.events.ts`; `email.send.failed` stays as the
   transport's own line. Emitted from the consumer and the publisher, never from `application`.
   Together these are the delivery record until a provider supplies a better one.
+  `done: 2026-09-12` — landed with `C1.19` rather than at the end: the consumer names
+  `mail.delivery.failed` and does not compile without it. `SendMailUseCase` returns the receipt
+  so the worker can log the id — `application` still never logs. `messageId` is a string rather
+  than `string | null` because `LogValue` admits no null; a server that returned none logs empty.
+  No recipient on any of the three: an address is the highest-cardinality field this system holds.
 - [ ] `C1.24` **CI greps** — `EMAIL_FINGERPRINTS` gains `"email.notification."` and keeps
   `"email.digest."`. No `SERVER_FINGERPRINTS` change is needed now that no mail dependency
   exists to leak. `pnpm check:architecture` 20/20 with no skip.

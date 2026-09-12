@@ -52,7 +52,6 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.interceptor.ts` | `error.interceptor.ts` | `ErrorInterceptor` |
 | `.consumer.ts` | `embedding.consumer.ts` | `EmbeddingConsumer` |
 | `.schedule.ts` | `cleanup.schedule.ts` | `CleanupSchedule` |
-| `.composer.ts` | `notification-digest.composer.ts` | `DigestComposer` |
 | `.error.ts` | `forbidden.error.ts` | `ForbiddenError` |
 | `.schema.ts` | `rbac.schema.ts` | Drizzle tables |
 | `.config.ts` | `auth.config.ts` | `AuthConfig` |

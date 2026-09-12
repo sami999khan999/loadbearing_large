@@ -39,6 +39,10 @@ const Schema = z
     // Serial by default: these jobs take table-level locks and can deadlock on the same
     // partition.
     WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
+    WORKER_MAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
+    // A provider's cap, expressed once. Ten a second is under every managed sender's
+    // free tier and well under a self-hosted relay's.
+    WORKER_MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(600),
     // Serial, and not a dial worth turning: correctness rests on there being exactly one
     // writer, not on the insert being idempotent.
     WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
@@ -117,6 +121,14 @@ export class Env {
 
   public static get analyticsConcurrency(): number {
     return Env.parsed.WORKER_ANALYTICS_CONCURRENCY;
+  }
+
+  public static get mailConcurrency(): number {
+    return Env.parsed.WORKER_MAIL_CONCURRENCY;
+  }
+
+  public static get mailRatePerMinute(): number {
+    return Env.parsed.WORKER_MAIL_RATE_PER_MINUTE;
   }
 
   // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds

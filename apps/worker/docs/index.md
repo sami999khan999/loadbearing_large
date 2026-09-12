@@ -38,6 +38,7 @@ apps/worker/
 │   │   ├── index.ts
 │   │   ├── analytics.consumer.ts     → AnalyticsConsumer   (project · reconcile)
 │   │   ├── embedding.consumer.ts     → EmbeddingConsumer
+│   │   ├── mail.consumer.ts          → MailConsumer        (send)
 │   │   └── maintenance.consumer.ts   → MaintenanceConsumer (sweep · partitions · archive)
 │   ├── schedule/
 │   │   ├── index.ts
@@ -46,13 +47,10 @@ apps/worker/
 │   │   ├── partitions.schedule.ts    02:00 on the first
 │   │   ├── projection.schedule.ts    every five minutes
 │   │   └── reconcile.schedule.ts     05:00 daily
-│   └── notification/
-│       ├── index.ts
-│       └── notification-digest.composer.ts        → DigestComposer
 └── tests/
     ├── bootstrap/system-principal.spec.ts
-    ├── consumer/maintenance.consumer.spec.ts
-    └── notification/notification-digest.composer.spec.ts
+    ├── consumer/mail.consumer.spec.ts
+    └── consumer/maintenance.consumer.spec.ts
 ```
 
 ---

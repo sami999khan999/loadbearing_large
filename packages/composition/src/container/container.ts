@@ -266,7 +266,7 @@ export class Container {
     this.content = new StaticContentSource(SERVER_CATALOG);
     this.emailSender = new SmtpEmailSender(config.email, this.logger);
     this.email = this.emailSender;
-    this.mailPublisher = new QueuedMailPublisher(this.queue);
+    this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
     this.mailRenderer = new ContentMailRenderer(this.content);
     this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
