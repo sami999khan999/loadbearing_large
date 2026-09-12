@@ -27,7 +27,10 @@ export type {
   IndexDocumentContractInput,
   InvitationDto,
   InviteMemberInput,
+  ListNotificationsInput,
+  MarkNotificationReadInput,
   MemberDto,
+  NotificationDto,
   PaginationQuery,
   QueuedDocumentDto,
   RevokeApiKeyInput,
@@ -35,6 +38,7 @@ export type {
   RoleDto,
   SearchDocumentsContractInput,
   SetMemberActiveInput,
+  UpdateNotificationPreferenceInput,
   UpdateRoleInput,
 } from "@loadbearing/contracts";
 
@@ -44,12 +48,17 @@ export { ERROR_CATALOG, ErrorNormalizer } from "@loadbearing/errors";
 
 // ── @tanstack/react-query ────────────────────────────────────────────────────
 export {
+  type InfiniteData,
+  infiniteQueryOptions,
   QueryClient,
   type QueryKey,
   queryOptions,
+  type UseInfiniteQueryOptions,
+  type UseInfiniteQueryResult,
   type UseMutationOptions,
   type UseQueryOptions,
   type UseQueryResult,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,

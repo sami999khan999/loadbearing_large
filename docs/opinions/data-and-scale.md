@@ -536,6 +536,15 @@ capability resolutions and 100k query sets, and the job runs for hours.
 copy stay per-recipient — those are cheap. It is the capability resolution and the query set that
 must be shared.
 
+`SendNotificationDigestUseCase`
+([`packages/application/src/notification/send-notification-digest.use-case.ts`](../../packages/application/src/notification/send-notification-digest.use-case.ts))
+answers the half that had to be right on day one: recipients arrive as keyset pages of 200, each
+page costs one address-and-locale query rather than one per person, and the mail leaves through
+`MailPublisher` so a slow SMTP server cannot stall the scan. It does **not** group by capability
+shape yet, because it does not resolve a capability per recipient at all — the digest reads a
+recipient's own rows, which are already the filtered set the subscriber wrote. The grouping above
+becomes necessary the first time a digest asks a question of the domain instead of the inbox.
+
 ### Aggregate views
 
 A capacity view aggregating every employee's tasks across every goal is a live join over everything.
@@ -546,6 +555,14 @@ Past a few thousand employees it must be a materialized view on a refresh schedu
 One task change notifying five people is 5× the write rate on the notification table. That table
 needs its own partitioning and an aggressive retention policy, or it becomes the largest table in
 the database by an order of magnitude.
+
+Both were in the first migration, which is the only time either is cheap.
+[`packages/infrastructure/src/pg/schema/notification.schema.ts`](../../packages/infrastructure/src/pg/schema/notification.schema.ts)
+is `PARTITION BY RANGE (created_at)` with `(id, created_at)` as its key, and `notifications` is a
+member of the frozen `PartitionedTable` allowlist that `MaintenanceConsumer` walks — so the monthly
+partition is created ahead of need and dropped after twelve months by the same loop that maintains
+the audit trail and the outbox. Retention is a number in one table there, not a job someone has to
+remember to write.
 
 > [!TIP]
 > Load-test these three paths at 10× expected volume **before** launch, with realistic data

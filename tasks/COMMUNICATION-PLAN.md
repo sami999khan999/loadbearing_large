@@ -710,18 +710,23 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
 
 #### 3.F Client (`api-client`, `query`, `content`, `feature`, `web`)
 
-- [ ] `C3.12` **Query layer** — `ApiClient.notification` accessor; `QueryKeys.notification = { all, list(params), unreadCount(), preferences() }`;
+- [x] `C3.12` **Query layer** — `ApiClient.notification` accessor; `QueryKeys.notification = { all, list(params), unreadCount(), preferences() }`;
   `NotificationQueries.list` as `infiniteQueryOptions` (keyset cursor = last row's
   `{ createdAt, id }`), `unreadCount` (`staleTime` 30 s, `refetchOnWindowFocus: true` — the one
   query that opts back in, until Phase 4 streams it), `preferences`; `NotificationMutations.useMarkRead`
   (optimistic on the list page and the count), `useMarkAllRead`, `useUpdatePreference`.
   **Docs:** `query/docs/reference/mutations.md`.
-- [ ] `C3.13` **Copy** — `content/src/message/{en,bn}/notification.ts` registered as a
+  `done: 2026-09-12` — the cursor is the server's opaque base64url string, not a
+  `{ createdAt, id }` object: `Keyset` already encodes both halves and a client that
+  destructured them would be reading the storage order.
+- [x] `C3.13` **Copy** — `content/src/message/{en,bn}/notification.ts` registered as a
   `ClientNamespace`: one `notification.kind.<kind>.title` / `.body` pair per `NotificationKind`
   (interpolated from `params`), inbox labels, preference labels; `email` namespace gains
   `email.notification.*` and reuses `email.digest.*`. A `NotificationKind` with no copy is a
   compile error (`NamespaceBundle` is total). `EMAIL_FINGERPRINTS` gains `"email.notification."`.
-- [ ] `C3.14` **Components** — `feature/src/notification/`: `notification-bell.button.tsx`
+  `done: 2026-09-12` — the fingerprint went in with Phase 1's `C1.24`, ahead of the copy, so
+  §8 was already watching for it.
+- [x] `C3.14` **Components** — `feature/src/notification/`: `notification-bell.button.tsx`
   (`NotificationBell`: icon + unread `StatusBadge`, `href` to `ROUTES.notification.inbox`),
   `notification.list.tsx` (`NotificationList`: pending → `DataTable.Skeleton`, error →
   `Callout`, empty → `EmptyState`, rows with `useMessages("notification")` copy, mark-read on
@@ -729,21 +734,27 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   a category × channel grid of `mode` selects). Icon `bell` added to `asset`'s sprite.
   **UI:** no popover primitive — the bell links to the inbox page; a `Popover` in `ui` is a
   follow-up (`C6.x`). Specs for the three states of the list and the optimistic mark-read.
-- [ ] `C3.15` **Transport + routes** — `apps/web/src/server/orpc/notification.router.ts`
+  `done: 2026-09-12` — thirteen specs across the three components.
+- [x] `C3.15` **Transport + routes** — `apps/web/src/server/orpc/notification.router.ts`
   (three lines per procedure), mounted in `app.router.ts`;
   `route/(app)/_authenticated/notifications.tsx` (`requirePermission("notification.inbox.read")`,
   `staticData.messages = ["notification"]`, loader prefetches page 1 and the count),
   `route/(app)/_authenticated/settings/notifications.tsx`; the bell mounted in the
   `_authenticated` layout header beside `OrganizationSwitcher`; nav gate entry. `routes.spec.ts`
   covers both literals.
+  `done: 2026-09-12` — `routes.spec.ts` needed no edit: it walks the route directory and
+  cross-checks `ROUTES` and `GATES`, so both literals are covered the moment they exist.
+  **unverified:** the loader's prefetch of page 1 and the count needs a live database.
 
 #### 3.G Docs and verify
 
-- [ ] `C3.16` **Docs** — `packages/application/docs/reference/notification-policy.md` (the
+- [x] `C3.16` **Docs** — `packages/application/docs/reference/notification-policy.md` (the
   event → recipients table, the dedupe key, why the count is cached), `apps/worker/docs/reference/subscribers.md`
   (Phase 2 creates it; this adds the first row), `docs/setup/27` gains the slice as the second
   worked example, `docs/opinions/data-and-scale.md` §6 both notification paragraphs point at the
   code that answers them.
+  `done: 2026-09-12` — `docs/setup/27` gains it as the **third** worked example, not the
+  second: `role` and `member` were both already there.
 
 **Exit.** Changing a member's role writes one `notifications` row for that member with no
 duplicate on a replayed event, the bell count moves on refocus, the row is marked read
@@ -751,6 +762,18 @@ optimistically and stays read after refetch, an `immediate` email preference pro
 `mail.delivery.sent` line and a Mailpit message, a `digest` preference produces nothing until the
 `digest-daily` run (`pnpm --filter @loadbearing/worker` + a manual `fire`), and `check:architecture`
 is 20/20.
+
+> **Status, 2026-09-12.** Every item `C3.0`–`C3.16` is `[x]`. The slice walks all twelve
+> `add-slice` steps: two permissions fragments, a data migration granting the three keys to every
+> role that already holds `member.read`, two partitioned tables, thirteen application files, four
+> Postgres adapters, a consumer and a schedule, the web router, the query layer, both locales,
+> three components, two routes and thirteen specs. `check:architecture` is 20/20 with no skip, and
+> `typecheck`, `lint` and every suite are green except the Postgres and Redis integration specs,
+> which fail identically on the untouched tree.
+> **The Exit line itself is unticked**: every clause of it needs a live stack, and the bell
+> "moving on refocus" is the interim behaviour Phase 4 replaces. Two decisions are recorded at
+> their items rather than assumed — the migration grants by `EXISTS(member.read)` rather than by
+> role key, and the keyset cursor stays opaque to the client.
 
 ---
 

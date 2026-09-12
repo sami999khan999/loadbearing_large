@@ -5,6 +5,7 @@ export { ApiKeyMutations, ApiKeyQueries } from "./apikey/index.js";
 export { DocumentMutations } from "./document/index.js";
 export { QueryKeys } from "./key/index.js";
 export { MemberMutations, MemberQueries } from "./member/index.js";
+export { NotificationMutations, NotificationQueries } from "./notification/index.js";
 export { OrganizationMutations } from "./organization/index.js";
 export { RoleMutations, RoleQueries } from "./rbac/index.js";
 export {
@@ -12,11 +13,13 @@ export {
   type ApiClientProviderProps,
   type AppMutationOptions,
   createQueryClient,
+  type InfiniteData,
   type OptimisticEdit,
   type QueryClientOptions,
   type QueryRuntime,
   type Rollback,
   useApiClient,
+  useAppInfiniteQuery,
   useAppMutation,
   useAppQuery,
 } from "./runtime/index.js";

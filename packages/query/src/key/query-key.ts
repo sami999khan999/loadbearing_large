@@ -20,6 +20,17 @@ export class QueryKeys {
     sessions: () => ["account", "session", "list"] as const,
   };
 
+  // The bell's count is its own key rather than a field on the list: it is read on
+  // every page and the list on one, so they cannot share a lifetime.
+  public static readonly notification = {
+    all: () => ["notification"] as const,
+    // The cursor is *not* in the key. It lives in the page data, and a key that carried
+    // it would make every page a separate cache entry nothing could invalidate together.
+    list: (params: unknown) => ["notification", "list", params] as const,
+    unreadCount: () => ["notification", "unreadCount"] as const,
+    preferences: () => ["notification", "preferences"] as const,
+  };
+
   public static readonly rbac = {
     all: () => ["rbac"] as const,
     roles: (params: unknown) => ["rbac", "role", "list", params] as const,

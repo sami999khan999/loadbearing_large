@@ -4,6 +4,7 @@ export {
   useApiClient,
 } from "./api-client.context.js";
 export { createQueryClient, type QueryClientOptions, type QueryRuntime } from "./query-client.js";
+export { type InfiniteData, useAppInfiniteQuery } from "./use-app-infinite-query.js";
 export {
   type AppMutationOptions,
   type OptimisticEdit,

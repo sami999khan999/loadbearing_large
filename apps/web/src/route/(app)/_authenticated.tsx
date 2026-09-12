@@ -2,10 +2,13 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouter } from "@tanstack
 import { Endpoint } from "~/endpoint.js";
 import {
   AuthClient,
+  Can,
   type ClientNamespace,
   ModuleNav,
+  NotificationBell,
   OrganizationClient,
   OrganizationSwitcher,
+  ROUTES,
   SignOutButton,
   useCapabilities,
   useMemo,
@@ -85,6 +88,13 @@ function AuthenticatedLayout() {
           onSwitched={switched}
           onCreate={() => void navigate({ to: "/organization/new" })}
         />
+        {
+          // Beside the switcher rather than in `ModuleNav`: the bell is a count, not a
+          // destination in a list, and it is on every page in this subtree.
+          <Can permission="notification.inbox.read" capabilities={capabilities}>
+            <NotificationBell href={ROUTES.notification.inbox} />
+          </Can>
+        }
         {
           // Ungated on purpose: your own account and security pages need no capability,
           // which is why `account.routes.ts` declares no gate for them.

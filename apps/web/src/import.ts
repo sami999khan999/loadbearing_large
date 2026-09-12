@@ -51,6 +51,9 @@ export {
   MemberList,
   MessageProvider,
   ModuleNav,
+  NotificationBell,
+  NotificationList,
+  NotificationPreferenceForm,
   OrganizationSwitcher,
   ProfileForm,
   ResetPasswordForm,
@@ -75,7 +78,12 @@ export {
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 // The same `can()` the server calls, which is why the guard rebuilds the DTO rather than
 // shape-checking the JSON.
-export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
+export {
+  CapabilitySet,
+  type CapabilitySetDto,
+  type PermissionKey,
+  ROUTES,
+} from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
 export {

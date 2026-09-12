@@ -28,6 +28,8 @@ export {
   type DocumentHitDto,
   type InvitationDto,
   type MemberDto,
+  type NotificationDto,
+  type NotificationPreferenceDto,
   Password,
   type RoleDto,
 } from "@loadbearing/contracts";
@@ -57,11 +59,14 @@ export {
   DocumentMutations,
   MemberMutations,
   MemberQueries,
+  NotificationMutations,
+  NotificationQueries,
   OrganizationMutations,
   RoleMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,
+  useAppInfiniteQuery,
   useAppQuery,
 } from "@loadbearing/query";
 
