@@ -499,6 +499,7 @@ const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 // Absent from the whole client output, like the server list above.
 const EMAIL_FINGERPRINTS = [
   "email.digest.", "email.verify.", "email.reset.", "email.change.", "email.otp.",
+  "email.invitation.", "email.notification.",
 ];
 
 // Field names from the `env.ts` schemas. Also absent from the whole client output.

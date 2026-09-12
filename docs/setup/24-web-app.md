@@ -350,6 +350,8 @@ export class Env {
 
 **Session lifetimes come from the environment, and the cookie cache is capped here rather than trusted.** A staging box and production do not want the same session length, so these are not literals in a factory. The `.max(60)` on the cookie cache is the load-bearing one: that value *is* the revocation window ([16](16-auth-package.md) §16.9), and the pressure to raise it always arrives as a performance argument. A schema that refuses to boot is a better answer than a comment asking people not to.
 
+**`APP_BASE_URL` is not `AUTH_URL`, and the duplication is deliberate.** `AUTH_URL` is Better Auth's own origin and lives only in this schema. `APP_BASE_URL` is the origin a link *inside a message* points at, and it reaches `ContainerConfig.email.baseUrl` — which the worker also parses, because the worker is what renders the invitation link and it holds no auth configuration at all. Collapsing the two would mean putting an auth block in the worker's schema to serve one string ([the mail pipeline](../../packages/composition/docs/reference/mail-pipeline.md)).
+
 **Not every parsed key reaches `containerConfig()`.** `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` are read by Better Auth's own configuration rather than by an adapter, and they are still validated at boot alongside the rest — one place to fail is the entire point of the schema, and a malformed value found at first use is a value found on a machine nobody is watching.
 
 **`AUTH_TRUSTED_ORIGINS` carries the Tauri origins from the first deployment**, not from whenever the desktop app is built:

@@ -338,14 +338,20 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   so the worker can log the id — `application` still never logs. `messageId` is a string rather
   than `string | null` because `LogValue` admits no null; a server that returned none logs empty.
   No recipient on any of the three: an address is the highest-cardinality field this system holds.
-- [ ] `C1.24` **CI greps** — `EMAIL_FINGERPRINTS` gains `"email.notification."` and keeps
+- [x] `C1.24` **CI greps** — `EMAIL_FINGERPRINTS` gains `"email.notification."` and keeps
   `"email.digest."`. No `SERVER_FINGERPRINTS` change is needed now that no mail dependency
   exists to leak. `pnpm check:architecture` 20/20 with no skip.
-- [ ] `C1.25` **Docs** — `docs/setup/24`/`25` mail sections rewritten; a new
+  `done: 2026-09-12` — `"email.invitation."` went in beside it. It was missing, so invitation
+  copy could have reached a client bundle and §8 would not have noticed. The copy in
+  `docs/setup/26` is updated to match.
+- [x] `C1.25` **Docs** — `docs/setup/24`/`25` mail sections rewritten; a new
   `packages/composition/docs/reference/mail-pipeline.md` carrying the argument (queued auth mail,
   why there is no table, why the invitation send stays after the commit, where the delivery record
   actually lives); `README.md` feature list; `docs/ai/rules/workflow.md` Mailpit sentence gains
   "with the worker running".
+  `done: 2026-09-12` — the README has no feature list to amend; the equivalent is step 6 of
+  "Running it locally", which now says nothing reaches Mailpit unless the worker is running.
+  `docs/setup/25` §25.5 was rewritten around `MailConsumer` rather than `DigestComposer`.
 
 **Ids `C1.5`, `C1.12`, `C1.13`, `C1.14`, `C1.20` and `C1.21` are retired**, not reused: they were
 the `mail_deliveries` table, the react-email package's templates, its preview tooling, its
@@ -357,6 +363,13 @@ worker runs**; stopping SMTP leaves the job retrying with backoff and emits `mai
 on the final attempt, with no orphaned row to reconcile; an invitation sent twice with the same
 `dedupeKey` produces one message. `pnpm check:architecture` 20/20, `typecheck`, `lint`, `test`,
 `smoke` green.
+
+> **Status, 2026-09-12.** Every item `C1.1`–`C1.25` is `[x]`. `check:architecture` is 20/20 with
+> no skip, and `typecheck`, `lint` and every suite are green except the `packages/infrastructure`
+> and `packages/composition` integration specs, which need Postgres and Redis and fail identically
+> on the untouched tree. **The Exit line itself is unticked and stays that way until it is run by
+> hand**: it needs `pnpm infra:up`, Mailpit and a live Redis, and the environment this was built
+> in has no Docker. What to run is in each item's `unverified:` note.
 
 ---
 ### Phase 2 — Transactional outbox (closes `T-031`)

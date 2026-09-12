@@ -212,6 +212,18 @@ probe.
   - **Files:** `tasks/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
+  - **Phase 1 complete, 2026-09-12.** `C1.1`–`C1.25` are all `[x]` across six commits. Every mail
+    in the system — Better Auth's four and the invitation — is now a job on `QueueName.MAIL`,
+    rendered by `MailConsumer` in the worker and sent through `EmailSender`. No new package, no new
+    dependency, no delivery table. Three corrections were made to the plan on the way through and
+    are recorded in it: no `mail` commit scope is added (the enum's rule is one scope per package,
+    and this adds none), `.manifest.ts` was already in the closed suffix table so only `.renderer.ts`
+    is new, and `EMAIL_FINGERPRINTS` was missing `"email.invitation."` — a real hole, now closed.
+    Two defects were found and fixed while building: `SmtpEmailSender` turned a transport that
+    resolved with nothing into a thrown `UnavailableError` over a message that had been sent, and
+    `Container` built both mailers inside `if (config.auth)`, so the worker — the process that is
+    supposed to send — had none. **Phase 1's Exit line is not ticked:** it needs Mailpit and a live
+    Redis, and the environment this was built in has no Docker.
   - **Revised 2026-09-12, before any of it was built.** Two Phase 1 decisions were reversed on review and the plan carries the reasoning. Templates are hand-written HTML in `packages/composition/src/mail/` rather than react-email, which removes the only new package in the plan and both of its dependencies. And a send is a BullMQ job with no `mail_deliveries` table: the queue already supplies retries, backoff and duplicate suppression, the mail provider is where a delivery record belongs at scale, and a table would put the plaintext invitation token in Postgres against the reason its hash is stored. The outbox event table stays, and the distinction is the point — Redis cannot commit atomically with Postgres. **The plan now adds no package and no dependency at all.**
 
 ## ⛔ Blocked
@@ -444,5 +456,6 @@ probe.
 | 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
 | 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
 | 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |
+| 2026-09-12 | @sami   | Phase 1 of `T-036` built: one mail pipeline, every message a queue job. `QueueName.MAIL`, `MailPublisher`/`MailRenderer`, the template manifest, `MailLayout`, `MailConsumer`, and both mailers moved onto it. `DigestComposer` deleted; `.composer.ts` retired with it |
 | 2026-09-12 | @sami   | Filed `T-036` and `COMMUNICATION-PLAN.md`: six phases for mail, the outbox, notifications, real-time and messaging. `T-031` annotated with the two corrections Phase 2 makes |
 | 2026-09-12 | @sami   | Revised Phase 1 on review: hand-written HTML templates instead of a react-email package, and no mail table — a send is a queue job. The plan now introduces no new package and no new dependency |

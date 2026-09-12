@@ -321,6 +321,10 @@ const EMAIL_FINGERPRINTS = [
   "email.reset.",
   "email.change.",
   "email.otp.",
+  // Was missing: the invitation copy could have reached a bundle and this would not have
+  // noticed. `email.notification.` is Phase 3's and is listed before its copy exists.
+  "email.invitation.",
+  "email.notification.",
 ];
 
 // Field names from the `env.ts` schemas, which no adapter drags in on its own — they
