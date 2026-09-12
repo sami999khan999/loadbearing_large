@@ -23,13 +23,16 @@ export {
   InMemoryStorageGateway,
   InMemoryVectorStore,
   type PublishedJob,
+  type PublishedMail,
   type RecordedActivity,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingEmailSender,
+  RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
   StubEmbeddingProvider,
+  StubMailRenderer,
   StubSessionResolver,
 } from "./fake/index.js";
 // `TestHarness.clock` is one, so a consumer naming that type needs it — and a spec that

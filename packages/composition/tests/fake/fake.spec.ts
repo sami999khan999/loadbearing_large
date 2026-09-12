@@ -6,8 +6,10 @@ import {
   InMemoryCacheStore,
   InMemoryStorageGateway,
   InMemoryVectorStore,
+  RecordingMailPublisher,
   RecordingQueuePublisher,
   StubEmbeddingProvider,
+  StubMailRenderer,
 } from "../../src/fake/index.js";
 import type { DocumentChunk, OrganizationId } from "../../src/import.js";
 
@@ -60,6 +62,52 @@ describe("RecordingQueuePublisher", () => {
     await queue.publish("embedding", { documentId: "d1" }, { jobId: "d1" });
 
     expect(queue.published()).toHaveLength(1);
+  });
+});
+
+describe("RecordingMailPublisher", () => {
+  it("records what was published, per recipient", async () => {
+    const mail = new RecordingMailPublisher();
+    await mail.publish({
+      template: "auth.verify",
+      to: "a@example.test",
+      locale: "en",
+      params: { url: "https://example.test/v" },
+      organizationId: null,
+      userId: null,
+    });
+
+    expect(mail.publishedTo("a@example.test")).toHaveLength(1);
+    expect(mail.published()[0]?.locale).toBe("en");
+  });
+
+  // The same contract `RecordingQueuePublisher` keeps, because `dedupeKey` becomes the
+  // job id: a fake that ignored it would let "invite once" pass while it sent twice.
+  it("treats a repeated dedupeKey as a no-op, the way BullMQ does", async () => {
+    const mail = new RecordingMailPublisher();
+    const request = {
+      template: "member.invitation",
+      to: "a@example.test",
+      locale: "en",
+      params: { url: "https://example.test/i", inviter: "A", organization: "O" },
+      organizationId: null,
+      userId: null,
+      dedupeKey: "invite-1",
+    } as const;
+
+    await mail.publish(request);
+    await mail.publish(request);
+
+    expect(mail.published()).toHaveLength(1);
+  });
+});
+
+describe("StubMailRenderer", () => {
+  it("returns both parts, so a caller cannot pass by rendering text alone", async () => {
+    const rendered = await new StubMailRenderer().render("auth.otp", "bn");
+
+    expect(rendered.text).not.toBe("");
+    expect(rendered.html).not.toBe("");
   });
 });
 

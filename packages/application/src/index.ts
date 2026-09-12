@@ -28,6 +28,7 @@ export {
   type RevokeApiKeyInput,
   RevokeApiKeyUseCase,
 } from "./apikey/index.js";
+export { type SendMailInput, SendMailUseCase } from "./mail/index.js";
 export {
   ChangeMemberRoleUseCase,
   type InvitationMail,
@@ -69,9 +70,13 @@ export {
   type LogEntry,
   type LogQuery,
   LogReader,
+  MailPublisher,
+  MailRenderer,
+  type MailRequest,
   MaintenanceGateway,
   type ProjectionCheckpoint,
   QueuePublisher,
+  type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
   type SearchHit,

@@ -30,6 +30,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
+    "@loadbearing/content": "workspace:*",
     "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
     "@loadbearing/errors": "workspace:*",

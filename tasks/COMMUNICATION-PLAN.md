@@ -193,7 +193,7 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
 
 #### 1.B Template catalog and ports (`contracts`, `application`)
 
-- [ ] `C1.6` **Template manifest in `contracts`** — `packages/contracts/src/mail/{index,mail-template.manifest}.ts`
+- [x] `C1.6` **Template manifest in `contracts`** — `packages/contracts/src/mail/{index,mail-template.manifest}.ts`
   → `MailTemplates`: a closed record `key → ZodObject` (the params) for `auth.verify`,
   `auth.reset`, `auth.change`, `auth.otp`, `member.invitation`, `notification.single` (Phase 3),
   `notification.digest` (Phase 3). Exports `MailTemplateKey` and `MailTemplateParams<K>`.
@@ -203,23 +203,35 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `application/src/import.ts` gains a **type-only** `Locale` from `@loadbearing/content` (a new,
   permitted edge — content is to its left; record it in `application/package.json` and
   `application/docs/index.md` "Depends on"). **Docs:** `contracts/docs/index.md`.
-- [ ] `C1.7` **`MailPublisher` port** — `application/src/port/mail.publisher.ts`:
+  `done: 2026-09-12` — **five keys, not seven.** `notification.single` and `notification.digest`
+  are Phase 3's: the renderer switches on the key with a `never` default, so declaring a key
+  before its template and copy exist does not compile. That is the mechanism working, not a gap.
+- [x] `C1.7` **`MailPublisher` port** — `application/src/port/mail.publisher.ts`:
   `MailRequest<K> { template: K; to; locale: Locale; params: MailTemplateParams<K>; organizationId: OrganizationId | null; userId: UserId | null; priority?: "high" | "normal"; dedupeKey?: string }`,
   `abstract publish<K>(mail: MailRequest<K>): Promise<void>`. Returns nothing: there is no row to
   identify, and a caller reading an id would be reaching for a record that does not exist.
   **Docs:** `application/docs/reference/ports.md` (port count: sixteen → seventeen, then eighteen
   with `C1.8`; `test-container.spec` counts the directory, so the harness fails until both fakes
   exist).
-- [ ] `C1.8` **`MailRenderer` port** — `application/src/port/mail.renderer.ts`:
+  `done: 2026-09-12` — the two fakes and the `TestPorts` entries landed **here** rather than at
+  `C1.18`, because the harness spec counts `src/port/` and goes red the moment a port file
+  appears. `C1.18` keeps the `Container` wiring. The real port count is seventeen, and the
+  harness has eighteen entries with `content`.
+- [x] `C1.8` **`MailRenderer` port** — `application/src/port/mail.renderer.ts`:
   `RenderedMail { subject; text; html }`, `abstract render<K>(template, locale, params): Promise<RenderedMail>`.
   New suffix `.renderer.ts` recorded in `docs/opinions/files.md` and `docs/ai/rules/files.md`.
-- [ ] `C1.9` **`mail` slice in `application`** — `application/src/mail/{index,send-mail.use-case}.ts`.
+  `done: 2026-09-12` — `.rules.ts` was recorded in the same pass, and both role nouns joined
+  `docs/opinions/classes.md`, which is the second edit that page asks for.
+- [x] `C1.9` **`mail` slice in `application`** — `application/src/mail/{index,send-mail.use-case}.ts`.
   `SendMailUseCase.execute(principal, request)`: validate `params` against
   `MailTemplates[template]`, render, send, return. No repository, no status, no idempotency of its
   own — the job id carries that. Principal is `SystemPrincipal.platform()` (new: the nil
   organization), because platform work asserts no permission, as `MaintenanceGateway` already
   does. Spec: an unknown template and a params mismatch both throw before the transport is
   touched. **Docs:** `application/docs/index.md` tree.
+  `done: 2026-09-12` — `execute(principal, input)` is kept, and the principal authorizes
+  nothing: mail belongs to no tenant, so the guard is the structural one the three gateways
+  already rely on. Written at the line and argued in `ports.md`.
 
 #### 1.C Templates and the renderer (`composition`)
 

@@ -10,9 +10,11 @@ import {
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
   RecordingEmailSender,
+  RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
   StubEmbeddingProvider,
+  StubMailRenderer,
   StubSessionResolver,
 } from "../fake/index.js";
 import {
@@ -29,6 +31,8 @@ import {
   FixedClock,
   type Logger,
   type LogReader,
+  type MailPublisher,
+  type MailRenderer,
   type MaintenanceGateway,
   type QueuePublisher,
   SERVER_CATALOG,
@@ -55,6 +59,8 @@ export interface TestPorts {
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
   readonly logs: LogReader;
+  readonly mailPublisher: MailPublisher;
+  readonly mailRenderer: MailRenderer;
   readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
@@ -98,6 +104,8 @@ export class TestContainer {
       email: overrides.email ?? new RecordingEmailSender(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       logs: overrides.logs ?? new InMemoryLogReader(),
+      mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
+      mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),

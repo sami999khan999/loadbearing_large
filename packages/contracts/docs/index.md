@@ -42,6 +42,9 @@ packages/contracts/
 │   ├── registry/
 │   │   ├── index.ts
 │   │   └── procedure-permissions.ts → ProcedurePermissions
+│   ├── mail/                        ← a manifest, not a slice: no contract, no procedures
+│   │   ├── index.ts
+│   │   └── mail-template.manifest.ts → MailTemplates, MailTemplateKey, MailTemplateParams
 │   └── <subject>/                   ← one folder per domain subject; `role/` and `member/` ship
 │       ├── index.ts
 │       ├── <subject>.contract.ts    → <Subject>Contract   (Zod shapes)
@@ -54,6 +57,7 @@ packages/contracts/
     │   └── pagination.spec.ts
     ├── role/role.contract.spec.ts
     ├── member/member.contract.spec.ts
+    ├── mail/mail-template.manifest.spec.ts
     └── registry/
         └── procedure-permissions.spec.ts
 ```
@@ -114,3 +118,18 @@ elsewhere.
 Specs live in `tests/`, mirroring `src/`. `vitest.config.ts` sets
 `resolve.conditions: ["development"]` so a spec resolves `@loadbearing/permissions` to its source
 rather than a stale `dist/` — the same condition `apps/web/vite.config.ts` sets.
+
+## `mail/` is a manifest, not a slice
+
+It holds no `.contract.ts`, no `.entity.ts` and no `.procedures.ts`, because a mail template is
+never a procedure — nothing on the wire sends one. What it holds is a closed record of template key
+→ params schema, which is the one shape both ends of the mail queue need: a publisher writes params
+it can prove match the key, and the worker parses them back out of JSON it has to distrust.
+
+**It is here rather than in `content` or `application` because of the layering, not by preference.**
+`application` has no zod and may not import one; `contracts` may not import `content`, which sits to
+its right. That leaves the recipient's `Locale` riding the `MailPublisher` port in `application`
+(where the edge to `content` *is* legal, type-only) while the params live here.
+
+Adding a key is deliberately more than one edit: the renderer switches on it with a `never` default,
+so a new row does not compile until a template and its copy exist.

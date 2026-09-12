@@ -16,6 +16,11 @@ export {
   type SearchDocumentsInput as SearchDocumentsContractInput,
 } from "./document/index.js";
 export {
+  type MailTemplateKey,
+  type MailTemplateParams,
+  MailTemplates,
+} from "./mail/index.js";
+export {
   type ChangeMemberRoleInput,
   type InvitationDto,
   type InviteMemberInput,

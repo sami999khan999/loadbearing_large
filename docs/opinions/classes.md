@@ -25,8 +25,11 @@ The technology-prefix rule is what makes a seam visible at a glance. Seeing `PgV
 
 **Banned suffixes:** `Manager`, `Helper`, `Util`, `Handler`, and bare `Service`. They describe
 nothing. If a class fits none of `UseCase`, `Repository`, `Gateway`, `Store`, `Reader`, `Logger`,
-`Provider`, `Publisher`, `Resolver`, `Bus`, `Policy`, `Strategy`, `Entity`, `Registry`, it probably
-wants splitting. `Policy` is the escape valve for a domain rule too broad for one entity.
+`Provider`, `Publisher`, `Resolver`, `Renderer`, `Rules`, `Bus`, `Policy`, `Strategy`, `Entity`,
+`Registry`, it probably wants splitting. `Policy` is the escape valve for a domain rule too broad
+for one entity, and `Rules` is what several writes over one subject share — `RoleRules` exists
+because a create that allows what an update refuses is a hole reachable by creating and then
+editing. A `Renderer` turns data into a document and touches no transport.
 
 The list is longer than it looks because it is descriptive: every suffix on it names a port that
 exists. A `Reader` reads and never writes — `LogReader` is the whole reason that

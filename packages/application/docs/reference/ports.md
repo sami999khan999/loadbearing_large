@@ -148,6 +148,48 @@ the id exists to be correlated later against a provider's own record. Every hop 
 for a reason worth keeping: reading the id off a transport that resolved with nothing turned a sent
 message into a thrown `UnavailableError` and a pointless retry.
 
+## `MailPublisher` returns nothing, and `MailRenderer` knows no transport
+
+These two are the mail pipeline's whole seam, and the split between them is the point:
+`MailPublisher` is what a caller holds, `MailRenderer` is what the worker holds, and neither knows
+the other exists.
+
+**`publish` resolves with `void`.** There is no delivery row, so an id handed back would be a
+handle to a record that does not exist — and a caller that held one would eventually try to read
+it. What a caller *can* pass is a `dedupeKey`, which becomes the BullMQ job id: "send this once"
+belongs where the queue already enforces it, not in a table a second process has to check.
+
+**The request carries the recipient's locale, not the request's.** Mail is read long after the click
+that caused it, in whatever language that person set — which is why `users.locale` exists and why
+composing per recipient is a `Translator.with()` call rather than a second system.
+
+`priority` is `"high" | "normal"` rather than a number. A caller choosing 37 is choosing against
+every other caller, and the only distinction that has ever mattered here is whether somebody is
+sitting and waiting for the message.
+
+**`MailRenderer` returns both parts, always.** Text is what every client renders and what keeps a
+message out of a spam folder; HTML is what makes the action look like a button. Returning one and
+leaving the other optional is how a pipeline ends up shipping text-only mail nobody noticed.
+
+The renderer is a port rather than a function in the worker because `application` may know neither
+the words nor the routes: the copy catalog carrying them is server-only, and the layer that holds
+both is `composition`.
+
+## `SendMailUseCase` asserts nothing, and that is the design
+
+It is the only use-case in this package that never calls `authorizer.assert`. Mail belongs to no
+tenant — every message Better Auth sends has no organization, and an invitation goes to somebody
+who does not have an account yet — so there is no organization that could be asked to authorize it.
+`SystemPrincipal.forOrganization` cannot express the work, exactly as it cannot for the three
+gateways above.
+
+The guard is the same structural one: nothing reachable from a request can call it. It is wired for
+`apps/worker` and invoked only from the mail consumer.
+
+What it *does* enforce is the manifest. A job crosses the queue as JSON, so the template key is a
+string and the params are `unknown` by the time the worker sees them. Both are checked before the
+transport is touched, because a message that cannot be built will not build on the retry either.
+
 ## `StorageGateway`
 
 No bucket, no region, no endpoint. Key layout is `<subject>/<yyyy>/<mm>/<uuid>.<ext>`, because
