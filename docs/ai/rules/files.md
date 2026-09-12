@@ -13,7 +13,7 @@ description: Kebab-case everywhere, the closed set of role suffixes, one class p
   Server roles: `.contract` `.entity` `.procedures` `.use-case` `.repository` `.gateway` `.store`
   `.reader` `.logger` `.provider` `.publisher` `.resolver` `.projector` `.sender` `.mailer`
   `.source` `.unit-of-work` `.connection` `.cache` `.hasher` `.builder` `.factory` `.seed`
-  `.enroller` `.founder` `.claimer` `.rules` `.renderer` `.policy` `.strategy` `.plugin`
+  `.enroller` `.founder` `.claimer` `.rules` `.renderer` `.subscriber` `.policy` `.strategy` `.plugin`
   `.router` `.interceptor` `.consumer` `.schedule` `.error` `.schema` `.config`
   `.manifest`. Catalog fragments:
   `.permissions` `.errors` `.events` `.gate` `.routes` `.data`. Client roles: `.form` `.list`

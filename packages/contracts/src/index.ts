@@ -47,6 +47,11 @@ export {
 } from "./primitive/index.js";
 export { type AppContract, contract } from "./procedure/index.js";
 export {
+  RealtimeContract,
+  type RealtimeEventName,
+  type RealtimeMessage,
+} from "./realtime/index.js";
+export {
   type DomainEvent,
   type DomainEventInput,
   type DomainEventName,

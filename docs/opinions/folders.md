@@ -128,6 +128,7 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `event/` | type-only declarations of what an event carries | `observability` |
 | `logger/` | the diagnostic seam and its sinks | `observability` |
 | `port/` | abstract classes for cross-cutting infrastructure, zero implementations | `application` |
+| `subscriber/` | the durable-reaction seam and the registry over it | `application` |
 | `schema/` | every table declaration, plus the barrel drizzle-kit is pointed at | `infrastructure` |
 | `transaction/` | the `UnitOfWork` seam and the scope it reads | `infrastructure` |
 | `seed/` | the seed classes a runnable script above `src/` calls | `infrastructure` |

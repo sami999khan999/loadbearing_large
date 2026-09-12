@@ -10,8 +10,8 @@ page carries the arguments; the port files themselves state constraints and stop
 
 ## Three ports carry no `Principal`, and that is the design
 
-`MaintenanceGateway`, `ActivityArchiveGateway` and `ActivityReplayReader` take no actor on any
-method. That is not a hole in the authorization story.
+`MaintenanceGateway`, `ActivityArchiveGateway`, `ActivityReplayReader` and `OutboxGateway` take no
+actor on any method. That is not a hole in the authorization story.
 
 Every *other* port reads or writes a tenant's rows, so `Authorizer.assert()` inside a use-case is
 the gate. Nothing these three touch belongs to a tenant: **an expired session is expired for
@@ -147,6 +147,82 @@ servers return none. **The receipt is logged, not stored** — this system keeps
 the id exists to be correlated later against a provider's own record. Every hop to it is optional
 for a reason worth keeping: reading the id off a transport that resolved with nothing turned a sent
 message into a thrown `UnavailableError` and a pointless retry.
+
+## `DomainEventPublisher` is broker-shaped before there is a broker
+
+Four properties, and they are chosen because they are the four a real broker cannot give back later
+([Data and scale](../../../../docs/opinions/data-and-scale.md) §7):
+
+- **`publish` returns nothing.** A caller reading a return value is doing RPC, and the day this sits
+  behind Kafka there is nothing to return.
+- **Handlers are idempotent on a stable event id.** At-least-once is what every broker offers, so a
+  duplicate has to be a no-op rather than a second effect.
+- **No ordering.** Two events published in order may be handled out of order.
+- **No handler exception reaches the publisher.** In-process dispatch *could* propagate one; a broker
+  cannot, so a use-case that caught a handler failure would depend on semantics that disappear.
+
+**Call it inside `unitOfWork.run`.** That is the whole point of an outbox: the row and the state
+change that caused it commit together or not at all. Publishing to a broker inside a transaction
+cannot be rolled back, and publishing after the commit loses the event on a crash in between. An
+outbox table written in the same transaction is the only shape with neither hole, and `BaseRepository`
+already joins the ambient transaction — `PgActivityLogger` is the worked example.
+
+The audit row and the outbox row sit side by side in the same `run`, and they are not the same thing:
+**audit is the human fact, the outbox is the integration fact.** One has a retention policy and a
+reader in the UI; the other has a schema, a `published_at`, and subscribers.
+
+## `OutboxGateway` hands out claimed work, and marks it only on success
+
+`drain(limit, relay)` selects a batch, calls `relay`, and marks the rows published **only if `relay`
+resolves**. A throw rolls the claim back and the same rows come round on the next tick. That is what
+makes the whole pipeline at-least-once rather than at-most-once, and it is why the in-memory fake
+honours the same ordering — a fake that removed rows first would let a spec prove a guarantee the
+adapter does not have.
+
+The batch is claimed with `FOR UPDATE SKIP LOCKED`, so two worker replicas share the drain with no
+coordinator and no leader election.
+
+`oldestPendingAt()` returns `null` when nothing is pending. That is the *healthy* answer, not a
+missing one, and an alert keyed on lag has to treat the two differently.
+
+**The inbox table is deliberately deferred.** A crash between relay and mark re-publishes the same
+job ids, and BullMQ drops the duplicates while they are still on the queue; anything older is caught
+by the subscribers' own idempotency, which is a stated requirement rather than a hope. The trigger
+for adding a `processed_event` table is written down: **the first subscriber whose effect is not
+idempotent by construction.**
+
+## `EventSubscriber` receives the event, never an actor
+
+A subscriber that needs a principal builds one from `event.organizationId`. Handing it the original
+actor would be handing it a permission set that was resolved at request time and may since have
+changed — and the work is not being done on that person's behalf anyway.
+
+Subscribers live **in `application`, in the slice they serve**, not in a folder of their own next to
+the consumer. `notification/notification.subscriber.ts` is a notification concern that happens to be
+triggered by an event; putting it beside the queue binding would file it by mechanism.
+
+They run **only in the worker**, because `SubscriberRegistry` is consulted only by `OutboxConsumer`.
+A subscriber invoked in the web tier would be the in-process dispatch §7 forbids depending on.
+
+`SubscriberRegistry` rejects a duplicate name or an unknown event **at construction**, which makes a
+wiring mistake a startup crash rather than an event lost at 3am. The name matters because it is half
+of every job id: two subscribers sharing one would deduplicate against each other, and one of them
+would silently never run.
+
+## `RealtimePublisher` is fire-and-forget, and says so
+
+A frame published to a channel nobody is listening on is gone. That is not a defect to be fixed with
+a buffer — it is why the client refetches what it subscribes to rather than trusting a replay, and
+why a reconnect yields a `resync` frame rather than a gap fill. Pub/sub cannot replay, and a contract
+that pretended otherwise would be a lie the first time a tab slept.
+
+Channels are **tenant-leading, always**: `org:<organizationId>:user:<userId>`. Sharded pub/sub
+(`SPUBLISH`), Redis Streams and a broker partitioner can all key on a prefix, and none of them can
+key on something buried in the middle. `RealtimeChannel` is a branded string so a channel cannot be
+assembled by concatenation at a call site, which is how one ends up without its prefix.
+
+A user channel is **authorised by construction**: you only ever receive your own, so the stream needs
+no per-frame permission check.
 
 ## `MailPublisher` returns nothing, and `MailRenderer` knows no transport
 

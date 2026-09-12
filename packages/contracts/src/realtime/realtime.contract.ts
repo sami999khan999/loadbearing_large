@@ -1,0 +1,30 @@
+import { z } from "../import.js";
+
+// What the browser receives, so the union is closed and the client's routing table is
+// total over it: a name with no route is a compile error rather than a dropped frame.
+const eventName = z.enum(["member.changed"]);
+
+export type RealtimeEventName = z.infer<typeof eventName>;
+
+export class RealtimeContract {
+  private constructor() {}
+
+  // No `organizationId` on the wire. The stream is opened by a resolved principal, so the
+  // tenant is the session's by construction — putting it here invites trusting it.
+  public static readonly message = z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("event"),
+      id: z.uuid(),
+      name: eventName,
+      at: z.coerce.date(),
+      payload: z.record(z.string(), z.unknown()),
+    }),
+    // Pub/sub cannot replay, so a resume is a resync and saying so is the honest
+    // contract. The client refetches what it subscribes to rather than trusting a gap.
+    z.object({ kind: z.literal("resync"), id: z.uuid() }),
+  ]);
+
+  public static readonly eventName = eventName;
+}
+
+export type RealtimeMessage = z.infer<typeof RealtimeContract.message>;

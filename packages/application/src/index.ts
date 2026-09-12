@@ -62,6 +62,7 @@ export {
   CapabilityInvalidator,
   type DailyCount,
   type DocumentChunk,
+  DomainEventPublisher,
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
@@ -74,8 +75,10 @@ export {
   MailRenderer,
   type MailRequest,
   MaintenanceGateway,
+  OutboxGateway,
   type ProjectionCheckpoint,
   QueuePublisher,
+  RealtimePublisher,
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
@@ -94,6 +97,8 @@ export {
   Principal,
   type PrincipalKind,
   QueueName,
+  type RealtimeChannel,
+  RealtimeChannels,
 } from "./primitive/index.js";
 export {
   CapabilityRepository,
@@ -116,3 +121,4 @@ export {
   type UpdateRoleInput,
   UpdateRoleUseCase,
 } from "./rbac/index.js";
+export { EventSubscriber, SubscriberRegistry } from "./subscriber/index.js";

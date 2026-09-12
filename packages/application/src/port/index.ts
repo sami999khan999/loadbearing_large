@@ -9,13 +9,16 @@ export {
 export { AnalyticsProjector } from "./analytics.projector.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
+export { DomainEventPublisher } from "./domain-event.publisher.js";
 export { type EmailMessage, type EmailReceipt, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MailPublisher, type MailRequest } from "./mail.publisher.js";
 export { MailRenderer, type RenderedMail } from "./mail.renderer.js";
 export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js";
+export { OutboxGateway } from "./outbox.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
+export { RealtimePublisher } from "./realtime.publisher.js";
 export {
   type RequestHeaders,
   type ResolvedSession,

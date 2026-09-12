@@ -4,6 +4,7 @@ import { TestContainer } from "../../src/container/test-container.js";
 import {
   DirectUnitOfWork,
   InMemoryCacheStore,
+  InMemoryOutboxGateway,
   InMemoryStorageGateway,
   InMemoryVectorStore,
   RecordingMailPublisher,
@@ -99,6 +100,47 @@ describe("RecordingMailPublisher", () => {
     await mail.publish(request);
 
     expect(mail.published()).toHaveLength(1);
+  });
+});
+
+describe("InMemoryOutboxGateway", () => {
+  const event = (name: string) => ({
+    organizationId: "018f8c00-0000-7000-8000-000000000010",
+    name,
+    actorId: "018f8c00-0000-7000-8000-000000000011",
+    occurredAt: new Date("2026-01-01T00:00:00Z"),
+    payload: {},
+  });
+
+  it("hands the relay a batch and removes it only once the relay resolves", async () => {
+    const outbox = new InMemoryOutboxGateway();
+    outbox.enqueue(event("member.joined") as never);
+
+    const seen: string[] = [];
+    expect(
+      await outbox.drain(10, async (events) => {
+        seen.push(...events.map((e) => e.name));
+        return Promise.resolve();
+      }),
+    ).toBe(1);
+
+    expect(seen).toEqual(["member.joined"]);
+    expect(outbox.remaining()).toEqual([]);
+  });
+
+  // The transactional adapter rolls back on a failing relay, so the fake has to leave the
+  // rows behind too — otherwise a spec proves an ordering the real one does not have.
+  it("leaves the batch pending when the relay throws", async () => {
+    const outbox = new InMemoryOutboxGateway();
+    outbox.enqueue(event("member.joined") as never);
+
+    await expect(outbox.drain(10, () => Promise.reject(new Error("down")))).rejects.toThrow();
+
+    expect(outbox.remaining()).toHaveLength(1);
+  });
+
+  it("reports no lag when nothing is pending, which is not the same as unknown", async () => {
+    expect(await new InMemoryOutboxGateway().oldestPendingAt()).toBeNull();
   });
 });
 

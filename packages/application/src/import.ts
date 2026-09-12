@@ -9,6 +9,10 @@ export type { Locale } from "@loadbearing/content";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
   type ApiKeyId,
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
+  DomainEvents,
   type GoalId,
   type InvitationId,
   type MailTemplateKey,
@@ -16,6 +20,7 @@ export {
   MailTemplates,
   type OrganizationId,
   type PaginationQuery,
+  type RealtimeMessage,
   type RoleId,
   type UserId,
 } from "@loadbearing/contracts";

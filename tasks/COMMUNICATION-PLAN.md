@@ -443,19 +443,23 @@ check in every layer and the browser can parse the same shapes on the stream.
 
 #### 2.C Ports and domain (`application`)
 
-- [ ] `C2.3` **`DomainEventPublisher` port** — `application/src/port/domain-event.publisher.ts`:
+- [x] `C2.3` **`DomainEventPublisher` port** — `application/src/port/domain-event.publisher.ts`:
   `abstract publish<N extends DomainEventName>(actor: Principal, event: DomainEventInput<N>): Promise<void>`.
   Returns nothing (a caller reading a return value is doing RPC); a caller outside
   `unitOfWork.run` is publishing about a row that may not commit — say so on the line. Fake
   `RecordingDomainEventPublisher` (`published()`), `TestPorts.events`.
   **Docs:** `application/docs/reference/ports.md`, `data-and-scale.md` §7 (the paragraph that
   says the port does not exist is rewritten).
-- [ ] `C2.4` **`OutboxGateway` port** — `application/src/port/outbox.gateway.ts`:
+  `done: 2026-09-12`
+- [x] `C2.4` **`OutboxGateway` port** — `application/src/port/outbox.gateway.ts`:
   `abstract drain(limit: number, relay: (events: readonly DomainEvent[]) => Promise<void>): Promise<number>`
   and `abstract oldestPendingAt(): Promise<Date | null>` (the lag probe). No principal on any
   method — platform work, reachable from the worker only, the `MaintenanceGateway` precedent.
   Fake `InMemoryOutboxGateway` (`enqueue(event)`, honours the relay contract), `TestPorts.outbox`.
-- [ ] `C2.5` **`EventSubscriber` seam** — `application/src/subscriber/{index,event.subscriber,subscriber-registry}.ts`:
+  `done: 2026-09-12` — the fake removes rows only after `relay` resolves, matching the adapter's
+  rollback. A fake that removed them first would let a spec prove a guarantee the real one
+  does not have.
+- [x] `C2.5` **`EventSubscriber` seam** — `application/src/subscriber/{index,event.subscriber,subscriber-registry}.ts`:
   `abstract class EventSubscriber { abstract readonly name: string; abstract readonly events: readonly DomainEventName[]; abstract handle(event: DomainEvent): Promise<void> }`
   (idempotent on `event.id`; may throw; never logs — §2); `SubscriberRegistry` (built once by
   `Container` from a frozen list): `subscriptions(): ReadonlyMap<DomainEventName, readonly string[]>`
@@ -468,6 +472,9 @@ check in every layer and the browser can parse the same shapes on the stream.
   in-process dispatch §7 forbids depending on. New folder name `subscriber/` and suffix
   `.subscriber.ts` recorded in `docs/opinions/{folders,files}.md`; `Subscriber` joins the
   role-noun list in `classes.md`. **Not** `bus/` and not `.bus.ts`: nothing here is a bus.
+  `done: 2026-09-12` — `Bus` was also **removed** from `classes.md`'s role-noun list, with the
+  reason recorded there: that list claims every suffix on it names something that exists, and the
+  design T-031 predicted a bus for turned out to be a publisher, a gateway and subscribers.
 - [ ] `C2.6` **First publishers and the proving subscriber** — `InviteMemberUseCase` →
   `member.invited`; `ChangeMemberRoleUseCase` → `member.role.changed`; `PgInvitationClaimer.claim`
   (already takes `ActivityLogger`) → `member.joined`. Each inside the existing `unitOfWork.run`
@@ -726,11 +733,15 @@ invalidation; on `resync` it invalidates every key the table names.
 
 #### 4.A Ports, primitives, adapters (landed with Phase 2 — `C2.6` needs them)
 
-- [ ] `C4.1` **`RealtimeChannel`** — `application/src/primitive/realtime-channel.ts`: private
+- [x] `C4.1` **`RealtimeChannel`** — `application/src/primitive/realtime-channel.ts`: private
   ctor, `user(organizationId, userId)`, `conversation(organizationId, conversationId)`
   returning a branded string. Server-only by residence; the browser never sees a channel.
   Spec: every channel starts with `org:<id>:`.
-- [ ] `C4.2` **Ports + wire shape** — `application/src/port/realtime.publisher.ts`
+  `done: 2026-09-12` — **`user()` only.** `conversation()` has no caller until Phase 5's stream,
+  and the tenant-leading shape this exists to enforce is proved by one method as well as two.
+  The class is `RealtimeChannels`; `RealtimeChannel` is the branded type, and a class cannot
+  share a name with the type its callers annotate with.
+- [x] `C4.2` **Ports + wire shape** — `application/src/port/realtime.publisher.ts`
   (`publish(channel, message)`) and `realtime.subscriber.ts` (`subscribe(channels, signal): AsyncIterable<RealtimeMessage>`;
   ends when `signal` aborts or the max age elapses; throws `RateLimitedError` past the cap;
   never buffers history). `RealtimeMessage` is the **wire** shape and lives in
@@ -739,6 +750,10 @@ invalidation; on `resync` it invalidates every key the table names.
   Fakes `RecordingRealtimePublisher`, `InMemoryRealtimeSubscriber` sharing an
   `InMemoryRealtimeHub` so a spec can publish and read; `TestPorts` gains `realtime` and
   `realtimeSubscriber`. **Docs:** `ports.md`, `test-container.md`.
+  `done: 2026-09-12` — **the publisher half only.** `RealtimeSubscriber`, `InMemoryRealtimeHub`
+  and the `typing` frame land in Phase 4 with the stream that reads them; `C2.6`'s subscriber
+  needs a publisher and nothing else. The wire union is `event` and `resync` for the same reason:
+  `typing` names a `conversationId` that does not exist until Phase 5.
 - [ ] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
   (cache client, `PUBLISH` of the JSON envelope, `id = Uuid.v7()`), `redis-realtime.subscriber.ts`
   (`constructor(redis /* subscriber role */, config: { maxStreamsPerUser; maxAgeMs; queueSize })`,

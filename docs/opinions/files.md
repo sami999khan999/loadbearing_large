@@ -34,6 +34,7 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.mailer.ts` | `content-auth.mailer.ts` | `ContentAuthMailer` |
 | `.source.ts` | `static-content.source.ts` | `StaticContentSource` |
 | `.renderer.ts` | `content-mail.renderer.ts` | `ContentMailRenderer` |
+| `.subscriber.ts` | `member-realtime.subscriber.ts` | `MemberRealtimeSubscriber` |
 | `.unit-of-work.ts` | `pg-unit-of-work.ts` | `PgUnitOfWork` |
 | `.connection.ts` | `redis.connection.ts` | `RedisConnection` |
 | `.cache.ts` | `capability.cache.ts` | `CapabilityCache` |

@@ -4,15 +4,18 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
   InMemoryLogReader,
+  InMemoryOutboxGateway,
   InMemoryStorageGateway,
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
+  RecordingDomainEventPublisher,
   RecordingEmailSender,
   RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
+  RecordingRealtimePublisher,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubSessionResolver,
@@ -26,6 +29,7 @@ import {
   type CacheStore,
   type CapabilityInvalidator,
   type ContentSource,
+  type DomainEventPublisher,
   type EmailSender,
   type EmbeddingProvider,
   FixedClock,
@@ -34,7 +38,9 @@ import {
   type MailPublisher,
   type MailRenderer,
   type MaintenanceGateway,
+  type OutboxGateway,
   type QueuePublisher,
+  type RealtimePublisher,
   SERVER_CATALOG,
   type SessionResolver,
   SilentLogger,
@@ -56,11 +62,14 @@ export interface TestPorts {
   readonly cache: CacheStore;
   readonly capabilities: CapabilityInvalidator;
   readonly content: ContentSource;
+  readonly events: DomainEventPublisher;
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
   readonly logs: LogReader;
   readonly mailPublisher: MailPublisher;
   readonly mailRenderer: MailRenderer;
+  readonly outbox: OutboxGateway;
+  readonly realtime: RealtimePublisher;
   readonly maintenance: MaintenanceGateway;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
@@ -102,10 +111,13 @@ export class TestContainer {
       // like `Container`: the client default carries no `email` namespace.
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),
       email: overrides.email ?? new RecordingEmailSender(),
+      events: overrides.events ?? new RecordingDomainEventPublisher(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       logs: overrides.logs ?? new InMemoryLogReader(),
       mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
+      outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
+      realtime: overrides.realtime ?? new RecordingRealtimePublisher(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),

@@ -18,10 +18,12 @@ export {
   type DailyCount,
   DeleteRoleUseCase,
   type DocumentChunk,
+  DomainEventPublisher,
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
   EmbeddingProvider,
+  EventSubscriber,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
@@ -40,12 +42,16 @@ export {
   MailRenderer,
   type MailRequest,
   MaintenanceGateway,
+  OutboxGateway,
   type PartitionedTableName,
   type Principal,
   type ProjectionCheckpoint,
   QueueDocumentIndexUseCase,
   QueueName,
   QueuePublisher,
+  type RealtimeChannel,
+  RealtimeChannels,
+  RealtimePublisher,
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
@@ -61,6 +67,7 @@ export {
   SetMemberActiveUseCase,
   StorageGateway,
   type StoredObject,
+  SubscriberRegistry,
   type SweepOutcome,
   UnitOfWork,
   UpdateRoleUseCase,
@@ -99,15 +106,18 @@ export {
 // Only the branded ids two port signatures name, without which `test-container.ts`
 // cannot override them.
 export type {
+  DomainEvent,
+  DomainEventInput,
   GoalId,
   MailTemplateKey,
   MailTemplateParams,
   OrganizationId,
+  RealtimeMessage,
   UserId,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
-export { type Clock, FixedClock, ServerOnly, SystemClock } from "@loadbearing/core";
+export { type Clock, FixedClock, ServerOnly, SystemClock, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export { NotFoundError } from "@loadbearing/errors";
