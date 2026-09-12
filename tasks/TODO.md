@@ -1,6 +1,6 @@
 ---
 title: TODO — loadbearing starter kit
-updated: 2026-09-05
+updated: 2026-09-12
 owner: sami
 schema: todo/v1
 ---
@@ -199,6 +199,19 @@ probe.
     `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
     file that exists. The analytics projection is the second consumer class and already works
     without this: it reads `activity_log`, which is a different stream with a different guarantee.
+  - **Planned:** Phase 2 of [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) (`C2.1`–`C2.9`) builds
+    this. Two corrections the design made to the wording above, to be applied when this closes:
+    `.bus.ts` is **not** re-added (the design is a publisher, a gateway and subscribers — nothing
+    is a bus; `.subscriber.ts` is the suffix that lands), and `published_at` needs no partial
+    *unique* indexes (nothing is unique over it — the two partial indexes are non-unique, one
+    for the drain and one for the sweep).
+
+- [ ] `T-036` **Communication plan: unified mail, outbox, notifications, real-time, messaging** `@sami` `P1` `~120h` `#api` `#ui` `#db`
+  - **Goal:** Mail is sent from two unrelated places with no record and no retry, `QueueName.NOTIFICATION` has no consumer, `DigestComposer` has no caller, there is no notification table, no event spine and no real-time path. One plan covers all of it in the order each piece compiles against the last.
+  - **Done when:** Every phase in [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) reports its **Exit** line true. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `tasks/COMMUNICATION-PLAN.md`
+  - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
+  - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, react-email in a new `packages/mail`, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
 
 ## ⛔ Blocked
 
@@ -430,3 +443,4 @@ probe.
 | 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
 | 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
 | 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |
+| 2026-09-12 | @sami   | Filed `T-036` and `COMMUNICATION-PLAN.md`: six phases for mail, the outbox, notifications, real-time and messaging. `T-031` annotated with the two corrections Phase 2 makes |
