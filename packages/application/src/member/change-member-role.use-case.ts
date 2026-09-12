@@ -1,5 +1,10 @@
 import { ConflictError, NotFoundError, type RoleId, type UserId } from "../import.js";
-import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../port/index.js";
+import type {
+  ActivityLogger,
+  CapabilityInvalidator,
+  DomainEventPublisher,
+  UnitOfWork,
+} from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRepository } from "../rbac/index.js";
 import type { MemberRecord, MemberRepository } from "./member.repository.js";
@@ -19,6 +24,7 @@ export class ChangeMemberRoleUseCase {
     private readonly roles: RoleRepository,
     private readonly capabilities: CapabilityInvalidator,
     private readonly activity: ActivityLogger,
+    private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
   ) {}
 
@@ -46,6 +52,12 @@ export class ChangeMemberRoleUseCase {
         userId: member.userId,
         fromRoleId: member.roleId,
         toRoleId: role.id,
+      });
+      // Beside the audit row and in the same transaction. Audit is the human fact and
+      // the outbox is the integration fact; they commit together or not at all.
+      await this.events.publish(actor, {
+        name: "member.role.changed",
+        payload: { userId: member.userId, roleId: role.id, previousRoleId: member.roleId },
       });
     });
 

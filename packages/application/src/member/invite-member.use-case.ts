@@ -7,7 +7,7 @@ import {
   Token,
   Uuid,
 } from "../import.js";
-import type { ActivityLogger, UnitOfWork } from "../port/index.js";
+import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRepository } from "../rbac/role.repository.js";
 import type { InvitationMailer } from "./invitation.mailer.js";
@@ -33,6 +33,7 @@ export class InviteMemberUseCase {
     private readonly invitations: InvitationRepository,
     private readonly mailer: InvitationMailer,
     private readonly activity: ActivityLogger,
+    private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
     private readonly clock: Clock,
   ) {}
@@ -72,6 +73,12 @@ export class InviteMemberUseCase {
         createdAt: now,
       });
       await this.activity.record(actor, "member.invited", { email, roleId: input.roleId });
+      // The token never rides the event, which is what `token_hash` exists to prevent.
+      // The mail below is a direct `MailPublisher` call for the same reason.
+      await this.events.publish(actor, {
+        name: "member.invited",
+        payload: { invitationId: id, email, roleId: input.roleId, invitedBy: actor.userId },
+      });
     });
 
     // Read back rather than assembled: the names the mail carries are the row's joins.

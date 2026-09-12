@@ -1,3 +1,4 @@
+import type { DomainEventInput } from "@loadbearing/contracts";
 import { Identifiers, type OrganizationId, type RoleId, type UserId } from "@loadbearing/contracts";
 import { ConflictError, ForbiddenError, NotFoundError } from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
@@ -9,7 +10,12 @@ import type {
   MemberRepository,
 } from "../../src/member/member.repository.js";
 import { SetMemberActiveUseCase } from "../../src/member/set-member-active.use-case.js";
-import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../../src/port/index.js";
+import type {
+  ActivityLogger,
+  CapabilityInvalidator,
+  DomainEventPublisher,
+  UnitOfWork,
+} from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
@@ -146,6 +152,15 @@ class RecordingActivityLogger implements ActivityLogger {
   }
 }
 
+class RecordingDomainEventPublisher implements DomainEventPublisher {
+  public readonly published: { name: string; payload: Record<string, unknown> }[] = [];
+
+  public publish(_actor: Principal, event: DomainEventInput): Promise<void> {
+    this.published.push({ name: event.name, payload: { ...event.payload } });
+    return Promise.resolve();
+  }
+}
+
 class DirectUnitOfWork implements UnitOfWork {
   public run<T>(work: () => Promise<T>): Promise<T> {
     return work();
@@ -170,15 +185,18 @@ const changeRole = (
   members: RecordingMembers,
   activity = new RecordingActivityLogger(),
   capabilities = new RecordingCapabilities(),
+  events = new RecordingDomainEventPublisher(),
 ) => ({
   activity,
   capabilities,
+  events,
   useCase: new ChangeMemberRoleUseCase(
     new Authorizer(),
     members,
     new StubRoles(),
     capabilities,
     activity,
+    events,
     new DirectUnitOfWork(),
   ),
 });
@@ -225,7 +243,7 @@ describe("ChangeMemberRoleUseCase", () => {
 
   it("demotes an owner while another active owner remains", async () => {
     const members = new RecordingMembers(member(), 2);
-    const { useCase, activity } = changeRole(members);
+    const { useCase, activity, events } = changeRole(members);
 
     const result = await useCase.execute(actorHolding("member.role.change"), {
       userId: TARGET,
@@ -235,6 +253,15 @@ describe("ChangeMemberRoleUseCase", () => {
     expect(result.roleKey).toBe("member");
     expect(members.roleChanges).toEqual([{ userId: TARGET, roleId: MEMBER_ROLE }]);
     expect(activity.records.map((r) => r.action)).toEqual(["member.role.changed"]);
+
+    // One event, carrying both roles: a subscriber that needs to know what changed
+    // should not have to read the row back to find out what it used to be.
+    expect(events.published).toEqual([
+      {
+        name: "member.role.changed",
+        payload: { userId: TARGET, roleId: MEMBER_ROLE, previousRoleId: OWNER_ROLE },
+      },
+    ]);
   });
 
   // Without this the demotion is invisible for a minute: `CapabilityCache` keeps the
@@ -279,7 +306,7 @@ describe("ChangeMemberRoleUseCase", () => {
 
   it("writes nothing when the role is already the one asked for", async () => {
     const members = new RecordingMembers(member(), 2);
-    const { useCase, activity } = changeRole(members);
+    const { useCase, activity, events } = changeRole(members);
 
     await useCase.execute(actorHolding("member.role.change"), {
       userId: TARGET,
@@ -288,6 +315,9 @@ describe("ChangeMemberRoleUseCase", () => {
 
     expect(members.roleChanges).toEqual([]);
     expect(activity.records).toEqual([]);
+    // A change that did not happen announces nothing. Publishing here would wake every
+    // subscriber for a no-op.
+    expect(events.published).toEqual([]);
   });
 });
 

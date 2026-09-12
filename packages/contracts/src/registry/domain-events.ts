@@ -6,16 +6,12 @@ export type DomainEventName = keyof typeof DOMAIN_EVENTS;
 
 export type DomainEventPayload<N extends DomainEventName> = z.infer<(typeof DOMAIN_EVENTS)[N]>;
 
-// What a use-case hands the publisher. No id, no timestamp and no actor: those belong to
-// the publisher, which is the only thing that can assign them consistently.
-export interface DomainEventInput<N extends DomainEventName = DomainEventName> {
+interface EventInputOf<N extends DomainEventName> {
   readonly name: N;
   readonly payload: DomainEventPayload<N>;
 }
 
-// What a subscriber receives. `id` is the idempotency key every handler is required to
-// use, because at-least-once is what every broker offers and this one is no different.
-export interface DomainEvent<N extends DomainEventName = DomainEventName> {
+interface EventOf<N extends DomainEventName> {
   readonly id: string;
   readonly organizationId: string;
   readonly name: N;
@@ -23,6 +19,17 @@ export interface DomainEvent<N extends DomainEventName = DomainEventName> {
   readonly occurredAt: Date;
   readonly payload: DomainEventPayload<N>;
 }
+
+// What a use-case hands the publisher. No id, no timestamp and no actor: those belong to
+// the publisher, which is the only thing that can assign them consistently.
+export type DomainEventInput<N extends DomainEventName = DomainEventName> =
+  N extends DomainEventName ? EventInputOf<N> : never;
+
+// What a subscriber receives, and **a discriminated union rather than one generic
+// shape**: without the distribution, `event.name === "x"` narrows nothing about `payload`.
+export type DomainEvent<N extends DomainEventName = DomainEventName> = N extends DomainEventName
+  ? EventOf<N>
+  : never;
 
 const NAMES: readonly DomainEventName[] = Object.freeze(
   Object.keys(DOMAIN_EVENTS) as DomainEventName[],

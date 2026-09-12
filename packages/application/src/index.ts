@@ -43,6 +43,7 @@ export {
   type ListMembersResult,
   ListMembersUseCase,
   type MemberPage,
+  MemberRealtimeSubscriber,
   type MemberRecord,
   MemberRepository,
   MemberRules,

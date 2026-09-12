@@ -20,6 +20,7 @@ import {
   CreateRoleUseCase,
   Database,
   DeleteRoleUseCase,
+  type DomainEventPublisher,
   type EmailSender,
   type EmbeddingProvider,
   GrantPermissionUseCase,
@@ -39,11 +40,13 @@ import {
   type MailPublisher,
   type MailRenderer,
   type MaintenanceGateway,
+  MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
   type OrganizationFounder,
+  type OutboxGateway,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
@@ -56,6 +59,8 @@ import {
   PgMemberRepository,
   PgMembershipReader,
   PgOrganizationFounder,
+  PgOutboxGateway,
+  PgOutboxPublisher,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
@@ -63,8 +68,10 @@ import {
   PrincipalBuilder,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
+  type RealtimePublisher,
   RedisCacheStore,
   RedisConnection,
+  RedisRealtimePublisher,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
@@ -77,6 +84,7 @@ import {
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
+  SubscriberRegistry,
   SystemClock,
   TransactionScope,
   type UnitOfWork,
@@ -159,6 +167,12 @@ export class Container {
   // private: only `mail.send` below has any business calling it.
   public readonly mailPublisher: MailPublisher;
   private readonly mailRenderer: MailRenderer;
+  // Public because every use-case that publishes takes one, and because the worker's
+  // consumer holds the gateway and the registry directly.
+  public readonly eventPublisher: DomainEventPublisher;
+  public readonly outbox: OutboxGateway;
+  public readonly realtime: RealtimePublisher;
+  public readonly subscribers: SubscriberRegistry;
   // No principal, because it owns no tenant's rows. Reachable only from the worker's
   // schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
@@ -276,6 +290,12 @@ export class Container {
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
     this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
+    this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
+    this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
+    this.realtime = new RedisRealtimePublisher(this.redis.client());
+    // A frozen list, and the registry rejects a duplicate name or an unknown event at
+    // construction — so a wiring mistake is a startup crash rather than a lost event.
+    this.subscribers = new SubscriberRegistry([new MemberRealtimeSubscriber(this.realtime)]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
@@ -289,6 +309,7 @@ export class Container {
       this.database,
       this.transactions,
       this.activity,
+      this.eventPublisher,
     );
 
     // One instance each: they hold no state beyond the pool and the scope, so a second
@@ -364,6 +385,7 @@ export class Container {
           invitations,
           new QueuedInvitationMailer(this.mailPublisher, config.email.baseUrl),
           this.activity,
+          this.eventPublisher,
           this.unitOfWork,
           this.clock,
         ),
@@ -379,6 +401,7 @@ export class Container {
           roles,
           this.capabilities,
           this.activity,
+          this.eventPublisher,
           this.unitOfWork,
         ),
         setMemberActive: new SetMemberActiveUseCase(

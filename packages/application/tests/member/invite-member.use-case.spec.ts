@@ -1,3 +1,4 @@
+import type { DomainEventInput } from "@loadbearing/contracts";
 import { Identifiers, type InvitationId, type RoleId } from "@loadbearing/contracts";
 import { FixedClock, Token } from "@loadbearing/core";
 import {
@@ -21,7 +22,7 @@ import type {
   MemberRecord,
   MemberRepository,
 } from "../../src/member/member.repository.js";
-import type { ActivityLogger, UnitOfWork } from "../../src/port/index.js";
+import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
@@ -168,6 +169,15 @@ class RecordingActivityLogger implements ActivityLogger {
   }
 }
 
+class RecordingDomainEventPublisher implements DomainEventPublisher {
+  public readonly published: { name: string; payload: Record<string, unknown> }[] = [];
+
+  public publish(_actor: Principal, event: DomainEventInput): Promise<void> {
+    this.published.push({ name: event.name, payload: { ...event.payload } });
+    return Promise.resolve();
+  }
+}
+
 class DirectUnitOfWork implements UnitOfWork {
   public run<T>(work: () => Promise<T>): Promise<T> {
     return work();
@@ -185,6 +195,7 @@ interface Harness {
   readonly invitations: RecordingInvitationRepository;
   readonly mailer: RecordingMailer;
   readonly activity: RecordingActivityLogger;
+  readonly events: RecordingDomainEventPublisher;
 }
 
 function harness(
@@ -193,6 +204,7 @@ function harness(
   const invitations = new RecordingInvitationRepository();
   const mailer = new RecordingMailer();
   const activity = new RecordingActivityLogger();
+  const events = new RecordingDomainEventPublisher();
   const useCase = new InviteMemberUseCase(
     new Authorizer(),
     new StubRoleRepository(options.roleTenant ?? ORG),
@@ -200,10 +212,11 @@ function harness(
     invitations,
     mailer,
     activity,
+    events,
     options.unitOfWork ?? new DirectUnitOfWork(),
     new FixedClock(NOW),
   );
-  return { useCase, invitations, mailer, activity };
+  return { useCase, invitations, mailer, activity, events };
 }
 
 describe("InviteMemberUseCase", () => {
@@ -260,6 +273,20 @@ describe("InviteMemberUseCase", () => {
       { action: "member.invited", payload: { email: "b@example.test", roleId: ROLE } },
     ]);
 
+    // Beside the audit row and inside the same unit of work. Audit is the human fact and
+    // the outbox is the integration fact, and they commit together or not at all.
+    expect(h.events.published).toEqual([
+      {
+        name: "member.invited",
+        payload: {
+          invitationId: saved?.id,
+          email: "b@example.test",
+          roleId: ROLE,
+          invitedBy: USER,
+        },
+      },
+    ]);
+
     // The mail carries the token; the row carries its digest. Neither is the other, and
     // that pairing is the whole of the change that stopped storing bearer tokens.
     const [mail] = h.mailer.sent;
@@ -271,6 +298,8 @@ describe("InviteMemberUseCase", () => {
       inviterName: "Ada",
     });
     expect(mail?.token).toMatch(/^[0-9a-f]{64}$/);
+    // The token reaches the mailbox and never the event: that is what `token_hash` is for.
+    expect(JSON.stringify(h.events.published)).not.toContain(mail?.token);
     expect(mail?.token).not.toBe(saved?.tokenHash);
     expect(saved?.tokenHash).toBe(await Token.hash(mail?.token ?? ""));
 

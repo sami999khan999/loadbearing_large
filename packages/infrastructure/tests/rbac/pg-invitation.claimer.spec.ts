@@ -6,6 +6,7 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgInvitationClaimer } from "../../src/pg/repository/pg-invitation.claimer.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
+import { PgOutboxPublisher } from "../../src/pg/repository/pg-outbox.publisher.js";
 import {
   activityLog,
   invitations,
@@ -76,8 +77,11 @@ const invite = async (
 const withScope = () => {
   const scope = new TransactionScope();
   const activity = new PgActivityLogger(database, scope, new SystemClock());
+  // The real publisher, not a double: a claim writes its event in the same transaction as
+  // the membership row, and that is the property this spec is here to hold.
+  const events = new PgOutboxPublisher(database, scope, new SystemClock());
   return {
-    claimer: new PgInvitationClaimer(database, scope, activity),
+    claimer: new PgInvitationClaimer(database, scope, activity, events),
     founder: new PgOrganizationFounder(database, scope, activity),
   };
 };

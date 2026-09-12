@@ -1,4 +1,4 @@
-import { type DomainEvent, OutboxGateway, Uuid } from "../import.js";
+import { type DomainEvent, type DomainEventName, OutboxGateway, Uuid } from "../import.js";
 
 // Honours the relay contract rather than approximating it: rows are removed only when
 // `relay` resolves, so a spec can assert that a failing subscriber leaves work behind.
@@ -7,8 +7,12 @@ export class InMemoryOutboxGateway extends OutboxGateway {
 
   // The test-side counterpart of `PgOutboxPublisher`, so a spec can seed the outbox
   // without naming a table.
-  public enqueue(event: Omit<DomainEvent, "id"> & { readonly id?: string }): void {
-    this.pending.push({ ...event, id: event.id ?? Uuid.v7() });
+  public enqueue<N extends DomainEventName>(
+    event: Omit<DomainEvent<N>, "id"> & { readonly id?: string },
+  ): void {
+    // Generic over the name so the payload still has to match it. The assertion is the
+    // last step only: `Omit` over a union does not put one back together.
+    this.pending.push({ ...event, id: event.id ?? Uuid.v7() } as DomainEvent);
   }
 
   public override async drain(

@@ -482,7 +482,7 @@ check in every layer and the browser can parse the same shapes on the stream.
   `done: 2026-09-12` — `Bus` was also **removed** from `classes.md`'s role-noun list, with the
   reason recorded there: that list claims every suffix on it names something that exists, and the
   design T-031 predicted a bus for turned out to be a publisher, a gateway and subscribers.
-- [ ] `C2.6` **First publishers and the proving subscriber** — `InviteMemberUseCase` →
+- [x] `C2.6` **First publishers and the proving subscriber** — `InviteMemberUseCase` →
   `member.invited`; `ChangeMemberRoleUseCase` → `member.role.changed`; `PgInvitationClaimer.claim`
   (already takes `ActivityLogger`) → `member.joined`. Each inside the existing `unitOfWork.run`
   beside the activity row: audit is the human fact, the outbox is the integration fact with a
@@ -527,7 +527,7 @@ check in every layer and the browser can parse the same shapes on the stream.
   measured commit-to-push budget under 500 ms. **Docs:** `consumers.md`, `schedules.md`,
   new `apps/worker/docs/reference/subscribers.md` (the contract: idempotent on `event.id`,
   no ordering, never throw for a duplicate, never log — surface through the job).
-- [ ] `C2.9` **Container** — `public readonly eventPublisher: DomainEventPublisher`,
+- [x] `C2.9` **Container** — `public readonly eventPublisher: DomainEventPublisher`,
   `public readonly outbox: OutboxGateway`, `public readonly subscribers: SubscriberRegistry`
   (built from the frozen list of subscriber instances, each given its ports), `realtime:
   RealtimePublisher` (from `C4.3`); `QueueName.EVENT` added; `inviteMember` and

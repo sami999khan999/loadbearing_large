@@ -53,10 +53,14 @@ describe("MaintenanceConsumer", () => {
     expect(activityArchive.archived()).toEqual([]);
   });
 
-  it("dispatches each known name to exactly one gateway call", async () => {
+  // `partitions` covers the whole allowlist, so its count tracks that list rather than a
+  // literal — a table added to it should not fail this spec.
+  it("dispatches each known name to exactly one gateway concern", async () => {
+    const tables = PartitionedTable.ALL.length;
+
     for (const [name, swept, ensured, archived] of [
       ["cleanup", 1, 0, 0],
-      ["partitions", 0, 1, 0],
+      ["partitions", 0, tables, 0],
       ["archive", 0, 0, 1],
     ] as const) {
       const h = harness();
