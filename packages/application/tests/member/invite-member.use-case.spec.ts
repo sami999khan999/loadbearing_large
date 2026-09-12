@@ -265,6 +265,8 @@ describe("InviteMemberUseCase", () => {
     const [mail] = h.mailer.sent;
     expect(mail).toMatchObject({
       to: "b@example.test",
+      // The one mail that belongs to a tenant, and the field is how the pipeline says so.
+      organizationId: ORG,
       organizationName: "Acme",
       inviterName: "Ada",
     });

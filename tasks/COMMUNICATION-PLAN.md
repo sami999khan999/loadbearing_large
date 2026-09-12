@@ -261,19 +261,24 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
 
 #### 1.D Wiring (`composition`, `auth`)
 
-- [ ] `C1.15` **`QueuedMailPublisher`** — `composition/src/mail/queued-mail.publisher.ts`
+- [x] `C1.15` **`QueuedMailPublisher`** — `composition/src/mail/queued-mail.publisher.ts`
   `extends MailPublisher`, ctor `(queue: QueuePublisher)`. `publish` is one call:
   `queue.publish(QueueName.MAIL, request, { name: "send", jobId: dedupeKey, priority, attempts: high ? 5 : 3 })`.
   It does not catch: with no row behind it there is nothing for a swallowed enqueue to be
   secondary to, and a caller that cannot queue mail should learn that. Spec pins the job options
   per priority.
-- [ ] `C1.16` **Auth mail moves onto the pipeline** — `AuthMailer` methods take
+- [x] `C1.16` **Auth mail moves onto the pipeline** — `AuthMailer` methods take
   `MailRecipient { email; userId: UserId | null; locale: Locale }` instead of a bare address;
   `AuthFactory` builds it from Better Auth's `user` (`locale` is already an additional field).
   `ContentAuthMailer` → `QueuedAuthMailer` (`composition/src/mail/queued-auth.mailer.ts`), one
   `publish` per method at `priority: "high"`, `organizationId: null`. Specs updated.
   **Docs:** `auth/docs/reference/auth-factory.md`, `composition/docs/index.md`.
-- [ ] `C1.17` **Invitation mail moves onto the pipeline** — `ContentInvitationMailer` →
+  `done: 2026-09-12` — `auth` gains a real `@loadbearing/content` dependency for `Locales`, not
+  just the type: `AuthFactory.recipient` normalises Better Auth's loosely-typed `locale`
+  additional field, and an unrecognised value would otherwise ask `ContentSource` for a catalog
+  that does not exist. No `dedupeKey` on any auth mail — each send carries a fresh single-use
+  token, so suppressing the second would mail a link the server has already replaced.
+- [x] `C1.17` **Invitation mail moves onto the pipeline** — `ContentInvitationMailer` →
   `QueuedInvitationMailer` publishing `member.invitation` with `url` built from `auth.baseUrl` +
   `ROUTES.shell.invitation` + token, `organizationId` set. `InviteMemberUseCase` keeps the send
   **after** the commit and keeps its `try`/`catch`: the token cannot ride a durable row, so the
@@ -281,7 +286,10 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   the crash window is to invite again, which replaces the row — say so at the line, and file the
   resend button as `C6.9`. **Docs:** `application/docs/index.md`,
   `auth/docs/reference/enrolment.md`.
-- [ ] `C1.18` **Container** — `public readonly mailPublisher: MailPublisher` (Phase 3's subscriber
+  `done: 2026-09-12` — `InvitationMail` gained `organizationId`. It is the one message that
+  belongs to a tenant, and `MailRequest.organizationId` existing while the only tenant-owned mail
+  passed null would have made the field meaningless.
+- [x] `C1.18` **Container** — `public readonly mailPublisher: MailPublisher` (Phase 3's subscriber
   uses it), `mailRenderer` private, `public readonly mail: { send: SendMailUseCase }` built in
   **every** process — the worker needs it and it needs no auth config, which is what
   `ContentAuthMailer` being inside the `config.auth` branch got wrong. `ContainerConfig.email`
@@ -290,6 +298,9 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `PublishedMail`) and `mailRenderer` (`StubMailRenderer`). `test-container.spec` key-set pin
   updated. **Docs:** `composition/docs/reference/{container,test-container}.md`, both
   `docs/reference/env.md`, `.env.example`, CI `env:` block.
+  `done: 2026-09-12` — `TestPorts` landed at `C1.7`/`C1.8`; this commit is the `Container`
+  wiring, `ContainerConfig.email.baseUrl`, `APP_BASE_URL` in both `env.ts`, both vitest env
+  blocks, `.env.example` and CI.
 
 #### 1.E Worker
 

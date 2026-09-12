@@ -20,7 +20,11 @@ export const baseConfig = (): ContainerConfig => ({
     secretKey: "ratchetsecret",
     forcePathStyle: true,
   },
-  email: { url: "smtp://localhost:1025", from: "noreply@example.test" },
+  email: {
+    url: "smtp://localhost:1025",
+    from: "noreply@example.test",
+    baseUrl: "http://localhost:3000",
+  },
   embedding: { apiKey: "sk-not-used", model: "text-embedding-3-small", dimensions: 1536 },
   vector: { driver: "pgvector" },
   analytics: {},

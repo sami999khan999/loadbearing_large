@@ -4,7 +4,7 @@ ServerOnly.assert("@loadbearing/auth");
 
 export { ApiKeyHasher, ApiKeyResolver } from "./apikey/index.js";
 export { type AuthConfig, AuthFactory, type AuthInstance } from "./factory/index.js";
-export { AuthMailer } from "./mail/index.js";
+export { AuthMailer, type MailRecipient } from "./mail/index.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export {
   BetterAuthSessionResolver,

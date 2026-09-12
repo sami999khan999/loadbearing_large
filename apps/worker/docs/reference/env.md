@@ -38,10 +38,13 @@ Both build a `Container`, and the container treats mail as required configuratio
 optional: a container that cannot send is one whose sign-ups never complete. Same URL shape as the
 web app's.
 
-> [!NOTE]
-> The worker requires `SMTP_URL` and `EMAIL_FROM` "for the scheduled digest", and nothing in this
-> process sends one yet — `DigestComposer` is constructed only in its own spec. `P8.3` either ships
-> the notification consumer or drops the two keys from this schema.
+The worker is now the *only* process that actually sends. Every mail is a job on `QueueName.MAIL`
+and `MailConsumer` is what renders and hands it to SMTP, so these two keys stopped being speculative
+the day the pipeline landed. The web app still parses them because it builds the same `Container`.
+
+`APP_BASE_URL` is required here for the same reason: the worker renders the invitation link, and it
+parses no auth configuration to borrow an origin from. It is deliberately *not* `AUTH_URL`, which is
+Better Auth's own and exists only in the web app's schema.
 
 ## The swappable stores
 

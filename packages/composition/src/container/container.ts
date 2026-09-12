@@ -36,6 +36,8 @@ import {
   type Logger,
   type LogReader,
   LokiLogReader,
+  type MailPublisher,
+  type MailRenderer,
   type MaintenanceGateway,
   type MembershipEnroller,
   type MembershipReader,
@@ -69,6 +71,7 @@ import {
   S3StorageGateway,
   SERVER_CATALOG,
   SearchDocumentsUseCase,
+  SendMailUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
   SmtpEmailSender,
@@ -80,7 +83,12 @@ import {
   UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
-import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
+import {
+  ContentMailRenderer,
+  QueuedAuthMailer,
+  QueuedInvitationMailer,
+  QueuedMailPublisher,
+} from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
 
 // The API-key slice's use-cases. Grouped like the member ones, and absent for the same
@@ -147,6 +155,10 @@ export class Container {
   // Built unconditionally: a missing analytics store means a feature is not deployed, a
   // missing mail transport means every sign-up is a dead end.
   public readonly email: EmailSender;
+  // Public because Phase 3's notification subscriber holds one. The renderer stays
+  // private: only `mail.send` below has any business calling it.
+  public readonly mailPublisher: MailPublisher;
+  private readonly mailRenderer: MailRenderer;
   // No principal, because it owns no tenant's rows. Reachable only from the worker's
   // schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
@@ -182,6 +194,9 @@ export class Container {
     readonly queueIndex: QueueDocumentIndexUseCase;
     readonly searchDocuments: SearchDocumentsUseCase;
   };
+  // Outside the `auth` block on purpose. The worker is the process that sends mail and it
+  // has no auth config — which is exactly what building the old mailer in there got wrong.
+  public readonly mail: { readonly send: SendMailUseCase };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
@@ -251,6 +266,9 @@ export class Container {
     this.content = new StaticContentSource(SERVER_CATALOG);
     this.emailSender = new SmtpEmailSender(config.email, this.logger);
     this.email = this.emailSender;
+    this.mailPublisher = new QueuedMailPublisher(this.queue);
+    this.mailRenderer = new ContentMailRenderer(this.content);
+    this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
@@ -301,7 +319,7 @@ export class Container {
         membershipEnroller,
         // Copy and transport joined here and nowhere else: `auth` owes no words and
         // `content` owes no transport.
-        new ContentAuthMailer(this.content, this.email),
+        new QueuedAuthMailer(this.mailPublisher),
         this.invitationClaimer,
         this.organizationFounder,
       );
@@ -344,7 +362,7 @@ export class Container {
           roles,
           members,
           invitations,
-          new ContentInvitationMailer(this.content, this.email, config.auth.baseUrl),
+          new QueuedInvitationMailer(this.mailPublisher, config.email.baseUrl),
           this.activity,
           this.unitOfWork,
           this.clock,

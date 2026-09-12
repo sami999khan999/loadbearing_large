@@ -1,7 +1,10 @@
+import type { OrganizationId } from "../import.js";
+
 // Everything the message needs and nothing about wording or routes — the implementation
 // owns both, which keeps this package free of copy.
 export interface InvitationMail {
   readonly to: string;
+  readonly organizationId: OrganizationId;
   readonly organizationName: string;
   readonly inviterName: string;
   readonly token: string;

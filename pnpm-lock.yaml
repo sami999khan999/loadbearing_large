@@ -668,6 +668,9 @@ importers:
       '@loadbearing/application':
         specifier: workspace:*
         version: link:../application
+      '@loadbearing/content':
+        specifier: workspace:*
+        version: link:../content
       '@loadbearing/contracts':
         specifier: workspace:*
         version: link:../contracts

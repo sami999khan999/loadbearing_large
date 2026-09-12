@@ -78,17 +78,19 @@ export class InviteMemberUseCase {
     const saved = await this.invitations.findById(actor.organizationId, id);
     if (!saved) throw new NotFoundError("invitation", id);
 
-    // Swallowed on purpose: the row is committed and the audit written, so throwing
-    // here is a 5xx over a live invitation. The adapter records why the send failed.
+    // Still after the commit and still swallowed: the token cannot ride a durable row, so
+    // the enqueue is the one step that cannot be made atomic with the invitation.
     try {
       await this.mailer.send({
         to: saved.email,
+        organizationId: actor.organizationId,
         organizationName: saved.organizationName,
         inviterName: saved.inviterName,
         token,
       });
     } catch {
-      // The operator action is to invite again, which replaces the row.
+      // The operator action for a crash in that window is to invite again, which replaces
+      // the row and issues a new token. Filed as `C6.9`, a resend button.
     }
 
     return saved;

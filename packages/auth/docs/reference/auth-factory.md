@@ -116,6 +116,22 @@ plugin's paths are down here too — see [`organization-plugin.md`](./organizati
 
 ## Credential options, and what each one prevents
 
+**Every one of these four hooks now enqueues rather than sends.** `AuthMailer` takes a
+`MailRecipient` — address, user id, and the locale from `users.locale`, which Better Auth carries as
+an additional field — instead of a bare address, and `QueuedAuthMailer` turns each call into a job on
+`QueueName.MAIL`. Two consequences worth knowing before the first local sign-up:
+
+- **The worker must be running for any of this mail to arrive.** A stopped worker means a
+  verification link that is queued and never rendered. That is the price of one send path, and it is
+  the reason auth mail is published at `high` priority with five attempts.
+- Better Auth's hooks are the reason the recipient is a shape rather than a string. They are called
+  from a token endpoint that carries no request, so the old implementation composed every message in
+  the default locale and there was nowhere to put the person's own.
+
+`AuthFactory.recipient` normalises `user.locale` against the known locales rather than trusting it.
+It is an additional field and therefore loosely typed, and an unrecognised value would otherwise
+reach `ContentSource.translator` and ask for a catalog that does not exist.
+
 | Option | Value | The failure it prevents |
 |---|---|---|
 | `revokeSessionsOnPasswordReset` | `true` | The difference between "changed my password" and "actually locked them out" |

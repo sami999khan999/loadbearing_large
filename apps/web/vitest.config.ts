@@ -22,6 +22,7 @@ const ENV = {
 
   SMTP_URL: "smtp://localhost:1025",
   EMAIL_FROM: "Test <no-reply@localhost>",
+  APP_BASE_URL: "http://localhost:3000",
 
   AUTH_SECRET: "test-secret-test-secret-test-secret-32",
   AUTH_URL: "http://localhost:3000",

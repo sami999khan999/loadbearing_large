@@ -14,6 +14,11 @@ export {
   SessionResolver,
 } from "@loadbearing/application";
 
+// ── @loadbearing/content ─────────────────────────────────────────────────────
+// The locale vocabulary, because a recipient's language rides every message this
+// package sends. `content` sits left of `application`, so the edge runs the right way.
+export { type Locale, Locales } from "@loadbearing/content";
+
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export { type OrganizationId, Password, type UserId } from "@loadbearing/contracts";
 

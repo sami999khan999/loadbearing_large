@@ -60,6 +60,9 @@ const Schema = z
     // Never defaulted: an address the sending domain does not authorise bounces or lands
     // in spam, silently.
     EMAIL_FROM: z.string().min(1),
+    // The origin a link in a message points at. Separate from `AUTH_URL`, which is Better
+    // Auth's own: the worker sends invitation mail and parses no auth configuration.
+    APP_BASE_URL: z.url(),
 
     EMBEDDING_MODEL: z.string().min(1),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
@@ -180,7 +183,7 @@ export class Env {
             ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
             : undefined,
       },
-      email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
+      email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,

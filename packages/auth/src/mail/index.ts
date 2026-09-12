@@ -1,1 +1,1 @@
-export { AuthMailer } from "./auth.mailer.js";
+export { AuthMailer, type MailRecipient } from "./auth.mailer.js";

@@ -20,6 +20,7 @@ const ENV = {
 
   SMTP_URL: "smtp://localhost:1025",
   EMAIL_FROM: "Test <no-reply@localhost>",
+  APP_BASE_URL: "http://localhost:3000",
 
   EMBEDDING_MODEL: "text-embedding-3-small",
   EMBEDDING_DIMENSIONS: "1536",

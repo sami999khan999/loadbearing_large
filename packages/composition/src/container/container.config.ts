@@ -49,6 +49,9 @@ export interface ContainerConfig {
   readonly email: {
     readonly url: string;
     readonly from: string;
+    // The origin a link in a message points at. Separate from `auth.baseUrl`, which is
+    // Better Auth's own: the worker sends invitation mail and has no auth config at all.
+    readonly baseUrl: string;
   };
   readonly embedding: {
     readonly apiKey: string;

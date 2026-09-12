@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthConfig } from "../../src/factory/auth.config.js";
 import { AuthFactory } from "../../src/factory/auth.factory.js";
 import type { CacheStore, Database, OrganizationId } from "../../src/import.js";
-import { AuthMailer } from "../../src/mail/auth.mailer.js";
+import { AuthMailer, type MailRecipient } from "../../src/mail/auth.mailer.js";
 import { InvitationClaimer, type InvitationPreview } from "../../src/session/invitation.claimer.js";
 import { MembershipEnroller } from "../../src/session/membership.enroller.js";
 import { MembershipReader, type OrganizationSummary } from "../../src/session/membership.reader.js";
@@ -84,7 +84,7 @@ class StubAuthMailer extends AuthMailer {
     return unreachable();
   }
 
-  public override sendEmailChangeConfirmation(_to: string, _url: string): Promise<void> {
+  public override sendEmailChangeConfirmation(_to: MailRecipient, _url: string): Promise<void> {
     return unreachable();
   }
 }
@@ -259,8 +259,8 @@ describe("AuthFactory — change of email", () => {
     const sent: string[] = [];
 
     class RecordingMailer extends StubAuthMailer {
-      public override sendEmailChangeConfirmation(to: string): Promise<void> {
-        sent.push(to);
+      public override sendEmailChangeConfirmation(to: MailRecipient): Promise<void> {
+        sent.push(to.email);
         return Promise.resolve();
       }
     }
@@ -268,7 +268,7 @@ describe("AuthFactory — change of email", () => {
     const options = optionsFor(BASE, new RecordingMailer());
 
     await options.user?.changeEmail?.sendChangeEmailConfirmation?.({
-      user: { email: "old@example.com" },
+      user: { id: "018f8c00-0000-7000-8000-000000000001", email: "old@example.com" },
       newEmail: "new@example.com",
       url: "https://example.test/callback",
       token: "token",

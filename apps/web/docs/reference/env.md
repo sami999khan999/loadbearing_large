@@ -65,6 +65,11 @@ place anyone will ever check.
 `EMAIL_FROM` is never defaulted. An address the sending domain does not authorise bounces or lands in
 spam, and a wrong default fails that way silently on the first real deploy.
 
+`APP_BASE_URL` is not `AUTH_URL`, and the duplication is deliberate. `AUTH_URL` is Better Auth's own
+origin and lives only in this schema; `APP_BASE_URL` is the origin a link inside a message points at,
+and the worker needs it while parsing no auth configuration at all. Collapsing the two would put an
+auth block in the worker's schema to serve one string.
+
 ## `trustedOrigins` has one home
 
 Better Auth's CSRF check reads it through `containerConfig()`; the CORS layer reads it directly. Two

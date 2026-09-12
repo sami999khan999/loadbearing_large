@@ -24,6 +24,9 @@ const Schema = z
     // rather than optional.
     SMTP_URL: z.string().min(1),
     EMAIL_FROM: z.string().min(1),
+    // Required here too, and this is the process that needs it: the worker renders the
+    // invitation link, and it parses no auth configuration to borrow an origin from.
+    APP_BASE_URL: z.url(),
 
     EMBEDDING_MODEL: z.string().min(1),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
@@ -131,7 +134,7 @@ export class Env {
         secretKey: e.S3_SECRET_KEY,
         forcePathStyle: e.S3_FORCE_PATH_STYLE,
       },
-      email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
+      email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,

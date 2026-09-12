@@ -49,6 +49,7 @@ jobs:
       # this job sends a message. A shape that parses is the whole requirement.
       SMTP_URL: smtp://localhost:1025
       EMAIL_FROM: ci@localhost
+      APP_BASE_URL: http://localhost:3000
 
       # Every remaining key both `env.ts` schemas require. Without them the job passed
       # only because nothing ever evaluated `Env` — the boot smoke below does, so a

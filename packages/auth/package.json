@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@loadbearing/application": "workspace:*",
+    "@loadbearing/content": "workspace:*",
     "@loadbearing/contracts": "workspace:*",
     "@loadbearing/core": "workspace:*",
     "@loadbearing/infrastructure": "workspace:*",
