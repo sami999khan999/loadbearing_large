@@ -44,9 +44,9 @@ would be theatre.
 | `postgres` | `pgvector/pgvector:pg17` | [postgres](postgres.md) |
 | `redis-cache` | `redis:7-alpine` | evicts, no persistence — [redis](redis.md) |
 | `redis-queue` | `redis:7-alpine` | never evicts, always persists — [redis](redis.md) |
-| `minio` | `minio/minio:latest` | S3 stand-in — [minio](minio.md) |
+| `minio` | `coollabsio/minio:RELEASE.2025-10-15T17-29-55Z` | S3 stand-in — [minio](minio.md) |
 
-`minio-init` is a fifth, and it is a **one-shot**: `minio/mc` runs an entrypoint that creates both
+`minio-init` is a fifth, and it is a **one-shot**: an `mc` image runs an entrypoint that creates both
 buckets and exits. `exited (0)` is success. It carries `restart: "no"` and no healthcheck, because a
 container that is supposed to stop cannot be "unhealthy" — and without the explicit `restart` the
 project default would keep starting a container whose whole job is to finish.
@@ -205,7 +205,7 @@ depends_on:
 Four of the probes are worth knowing:
 
 **MinIO** uses the HTTP `/minio/health/live` endpoint. It used to run `mc ready local`, which cannot
-work: `mc` is not in the `minio/minio` server image, and the `local` alias it names is created in
+work: `mc` is not in the MinIO server image, and the `local` alias it names is created in
 `minio-init` — which itself waits on this healthcheck. A probe that could only ever fail, gating a
 container that could only ever wait.
 

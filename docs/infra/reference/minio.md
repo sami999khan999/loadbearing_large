@@ -10,7 +10,7 @@ than first executed on the day you deploy.
 
 | | |
 | --- | --- |
-| **Image** | `minio/minio:latest` |
+| **Image** | `coollabsio/minio:RELEASE.2025-10-15T17-29-55Z` |
 | **Inside the network** | `minio:9000` |
 | **From the host** | `localhost:9000` (API), `localhost:9001` (console) |
 | **Credentials** | `ratchet` / `ratchetsecret` |
@@ -66,7 +66,7 @@ A one-shot container, not a service:
 
 ```yaml
 minio-init:
-  image: minio/mc:latest
+  image: bitnamilegacy/minio-client:latest
   depends_on: { minio: { condition: service_healthy } }
   entrypoint: >
     /bin/sh -c "
@@ -125,6 +125,13 @@ check [alloy](alloy.md). An `index/` but no `fake/` after a few minutes of traff
 The console at `http://localhost:9001` signs in with the same credentials and is the fastest way to
 look at an uploaded object.
 
-> **`minio/minio:latest` is the one unpinned image in the stack.** MinIO's release cadence and its
-> occasional console changes make a pin age badly, and nothing here depends on a specific version.
-> Pin it the moment this stack stops being a scratch environment.
+> **MinIO stopped publishing community images in October 2025**, and pulled the existing ones from
+> Docker Hub and Quay together. `minio/minio` and `minio/mc` both stopped resolving, which took the
+> CI stack down with them — the pull failure is a `403` naming a repository that no longer exists,
+> not a rate limit, so waiting does not fix it.
+>
+> The server is now a community rebuild of `RELEASE.2025-10-15T17-29-55Z`, the last upstream release,
+> pinned rather than floating: there will be no further releases to track, so a moving tag buys
+> nothing and costs the next person an unexplained change. `mc` comes from Bitnami's archive, which
+> is frozen for the same reason. Both are stand-ins for a dev dependency — an S3 that is not AWS —
+> and neither is something a deployment runs.

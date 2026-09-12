@@ -66,7 +66,7 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -82,7 +82,7 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:latest
+    image: bitnamilegacy/minio-client:latest
     depends_on:
       minio:
         condition: service_healthy

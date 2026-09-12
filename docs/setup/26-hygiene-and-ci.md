@@ -183,6 +183,9 @@ jobs:
       # Every remaining key both `env.ts` schemas require. Without them the job passed
       # only because nothing ever evaluated `Env` — the boot smoke below does, so a
       # key missing here is now a failure rather than a deploy-time surprise.
+      # Like SMTP_URL above, no container answers these: every S3 path in this job's
+      # suite runs against a fake, and the smoke suite that does reach one is excluded
+      # from `pnpm test` and runs in `compose`. A shape that parses is the requirement.
       S3_ENDPOINT: http://localhost:9000
       S3_REGION: us-east-1
       S3_BUCKET: ratchet
@@ -204,23 +207,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-
-      # `docker run`, not a `services:` entry: MinIO needs `server /data` and a service
-      # container takes no command. The bucket is what `S3_BUCKET` above names.
-      - name: Start MinIO
-        run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=ratchet -e MINIO_ROOT_PASSWORD=ratchetsecret \
-            --health-cmd "curl -sf http://localhost:9000/minio/health/live" \
-            --health-interval 5s --health-timeout 3s --health-retries 10 \
-            minio/minio:latest server /data
-          for _ in $(seq 1 30); do
-            [ "$(docker inspect -f '{{.State.Health.Status}}' minio)" = healthy ] && break
-            sleep 2
-          done
-          docker run --rm --network host --entrypoint sh minio/mc:latest -c "
-            mc alias set local http://localhost:9000 ratchet ratchetsecret &&
-            mc mb --ignore-existing local/ratchet"
 
       # Reads the root manifest's `packageManager` field and nothing else — a root that
       # declares only `devEngines.packageManager` fails here in seconds, before a single
@@ -891,9 +877,12 @@ images configured in the workflow file; `infra/docker-compose.yml` is what a dev
 what the setup pages describe. The two drift — an image tag, a healthcheck, an init script — and
 nothing else in this workflow can see it.
 
-It is also the only job that reaches **Loki, Alloy and Mailpit at all.** A `services:` container
-takes no command and mounts nothing from the checkout, which is why MinIO is a `docker run` in
-`verify` and why those three have no equivalent there.
+It is also the only job that reaches **S3, Loki, Alloy and Mailpit at all.** A `services:` container
+takes no command and mounts nothing from the checkout, so none of them has an equivalent in
+`verify` — and `verify` needs none: its only S3-touching spec builds a `FakeStorage`, and the smoke
+suite that does real round trips is excluded from `pnpm test`. `verify` ran a MinIO container until
+the image was withdrawn from Docker Hub, which is when it became clear nothing in that job had ever
+used it.
 
 Three things it proves that `verify` cannot:
 
