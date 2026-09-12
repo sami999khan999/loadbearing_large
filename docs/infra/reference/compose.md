@@ -44,10 +44,11 @@ would be theatre.
 | `postgres` | `pgvector/pgvector:pg17` | [postgres](postgres.md) |
 | `redis-cache` | `redis:7-alpine` | evicts, no persistence — [redis](redis.md) |
 | `redis-queue` | `redis:7-alpine` | never evicts, always persists — [redis](redis.md) |
-| `minio` | `minio/minio:latest` | S3 stand-in — [minio](minio.md) |
+| `minio` | `coollabsio/minio:RELEASE.2025-10-15T17-29-55Z` | S3 stand-in — [minio](minio.md) |
 
-`minio-init` is a fifth, and it is a **one-shot**: `minio/mc` runs an entrypoint that creates both
-buckets and exits. `exited (0)` is success. It carries `restart: "no"` and no healthcheck, because a
+`minio-init` is a fifth, and it is a **one-shot**: an `mc` image runs an entrypoint that waits for
+the MinIO API, creates both buckets and exits. `exited (0)` is success, and `compose-wait.mjs` holds
+the stack un-ready until it is — a one-shot still running is doing the work the next step reads. It carries `restart: "no"` and no healthcheck, because a
 container that is supposed to stop cannot be "unhealthy" — and without the explicit `restart` the
 project default would keep starting a container whose whole job is to finish.
 
@@ -193,8 +194,8 @@ One default is already non-obvious: ClickHouse's native port is 9002 because Min
 
 ## Healthchecks and `depends_on`
 
-Every long-running service has a healthcheck, because `depends_on` alone only waits for a container
-to *start*, not to be *usable*.
+Every long-running service but one has a healthcheck, because `depends_on` alone only waits for a
+container to *start*, not to be *usable*. MinIO is the exception — see below.
 
 ```yaml
 depends_on:
@@ -204,10 +205,16 @@ depends_on:
 
 Four of the probes are worth knowing:
 
-**MinIO** uses the HTTP `/minio/health/live` endpoint. It used to run `mc ready local`, which cannot
-work: `mc` is not in the `minio/minio` server image, and the `local` alias it names is created in
-`minio-init` — which itself waits on this healthcheck. A probe that could only ever fail, gating a
-container that could only ever wait.
+**MinIO** has no probe, having had two that could not run. `mc ready local` needed a binary the
+server image does not ship, and the `local` alias it named is created by `minio-init` — which was
+itself waiting on that healthcheck. `curl -sf /minio/health/live` replaced it and lasted until the
+image did: the community rebuild that took over from the withdrawn `minio/minio` ships no `curl`
+either, so the container sat unhealthy while the server logged that it was serving.
+
+The third version does not guess at the image's contents. `minio-init` retries `mc alias set` until
+the API answers, which is a real readiness check — it is the first thing that has to work anyway —
+and it depends on no binary being present anywhere except the `mc` this project chose. `minio` is
+consequently the one long-running service `compose-wait.mjs` passes on `running` alone.
 
 **Alloy** uses `bash`'s `/dev/tcp` — its image ships neither `wget` nor `curl`, a fact discovered by
 the healthcheck failing rather than by reading the Dockerfile. It proves Alloy is listening, not that

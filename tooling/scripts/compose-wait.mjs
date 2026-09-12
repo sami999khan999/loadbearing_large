@@ -34,6 +34,10 @@ function containers() {
     .map((line) => JSON.parse(line));
 }
 
+// Services whose success is *finishing*, not running. Without this a one-shot counts as
+// ready the moment it starts, which is the whole thing it exists to gate.
+const ONE_SHOTS = new Set(["minio-init"]);
+
 // A service is ready when it is healthy, when it is running without a healthcheck to be
 // healthy by, or when it has already finished successfully.
 export function readiness(container) {
@@ -48,6 +52,9 @@ export function readiness(container) {
       ? { ready: true, why: "exited 0" }
       : { ready: false, why: `exited ${code}`, fatal: true };
   }
+  // Checked before the running-without-a-healthcheck rule below, which would otherwise
+  // pass a one-shot that is still creating the buckets the next step reads.
+  if (ONE_SHOTS.has(container.Service ?? "")) return { ready: false, why: state || "unknown" };
   if (state === "running" && health === "") return { ready: true, why: "running" };
 
   return { ready: false, why: health || state || "unknown" };

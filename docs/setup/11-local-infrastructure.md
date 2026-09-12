@@ -66,7 +66,7 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -82,13 +82,11 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
+    image: bitnamilegacy/minio-client:latest
+    depends_on: [minio]
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 ratchet ratchetsecret &&
+      until mc alias set local http://minio:9000 ratchet ratchetsecret; do sleep 2; done &&
       mc mb --ignore-existing local/ratchet &&
       mc mb --ignore-existing local/loki &&
       mc anonymous set none local/ratchet &&
