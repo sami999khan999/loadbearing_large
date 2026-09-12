@@ -76,8 +76,16 @@ export class DomainEvents {
     return DOMAIN_EVENTS[name];
   }
 
-  // The whole envelope, so a consumer parses a job's payload in one call rather than
-  // reading `name` first and picking a schema by hand.
+  // The whole envelope in one call, rather than reading `name` first and picking a
+  // schema by hand — which is a second place to forget a case.
+  public static parse(value: unknown): DomainEvent {
+    // The validation is real; the assertion is only because the union is *built* from the
+    // catalog at module load, so zod infers each member's payload as the whole union.
+    return ENVELOPE.parse(value) as DomainEvent;
+  }
+
+  // Exposed for `safeParse`, which is what a spec wants when the expected answer is a
+  // rejection rather than a value.
   public static get envelope(): typeof ENVELOPE {
     return ENVELOPE;
   }

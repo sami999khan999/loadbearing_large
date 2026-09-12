@@ -4,6 +4,7 @@ const DOCUMENT = "document";
 const ANALYTICS = "analytics";
 const MAINTENANCE = "maintenance";
 const MAIL = "mail";
+const EVENT = "event";
 
 // Frozen at module load rather than left as a `static readonly`: the keyword freezes the
 // binding and not the array, which is the shape `docs/ai/rules/classes.md` bans.
@@ -14,6 +15,7 @@ const ALL = Object.freeze([
   ANALYTICS,
   MAINTENANCE,
   MAIL,
+  EVENT,
 ] as const);
 
 // A handful of queues by concern, not one per job type. A queue is a concurrency
@@ -31,6 +33,9 @@ export class QueueName {
   // Its own concern because a provider's rate limit is a property of this queue and of
   // nothing else: one limiter here beats a sleep in every caller.
   public static readonly MAIL = MAIL;
+  // The outbox drain and the deliveries it fans out to. Its own concern because the
+  // drain must not queue behind the deliveries it just created.
+  public static readonly EVENT = EVENT;
 
   public static readonly ALL = ALL;
 }

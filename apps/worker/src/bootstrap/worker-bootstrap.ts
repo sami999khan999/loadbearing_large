@@ -3,12 +3,14 @@ import {
   EmbeddingConsumer,
   MailConsumer,
   MaintenanceConsumer,
+  OutboxConsumer,
 } from "../consumer/index.js";
 import { Env } from "../env.js";
 import type { Container, RedisConnection, Worker } from "../import.js";
 import {
   ArchiveSchedule,
   CleanupSchedule,
+  OutboxDrainSchedule,
   PartitionsSchedule,
   ProjectionSchedule,
   ReconcileSchedule,
@@ -43,6 +45,12 @@ export class WorkerBootstrap {
       ).start(),
     );
 
+    // Before the schedules register, and before the drain in particular: a repeatable
+    // job that fires the instant it lands needs somewhere to run.
+    this.workers.push(
+      new OutboxConsumer(this.container, this.redis.queueClient(), Env.eventConcurrency).start(),
+    );
+
     // Before the schedules register, so an entry that fires the instant it lands has
     // somewhere to run. See docs/reference/schedules.md.
     this.workers.push(
@@ -65,6 +73,7 @@ export class WorkerBootstrap {
       );
     }
 
+    await new OutboxDrainSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     await new ArchiveSchedule(this.container, this.redis.queueClient()).register();

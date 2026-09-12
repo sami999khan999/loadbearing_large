@@ -10,6 +10,9 @@ export interface JobOptions {
   // The job name a consumer switches on. Defaults to the queue name, which is what every
   // single-job-kind queue wants and what a queue carrying two kinds of work cannot use.
   readonly name?: string;
+  // How long a completed job stays keyed. It is not tuning: `jobId` deduplicates only
+  // against jobs the queue still holds, so this *is* the duplicate-suppression window.
+  readonly removeOnCompleteAgeSeconds?: number;
 }
 
 export abstract class QueuePublisher {

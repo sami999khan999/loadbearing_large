@@ -6,6 +6,7 @@
 // constructs a user's.
 export {
   PartitionedTable,
+  type PartitionedTableName,
   Principal,
   type ProjectionCheckpoint,
   QueueName,
@@ -17,7 +18,9 @@ export {
 export { Container } from "@loadbearing/composition";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-export type { OrganizationId, UserId } from "@loadbearing/contracts";
+// The envelope, because a `deliver` job crosses Redis as JSON and has to be parsed back
+// into a typed event rather than trusted.
+export { DomainEvents, type OrganizationId, type UserId } from "@loadbearing/contracts";
 
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 // `RedisConnection` is what applies `maxRetriesPerRequest: null`: a bare connection gets

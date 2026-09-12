@@ -67,3 +67,17 @@ on its first run with a vendor auth error.
 The same block the web app parses. A worker with no log output is a worker you cannot operate, and
 `LOG_PRETTY` must stay false anywhere Alloy is reading — it is a terminal format, and Alloy's JSON
 stage drops what it cannot parse.
+
+## The four concurrency knobs are not one knob
+
+Each is per worker *instance*, never global: four instances at concurrency 4 is sixteen in-flight
+jobs, every one of which may hold a Postgres connection.
+
+- `WORKER_EMBEDDING_CONCURRENCY` (4) — bounded by the embedding provider's rate limit and your pool.
+- `WORKER_MAINTENANCE_CONCURRENCY` (1) — serial, because these jobs take table-level locks.
+- `WORKER_ANALYTICS_CONCURRENCY` (1) — capped at 1 *by the schema*: correctness rests on one writer.
+- `WORKER_MAIL_CONCURRENCY` (4) — with `WORKER_MAIL_RATE_PER_MINUTE` (600) as the provider's cap,
+  which is a BullMQ `limiter` on that queue rather than a sleep in every caller.
+- `WORKER_EVENT_CONCURRENCY` (8) — the highest, because deliveries are subscriber work and one
+  event fans out to one job per subscriber. The drain itself runs at `priority: 1` ahead of them,
+  so a delivery backlog cannot starve it.

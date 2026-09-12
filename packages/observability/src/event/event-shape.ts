@@ -53,6 +53,7 @@ export interface EventShape {
     readonly key: string;
     readonly rowCount: number;
   };
+  readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;
@@ -72,6 +73,10 @@ export interface EventShape {
   // null, and a missing id is a fact about the server rather than about the message.
   readonly "mail.delivery.sent": { readonly template: string; readonly messageId: string };
   readonly "mail.delivery.failed": { readonly template: string; readonly attempts: number };
+
+  readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
+  readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
+  readonly "outbox.delivery.failed": { readonly subscriber: string; readonly event: string };
 
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };

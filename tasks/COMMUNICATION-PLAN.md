@@ -510,7 +510,7 @@ check in every layer and the browser can parse the same shapes on the stream.
   `done: 2026-09-12` — **unverified:** the whole spec needs Postgres, including the concurrency
   case, which is the one that actually proves `SKIP LOCKED`. Run `pnpm infra:up && pnpm db:migrate
   && pnpm --filter @loadbearing/infrastructure test`.
-- [ ] `C2.8` **`OutboxConsumer` + `OutboxDrainSchedule`** — `apps/worker/src/consumer/outbox.consumer.ts`
+- [x] `C2.8` **`OutboxConsumer` + `OutboxDrainSchedule`** — `apps/worker/src/consumer/outbox.consumer.ts`
   on `QueueName.EVENT`, `switch (job.name)`: `drain` → loop
   `container.outbox.drain(100, relay)` until a short batch or `MAX_BATCHES_PER_RUN = 20`,
   where `relay` publishes through `container.queue` one `deliver` job per (subscriber, event)
@@ -527,6 +527,19 @@ check in every layer and the browser can parse the same shapes on the stream.
   measured commit-to-push budget under 500 ms. **Docs:** `consumers.md`, `schedules.md`,
   new `apps/worker/docs/reference/subscribers.md` (the contract: idempotent on `event.id`,
   no ordering, never throw for a duplicate, never log — surface through the job).
+  `done: 2026-09-12` — `JobOptions` gained `removeOnCompleteAgeSeconds` rather than the adapter
+  hardcoding 24 h for this queue: `jobId` deduplicates only against jobs BullMQ still holds, so
+  that age *is* the duplicate-suppression window and belongs in the port. `DomainEvents.parse`
+  was added beside `envelope`: the union is built from the catalog at module load, so zod infers
+  each member's payload as the whole union and a consumer needs the narrowed type.
+  **Retention landed in `MaintenanceConsumer.partitions()`** rather than as a second schedule —
+  it already loops the allowlist, and pruning months behind is the same concern as ensuring
+  months ahead. `activity_log` is never pruned there (the archive job owns it and verifies the
+  upload first); `outbox_event` is pruned after two months, and skipped entirely if the oldest
+  unpublished row predates the cutoff. `maintenance.partition.dropped` is a new code, distinct
+  from `archived` — that one means detached, uploaded, verified and *then* dropped.
+  **unverified:** the drain loop, the one-second schedule and the priority ordering need a live
+  Redis. Run `pnpm infra:up && pnpm dev`.
 - [x] `C2.9` **Container** — `public readonly eventPublisher: DomainEventPublisher`,
   `public readonly outbox: OutboxGateway`, `public readonly subscribers: SubscriberRegistry`
   (built from the frozen list of subscriber instances, each given its ports), `realtime:

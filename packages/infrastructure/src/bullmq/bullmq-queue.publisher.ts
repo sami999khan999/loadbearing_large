@@ -21,7 +21,7 @@ export class BullMqQueuePublisher extends QueuePublisher {
       backoff: { type: "exponential", delay: 2_000 },
       // Mandatory, not tuning. BullMQ keeps completed jobs forever by default, and
       // on a `noeviction` instance that ends with everything stopping.
-      removeOnComplete: { age: 3_600, count: 1_000 },
+      removeOnComplete: { age: options?.removeOnCompleteAgeSeconds ?? 3_600, count: 1_000 },
       removeOnFail: { age: 86_400 },
     });
   }

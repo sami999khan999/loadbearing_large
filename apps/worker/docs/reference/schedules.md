@@ -7,6 +7,7 @@ description: Five repeatable entries, the fixed job ids that make registration i
 
 | Schedule | When | Queue |
 |---|---|---|
+| `outbox-drain` | every second | `EVENT` |
 | `partitions-monthly` | 02:00 on the first | `MAINTENANCE` |
 | `cleanup-daily` | 03:00 daily | `MAINTENANCE` |
 | `archive-monthly` | 04:00 on the first | `MAINTENANCE` |
@@ -74,3 +75,24 @@ It detaches the month that has just aged out of the retention window, ships it t
 NDJSON, and records it in `activity_archive`. That table is what makes a ClickHouse replay past the
 Postgres window automatable rather than archaeology, and nothing wrote to it before this schedule
 existed.
+
+## `outbox-drain` is the only sub-minute schedule here
+
+Every second, and that is the commit-to-delivery budget for anything riding the outbox. It is
+deliberately a poll rather than a push: the cheap improvement later is Postgres `LISTEN`/`NOTIFY`,
+and the trigger for reaching for it is written down as a measured commit-to-push budget under
+500 ms. A shorter interval is not the answer — it multiplies empty queries without moving the
+worst case.
+
+It registers under a fixed `jobId` like every other schedule here, and at `priority: 1` so the
+deliveries it creates cannot starve it.
+
+## Retention now drops partitions, and one table is guarded
+
+`partitions-monthly` ensures months ahead **and** prunes months behind, per table. `activity_log`
+is deliberately never pruned by it: `archive-monthly` owns that table and drops a partition only
+after verifying the upload, so a second dropper here would race it.
+
+`outbox_event` is pruned after two months, with one guard: if the oldest *unpublished* row is
+older than the cutoff, the prune does nothing. A stuck event is never dropped by the calendar,
+which is the difference between retention and data loss.

@@ -40,6 +40,7 @@ const Schema = z
     // partition.
     WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
     WORKER_MAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
+    WORKER_EVENT_CONCURRENCY: z.coerce.number().int().positive().default(8),
     // A provider's cap, expressed once. Ten a second is under every managed sender's
     // free tier and well under a self-hosted relay's.
     WORKER_MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(600),
@@ -129,6 +130,10 @@ export class Env {
 
   public static get mailRatePerMinute(): number {
     return Env.parsed.WORKER_MAIL_RATE_PER_MINUTE;
+  }
+
+  public static get eventConcurrency(): number {
+    return Env.parsed.WORKER_EVENT_CONCURRENCY;
   }
 
   // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds

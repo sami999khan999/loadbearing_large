@@ -10,6 +10,7 @@ description: Three consumers, all serial, all with a public handle() — the bat
 | `MaintenanceConsumer` | `MAINTENANCE` | sweep · partitions · archive | always |
 | `EmbeddingConsumer` | `EMBEDDING` | index | always |
 | `MailConsumer` | `MAIL` | send | always |
+| `OutboxConsumer` | `EVENT` | drain · deliver | always |
 | `AnalyticsConsumer` | `ANALYTICS` | project · reconcile | only with a ClickHouse config |
 
 ## `handle()` is public on every one of them
@@ -150,6 +151,33 @@ here is what keeps it out of every caller as a sleep.
 With no delivery table, that line and `mail.delivery.sent` are the whole record of what happened to
 a message — which is exactly why the sent line carries the transport's message id, the thing a
 provider webhook would later correlate against.
+
+## `OutboxConsumer` runs two different jobs, and the split is the design
+
+`drain` reads a batch of unpublished events and turns each into one `deliver` job **per
+subscriber that listens for it**. `deliver` parses the envelope and calls that one subscriber.
+
+**One job per (subscriber, event) is what makes a failure local.** A single job calling every
+subscriber in turn would retry all of them because one was down, and an idempotent subscriber
+would still do its work again on every retry.
+
+**The job id is `<subscriber>_<eventId>`, and it is the deduplication key.** A crash between
+`relay` and the `published_at` mark re-drains the same rows, produces the same ids, and BullMQ
+drops the duplicates — which is why `removeOnCompleteAgeSeconds` on this queue is 24 hours rather
+than the default hour. That window is the guarantee, not tuning. Anything older is caught by the
+subscribers' own idempotency, which is a stated requirement rather than a hope.
+
+**An event nobody listens for still gets marked published.** Leaving it pending would make the
+outbox grow forever on a name whose subscriber was deleted.
+
+**The drain is bounded**: 100 rows a batch, at most 20 batches a run. Unbounded, a backlog would
+hold the worker inside one job while the one-second schedule piled up behind it. And it runs at
+`priority: 1`, ahead of the deliveries it creates — a backlog of `deliver` jobs must not starve the
+drain, or the outbox grows while the worker looks busy.
+
+`outbox.drain.lagged` exists because a drain that has stopped running is otherwise silent: "no
+events published" and "no events to publish" produce the same line. Sixty seconds behind, on a
+one-second schedule, means the drain is not running rather than that it is busy.
 
 > [!NOTE]
 > `QueueName.NOTIFICATION` still has no consumer. It gains one in Phase 3 of
