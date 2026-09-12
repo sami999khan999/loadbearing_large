@@ -5,6 +5,7 @@ export {
   Database,
   type DatabaseConfig,
   type DrizzleClient,
+  KeysetCursor,
 } from "./primitive/index.js";
 export {
   PgActivityArchiveGateway,

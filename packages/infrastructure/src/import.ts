@@ -98,7 +98,13 @@ export {
 export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { ConflictError, InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
+export {
+  ConflictError,
+  InternalError,
+  NotFoundError,
+  UnavailableError,
+  ValidationError,
+} from "@loadbearing/errors";
 
 // ── @loadbearing/observability ───────────────────────────────────────────────
 export { Logger } from "@loadbearing/observability";

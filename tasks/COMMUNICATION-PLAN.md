@@ -587,7 +587,7 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
 
 #### 3.0 Foundation
 
-- [ ] `C3.0` **Keyset primitive** — nothing in `contracts/src/primitive/` paginates by cursor
+- [x] `C3.0` **Keyset primitive** — nothing in `contracts/src/primitive/` paginates by cursor
   today (`pagination.ts` / `envelope.ts` are offset-only). Add `keyset.ts` → `Keyset.query`
   (`{ limit ≤ 100 default 50, cursor?: string ≤ 256 }`) and `Keyset.page(item)`
   (`{ items: readonly[], nextCursor: string | null }`, no `total` — a count per page over a
@@ -596,6 +596,11 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   `ValidationError`). Query shape: `WHERE … AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT n + 1`.
   Notifications, conversations and messages all page this way. **Docs:**
   `contracts/docs/reference/keyset.md`, `docs/opinions/vocabulary.md` query-key table.
+  `done: 2026-09-12` — `Keyset.query` takes `{ limit, cursor }` rather than the plan's
+  `{ limit, before: { createdAt, id } }`: an opaque token is what leaves the encoding ours to
+  change without a version field, and a client echoing back a structured `before` would be
+  building cursors the server has to keep parsing. `nextCursor: null` is the last page and is
+  deliberately not derived from `items.length < limit` — a full page can still be the last one.
 
 #### 3.A Permissions, routes, gate (`permissions`)
 

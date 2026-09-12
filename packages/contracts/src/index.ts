@@ -37,6 +37,8 @@ export {
   type GoalId,
   Identifiers,
   type InvitationId,
+  Keyset,
+  type KeysetQuery,
   type OrganizationId,
   Pagination,
   type PaginationQuery,

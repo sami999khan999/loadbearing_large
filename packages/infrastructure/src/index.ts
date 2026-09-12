@@ -17,6 +17,7 @@ export {
   Database,
   type DatabaseConfig,
   type DrizzleClient,
+  KeysetCursor,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,

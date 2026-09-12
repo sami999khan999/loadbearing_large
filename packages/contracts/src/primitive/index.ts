@@ -9,5 +9,6 @@ export {
   type TaskId,
   type UserId,
 } from "./identifiers.js";
+export { Keyset, type KeysetQuery } from "./keyset.js";
 export { Pagination, type PaginationQuery } from "./pagination.js";
 export { Password } from "./password.js";

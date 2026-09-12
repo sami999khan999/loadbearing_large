@@ -123,6 +123,14 @@ Specs live in `tests/`, mirroring `src/`. `vitest.config.ts` sets
 `resolve.conditions: ["development"]` so a spec resolves `@loadbearing/permissions` to its source
 rather than a stale `dist/` — the same condition `apps/web/vite.config.ts` sets.
 
+## Two pagination shapes, and the newer one is the default for growth
+
+`Pagination` (`limit` + `offset`) still serves the lists bounded by the tenant — roles, members,
+invitations. `Keyset` (`limit` + opaque `cursor`) serves the ones that grow with activity, and its
+page carries no `total`, because an exact count over a partitioned table is exactly the cost keyset
+pagination exists to avoid. Which to reach for, what the cursor encodes, and the query shape it
+pairs with are in [keyset](reference/keyset.md).
+
 ## `mail/` is a manifest, not a slice
 
 It holds no `.contract.ts`, no `.entity.ts` and no `.procedures.ts`, because a mail template is
