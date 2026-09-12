@@ -67,10 +67,10 @@ A one-shot container, not a service:
 ```yaml
 minio-init:
   image: bitnamilegacy/minio-client:latest
-  depends_on: { minio: { condition: service_healthy } }
+  depends_on: [minio]
   entrypoint: >
     /bin/sh -c "
-    mc alias set local http://minio:9000 ratchet ratchetsecret &&
+    until mc alias set local http://minio:9000 ratchet ratchetsecret; do sleep 2; done &&
     mc mb --ignore-existing local/ratchet &&
     mc mb --ignore-existing local/loki &&
     mc anonymous set none local/ratchet &&
