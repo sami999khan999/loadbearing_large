@@ -553,6 +553,14 @@ second and the inviter's second tab refetches the member list without a reload; 
 drain twice over the same rows yields the same job ids and one `handle` call; `T-031` closed in
 `TODO.md` with the `.bus.ts` and partial-index sentences corrected; `check:architecture` 20/20.
 
+> **Status, 2026-09-12.** Every item `C2.1`–`C2.9` is `[x]`, plus `C4.1`–`C4.3`'s publisher half,
+> which `C2.6` needed. `T-031` is closed with both of its corrections applied and a third recorded.
+> `check:architecture` is 20/20 with no skip, and `typecheck`, `lint` and every suite are green
+> except the Postgres and Redis integration specs, which fail identically on the untouched tree.
+> **The Exit line itself is unticked**: the second half of it — a tab refetching without a reload —
+> also needs Phase 4's stream, which does not exist yet. What is verifiable today is the first
+> half, and it needs `pnpm infra:up && pnpm db:migrate`.
+
 ---
 
 ---
