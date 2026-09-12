@@ -75,4 +75,44 @@ describe("QueuePublisher against the running queue instance", () => {
       await publisher.close();
     }
   });
+
+  // Both defaulted, and both only observable on a real queue: the job name is what a
+  // consumer switches on, and priority is how mail nobody can sign up without goes first.
+  it("carries the job name and priority the caller asked for", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+
+    try {
+      await publisher.publish(
+        QueueName.MAINTENANCE,
+        { probe: true },
+        { jobId: "smoke-named", name: "partitions", priority: 1 },
+      );
+      const job = await reader.getJob("smoke-named");
+
+      expect(job?.name).toBe("partitions");
+      expect(job?.opts.priority).toBe(1);
+    } finally {
+      await (await reader.getJob("smoke-named"))?.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
+  // The default the four call sites above rely on: a queue carrying one kind of work
+  // names no job, and BullMQ still needs a name.
+  it("names the job after the queue when the caller passes none", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+
+    try {
+      await publisher.publish(QueueName.MAINTENANCE, { probe: true }, { jobId: "smoke-unnamed" });
+
+      expect((await reader.getJob("smoke-unnamed"))?.name).toBe(QueueName.MAINTENANCE);
+    } finally {
+      await (await reader.getJob("smoke-unnamed"))?.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
 });

@@ -477,6 +477,7 @@ export class QueueName {
   public static readonly DOCUMENT = "document";
   public static readonly ANALYTICS = "analytics";
   public static readonly MAINTENANCE = "maintenance";
+  public static readonly MAIL = "mail";
 
   public static readonly ALL = [
     QueueName.EMBEDDING,
@@ -484,11 +485,14 @@ export class QueueName {
     QueueName.DOCUMENT,
     QueueName.ANALYTICS,
     QueueName.MAINTENANCE,
+    QueueName.MAIL,
   ] as const;
 }
 ```
 
 **A handful of queues by concern, not one per job type.** Queues are a concurrency and priority boundary: embedding is slow and rate-limited, notifications are fast and bursty, and you want to tune those separately. Fifty queues means fifty Redis connections and fifty things to monitor.
+
+**`MAIL` is its own concern because a provider's rate limit belongs to it and to nothing else.** Every managed sender caps messages per second, and the only place that cap can be expressed once is a BullMQ `limiter` on the worker consuming this queue. Sharing a queue with anything else would either throttle that other work or leak the cap into every caller as a sleep. It is also the queue whose jobs carry no state of their own: there is no delivery table, so retries, backoff and duplicate suppression by job id are the whole error model.
 
 **`ANALYTICS` is its own concern because it is allowed to fall behind.** Projecting domain events into snapshot tables is the one workload here where lag is acceptable and throughput matters more than latency — nobody is waiting on a dashboard row. Sharing a queue with notifications would let a backlog of projections delay something a user is actually waiting for. It is also the queue whose depth is the health signal for the derived store: a consumer that died on Tuesday shows up here before it shows up in a wrong quarterly number ([Data and scale](../opinions/data-and-scale.md) §2).
 

@@ -62,6 +62,12 @@ because it looks like it is working.
 Migration `0000` created partitions through 2027-01. The day after the last one ends, **every insert
 to `activity_log` fails** — which under the analytics design is also every analytics write.
 
+**It covers every table on the allowlist, not `activity_log` by name.** `MaintenanceConsumer`
+iterates `PartitionedTable.ALL` and calls `ensureMonthlyPartitions` once per entry, emitting one
+`maintenance.partitions.ensured` line per table with the table as a *field*. So partitioning a new
+table is one entry in that list and no edit here — and the deadline above applies to each of them
+independently.
+
 ## `archive-monthly` is what makes replay possible
 
 It detaches the month that has just aged out of the retention window, ships it to S3 as gzipped

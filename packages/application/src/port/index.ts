@@ -9,7 +9,7 @@ export {
 export { AnalyticsProjector } from "./analytics.projector.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
-export { type EmailMessage, EmailSender } from "./email.sender.js";
+export { type EmailMessage, type EmailReceipt, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js";

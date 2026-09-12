@@ -1,3 +1,5 @@
+import type { PartitionedTableName } from "../primitive/index.js";
+
 export interface SweepOutcome {
   readonly sessions: number;
   readonly verifications: number;
@@ -15,5 +17,16 @@ export abstract class MaintenanceGateway {
 
   // `months` counts partitions created, starting at the month `from` falls in — so three
   // is the current month and the next two, which is two months of runway.
-  public abstract ensureActivityPartitions(from: Date, months: number): Promise<readonly string[]>;
+  public abstract ensureMonthlyPartitions(
+    table: PartitionedTableName,
+    from: Date,
+    months: number,
+  ): Promise<readonly string[]>;
+
+  // Returns what it dropped. Whole partitions rather than a `DELETE`, because dropping a
+  // partition is a catalog edit and deleting a month of rows is a vacuum problem.
+  public abstract dropMonthlyPartitionsBefore(
+    table: PartitionedTableName,
+    cutoff: Date,
+  ): Promise<readonly string[]>;
 }

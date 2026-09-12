@@ -3,10 +3,18 @@ const NOTIFICATION = "notification";
 const DOCUMENT = "document";
 const ANALYTICS = "analytics";
 const MAINTENANCE = "maintenance";
+const MAIL = "mail";
 
 // Frozen at module load rather than left as a `static readonly`: the keyword freezes the
 // binding and not the array, which is the shape `docs/ai/rules/classes.md` bans.
-const ALL = Object.freeze([EMBEDDING, NOTIFICATION, DOCUMENT, ANALYTICS, MAINTENANCE] as const);
+const ALL = Object.freeze([
+  EMBEDDING,
+  NOTIFICATION,
+  DOCUMENT,
+  ANALYTICS,
+  MAINTENANCE,
+  MAIL,
+] as const);
 
 // A handful of queues by concern, not one per job type. A queue is a concurrency
 // and priority boundary: embedding is slow and rate-limited, notifications bursty.
@@ -20,6 +28,9 @@ export class QueueName {
   // dashboard row, and its depth is the health signal for the derived store.
   public static readonly ANALYTICS = ANALYTICS;
   public static readonly MAINTENANCE = MAINTENANCE;
+  // Its own concern because a provider's rate limit is a property of this queue and of
+  // nothing else: one limiter here beats a sleep in every caller.
+  public static readonly MAIL = MAIL;
 
   public static readonly ALL = ALL;
 }

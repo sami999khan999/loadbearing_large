@@ -1,3 +1,4 @@
+import { PartitionedTable } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import {
   FixedClock,
@@ -82,6 +83,21 @@ describe("MaintenanceConsumer", () => {
     // of runway makes a missed run an outage at midnight on the first.
     expect(maintenance.partitionsEnsured()[0]?.months).toBeGreaterThan(1);
     expect(maintenance.partitionsEnsured()[0]?.from).toEqual(NOW);
+  });
+
+  // The allowlist, not a name in the consumer: this is what makes a table partitioned by
+  // a later migration covered by the existing schedule.
+  it("ensures partitions for every table on the allowlist", () => {
+    expect(PartitionedTable.ALL).toContain(PartitionedTable.ACTIVITY_LOG);
+  });
+
+  it("covers each allowlisted table once per run", async () => {
+    const { container, maintenance } = harness();
+    await consumerFor(container).handle(job("partitions"));
+
+    expect(maintenance.partitionsEnsured().map((run) => run.table)).toEqual([
+      ...PartitionedTable.ALL,
+    ]);
   });
 
   it("archives the month that has aged out, computed from the clock and not the payload", async () => {

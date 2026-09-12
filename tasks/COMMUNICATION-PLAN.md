@@ -24,8 +24,10 @@ source: tree at 927cdec (main), 2026-09-12
 >    it in the same commit (`docs/opinions/files.md` + `docs/ai/rules/files.md`).
 > 6. `tasks/TODO.md` stays the task ledger: `T-036` points here, and Phase 2 closes `T-031`.
 >    New defects found while executing go to the bottom of the relevant phase.
-> 7. Commit per layer with the closed `scope-enum` in `commitlint.config.js` (Phase 1 adds
->    `mail`). No author or tool trailers (`docs/ai/rules/workflow.md`).
+> 7. Commit per layer with the closed `scope-enum` in `commitlint.config.js`. **No scope is
+>    added:** that line said Phase 1 adds `mail`, which was true of the draft that had a
+>    `packages/mail`. The enum's own rule is "add a package, add its scope here", and this plan
+>    adds no package. No author or tool trailers (`docs/ai/rules/workflow.md`).
 
 ---
 
@@ -156,17 +158,23 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
 
 #### 1.A Foundations (`application`, `infrastructure`)
 
-- [ ] `C1.1` **`QueueName.MAIL`** — add `"mail"` to `packages/application/src/primitive/queue-name.ts`
+- [x] `C1.1` **`QueueName.MAIL`** — add `"mail"` to `packages/application/src/primitive/queue-name.ts`
   and `ALL`. **Docs:** `docs/opinions/vocabulary.md` queue table, `docs/setup/15`.
-- [ ] `C1.2` **`JobOptions.priority` and `JobOptions.name`** — `readonly priority?: number`
+  `done: 2026-09-12`
+- [x] `C1.2` **`JobOptions.priority` and `JobOptions.name`** — `readonly priority?: number`
   and `readonly name?: string` (the BullMQ job name, defaulting to the queue name as today) on
   `packages/application/src/port/queue.publisher.ts`; `BullMqQueuePublisher` passes both through;
   `RecordingQueuePublisher` records them. Spec in `infrastructure/tests/smoke/` publish test.
-- [ ] `C1.3` **`EmailSender.send` returns a receipt** — `Promise<EmailReceipt>` with
+  `done: 2026-09-12` — **unverified:** the two new smoke cases (job name, priority, and the
+  queue-name default) need a live Redis. Run `pnpm infra:up && pnpm smoke`.
+- [x] `C1.3` **`EmailSender.send` returns a receipt** — `Promise<EmailReceipt>` with
   `{ messageId: string | null }` (nodemailer's `info.messageId`). Update `SmtpEmailSender`,
   `RecordingEmailSender`, both specs. The receipt is logged rather than stored, and it is what a
   provider webhook would later correlate against. **Docs:** `application/docs/reference/ports.md`.
-- [ ] `C1.4` **Generalise partition maintenance** — `MaintenanceGateway.ensureActivityPartitions`
+  `done: 2026-09-12` — the spec caught a real defect on the way in: reading the id off a
+  transport that resolved with nothing threw `UnavailableError` over a message that had been
+  sent. Every hop to `messageId` is optional, and a unit case pins it.
+- [x] `C1.4` **Generalise partition maintenance** — `MaintenanceGateway.ensureActivityPartitions`
   becomes `ensureMonthlyPartitions(table: PartitionedTable, from, months)` and gains
   `dropMonthlyPartitionsBefore(table, cutoff)`; `PartitionedTable` is a frozen allowlist
   (`activity_log`, then `outbox_event` in Phase 2, `notifications` in Phase 3, `messages` in
@@ -177,6 +185,11 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `docs/opinions/data-and-scale.md` §4.
   **Depends on:** nothing, but it earns its place only from Phase 2 onward — land it here because
   Phase 2's migration is the first caller and splitting it across two phases reads worse.
+  `done: 2026-09-12` — `PartitionedTable` landed in `application/src/primitive/` beside
+  `QueueName` rather than in the port file: it is a closed vocabulary of strings, which is the
+  stated reason `QueueName` lives there. The port takes the `PartitionedTableName` union.
+  **unverified:** the two `dropMonthlyPartitionsBefore` cases and the renamed ensure cases need
+  Postgres. Run `pnpm infra:up && pnpm db:migrate && pnpm --filter @loadbearing/infrastructure test`.
 
 #### 1.B Template catalog and ports (`contracts`, `application`)
 

@@ -27,10 +27,24 @@ The guard is instead structural: nothing reachable from a request can call them.
 `sweepExpired` exists because `sessions` is bounded by expiry rather than partitioned — the trade
 that table's own schema comment documents. This sweep is what makes that trade hold.
 
-`ensurePartitions` runs several months ahead on purpose. **A partitioned table with no partition for
-the current date rejects every insert**, so the failure mode of running exactly one month ahead is a
-total write outage at midnight on the first. It returns the partitions it created, empty when they
-all already existed.
+`ensureMonthlyPartitions` runs several months ahead on purpose. **A partitioned table with no
+partition for the current date rejects every insert**, so the failure mode of running exactly one
+month ahead is a total write outage at midnight on the first. It returns the partitions it created,
+empty when they all already existed.
+
+**The table is a `PartitionedTableName`, not a `string`, and that is not style.** Postgres accepts
+no bind parameters in DDL — not for the table, not even for the range bounds — so the adapter builds
+the statement by interpolation. A closed union from `PartitionedTable.ALL` is the only thing
+standing between that and a table name arriving from somewhere else. The list is also what the
+maintenance schedule loops, so a table partitioned by a later migration is covered by adding one
+entry rather than by editing the worker.
+
+`dropMonthlyPartitionsBefore` is the retention half, and it drops whole partitions rather than
+issuing a `DELETE`: dropping a partition is a catalog edit, while deleting a month of rows leaves a
+vacuum problem behind. It reads the children from the catalog instead of computing names from a date
+range, because a month created by hand is still a partition and still has to be found — and it
+leaves alone any child whose name it cannot parse, since this loop is holding a `drop table` and
+"I could not read the name" is not evidence the rows are expendable.
 
 ### `ActivityArchiveGateway`
 
@@ -127,6 +141,12 @@ a layout to be readable.
 `send()` resolves when the transport has **accepted** the message, which is not delivery and never
 can be. A caller that needs delivery confirmation is asking a question only a webhook from the
 provider can answer.
+
+It resolves with an `EmailReceipt` carrying the transport's `messageId`, nullable because plenty of
+servers return none. **The receipt is logged, not stored** — this system keeps no delivery table, so
+the id exists to be correlated later against a provider's own record. Every hop to it is optional
+for a reason worth keeping: reading the id off a transport that resolved with nothing turned a sent
+message into a thrown `UnavailableError` and a pointless retry.
 
 ## `StorageGateway`
 

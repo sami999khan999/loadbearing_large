@@ -1,3 +1,4 @@
+import { PartitionedTable } from "@loadbearing/application";
 import { Uuid } from "@loadbearing/core";
 import type { Logger } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -44,7 +45,11 @@ beforeAll(async () => {
 
   // A partitioned table with no partition for a row's date rejects the insert, so a spec
   // that writes to a future month creates it first.
-  await new PgMaintenanceGateway(database, scope).ensureActivityPartitions(INSTANT, 1);
+  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
+    PartitionedTable.ACTIVITY_LOG,
+    INSTANT,
+    1,
+  );
 });
 
 afterAll(async () => {

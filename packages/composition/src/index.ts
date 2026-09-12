@@ -14,6 +14,8 @@ export {
 // types: a spec constructs the fake it wants to assert on and passes it in.
 export {
   DirectUnitOfWork,
+  type DroppedPartitions,
+  type EnsuredPartitions,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,

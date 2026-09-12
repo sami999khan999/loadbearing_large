@@ -1,3 +1,4 @@
+import { PartitionedTable } from "@loadbearing/application";
 import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -57,11 +58,11 @@ afterAll(async () => {
   await database.close();
 });
 
-describe("PgMaintenanceGateway.ensureActivityPartitions", () => {
+describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
   // The regression guard for the parameterised form, which failed at bind time on every
   // run: Postgres accepts no bind parameters in DDL, and no fake can reach that.
   it("actually creates the partitions it reports", async () => {
-    const created = await gateway.ensureActivityPartitions(FROM, 2);
+    const created = await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
     expect(created).toEqual(NAMES);
 
     const rows = await database.client.execute<{ relname: string }>(
@@ -81,7 +82,45 @@ describe("PgMaintenanceGateway.ensureActivityPartitions", () => {
   it("is idempotent, so a second run creates nothing", async () => {
     // The schedule registers on every boot and runs monthly; a second call has to be
     // a no-op rather than an error, or a redeploy turns into a failed job.
-    expect(await gateway.ensureActivityPartitions(FROM, 2)).toEqual([]);
+    expect(await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
+  // The cutoff is read as a month boundary, not an instant: a partition holding the
+  // cutoff's own month also holds rows newer than it, and dropping it would lose them.
+  it("drops only the partitions whose month ends before the cutoff month", async () => {
+    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+
+    const dropped = await gateway.dropMonthlyPartitionsBefore(
+      PartitionedTable.ACTIVITY_LOG,
+      new Date("2032-08-15T00:00:00.000Z"),
+    );
+
+    expect(dropped).toContain("activity_log_2032_07");
+    expect(dropped).not.toContain("activity_log_2032_08");
+  });
+
+  // The loop holds a `drop table`, so a child it cannot parse has to be left alone: an
+  // unrecognised name is not evidence that the rows in it are expendable.
+  it("leaves a child whose name is not <table>_<yyyy>_<mm> alone", async () => {
+    await database.client.execute(
+      sql`create table if not exists activity_log_scratch partition of activity_log
+          for values from ('2033-01-01') to ('2033-02-01')`,
+    );
+
+    try {
+      const dropped = await gateway.dropMonthlyPartitionsBefore(
+        PartitionedTable.ACTIVITY_LOG,
+        new Date("2034-01-01T00:00:00.000Z"),
+      );
+
+      expect(dropped).not.toContain("activity_log_scratch");
+    } finally {
+      await database.client.execute(sql`drop table if exists activity_log_scratch`);
+    }
   });
 });
 

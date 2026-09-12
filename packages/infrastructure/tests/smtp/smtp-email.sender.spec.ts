@@ -34,6 +34,20 @@ describe("SmtpEmailSender", () => {
     );
   });
 
+  it("returns the transport's message id as the receipt", async () => {
+    sendMail.mockResolvedValue({ messageId: "<abc@example.test>" });
+
+    expect(await sender().send(message)).toEqual({ messageId: "<abc@example.test>" });
+  });
+
+  // A transport that answers with nothing has still accepted the message. Reading the id
+  // off it without guarding turned that into a thrown `UnavailableError` and a retry.
+  it("reports a null id rather than failing when the transport returns nothing", async () => {
+    sendMail.mockResolvedValue(undefined);
+
+    expect(await sender().send(message)).toEqual({ messageId: null });
+  });
+
   it("normalises a transport failure to a retryable error", async () => {
     sendMail.mockRejectedValue(new Error("550 relay denied for b@example.test"));
 

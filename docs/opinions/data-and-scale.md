@@ -318,6 +318,14 @@ Three things this buys:
 - Dropping old data is `DROP PARTITION` — instant, rather than a `DELETE` that bloats the table.
 - Index maintenance stays bounded, because each partition's index is small.
 
+**Which tables are partitioned is a list, not a convention.** `PartitionedTable.ALL` in
+`packages/application/src/primitive/partitioned-table.ts` names them, `MaintenanceGateway`'s two
+methods take that union rather than a `string`, and the monthly schedule loops it. Two things fall
+out of writing it down: Postgres accepts no bind parameters in DDL, so the adapter interpolates the
+table name and the closed union is the only boundary there is; and a table that is partitioned in a
+migration but never added to the list quietly stops getting partitions the month the migration's
+own runway ends.
+
 Create partitions ahead of time with a scheduled job, or use `pg_partman`.
 
 > [!WARNING]

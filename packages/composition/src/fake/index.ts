@@ -9,7 +9,11 @@ export { type RecordedActivity, RecordingActivityLogger } from "./recording-acti
 export { RecordingActivityArchiveGateway } from "./recording-activity-archive.gateway.js";
 export { RecordingCapabilityInvalidator } from "./recording-capability.invalidator.js";
 export { RecordingEmailSender } from "./recording-email.sender.js";
-export { RecordingMaintenanceGateway } from "./recording-maintenance.gateway.js";
+export {
+  type DroppedPartitions,
+  type EnsuredPartitions,
+  RecordingMaintenanceGateway,
+} from "./recording-maintenance.gateway.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export { StubEmbeddingProvider } from "./stub-embedding.provider.js";
 export { StubSessionResolver } from "./stub-session.resolver.js";

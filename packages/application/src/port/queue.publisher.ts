@@ -4,6 +4,12 @@ export interface JobOptions {
   // Idempotency is a domain rule ("enqueue OCR for this receipt, once"), not queue
   // configuration. **No `:`** — BullMQ keys on it and rejects the job at publish time.
   readonly jobId?: string;
+  // Lower runs first. A queue is a priority boundary, so this orders work *within* one
+  // queue — a mail nobody can sign up without, ahead of a digest nobody is waiting on.
+  readonly priority?: number;
+  // The job name a consumer switches on. Defaults to the queue name, which is what every
+  // single-job-kind queue wants and what a queue carrying two kinds of work cannot use.
+  readonly name?: string;
 }
 
 export abstract class QueuePublisher {

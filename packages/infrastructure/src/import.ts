@@ -41,6 +41,7 @@ export {
   type DailyCount,
   type DocumentChunk,
   type EmailMessage,
+  type EmailReceipt,
   EmailSender,
   EmbeddingProvider,
   type InvitationPage,
@@ -56,6 +57,7 @@ export {
   type MemberRepository,
   type NewApiKey,
   type NewInvitation,
+  type PartitionedTableName,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,

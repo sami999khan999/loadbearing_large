@@ -62,6 +62,7 @@ export {
   type DailyCount,
   type DocumentChunk,
   type EmailMessage,
+  type EmailReceipt,
   EmailSender,
   EmbeddingProvider,
   type JobOptions,
@@ -81,7 +82,14 @@ export {
   UnitOfWork,
   VectorStore,
 } from "./port/index.js";
-export { Authorizer, Principal, type PrincipalKind, QueueName } from "./primitive/index.js";
+export {
+  Authorizer,
+  PartitionedTable,
+  type PartitionedTableName,
+  Principal,
+  type PrincipalKind,
+  QueueName,
+} from "./primitive/index.js";
 export {
   CapabilityRepository,
   type CreateRoleInput,

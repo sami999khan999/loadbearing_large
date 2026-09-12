@@ -5,6 +5,7 @@
 // The principal a consumer runs as. `SystemPrincipal` narrows it; nothing here
 // constructs a user's.
 export {
+  PartitionedTable,
   Principal,
   type ProjectionCheckpoint,
   QueueName,

@@ -1,4 +1,11 @@
-import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
+import {
+  type Container,
+  type Job,
+  PartitionedTable,
+  QueueName,
+  type Redis,
+  Worker,
+} from "../import.js";
 
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
@@ -101,16 +108,23 @@ export class MaintenanceConsumer {
     });
   }
 
+  // Every partitioned table, from the allowlist rather than named here: a table added in
+  // a later migration is covered by this schedule with no edit to the worker.
   private async partitions(): Promise<void> {
-    const created = await this.container.maintenance.ensureActivityPartitions(
-      this.container.clock.now(),
-      MaintenanceConsumer.MONTHS_PER_RUN,
-    );
+    for (const table of PartitionedTable.ALL) {
+      const created = await this.container.maintenance.ensureMonthlyPartitions(
+        table,
+        this.container.clock.now(),
+        MaintenanceConsumer.MONTHS_PER_RUN,
+      );
 
-    this.container.logger.emit("maintenance.partitions.ensured", {
-      table: "activity_log",
-      created: created.length,
-      months: MaintenanceConsumer.MONTHS_PER_RUN,
-    });
+      // One line per table, and `table` is a field rather than part of the code: the
+      // event catalog is the cardinality budget for the `event_code` label.
+      this.container.logger.emit("maintenance.partitions.ensured", {
+        table,
+        created: created.length,
+        months: MaintenanceConsumer.MONTHS_PER_RUN,
+      });
+    }
   }
 }
