@@ -46,7 +46,14 @@ export {
   type UserId,
 } from "./primitive/index.js";
 export { type AppContract, contract } from "./procedure/index.js";
-export { ProcedurePermissions } from "./registry/index.js";
+export {
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
+  type DomainEventPayload,
+  DomainEvents,
+  ProcedurePermissions,
+} from "./registry/index.js";
 export {
   type CapabilitiesDto,
   type ChangeRolePermissionInput,

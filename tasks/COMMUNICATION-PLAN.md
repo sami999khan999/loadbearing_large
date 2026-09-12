@@ -405,7 +405,7 @@ check in every layer and the browser can parse the same shapes on the stream.
 
 #### 2.A Catalog (`contracts`)
 
-- [ ] `C2.1` **Domain event catalog** — fragments `contracts/src/catalog/member.events.ts`
+- [x] `C2.1` **Domain event catalog** — fragments `contracts/src/catalog/member.events.ts`
   (`memberEvents = { "member.invited": z.object({ invitationId, email, roleId }), "member.joined": …, "member.role.changed": … } as const satisfies Record<string, ZodType>`),
   later `messaging.events.ts`; merged in `catalog/index.ts` as `DOMAIN_EVENTS` (not
   `EVENT_CATALOG` — that name is observability's). Registry `contracts/src/registry/domain-events.ts`
@@ -418,6 +418,10 @@ check in every layer and the browser can parse the same shapes on the stream.
   is past tense against the vocabulary table. **Docs:** `contracts/docs/index.md`,
   `docs/opinions/vocabulary.md` (the activity/event row now points at the catalog),
   `docs/opinions/folders.md` (`catalog/` "used by" gains it).
+  `done: 2026-09-12` — the merge lives in `catalog/domain-events.ts` rather than in
+  `catalog/index.ts` beside `PROCEDURE_PERMISSIONS`: two unrelated merged records in one file is
+  how a fragment gets added to the wrong one. The past-tense assertion is a spec over
+  `DomainEvents.names()`.
 
 #### 2.B Schema (`infrastructure`)
 

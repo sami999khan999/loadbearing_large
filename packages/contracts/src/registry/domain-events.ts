@@ -1,0 +1,77 @@
+import { DOMAIN_EVENTS } from "../catalog/index.js";
+import { z } from "../import.js";
+import { Identifiers } from "../primitive/index.js";
+
+export type DomainEventName = keyof typeof DOMAIN_EVENTS;
+
+export type DomainEventPayload<N extends DomainEventName> = z.infer<(typeof DOMAIN_EVENTS)[N]>;
+
+// What a use-case hands the publisher. No id, no timestamp and no actor: those belong to
+// the publisher, which is the only thing that can assign them consistently.
+export interface DomainEventInput<N extends DomainEventName = DomainEventName> {
+  readonly name: N;
+  readonly payload: DomainEventPayload<N>;
+}
+
+// What a subscriber receives. `id` is the idempotency key every handler is required to
+// use, because at-least-once is what every broker offers and this one is no different.
+export interface DomainEvent<N extends DomainEventName = DomainEventName> {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly name: N;
+  readonly actorId: string;
+  readonly occurredAt: Date;
+  readonly payload: DomainEventPayload<N>;
+}
+
+const NAMES: readonly DomainEventName[] = Object.freeze(
+  Object.keys(DOMAIN_EVENTS) as DomainEventName[],
+);
+
+const envelopeFor = <N extends DomainEventName>(name: N) =>
+  z.object({
+    id: z.uuid(),
+    organizationId: Identifiers.organizationId,
+    name: z.literal(name),
+    actorId: Identifiers.userId,
+    occurredAt: z.coerce.date(),
+    payload: DOMAIN_EVENTS[name],
+  });
+
+// Built once at module load and frozen, for the reason `classes.md` gives: a lazily-built
+// lookup on a `static readonly` is mutable state wearing a keyword.
+const ENVELOPE = Object.freeze(
+  z.discriminatedUnion(
+    "name",
+    NAMES.map((name) => envelopeFor(name)) as unknown as [
+      ReturnType<typeof envelopeFor>,
+      ...ReturnType<typeof envelopeFor>[],
+    ],
+  ),
+);
+
+// The closed vocabulary of facts this system publishes. A name that is not here cannot be
+// published and cannot be subscribed to — both are compile errors.
+export class DomainEvents {
+  private constructor() {}
+
+  public static names(): readonly DomainEventName[] {
+    return NAMES;
+  }
+
+  // `Object.hasOwn`, not a bare index, for the reason `ProcedurePermissions` gives:
+  // `DOMAIN_EVENTS["toString"]` otherwise resolves up the prototype chain to a function.
+  public static isKnown(name: string): name is DomainEventName {
+    return Object.hasOwn(DOMAIN_EVENTS, name);
+  }
+
+  public static schema<N extends DomainEventName>(name: N): (typeof DOMAIN_EVENTS)[N] {
+    return DOMAIN_EVENTS[name];
+  }
+
+  // The whole envelope, so a consumer parses a job's payload in one call rather than
+  // reading `name` first and picking a schema by hand.
+  public static get envelope(): typeof ENVELOPE {
+    return ENVELOPE;
+  }
+}

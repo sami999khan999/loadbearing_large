@@ -12,3 +12,5 @@ export const PROCEDURE_PERMISSIONS: Readonly<Record<string, PermissionKey>> = {
   ...apiKeyProcedurePermissions,
   ...documentProcedurePermissions,
 };
+
+export { DOMAIN_EVENTS } from "./domain-events.js";
