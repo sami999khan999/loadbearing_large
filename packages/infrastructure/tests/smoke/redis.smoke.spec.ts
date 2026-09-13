@@ -46,7 +46,7 @@ describe("realtime against the running cache instance", () => {
   // subscriber's are the same string after ioredis has finished with both.
   it("delivers a published frame to a subscriber on the other client", async () => {
     const publisher = new RedisRealtimePublisher(redis.client());
-    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+    const subscriber = new RedisRealtimeSubscriber(() => redis.subscriberClient(), {
       maxStreamsPerUser: 8,
       maxAgeMs: 5_000,
       queueSize: 256,
@@ -80,7 +80,7 @@ describe("realtime against the running cache instance", () => {
   // PING is one of the eight commands valid in subscriber mode, which is what lets the
   // health check report on the connection the streams are actually on.
   it("answers healthy on a connection that has entered subscriber mode", async () => {
-    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+    const subscriber = new RedisRealtimeSubscriber(() => redis.subscriberClient(), {
       maxStreamsPerUser: 8,
       maxAgeMs: 50,
       queueSize: 8,

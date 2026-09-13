@@ -363,9 +363,9 @@ export class Container {
     this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
     this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
     this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
-    // The connection behind it is opened on the first `subscribe`, not here, so the
-    // worker never holds one — which is what makes `health().realtime` honestly `null`.
-    this.realtimeSubscriber = new RedisRealtimeSubscriber(this.redis.subscriberClient(), {
+    // The role is resolved on the first `subscribe`, not here, so the worker never holds
+    // one — which is what makes `health().realtime` honestly `null`.
+    this.realtimeSubscriber = new RedisRealtimeSubscriber(() => this.redis.subscriberClient(), {
       maxStreamsPerUser: config.realtime.maxStreamsPerUser,
       maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
       queueSize: Container.REALTIME_QUEUE_SIZE,
