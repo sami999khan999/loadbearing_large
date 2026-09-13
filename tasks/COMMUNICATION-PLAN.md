@@ -832,6 +832,14 @@ invalidation; on `resync` it invalidates every key the table names.
   and the `typing` frame land in Phase 4 with the stream that reads them; `C2.6`'s subscriber
   needs a publisher and nothing else. The wire union is `event` and `resync` for the same reason:
   `typing` names a `conversationId` that does not exist until Phase 5.
+  `done: 2026-09-13` — subscriber half landed, with four specs pairing the two fakes over one hub.
+  Two decisions. The signal is a three-member `CancellationSignal` declared in `primitive/`, not
+  `AbortSignal`: `lib` is `["ES2024"]` and nothing else, so the name does not exist here and
+  reaching it through `DOM` would put every browser global in the domain — `tsc --noEmit` passed
+  on the accident of vitest's ambient types and the `tsup` DTS build is what caught it. And the
+  two fakes are **not** wired together by default, because nearly every spec asks only what was
+  published; a spec asserting arrival builds the hub itself. `typing` stays deferred to Phase 5,
+  for the reason above.
 - [ ] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
   (cache client, `PUBLISH` of the JSON envelope, `id = Uuid.v7()`), `redis-realtime.subscriber.ts`
   (`constructor(redis /* subscriber role */, config: { maxStreamsPerUser; maxAgeMs; queueSize })`,

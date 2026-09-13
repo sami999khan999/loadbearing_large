@@ -224,6 +224,30 @@ assembled by concatenation at a call site, which is how one ends up without its 
 A user channel is **authorised by construction**: you only ever receive your own, so the stream needs
 no per-frame permission check.
 
+## `RealtimeSubscriber` takes a signal because the domain has no `AbortSignal`
+
+`subscribe(channels, signal)` returns an `AsyncIterable` that ends when the signal aborts or the
+adapter's maximum stream age elapses, and never buffers history. Breaking out of a `for await`
+would end it too — an async generator's `finally` runs on `return()` — but a signal is what lets
+something *other than the reader* end it: a shutdown, a stream that has been open too long, a cap
+on how many one person may hold.
+
+The signal's type is `CancellationSignal`, three members wide, declared in `primitive/`. It is not
+`AbortSignal`: `lib` here is `["ES2024"]` and nothing else, so there is no such name, and reaching
+one by adding `DOM` would put every browser global inside the domain. A real `AbortSignal`
+satisfies it structurally, so no adapter or router wraps anything.
+
+**The two fakes are deliberately not connected by default.** `TestContainer` builds a
+`RecordingRealtimePublisher` that records and an `InMemoryRealtimeSubscriber` over a hub of its
+own, because most specs only ask what was published. A spec asserting that a frame *arrived*
+builds one `InMemoryRealtimeHub` and passes both fakes over it — which is also the only way to
+write the assertion that matters, that the frame reached this user's channel and no other.
+
+One name collision worth knowing before you grep: `RealtimeSubscriber` is this port, and
+`MemberRealtimeSubscriber` is an `EventSubscriber` — a reaction to a committed domain event that
+happens to publish a realtime frame. Neither name is wrong in its own vocabulary and nothing
+compiles the two together, but they are different kinds of thing.
+
 ## `MailPublisher` returns nothing, and `MailRenderer` knows no transport
 
 These two are the mail pipeline's whole seam, and the split between them is the point:

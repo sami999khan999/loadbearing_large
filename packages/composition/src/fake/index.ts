@@ -4,6 +4,8 @@ export { InMemoryAnalyticsProjector } from "./in-memory-analytics.projector.js";
 export { InMemoryCacheStore } from "./in-memory-cache.store.js";
 export { InMemoryLogReader } from "./in-memory-log.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
+export { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
+export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";
 export { InMemoryStorageGateway } from "./in-memory-storage.gateway.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";

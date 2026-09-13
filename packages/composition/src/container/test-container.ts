@@ -5,6 +5,8 @@ import {
   InMemoryCacheStore,
   InMemoryLogReader,
   InMemoryOutboxGateway,
+  InMemoryRealtimeHub,
+  InMemoryRealtimeSubscriber,
   InMemoryStorageGateway,
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
@@ -41,6 +43,7 @@ import {
   type OutboxGateway,
   type QueuePublisher,
   type RealtimePublisher,
+  type RealtimeSubscriber,
   SERVER_CATALOG,
   type SessionResolver,
   SilentLogger,
@@ -68,9 +71,10 @@ export interface TestPorts {
   readonly logs: LogReader;
   readonly mailPublisher: MailPublisher;
   readonly mailRenderer: MailRenderer;
+  readonly maintenance: MaintenanceGateway;
   readonly outbox: OutboxGateway;
   readonly realtime: RealtimePublisher;
-  readonly maintenance: MaintenanceGateway;
+  readonly realtimeSubscriber: RealtimeSubscriber;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
@@ -116,9 +120,13 @@ export class TestContainer {
       logs: overrides.logs ?? new InMemoryLogReader(),
       mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
-      outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
-      realtime: overrides.realtime ?? new RecordingRealtimePublisher(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
+      outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
+      // Deliberately not connected to each other. A spec that wants a published frame to
+      // arrive builds one `InMemoryRealtimeHub` and passes both fakes over it.
+      realtime: overrides.realtime ?? new RecordingRealtimePublisher(),
+      realtimeSubscriber:
+        overrides.realtimeSubscriber ?? new InMemoryRealtimeSubscriber(new InMemoryRealtimeHub()),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),

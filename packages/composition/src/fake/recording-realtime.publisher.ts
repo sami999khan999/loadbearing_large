@@ -1,4 +1,5 @@
 import { type RealtimeChannel, type RealtimeMessage, RealtimePublisher } from "../import.js";
+import type { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 
 export interface PublishedFrame {
   readonly channel: string;
@@ -10,8 +11,15 @@ export interface PublishedFrame {
 export class RecordingRealtimePublisher extends RealtimePublisher {
   private readonly frames: PublishedFrame[] = [];
 
+  // The hub is optional because most specs only ask what was published. Pass one when the
+  // assertion is about a reader receiving it.
+  public constructor(private readonly hub?: InMemoryRealtimeHub) {
+    super();
+  }
+
   public override publish(channel: RealtimeChannel, message: RealtimeMessage): Promise<void> {
     this.frames.push({ channel, message });
+    this.hub?.publish(channel, message);
     return Promise.resolve();
   }
 

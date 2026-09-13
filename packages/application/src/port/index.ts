@@ -19,6 +19,7 @@ export { MaintenanceGateway, type SweepOutcome } from "./maintenance.gateway.js"
 export { OutboxGateway } from "./outbox.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
+export { RealtimeSubscriber } from "./realtime.subscriber.js";
 export {
   type RequestHeaders,
   type ResolvedSession,

@@ -55,6 +55,7 @@ describe("TestContainer", () => {
       "outbox",
       "queue",
       "realtime",
+      "realtimeSubscriber",
       "sessions",
       "storage",
       "unitOfWork",

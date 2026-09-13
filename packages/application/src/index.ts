@@ -105,6 +105,7 @@ export {
   type ProjectionCheckpoint,
   QueuePublisher,
   RealtimePublisher,
+  RealtimeSubscriber,
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
@@ -118,6 +119,7 @@ export {
 } from "./port/index.js";
 export {
   Authorizer,
+  type CancellationSignal,
   PartitionedTable,
   type PartitionedTableName,
   Principal,
