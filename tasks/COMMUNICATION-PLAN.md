@@ -49,8 +49,8 @@ members of one organization.
 
 ### What is outstanding
 
-- **`C5.8`'s fixed-query-count integration specs are not written.** The one gap inside a built
-  phase. They need a live Postgres, so write them during the run above.
+- **`C5.8`'s fixed-query-count integration specs are written and green** (2026-09-13). They found
+  two defects on the way in; see the item.
 - **Phase 6**, eleven items, filed with their reasoning. `C6.8` (the 10× load test) is the one
   worth promoting: it is the only one that could invalidate something already built.
 
@@ -212,8 +212,8 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   and `readonly name?: string` (the BullMQ job name, defaulting to the queue name as today) on
   `packages/application/src/port/queue.publisher.ts`; `BullMqQueuePublisher` passes both through;
   `RecordingQueuePublisher` records them. Spec in `infrastructure/tests/smoke/` publish test.
-  `done: 2026-09-12` — **unverified:** the two new smoke cases (job name, priority, and the
-  queue-name default) need a live Redis. Run `pnpm infra:up && pnpm smoke`.
+  `done: 2026-09-12` — **verified 2026-09-13** against a live Redis: `pnpm smoke` is 17/17,
+  the three queue cases included.
 - [x] `C1.3` **`EmailSender.send` returns a receipt** — `Promise<EmailReceipt>` with
   `{ messageId: string | null }` (nodemailer's `info.messageId`). Update `SmtpEmailSender`,
   `RecordingEmailSender`, both specs. The receipt is logged rather than stored, and it is what a
@@ -235,8 +235,10 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `done: 2026-09-12` — `PartitionedTable` landed in `application/src/primitive/` beside
   `QueueName` rather than in the port file: it is a closed vocabulary of strings, which is the
   stated reason `QueueName` lives there. The port takes the `PartitionedTableName` union.
-  **unverified:** the two `dropMonthlyPartitionsBefore` cases and the renamed ensure cases need
-  Postgres. Run `pnpm infra:up && pnpm db:migrate && pnpm --filter @loadbearing/infrastructure test`.
+  **verified 2026-09-13** against Postgres, and the two drop cases were a defect: their cutoffs
+  were in the future, so each swept every partition the migrations created and eleven other specs
+  failed on rows they could not place. Months moved into the past, and the case now asserts it
+  dropped nothing but its own. Fixed in `733b3d8`.
 
 #### 1.B Template catalog and ports (`contracts`, `application`)
 
@@ -407,16 +409,34 @@ never renumbered here, so the gap is the record.
 
 **Exit.** A sign-up in the local stack shows the verification mail in Mailpit **only while the
 worker runs**; stopping SMTP leaves the job retrying with backoff and emits `mail.delivery.failed`
-on the final attempt, with no orphaned row to reconcile; an invitation sent twice with the same
-`dedupeKey` produces one message. `pnpm check:architecture` 20/20, `typecheck`, `lint`, `test`,
-`smoke` green.
+on the final attempt, with no orphaned row to reconcile; ~~an invitation sent twice with the same
+`dedupeKey` produces one message~~ — **that clause is wrong, see below.** `pnpm check:architecture`
+20/20, `typecheck`, `lint`, `test`, `smoke` green.
+
+- [x] Sign-up with the worker **stopped**: the request succeeds, Mailpit stays where it was, and
+  the job waits in `bull:mail:prioritized` — the high-priority path `C1.20` describes. Starting
+  the worker delivers it. `done: 2026-09-13`
+- [x] Mailpit stopped, a password reset requested: `queue.job.failed` at attempts 1–5 on the
+  exponential ladder, then one `mail.delivery.failed {template: "auth.reset", attempts: 5}`. There
+  is no row to reconcile because the system deliberately stores no delivery record.
+  `done: 2026-09-13`
+- [-] "An invitation sent twice with the same `dedupeKey` produces one message" — **dropped as
+  written.** Invitation mail carries **no** `dedupeKey`, and `queued-invitation.mailer.ts` says
+  why: re-inviting replaces the row and issues a new token, so a suppressed second send would mail
+  a link the database no longer accepts. Measured: two invites to one address leave **one**
+  invitation row holding **one** token and send **two** messages — correct, and the opposite of
+  what this line asked for. The dedupe that does exist is `notification_<eventId>_<userId>` and
+  `digest_<org>_<user>_<day>`, and Phase 3's Exit line is what tests it. `done: 2026-09-13`
 
 > **Status, 2026-09-12.** Every item `C1.1`–`C1.25` is `[x]`. `check:architecture` is 20/20 with
 > no skip, and `typecheck`, `lint` and every suite are green except the `packages/infrastructure`
 > and `packages/composition` integration specs, which need Postgres and Redis and fail identically
-> on the untouched tree. **The Exit line itself is unticked and stays that way until it is run by
-> hand**: it needs `pnpm infra:up`, Mailpit and a live Redis, and the environment this was built
-> in has no Docker. What to run is in each item's `unverified:` note.
+> on the untouched tree.
+>
+> **Walked by hand 2026-09-13** against the live stack, on `localhost:3200` — 3000 and 3001 were
+> taken by another project on this machine, so `.env` names 3200 in `AUTH_URL`,
+> `AUTH_TRUSTED_ORIGINS`, `APP_BASE_URL` and `WEB_PORT`, and `AUTH_ENROLMENT_MODE=bootstrap` so
+> two sign-ups land in one organization. Two of the three clauses hold; the third was wrong.
 
 ---
 ### Phase 2 — Transactional outbox (closes `T-031`)
@@ -493,7 +513,7 @@ check in every layer and the browser can parse the same shapes on the stream.
   `sweepExpired` over `published_at` is exactly the vacuum problem partitions exist to avoid, and
   it would have been a second mechanism doing the first one's job. The guard against dropping a
   stuck event is `oldestPendingAt()`, checked before the cutoff.
-  **unverified:** the migration cannot be applied here. Run `pnpm infra:up && pnpm db:migrate`.
+  **verified 2026-09-13:** `0015` applies, and the whole chain applies to an empty database.
 
 #### 2.C Ports and domain (`application`)
 
@@ -554,9 +574,12 @@ check in every layer and the browser can parse the same shapes on the stream.
   inside one `unitOfWork.run`; a throw in `relay` rolls back and the rows are re-claimed next
   tick). Integration spec: two concurrent `drain` calls never hand out the same row; fixed
   query count of two per batch.
-  `done: 2026-09-12` — **unverified:** the whole spec needs Postgres, including the concurrency
-  case, which is the one that actually proves `SKIP LOCKED`. Run `pnpm infra:up && pnpm db:migrate
-  && pnpm --filter @loadbearing/infrastructure test`.
+  `done: 2026-09-12` — **verified 2026-09-13**, and it found the defect that made `drain` throw
+  on its first row: `db.execute` returns driver rows, so `occurred_at` arrived a string and
+  `tuples` called `.toISOString()` on it. `oldestPendingAt` returned one too, where
+  `oldest < cutoff` against a `Date` is false for every value — the retention guard could never
+  have fired. Fixed in `e644ed0`. `SKIP LOCKED` holds; the concurrency case needed the suite
+  serialised first, because `drain` is untenanted and another spec's rows are in its batch.
 - [x] `C2.8` **`OutboxConsumer` + `OutboxDrainSchedule`** — `apps/worker/src/consumer/outbox.consumer.ts`
   on `QueueName.EVENT`, `switch (job.name)`: `drain` → loop
   `container.outbox.drain(100, relay)` until a short batch or `MAX_BATCHES_PER_RUN = 20`,
@@ -604,9 +627,48 @@ drain twice over the same rows yields the same job ids and one `handle` call; `T
 > which `C2.6` needed. `T-031` is closed with both of its corrections applied and a third recorded.
 > `check:architecture` is 20/20 with no skip, and `typecheck`, `lint` and every suite are green
 > except the Postgres and Redis integration specs, which fail identically on the untouched tree.
-> **The Exit line itself is unticked**: the second half of it — a tab refetching without a reload —
-> also needs Phase 4's stream, which does not exist yet. What is verifiable today is the first
-> half, and it needs `pnpm infra:up && pnpm db:migrate`.
+>
+> **Walked by hand 2026-09-13**, against the live stack:
+>
+> - [x] Inviting with the worker **stopped** leaves exactly one pending `outbox_event` row; an
+>   invite that fails its guard (`CONFLICT`, an address already a member) leaves **none**. The
+>   transactional rollback proper is `PgOutboxPublisher > rolls the event back with the
+>   transaction that wrote it`, which now passes against Postgres.
+> - [x] Starting the worker published the waiting row **0.92 s** after `process.started`
+>   (`process.started` 05:13:26.255, `published_at` 05:13:27.171), and
+>   `outbox.drain.completed {events: 1, jobs: 2}`. The drain's own lines are at `debug` and
+>   `LOG_LEVEL=info` hides them, which is why an idle worker looks silent — that is deliberate
+>   for a job that runs once a second.
+> - [ ] "The inviter's second tab refetches the member list without a reload" — needs a browser.
+> - [!] **"Running the drain twice over the same rows yields the same job ids and one `handle`
+>   call" — the job ids hold, the one-`handle` half does not.** Replaying a `member.role.changed`
+>   row ran both subscribers a second time. See `C2.10` below; the *effect* is still idempotent,
+>   which is the guarantee that matters, but it is the subscriber that provides it and not the
+>   job id.
+> - [x] `T-031` closed; `check:architecture` 20/20.
+
+#### 2.E Found while walking the Exit line
+
+- [ ] `C2.10` **The `jobId` duplicate-suppression window is about five seconds, not
+  `removeOnCompleteAgeSeconds`.** BullMQ trims a queue's completed set when *any* job on it
+  completes, to that job's own `removeOnComplete`. `OutboxDrainSchedule` runs every second with
+  `removeOnComplete: 10` on the same `EVENT` queue, so it evicts the `deliver` jobs within a few
+  ticks — measured: two `deliver` entries present at t+1s, gone by t+5s, while
+  `removeOnCompleteAgeSeconds` asks for 86 400.
+  `C2.8`'s note reasons that "that age *is* the duplicate-suppression window and belongs in the
+  port"; that reasoning is wrong as built, and the note should say so whatever is decided here.
+  **It is not a correctness bug** — the subscriber contract is idempotent on `event.id`, the
+  notification dedupe index holds, and the client dedupes messages by id; a re-run costs a
+  duplicate cache-invalidation frame. Three options, none obviously right: put the drain's repeat
+  job on its own queue so its trim cannot reach deliveries; raise the drain's `removeOnComplete`
+  past the expected delivery volume (moves the number, does not fix the shape); or accept a
+  seconds-long window, which covers the race the design actually targets — a drain that claimed
+  rows and died before marking them — and correct the note.
+- [ ] `C2.11` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue.** With a
+  worker running, that worker picks it up and logs
+  `queue.job.failed {jobId: "smoke-unnamed"}` — the consumer rejects a job name it does not know,
+  correctly. Harmless, and confusing the first time. Either the smoke suite should use a queue
+  name no consumer listens on, or `docs/setup` should say to run it with the worker stopped.
 
 ---
 
@@ -688,7 +750,10 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   (§17); `notifications_user_fk_idx (user_id)` (§18). Retention twelve months (`C1.4` allowlist).
   `done: 2026-09-12` — migration `0017`, hand-edited to `PARTITION BY RANGE (created_at)` with
   six months of runway; the table joins `PartitionedTable.ALL` at twelve months' retention.
-  **unverified:** cannot be applied here. Run `pnpm infra:up && pnpm db:migrate`.
+  **verified 2026-09-13:** `0017` applies, `notifications_dedupe_uq` is accepted, and the
+  `created_at`-from-the-event argument holds end to end — the value crosses BullMQ as JSON and
+  `DomainEvents.envelope` coerces it back with `z.coerce.date()`, so a redelivery computes the
+  same instant and collides rather than landing beside itself.
 - [x] `C3.4` **`notification_preferences`** — `organization_id`, `user_id`, `category`,
   `channel` (`in_app | email`), `mode` (`immediate | digest | off`), `updated_at`; unique
   `(organization_id, user_id, category, channel)`; FK indexes. Absent row = the category's
@@ -817,10 +882,26 @@ is 20/20.
 > three components, two routes and thirteen specs. `check:architecture` is 20/20 with no skip, and
 > `typecheck`, `lint` and every suite are green except the Postgres and Redis integration specs,
 > which fail identically on the untouched tree.
-> **The Exit line itself is unticked**: every clause of it needs a live stack, and the bell
-> "moving on refocus" is the interim behaviour Phase 4 replaces. Two decisions are recorded at
-> their items rather than assumed — the migration grants by `EXISTS(member.read)` rather than by
-> role key, and the keyset cursor stays opaque to the client.
+> Two decisions are recorded at their items rather than assumed — the migration grants by
+> `EXISTS(member.read)` rather than by role key, and the keyset cursor stays opaque to the client.
+>
+> **Walked by hand 2026-09-13**, Alice (owner) changing Bob's role in a three-member tenant:
+>
+> - [x] One `notifications` row for Bob, `created_at` equal to the event's `occurred_at` to the
+>   millisecond (`05:19:22.900`), and `read_at` null.
+> - [x] **No duplicate on a replayed event.** `update outbox_event set published_at = null` twice:
+>   the row is re-drained and both subscribers re-run, and the notification count stays at **one**.
+>   `notifications_dedupe_uq` is what holds it — the argument that the `created_at` comes from the
+>   event and not the clock is the thing being relied on, and it works.
+> - [x] Default (`immediate`) email preference → `mail.delivery.sent {template:
+>   "notification.single"}` and a message in Mailpit. Exactly one, across two replays.
+> - [x] `digest` preference set through `notification/updatePreference` → the in-app row is still
+>   written and **no** mail is sent; firing `digest-fanout` by hand then produced
+>   `notification.digest.completed {organizations: 1, day: "2026-09-13"}`,
+>   `mail.delivery.sent {template: "notification.digest"}` and one "Your daily digest — 2 updates".
+> - [ ] "The bell count moves on refocus" and "the row is marked read optimistically and stays
+>   read after refetch" — both need a browser.
+> - [x] `check:architecture` 20/20.
 
 ---
 
@@ -910,7 +991,9 @@ invalidation; on `resync` it invalidates every key the table names.
   — `healthy()` alone would open a subscriber connection on the worker in order to report that it
   has none. Every frame is `safeParse`d rather than cast, because `at` crosses as a string and the
   contract coerces it.
-  **unverified:** the two smoke specs need a live Redis (`pnpm infra:up`).
+  **verified 2026-09-13:** both pass. Constructing the subscriber was opening the connection,
+  though — the container resolved the role while wiring, so `health().realtime` was never `null`
+  in any process. Fixed in `f0bfd41`.
 - [x] `C4.4` **Container + config + health** — `realtime: RealtimePublisher`,
   `realtimeSubscriber: RealtimeSubscriber` (public — the router needs it), built in every
   process; `ContainerConfig.realtime: { maxStreamsPerUser; streamMaxAgeSeconds }` from env
@@ -1068,9 +1151,21 @@ connection per web process, not one per tab; `/api/health` reports `realtime: tr
 > only the publisher. `check:architecture` is 20/20 with no skip, `typecheck` and `lint` are clean,
 > and every suite is green except the Postgres and Redis integration specs, which fail identically
 > on the untouched tree. Twenty-six new specs across four packages.
-> **The Exit line itself is unticked**: every clause of it needs two browsers and a running stack.
-> The one part provable here — that the pipe carries a frame end to end through the real handler —
-> is `C4.7`'s five specs, and they pass.
+>
+> **Walked by hand 2026-09-13**, three SSE streams open over curl — two for Bob, one for Carol:
+>
+> - [x] Alice changed Bob's role at `05:19:22.618`; **both** of Bob's streams carried
+>   `member.changed` and `notification.created` stamped `05:19:22.900` — **282 ms**, and Carol's
+>   stream carried nothing. The two tabs are demultiplexed off one socket, which is the design.
+> - [x] `redis-cli client list` shows **one** connection in subscriber mode across all three
+>   streams (`sub=2`, one channel per user), not one per tab.
+> - [x] `/api/health` reports `realtime: null` with nothing streaming and `true` with a stream
+>   open. **Both halves were wrong before this run** and both are fixed: the container resolved
+>   the subscriber role while wiring, so it was never `null`; and a connection in subscriber mode
+>   answers PING with `["pong", ""]`, so it was `false` — which made the whole web process report
+>   unhealthy for as long as anyone had a stream open. `f0bfd41` and `f5ac82b`.
+> - [ ] "Killing the web process and restarting it reconnects the stream, a `resync` frame
+>   arrives" — the reconnect is `EventSource`'s, so this needs a browser.
 
 ---
 
@@ -1111,7 +1206,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   `SystemRoleSeed` for tenants created from here on, and `0018_messaging_grants.sql` for the ones
   that already exist. `manage` is granted separately, by `EXISTS(rbac.role.manage)` rather than by
   role key — administering a channel is the same power as administering a role.
-  **unverified:** the migration needs a live Postgres.
+  **verified 2026-09-13:** `0019` applies.
   **The whole server slice is one commit, and that is forced rather than chosen.** Four merge
   points bind together: `messagingPermissions` in `CATALOG` (the gate fragment and the seed need
   the keys to be `PermissionKey`s at all), `messagingGates` in `GATES` (`route.spec.ts` wants a
@@ -1218,13 +1313,21 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   page regardless of size (rows + one lateral), `list` messages one, `unreadCounts` one;
   partition-bounded cleanup as `pg-activity-replay.reader.spec.ts` does (`T-026`).
   `Container.messaging = { … }`; the subscriber joins the frozen list in `C2.9`.
-  `done: 2026-09-13` — the two adapters, the cursor codec and the container wiring. **The
-  fixed-query-count integration specs are NOT written**, which is the one piece of Phase 5
-  outstanding: they need a live Postgres to mean anything, and a version against a fake would
-  assert only that drizzle builds the query the spec already spells out. Write them in the same
-  run as the Exit line. Until then the query counts this item promises — two statements for a
-  conversation page, one for a message page, one for `unreadCounts` — are a design claim and not
-  a measured one.
+  `done: 2026-09-13` — the two adapters, the cursor codec and the container wiring, and the
+  fixed-query-count specs **written and passing 2026-09-13** in
+  `tests/messaging/`: two statements for a conversation page at any size (one when the page is
+  empty), one for a message page first or later, one for `unreadCounts` at any width and none for
+  an empty list. Each is paired with the correctness it counts, because a count over a query
+  returning nothing proves nothing — and that pairing is what caught both defects below.
+  **Two real failures, neither of which any unit spec could have seen:**
+  `unreadCounts` correlated nothing. Drizzle renders a column in a raw fragment unqualified when
+  the query has one table, so `${messages.conversationId} = ${conversationMembers.conversationId}`
+  became `"conversation_id" = "conversation_id"` — and so did the tenant. Every badge read 100,
+  over every tenant's messages. Fixed in `9d02f5b`.
+  And `messages.created_at` was stored to the microsecond while every caller carries it back as a
+  millisecond `Date`, so `findById`, `edit` and `softDelete` matched no row and the reader's own
+  mark never cleared the badge. Migration `0021` and `d1ccb5b`;
+  `packages/application/docs/reference/messaging.md` carries the argument.
 - [x] `C5.9` **Notification policy rows** — `message.sent` in a **direct** conversation →
   kind `message.received`, recipients: members minus author, in-app `immediate`, email
   `digest` by default; suppressed while the recipient already has an unread `message.received`
@@ -1239,7 +1342,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   `when`, so "direct only" and "one unread at a time" are both declared in the table rather than
   branched on in the use-case. `message.sent` carries `conversationKind` now, so the policy tells
   a DM from a channel without a second query.
-  **unverified:** migration `0020` needs a live Postgres.
+  **verified 2026-09-13:** `0020` applies.
 
 #### 5.F Client
 
@@ -1313,11 +1416,25 @@ specs and the smoke suite.
 >    table and in `application/docs/reference/messaging.md`. The same Postgres rule forbids the
 >    send-dedupe index there, and no version of that index survives adding the partition key.
 >
-> **The Exit line itself is unticked**: every clause needs two browsers and a running stack.
-> `C5.8`'s fixed-query-count integration specs are **not written** — they need a live Postgres to
-> be worth anything, and a version against a fake would assert only that drizzle builds the query
-> the spec already spells out. They are the one piece of Phase 5 outstanding, and they belong in
-> the same run as the Exit line.
+> `C5.8`'s fixed-query-count integration specs are **written and green as of 2026-09-13**, and
+> they took two defects with them — an uncorrelated, untenanted unread count and a `created_at`
+> stored at a precision no caller could hold. Both are in the item's note.
+>
+> **Walked by hand 2026-09-13**, Bob and Carol in one DM, Carol holding the conversation stream:
+>
+> - [x] `0017`'s fix is confirmed applied: the whole 21-migration chain runs against an empty
+>   database, and `notifications_dedupe_uq` is accepted.
+> - [x] A send reaches Carol's stream as `message.sent` — **twice per send**, once from the
+>   use-case's fast path and once from the outbox, which is `messaging.md`'s "two publish paths,
+>   and the client dedupes". `message.edited`, `typing` and `message.deleted` all propagate.
+> - [x] The same `clientId` sent twice returns **the same message id** and leaves **one** row.
+> - [x] Carol's unread count is `1` and Bob's is `0` for the same conversation — his own messages
+>   are not counted, and the deleted one is not either. `markRead` on the newest takes hers to
+>   `0`. **Neither of those worked before this run**: `unreadCounts` correlated nothing, and the
+>   read mark could never reach a `created_at` stored at a precision it cannot hold.
+> - [x] Alice — a third member of the organization, not of the conversation — gets `FORBIDDEN`
+>   (403) on `message.list`, not an empty page.
+> - [ ] "Appears optimistically" and "typing … clears" are the two clauses that need a browser.
 
 ---
 
