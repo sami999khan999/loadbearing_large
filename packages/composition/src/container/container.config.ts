@@ -58,6 +58,14 @@ export interface ContainerConfig {
     readonly model: string;
     readonly dimensions: number;
   };
+  readonly realtime: {
+    // Per process, not per cluster: a shared counter would cost a round trip on every
+    // stream open, and the failure it prevents is one runaway tab.
+    readonly maxStreamsPerUser: number;
+    // A stream that has been open this long ends and the client reconnects, which is
+    // what stops a leaked reader holding a channel for the life of the process.
+    readonly streamMaxAgeSeconds: number;
+  };
   // ── the swappable stores ───────────────────────────────────────────────────
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.

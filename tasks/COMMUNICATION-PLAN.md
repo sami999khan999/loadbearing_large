@@ -864,7 +864,7 @@ invalidation; on `resync` it invalidates every key the table names.
   has none. Every frame is `safeParse`d rather than cast, because `at` crosses as a string and the
   contract coerces it.
   **unverified:** the two smoke specs need a live Redis (`pnpm infra:up`).
-- [ ] `C4.4` **Container + config + health** — `realtime: RealtimePublisher`,
+- [x] `C4.4` **Container + config + health** — `realtime: RealtimePublisher`,
   `realtimeSubscriber: RealtimeSubscriber` (public — the router needs it), built in every
   process; `ContainerConfig.realtime: { maxStreamsPerUser; streamMaxAgeSeconds }` from env
   `REALTIME_MAX_STREAMS_PER_USER` (8) and `REALTIME_STREAM_MAX_AGE_SECONDS` (1800) in both
@@ -873,6 +873,14 @@ invalidation; on `resync` it invalidates every key the table names.
   no subscriber connection, the subscriber `PING` otherwise; `healthy` treats `false` as
   degraded and `null` as absent, the `analytics` rule. **Docs:** `container.md`, `health.md`,
   both `env.md`, `.env.example`, CI `env:`.
+  `done: 2026-09-13` — there is no `health.md`; the health section lives inside `container.md`,
+  which is where it was extended. Three decisions. `REALTIME_STREAM_MAX_AGE_SECONDS` is **not**
+  fingerprinted, only the cap: the cap is enforced in the adapter, so a client that knew it could
+  work around it, while the age is something the client observes happening regardless. The queue
+  size is a private constant on `Container` rather than config — how far behind a reader may fall
+  before a refetch beats the memory is the same number on every deployment. And `null` needed
+  `RedisConnection.opened(role)` from `C4.3`: `healthy("subscriber")` would create the connection
+  it is reporting on.
 
 #### 4.B Contract, transport, permission
 

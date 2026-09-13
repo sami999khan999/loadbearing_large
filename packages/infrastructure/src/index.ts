@@ -45,7 +45,9 @@ export {
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
+  type RedisRealtimeConfig,
   RedisRealtimePublisher,
+  RedisRealtimeSubscriber,
   type RedisRole,
 } from "./redis/index.js";
 export { type S3Config, S3StorageGateway, StorageKey } from "./s3/index.js";

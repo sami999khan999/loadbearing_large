@@ -32,6 +32,11 @@ const Schema = z
     EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
     OPENAI_API_KEY: z.string().default(""),
 
+    // Per process. The cap exists to stop one runaway tab, which is local by
+    // construction, and the age is what releases a channel a leaked reader is holding.
+    REALTIME_MAX_STREAMS_PER_USER: z.coerce.number().int().positive().default(8),
+    REALTIME_STREAM_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(1800),
+
     // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
     // it just means the platform kills you mid-drain.
     WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
@@ -163,6 +168,10 @@ export class Env {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
+      },
+      realtime: {
+        maxStreamsPerUser: e.REALTIME_MAX_STREAMS_PER_USER,
+        streamMaxAgeSeconds: e.REALTIME_STREAM_MAX_AGE_SECONDS,
       },
       // Undefined unless a URL was given, which is what `Container` branches on: a
       // partly-filled object builds a connection pointed at nothing.

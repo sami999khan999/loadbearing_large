@@ -145,14 +145,15 @@ something to say on the way out.
 ## `health()` pings what callers actually hold
 
 ```ts
-const [database, cache, queue, analytics] = await Promise.all([
+const [database, cache, queue, analytics, realtime] = await Promise.all([
   this.database.isHealthy(),
   this.redis.healthy("cache"),
   this.redis.healthy("queue"),
   this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
+  this.redis.opened("subscriber") ? this.redis.healthy("subscriber") : Promise.resolve(null),
 ]);
 
-return { healthy: database && cache && queue && analytics !== false, database, cache, queue, analytics };
+return { healthy: database && cache && queue && analytics !== false && realtime !== false, … };
 ```
 
 Postgres and **both** Redis instances. A cache that is down degrades; a queue that is down silently
@@ -166,6 +167,18 @@ the deployment is unhealthy; it does not say whether to restart the pod or page 
 **ClickHouse only when it is part of this deployment**, and `null` rather than `true` when it is not:
 that container is not healthy and not degraded, it is not running one, and a probe body saying `true`
 claims otherwise. The roll-up reads `analytics !== false`, so absent does not fail the probe.
+
+**The realtime subscriber follows the same `null` rule, for a different reason.** ClickHouse is
+absent because the deployment does not run one; the subscriber connection is absent because
+*nothing in this process has opened a stream yet* — which is every worker, always, and a web
+replica until its first signed-in tab. `opened("subscriber")` is what makes that answerable:
+calling `healthy("subscriber")` would **create** the connection, and a worker reporting `true` for
+a socket it opened purely in order to answer the question is reporting on itself.
+
+Once a stream has been opened it is a real dependency and reports like one, which is why the
+roll-up reads `realtime !== false` rather than ignoring it. A web replica whose subscriber
+connection has died serves every request correctly and delivers nothing, and that is exactly the
+failure a readiness probe should catch — the pod looks fine from every other angle.
 
 **Loki is deliberately absent from this list**, even though `LokiLogReader.healthy()` exists. Loki
 being down loses diagnostics and nothing else. Failing a readiness probe over it takes the application

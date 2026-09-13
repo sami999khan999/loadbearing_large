@@ -102,3 +102,19 @@ quietly reaching some other localhost.
 
 The desktop shell is cross-origin against both and supplies absolute URLs of its own through
 `import.meta.env`.
+
+## The two realtime numbers are per process
+
+`REALTIME_MAX_STREAMS_PER_USER` (8) caps how many concurrent streams one person may hold **on this
+replica**, and `REALTIME_STREAM_MAX_AGE_SECONDS` (1800) is how long any one of them lives before it
+ends and the client reconnects.
+
+Neither is cluster-wide, and that is the decision rather than a limitation. A shared counter would
+cost a Redis round trip on every stream open, and the failure the cap exists to prevent — one tab
+in a reconnect loop opening streams faster than it closes them — is local to the replica it is
+happening on. Behind a load balancer the effective per-person total is the cap times the replica
+count, which is the right order of magnitude for a limit whose job is to bound one bug.
+
+The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
+error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.

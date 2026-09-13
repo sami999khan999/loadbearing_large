@@ -170,6 +170,7 @@ export {
   RedisCacheStore,
   RedisConnection,
   RedisRealtimePublisher,
+  RedisRealtimeSubscriber,
   S3StorageGateway,
   SmtpEmailSender,
   TransactionScope,

@@ -75,6 +75,9 @@ jobs:
       EMBEDDING_MODEL: text-embedding-3-small
       EMBEDDING_DIMENSIONS: "1536"
 
+      REALTIME_MAX_STREAMS_PER_USER: "8"
+      REALTIME_STREAM_MAX_AGE_SECONDS: "1800"
+
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }

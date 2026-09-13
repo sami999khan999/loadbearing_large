@@ -80,9 +80,11 @@ import {
   QueueDocumentIndexUseCase,
   type QueuePublisher,
   type RealtimePublisher,
+  type RealtimeSubscriber,
   RedisCacheStore,
   RedisConnection,
   RedisRealtimePublisher,
+  RedisRealtimeSubscriber,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
@@ -142,11 +144,18 @@ export interface HealthReport {
   readonly queue: boolean;
   // `null` when this deployment runs no ClickHouse — absent, rather than passing.
   readonly analytics: boolean | null;
+  // `null` in a process that has opened no subscriber connection, which is every worker.
+  // Not a failure, and not something to open a connection in order to report on.
+  readonly realtime: boolean | null;
 }
 
 // The only class in the repository that knows both an abstract port and the concrete
 // class behind it. That is the entire job, and it is why a swap is one line here.
 export class Container {
+  // Not configurable: the number that matters is how far behind a reader may fall before
+  // a refetch is cheaper than the memory, and it is the same on every deployment.
+  private static readonly REALTIME_QUEUE_SIZE = 256;
+
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
   private readonly redis: RedisConnection;
@@ -185,6 +194,9 @@ export class Container {
   public readonly eventPublisher: DomainEventPublisher;
   public readonly outbox: OutboxGateway;
   public readonly realtime: RealtimePublisher;
+  // Public because the web router holds it directly: a stream is the one thing a
+  // procedure reads from a port rather than from a use-case.
+  public readonly realtimeSubscriber: RealtimeSubscriber;
   public readonly subscribers: SubscriberRegistry;
   // No principal, because it owns no tenant's rows. Reachable only from the worker's
   // schedules, never from a request path.
@@ -319,6 +331,13 @@ export class Container {
     this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
     this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
     this.realtime = new RedisRealtimePublisher(this.redis.client());
+    // The connection behind it is opened on the first `subscribe`, not here, so the
+    // worker never holds one — which is what makes `health().realtime` honestly `null`.
+    this.realtimeSubscriber = new RedisRealtimeSubscriber(this.redis.subscriberClient(), {
+      maxStreamsPerUser: config.realtime.maxStreamsPerUser,
+      maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
+      queueSize: Container.REALTIME_QUEUE_SIZE,
+    });
 
     const notifications = new PgNotificationRepository(this.database, this.transactions);
     const notificationPreferences = new PgNotificationPreferenceRepository(
@@ -642,21 +661,25 @@ export class Container {
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
   // of a failing probe is what an operator reads. See docs/reference/container.md.
   public async health(): Promise<HealthReport> {
-    const [database, cache, queue, analytics] = await Promise.all([
+    const [database, cache, queue, analytics, realtime] = await Promise.all([
       this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
       // `null` rather than `true` when absent: it is not healthy and not degraded, it
       // is not running one. Loki is absent from this list on purpose.
       this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
+      // Asked only of a connection that exists. `healthy()` would create one, and a
+      // worker reporting on a subscriber it opened to answer this is reporting on itself.
+      this.redis.opened("subscriber") ? this.redis.healthy("subscriber") : Promise.resolve(null),
     ]);
 
     return {
-      healthy: database && cache && queue && analytics !== false,
+      healthy: database && cache && queue && analytics !== false && realtime !== false,
       database,
       cache,
       queue,
       analytics,
+      realtime,
     };
   }
 

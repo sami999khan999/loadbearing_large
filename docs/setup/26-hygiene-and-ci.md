@@ -511,6 +511,8 @@ const ENV_FINGERPRINTS = [
   // learns whether Google is configured from the session snapshot, not this schema.
   "GOOGLE_CLIENT_SECRET",
   "AUTH_ENROLMENT_MODE",
+  // Enforced in the subscriber adapter, so a client that knew it could only work around it.
+  "REALTIME_MAX_STREAMS_PER_USER",
 ];
 ```
 
