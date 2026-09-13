@@ -4,6 +4,7 @@ updated: 2026-09-13
 owner: sami
 schema: plan/v1
 source: tree at c72ca9e (claude/sleepy-franklin-yqa9av), 2026-09-13
+verified: tree at 49703c9, against a live stack, 2026-09-13
 ---
 
 # Database scaling plan
@@ -14,6 +15,9 @@ source: tree at c72ca9e (claude/sleepy-franklin-yqa9av), 2026-09-13
 > 2. Change progress by editing the checkbox marker only: `[ ]` todo · `[~]` in progress ·
 >    `[!]` blocked · `[x]` done · `[-]` dropped. Add `done: YYYY-MM-DD` when closing, and
 >    `unverified:` naming the command when the proof needs a container the executor lacks.
+>    A `verified:` line means the item's *premise* was tested against a live stack and holds;
+>    a `corrected:` line means it did not and the text above was changed. Neither moves a
+>    checkbox: nothing here has been built.
 > 3. Phases run in order. A phase may start when the previous phase's **Exit** line is true.
 >    Inside a phase, checklists run top to bottom; items inside one are independent unless
 >    **Depends on** says otherwise.
@@ -82,7 +86,12 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
    `shard_assignments`, `activity_archive`. `local` — present on every physical database and
    written in whichever transaction is open: `activity_log`, `outbox_event`. `routed` — everything
    a tenant produces: `notifications`, `notification_preferences`, `conversations`,
-   `conversation_members`, `messages`, `document_chunks`, and every future slice. RBAC on the
+   `conversation_members`, `messages`, `document_chunks`, and every future slice. Those three
+   lists cover all twenty-two tables in `pg/schema/` exactly once, with nothing left over.
+   `local` has three writers beyond the two that insert into it, and each is already looped per
+   shard by `S3.16`: `PgOutboxGateway.drain` (`update outbox_event set published_at`),
+   `PgActivityArchiveGateway` (detach, attach, drop on `activity_log`) and
+   `PgMaintenanceGateway` (partition DDL on both). RBAC on the
    catalog is what keeps sign-in, the switcher, capability resolution and the founder flow each
    inside one transaction; the cost is that the catalog is the last single primary, and §4 files
    what to do about it.
@@ -105,7 +114,11 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
    DDL use. pgBouncer is Tier 0 (`docs/opinions/dependencies.md`): the deployment runs it, no
    manifest names it, and a managed pooler replaces it in production without a code change.
 10. **Timeouts move server-side.** `pg` sends `statement_timeout` as a startup parameter, which a
-    transaction-mode pooler must be told to ignore — and then it is gone. `ALTER ROLE CURRENT_USER
+    transaction-mode pooler must be told to ignore — and then it is gone. Measured, not assumed:
+    without the ignore list `new Database({ url })` never connects at all
+    (`unsupported startup parameter: statement_timeout`), and with it `SHOW statement_timeout`
+    reads `0`, not a smaller number. Unlimited, on every application connection, is the state
+    this decision exists to prevent. `ALTER ROLE CURRENT_USER
     SET …` in a migration is the floor that survives the pooler; the worker's longer batch timeout
     is `SET LOCAL` inside `PgUnitOfWork.run`, which is transaction-scoped and therefore
     pooler-safe. The startup parameter stays for direct connections.
@@ -116,6 +129,11 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     which makes the count twenty-three everywhere the docs say twenty.
 
 ### What exists and is reused (verified against the tree at `c72ca9e`)
+
+Re-read at `49703c9`, where every line below still holds. One thing moved: a twenty-second
+migration, `0021_cold_guardian.sql`, has landed since `c72ca9e`, so the numbers this plan
+reserves shift by one — `S1.7` is `0022`, `S3.3` is `0023` — and `check-architecture` §21 runs
+against twenty-two migrations, not twenty-one.
 
 - `Database` takes a config object, not a URL — `docs/setup/13` says so it could grow pool tuning
   without touching call sites. It grows here.
@@ -230,9 +248,19 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   hand-written: `ALTER ROLE CURRENT_USER SET statement_timeout = '30s'`,
   `… SET idle_in_transaction_session_timeout = '60s'`, `… SET lock_timeout = '10s'`. `CURRENT_USER`
   because the role name is the deployment's, not the repository's. Applies to new sessions only;
-  the pooler's server connections pick it up on their next reset. `§20` sees no table, so it
-  passes; the migration carries the comment saying it is the pooler floor. **Docs:**
+  the pooler's server connections pick it up on their next **reconnect**. `§20` sees no table, so
+  it passes; the migration carries the comment saying it is the pooler floor. **Docs:**
   `docs/setup/13` §13.6 gains "the role-settings migration".
+  `verified: 2026-09-13` — the migrator applies `ALTER ROLE CURRENT_USER SET …` inside its own
+  transaction without complaint, and `pg_db_role_setting` carries all three afterwards. A fresh
+  pgBouncer server connection then reads `statement_timeout = 30s` through `:6432`.
+  `corrected: 2026-09-13` — "on their next reset" was wrong and the word mattered. `DISCARD ALL`
+  is `RESET ALL`, which restores the values the session read *at startup*; a server connection
+  already open when the migration lands keeps `statement_timeout = 0` until it is closed — up to
+  `server_lifetime`, an hour by default. Measured: 30s direct and still `0` through the pooler
+  until the pooler was restarted. The item now owes a deploy step — `RECONNECT` on the pgBouncer
+  console, or a restart — and `S1.13` owes the paragraph saying why skipping it leaves every
+  pooled connection with no timeout for an hour.
 - [ ] `S1.8` **`SET LOCAL` in `PgUnitOfWork.run`** — when `statementTimeoutMs` differs from the
   role floor (the worker), `run` issues `set local statement_timeout = <ms>` as the first
   statement of the transaction, on the transaction handle, so it holds through pgBouncer and dies
@@ -240,6 +268,10 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   asymmetry: batch work is transactional by the outbox rules already. `packages/infrastructure/tests/transaction/pg-unit-of-work.spec.ts`
   asserts `SHOW statement_timeout` inside `run` equals the configured value and outside it equals
   the role's. **Docs:** `packages/infrastructure/docs/reference/unit-of-work.md`.
+  `verified: 2026-09-13` — through `:6432`, against the real `PgUnitOfWork`: `set local
+  statement_timeout = 120000` reads back `2min` inside `run`, `30s` on the pool handle after it,
+  and `30s` again in the next transaction, which is the one that would have inherited a leak off
+  a recycled server connection. The mechanism is pooler-safe as written.
 
 #### 1.C pgBouncer in the stack (`infra`, `docs`)
 
@@ -253,22 +285,74 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   -c max_connections=200`, and `infra/postgres.init.sql` creates `pg_stat_statements` — the
   measurement that answers "which query" before any move on the §5 ladder. **Docs:**
   `docs/infra/reference/compose.md`, `docs/setup/11`.
+  `verified: 2026-09-13` — `edoburu/pgbouncer:v1.24.1-p1` reads both names this item depends on:
+  `AUTH_TYPE` and `IGNORE_STARTUP_PARAMETERS` are lines 120 and 134 of its `entrypoint.sh`, and
+  the image's own default for the second is `extra_float_digits` alone, which is why leaving it
+  out is the failure `S1.10` describes rather than a milder setting. `AUTH_TYPE=scram-sha-256`
+  authenticates against the compose Postgres with no userlist of our own. Separately, a scratch
+  `pgvector/pgvector:pg17` started with exactly the three command flags above reports
+  `shared_preload_libraries = pg_stat_statements`, `track_io_timing = on`, `max_connections = 200`,
+  and `create extension pg_stat_statements` then tracks.
+  `corrected: 2026-09-13` — one operator note the item was missing: `postgres.init.sql` is a
+  `docker-entrypoint-initdb.d` script, so it runs **only on a first boot**. Every machine with an
+  existing `pgdata` volume — this one included — needs the extension created by hand or the
+  volume dropped. Add that sentence to `S1.13`'s page; without it the flags are on, the extension
+  is absent, and `pg_stat_statements` reads as an empty view rather than an error.
 - [ ] `S1.10` **`.env.example` and the scripts** — `DATABASE_URL` → `:6432`,
   `DATABASE_DIRECT_URL` → `:5432`, with the comment that the second is for DDL. `packages/infrastructure/package.json`
   `db:migrate` / `db:seed` / `db:generate` / `db:studio` and `drizzle.config.ts`,
   `migrate.ts`, `seed.ts` read `DATABASE_DIRECT_URL ?? DATABASE_URL`. `tooling/scripts/boot-smoke.mjs`
   waits on both ports. **Docs:** `docs/setup/11`, `docs/setup/13` §13.5.
+  `verified: 2026-09-13` — this item's premise is the sharpest one in Phase 1 and it holds
+  exactly. Pointed at a transaction-mode pgBouncer **without** `statement_timeout` in the ignore
+  list, the repository's own `Database` does not connect: pgBouncer closes the socket with
+  `unsupported startup parameter: statement_timeout` before authentication, and drizzle surfaces
+  it as a bare `Failed query`. With the four names in the list it connects, and `SHOW
+  statement_timeout` reads `0` — the same connection reads `30s` on `:5432`. So the pooler does
+  not weaken the timeout, it removes it, and `S1.7` is not an optimisation but the only thing
+  standing between a pooled deployment and unbounded statements.
 - [ ] `S1.11` **The archive's DDL goes direct** — `PgActivityArchiveGateway`'s
-  `detach … concurrently` cannot run inside a transaction and must not run through a
-  transaction pooler; it takes a second `Database` built from `directUrl` (the container owns
-  it, `dispose()` closes it), and `PgMaintenanceGateway`'s partition DDL uses the same handle.
-  **Docs:** `packages/infrastructure/docs/reference/activity-archive.md`.
+  `detach … concurrently` cannot run inside a transaction, and the role floor `S1.7` sets is
+  the wrong ceiling for it; it takes a second `Database` built from `directUrl` (the container
+  owns it, `dispose()` closes it), and `PgMaintenanceGateway`'s partition DDL uses the same
+  handle. **Docs:** `packages/infrastructure/docs/reference/activity-archive.md`.
+  `corrected: 2026-09-13` — **"must not run through a transaction pooler" was wrong, and it was
+  this item's whole stated reason.** Measured against a scratch partitioned table:
+  `alter table … detach partition … concurrently` **succeeds** through pgBouncer in transaction
+  mode as a single statement, and fails identically on both paths — pooled and direct — the
+  moment it is inside `PgUnitOfWork.run`: `ALTER TABLE … DETACH CONCURRENTLY cannot run inside a
+  transaction block`. The constraint is the transaction, not the pooler, and the code already
+  honours it by not making `archive()` one. Nor does the rest of the method need session
+  affinity: `rows()` pages by keyset with no server-side cursor, so every statement in the
+  detach → stream → record → verify → drop sequence stands alone.
+  What survives is a smaller and different argument, and the item is kept on it: after `S1.7`
+  every pooled session inherits `statement_timeout = 30s` and `lock_timeout = 10s`, and a
+  month-sized `drop table` or a detach waiting behind a long reader will exceed both. A direct
+  handle is where the archive can set its own. The cost of being killed mid-detach is not a
+  retry either — Postgres leaves the partition detach-pending until someone issues
+  `ALTER TABLE … DETACH PARTITION … FINALIZE`.
+  `unverified:` the FINALIZE path — documented behaviour, not reproduced here. Rewrite the
+  item's first clause before building it; a reader who acts on the old sentence will also
+  believe the seed and the migrator need `DATABASE_DIRECT_URL` for a reason they do not have.
 - [ ] `S1.12` **The pooled smoke spec** — `packages/infrastructure/tests/smoke/pooled.spec.ts`:
   through `DATABASE_URL`, `SHOW statement_timeout` inside a `PgUnitOfWork.run` equals the
   worker override and outside equals the role floor (`S1.7`); nested `run` is a savepoint that
   rolls back alone; two connections contend on `pg_advisory_xact_lock` and serialise;
   `PgOutboxGateway.drain` from two callers claims disjoint rows; through `DATABASE_DIRECT_URL`,
   `detach partition … concurrently` succeeds. Runs under `pnpm smoke`. **Docs:** `docs/setup/27`.
+  `verified: 2026-09-13` — every case this spec is meant to assert was run by hand through
+  `:6432` first, so the spec is being written against known answers rather than hopes. Nested
+  `PgUnitOfWork.run` is a savepoint that rolls back alone (`1,3` survive an inner throw); two
+  connections on `pg_advisory_xact_lock(918273)` serialise (`A-acquired → A-released →
+  B-acquired`); two `PgOutboxGateway.drain` callers over twenty pending rows claim ten each with
+  **zero** overlap, so `FOR UPDATE SKIP LOCKED` is unharmed by the pooler; and Better Auth's
+  `drizzleAdapter` signs `alice@example.test` in through the pooled URL, writing a session and
+  resolving `activeOrganizationId`, with `pg_stat_activity` showing the connections arriving from
+  the pgBouncer container rather than the host. Add the Better Auth case to the spec's list — it
+  is the path most likely to break on a pooler and the one nobody would think to write.
+  `corrected: 2026-09-13` — the `detach … concurrently` case must assert the transaction
+  boundary, not the URL: it succeeds on **both** URLs as a single statement and fails on both
+  inside `run`. See `S1.11`.
 - [ ] `S1.13` **Docs** — new `docs/infra/reference/pgbouncer.md` (why transaction mode, the
   startup-parameter trap and the role floor that closes it, what `DISCARD ALL` costs, sizing:
   `DEFAULT_POOL_SIZE × databases` against `max_connections`, and the managed-pooler swap), added
@@ -329,6 +413,17 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   ensuring. `partitions.schedule.ts`'s comment about the 2027 deadline is updated to say the
   deadline is now recovered at every boot. **Docs:** `apps/worker/docs/reference/schedules.md`,
   `docs/setup/25` §25.6, `docs/setup/09b` code table.
+  `verified: 2026-09-13` — the mechanism this builds on works. Five future `notifications`
+  partitions were dropped by hand, leaving only the current month; the real `MaintenanceConsumer`
+  (not the gateway — the consumer, built on a real `Container` and handed a `partitions` job)
+  recreated them and logged `maintenance.partitions.ensured table=notifications created=2`.
+  It also confirmed both halves of the gap this item closes: `PartitionsSchedule` registers
+  `0 2 1 * *` and nothing else, so the recovery happens only if the worker is awake on the first;
+  and the run emitted no runway line, because there is none to emit.
+  One thing to write into the item: `ensureMonthlyPartitions` restores the **`MONTHS_PER_RUN`
+  window**, not what was dropped. Five gone, two back. That is the intended behaviour and it is
+  also why `partition.runway.low` has to count what exists rather than what the last run created
+  — a run that creates zero is the healthy case and the starved case alike.
 
 #### 2.B The guard and the proof (`tooling`, `infrastructure`)
 
@@ -347,6 +442,29 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `Append` child. This is the assertion that a future `WHERE` clause that drops the partition
   column is caught by a test, not by a slow production query. **Docs:**
   `packages/infrastructure/docs/reference/partitions.md` (new, `S2.8`).
+  `corrected: 2026-09-13` — **the premise is wrong: there is no one-month window to pass.**
+  `PgNotificationRepository.list` has no lower bound on `created_at` at all — the keyset cursor
+  supplies only the upper half of the predicate, `(created_at, id) < (at, id)`. Measured on six
+  live partitions with `EXPLAIN (FORMAT JSON)`:
+
+  | query | partitions scanned |
+  |---|---|
+  | `list`, no cursor | **6 of 6** |
+  | `list`, with a cursor | **6 of 6** |
+  | `countUnread` | **6 of 6** |
+  | `outbox_event` drain | **6 of 6** |
+  | `activity_log` replay (`occurred_at > checkpoint`) | 5 of 6 |
+  | `activity_log` daily rollup (`>= from and < to`) | **1** |
+  | `notifications` with an explicit one-month range | **1** |
+  | `markRead` (`created_at =`) | **1** |
+
+  A row-constructor `<` is not decomposed by the partition pruner, so even a paged read widens
+  rather than narrows: the cursor did not prune the *newer* partitions either. Only the two
+  queries that already carry a range or an equality on the partition column prune to one.
+  Written as specified this spec cannot pass on two of the three tables, and written to pass it
+  would assert today's behaviour — every inbox page and every bell count touching every month,
+  six today and fourteen once `notifications` retention fills its year.
+  The spec is still worth having; it now has a fix to assert against. **Depends on:** `S2.9`.
 - [ ] `S2.6` **`messages` — the recorded exception** — no code. `messaging.schema.ts`'s comment
   gains the trigger: reopen when one month of `messages` passes 50 M rows or
   `messages_keyset_idx` passes 10 GB, and the shape to build then is `PARTITION BY RANGE
@@ -365,12 +483,30 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `docs/opinions/data-and-scale.md` §4.2 rewritten around the allowlist entry shape;
   `docs/ai/rules/data.md` partition bullet updated; `docs/setup/13` §13.6 hand-edit paragraph
   points at §21.
+- [ ] `S2.9` **The reads get a partition bound** — filed by the `EXPLAIN` at `S2.5`, which found
+  that three of the four hot reads over a partitioned table scan every month. The shape is a
+  floor, not a window: a read that walks backwards in time needs a lower bound it can push to
+  the pruner, and the keyset cursor is the wrong half of the predicate.
+  `UnreadQuery` gains `since: Date` and `PgNotificationRepository.list` adds
+  `gte(notifications.createdAt, since)` beside the existing cursor clause, defaulted at the
+  use-case to the retention horizon (`S2.1`'s `retentionMonths` for `notifications`, twelve) so
+  the deep page still terminates and a caller cannot ask for an unbounded scan;
+  `countUnread` takes the same floor. `PgOutboxGateway.drain` takes
+  `occurred_at > now() - interval '<retentionMonths> months'` from the same entry — a pending row
+  older than its own retention is one the prune has already dropped, so the bound costs nothing
+  and removes a growing scan from the hottest loop in the worker.
+  Then `S2.5` asserts one `Append` child per read, which is the state this item creates rather
+  than the one it found. **Docs:** `packages/application/docs/reference/notification-policy.md`,
+  `packages/infrastructure/docs/reference/partitions.md` (`S2.8`),
+  `packages/application/docs/reference/ports.md` (the `UnreadQuery` shape).
+  **Depends on:** `S2.1`.
 
-**Exit.** `pnpm check:architecture` is 21/21 with §21 passing on the twenty-one existing
+**Exit.** `pnpm check:architecture` is 21/21 with §21 passing on the twenty-two existing
 migrations; removing `notifications` from `PartitionedTable.ALL` fails §21; starting the worker
 against a database whose future partitions were dropped by hand recreates them and prints nothing;
 dropping them down to one future month prints `partition.runway.low`; `partition-pruning.spec.ts`
-is green; `pnpm db:partitions` prints three tables with their runway.
+is green — which now means `S2.9` has landed, since on the tree as found it cannot be;
+`pnpm db:partitions` prints three tables with their runway.
 
 ---
 
@@ -427,11 +563,33 @@ to fail on the catalog foreign keys until `S4.1`.
   `moved_at` nullable; `shard_assignments_virtual_idx (virtual_shard)` for the move job. A
   catalog table, so no `organization_id` — §9's exemption set becomes derived from
   `CatalogTable` (`S3.18`), and this is the first table to rely on it. Migration
-  `0022_*.sql`, generated, then hand-appended with the backfill:
+  `0023_*.sql`, generated, then hand-appended with the backfill:
   `insert into shard_assignments (shard_key, virtual_shard) select id::text, <fnv1a-mod-256 in SQL> from organizations on conflict do nothing`
   — the same function `S3.11` ships in TypeScript, with a spec asserting both agree on the
   pinned vectors. **Docs:** `docs/setup/13` §13.3 modelling notes, `docs/opinions/vocabulary.md`
   table list.
+  `verified: 2026-09-13` — "FNV-1a in SQL" is real, in both the forms a migration could use, and
+  both agree with `Math.imul(h, 0x01000193) >>> 0` on all ten pinned uuids (`206, 209, 145, 188,
+  117, 226, 249, 143, 255, 48`). No script fallback is needed. The backfill takes the recursive
+  CTE, so it stays one `insert … select` and leaves no function behind:
+
+  ```sql
+  with recursive fold(id, i, h) as (
+    select id, 0, 2166136261::bigint from organizations
+    union all
+    select f.id, f.i + 1,
+           ((f.h # get_byte(convert_to(f.id::text, 'UTF8'), f.i)::bigint) * 16777619) & 4294967295
+    from fold f where f.i < octet_length(convert_to(f.id::text, 'UTF8'))
+  )
+  insert into shard_assignments (shard_key, virtual_shard)
+  select id::text, (h % 256)::smallint from fold
+  where i = octet_length(convert_to(id::text, 'UTF8'))
+  on conflict do nothing;
+  ```
+
+  Two details the spec must pin, because getting either wrong is silent and re-places every
+  tenant: the mask `& 4294967295` after **every** multiply, not once at the end, and `#` on a
+  `bigint` — an `int` overflows the multiply before the mask can run.
 
 #### 3.B Routing (`infrastructure`)
 
@@ -480,6 +638,25 @@ to fail on the catalog foreign keys until `S4.1`.
   `catalog` placement: `findByKey`, `save` (upsert, `moved_at` set when `virtual_shard` changes,
   then `resolver.invalidate(key)`), `all(page)` keyset over `shard_key`. Emits nothing; the
   founder emits `shard.assignment.created` (`info`, `{ key, virtualShard }`). **Docs:** `sharding.md`.
+- [ ] `S3.23` **`PgNotificationRecipientReader.conversationMembers` is split** — filed by the
+  audit at `S3.18`, and it is the only cross-placement query in the repository. The method joins
+  `conversation_members` (routed) to `users` and `memberships` (both catalog) in one statement, so
+  it has no plan at all once the two sit on different physical databases — unlike everything else
+  in `CROSS_PLACEMENT_KNOWN`, which is empty apart from it.
+  Split it the way decision 6 already prescribes for a crossing read: page the conversation's
+  member ids off the routed shard first, then resolve those ids through the existing
+  `users(organizationId, userIds)` on the catalog, which is already written, already one
+  statement per page, and already applies the `deactivatedAt` filter this method needs. Two
+  queries per page instead of one, both tenant-scoped, and the query count stays bounded by the
+  page rather than the recipient list.
+  Landing this empties `CROSS_PLACEMENT_KNOWN` before Phase 3 ends rather than at `S4.1`, which
+  is the difference between §22 guarding a rule and §22 recording an exception.
+  **Docs:** a new `packages/infrastructure/docs/reference/notification-recipients.md` — the
+  reader's own comment already says "See docs/reference/notification-recipients.md" and that page
+  has never existed, so the `EXISTS` claim it defers to is written down nowhere; registered in
+  `reference/meta.json` and named from `packages/infrastructure/docs/index.md`. Also
+  `packages/application/docs/reference/notification-policy.md`, `sharding.md`.
+  **Depends on:** `S3.7`.
 
 #### 3.C The strategy and the policy the kit ships (`composition`)
 
@@ -500,12 +677,35 @@ to fail on the catalog foreign keys until `S4.1`.
   the one reader). `Container` builds `ShardMap` → `DatabaseCluster`, `ShardScope`,
   `PgShardResolver`, `PgShardAssignmentRepository`, both `PgUnitOfWork`s, binds
   `OrganizationShardingStrategy` and `HashShardPlacementPolicy`, passes the catalog unit of work
-  to `RoleUseCases`, `MemberUseCases`, `ApiKeyUseCases`, the enrollers, claimer and founder, and
-  the routed one to `NotificationUseCases`, `MessagingUseCases`, `DocumentUseCases`;
+  to `container.rbac`, `container.member`, `container.apiKey`, the enrollers, claimer and founder,
+  and the routed one to `container.notification`, `container.messaging`, `container.ai`;
   `PgOrganizationFounder.found` writes the assignment via the policy inside its transaction;
   `health()` reports `database: Record<index, boolean>` and `dispose()` closes the cluster last.
   `Container` exposes `shards: ShardScope`, `sharding: ShardingStrategy` and `cluster` for the
   edges (`S3.14`, `S3.15`). **Docs:** `docs/setup/17`, `packages/composition/docs/reference/container.md`.
+  `corrected: 2026-09-13` — **four of the six names this item binds do not exist.** `container.ts`
+  has `ApiKeyUseCases` and `MemberUseCases` as interfaces and nothing called `RoleUseCases`,
+  `NotificationUseCases`, `MessagingUseCases` or `DocumentUseCases`; the rest are anonymous
+  object literals on `public readonly` fields. The real surface, and the placement each takes:
+
+  | Container member | Placement |
+  |---|---|
+  | `rbac`, `member`, `apiKey` (`private apiKeyUseCases`) | catalog |
+  | `organizationFounder`, `invitationClaimer`, the enrollers | catalog |
+  | `notification`, `messaging`, `ai` | routed |
+  | `mail` | neither — `SendMailUseCase` opens no transaction |
+
+  The names above are corrected in place. Note what this costs the item: `rbac`, `notification`
+  and `messaging` are object literals, so there is no type to bind a unit of work *to* and no
+  compiler error when one is handed the wrong one — the mis-binding fails at the first spec that
+  touches it, as decision 7 says, and not one line earlier.
+  `verified: 2026-09-13` — decision 7's harder half holds, and it was the one worth checking.
+  Of the sixteen `unitOfWork.run` call sites, fourteen are use-cases and every one of them
+  injects repositories of a single placement — seven catalog (`rbac` ×5, `apikey` ×2), five
+  catalog via `member`, two routed (`messaging`), one routed (`ai`, `VectorStore`). None writes a
+  catalog table and a routed table in the same transaction, so decision 6's tripwire has no
+  existing violation to forgive. The remaining two are `PgOutboxGateway.drain` (local) and the
+  founder's own catalog transaction.
 - [ ] `S3.13` **`TestContainer` and fakes** — `packages/composition/src/fake/`: `FakeShardResolver`
   (a `Map`), `FakeShardAssignmentRepository`, `FixedShardingStrategy`, `FixedShardPlacementPolicy`;
   `TestPorts` gains the four; `test-container.spec.ts` pinned list updated. **Docs:**
@@ -521,6 +721,22 @@ to fail on the catalog foreign keys until `S4.1`.
   Better Auth's own handlers are catalog-only and need no key; the sign-in hook's
   `activeOrganizationFor` is a catalog read. **Docs:** `apps/web/docs/reference/enforcement-surfaces.md`
   (a fourth surface: the shard scope), `docs/setup/24`.
+  `verified: 2026-09-13` — the parenthesis is right and it understates the failure. Built against
+  this repository's own `@orpc/server`, a middleware shaped exactly like `shardMiddleware`
+  (`als.run("KEY", () => next())`) over a unary handler reads `KEY`; over an **async-generator**
+  handler it reads `UNDEFINED` on every frame. Not a leak on reconnect, not a race — no key at
+  all, always, on `realtime.stream` and `message.stream`. Plain Node says why: `next()` resolves
+  once the generator is *created*, and every `.next()` after that runs in the caller's context.
+  So the fix cannot be "wrap the generator", because the wrap has to survive a `run()` that has
+  already returned. Two shapes work, both measured:
+  **(a)** `AsyncLocalStorage.snapshot()` taken inside the middleware's `run()`, and the returned
+  async iterator replaced with one whose `next`/`return`/`throw` each call through it. No handler
+  changes, and it fixes every streaming procedure at once — take this one.
+  **(b)** `ShardScope.enterWith(key)` as the first statement of each generator body, which also
+  holds across yields but puts the key back in the handlers and is one forgotten line from a
+  silent cross-shard read.
+  Whichever lands, the spec belongs beside the middleware and must iterate at least twice: a
+  single-frame test passes under the broken shape often enough to be worthless.
 - [ ] `S3.15` **Worker** — every consumer that builds `SystemPrincipal.forOrganization(orgId)`
   wraps its use-case call in `container.shards.within(container.sharding.keyOf(principal), …)`;
   a `withShard` in `apps/worker/src/bootstrap/` mirrors the web one. Platform consumers
@@ -553,13 +769,43 @@ to fail on the catalog foreign keys until `S4.1`.
 - [ ] `S3.18` **§22 and §23; §9 derived** — `check-architecture.mjs`: §9's `TENANT_EXEMPT` is
   parsed from `CatalogTable` in `application/src/primitive/shard.ts` (plus
   `__drizzle_migrations`), so a table cannot be catalog in one file and tenant-exempt in another.
-  §22: for every `pg/repository/pg-*.ts`, the tables it imports from `../schema/index.js` all
-  share one placement (`local` mixes with either), or the file is in `CROSS_PLACEMENT_KNOWN` —
-  which starts at the audited set (`pg-membership.reader.ts` joins `users`; the recipient reader;
-  list every hit) and which `S4.1` empties. §23: `new Database(` appears in `src/` only in
+  §22: for every `pg/repository/pg-*.ts`, the tables it imports from **any** `../schema/*` path
+  all share one placement (`local` mixes with either), or the file is in `CROSS_PLACEMENT_KNOWN`,
+  which `S4.1` empties. The audited set, at `49703c9`, is one file:
+
+  ```js
+  const CROSS_PLACEMENT_KNOWN = new Set(["pg-notification-recipient.reader.ts"]);
+  ```
+
+  §23: `new Database(` appears in `src/` only in
   `database-cluster.ts`, and `database.client` / `.client` off a `Database` only there and in the
   scripts above `src/`. `docs/setup/26` gains the three entries with the failure each prevents.
   **Docs:** `docs/setup/26`, `docs/ai/rules/workflow.md` (twenty-three), `AGENTS.md`.
+  `corrected: 2026-09-13` — three findings from running the audit, and two of them change the
+  assertion rather than its seed list.
+  **One.** The named example is wrong: `pg-membership.reader.ts` joins `users`, `organizations`
+  and `roles` to `memberships`, and all four are catalog. It does not cross. Twenty-one of the
+  twenty-two repository files are cleanly single-placement.
+  **Two.** The one file that does cross would have been **invisible to §22 as specified.**
+  `pg-notification-recipient.reader.ts` imports from `../schema/auth.schema.js`,
+  `../schema/messaging.schema.js` and `../schema/rbac.schema.js` directly, never from
+  `../schema/index.js`, so a check reading the barrel import finds nothing and passes it. Scan
+  every `../schema/*` specifier. That it reaches past the barrel at all is its own small
+  violation of `docs/ai/rules/imports.md` rule 2, and fixing that would have closed the blind
+  spot for free — which is the argument for the rule.
+  **Three.** §22 cannot see a table named in raw SQL, and two files name one:
+  `pg-outbox.gateway.ts` (`outbox_event`) and `pg-activity-archive.gateway.ts` (`activity_log`).
+  Both are `local` and benign, and both would be invisible if they were not. State the blind spot
+  in `docs/setup/26` beside the assertion, the way §17 and §18 record theirs.
+  `corrected: 2026-09-13` — **§9's `TENANT_EXEMPT` must not be derived from `CatalogTable`.**
+  The two sets answer different questions and only partly overlap: `TENANT_EXEMPT` is eight
+  entries (`organizations`, `users`, `accounts`, `verifications`, `two_factors`, `sessions`,
+  `activity_archive`, `__drizzle_migrations`) where decision 5's catalog is fifteen. Deriving one
+  from the other would exempt `memberships`, `roles`, `role_permissions`, `goal_members`,
+  `permission_overrides`, `invitations` and `api_keys` — seven tables that do carry
+  `organization_id` and are exactly what §9 exists to police. Living on the catalog and carrying
+  a tenant column are independent facts. `shard_assignments` joins `TENANT_EXEMPT` as one
+  hand-written line, with a comment saying which of the two it is.
 
 #### 3.G The rehearsal kit (`infra`, `infrastructure`)
 
@@ -664,3 +910,4 @@ constraint `S4.1` names and on nothing else.
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-13 | @sami | Created from a read of the tree at `c72ca9e`: four phases covering connection pooling and pgBouncer, partition policy and guards, the virtual-sharding seam with a pluggable strategy, a directory and an env map, and the filed physical split |
+| 2026-09-13 | @sami | Premises tested against a live stack and the tree at `49703c9`; no phase started. Four hold as written — the startup-parameter trap (worse than described: through the pooler `statement_timeout` reads `0`, not a smaller number), `SET LOCAL` in `PgUnitOfWork.run`, `ALTER ROLE` inside drizzle's migrator, and FNV-1a in SQL matching TypeScript on all ten vectors. `S3.14`'s guess is confirmed by experiment and is total, not partial: an oRPC middleware's `AsyncLocalStorage` reaches a unary handler and reaches an async-generator handler on no frame at all. Four are wrong and are corrected in place: `S1.11` (`DETACH … CONCURRENTLY` succeeds through a transaction pooler; the transaction, not the pooler, is the constraint), `S2.5` (the notification read carries no lower bound on the partition column, so it scans every month — new `S2.9`), `S3.12` (four of six use-case group names do not exist), `S3.18` (`CROSS_PLACEMENT_KNOWN` is one file and §22 as specified could not see it — new `S3.23`; and §9's `TENANT_EXEMPT` must not be derived from `CatalogTable`). Two smaller ones: the migration numbers shift by one, and `S1.7` needs a pooler reconnect it did not ask for |
