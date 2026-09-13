@@ -27,14 +27,21 @@ order found:
 | 4 | `messages.created_at` stored microseconds while every caller carries it back as a millisecond `Date` — `findById`, `edit` and `softDelete` matched no row, and a read conversation never cleared | `d1ccb5b` + migration `0021` |
 | 5 | `Container` resolved the Redis subscriber role while wiring, so `health().realtime` was never `null` and every process held a third connection from boot | `f0bfd41` |
 | 6 | A connection in subscriber mode answers PING with `["pong", ""]`, so `healthy("subscriber")` was false — and the whole web process reported unhealthy for as long as anyone had a stream open | `f5ac82b` |
+| 7 | The RPC link was given a **relative** URL, which `RPCLink` resolves through `new URL()` with no base — **no RPC call from a browser has ever succeeded**; signing in landed on the error boundary | `edfe998` |
+| 8 | The no-flash theme script rewrites `<html>` before React hydrates, so every page load logged a hydration mismatch | `6004c40` |
 
-Numbers 3 and 4 were found by writing `C5.8`'s specs; 5 hid 6.
+Numbers 3 and 4 were found by writing `C5.8`'s specs; 5 hid 6; 7 and 8 came out of the first ten
+minutes of actually opening the app in Chrome, and 8 was hiding `C4.10`, which is filed and open.
 
 ### What is outstanding
 
 - **Eight Exit clauses, all client-side**, listed under their phases: optimistic append, refetch
   on focus, typing clearing, `EventSource` reconnect and its `resync` frame. Everything provable
-  from the server is proven and recorded at the clause.
+  from the server is proven and recorded at the clause. The browser walk started and stopped when
+  the Chrome extension disconnected; it got as far as signing in, which is what found 7 and 8.
+- **`C4.10` needs a decision before it can be fixed** — the QueryClient is never dehydrated, so
+  every loader prefetch is refetched in the browser. Three options are written out at the item;
+  one of them is a Tier 3 dependency.
 - **`C2.10` and `C2.11`**, both found while walking Phase 2's Exit line and neither a correctness
   bug. `C2.10` is the one to read: the `jobId` duplicate-suppression window is about five seconds,
   not the 86 400 the port asks for, because the once-a-second drain job trims the queue's shared
@@ -1195,6 +1202,41 @@ connection per web process, not one per tab; `/api/health` reports `realtime: tr
 >   unhealthy for as long as anyone had a stream open. `f0bfd41` and `f5ac82b`.
 > - [ ] "Killing the web process and restarting it reconnects the stream, a `resync` frame
 >   arrives" — the reconnect is `EventSource`'s, so this needs a browser.
+
+#### 4.D Found on first opening the app in a browser
+
+The client half had never been run. Three defects inside ten minutes of it, and the first one
+means **no RPC call from a browser has ever succeeded** — SSR uses `ApiClient.inProcess`, and
+every suite calls the handler or `/api/rpc` directly, so nothing looked at this path.
+
+- [x] `C4.8b` **The RPC link was given a relative URL.** oRPC's `RPCLink` resolves `url` through
+  `new URL()` with no second argument, so `/api/rpc` threw `TypeError: Failed to construct 'URL':
+  Invalid URL` in `StandardRPCLinkCodec.encode` on the first call. Signing in landed on the error
+  boundary. `Endpoint.auth` had already solved exactly this for Better Auth and said so at the
+  line; `rpc` is now the same shape. `edfe998`. `done: 2026-09-13`
+- [x] `C4.9b` **The no-flash script read as a hydration mismatch on every load.**
+  `SYSTEM_MODE_SCRIPT` rewrites `data-mode` and `colorScheme` before React hydrates — which is its
+  job — so React logged a mismatch each time. `suppressHydrationWarning` on that element alone.
+  `6004c40`. `done: 2026-09-13`
+- [ ] `C4.10` **The QueryClient is not dehydrated, so every loader prefetch is thrown away.**
+  `getRouter`'s `dehydrate` carries messages, session and appearance — not the query cache. SSR
+  renders `Members: 3`, the client hydrates the same node as `Loading…` and refetches. Measured
+  from the live hydration diff, and it makes `C3.13`'s "the loader prefetches page 1" false in
+  the browser however true it is on the server.
+  **It needs a decision, which is why it is filed rather than fixed.** The fix is four lines —
+  `dehydrate(queryClient)` into the payload, `hydrate(queryClient, …)` back out, and react-query
+  5.101.4 already exports both, so **no new dependency is required to make it work**. What it
+  does not pass is the *type*: TanStack Router validates the payload with
+  `ValidateSerializableMapped`, and react-query's `queryKey`/`mutationKey` are `readonly
+  unknown[]`, which the validator cannot prove serializable. So it is one of:
+  **(a)** add `@tanstack/react-router-ssr-query` — the official integration, and a Tier 3
+  dependency by `dependencies.md` (it names the router), quarantined to `apps/web`;
+  **(b)** one cast at the boundary with a comment saying the values are serializable and the
+  type cannot show it — no dependency, and the repo dislikes exactly this kind of cast;
+  **(c)** `JSON.stringify` the payload, which is **wrong** — it flattens `Date` to a string, and
+  that is the shape of two defects already fixed this week (`d1ccb5b`, `e644ed0`).
+  A branch attempting (a)-without-the-package was written and reverted; the type error is
+  recorded above so nobody re-derives it.
 
 ---
 
