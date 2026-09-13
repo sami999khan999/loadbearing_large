@@ -10,50 +10,72 @@ source: tree at 927cdec (main), 2026-09-12
 
 ## Resume here
 
-**State, 2026-09-13.** Phases 1–5 are built and pushed on `claude/sleepy-franklin-yqa9av`.
-Phase 6 is filed and deliberately not built. Every closed item carries a `done:` note saying what
-actually landed and where it deviated; every phase ends in a status block. `check:architecture` is
-20/20, `check:contrast`, `typecheck`, `lint` and every unit suite are green.
+**State, 2026-09-13 (second pass, with Docker).** Phases 1–5 are built. Phase 6 is filed and
+deliberately not built. The whole stack has now been **run**: 21 migrations against an empty
+database, 145 Postgres/Redis specs, 62 composition specs, 17 smoke specs including Loki and
+ClickHouse, and the five **Exit** lines walked by hand against a live web app and worker.
+`check:architecture` is 20/20, `typecheck` and `lint` clean.
 
-**Nothing that needs a container has ever run.** It was built without Docker, so the Postgres and
-Redis integration suites, both smoke suites, all five **Exit** lines and every migration are
-unproven. Fourteen `unverified:` notes mark exactly which item needs what — `grep -n "unverified:"`
-this file to list them.
+**Six defects came out of that run, and every one of them needed a container to see.** In the
+order found:
 
-### The order to run it in
+| | What was wrong | Where |
+|---|---|---|
+| 1 | Two maintenance specs swept every partition the migrations made, under eleven other specs | `733b3d8` |
+| 2 | `db.execute` returns driver rows, so the outbox read `occurred_at` back as a string — `drain` threw, and the retention guard compared a string to a `Date` and was false for every value | `e644ed0` |
+| 3 | `unreadCounts` correlated nothing: drizzle renders a column unqualified in a raw fragment, so the tenant and conversation predicates were `x = x`. Every badge read 100, across every tenant | `9d02f5b` |
+| 4 | `messages.created_at` stored microseconds while every caller carries it back as a millisecond `Date` — `findById`, `edit` and `softDelete` matched no row, and a read conversation never cleared | `d1ccb5b` + migration `0021` |
+| 5 | `Container` resolved the Redis subscriber role while wiring, so `health().realtime` was never `null` and every process held a third connection from boot | `f0bfd41` |
+| 6 | A connection in subscriber mode answers PING with `["pong", ""]`, so `healthy("subscriber")` was false — and the whole web process reported unhealthy for as long as anyone had a stream open | `f5ac82b` |
+
+Numbers 3 and 4 were found by writing `C5.8`'s specs; 5 hid 6.
+
+### What is outstanding
+
+- **Eight Exit clauses, all client-side**, listed under their phases: optimistic append, refetch
+  on focus, typing clearing, `EventSource` reconnect and its `resync` frame. Everything provable
+  from the server is proven and recorded at the clause.
+- **`C2.10` and `C2.11`**, both found while walking Phase 2's Exit line and neither a correctness
+  bug. `C2.10` is the one to read: the `jobId` duplicate-suppression window is about five seconds,
+  not the 86 400 the port asks for, because the once-a-second drain job trims the queue's shared
+  completed set.
+- **Phase 6**, eleven items. `C6.8` (the 10× load test) is still the one worth promoting.
+
+### Running it again
 
 ```bash
 pnpm install
 pnpm build:packages && pnpm --filter @loadbearing/web build
 pnpm infra:up
-pnpm db:migrate          # ← the first thing that can fail. See below.
-pnpm db:seed
-pnpm --filter @loadbearing/infrastructure test    # 30 specs that have never passed
-pnpm --filter @loadbearing/composition test       # 2 more
-pnpm smoke
-pnpm dev                 # Mailpit on :8025; the worker must run for any mail to send
+pnpm db:migrate && pnpm db:seed
+pnpm --filter @loadbearing/infrastructure test    # 145, serial — see vitest.config.ts
+pnpm --filter @loadbearing/composition test       # 62
+LOKI_URL=http://localhost:3100 pnpm smoke         # 17 with Loki; 3 of them skip without it
+pnpm dev                                          # Mailpit on :8025
 ```
 
-Then walk the five **Exit** lines, phase by phase. Two of them need two browsers signed in as two
-members of one organization.
+**`.env` is gitignored and was nine keys behind `.env.example`** — `APP_BASE_URL`,
+`AUTH_APP_NAME`, `AUTH_ENROLMENT_MODE`, `AUTH_MAX_OWNED_ORGANIZATIONS`, both `REALTIME_*` and
+three `WORKER_*`. Copy them across before running anything. This machine also has another project
+on 3000 and 3001, so the local `.env` names **3200** in `AUTH_URL`, `AUTH_TRUSTED_ORIGINS`,
+`APP_BASE_URL` and `WEB_PORT`, and sets `AUTH_ENROLMENT_MODE=bootstrap` so two sign-ups land in
+one organization.
 
-### Check these two first
+Two more things that cost time: **Mailpit has no volume**, so restarting it drops every message
+including verification links still needed — re-request rather than hunt. And the **ClickHouse
+volume outlives its init script**, so a `clickhouse.init.sql` edited after first boot never
+applies; `docker volume rm ratchet_clickhousedata` is the fix.
 
-1. **Migration `0017` was edited in place.** Its unique index omitted the partition key, which
-   Postgres refuses outright — `db:migrate` would have aborted there. The fix depends on
-   notification rows taking `created_at` from the event rather than the clock, so if delivery
-   ever writes a duplicate, that is where to look. Phase 3's status block has the detail.
-2. **`messages` is deliberately not partitioned**, against `docs/ai/rules/data.md`. The argument
-   is at the table and in `packages/application/docs/reference/messaging.md`. Disagree with it
-   before the table holds rows, not after.
+### Two decisions, both challenged and both standing
 
-### What is outstanding
-
-- **`C5.8`'s fixed-query-count integration specs are written and green** (2026-09-13). They found
-  two defects on the way in; see the item.
-- **Phase 6**, eleven items, filed with their reasoning. `C6.8` (the 10× load test) is the one
-  worth promoting: it is the only one that could invalidate something already built.
-
+1. **`messages` is not partitioned**, against `docs/ai/rules/data.md`. The argument is at the
+   table and in `packages/application/docs/reference/messaging.md`, and it holds: the send-dedupe
+   unique index cannot carry `created_at` without deleting the guarantee it exists for.
+2. **Notification rows take `created_at` from the event, not the clock** — which is what makes
+   `notifications_dedupe_uq` legal on a partitioned table. Measured end to end: the value crosses
+   BullMQ as JSON and `DomainEvents.envelope` coerces it back with `z.coerce.date()`, so a
+   redelivery computes the same instant. Replaying the same row twice left **one** row and sent
+   **one** mail. It is also, by accident, the reason `notifications` did not have defect 4.
 
 > **How to use this file**
 >
@@ -363,9 +385,9 @@ becomes the job id, so "enqueue this once" is expressed where BullMQ already enf
   `WORKER_MAIL_RATE_PER_MINUTE` (600). Spec via `TestContainer` as
   `maintenance.consumer.spec.ts` does. **Docs:** `apps/worker/docs/reference/consumers.md` (the
   `NOTIFICATION` "no consumer" sentence changes), `env.md`.
-  `done: 2026-09-12` — **unverified:** the consumer's own spec runs without containers, but the
-  rate limiter, the retry ladder and the final-attempt `mail.delivery.failed` only happen against
-  a live Redis. Run `pnpm infra:up && pnpm dev`, then stop Mailpit and watch a job retry.
+  `done: 2026-09-12` — **verified 2026-09-13**: Mailpit stopped and a password reset requested
+  produced `queue.job.failed` at attempts 1–5 on the exponential ladder, then one
+  `mail.delivery.failed {template: "auth.reset", attempts: 5}` on the last.
 - [x] `C1.22` **Delete `DigestComposer`** — `apps/worker/src/notification/` and its spec; the
   worker's `import.ts` drops `ContentSource`/`Locale`. **Docs:** `docs/setup/25`, `28`,
   `apps/worker/docs/index.md`, `docs/opinions/files.md` example row for `.composer.ts` (keep the
@@ -608,8 +630,10 @@ check in every layer and the browser can parse the same shapes on the stream.
   upload first); `outbox_event` is pruned after two months, and skipped entirely if the oldest
   unpublished row predates the cutoff. `maintenance.partition.dropped` is a new code, distinct
   from `archived` — that one means detached, uploaded, verified and *then* dropped.
-  **unverified:** the drain loop, the one-second schedule and the priority ordering need a live
-  Redis. Run `pnpm infra:up && pnpm dev`.
+  **verified 2026-09-13:** a row left pending while the worker was down published **0.92 s**
+  after `process.started`, with `outbox.drain.completed {events: 1, jobs: 2}`. The drain's lines
+  are `debug` and `LOG_LEVEL=info` hides them, so an idle worker is silent by design. The
+  `removeOnCompleteAgeSeconds` reasoning in this note does **not** hold — see `C2.10`.
 - [x] `C2.9` **Container** — `public readonly eventPublisher: DomainEventPublisher`,
   `public readonly outbox: OutboxGateway`, `public readonly subscribers: SubscriberRegistry`
   (built from the frozen list of subscriber instances, each given its ports), `realtime:
@@ -815,7 +839,9 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   `sendNotificationDigest`). Env `WORKER_NOTIFICATION_CONCURRENCY` (2). **Docs:**
   `consumers.md`, `schedules.md`, `env.md`; `data-and-scale.md` §6 "Digest fan-out" now names
   the file that does it.
-  `done: 2026-09-12` — **unverified:** the schedule and the fan-out need a live Redis.
+  `done: 2026-09-12` — **verified 2026-09-13:** `digest-fanout` fired by hand emitted
+  `notification.digest.completed {organizations: 1, day: "2026-09-13"}` and one digest mail to the
+  only recipient on `digest`.
 - [x] `C3.11` **Container** — `public readonly notification: { list; countUnread; markRead; preferences; updatePreference; deliver; sendDigest }`
   in every process. Fakes: none new (repositories are slice ports, faked in specs).
   `done: 2026-09-12` — plus `digestOrganizations`, which the worker's fan-out reads.
@@ -856,7 +882,8 @@ grouped as `data-and-scale.md` §6 asks: recipients first, copy per recipient.
   covers both literals.
   `done: 2026-09-12` — `routes.spec.ts` needed no edit: it walks the route directory and
   cross-checks `ROUTES` and `GATES`, so both literals are covered the moment they exist.
-  **unverified:** the loader's prefetch of page 1 and the count needs a live database.
+  **unverified:** the loader's prefetch of page 1 and the count still needs a browser — the
+  procedures behind it are exercised, but not the loader.
 
 #### 3.G Docs and verify
 
@@ -1098,7 +1125,9 @@ invalidation; on `resync` it invalidates every key the table names.
   `Cors.apply` hands back the same body. They call the handler rather than `handleRpc`, because
   `handleRpc` imports the process container and would need Postgres and both Redis instances to be
   constructed at all — the CORS half is covered directly instead, which is the part that could
-  have buffered. **unverified:** the two by-hand runs, `pnpm dev` and the built `.output`.
+  have buffered. **partly verified 2026-09-13:** `pnpm dev` carried a frame to two open streams
+  282 ms after the change, on one Redis connection. The built `.output` run and the `EventSource`
+  reconnect are the parts still outstanding, and both need a browser.
 
 #### 4.C Client
 
