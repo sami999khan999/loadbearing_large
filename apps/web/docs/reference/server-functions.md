@@ -74,3 +74,52 @@ the connection pool.
 > **Pass the real request headers.** `principalMiddleware` resolves the principal from them.
 > Skipping them because the code is already on the server either breaks auth or invites someone to
 > construct a privileged principal directly. In-process skips serialisation and nothing else.
+
+## Streams: one procedure that is not a request
+
+`realtime.stream` is an oRPC event iterator — an `async function*` handler whose output contract is
+`eventIterator(RealtimeContract.message)` — and `RPCHandler` serves it as `text/event-stream` on the
+existing `/api/rpc` route. There is no second route and no second handler.
+
+**It is a POST, whatever the contract's `route` says.** Every procedure in `contracts` carries a
+`.route({ method, path })` for consistency and for an OpenAPI handler that may exist one day.
+`RPCHandler` reads none of it: it dispatches on the procedure path, so the stream is a POST to
+`/api/rpc/realtime/stream` whose response body happens to stream. Trying to `curl -N` the `GET` in
+the contract will find nothing, and the `StrictGetMethodPlugin` — on by default — is a second
+reason not to reach for one.
+
+**The channel comes from the principal and from nowhere else.** `principalMiddleware` runs before
+this handler like every other, and the handler builds
+`RealtimeChannels.user(principal.organizationId, principal.userId)`. There is no input, so there is
+nothing to ask for. That is the entire authorization argument, and it is why the permission is
+`core.realtime.subscribe` — held by every resolved principal, because each frame on the stream was
+authorised where it was produced. Gating the pipe again would gate the wrong thing.
+
+**A resume is a `resync`.** When `lastEventId` is set, the handler yields a `resync` frame before
+anything live. Redis pub/sub cannot replay, so a gap-fill would be a lie; the client refetches what
+it subscribes to. Every frame goes out through `withEventMeta({ id, retry })` — the `id` is what
+comes back as `Last-Event-ID`, and the `retry` is what `ClientRetryPlugin` reads for its delay.
+
+**Keep-alive is set, not enabled.** `RPCHandler` sends a comment every 5 s by default; the handler
+here sets 15 s, inside every proxy idle timeout worth worrying about and a third of the traffic. It
+also sends an initial comment on stream open by default, which flushes headers before the first
+frame — the reason a dev-server proxy establishes the connection immediately rather than appearing
+to hang.
+
+**`http.request.completed` fires at stream *start* for this procedure.** `errorMiddleware` wraps the
+call that returns the iterator, not each frame, so a stream open is one line and its `durationMs` is
+the time to open. Per-frame logging would be the volume mistake the event catalog warns about — this
+is already the highest-cardinality line in the system. What a stream costs is on
+`realtime.stream.closed` instead: a duration and a frame count, once, at the end.
+
+> [!IMPORTANT]
+> **`apps/web/src/server/import.ts` must never re-export oRPC's `EventPublisher`.** It is their
+> in-process fan-out, and it works — on one replica. Reaching for it puts a second realtime path
+> beside the Redis one that silently delivers to a fraction of the tabs.
+
+> [!NOTE]
+> **Six connections per origin, on HTTP/1.1.** A browser holds at most six, and a stream holds one
+> for as long as the tab is open — so five other requests in flight is the ceiling and the sixth
+> queues. That is why there is exactly **one** stream per tab, opened in the `_authenticated`
+> layout, rather than one per component that wants a frame. HTTP/2 multiplexes and the limit goes
+> away, which is a deployment property and not something to design around.

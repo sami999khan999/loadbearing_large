@@ -48,6 +48,12 @@ export const coreEvents = {
 
   "notification.digest.completed": { level: "info" },
 
+  // A pair, not a counter: `opened` minus `closed` is the live stream count, and the
+  // duration on `closed` is what says whether a client is reconnecting in a loop.
+  "realtime.stream.opened": { level: "debug" },
+  "realtime.stream.closed": { level: "debug" },
+  "realtime.publish.failed": { level: "warn" },
+
   "cache.entry.corrupt": { level: "warn" },
   "embedding.request.failed": { level: "error" },
 

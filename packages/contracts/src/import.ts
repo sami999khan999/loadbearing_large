@@ -5,7 +5,7 @@
 export type { PermissionKey } from "@loadbearing/permissions";
 
 // ── @orpc/contract ───────────────────────────────────────────────────────────
-export { type AnyContractRouter, oc } from "@orpc/contract";
+export { type AnyContractRouter, eventIterator, oc } from "@orpc/contract";
 
 // ── zod ──────────────────────────────────────────────────────────────────────
 export { z } from "zod";

@@ -83,6 +83,12 @@ export interface EventShape {
     readonly day: string;
   };
 
+  // No user id and no channel: both are per-person, and a label is not what they would
+  // become — but a line body carrying one on every stream open is a retention bill.
+  readonly "realtime.stream.opened": { readonly resumed: boolean };
+  readonly "realtime.stream.closed": { readonly durationMs: number; readonly frames: number };
+  readonly "realtime.publish.failed": { readonly event: string };
+
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };
 

@@ -3,6 +3,7 @@ import { DocumentProcedures } from "../document/index.js";
 import type { AnyContractRouter } from "../import.js";
 import { MemberProcedures } from "../member/index.js";
 import { NotificationProcedures } from "../notification/index.js";
+import { RealtimeProcedures } from "../realtime/index.js";
 import { RoleProcedures } from "../role/index.js";
 
 // The merge point for every slice's procedures. `satisfies` is what makes a fragment
@@ -13,6 +14,7 @@ export const contract = {
   apiKey: ApiKeyProcedures.all,
   document: DocumentProcedures.all,
   notification: NotificationProcedures.all,
+  realtime: RealtimeProcedures.all,
 } as const satisfies AnyContractRouter;
 
 export type AppContract = typeof contract;

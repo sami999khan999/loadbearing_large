@@ -933,7 +933,7 @@ invalidation; on `resync` it invalidates every key the table names.
   applied to a channel name and publisher and subscriber agree without either compensating.
   `SPUBLISH` and `SSUBSCRIBE` both *do* declare them, so a later move to sharded pub/sub stays
   symmetric too — the asymmetry that would have been silent does not exist in either direction.
-- [ ] `C4.6` **Contract + router** — `contracts/src/realtime/{index,realtime.contract,realtime.procedures}.ts`:
+- [x] `C4.6` **Contract + router** — `contracts/src/realtime/{index,realtime.contract,realtime.procedures}.ts`:
   `stream` = `oc.route({ method: "GET", path: "/realtime/stream" }).output(eventIterator(RealtimeContract.message))`,
   mounted as `realtime` in `procedure/index.ts`. `catalog/realtime.permissions.ts`:
   `realtime.stream → core.realtime.subscribe`; `core.permissions.ts` gains that key (held by
@@ -947,13 +947,28 @@ invalidation; on `resync` it invalidates every key the table names.
   procedure (a per-frame line would be the volume mistake the catalog warns about). **Docs:**
   `apps/web/docs/reference/server-functions.md` "streams" section, `docs/setup/24`, the
   HTTP/1.1 six-connections-per-origin caveat.
-- [ ] `C4.7` **Prove the pipe end to end before building on it** — a spec in
+  `done: 2026-09-13` — **`C4.5`'s first correction is itself revised.** That note said to drop the
+  contract's `.route()`; every one of the twenty-odd sibling procedures carries one, and breaking
+  that for the single procedure where it is most likely to mislead is the wrong trade. It stays,
+  with a comment at the line saying it is OpenAPI metadata and that `RPCHandler` dispatches on the
+  procedure path. Keep-alive is *set* to 15 s rather than enabled — it defaults to on at 5 s.
+  Three log codes rather than two: `realtime.publish.failed` is `C4.9`'s and lands here with its
+  siblings, since an event with no declared `EventShape` fields will not compile.
+- [x] `C4.7` **Prove the pipe end to end before building on it** — a spec in
   `apps/web/tests/server/` calling `handleRpc` with `GET /api/rpc/realtime/stream` and
   asserting a `text/event-stream` body carrying a pushed frame and a keep-alive comment; and by
   hand under `pnpm dev` and against the built `.output` that both stream (Nitro's node preset
   does; the point is the Vite dev middleware and `Cors.apply`, which must only set headers). If
   either buffers, the fallback is a dedicated `route/api/realtime.ts` Start route calling the
   same handler.
+  `done: 2026-09-13` — five specs in `apps/web/tests/server/realtime.stream.spec.ts`, against a
+  real `RPCHandler` over the real router with a stub container: the response is
+  `text/event-stream`, a frame arrives carrying the `id` `withEventMeta` wrote, the channel comes
+  from the principal, a resumed stream opens with a `resync` before anything live, and
+  `Cors.apply` hands back the same body. They call the handler rather than `handleRpc`, because
+  `handleRpc` imports the process container and would need Postgres and both Redis instances to be
+  constructed at all — the CORS half is covered directly instead, which is the part that could
+  have buffered. **unverified:** the two by-hand runs, `pnpm dev` and the built `.output`.
 
 #### 4.C Client
 

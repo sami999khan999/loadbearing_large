@@ -604,6 +604,16 @@ line a new slice adds here.
 > returned `undefined` would make the contract's output schema a lie. The four lines are where those
 > two facts meet, and every write-shaped procedure will have them.
 
+> [!NOTE]
+> **One procedure is not a request at all.** `realtime.stream` is an `async function*` whose
+> output contract is `eventIterator(RealtimeContract.message)`, and `RPCHandler` serves it as
+> `text/event-stream` on this same `/api/rpc` route — no second route, no second handler, no new
+> dependency. It takes no input, because its channel is built from the principal
+> `principalMiddleware` already resolved; there is nothing to ask for and so nothing to get wrong.
+> The full account, including why it is a POST despite the contract's `GET` and why
+> `http.request.completed` fires at stream start, is in
+> [`apps/web/docs/reference/server-functions.md`](../../apps/web/docs/reference/server-functions.md).
+
 ---
 
 ## Step 24.7 — The HTTP entrypoints
