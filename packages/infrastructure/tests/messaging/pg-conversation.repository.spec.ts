@@ -1,0 +1,150 @@
+import {
+  type ConversationId,
+  Identifiers,
+  type OrganizationId,
+  type UserId,
+} from "@loadbearing/contracts";
+import { Uuid } from "@loadbearing/core";
+import { eq, type Logger } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "../../src/pg/primitive/index.js";
+import { PgConversationRepository } from "../../src/pg/repository/pg-conversation.repository.js";
+import { organizations, users } from "../../src/pg/schema/index.js";
+import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { openDatabase } from "../support/database.js";
+
+// What the fixed-query-count claims are measured with. Drizzle calls this once per
+// statement it issues, which is the only place a second round trip shows up.
+class CountingLogger implements Logger {
+  public count = 0;
+  public logQuery(): void {
+    this.count += 1;
+  }
+}
+
+const counter = new CountingLogger();
+let database: Database;
+let repository: PgConversationRepository;
+let organizationId: OrganizationId;
+let alice: UserId;
+let bob: UserId;
+let carol: UserId;
+let dave: UserId;
+const conversationIds: ConversationId[] = [];
+
+const makeUser = async (name: string): Promise<UserId> => {
+  const id = Identifiers.userId.parse(Uuid.v7());
+  await database.client.insert(users).values({ id, name, email: `${id}@example.test` });
+  return id;
+};
+
+beforeAll(async () => {
+  database = openDatabase(counter);
+  repository = new PgConversationRepository(database, new TransactionScope());
+
+  // Its own tenant, never the seeded one: this spec counts statements, and a page whose
+  // size depends on what another spec left behind cannot hold a count at all.
+  organizationId = Identifiers.organizationId.parse(Uuid.v7());
+  await database.client.insert(organizations).values({
+    id: organizationId,
+    name: "Messaging Spec",
+    slug: `messaging-spec-${organizationId}`,
+  });
+
+  alice = await makeUser("Alice");
+  bob = await makeUser("Bob");
+  carol = await makeUser("Carol");
+  // In no conversation at all, which is the only case where the member lookup is skipped.
+  dave = await makeUser("Dave");
+
+  // Four conversations, alice in every one. Each is touched with a distinct instant, so
+  // the keyset has a total order and a page boundary is a fact rather than a coin toss.
+  for (let index = 0; index < 4; index += 1) {
+    const id = await repository.save({
+      organizationId,
+      kind: index === 0 ? "direct" : "channel",
+      title: index === 0 ? null : `Channel ${index}`,
+      directKey: index === 0 ? `${alice}_${bob}` : null,
+      createdBy: alice,
+      memberIds: index === 3 ? [alice, bob, carol] : [alice, bob],
+    });
+    conversationIds.push(id);
+    await repository.touch(
+      organizationId,
+      id,
+      Identifiers.messageId.parse(Uuid.v7()),
+      new Date(Date.UTC(2030, 0, index + 1)),
+    );
+  }
+});
+
+afterAll(async () => {
+  // One delete. `messages`, `conversations` and `conversation_members` all cascade off
+  // the tenant, which is the property `tenant-cascade.spec.ts` holds separately.
+  await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+  await database.client.delete(users).where(eq(users.id, alice));
+  await database.client.delete(users).where(eq(users.id, bob));
+  await database.client.delete(users).where(eq(users.id, carol));
+  await database.client.delete(users).where(eq(users.id, dave));
+  await database.close();
+});
+
+beforeEach(() => {
+  counter.count = 0;
+});
+
+describe("PgConversationRepository.listByMember", () => {
+  // The claim `C5.8` makes. A member lookup per row is the N+1 this shape exists to
+  // avoid, and it only ever shows up against a page holding more than one row.
+  it("is two statements for a page, whatever size the page is", async () => {
+    const one = await repository.listByMember(organizationId, alice, { limit: 1 });
+    expect(one.items).toHaveLength(1);
+    expect(counter.count).toBe(2);
+
+    counter.count = 0;
+    const four = await repository.listByMember(organizationId, alice, { limit: 10 });
+    expect(four.items).toHaveLength(4);
+    expect(counter.count).toBe(2);
+  });
+
+  // Not decoration: the count above is worth nothing if the second statement returned no
+  // members, and an empty page would spend one statement rather than two either way.
+  it("carries every member of every row on the page", async () => {
+    const page = await repository.listByMember(organizationId, alice, { limit: 10 });
+
+    const sizes = page.items.map((item) => item.members.length).sort();
+    expect(sizes).toEqual([2, 2, 2, 3]);
+  });
+
+  it("spends one statement on a page with nothing on it", async () => {
+    const page = await repository.listByMember(organizationId, dave, { limit: 10 });
+
+    expect(page.items).toHaveLength(0);
+    // One, not two: there are no ids to look members up for, and an `IN ()` would be a
+    // round trip spent asking about nothing.
+    expect(counter.count).toBe(1);
+  });
+
+  // The tenant scope and the membership join, in one case: carol is in exactly one.
+  it("returns only the conversations the member is actually in", async () => {
+    const page = await repository.listByMember(organizationId, carol, { limit: 10 });
+
+    expect(page.items.map((item) => item.id)).toEqual([conversationIds[3]]);
+  });
+
+  // Newest first, and the cursor is what makes the second page the rest rather than the
+  // same rows again — the failure a row-constructor keyset is written the way it is to avoid.
+  it("pages backwards through the list without repeating or skipping a row", async () => {
+    const first = await repository.listByMember(organizationId, alice, { limit: 2 });
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await repository.listByMember(organizationId, alice, {
+      limit: 2,
+      cursor: first.nextCursor ?? "",
+    });
+
+    const walked = [...first.items, ...second.items].map((item) => item.id);
+    expect(walked).toEqual([...conversationIds].reverse());
+    expect(second.nextCursor).toBeNull();
+  });
+});
