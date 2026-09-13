@@ -34,11 +34,11 @@ beforeAll(async () => {
   );
 
   // The month this spec writes into has to exist: no DEFAULT partition, on purpose.
-  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
-    PartitionedTable.OUTBOX_EVENT,
-    new Date(),
-    1,
-  );
+  await new PgMaintenanceGateway(
+    database,
+    scope,
+    new PgUnitOfWork(database, scope),
+  ).ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, new Date(), 1);
 });
 
 afterEach(async () => {

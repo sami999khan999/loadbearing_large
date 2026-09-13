@@ -23,6 +23,10 @@ export abstract class MaintenanceGateway {
     months: number,
   ): Promise<readonly string[]>;
 
+  // Partitions for months strictly after the one `from` falls in. A runway check has to
+  // ask what *exists*, because a run that created nothing is healthy or starved alike.
+  public abstract monthlyPartitionsAfter(table: PartitionedTableName, from: Date): Promise<number>;
+
   // Returns what it dropped. Whole partitions rather than a `DELETE`, because dropping a
   // partition is a catalog edit and deleting a month of rows is a vacuum problem.
   public abstract dropMonthlyPartitionsBefore(

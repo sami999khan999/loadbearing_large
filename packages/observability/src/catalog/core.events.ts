@@ -27,14 +27,17 @@ export const coreEvents = {
   // the pool they share. Once at boot.
   "worker.pool.oversubscribed": { level: "warn" },
 
-  // Alert on `partitions.ensured` when `created` stays 0 for a month: the job ran and
-  // the runway is not being extended.
+  // Do not alert on `ensured.created == 0` — that is the steady state, because the runway
+  // is already three months deep. `partition.runway.low` is the signal.
   "maintenance.sweep.completed": { level: "info" },
   "maintenance.partitions.ensured": { level: "info" },
   "maintenance.partition.archived": { level: "info" },
   // Distinct from `archived`, which means detached, uploaded, verified and *then*
   // dropped. This one is a partition whose rows were never worth keeping.
   "maintenance.partition.dropped": { level: "info" },
+  // Counts what exists, never what the last run created: a run that creates zero is the
+  // healthy case and the starved case alike.
+  "partition.runway.low": { level: "warn" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.

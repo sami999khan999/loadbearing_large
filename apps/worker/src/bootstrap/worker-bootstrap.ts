@@ -83,6 +83,10 @@ export class WorkerBootstrap {
       );
     }
 
+    // Once at boot, before the schedules: the monthly cron only helps a worker that was
+    // awake on the first, and the runway running out is every write in the system failing.
+    await new PartitionsSchedule(this.container, this.redis.queueClient()).runOnce();
+
     await new OutboxDrainSchedule(this.container, this.redis.queueClient()).register();
     await new DigestSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();

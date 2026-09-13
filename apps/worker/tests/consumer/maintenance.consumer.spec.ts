@@ -14,12 +14,11 @@ const NOW = new Date("2026-08-15T00:00:00Z");
 
 // `TestContainer` rather than an object literal of the four members this consumer
 // touches: a port added to the container is a compile error there, and was silence here.
-function harness() {
-  const maintenance = new RecordingMaintenanceGateway({
-    sessions: 3,
-    verifications: 1,
-    invitations: 2,
-  });
+function harness(monthsAhead?: number) {
+  const maintenance = new RecordingMaintenanceGateway(
+    { sessions: 3, verifications: 1, invitations: 2 },
+    monthsAhead,
+  );
   const activityArchive = new RecordingActivityArchiveGateway();
 
   const container = {
@@ -89,10 +88,21 @@ describe("MaintenanceConsumer", () => {
     expect(maintenance.partitionsEnsured()[0]?.from).toEqual(NOW);
   });
 
+  // The regression guard for a check that could never fire. `ensureMonthlyPartitions`
+  // always leaves two months ahead, so reading the runway after it is reading its own work.
+  it("reads the runway before ensuring, not after", async () => {
+    const { container, maintenance } = harness();
+    await consumerFor(container).handle(job("partitions"));
+
+    const checked = maintenance.runwayChecked();
+    expect(checked.map((run) => run.table)).toEqual([...PartitionedTable.NAMES]);
+    expect(checked[0]?.from).toEqual(NOW);
+  });
+
   // The allowlist, not a name in the consumer: this is what makes a table partitioned by
   // a later migration covered by the existing schedule.
   it("ensures partitions for every table on the allowlist", () => {
-    expect(PartitionedTable.ALL).toContain(PartitionedTable.ACTIVITY_LOG);
+    expect(PartitionedTable.NAMES).toContain(PartitionedTable.ACTIVITY_LOG);
   });
 
   it("covers each allowlisted table once per run", async () => {
@@ -100,7 +110,7 @@ describe("MaintenanceConsumer", () => {
     await consumerFor(container).handle(job("partitions"));
 
     expect(maintenance.partitionsEnsured().map((run) => run.table)).toEqual([
-      ...PartitionedTable.ALL,
+      ...PartitionedTable.NAMES,
     ]);
   });
 

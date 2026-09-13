@@ -17,9 +17,13 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   private readonly sweeps: Date[] = [];
   private readonly partitionRuns: EnsuredPartitions[] = [];
   private readonly dropRuns: DroppedPartitions[] = [];
+  private readonly runwayChecks: { table: PartitionedTableName; from: Date }[] = [];
 
   public constructor(
     private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
+    // What `monthlyPartitionsAfter` answers. The default is healthy, so a spec that does
+    // not care about the runway does not have to say so.
+    private readonly monthsAhead = 2,
   ) {
     super();
   }
@@ -36,6 +40,11 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   ): Promise<readonly string[]> {
     this.partitionRuns.push({ table, from, months });
     return Promise.resolve([]);
+  }
+
+  public override monthlyPartitionsAfter(table: PartitionedTableName, from: Date): Promise<number> {
+    this.runwayChecks.push({ table, from });
+    return Promise.resolve(this.monthsAhead);
   }
 
   public override dropMonthlyPartitionsBefore(
@@ -56,5 +65,9 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
 
   public partitionsDropped(): readonly DroppedPartitions[] {
     return this.dropRuns;
+  }
+
+  public runwayChecked(): readonly { table: PartitionedTableName; from: Date }[] {
+    return this.runwayChecks;
   }
 }

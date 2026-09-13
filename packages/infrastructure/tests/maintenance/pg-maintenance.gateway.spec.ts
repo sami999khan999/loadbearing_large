@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { invitations, roles, sessions, users, verifications } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
 let database: Database;
@@ -25,7 +25,8 @@ const NAMES = ["activity_log_2020_07", "activity_log_2020_08"];
 
 beforeAll(async () => {
   database = openDatabase();
-  gateway = new PgMaintenanceGateway(database, new TransactionScope());
+  const scope = new TransactionScope();
+  gateway = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
 
   organizationId = await seedOrganizationId(database);
   sweeper = Identifiers.userId.parse(Uuid.v7());
@@ -85,6 +86,58 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
     expect(await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)).toEqual(
       [],
     );
+  });
+
+  // Two replicas booting together: probe-and-create is two statements, and when both
+  // probe before either creates the loser gets 42P07 — reproduced by hand.
+
+  // Held from another connection rather than raced for: a race through the public API
+  // cannot be made to interleave, and a lucky pass is worse than no spec at all.
+  it("takes an advisory lock the whole ensure runs under", async () => {
+    const lock = PgMaintenanceGateway.lockFor(PartitionedTable.ACTIVITY_LOG);
+    await database.client.execute(sql.raw(`drop table if exists ${NAMES.join(", ")}`));
+
+    // Started inside the holder's transaction, awaited outside it: awaiting inside is a
+    // self-deadlock that `lock_timeout` ends with 55P03 rather than an answer.
+    let ensure: Promise<"finished"> | undefined;
+
+    await database.client.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(${lock.namespace}, ${lock.key})`);
+
+      ensure = gateway
+        .ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)
+        .then(() => "finished" as const);
+      const blocked = new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 600),
+      );
+
+      expect(await Promise.race([ensure, blocked])).toBe("blocked");
+    });
+
+    // And it completes once the holder commits, which is what says it was waiting on the
+    // lock rather than simply failing.
+    expect(await ensure).toBe("finished");
+    expect(
+      await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM),
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("PgMaintenanceGateway.monthlyPartitionsAfter", () => {
+  // Relative, not absolute: this database also holds the real months the migrations made,
+  // and every one of them is "after" a scratch window sitting in 2020.
+  it("counts the months ahead and excludes the current one", async () => {
+    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+
+    const fromJuly = await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM);
+    const fromAugust = await gateway.monthlyPartitionsAfter(
+      PartitionedTable.ACTIVITY_LOG,
+      new Date("2020-08-01T00:00:00.000Z"),
+    );
+
+    // Exactly one partition lies between the two readings — August's — which is the
+    // "strictly after" boundary this method exists to get right.
+    expect(fromJuly - fromAugust).toBe(1);
   });
 });
 

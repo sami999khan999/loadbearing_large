@@ -372,7 +372,7 @@ export class Container {
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
       statementTimeoutMs: config.database.statementTimeoutMs,
     });
-    this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
+    this.maintenance = new PgMaintenanceGateway(this.database, this.transactions, this.unitOfWork);
 
     // ── the swap points ──
     // Each reads a `driver` rather than naming a class: the alternative is named in a

@@ -70,6 +70,12 @@ export interface EventShape {
     readonly rowCount: number;
   };
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
+  readonly "partition.runway.low": {
+    readonly table: string;
+    // Months strictly after the current one. Zero means the next insert past month end
+    // fails, and for `activity_log` that is every write in the system.
+    readonly monthsAhead: number;
+  };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;

@@ -9,7 +9,7 @@ import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js"
 import { PgActivityArchiveGateway } from "../../src/pg/repository/pg-activity-archive.gateway.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { activityArchive } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
 // Its own month, so the partition this spec detaches and drops is never one another
@@ -76,11 +76,11 @@ const write = async (count: number) => {
 
 const freshPartition = async () => {
   await database.client.execute(sql`drop table if exists ${sql.identifier(PARTITION)}`);
-  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
-    PartitionedTable.ACTIVITY_LOG,
-    PERIOD,
-    1,
-  );
+  await new PgMaintenanceGateway(
+    database,
+    scope,
+    new PgUnitOfWork(database, scope),
+  ).ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, PERIOD, 1);
 };
 
 beforeAll(() => {
