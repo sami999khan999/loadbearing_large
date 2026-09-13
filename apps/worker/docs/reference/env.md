@@ -38,10 +38,13 @@ Both build a `Container`, and the container treats mail as required configuratio
 optional: a container that cannot send is one whose sign-ups never complete. Same URL shape as the
 web app's.
 
-> [!NOTE]
-> The worker requires `SMTP_URL` and `EMAIL_FROM` "for the scheduled digest", and nothing in this
-> process sends one yet — `DigestComposer` is constructed only in its own spec. `P8.3` either ships
-> the notification consumer or drops the two keys from this schema.
+The worker is now the *only* process that actually sends. Every mail is a job on `QueueName.MAIL`
+and `MailConsumer` is what renders and hands it to SMTP, so these two keys stopped being speculative
+the day the pipeline landed. The web app still parses them because it builds the same `Container`.
+
+`APP_BASE_URL` is required here for the same reason: the worker renders the invitation link, and it
+parses no auth configuration to borrow an origin from. It is deliberately *not* `AUTH_URL`, which is
+Better Auth's own and exists only in the web app's schema.
 
 ## The swappable stores
 
@@ -64,3 +67,38 @@ on its first run with a vendor auth error.
 The same block the web app parses. A worker with no log output is a worker you cannot operate, and
 `LOG_PRETTY` must stay false anywhere Alloy is reading — it is a terminal format, and Alloy's JSON
 stage drops what it cannot parse.
+
+## The four concurrency knobs are not one knob
+
+Each is per worker *instance*, never global: four instances at concurrency 4 is sixteen in-flight
+jobs, every one of which may hold a Postgres connection.
+
+- `WORKER_EMBEDDING_CONCURRENCY` (4) — bounded by the embedding provider's rate limit and your pool.
+- `WORKER_MAINTENANCE_CONCURRENCY` (1) — serial, because these jobs take table-level locks.
+- `WORKER_ANALYTICS_CONCURRENCY` (1) — capped at 1 *by the schema*: correctness rests on one writer.
+- `WORKER_MAIL_CONCURRENCY` (4) — with `WORKER_MAIL_RATE_PER_MINUTE` (600) as the provider's cap,
+  which is a BullMQ `limiter` on that queue rather than a sleep in every caller.
+- `WORKER_EVENT_CONCURRENCY` (8) — the highest, because deliveries are subscriber work and one
+  event fans out to one job per subscriber. The drain itself runs at `priority: 1` ahead of them,
+  so a delivery backlog cannot starve it.
+
+## The two realtime numbers are per process
+
+`REALTIME_MAX_STREAMS_PER_USER` (8) caps how many concurrent streams one person may hold **on this
+replica**, and `REALTIME_STREAM_MAX_AGE_SECONDS` (1800) is how long any one of them lives before it
+ends and the client reconnects.
+
+Neither is cluster-wide, and that is the decision rather than a limitation. A shared counter would
+cost a Redis round trip on every stream open, and the failure the cap exists to prevent — one tab
+in a reconnect loop opening streams faster than it closes them — is local to the replica it is
+happening on. Behind a load balancer the effective per-person total is the cap times the replica
+count, which is the right order of magnitude for a limit whose job is to bound one bug.
+
+The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
+error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.
+
+The worker parses both and uses neither: it builds a container, and a container builds a realtime
+subscriber. Nothing in a worker opens a stream, so the connection behind it is never created — which
+is what makes `health().realtime` honestly `null` there rather than a socket opened to answer the
+question.

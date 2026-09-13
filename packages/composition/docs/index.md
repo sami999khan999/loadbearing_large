@@ -96,6 +96,11 @@ The four rules that govern this class — abstract types on the public surface, 
 [`docs/reference/container.md`](reference/container.md). The test shape that justifies all of it is
 in [`docs/reference/test-container.md`](reference/test-container.md).
 
+`src/mail/` is the one folder here that is more than wiring: it holds the mail layout and the
+renderer, because this is the only layer that sees both the translated copy and the transport.
+Why every message is a queue job, why there is no delivery table, and where the delivery record
+actually lives are in [`docs/reference/mail-pipeline.md`](reference/mail-pipeline.md).
+
 ## Config arrives, it is never read
 
 `ContainerConfig` is every value the system needs in one shape, and none of it comes from the

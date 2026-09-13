@@ -1,10 +1,21 @@
 import type { AuthStrategy } from "../auth/index.js";
 import type { AppContract } from "../import.js";
-import { type ContractRouterClient, createORPCClient, InternalError, RPCLink } from "../import.js";
+import {
+  ClientRetryPlugin,
+  type ClientRetryPluginContext,
+  type ContractRouterClient,
+  createORPCClient,
+  InternalError,
+  RPCLink,
+} from "../import.js";
 
-// The typed client every caller holds. It is derived from the contract, so a procedure
-// added in `contracts` appears here with no edit in this package.
-export type AppClient = ContractRouterClient<AppContract>;
+// Derived from the contract, so a procedure added in `contracts` appears here with no
+// edit. The second argument is the retry context — an opt-in knob, defaulting to 0.
+export type AppClient = ContractRouterClient<AppContract, ClientRetryPluginContext>;
+
+// What a call site may pass as `context`. Named so the in-process transport can build a
+// client with the same one — a narrower client would not be assignable to `AppClient`.
+export type AppClientContext = ClientRetryPluginContext;
 
 // `fetch` off `globalThis`, since `lib: ["ES2024"]` declares neither it nor `Request`.
 // `unknown` in and `never` out: both flow through untouched, so neither is named.
@@ -31,6 +42,9 @@ export class ApiClient {
       // whether the cookie rides along — and it is per-strategy, not per-call.
       fetch: (request, init) =>
         platformFetch()(request, { ...init, credentials: auth.credentials }),
+      // No `default`, so nothing retries unless its call site says so. A stream asks for
+      // infinite retries; a mutation that retried itself would submit twice.
+      plugins: [new ClientRetryPlugin()],
     });
 
     return new ApiClient(createORPCClient<AppClient>(link));
@@ -75,6 +89,22 @@ export class ApiClient {
 
   public get document(): AppClient["document"] {
     return this.rpc.document;
+  }
+
+  public get notification(): AppClient["notification"] {
+    return this.rpc.notification;
+  }
+
+  public get realtime(): AppClient["realtime"] {
+    return this.rpc.realtime;
+  }
+
+  public get conversation(): AppClient["conversation"] {
+    return this.rpc.conversation;
+  }
+
+  public get message(): AppClient["message"] {
+    return this.rpc.message;
   }
 
   // The escape hatch for a namespace with no accessor yet.

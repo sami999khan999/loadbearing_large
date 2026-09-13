@@ -19,22 +19,40 @@ export type {
   ApiKeyDto,
   ChangeMemberRoleInput,
   ChangeRolePermissionInput,
+  ConversationDto,
+  ConversationMemberInput,
   CreateApiKeyInput,
+  CreateConversationInput,
   CreatedApiKeyDto,
   CreateRoleInput,
+  DeleteMessageInput,
   DeleteRoleInput,
   DocumentHitDto,
+  EditMessageInput,
   IndexDocumentContractInput,
   InvitationDto,
   InviteMemberInput,
+  LeaveConversationInput,
+  ListConversationsInput,
+  ListMessagesInput,
+  ListNotificationsInput,
+  MarkConversationReadInput,
+  MarkNotificationReadInput,
   MemberDto,
+  MessageDto,
+  NotificationDto,
   PaginationQuery,
   QueuedDocumentDto,
+  RealtimeEventName,
+  RealtimeMessage,
   RevokeApiKeyInput,
   RevokeInvitationInput,
   RoleDto,
   SearchDocumentsContractInput,
+  SendMessageInput,
   SetMemberActiveInput,
+  TypingInput,
+  UpdateNotificationPreferenceInput,
   UpdateRoleInput,
 } from "@loadbearing/contracts";
 
@@ -44,16 +62,21 @@ export { ERROR_CATALOG, ErrorNormalizer } from "@loadbearing/errors";
 
 // ── @tanstack/react-query ────────────────────────────────────────────────────
 export {
+  type InfiniteData,
+  infiniteQueryOptions,
   QueryClient,
   type QueryKey,
   queryOptions,
+  type UseInfiniteQueryOptions,
+  type UseInfiniteQueryResult,
   type UseMutationOptions,
   type UseQueryOptions,
   type UseQueryResult,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export { createContext, type ReactNode, useContext } from "react";
+export { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";

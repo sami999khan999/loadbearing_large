@@ -3,8 +3,10 @@ import {
   and,
   asc,
   CapabilitySet,
+  type DomainEventPublisher,
   eq,
   gt,
+  Identifiers,
   type OrganizationId,
   Principal,
   type SQL,
@@ -40,6 +42,7 @@ export class PgInvitationClaimer extends BaseRepository {
     database: Database,
     scope: TransactionScope,
     private readonly activity: ActivityLogger,
+    private readonly events: DomainEventPublisher,
   ) {
     super(database, scope);
   }
@@ -126,11 +129,17 @@ export class PgInvitationClaimer extends BaseRepository {
 
         // Written as the tenant being joined — the fact is theirs, not the actor's
         // current organization's. The same construction `PgOrganizationFounder` uses.
-        await this.activity.record(
-          new Principal(invitation.organizationId, userId, CapabilitySet.empty()),
-          "member.joined",
-          { invitationId: invitation.id, roleId: invitation.roleId },
-        );
+        const joiner = new Principal(invitation.organizationId, userId, CapabilitySet.empty());
+        await this.activity.record(joiner, "member.joined", {
+          invitationId: invitation.id,
+          roleId: invitation.roleId,
+        });
+
+        // Inside the same transaction as the membership row, which is the whole point.
+        await this.events.publish(joiner, {
+          name: "member.joined",
+          payload: { userId, roleId: Identifiers.roleId.parse(invitation.roleId) },
+        });
 
         return invitation.organizationId;
       }),

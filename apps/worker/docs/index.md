@@ -38,21 +38,22 @@ apps/worker/
 │   │   ├── index.ts
 │   │   ├── analytics.consumer.ts     → AnalyticsConsumer   (project · reconcile)
 │   │   ├── embedding.consumer.ts     → EmbeddingConsumer
+│   │   ├── mail.consumer.ts          → MailConsumer        (send)
+│   │   ├── outbox.consumer.ts        → OutboxConsumer      (drain · deliver)
 │   │   └── maintenance.consumer.ts   → MaintenanceConsumer (sweep · partitions · archive)
 │   ├── schedule/
 │   │   ├── index.ts
 │   │   ├── archive.schedule.ts       04:00 on the first
 │   │   ├── cleanup.schedule.ts       03:00 daily
+│   │   ├── outbox-drain.schedule.ts  every second
 │   │   ├── partitions.schedule.ts    02:00 on the first
 │   │   ├── projection.schedule.ts    every five minutes
 │   │   └── reconcile.schedule.ts     05:00 daily
-│   └── notification/
-│       ├── index.ts
-│       └── notification-digest.composer.ts        → DigestComposer
 └── tests/
     ├── bootstrap/system-principal.spec.ts
-    ├── consumer/maintenance.consumer.spec.ts
-    └── notification/notification-digest.composer.spec.ts
+    ├── consumer/mail.consumer.spec.ts
+    ├── consumer/outbox.consumer.spec.ts
+    └── consumer/maintenance.consumer.spec.ts
 ```
 
 ---
@@ -91,6 +92,8 @@ See [`reference/consumers.md`](reference/consumers.md) and
   `EmbeddingConsumer` catches nothing.
 - [The schedules](reference/schedules.md) — the fixed job ids that make registration idempotent, the
   clock order, and why none of them retries.
+- [Subscribers](reference/subscribers.md) — the contract every outbox subscriber keeps, and why
+  they live in `application` rather than beside the consumer that calls them.
 - [Shutdown](reference/shutdown.md) — what `stop()` drains, the race that bounds it, and the order
   everything closes in.
 - [`Env`](reference/env.md) — why the schema is smaller than the web app's and deliberately not

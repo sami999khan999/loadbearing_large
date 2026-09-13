@@ -12,7 +12,7 @@ export interface RedisConfig {
 
 // Which instance a consumer is asking about. The health check takes it rather than
 // exposing the clients, so `Container` never names `Redis` (17).
-export type RedisRole = "cache" | "queue";
+export type RedisRole = "cache" | "queue" | "subscriber";
 
 // Two instances, one class. Which connection a consumer gets is a property of what
 // it is doing, not a wiring decision two same-typed arguments could get backwards.
@@ -32,6 +32,18 @@ export class RedisConnection {
     return this.resolve("queue");
   }
 
+  // A connection in subscriber mode can run nothing else, which is why this is a role
+  // rather than a second use of `client()`. A process that never streams never opens it.
+  public subscriberClient(): Redis {
+    return this.resolve("subscriber");
+  }
+
+  // Whether a role has ever been resolved, without resolving it. Health reports `null`
+  // for a connection this process never opened, and asking would be opening it.
+  public opened(role: RedisRole): boolean {
+    return this.clients.has(role);
+  }
+
   // PING on the instance callers actually hold. Opening a second connection to answer
   // this would report on a socket nothing else uses — green while the cache is down.
   public async healthy(role: RedisRole): Promise<boolean> {
@@ -48,16 +60,31 @@ export class RedisConnection {
     const existing = this.clients.get(role);
     if (existing) return existing;
 
-    const created =
-      role === "cache"
-        ? this.create(this.config.cacheUrl, { keyPrefix: this.config.keyPrefix ?? "app:" })
-        : this.create(this.config.queueUrl, {
-            maxRetriesPerRequest: null,
-            enableReadyCheck: false,
-          });
+    const created = this.build(role);
 
     this.clients.set(role, created);
     return created;
+  }
+
+  // The subscriber shares the cache instance and its key prefix. Neither `PUBLISH` nor
+  // `SUBSCRIBE` declares a key; `SPUBLISH` does — see docs/reference/realtime.md.
+  private build(role: RedisRole): Redis {
+    const prefix = this.config.keyPrefix ?? "app:";
+
+    if (role === "queue") {
+      return this.create(this.config.queueUrl, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      });
+    }
+
+    if (role === "subscriber") {
+      // Auto-pipelining batches commands issued in one tick, and a subscriber issues
+      // almost none: the traffic it carries is pushed, not requested.
+      return this.create(this.config.cacheUrl, { keyPrefix: prefix, enableAutoPipelining: false });
+    }
+
+    return this.create(this.config.cacheUrl, { keyPrefix: prefix });
   }
 
   private create(url: string, options: RedisOptions): Redis {

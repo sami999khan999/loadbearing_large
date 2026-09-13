@@ -20,6 +20,32 @@ export class QueryKeys {
     sessions: () => ["account", "session", "list"] as const,
   };
 
+  // The bell's count is its own key rather than a field on the list: it is read on
+  // every page and the list on one, so they cannot share a lifetime.
+  public static readonly notification = {
+    all: () => ["notification"] as const,
+    // The cursor is *not* in the key. It lives in the page data, and a key that carried
+    // it would make every page a separate cache entry nothing could invalidate together.
+    list: (params: unknown) => ["notification", "list", params] as const,
+    unreadCount: () => ["notification", "unreadCount"] as const,
+    preferences: () => ["notification", "preferences"] as const,
+  };
+
+  // Two namespaces rather than one: a conversation list and the messages inside one
+  // change at different rates, and a send must not invalidate the whole inbox.
+  public static readonly conversation = {
+    all: () => ["conversation"] as const,
+    list: (params: unknown) => ["conversation", "list", params] as const,
+    get: (conversationId: string) => ["conversation", "get", conversationId] as const,
+  };
+
+  public static readonly message = {
+    all: () => ["message"] as const,
+    // The cursor is not in the key, as everywhere else: it lives in the page data, and a
+    // key that carried it would make every page a separate entry nothing invalidates.
+    list: (conversationId: string) => ["message", "list", conversationId] as const,
+  };
+
   public static readonly rbac = {
     all: () => ["rbac"] as const,
     roles: (params: unknown) => ["rbac", "role", "list", params] as const,

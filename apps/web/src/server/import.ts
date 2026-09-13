@@ -5,6 +5,11 @@
 // Type-only. The principal is resolved by the container, never constructed here.
 export type { Principal } from "@loadbearing/application";
 
+// ── @loadbearing/application ─────────────────────────────────────────────────
+// The channel builder only. A router names no other domain type: everything else it
+// touches, it reaches through a use-case on the container.
+export { RealtimeChannels } from "@loadbearing/application";
+
 // ── @loadbearing/composition ─────────────────────────────────────────────────
 export { Container } from "@loadbearing/composition";
 
@@ -30,7 +35,9 @@ export {
 export { Correlation, type Logger, type TraceId } from "@loadbearing/observability";
 
 // ── @orpc/server ─────────────────────────────────────────────────────────────
-export { createRouterClient, implement, ORPCError, os } from "@orpc/server";
+// Never `EventPublisher` from here. It is oRPC's own in-process fan-out, and reaching
+// for it would put a second, replica-local realtime path beside the Redis one.
+export { createRouterClient, implement, ORPCError, os, withEventMeta } from "@orpc/server";
 
 // ── @orpc/server/fetch ───────────────────────────────────────────────────────
 export { RPCHandler } from "@orpc/server/fetch";

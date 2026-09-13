@@ -36,11 +36,9 @@ apps/worker/
 │   ├── consumer/
 │   │   ├── index.ts
 │   │   ├── embedding.consumer.ts     → EmbeddingConsumer
+│   │   ├── mail.consumer.ts          → MailConsumer        (the only sender in the system)
 │   │   ├── maintenance.consumer.ts   → MaintenanceConsumer
 │   │   └── analytics.consumer.ts     → AnalyticsConsumer   (registered only when configured)
-│   ├── notification/
-│   │   ├── index.ts
-│   │   └── notification-digest.composer.ts        → DigestComposer  (the only email-namespace reader)
 │   └── schedule/
 │       ├── index.ts
 │       ├── cleanup.schedule.ts       → CleanupSchedule
@@ -50,8 +48,8 @@ apps/worker/
 │       └── reconcile.schedule.ts     → ReconcileSchedule   (analytics)
 └── tests/                            ← mirrors src/, never inside it
     ├── bootstrap/system-principal.spec.ts
-    ├── consumer/maintenance.consumer.spec.ts
-    └── notification/notification-digest.composer.spec.ts
+    ├── consumer/mail.consumer.spec.ts
+    └── consumer/maintenance.consumer.spec.ts
 ```
 
 ---
@@ -291,32 +289,59 @@ The listener observes without swallowing, so BullMQ still sees the rejection and
 
 ## Step 25.5 — Copy for email
 
-The worker is the only process that reads the `email` namespace, and it reads it the same way
-every other consumer reads copy — through `ContentSource`.
+The worker is the only process that reads the `email` namespace, and it is now the only process
+that sends at all: every message in this system is a job on `QueueName.MAIL`, and `MailConsumer`
+is what renders it and hands it to SMTP.
 
-**`apps/worker/src/notification/notification-digest.composer.ts`**
+**`apps/worker/src/consumer/mail.consumer.ts`**
 
 ```ts
-import type { ContentSource, Locale } from "@loadbearing/content";
+public async handle(job: Job<MailJobData>): Promise<void> {
+  switch (job.name) {
+    case "send": {
+      const receipt = await this.container.mail.send.execute(SystemPrincipal.platform(), {
+        template: job.data.template,
+        to: job.data.to,
+        locale: job.data.locale as never,
+        params: job.data.params,
+      });
 
-export class DigestComposer {
-  public constructor(private readonly content: ContentSource) {}
-
-  public async subject(locale: Locale, count: number): Promise<string> {
-    const t = await this.content.translator(locale, ["email"]);
-    return t.t("email.digest.subject", { count });
+      this.container.logger.emit("mail.delivery.sent", {
+        template: job.data.template,
+        messageId: receipt.messageId ?? "",
+      });
+      return;
+    }
+    default:
+      throw new Error(`Unknown mail job: ${job.name}`);
   }
 }
 ```
 
+**The rate limiter is a worker option, never a use-case concern.** A provider's cap belongs to
+this queue and to nothing else, so one `limiter` here is what keeps it out of every caller as a
+sleep — `WORKER_MAIL_RATE_PER_MINUTE`, defaulting to 600.
+
+**It does not catch.** BullMQ's retry is driven by rejection, so a `try` here would turn a provider
+outage into permanent, silent loss. `mail.delivery.failed` is emitted from the `failed` listener
+and only on the last attempt, which with no delivery table is the one place a permanently
+undelivered message is reported.
+
 **One `Translator`, one interpolation implementation, one place a typo gets fixed.** A separate
 templating system for email is the standard way to end up with two copies of every string and a
-locale that is correct in the UI and English in the inbox.
+locale that is correct in the UI and English in the inbox. The container hands every process a
+`StaticContentSource(SERVER_CATALOG)` ([17](17-composition-container.md)) — the only catalog that
+carries `email` at all — and `ContentMailRenderer` reads it.
 
-**The recipient's locale is a parameter**, so a per-recipient subject line is a second call
-rather than a second system. The container hands the worker a
-`StaticContentSource(SERVER_CATALOG)` ([17](17-composition-container.md)) — the only catalog
-that carries `email` at all.
+**The recipient's locale rides the job**, so a per-recipient message is a second `Translator`
+lookup rather than a second system. `users.locale` is where it comes from, which is why
+`AuthMailer` takes a recipient rather than an address.
+
+> [!NOTE]
+> `DigestComposer` used to live in a `notification/` folder beside `consumer/`, and was
+> constructed only by its own spec. It is deleted: the digest returns in Phase 3 of
+> [`tasks/COMMUNICATION-PLAN.md`](../../tasks/COMMUNICATION-PLAN.md) as a real schedule with a real
+> consumer, and a class with no caller is worse documentation than its absence.
 
 > [!IMPORTANT]
 > **Rendering per recipient is cheap. Resolving permissions per recipient is not.**

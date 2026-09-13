@@ -22,6 +22,9 @@ export const coreEvents = {
   "maintenance.sweep.completed": { level: "info" },
   "maintenance.partitions.ensured": { level: "info" },
   "maintenance.partition.archived": { level: "info" },
+  // Distinct from `archived`, which means detached, uploaded, verified and *then*
+  // dropped. This one is a partition whose rows were never worth keeping.
+  "maintenance.partition.dropped": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.
@@ -30,6 +33,26 @@ export const coreEvents = {
   // The transport's own reason, which `UnavailableError("smtp")` deliberately does not
   // carry. Without it a bounced invitation is a 200 and nothing else.
   "email.send.failed": { level: "error" },
+
+  // Together these are the delivery record, because there is no delivery table. `queued`
+  // and `sent` bracket a message; `failed` fires once, on the last attempt.
+  "mail.delivery.queued": { level: "debug" },
+  "mail.delivery.sent": { level: "info" },
+  "mail.delivery.failed": { level: "error" },
+
+  // `lagged` is the one that matters: a drain that stops running is silent otherwise,
+  // because "no events published" and "no events to publish" look identical.
+  "outbox.drain.completed": { level: "debug" },
+  "outbox.drain.lagged": { level: "warn" },
+  "outbox.delivery.failed": { level: "error" },
+
+  "notification.digest.completed": { level: "info" },
+
+  // A pair, not a counter: `opened` minus `closed` is the live stream count, and the
+  // duration on `closed` is what says whether a client is reconnecting in a loop.
+  "realtime.stream.opened": { level: "debug" },
+  "realtime.stream.closed": { level: "debug" },
+  "realtime.publish.failed": { level: "warn" },
 
   "cache.entry.corrupt": { level: "warn" },
   "embedding.request.failed": { level: "error" },

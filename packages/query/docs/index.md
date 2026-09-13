@@ -231,6 +231,8 @@ deliberate: routing is the one thing the desktop shell replaces.
   module-scope instance costs under this permission model.
 - [Mutations and invalidation](reference/mutations.md) — invalidate-before-`onSuccess`, the three
   states of `invalidates`, and why sign-out and switch declare none.
+- [Realtime](reference/realtime.md) — one stream per tab, a total routing table, and why a
+  frame invalidates rather than patches.
 
 ## Every `rbac` key now has a caller
 

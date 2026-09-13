@@ -1,6 +1,6 @@
 ---
 title: Test container
-description: The sixteen fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
+description: The twenty-two fakes and the harness that wires them — why it returns abstract types, why it lives in src/ rather than tests/, and why query counts belong in the integration tier instead.
 ---
 
 # `TestContainer`
@@ -29,10 +29,10 @@ is a much smaller and much less flaky set.
 `files.md` says tests mirror `src/` and never live inside it. This is not a test — it is a
 **compile-time completeness check**, and it has to be inside `src/` for `tsc` to see it.
 
-`TestPorts` has one entry per abstract class in `packages/application/src/port/` — sixteen of them —
-plus `content`, which is a `ContentSource` from a package to `application`'s left rather than a port
-of its own. Seventeen entries, and adding a seventeenth port makes this file stop compiling until it
-has a double. The spec counts the directory rather than restating the list, so the entry is caught
+`TestPorts` has one entry per abstract class in `packages/application/src/port/` — twenty-one of
+them — plus `content`, which is a `ContentSource` from a package to `application`'s left rather than
+a port of its own. Twenty-two entries, and adding a port makes this file stop compiling until it has a
+double. The spec counts the directory rather than restating the list, so the entry is caught
 even where the type would not force it. That is the whole claim of
 [17](../../../../docs/setup/17-composition-container.md) §17.4 — *"adding a port to `application`
 shows up here as one line rather than as a compile error in forty specs"* — and it only holds if the
@@ -91,12 +91,16 @@ That is also why `fake/` has a barrel while `TestContainer` does not go on the p
 | `CacheStore` | `InMemoryCacheStore` | Map + recorded TTLs, **never enforced** — wall-clock expiry is how a suite goes flaky |
 | `StorageGateway` | `InMemoryStorageGateway` | bytes in a Map; `presign*` returns a fake URL rather than throwing |
 | `QueuePublisher` | `RecordingQueuePublisher` | records, and honours `jobId` dedup because that is a domain rule |
+| `MailPublisher` | `RecordingMailPublisher` | records, and honours `dedupeKey` for the same reason — it *becomes* the job id |
+| `MailRenderer` | `StubMailRenderer` | canned subject and both parts; rendered copy is `content`'s suite to assert |
 | `VectorStore` | `InMemoryVectorStore` | **real cosine**, goal filter applied to the input set |
 | `EmbeddingProvider` | `StubEmbeddingProvider` | deterministic character histogram, no network |
 | `SessionResolver` | `StubSessionResolver` | `null` by default; a use-case test never reaches it |
 | `ActivityLogger` | `RecordingActivityLogger` | records actor, action and payload |
 | `UnitOfWork` | `DirectUnitOfWork` | runs the work, opens nothing, counts the call |
 | `ContentSource` | `StaticContentSource` | **the real one** — its catalog is a map of dynamic imports |
+| `RealtimePublisher` | `RecordingRealtimePublisher` | records, and publishes into an `InMemoryRealtimeHub` when given one |
+| `RealtimeSubscriber` | `InMemoryRealtimeSubscriber` | an unbounded async generator over the hub, ending on the signal |
 
 `StubSessionResolver` returning `null` is not laziness. The value of this file is that adding a
 port is **one line** here; a fake elaborate enough to need its own tests would defeat that.
@@ -107,9 +111,22 @@ assertion a retrieval use-case is actually worth testing. And `RecordingQueuePub
 `jobId` deduplication, because *"enqueue OCR for this receipt, once"* is a business rule the
 use-case is responsible for, not queue configuration.
 
+**The two realtime fakes are the one pair that is not wired together by default.** `TestContainer`
+gives the publisher no hub and the subscriber a private one, so a frame published through the
+harness reaches no reader. That is not an oversight: nearly every spec here asks *what was
+published*, and to which channel, which the recording half answers alone. A spec asserting that a
+frame *arrived* — that this user's tab got it and the next user's did not — builds one
+`InMemoryRealtimeHub` and passes both fakes over it, in the two lines `tests/fake/realtime-fake.spec.ts`
+shows. Wiring them by default would make every unrelated spec pay for a listener nobody reads.
+
+`InMemoryRealtimeSubscriber` is also deliberately *unbounded*, where the Redis adapter is not. The
+bounded queue and its `resync` overflow marker exist so one slow tab cannot cost the process
+memory; a spec has neither a slow tab nor a memory budget, and a fake that modelled the cap would
+be a second implementation of the thing under test.
+
 ## Every fake has a real counterpart
 
-`Container` constructs an implementation for all sixteen ports, so every entry above is a *double*
+`Container` constructs an implementation for all seventeen ports, so every entry above is a *double*
 for something rather than the only thing that exists. That has not always held: `EventBus` was
 declared and faked here while nothing bound it in `Container`, which meant a publishing use-case
 would have published into this recording fake under test and into nothing at all in production. It

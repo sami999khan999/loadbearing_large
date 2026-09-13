@@ -135,3 +135,20 @@ Retries come from the error catalog rather than from a per-query setting: retrya
 about the code. A `FORBIDDEN` retried twice with backoff turns an instant "you cannot do that" into
 a three-second wait for the same answer. A signed-out session query is an answer, not a failure to
 retry, so it retries never.
+
+## A cursor page is one query key, not one per page
+
+`useAppInfiniteQuery` is the same pass-through as `useAppQuery`, and it exists for the same reason:
+so a call site names one hook rather than the library's. Its five type parameters are copied from
+the library's signature verbatim — with fewer, `data` collapses to `unknown` at every call site,
+which typechecks and then loses every field.
+
+The rule it enforces is about the key. A keyset list's cursor lives in the **page data**, never in
+the query key: `["notification", "list", { limit, unreadOnly }]` covers page one and page forty
+alike, so one `invalidate` on that key refetches the whole scroll and a mutation does not have to
+know how far the reader got. Putting the cursor in the key gives every page its own cache entry,
+none of which any invalidation you would think to write will match.
+
+`getNextPageParam` reads `nextCursor` and nothing else. `items.length < limit` is the tempting
+version and it is wrong: a full last page is ordinary, and the server is the only party that knows
+whether a row follows the one it just sent.

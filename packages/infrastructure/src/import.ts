@@ -37,10 +37,17 @@ export {
   type ApiKeySummary,
   type ArchivedPartition,
   CacheStore,
+  type CancellationSignal,
   type CapabilityRepository,
+  type ConversationMemberRecord,
+  type ConversationPage,
+  type ConversationRecord,
+  ConversationRepository,
   type DailyCount,
   type DocumentChunk,
+  type DomainEventPublisher,
   type EmailMessage,
+  type EmailReceipt,
   EmailSender,
   EmbeddingProvider,
   type InvitationPage,
@@ -54,13 +61,33 @@ export {
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
+  type MessagePageResult,
+  type MessageQuery,
+  type MessageRecord,
+  MessageRepository,
   type NewApiKey,
+  type NewConversation,
   type NewInvitation,
+  type NewMessage,
+  type NewNotification,
+  type NotificationPage,
+  type NotificationPreferenceRepository,
+  type NotificationRecipientReader,
+  type NotificationRecord,
+  type NotificationRepository,
+  type OutboxGateway,
+  type PartitionedTableName,
+  type PreferenceRecord,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
   type ProjectionCheckpoint,
   QueuePublisher,
+  type RealtimeChannel,
+  RealtimeChannels,
+  type RealtimePublisher,
+  RealtimeSubscriber,
+  type Recipient,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
@@ -69,17 +96,37 @@ export {
   type StoredObject,
   type SweepOutcome,
   UnitOfWork,
+  type UnreadCount,
+  type UnreadQuery,
   type VectorStore,
 } from "@loadbearing/application";
+
+// ── @loadbearing/content ─────────────────────────────────────────────────────
+// The locale type only. A recipient row carries the language its message will be
+// composed in, and `content` sits left of every package that reads one.
+export type { Locale } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
   type ApiKeyId,
+  type ConversationId,
+  type ConversationKind,
+  type ConversationMemberRole,
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
   type GoalId,
   Identifiers,
   type InvitationId,
+  type KeysetQuery,
+  type MessageId,
+  type NotificationCategory,
+  type NotificationId,
+  type NotificationKind,
   type OrganizationId,
   type PaginationQuery,
+  RealtimeContract,
+  type RealtimeMessage,
   type RoleId,
   type UserId,
 } from "@loadbearing/contracts";
@@ -88,7 +135,14 @@ export {
 export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { ConflictError, InternalError, NotFoundError, UnavailableError } from "@loadbearing/errors";
+export {
+  ConflictError,
+  InternalError,
+  NotFoundError,
+  RateLimitedError,
+  UnavailableError,
+  ValidationError,
+} from "@loadbearing/errors";
 
 // ── @loadbearing/observability ───────────────────────────────────────────────
 export { Logger } from "@loadbearing/observability";
@@ -113,6 +167,7 @@ export {
   count,
   desc,
   eq,
+  exists,
   gt,
   gte,
   inArray,

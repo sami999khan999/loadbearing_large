@@ -24,6 +24,7 @@ this page is what follows from it.
 |---|---|---|---|
 | **Domain data** — tasks, goals, RBAC | use-cases | Postgres | Transactional; read after write |
 | **Audit trail** — business facts | `ActivityLogger` | Postgres, partitioned | Must not be lost; in-transaction |
+| **Domain events** — integration facts | `DomainEventPublisher` | Postgres outbox, partitioned | In-transaction, at-least-once, drained by the worker |
 | **Diagnostics** — operator signal | `JsonLogger` | stdout → **Loki** | May be lost; 30-day retention |
 | **Analytics** — aggregates over time | worker, from domain events | Postgres snapshots → ClickHouse | Derived; rebuildable |
 
@@ -318,6 +319,14 @@ Three things this buys:
 - Dropping old data is `DROP PARTITION` — instant, rather than a `DELETE` that bloats the table.
 - Index maintenance stays bounded, because each partition's index is small.
 
+**Which tables are partitioned is a list, not a convention.** `PartitionedTable.ALL` in
+`packages/application/src/primitive/partitioned-table.ts` names them, `MaintenanceGateway`'s two
+methods take that union rather than a `string`, and the monthly schedule loops it. Two things fall
+out of writing it down: Postgres accepts no bind parameters in DDL, so the adapter interpolates the
+table name and the closed union is the only boundary there is; and a table that is partitioned in a
+migration but never added to the list quietly stops getting partitions the month the migration's
+own runway ends.
+
 Create partitions ahead of time with a scheduled job, or use `pg_partman`.
 
 > [!WARNING]
@@ -527,6 +536,15 @@ capability resolutions and 100k query sets, and the job runs for hours.
 copy stay per-recipient — those are cheap. It is the capability resolution and the query set that
 must be shared.
 
+`SendNotificationDigestUseCase`
+([`packages/application/src/notification/send-notification-digest.use-case.ts`](../../packages/application/src/notification/send-notification-digest.use-case.ts))
+answers the half that had to be right on day one: recipients arrive as keyset pages of 200, each
+page costs one address-and-locale query rather than one per person, and the mail leaves through
+`MailPublisher` so a slow SMTP server cannot stall the scan. It does **not** group by capability
+shape yet, because it does not resolve a capability per recipient at all — the digest reads a
+recipient's own rows, which are already the filtered set the subscriber wrote. The grouping above
+becomes necessary the first time a digest asks a question of the domain instead of the inbox.
+
 ### Aggregate views
 
 A capacity view aggregating every employee's tasks across every goal is a live join over everything.
@@ -537,6 +555,31 @@ Past a few thousand employees it must be a materialized view on a refresh schedu
 One task change notifying five people is 5× the write rate on the notification table. That table
 needs its own partitioning and an aggressive retention policy, or it becomes the largest table in
 the database by an order of magnitude.
+
+Both were in the first migration, which is the only time either is cheap.
+[`packages/infrastructure/src/pg/schema/notification.schema.ts`](../../packages/infrastructure/src/pg/schema/notification.schema.ts)
+is `PARTITION BY RANGE (created_at)` with `(id, created_at)` as its key, and `notifications` is a
+member of the frozen `PartitionedTable` allowlist that `MaintenanceConsumer` walks — so the monthly
+partition is created ahead of need and dropped after twelve months by the same loop that maintains
+the audit trail and the outbox. Retention is a number in one table there, not a job someone has to
+remember to write.
+
+### Message fan-out
+
+A message in a conversation of N members is one row and N realtime publishes — the
+`MessagingRealtimeSubscriber` loop that keeps every member's inbox ordered. That is the
+amplification to watch, and it is bounded deliberately in three places.
+[`packages/application/docs/reference/messaging.md`](../../packages/application/docs/reference/messaging.md)
+carries the whole argument; the shape is: the **body** rides the conversation channel and is
+published once, the **user** channels get a compact "something changed" frame and only for the
+three events that reorder a list, and the notification policy stops at direct conversations
+entirely — a busy channel producing a bell item per member per message is this section's failure
+with a table attached.
+
+Unread is the other half, and it is computed rather than counted: `last_read_at` is the only
+state and the count is a capped `LATERAL` per row of a page, so there is no per-member write per
+message and nothing to drift. The swap at 100k is that method behind a Redis counter, with
+`last_read_at` still the record.
 
 > [!TIP]
 > Load-test these three paths at 10× expected volume **before** launch, with realistic data
@@ -560,18 +603,29 @@ Worth naming, because it is most of the system. At every scale on this page:
 - **Event handlers** — moving from in-process dispatch to a broker changes the dispatcher, not the
   subscribers.
 
-That last one has a condition attached, and it applies to the interface that does not exist yet:
-**when an event bus is built, build it broker-shaped** — async `publish`, no return value,
-idempotent handlers keyed on a stable event id, no ordering assumptions, and no handler exception
-reaching the publisher. Each of those is something a Kafka or Redis Streams implementation cannot
-give back later, and a handler that starts depending on synchronous in-process semantics is the one
-thing that would make the swap expensive.
+That last one is now built, and it was built broker-shaped: `DomainEventPublisher.publish` is async
+and returns nothing, handlers are idempotent on a stable event id, there are no ordering
+assumptions, and no handler exception reaches the publisher. Each of those is something a Kafka or
+Redis Streams implementation cannot give back later, and a handler that started depending on
+synchronous in-process semantics is the one thing that would make the swap expensive.
 
-**Shape is not a reason to declare the port early.** One was declared here, faked in
-`TestContainer`, and bound nowhere, which meant a use-case that published would have published into
-nothing in production while reading as correct. It was deleted. The retrofit for this seam is local
-— a port file, an adapter, one `Container` line — so it lands with its first publisher, together,
-and `tasks/TODO.md` carries the design until then.
+**It is an outbox, not a bus, and the distinction is the reason it exists.** The event and the state
+change that caused it must commit or fail together. Publishing to a broker inside a transaction
+cannot be rolled back; publishing after it commits loses the event on a crash in between. A row
+written in the same transaction and drained by the worker is the only shape with neither hole — and
+`BaseRepository` already joins the ambient transaction, so it is one line at the call site.
+
+**Shape was not a reason to declare the port early**, and this is the second attempt. An `EventBus`
+port was declared here, faked in `TestContainer`, and bound nowhere, which meant a use-case that
+published would have published into nothing in production while reading as correct. It was deleted.
+What landed instead landed whole: a port, an adapter, a `Container` line, one real publisher and one
+real subscriber, in one change. The name went with it — there is no `Bus` in this design, and
+`classes.md` no longer lists one.
+
+**The in-process dispatch this section warns about is structurally impossible here.**
+`SubscriberRegistry` is consulted only by `OutboxConsumer`, which runs in the worker. A subscriber
+invoked from the web tier would be exactly the coupling that makes a broker swap expensive, and
+there is nowhere in `apps/web` that can reach one.
 
 ---
 
@@ -617,7 +671,7 @@ Postgres, sharded by organization_id
 Redis Cluster                       already split by concern before clustering
 ClickHouse                          analytics · audit search
 Qdrant                              embeddings
-Kafka or Redis Streams              the event bus
+Kafka or Redis Streams              behind `DomainEventPublisher`, replacing the Postgres outbox
 S3                                  uploads · Loki chunks
 stdout → Alloy → Loki               diagnostics
 ```
@@ -638,6 +692,7 @@ stdout → Alloy → Loki               diagnostics
 | Tasks, goals, RBAC | Postgres |
 | Task status history | Postgres, partitioned monthly |
 | Audit trail | Postgres, partitioned monthly, **in-transaction** |
+| Domain events | Postgres outbox, partitioned monthly, **in-transaction**, drained into BullMQ |
 | Auth sessions | Postgres + Redis cache |
 | Vectors | pgvector, behind `VectorStore` — `VECTOR_DRIVER` |
 | Analytics aggregates | Postgres snapshots → ClickHouse, written by `AnalyticsProjector` — `CLICKHOUSE_URL`. No reader yet; see §4.3 |

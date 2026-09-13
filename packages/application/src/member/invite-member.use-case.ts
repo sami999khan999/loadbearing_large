@@ -7,7 +7,7 @@ import {
   Token,
   Uuid,
 } from "../import.js";
-import type { ActivityLogger, UnitOfWork } from "../port/index.js";
+import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRepository } from "../rbac/role.repository.js";
 import type { InvitationMailer } from "./invitation.mailer.js";
@@ -33,6 +33,7 @@ export class InviteMemberUseCase {
     private readonly invitations: InvitationRepository,
     private readonly mailer: InvitationMailer,
     private readonly activity: ActivityLogger,
+    private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
     private readonly clock: Clock,
   ) {}
@@ -72,23 +73,31 @@ export class InviteMemberUseCase {
         createdAt: now,
       });
       await this.activity.record(actor, "member.invited", { email, roleId: input.roleId });
+      // The token never rides the event, which is what `token_hash` exists to prevent.
+      // The mail below is a direct `MailPublisher` call for the same reason.
+      await this.events.publish(actor, {
+        name: "member.invited",
+        payload: { invitationId: id, email, roleId: input.roleId, invitedBy: actor.userId },
+      });
     });
 
     // Read back rather than assembled: the names the mail carries are the row's joins.
     const saved = await this.invitations.findById(actor.organizationId, id);
     if (!saved) throw new NotFoundError("invitation", id);
 
-    // Swallowed on purpose: the row is committed and the audit written, so throwing
-    // here is a 5xx over a live invitation. The adapter records why the send failed.
+    // Still after the commit and still swallowed: the token cannot ride a durable row, so
+    // the enqueue is the one step that cannot be made atomic with the invitation.
     try {
       await this.mailer.send({
         to: saved.email,
+        organizationId: actor.organizationId,
         organizationName: saved.organizationName,
         inviterName: saved.inviterName,
         token,
       });
     } catch {
-      // The operator action is to invite again, which replaces the row.
+      // The operator action for a crash in that window is to invite again, which replaces
+      // the row and issues a new token. Filed as `C6.9`, a resend button.
     }
 
     return saved;

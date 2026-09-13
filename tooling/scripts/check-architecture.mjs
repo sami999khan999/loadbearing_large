@@ -321,6 +321,10 @@ const EMAIL_FINGERPRINTS = [
   "email.reset.",
   "email.change.",
   "email.otp.",
+  // Was missing: the invitation copy could have reached a bundle and this would not have
+  // noticed. `email.notification.` is Phase 3's and is listed before its copy exists.
+  "email.invitation.",
+  "email.notification.",
 ];
 
 // Field names from the `env.ts` schemas, which no adapter drags in on its own — they
@@ -337,6 +341,9 @@ const ENV_FINGERPRINTS = [
   // than from this schema — so its name in the bundle means that boundary was crossed.
   "GOOGLE_CLIENT_SECRET",
   "AUTH_ENROLMENT_MODE",
+  // Server-only for a reason that is not obvious: the cap is enforced in the subscriber
+  // adapter, so a client that knew it would only be able to work around it.
+  "REALTIME_MAX_STREAMS_PER_USER",
 ];
 const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 

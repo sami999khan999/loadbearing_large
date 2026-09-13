@@ -1,6 +1,7 @@
 import {
   createTransport,
   type EmailMessage,
+  type EmailReceipt,
   EmailSender,
   type Logger,
   type Transporter,
@@ -31,15 +32,19 @@ export class SmtpEmailSender extends EmailSender {
     this.transport = createTransport(config.url);
   }
 
-  public override async send(message: EmailMessage): Promise<void> {
+  public override async send(message: EmailMessage): Promise<EmailReceipt> {
     try {
-      await this.transport.sendMail({
+      const info = (await this.transport.sendMail({
         from: this.config.from,
         to: message.to,
         subject: message.subject,
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
-      });
+      })) as { messageId?: string } | undefined;
+
+      // Every hop optional, because nodemailer types the result `any`: a transport that
+      // resolves with no id has still sent the message, and must not read as a failure.
+      return { messageId: info?.messageId ?? null };
     } catch (error: unknown) {
       // The transport's reason, which the error below cannot carry: a caller that treats
       // a failed send as recoverable would otherwise leave nothing to diagnose from.

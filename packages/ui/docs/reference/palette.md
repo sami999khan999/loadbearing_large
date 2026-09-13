@@ -102,3 +102,21 @@ Every theme ships to every user rather than being fetched on demand, because a l
 costs a round trip and a visible flash at the exact moment somebody is looking at the colours. The
 browser applies only the block that matches; the rest cost parse time, not resolution time. Worth
 revisiting somewhere past forty themes, and not before.
+
+## Mail is outside the palette, and has to be
+
+`packages/composition/src/mail/mail-layout.ts` writes literal sRGB hexes rather than any of the
+twelve. That is the second exemption in [the colour rule](../../../../docs/ai/rules/color.md), and
+the reason is the medium: **a mail client resolves no CSS custom property**, so `var(--primary)`
+reaching an inbox renders as nothing at all — and most clients strip or ignore a `<style>` block,
+which is why every value there is inline on the element.
+
+The values are slate-light converted to sRGB, so a message looks like the product it came from. They
+are deliberately *not* derived from `theme/color/slate.css` at build time: a message is composed on
+the server for a recipient who has no theme and no mode, so there is nothing to read a preference
+from, and a pipeline that tried would have to pick one anyway.
+
+`check:contrast` does not see them — it reads `packages/ui/src/theme/color/*.css` and nothing else.
+The pairings that matter there are white-on-primary for the button and `--fg` on `--surface` for the
+body, both of which clear AA at the values listed, and both of which are a review item rather than a
+gate.

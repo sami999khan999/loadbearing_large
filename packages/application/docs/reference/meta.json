@@ -1,5 +1,5 @@
 {
   "title": "Reference",
   "description": "One page per export with reasoning that outgrew a two-line comment",
-  "pages": ["authorizer", "ports"]
+  "pages": ["authorizer", "ports", "notification-policy", "messaging"]
 }

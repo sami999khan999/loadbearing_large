@@ -53,6 +53,7 @@ export interface EventShape {
     readonly key: string;
     readonly rowCount: number;
   };
+  readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;
@@ -64,6 +65,29 @@ export interface EventShape {
   // No recipient: the address is what the failing send was about, and a log line is
   // not where it belongs. The reason is truncated at the call site.
   readonly "email.send.failed": { readonly reason: string };
+
+  // No recipient on any of the three. An address is the highest-cardinality field this
+  // system holds and a log platform is not where it belongs.
+  readonly "mail.delivery.queued": { readonly template: string; readonly priority: string };
+  // The transport's id, or the empty string when it returned none: `LogValue` admits no
+  // null, and a missing id is a fact about the server rather than about the message.
+  readonly "mail.delivery.sent": { readonly template: string; readonly messageId: string };
+  readonly "mail.delivery.failed": { readonly template: string; readonly attempts: number };
+
+  readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
+  readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
+  readonly "outbox.delivery.failed": { readonly subscriber: string; readonly event: string };
+
+  readonly "notification.digest.completed": {
+    readonly organizations: number;
+    readonly day: string;
+  };
+
+  // No user id and no channel: both are per-person, and a label is not what they would
+  // become — but a line body carrying one on every stream open is a retention bill.
+  readonly "realtime.stream.opened": { readonly resumed: boolean };
+  readonly "realtime.stream.closed": { readonly durationMs: number; readonly frames: number };
+  readonly "realtime.publish.failed": { readonly event: string };
 
   readonly "cache.entry.corrupt": { readonly key: string };
   readonly "embedding.request.failed": { readonly model: string; readonly chunks: number };

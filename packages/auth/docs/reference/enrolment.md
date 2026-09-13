@@ -83,11 +83,19 @@ was sent to is the credential. Without the verification check anyone could regis
 email and walk into the tenant, which is why the check lives in `PgInvitationClaimer`'s query rather
 than in a caller that might forget it.
 
-**A failed invitation mail does not undo the invitation.** The send happens after the commit — a
-message about a row that rolled back is a link to nothing — so by the time the transport can fail
-there is a live row and an audit entry. `InviteMemberUseCase` returns the record rather than
-answering 5xx over it; `SmtpEmailSender` emits `email.send.failed` with the transport's own reason,
-and the operator action is to invite again, which replaces the row.
+**A failed invitation mail does not undo the invitation.** The send is now an enqueue, and it still
+happens after the commit — a message about a row that rolled back is a link to nothing — so by the
+time anything can fail there is a live row and an audit entry. `InviteMemberUseCase` returns the
+record rather than answering 5xx over it, and the `try`/`catch` stays for one specific reason: the
+plaintext token cannot ride a durable row (that is what `token_hash` exists to prevent), so the
+enqueue is the one step that cannot be made atomic with the invitation.
+
+The window that leaves is a crash between the commit and the enqueue, and the answer to it is a
+resend action rather than a delivery table — filed as `C6.9` in
+[`tasks/COMMUNICATION-PLAN.md`](../../../../tasks/COMMUNICATION-PLAN.md). Once the job is on the
+queue, BullMQ's retries and backoff cover a transport that is down, and `MailConsumer` emits
+`mail.delivery.failed` on the final attempt. The operator action is still to invite again, which
+replaces the row and issues a new token.
 
 It follows that **invitations require email verification**. Under
 `AUTH_REQUIRE_EMAIL_VERIFICATION=false` no user row is ever verified, so no claim ever matches and

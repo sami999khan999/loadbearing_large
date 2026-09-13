@@ -1,15 +1,54 @@
 // Everything this package takes from outside itself, in one place. No relative
 // re-exports live here — that is what keeps it cycle-free.
 
+// ── @loadbearing/content ─────────────────────────────────────────────────────
+// A type and nothing else. Mail is composed per recipient, so a locale rides every mail
+// request — and `content` sits left of this package, which is what makes the edge legal.
+export type { Locale } from "@loadbearing/content";
+
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
-export type {
-  ApiKeyId,
-  GoalId,
-  InvitationId,
-  OrganizationId,
-  PaginationQuery,
-  RoleId,
-  UserId,
+export {
+  type ApiKeyId,
+  type ConversationId,
+  type ConversationKind,
+  type ConversationMemberInput,
+  type ConversationMemberRole,
+  type CreateConversationInput,
+  type DeleteMessageInput,
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
+  DomainEvents,
+  type EditMessageInput,
+  type GoalId,
+  type InvitationId,
+  type KeysetQuery,
+  type LeaveConversationInput,
+  type ListConversationsInput,
+  type ListMessagesInput,
+  type ListNotificationsInput,
+  type MailTemplateKey,
+  type MailTemplateParams,
+  MailTemplates,
+  type MarkConversationReadInput,
+  type MarkNotificationReadInput,
+  type MessageId,
+  type NotificationCategory,
+  type NotificationChannel,
+  type NotificationDto,
+  type NotificationId,
+  type NotificationKind,
+  type NotificationMode,
+  type OrganizationId,
+  type PaginationQuery,
+  type RealtimeEventName,
+  type RealtimeMessage,
+  type RenameConversationInput,
+  type RoleId,
+  type SendMessageInput,
+  type TypingInput,
+  type UpdateNotificationPreferenceInput,
+  type UserId,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/core ────────────────────────────────────────────────────────
@@ -20,9 +59,11 @@ export {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  type SchemaIssue,
   UnavailableError,
   ValidationError,
 } from "@loadbearing/errors";
-export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
+// A value, not a type: a subscriber builds an empty set to make a system principal
+// that asserts nothing.
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
-export { PermissionRegistry } from "@loadbearing/permissions";
+export { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";

@@ -20,7 +20,7 @@ It returns nothing, and `check-architecture.mjs` §1 asserts it in CI.
 | --- | --- |
 | **Package** | `@loadbearing/application` (private, never published) |
 | **Entrypoint** | `src/index.ts` |
-| **Depends on** | `@loadbearing/contracts`, `@loadbearing/core` (`ServerOnly`), `@loadbearing/errors` (`ForbiddenError`), `@loadbearing/permissions` — no third-party runtime dependency, ever |
+| **Depends on** | `@loadbearing/contracts`, `@loadbearing/content` (**the `Locale` type only**), `@loadbearing/core` (`ServerOnly`), `@loadbearing/errors` (`ForbiddenError`), `@loadbearing/permissions` — no third-party runtime dependency, ever |
 | **Used by** | `infrastructure`, `auth`, `composition`, `apps/worker` — **never** a browser bundle |
 | **Environment** | server-only; `ServerOnly.assert()` is the runtime tripwire |
 | **Build** | `tsup` → `dist/index.js` + `dist/index.d.ts` |
@@ -34,6 +34,8 @@ packages/application/
 │   ├── primitive/
 │   │   ├── index.ts
 │   │   ├── principal.ts          → Principal, PrincipalKind
+│   │   ├── queue-name.ts         → QueueName
+│   │   ├── partitioned-table.ts  → PartitionedTable, PartitionedTableName
 │   │   └── authorizer.ts         → Authorizer
 │   ├── port/                     ← abstract classes only, zero implementations
 │   │   ├── index.ts
@@ -44,7 +46,7 @@ packages/application/
 │   │   ├── analytics.projector.ts → AnalyticsProjector
 │   │   ├── cache.store.ts        → CacheStore
 │   │   ├── capability.invalidator.ts → CapabilityInvalidator
-│   │   ├── email.sender.ts       → EmailSender, EmailMessage
+│   │   ├── email.sender.ts       → EmailSender, EmailMessage, EmailReceipt
 │   │   ├── embedding.provider.ts → EmbeddingProvider
 │   │   ├── log.reader.ts         → LogReader, LogQuery, LogEntry
 │   │   ├── maintenance.gateway.ts → MaintenanceGateway, SweepOutcome
@@ -55,6 +57,8 @@ packages/application/
 │   │   └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
 │   ├── ai/
 │   │   └── index-document.use-case.ts  → IndexDocumentUseCase
+│   ├── mail/                    ← a slice with no repository: the queue is the state
+│   │   └── send-mail.use-case.ts       → SendMailUseCase, SendMailInput
 │   ├── member/                   ← a slice: its repository ports live with it
 │   │   ├── member.repository.ts        → MemberRepository, MemberRecord, MemberPage
 │   │   ├── invitation.repository.ts    → InvitationRepository, InvitationRecord
@@ -71,6 +75,7 @@ packages/application/
     ├── primitive/{principal,authorizer}.spec.ts
     ├── ai/index-document.use-case.spec.ts
     ├── rbac/list-roles.use-case.spec.ts
+    ├── mail/send-mail.use-case.spec.ts
     └── member/{invite-member,list-members,revoke-invitation}.use-case.spec.ts
 ```
 
@@ -106,6 +111,8 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | `EmailSender` | `SmtpEmailSender` | any provider that speaks SMTP |
 | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | any embedding API |
 | `LogReader` | `LokiLogReader` | VictoriaLogs, OpenObserve, SigNoz |
+| `MailPublisher` | `QueuedMailPublisher` — `composition` | never; the queue is the pipeline |
+| `MailRenderer` | `ContentMailRenderer` — `composition` | a template engine, if one earns it |
 | `MaintenanceGateway` | `PgMaintenanceGateway` | never |
 | `QueuePublisher` | `BullMqQueuePublisher` | managed Redis |
 | `SessionResolver` | Better Auth — `auth` | any session library |
@@ -160,3 +167,6 @@ from Qdrant, so a scope that is not in the argument list does not exist.
 - [Authorizer](reference/authorizer.md) — the gate, the load-assert-work shape, and the one leak it accepts
 - [The ports](reference/ports.md) — one section per port whose reasoning outgrew a two-line comment:
   the three that carry no `Principal`, the analytics split, and what each method refuses to offer
+
+- [Messaging](reference/messaging.md) — the direct key, unread computed rather than
+  counted, and the one table that is not partitioned.

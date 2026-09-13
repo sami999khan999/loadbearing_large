@@ -1,0 +1,34 @@
+// One title and body per `NotificationKind`, interpolated from the row's `params`. The
+// row carries no snapshot of what happened, so the copy has to stand on its own.
+export const notification = {
+  "notification.kind.member.joined.title": "Someone joined",
+  "notification.kind.member.joined.body": "A new member has joined this organization.",
+  "notification.kind.member.role.changed.title": "Your role changed",
+  "notification.kind.member.role.changed.body":
+    "An administrator changed what you can do here. Open the members page to see your new role.",
+
+  "notification.kind.message.received.title": "New message",
+  "notification.kind.message.received.body": "You have unread messages in a conversation.",
+
+  "notification.inbox.title": "Notifications",
+  "notification.inbox.empty": "Nothing yet. This is where updates will appear.",
+  "notification.inbox.emptyUnread": "Nothing unread. Everything here has been seen.",
+  "notification.inbox.error": "Your notifications could not be loaded.",
+  "notification.inbox.loadMore": "Load older",
+  "notification.inbox.markAllRead": "Mark all as read",
+  "notification.inbox.unreadOnly": "Unread only",
+  "notification.inbox.unreadCount": "{count} unread",
+  "notification.inbox.open": "Open notifications",
+
+  "notification.preference.title": "How you hear from us",
+  "notification.preference.description":
+    "Choose how each kind of update reaches you. In-app notifications always appear in this list; these settings decide whether you are interrupted and whether we email you.",
+  "notification.preference.category.membership": "People and roles",
+  "notification.preference.category.messaging": "Messages",
+  "notification.preference.channel.in_app": "In the app",
+  "notification.preference.channel.email": "By email",
+  "notification.preference.mode.immediate": "Straight away",
+  "notification.preference.mode.digest": "Once a day",
+  "notification.preference.mode.off": "Off",
+  "notification.preference.saved": "Saved.",
+} as const;

@@ -29,6 +29,20 @@ export class SystemPrincipal {
   // tenant id reads as a user.
   public static readonly USER_ID = "00000000-0000-7000-8000-000000000001";
 
+  // The nil uuid, and it names no row. Platform work belongs to no tenant, so this is a
+  // placeholder in a required field rather than an organization anything could resolve.
+  private static readonly NIL_ORGANIZATION = "00000000-0000-0000-0000-000000000000";
+
+  // For work that touches no tenant's rows and therefore asserts no permission — sending
+  // a queued message, for one. It holds nothing, so a use-case that *did* assert denies.
+  public static platform(): Principal {
+    return Principal.system(
+      SystemPrincipal.NIL_ORGANIZATION as OrganizationId,
+      SystemPrincipal.USER_ID as UserId,
+      CapabilitySet.from({ wildcard: false, org: { grants: [], denies: [] }, goals: {} }),
+    );
+  }
+
   // Every job carries an organization: there is no global data, so a job that processes
   // rows must know whose rows.
   public static forOrganization(organizationId: string): Principal {

@@ -1,4 +1,12 @@
-import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
+import {
+  type Container,
+  type Job,
+  PartitionedTable,
+  type PartitionedTableName,
+  QueueName,
+  type Redis,
+  Worker,
+} from "../import.js";
 
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
@@ -10,6 +18,18 @@ export class MaintenanceConsumer {
   // Thirteen months keeps a full year queryable in Postgres and archives the month that
   // has just fallen out of it.
   private static readonly RETAIN_MONTHS = 13;
+
+  // Per table, and `null` means this job never drops it. `activity_log` is archived and
+  // dropped by `archive`, which verifies the upload first — dropping it here would race.
+  private static readonly PRUNE_AFTER_MONTHS: Readonly<
+    Record<PartitionedTableName, number | null>
+  > = Object.freeze({
+    activity_log: null,
+    outbox_event: 2,
+    // Twelve months. An inbox older than a year is not read, and the row is derived
+    // from an event whose own partition went two months in.
+    notifications: 12,
+  });
 
   public constructor(
     private readonly container: Container,
@@ -101,16 +121,49 @@ export class MaintenanceConsumer {
     });
   }
 
+  // Every partitioned table, from the allowlist rather than named here: a table added in
+  // a later migration is covered by this schedule with no edit to the worker.
   private async partitions(): Promise<void> {
-    const created = await this.container.maintenance.ensureActivityPartitions(
-      this.container.clock.now(),
-      MaintenanceConsumer.MONTHS_PER_RUN,
-    );
+    for (const table of PartitionedTable.ALL) {
+      const created = await this.container.maintenance.ensureMonthlyPartitions(
+        table,
+        this.container.clock.now(),
+        MaintenanceConsumer.MONTHS_PER_RUN,
+      );
 
-    this.container.logger.emit("maintenance.partitions.ensured", {
-      table: "activity_log",
-      created: created.length,
-      months: MaintenanceConsumer.MONTHS_PER_RUN,
-    });
+      // One line per table, and `table` is a field rather than part of the code: the
+      // event catalog is the cardinality budget for the `event_code` label.
+      this.container.logger.emit("maintenance.partitions.ensured", {
+        table,
+        created: created.length,
+        months: MaintenanceConsumer.MONTHS_PER_RUN,
+      });
+
+      await this.prune(table);
+    }
+  }
+
+  private async outboxIsBehind(cutoff: Date): Promise<boolean> {
+    const oldest = await this.container.outbox.oldestPendingAt();
+    return oldest !== null && oldest < cutoff;
+  }
+
+  // Whole partitions, never a `DELETE`: dropping one is a catalog edit, and deleting a
+  // month of rows leaves the vacuum problem partitioning exists to avoid.
+  private async prune(table: PartitionedTableName): Promise<void> {
+    const months = MaintenanceConsumer.PRUNE_AFTER_MONTHS[table];
+    if (months === null) return;
+
+    const now = this.container.clock.now();
+    const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));
+
+    // Only the outbox has a notion of "not yet handled", and a stuck event must never be
+    // dropped by the calendar. Applying this to every table would let one block them all.
+    if (table === PartitionedTable.OUTBOX_EVENT && (await this.outboxIsBehind(cutoff))) return;
+
+    const dropped = await this.container.maintenance.dropMonthlyPartitionsBefore(table, cutoff);
+    for (const partition of dropped) {
+      this.container.logger.emit("maintenance.partition.dropped", { table, partition });
+    }
   }
 }

@@ -65,6 +65,11 @@ place anyone will ever check.
 `EMAIL_FROM` is never defaulted. An address the sending domain does not authorise bounces or lands in
 spam, and a wrong default fails that way silently on the first real deploy.
 
+`APP_BASE_URL` is not `AUTH_URL`, and the duplication is deliberate. `AUTH_URL` is Better Auth's own
+origin and lives only in this schema; `APP_BASE_URL` is the origin a link inside a message points at,
+and the worker needs it while parsing no auth configuration at all. Collapsing the two would put an
+auth block in the worker's schema to serve one string.
+
 ## `trustedOrigins` has one home
 
 Better Auth's CSRF check reads it through `containerConfig()`; the CORS layer reads it directly. Two
@@ -97,3 +102,19 @@ quietly reaching some other localhost.
 
 The desktop shell is cross-origin against both and supplies absolute URLs of its own through
 `import.meta.env`.
+
+## The two realtime numbers are per process
+
+`REALTIME_MAX_STREAMS_PER_USER` (8) caps how many concurrent streams one person may hold **on this
+replica**, and `REALTIME_STREAM_MAX_AGE_SECONDS` (1800) is how long any one of them lives before it
+ends and the client reconnects.
+
+Neither is cluster-wide, and that is the decision rather than a limitation. A shared counter would
+cost a Redis round trip on every stream open, and the failure the cap exists to prevent — one tab
+in a reconnect loop opening streams faster than it closes them — is local to the replica it is
+happening on. Behind a load balancer the effective per-person total is the cap times the replica
+count, which is the right order of magnitude for a limit whose job is to bound one bug.
+
+The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
+error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.

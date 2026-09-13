@@ -24,10 +24,18 @@ const Schema = z
     // rather than optional.
     SMTP_URL: z.string().min(1),
     EMAIL_FROM: z.string().min(1),
+    // Required here too, and this is the process that needs it: the worker renders the
+    // invitation link, and it parses no auth configuration to borrow an origin from.
+    APP_BASE_URL: z.url(),
 
     EMBEDDING_MODEL: z.string().min(1),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
     OPENAI_API_KEY: z.string().default(""),
+
+    // Per process. The cap exists to stop one runaway tab, which is local by
+    // construction, and the age is what releases a channel a leaked reader is holding.
+    REALTIME_MAX_STREAMS_PER_USER: z.coerce.number().int().positive().default(8),
+    REALTIME_STREAM_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(1800),
 
     // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
     // it just means the platform kills you mid-drain.
@@ -36,6 +44,14 @@ const Schema = z
     // Serial by default: these jobs take table-level locks and can deadlock on the same
     // partition.
     WORKER_MAINTENANCE_CONCURRENCY: z.coerce.number().int().positive().default(1),
+    WORKER_MAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
+    WORKER_EVENT_CONCURRENCY: z.coerce.number().int().positive().default(8),
+    // Two. The digest fan-out is one job a day and each tenant's digest is I/O bound
+    // on the mail queue, which has its own limiter.
+    WORKER_NOTIFICATION_CONCURRENCY: z.coerce.number().int().positive().default(2),
+    // A provider's cap, expressed once. Ten a second is under every managed sender's
+    // free tier and well under a self-hosted relay's.
+    WORKER_MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(600),
     // Serial, and not a dial worth turning: correctness rests on there being exactly one
     // writer, not on the insert being idempotent.
     WORKER_ANALYTICS_CONCURRENCY: z.coerce.number().int().positive().max(1).default(1),
@@ -116,6 +132,22 @@ export class Env {
     return Env.parsed.WORKER_ANALYTICS_CONCURRENCY;
   }
 
+  public static get mailConcurrency(): number {
+    return Env.parsed.WORKER_MAIL_CONCURRENCY;
+  }
+
+  public static get mailRatePerMinute(): number {
+    return Env.parsed.WORKER_MAIL_RATE_PER_MINUTE;
+  }
+
+  public static get eventConcurrency(): number {
+    return Env.parsed.WORKER_EVENT_CONCURRENCY;
+  }
+
+  public static get notificationConcurrency(): number {
+    return Env.parsed.WORKER_NOTIFICATION_CONCURRENCY;
+  }
+
   // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds
   // no session secret.
   public static containerConfig() {
@@ -131,11 +163,15 @@ export class Env {
         secretKey: e.S3_SECRET_KEY,
         forcePathStyle: e.S3_FORCE_PATH_STYLE,
       },
-      email: { url: e.SMTP_URL, from: e.EMAIL_FROM },
+      email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
         apiKey: e.OPENAI_API_KEY,
         model: e.EMBEDDING_MODEL,
         dimensions: e.EMBEDDING_DIMENSIONS,
+      },
+      realtime: {
+        maxStreamsPerUser: e.REALTIME_MAX_STREAMS_PER_USER,
+        streamMaxAgeSeconds: e.REALTIME_STREAM_MAX_AGE_SECONDS,
       },
       // Undefined unless a URL was given, which is what `Container` branches on: a
       // partly-filled object builds a connection pointed at nothing.

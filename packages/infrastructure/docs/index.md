@@ -274,3 +274,5 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   adopted in.
 - [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to
   offer.
+- [Realtime](reference/realtime.md) — one subscriber connection per process, ref-counted channels,
+  and why the overflow is a `resync`.

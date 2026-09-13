@@ -24,7 +24,8 @@ pnpm auth:tables          # print Better Auth's own schema; run by hand
 ```
 
 Mail goes to **Mailpit** in development, never out — inbox on `:8025`. A flow that sends
-(verification, reset, an invitation) is checked there, not in a real inbox.
+(verification, reset, an invitation) is checked there, not in a real inbox — and **only while the
+worker is running**, because every message in this system is a job on `QueueName.MAIL`.
 
 Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a package.
 

@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import { PartitionedTable } from "@loadbearing/application";
 import { Uuid } from "@loadbearing/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -75,7 +76,11 @@ const write = async (count: number) => {
 
 const freshPartition = async () => {
   await database.client.execute(sql`drop table if exists ${sql.identifier(PARTITION)}`);
-  await new PgMaintenanceGateway(database, scope).ensureActivityPartitions(PERIOD, 1);
+  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
+    PartitionedTable.ACTIVITY_LOG,
+    PERIOD,
+    1,
+  );
 };
 
 beforeAll(() => {

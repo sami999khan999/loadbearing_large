@@ -170,7 +170,7 @@ probe.
     started would cut a dashboard over to a store that is still backfilling.
 
 
-- [ ] `T-031` **Transactional outbox for cross-slice events** `@unassigned` `P3` `~12h` `#api` `#db`
+- [x] `T-031` **Transactional outbox for cross-slice events** `@sami` `P3` `~12h` `#api` `#db` `done: 2026-09-12`
   - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
     notification slice. Without a seam for that, slice ownership decays into a call graph where
     every team's code reaches into every other team's. An `EventBus` port was declared for this and
@@ -199,12 +199,24 @@ probe.
     `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
     file that exists. The analytics projection is the second consumer class and already works
     without this: it reads `activity_log`, which is a different stream with a different guarantee.
-  - **Planned:** Phase 2 of [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) (`C2.1`–`C2.9`) builds
-    this. Two corrections the design made to the wording above, to be applied when this closes:
-    `.bus.ts` is **not** re-added (the design is a publisher, a gateway and subscribers — nothing
-    is a bus; `.subscriber.ts` is the suffix that lands), and `published_at` needs no partial
-    *unique* indexes (nothing is unique over it — the two partial indexes are non-unique, one
-    for the drain and one for the sweep).
+  - **Closed 2026-09-12 by Phase 2 of [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md)**
+    (`C2.1`–`C2.9`). The four broker-shaped properties hold, and one publisher plus one subscriber
+    landed with the port, the adapter and the `Container` line in one change, as `P5.11` requires.
+    **Both corrections above are now applied:**
+    - **`.bus.ts` is not re-added.** The design is a publisher, a gateway and subscribers, and
+      nothing in it is a bus. `.subscriber.ts` is the suffix that landed — and `Bus` was *removed*
+      from `classes.md`'s role-noun list, since that list claims every entry names something that
+      exists.
+    - **`published_at` needs no partial *unique* indexes.** Nothing is unique over it. The two
+      partial indexes are ordinary: `outbox_event_pending_idx` for the drain and
+      `outbox_event_published_idx` for retention, each holding only the rows the other ignores.
+  - **One further correction the build made.** Retention is whole-partition drop, not the
+    row-level `DELETE` the plan sketched: deleting a month of rows is exactly the vacuum problem
+    partitioning exists to avoid. The guard against dropping a stuck event is `oldestPendingAt()`,
+    checked before the cutoff.
+  - **Not yet run against a database.** The migration, the `SKIP LOCKED` concurrency spec and the
+    one-second drain need Postgres and Redis, which the environment this was built in has none of.
+    Each item in the plan carries an `unverified:` note naming what to run.
 
 - [ ] `T-036` **Communication plan: unified mail, outbox, notifications, real-time, messaging** `@sami` `P1` `~120h` `#api` `#ui` `#db`
   - **Goal:** Mail is sent from two unrelated places with no record and no retry, `QueueName.NOTIFICATION` has no consumer, `DigestComposer` has no caller, there is no notification table, no event spine and no real-time path. One plan covers all of it in the order each piece compiles against the last.
@@ -212,6 +224,18 @@ probe.
   - **Files:** `tasks/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
+  - **Phase 1 complete, 2026-09-12.** `C1.1`–`C1.25` are all `[x]` across six commits. Every mail
+    in the system — Better Auth's four and the invitation — is now a job on `QueueName.MAIL`,
+    rendered by `MailConsumer` in the worker and sent through `EmailSender`. No new package, no new
+    dependency, no delivery table. Three corrections were made to the plan on the way through and
+    are recorded in it: no `mail` commit scope is added (the enum's rule is one scope per package,
+    and this adds none), `.manifest.ts` was already in the closed suffix table so only `.renderer.ts`
+    is new, and `EMAIL_FINGERPRINTS` was missing `"email.invitation."` — a real hole, now closed.
+    Two defects were found and fixed while building: `SmtpEmailSender` turned a transport that
+    resolved with nothing into a thrown `UnavailableError` over a message that had been sent, and
+    `Container` built both mailers inside `if (config.auth)`, so the worker — the process that is
+    supposed to send — had none. **Phase 1's Exit line is not ticked:** it needs Mailpit and a live
+    Redis, and the environment this was built in has no Docker.
   - **Revised 2026-09-12, before any of it was built.** Two Phase 1 decisions were reversed on review and the plan carries the reasoning. Templates are hand-written HTML in `packages/composition/src/mail/` rather than react-email, which removes the only new package in the plan and both of its dependencies. And a send is a BullMQ job with no `mail_deliveries` table: the queue already supplies retries, backoff and duplicate suppression, the mail provider is where a delivery record belongs at scale, and a table would put the plaintext invitation token in Postgres against the reason its hash is stored. The outbox event table stays, and the distinction is the point — Redis cannot commit atomically with Postgres. **The plan now adds no package and no dependency at all.**
 
 ## ⛔ Blocked
@@ -444,5 +468,7 @@ probe.
 | 2026-09-05 | @sami   | Filed `IMPLEMENTATION-PLAN.md` from a full audit: eight phases covering comments, bugs, conventions, docs drift, feature gaps, tests, tooling |
 | 2026-09-05 | @sami   | Closed `T-026` and `T-030` |
 | 2026-09-06 | @sami   | Re-measured the state table against the tree. CI has never been green — `P8.12` |
+| 2026-09-12 | @sami   | Phase 2 of `T-036` built and `T-031` closed: the transactional outbox. `outbox_event` partitioned from its first migration, `DomainEventPublisher` writing in the ambient transaction, `OutboxGateway` claiming with `SKIP LOCKED`, the `EventSubscriber` seam and its registry, three real publishers and `MemberRealtimeSubscriber`. `Bus` removed from the role nouns rather than given a file |
+| 2026-09-12 | @sami   | Phase 1 of `T-036` built: one mail pipeline, every message a queue job. `QueueName.MAIL`, `MailPublisher`/`MailRenderer`, the template manifest, `MailLayout`, `MailConsumer`, and both mailers moved onto it. `DigestComposer` deleted; `.composer.ts` retired with it |
 | 2026-09-12 | @sami   | Filed `T-036` and `COMMUNICATION-PLAN.md`: six phases for mail, the outbox, notifications, real-time and messaging. `T-031` annotated with the two corrections Phase 2 makes |
 | 2026-09-12 | @sami   | Revised Phase 1 on review: hand-written HTML templates instead of a react-email package, and no mail table — a send is a queue job. The plan now introduces no new package and no new dependency |

@@ -536,9 +536,6 @@ importers:
       '@loadbearing/composition':
         specifier: workspace:*
         version: link:../../packages/composition
-      '@loadbearing/content':
-        specifier: workspace:*
-        version: link:../../packages/content
       '@loadbearing/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -613,6 +610,9 @@ importers:
 
   packages/application:
     dependencies:
+      '@loadbearing/content':
+        specifier: workspace:*
+        version: link:../content
       '@loadbearing/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -665,6 +665,9 @@ importers:
       '@loadbearing/application':
         specifier: workspace:*
         version: link:../application
+      '@loadbearing/content':
+        specifier: workspace:*
+        version: link:../content
       '@loadbearing/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -938,6 +941,9 @@ importers:
       '@loadbearing/application':
         specifier: workspace:*
         version: link:../application
+      '@loadbearing/content':
+        specifier: workspace:*
+        version: link:../content
       '@loadbearing/contracts':
         specifier: workspace:*
         version: link:../contracts

@@ -1,9 +1,18 @@
-import { AnalyticsConsumer, EmbeddingConsumer, MaintenanceConsumer } from "../consumer/index.js";
+import {
+  AnalyticsConsumer,
+  EmbeddingConsumer,
+  MailConsumer,
+  MaintenanceConsumer,
+  NotificationConsumer,
+  OutboxConsumer,
+} from "../consumer/index.js";
 import { Env } from "../env.js";
 import type { Container, RedisConnection, Worker } from "../import.js";
 import {
   ArchiveSchedule,
   CleanupSchedule,
+  DigestSchedule,
+  OutboxDrainSchedule,
   PartitionsSchedule,
   ProjectionSchedule,
   ReconcileSchedule,
@@ -24,6 +33,31 @@ export class WorkerBootstrap {
         this.container,
         this.redis.queueClient(),
         Env.embeddingConcurrency,
+      ).start(),
+    );
+
+    // Unconditional, and the reason is in `.env.example`: every mail in this system is a
+    // job, so a stopped worker is a sign-up whose verification link never arrives.
+    this.workers.push(
+      new MailConsumer(
+        this.container,
+        this.redis.queueClient(),
+        Env.mailConcurrency,
+        Env.mailRatePerMinute,
+      ).start(),
+    );
+
+    // Before the schedules register, and before the drain in particular: a repeatable
+    // job that fires the instant it lands needs somewhere to run.
+    this.workers.push(
+      new OutboxConsumer(this.container, this.redis.queueClient(), Env.eventConcurrency).start(),
+    );
+
+    this.workers.push(
+      new NotificationConsumer(
+        this.container,
+        this.redis.queueClient(),
+        Env.notificationConcurrency,
       ).start(),
     );
 
@@ -49,6 +83,8 @@ export class WorkerBootstrap {
       );
     }
 
+    await new OutboxDrainSchedule(this.container, this.redis.queueClient()).register();
+    await new DigestSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     await new ArchiveSchedule(this.container, this.redis.queueClient()).register();

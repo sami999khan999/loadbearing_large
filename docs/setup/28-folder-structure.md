@@ -870,11 +870,9 @@ apps/worker/
 │   ├── consumer/
 │   │   ├── index.ts
 │   │   ├── embedding.consumer.ts       → EmbeddingConsumer
+│   │   ├── mail.consumer.ts            → MailConsumer
 │   │   ├── maintenance.consumer.ts     → MaintenanceConsumer
 │   │   └── analytics.consumer.ts       → AnalyticsConsumer   (only when configured)
-│   ├── notification/
-│   │   ├── index.ts
-│   │   └── notification-digest.composer.ts     → DigestComposer  (the only email reader)
 │   └── schedule/                       ← every one carries a fixed jobId
 │       ├── index.ts
 │       ├── cleanup.schedule.ts         → CleanupSchedule
@@ -885,7 +883,7 @@ apps/worker/
 └── tests/                              ← mirrors src/, never inside it
     ├── bootstrap/system-principal.spec.ts
     ├── consumer/maintenance.consumer.spec.ts
-    └── notification/notification-digest.composer.spec.ts
+    └── consumer/mail.consumer.spec.ts
 ```
 
 ---

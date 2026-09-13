@@ -23,6 +23,14 @@ export {
 export { createORPCClient } from "@orpc/client";
 export { RPCLink } from "@orpc/client/fetch";
 
+// ── @orpc/client/plugins ─────────────────────────────────────────────────────
+// `retry` defaults to 0 and is read from the client context, so an ordinary call keeps
+// its no-retry semantics and only the stream opts in.
+export {
+  ClientRetryPlugin,
+  type ClientRetryPluginContext,
+} from "@orpc/client/plugins";
+
 // ── @orpc/contract ───────────────────────────────────────────────────────────
 export type { ContractRouterClient } from "@orpc/contract";
 

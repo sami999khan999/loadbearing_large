@@ -5,12 +5,14 @@ import {
   type CacheStore,
   type Database,
   drizzleAdapter,
+  type Locale,
+  Locales,
   Password,
   twoFactor,
   type UserId,
   Uuid,
 } from "../import.js";
-import type { AuthMailer } from "../mail/index.js";
+import type { AuthMailer, MailRecipient } from "../mail/index.js";
 import { OrganizationPlugin } from "../plugin/index.js";
 import type {
   InvitationClaimer,
@@ -56,7 +58,8 @@ export class AuthFactory {
         enabled: true,
         requireEmailVerification: config.requireEmailVerification,
         revokeSessionsOnPasswordReset: true,
-        sendResetPassword: async ({ user, url }) => mailer.sendPasswordReset(user.email, url),
+        sendResetPassword: async ({ user, url }) =>
+          mailer.sendPasswordReset(AuthFactory.recipient(user), url),
         minPasswordLength: Password.MIN_LENGTH,
         maxPasswordLength: Password.MAX_LENGTH,
         autoSignIn: false,
@@ -66,7 +69,8 @@ export class AuthFactory {
       // Paired with `requireEmailVerification`: with the flag on and no sender, a fresh
       // clone can sign up and then never sign in.
       emailVerification: {
-        sendVerificationEmail: async ({ user, url }) => mailer.sendVerification(user.email, url),
+        sendVerificationEmail: async ({ user, url }) =>
+          mailer.sendVerification(AuthFactory.recipient(user), url),
         sendOnSignUp: true,
         autoSignInAfterVerification: false,
         expiresIn: 3600,
@@ -90,7 +94,7 @@ export class AuthFactory {
         changeEmail: {
           enabled: true,
           sendChangeEmailConfirmation: async ({ user, url }) =>
-            mailer.sendEmailChangeConfirmation(user.email, url),
+            mailer.sendEmailChangeConfirmation(AuthFactory.recipient(user), url),
         },
       },
 
@@ -228,7 +232,8 @@ export class AuthFactory {
             // **Minutes, not seconds** — Better Auth's default is 3. Longer widens the
             // window in which a forwarded message is still a valid second factor.
             period: 5,
-            sendOTP: async ({ user, otp }) => mailer.sendTwoFactorOtp(user.email, otp),
+            sendOTP: async ({ user, otp }) =>
+              mailer.sendTwoFactorOtp(AuthFactory.recipient(user), otp),
           },
         }),
         // Switch, create, accept — the three ways a session ends up pointing at a
@@ -238,6 +243,20 @@ export class AuthFactory {
     } satisfies BetterAuthOptions;
 
     return betterAuth(options);
+  }
+
+  // Better Auth hands these hooks its own user, whose `locale` is an additional field and
+  // therefore typed loosely. An unrecognised value falls back rather than rendering blank.
+  private static recipient(user: { id: string; email: string; locale?: unknown }): MailRecipient {
+    return {
+      email: user.email,
+      userId: user.id as UserId,
+      locale: AuthFactory.localeOf(user.locale),
+    };
+  }
+
+  private static localeOf(value: unknown): Locale {
+    return Locales.ALL.find((locale) => locale === value) ?? Locales.DEFAULT;
   }
 }
 

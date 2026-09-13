@@ -17,6 +17,7 @@ export type {
   ReactElement,
   ReactNode,
   Ref,
+  TextareaHTMLAttributes,
 } from "react";
 export { Children, cloneElement, isValidElement, useMemo } from "react";
 

@@ -38,10 +38,16 @@ packages/contracts/
 │   ├── procedure/
 │   │   └── index.ts                 → contract, AppContract   ← merges every slice's procedures
 │   ├── catalog/
-│   │   └── index.ts                 → PROCEDURE_PERMISSIONS   ← merges every slice's fragment
+│   │   ├── index.ts                 → PROCEDURE_PERMISSIONS, DOMAIN_EVENTS
+│   │   ├── <subject>.permissions.ts ← one fragment per slice, procedure path → key
+│   │   └── <subject>.events.ts      ← one fragment per slice, event name → payload schema
 │   ├── registry/
 │   │   ├── index.ts
+│   │   ├── domain-events.ts         → DomainEvents
 │   │   └── procedure-permissions.ts → ProcedurePermissions
+│   ├── mail/                        ← a manifest, not a slice: no contract, no procedures
+│   │   ├── index.ts
+│   │   └── mail-template.manifest.ts → MailTemplates, MailTemplateKey, MailTemplateParams
 │   └── <subject>/                   ← one folder per domain subject; `role/` and `member/` ship
 │       ├── index.ts
 │       ├── <subject>.contract.ts    → <Subject>Contract   (Zod shapes)
@@ -54,7 +60,9 @@ packages/contracts/
     │   └── pagination.spec.ts
     ├── role/role.contract.spec.ts
     ├── member/member.contract.spec.ts
+    ├── mail/mail-template.manifest.spec.ts
     └── registry/
+        ├── domain-events.spec.ts
         └── procedure-permissions.spec.ts
 ```
 
@@ -114,3 +122,48 @@ elsewhere.
 Specs live in `tests/`, mirroring `src/`. `vitest.config.ts` sets
 `resolve.conditions: ["development"]` so a spec resolves `@loadbearing/permissions` to its source
 rather than a stale `dist/` — the same condition `apps/web/vite.config.ts` sets.
+
+## Two pagination shapes, and the newer one is the default for growth
+
+`Pagination` (`limit` + `offset`) still serves the lists bounded by the tenant — roles, members,
+invitations. `Keyset` (`limit` + opaque `cursor`) serves the ones that grow with activity, and its
+page carries no `total`, because an exact count over a partitioned table is exactly the cost keyset
+pagination exists to avoid. Which to reach for, what the cursor encodes, and the query shape it
+pairs with are in [keyset](reference/keyset.md).
+
+## `mail/` is a manifest, not a slice
+
+It holds no `.contract.ts`, no `.entity.ts` and no `.procedures.ts`, because a mail template is
+never a procedure — nothing on the wire sends one. What it holds is a closed record of template key
+→ params schema, which is the one shape both ends of the mail queue need: a publisher writes params
+it can prove match the key, and the worker parses them back out of JSON it has to distrust.
+
+**It is here rather than in `content` or `application` because of the layering, not by preference.**
+`application` has no zod and may not import one; `contracts` may not import `content`, which sits to
+its right. That leaves the recipient's `Locale` riding the `MailPublisher` port in `application`
+(where the edge to `content` *is* legal, type-only) while the params live here.
+
+Adding a key is deliberately more than one edit: the renderer switches on it with a `never` default,
+so a new row does not compile until a template and its copy exist.
+
+## `DomainEvents` is the same shape as `ProcedurePermissions`, on purpose
+
+A catalog of team-owned fragments, merged in `catalog/index.ts`, read through a registry class with
+a private constructor. Two lookups exist for the same reason in the same package because the
+property they buy is the same: **the name union is a compile-time check in every layer**, so a
+use-case cannot publish an event nothing declares and a subscriber cannot listen for one.
+
+`.events.ts` keeps its meaning here — a catalog fragment — exactly as `.permissions.ts` already does
+in two packages. It is `DOMAIN_EVENTS` and not `EVENT_CATALOG`: that name belongs to
+`@loadbearing/observability`, and the two are different vocabularies. A domain event is a business
+fact with a schema and a `published_at`; a log event code is a diagnostic that may be lost.
+[Vocabulary](../../../docs/opinions/vocabulary.md) keeps them apart, and a spec asserts every event
+name here is past tense.
+
+**`envelope` is a discriminated union built once at module load.** One `parse` turns a job's JSON
+back into a typed event, which is what keeps the consumer from reading `name` first and picking a
+schema by hand — a second place to forget a case.
+
+The payloads carry what a subscriber needs and no more. `member.invited` deliberately omits the
+invitation token: `invitations` stores only its hash so that a dump of that table accepts nothing,
+and an event carrying the plaintext would hand it straight back.

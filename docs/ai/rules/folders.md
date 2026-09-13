@@ -13,7 +13,7 @@ description: What src/ may hold, role folders vs subject folders, and the two ex
 - **Role folder by default, subject folder where contents repeat per feature.** A role folder names
   the kind of thing inside and uses the shared vocabulary — `catalog/`, `registry/`, `port/`,
   `primitive/`, `gate/`, `route/`, `procedure/`, `schema/`, `container/`, `fake/`, `key/`,
-  `consumer/`, `schedule/`, `bootstrap/`. **Non-plural, always.** A subject folder is singular and **every file
+  `consumer/`, `subscriber/`, `schedule/`, `bootstrap/`. **Non-plural, always.** A subject folder is singular and **every file
   inside is prefixed with the folder's name**.
 - **Adding a folder name is a decision.** If a new folder wants a name that already means something
   else in `docs/opinions/folders.md`, it is the wrong name.

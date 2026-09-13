@@ -7,6 +7,7 @@
 export {
   AccountClient,
   ApiClient,
+  type AppClientContext,
   AuthClient,
   CookieAuthStrategy,
   OrganizationClient,
@@ -36,6 +37,7 @@ export {
   ApiKeyList,
   ChangeEmailForm,
   ChangePasswordForm,
+  ConversationList,
   CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
@@ -49,8 +51,13 @@ export {
   LinkedAccountList,
   MemberCount,
   MemberList,
+  MessageComposer,
+  MessageList,
   MessageProvider,
   ModuleNav,
+  NotificationBell,
+  NotificationList,
+  NotificationPreferenceForm,
   OrganizationSwitcher,
   ProfileForm,
   ResetPasswordForm,
@@ -65,6 +72,7 @@ export {
   TwoFactorForm,
   TwoFactorPanel,
   TwoFactorSetup,
+  TypingNotice,
   useCapabilities,
   useErrorMessage,
   useMessages,
@@ -75,7 +83,12 @@ export {
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
 // The same `can()` the server calls, which is why the guard rebuilds the DTO rather than
 // shape-checking the JSON.
-export { CapabilitySet, type CapabilitySetDto, type PermissionKey } from "@loadbearing/permissions";
+export {
+  CapabilitySet,
+  type CapabilitySetDto,
+  type PermissionKey,
+  ROUTES,
+} from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
 export {
@@ -83,7 +96,10 @@ export {
   ApiKeyQueries,
   createQueryClient,
   MemberQueries,
+  RealtimeProvider,
   RoleQueries,
+  useApiClient,
+  useConversationStream,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────

@@ -1,1 +1,1 @@
-export { ApiClient, type AppClient } from "./api-client.js";
+export { ApiClient, type AppClient, type AppClientContext } from "./api-client.js";

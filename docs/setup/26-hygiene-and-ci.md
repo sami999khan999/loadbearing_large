@@ -499,6 +499,7 @@ const ENTRY_FINGERPRINTS = ["সংরক্ষণ"];
 // Absent from the whole client output, like the server list above.
 const EMAIL_FINGERPRINTS = [
   "email.digest.", "email.verify.", "email.reset.", "email.change.", "email.otp.",
+  "email.invitation.", "email.notification.",
 ];
 
 // Field names from the `env.ts` schemas. Also absent from the whole client output.
@@ -510,6 +511,8 @@ const ENV_FINGERPRINTS = [
   // learns whether Google is configured from the session snapshot, not this schema.
   "GOOGLE_CLIENT_SECRET",
   "AUTH_ENROLMENT_MODE",
+  // Enforced in the subscriber adapter, so a client that knew it could only work around it.
+  "REALTIME_MAX_STREAMS_PER_USER",
 ];
 ```
 

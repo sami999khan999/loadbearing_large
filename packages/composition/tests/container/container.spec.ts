@@ -199,6 +199,9 @@ describe("Container.health", () => {
     // `null` rather than `true`: this deployment is not running one, which is neither
     // healthy nor degraded.
     expect(report.analytics).toBeNull();
+    // Same rule, different reason: nothing has opened a stream, so there is no
+    // subscriber connection — and asking would have created the thing being reported on.
+    expect(report.realtime).toBeNull();
     expect(report.healthy).toBe(true);
   });
 

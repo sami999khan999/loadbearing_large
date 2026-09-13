@@ -14,6 +14,7 @@ export { type ListInvitationsResult, ListInvitationsUseCase } from "./list-invit
 export { type ListMembersResult, ListMembersUseCase } from "./list-members.use-case.js";
 export { type MemberPage, type MemberRecord, MemberRepository } from "./member.repository.js";
 export { MemberRules } from "./member.rules.js";
+export { MemberRealtimeSubscriber } from "./member-realtime.subscriber.js";
 export {
   type RevokeInvitationInput,
   RevokeInvitationUseCase,

@@ -145,14 +145,15 @@ something to say on the way out.
 ## `health()` pings what callers actually hold
 
 ```ts
-const [database, cache, queue, analytics] = await Promise.all([
+const [database, cache, queue, analytics, realtime] = await Promise.all([
   this.database.isHealthy(),
   this.redis.healthy("cache"),
   this.redis.healthy("queue"),
   this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
+  this.redis.opened("subscriber") ? this.redis.healthy("subscriber") : Promise.resolve(null),
 ]);
 
-return { healthy: database && cache && queue && analytics !== false, database, cache, queue, analytics };
+return { healthy: database && cache && queue && analytics !== false && realtime !== false, … };
 ```
 
 Postgres and **both** Redis instances. A cache that is down degrades; a queue that is down silently
@@ -166,6 +167,18 @@ the deployment is unhealthy; it does not say whether to restart the pod or page 
 **ClickHouse only when it is part of this deployment**, and `null` rather than `true` when it is not:
 that container is not healthy and not degraded, it is not running one, and a probe body saying `true`
 claims otherwise. The roll-up reads `analytics !== false`, so absent does not fail the probe.
+
+**The realtime subscriber follows the same `null` rule, for a different reason.** ClickHouse is
+absent because the deployment does not run one; the subscriber connection is absent because
+*nothing in this process has opened a stream yet* — which is every worker, always, and a web
+replica until its first signed-in tab. `opened("subscriber")` is what makes that answerable:
+calling `healthy("subscriber")` would **create** the connection, and a worker reporting `true` for
+a socket it opened purely in order to answer the question is reporting on itself.
+
+Once a stream has been opened it is a real dependency and reports like one, which is why the
+roll-up reads `realtime !== false` rather than ignoring it. A web replica whose subscriber
+connection has died serves every request correctly and delivers nothing, and that is exactly the
+failure a readiness probe should catch — the pod looks fine from every other angle.
 
 **Loki is deliberately absent from this list**, even though `LokiLogReader.healthy()` exists. Loki
 being down loses diagnostics and nothing else. Failing a readiness probe over it takes the application
@@ -248,6 +261,31 @@ contract path exactly.
 first access. It saves microseconds at boot and costs you the property that a container which
 constructs successfully is a container where every dependency resolved. Eager construction means a
 wiring mistake is a **startup crash** rather than a request-time surprise at 3am.
+
+## The mail block is outside the `auth` branch, and that was a bug
+
+`ContentAuthMailer` and `ContentInvitationMailer` used to be constructed inline inside
+`if (config.auth)`. The worker parses no auth configuration, so the process that is *supposed* to
+send mail had no mailer at all — the wiring read as though mail belonged to authentication when in
+fact only two of its callers did.
+
+Now `mailPublisher`, `mailRenderer` and `mail.send` are built unconditionally, beside `email`:
+
+```ts
+this.mailPublisher = new QueuedMailPublisher(this.queue);
+this.mailRenderer = new ContentMailRenderer(this.content);
+this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
+```
+
+`mailPublisher` is public because Phase 3's notification subscriber holds one. `mailRenderer` stays
+private: `mail.send` is the only thing with any business calling it, and a second caller would be a
+second place that decides what a message looks like.
+
+The two mailers still live in the `auth` branch, and that is correct — `QueuedAuthMailer` is passed
+to `AuthFactory`, and `QueuedInvitationMailer` to `InviteMemberUseCase`. What changed is that both
+now take a `MailPublisher` instead of an `EmailSender`, so neither renders anything and neither
+needs a `ContentSource`. `QueuedInvitationMailer` takes its origin from `config.email.baseUrl` rather
+than `config.auth.baseUrl`, which is the other half of what kept mail trapped in that branch.
 
 ## Smells
 

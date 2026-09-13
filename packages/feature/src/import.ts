@@ -25,9 +25,13 @@ export {
   type ApiKeyDto,
   ApiKeyEntity,
   type CapabilitiesDto,
+  type ConversationDto,
   type DocumentHitDto,
   type InvitationDto,
   type MemberDto,
+  type MessageDto,
+  type NotificationDto,
+  type NotificationPreferenceDto,
   Password,
   type RoleDto,
 } from "@loadbearing/contracts";
@@ -57,11 +61,16 @@ export {
   DocumentMutations,
   MemberMutations,
   MemberQueries,
+  MessagingMutations,
+  MessagingQueries,
+  NotificationMutations,
+  NotificationQueries,
   OrganizationMutations,
   RoleMutations,
   RoleQueries,
   SessionMutations,
   useApiClient,
+  useAppInfiniteQuery,
   useAppQuery,
 } from "@loadbearing/query";
 
@@ -81,6 +90,7 @@ export {
   QrCode,
   StatusBadge,
   type TableColumn,
+  Textarea,
 } from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────
@@ -91,6 +101,7 @@ export {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";

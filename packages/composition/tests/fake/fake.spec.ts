@@ -4,10 +4,13 @@ import { TestContainer } from "../../src/container/test-container.js";
 import {
   DirectUnitOfWork,
   InMemoryCacheStore,
+  InMemoryOutboxGateway,
   InMemoryStorageGateway,
   InMemoryVectorStore,
+  RecordingMailPublisher,
   RecordingQueuePublisher,
   StubEmbeddingProvider,
+  StubMailRenderer,
 } from "../../src/fake/index.js";
 import type { DocumentChunk, OrganizationId } from "../../src/import.js";
 
@@ -60,6 +63,93 @@ describe("RecordingQueuePublisher", () => {
     await queue.publish("embedding", { documentId: "d1" }, { jobId: "d1" });
 
     expect(queue.published()).toHaveLength(1);
+  });
+});
+
+describe("RecordingMailPublisher", () => {
+  it("records what was published, per recipient", async () => {
+    const mail = new RecordingMailPublisher();
+    await mail.publish({
+      template: "auth.verify",
+      to: "a@example.test",
+      locale: "en",
+      params: { url: "https://example.test/v" },
+      organizationId: null,
+      userId: null,
+    });
+
+    expect(mail.publishedTo("a@example.test")).toHaveLength(1);
+    expect(mail.published()[0]?.locale).toBe("en");
+  });
+
+  // The same contract `RecordingQueuePublisher` keeps, because `dedupeKey` becomes the
+  // job id: a fake that ignored it would let "invite once" pass while it sent twice.
+  it("treats a repeated dedupeKey as a no-op, the way BullMQ does", async () => {
+    const mail = new RecordingMailPublisher();
+    const request = {
+      template: "member.invitation",
+      to: "a@example.test",
+      locale: "en",
+      params: { url: "https://example.test/i", inviter: "A", organization: "O" },
+      organizationId: null,
+      userId: null,
+      dedupeKey: "invite-1",
+    } as const;
+
+    await mail.publish(request);
+    await mail.publish(request);
+
+    expect(mail.published()).toHaveLength(1);
+  });
+});
+
+describe("InMemoryOutboxGateway", () => {
+  const event = (name: string) => ({
+    organizationId: "018f8c00-0000-7000-8000-000000000010",
+    name,
+    actorId: "018f8c00-0000-7000-8000-000000000011",
+    occurredAt: new Date("2026-01-01T00:00:00Z"),
+    payload: {},
+  });
+
+  it("hands the relay a batch and removes it only once the relay resolves", async () => {
+    const outbox = new InMemoryOutboxGateway();
+    outbox.enqueue(event("member.joined") as never);
+
+    const seen: string[] = [];
+    expect(
+      await outbox.drain(10, async (events) => {
+        seen.push(...events.map((e) => e.name));
+        return Promise.resolve();
+      }),
+    ).toBe(1);
+
+    expect(seen).toEqual(["member.joined"]);
+    expect(outbox.remaining()).toEqual([]);
+  });
+
+  // The transactional adapter rolls back on a failing relay, so the fake has to leave the
+  // rows behind too — otherwise a spec proves an ordering the real one does not have.
+  it("leaves the batch pending when the relay throws", async () => {
+    const outbox = new InMemoryOutboxGateway();
+    outbox.enqueue(event("member.joined") as never);
+
+    await expect(outbox.drain(10, () => Promise.reject(new Error("down")))).rejects.toThrow();
+
+    expect(outbox.remaining()).toHaveLength(1);
+  });
+
+  it("reports no lag when nothing is pending, which is not the same as unknown", async () => {
+    expect(await new InMemoryOutboxGateway().oldestPendingAt()).toBeNull();
+  });
+});
+
+describe("StubMailRenderer", () => {
+  it("returns both parts, so a caller cannot pass by rendering text alone", async () => {
+    const rendered = await new StubMailRenderer().render("auth.otp", "bn");
+
+    expect(rendered.text).not.toBe("");
+    expect(rendered.html).not.toBe("");
   });
 });
 

@@ -2,6 +2,7 @@ import {
   type ActivityArchiveGateway,
   type ActivityLogger,
   type ActivityReplayReader,
+  AddConversationMemberUseCase,
   type AnalyticsProjector,
   ApiKeyResolver,
   AuthFactory,
@@ -16,12 +17,21 @@ import {
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  ConversationAccess,
+  CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
+  CreateConversationUseCase,
   CreateRoleUseCase,
   Database,
+  DeleteMessageUseCase,
   DeleteRoleUseCase,
+  DeliverNotificationUseCase,
+  type DomainEventPublisher,
+  EditMessageUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  GetConversationUseCase,
+  GetNotificationPreferencesUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
@@ -29,31 +39,52 @@ import {
   InvitationClaimingEnroller,
   InviteMemberUseCase,
   JsonLogger,
+  LeaveConversationUseCase,
   ListApiKeysUseCase,
+  ListConversationsUseCase,
+  ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
+  ListMessagesUseCase,
+  ListNotificationsUseCase,
   ListRolesUseCase,
   type Logger,
   type LogReader,
   LokiLogReader,
+  type MailPublisher,
+  type MailRenderer,
   type MaintenanceGateway,
+  MarkAllNotificationsReadUseCase,
+  MarkConversationReadUseCase,
+  MarkNotificationReadUseCase,
+  MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
+  MessagingRealtimeSubscriber,
+  NotificationSubscriber,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
   type OrganizationFounder,
+  type OutboxGateway,
   PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
+  PgConversationRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageRepository,
+  PgNotificationPreferenceRepository,
+  PgNotificationRecipientReader,
+  PgNotificationRepository,
   PgOrganizationFounder,
+  PgOutboxGateway,
+  PgOutboxPublisher,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
@@ -61,26 +92,43 @@ import {
   PrincipalBuilder,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
+  type RealtimePublisher,
+  type RealtimeSubscriber,
   RedisCacheStore,
   RedisConnection,
+  RedisRealtimePublisher,
+  RedisRealtimeSubscriber,
+  RemoveConversationMemberUseCase,
+  RenameConversationUseCase,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
   S3StorageGateway,
   SERVER_CATALOG,
   SearchDocumentsUseCase,
+  SendMailUseCase,
+  SendMessageUseCase,
+  SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
+  SignalTypingUseCase,
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
+  SubscriberRegistry,
   SystemClock,
   TransactionScope,
   type UnitOfWork,
+  UpdateNotificationPreferenceUseCase,
   UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
-import { ContentAuthMailer, ContentInvitationMailer } from "../mail/index.js";
+import {
+  ContentMailRenderer,
+  QueuedAuthMailer,
+  QueuedInvitationMailer,
+  QueuedMailPublisher,
+} from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
 
 // The API-key slice's use-cases. Grouped like the member ones, and absent for the same
@@ -113,11 +161,18 @@ export interface HealthReport {
   readonly queue: boolean;
   // `null` when this deployment runs no ClickHouse — absent, rather than passing.
   readonly analytics: boolean | null;
+  // `null` in a process that has opened no subscriber connection, which is every worker.
+  // Not a failure, and not something to open a connection in order to report on.
+  readonly realtime: boolean | null;
 }
 
 // The only class in the repository that knows both an abstract port and the concrete
 // class behind it. That is the entire job, and it is why a swap is one line here.
 export class Container {
+  // Not configurable: the number that matters is how far behind a reader may fall before
+  // a refetch is cheaper than the memory, and it is the same on every deployment.
+  private static readonly REALTIME_QUEUE_SIZE = 256;
+
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
   private readonly redis: RedisConnection;
@@ -147,6 +202,19 @@ export class Container {
   // Built unconditionally: a missing analytics store means a feature is not deployed, a
   // missing mail transport means every sign-up is a dead end.
   public readonly email: EmailSender;
+  // Public because Phase 3's notification subscriber holds one. The renderer stays
+  // private: only `mail.send` below has any business calling it.
+  public readonly mailPublisher: MailPublisher;
+  private readonly mailRenderer: MailRenderer;
+  // Public because every use-case that publishes takes one, and because the worker's
+  // consumer holds the gateway and the registry directly.
+  public readonly eventPublisher: DomainEventPublisher;
+  public readonly outbox: OutboxGateway;
+  public readonly realtime: RealtimePublisher;
+  // Public because the web router holds it directly: a stream is the one thing a
+  // procedure reads from a port rather than from a use-case.
+  public readonly realtimeSubscriber: RealtimeSubscriber;
+  public readonly subscribers: SubscriberRegistry;
   // No principal, because it owns no tenant's rows. Reachable only from the worker's
   // schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
@@ -181,6 +249,37 @@ export class Container {
     readonly indexDocument: IndexDocumentUseCase;
     readonly queueIndex: QueueDocumentIndexUseCase;
     readonly searchDocuments: SearchDocumentsUseCase;
+  };
+  // Outside the `auth` block on purpose. The worker is the process that sends mail and it
+  // has no auth config — which is exactly what building the old mailer in there got wrong.
+  public readonly mail: { readonly send: SendMailUseCase };
+  // In every process: the worker delivers and digests, the web tier reads. Neither
+  // half needs an auth config, which is why this sits outside that branch too.
+  public readonly notification: {
+    readonly list: ListNotificationsUseCase;
+    readonly countUnread: CountUnreadNotificationsUseCase;
+    readonly markRead: MarkNotificationReadUseCase;
+    readonly markAllRead: MarkAllNotificationsReadUseCase;
+    readonly preferences: GetNotificationPreferencesUseCase;
+    readonly updatePreference: UpdateNotificationPreferenceUseCase;
+    readonly deliver: DeliverNotificationUseCase;
+    readonly sendDigest: SendNotificationDigestUseCase;
+    readonly digestOrganizations: ListDigestOrganizationsUseCase;
+  };
+  public readonly messaging: {
+    readonly listConversations: ListConversationsUseCase;
+    readonly getConversation: GetConversationUseCase;
+    readonly createConversation: CreateConversationUseCase;
+    readonly addMember: AddConversationMemberUseCase;
+    readonly removeMember: RemoveConversationMemberUseCase;
+    readonly leave: LeaveConversationUseCase;
+    readonly rename: RenameConversationUseCase;
+    readonly markRead: MarkConversationReadUseCase;
+    readonly listMessages: ListMessagesUseCase;
+    readonly send: SendMessageUseCase;
+    readonly edit: EditMessageUseCase;
+    readonly remove: DeleteMessageUseCase;
+    readonly typing: SignalTypingUseCase;
   };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
@@ -251,6 +350,9 @@ export class Container {
     this.content = new StaticContentSource(SERVER_CATALOG);
     this.emailSender = new SmtpEmailSender(config.email, this.logger);
     this.email = this.emailSender;
+    this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
+    this.mailRenderer = new ContentMailRenderer(this.content);
+    this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
@@ -258,6 +360,148 @@ export class Container {
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
     this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
+    this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
+    this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
+    this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
+    // The connection behind it is opened on the first `subscribe`, not here, so the
+    // worker never holds one — which is what makes `health().realtime` honestly `null`.
+    this.realtimeSubscriber = new RedisRealtimeSubscriber(this.redis.subscriberClient(), {
+      maxStreamsPerUser: config.realtime.maxStreamsPerUser,
+      maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
+      queueSize: Container.REALTIME_QUEUE_SIZE,
+    });
+
+    const notifications = new PgNotificationRepository(this.database, this.transactions);
+    const notificationPreferences = new PgNotificationPreferenceRepository(
+      this.database,
+      this.transactions,
+    );
+    const notificationRecipients = new PgNotificationRecipientReader(
+      this.database,
+      this.transactions,
+    );
+
+    this.notification = {
+      list: new ListNotificationsUseCase(this.authorizer, notifications),
+      countUnread: new CountUnreadNotificationsUseCase(this.authorizer, notifications, this.cache),
+      markRead: new MarkNotificationReadUseCase(
+        this.authorizer,
+        notifications,
+        this.cache,
+        this.clock,
+      ),
+      markAllRead: new MarkAllNotificationsReadUseCase(
+        this.authorizer,
+        notifications,
+        this.cache,
+        this.clock,
+      ),
+      preferences: new GetNotificationPreferencesUseCase(this.authorizer, notificationPreferences),
+      updatePreference: new UpdateNotificationPreferenceUseCase(
+        this.authorizer,
+        notificationPreferences,
+      ),
+      deliver: new DeliverNotificationUseCase(
+        notifications,
+        notificationPreferences,
+        notificationRecipients,
+        this.mailPublisher,
+        this.realtime,
+        this.cache,
+      ),
+      sendDigest: new SendNotificationDigestUseCase(
+        notifications,
+        notificationPreferences,
+        notificationRecipients,
+        this.mailPublisher,
+      ),
+      digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
+    };
+
+    const conversations = new PgConversationRepository(this.database, this.transactions);
+    const messages = new PgMessageRepository(this.database, this.transactions);
+    // One instance, shared: the membership check is the same question every messaging
+    // use-case asks, and a second copy is a second place for it to drift.
+    const conversationAccess = new ConversationAccess(conversations);
+
+    this.messaging = {
+      listConversations: new ListConversationsUseCase(this.authorizer, conversations, messages),
+      getConversation: new GetConversationUseCase(this.authorizer, conversationAccess, messages),
+      createConversation: new CreateConversationUseCase(
+        this.authorizer,
+        conversations,
+        this.eventPublisher,
+        this.unitOfWork,
+      ),
+      addMember: new AddConversationMemberUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      removeMember: new RemoveConversationMemberUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      leave: new LeaveConversationUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      rename: new RenameConversationUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      markRead: new MarkConversationReadUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.realtime,
+      ),
+      listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
+      send: new SendMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        messages,
+        this.eventPublisher,
+        this.realtime,
+        this.unitOfWork,
+      ),
+      edit: new EditMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        this.eventPublisher,
+        this.clock,
+      ),
+      remove: new DeleteMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        this.eventPublisher,
+        this.clock,
+      ),
+      typing: new SignalTypingUseCase(
+        this.authorizer,
+        conversationAccess,
+        this.realtime,
+        this.cache,
+      ),
+    };
+
+    // A frozen list, and the registry rejects a duplicate name or an unknown event at
+    // construction — so a wiring mistake is a startup crash rather than a lost event.
+    this.subscribers = new SubscriberRegistry([
+      new MemberRealtimeSubscriber(this.realtime),
+      new NotificationSubscriber(this.notification.deliver),
+      new MessagingRealtimeSubscriber(this.realtime, conversations),
+    ]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
@@ -271,6 +515,7 @@ export class Container {
       this.database,
       this.transactions,
       this.activity,
+      this.eventPublisher,
     );
 
     // One instance each: they hold no state beyond the pool and the scope, so a second
@@ -301,7 +546,7 @@ export class Container {
         membershipEnroller,
         // Copy and transport joined here and nowhere else: `auth` owes no words and
         // `content` owes no transport.
-        new ContentAuthMailer(this.content, this.email),
+        new QueuedAuthMailer(this.mailPublisher),
         this.invitationClaimer,
         this.organizationFounder,
       );
@@ -344,8 +589,9 @@ export class Container {
           roles,
           members,
           invitations,
-          new ContentInvitationMailer(this.content, this.email, config.auth.baseUrl),
+          new QueuedInvitationMailer(this.mailPublisher, config.email.baseUrl),
           this.activity,
+          this.eventPublisher,
           this.unitOfWork,
           this.clock,
         ),
@@ -361,6 +607,7 @@ export class Container {
           roles,
           this.capabilities,
           this.activity,
+          this.eventPublisher,
           this.unitOfWork,
         ),
         setMemberActive: new SetMemberActiveUseCase(
@@ -524,21 +771,25 @@ export class Container {
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
   // of a failing probe is what an operator reads. See docs/reference/container.md.
   public async health(): Promise<HealthReport> {
-    const [database, cache, queue, analytics] = await Promise.all([
+    const [database, cache, queue, analytics, realtime] = await Promise.all([
       this.database.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
       // `null` rather than `true` when absent: it is not healthy and not degraded, it
       // is not running one. Loki is absent from this list on purpose.
       this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
+      // Asked only of a connection that exists. `healthy()` would create one, and a
+      // worker reporting on a subscriber it opened to answer this is reporting on itself.
+      this.redis.opened("subscriber") ? this.redis.healthy("subscriber") : Promise.resolve(null),
     ]);
 
     return {
-      healthy: database && cache && queue && analytics !== false,
+      healthy: database && cache && queue && analytics !== false && realtime !== false,
       database,
       cache,
       queue,
       analytics,
+      realtime,
     };
   }
 

@@ -34,4 +34,10 @@ export const email: NamespaceBundle<"email"> = {
     "{inviter} আপনাকে {organization}-এ যোগ দিতে আমন্ত্রণ জানিয়েছেন। গ্রহণ করতে নিচের লিঙ্কটি খুলুন। আপনার অ্যাকাউন্ট না থাকলে এই ঠিকানা দিয়ে একটি তৈরি করতে বলা হবে — আমন্ত্রণটি এই ঠিকানার সাথে যুক্ত। এটি সাত দিন পরে মেয়াদোত্তীর্ণ হবে; আপনি এটি আশা না করে থাকলে উপেক্ষা করুন।",
   "email.invitation.action": "{organization}-এ যোগ দিন",
   "email.digest.unsubscribe": "আমরা কত ঘন ঘন যোগাযোগ করব তা বদলান",
+
+  "email.notification.subject": "আপনার কর্মক্ষেত্রে একটি হালনাগাদ আছে",
+  "email.notification.greeting": "হ্যালো {name},",
+  "email.notification.body":
+    "আপনি যে বিষয়ে জানতে চেয়েছিলেন তেমন কিছু বদলেছে। কী বদলেছে দেখতে আপনার বিজ্ঞপ্তিগুলো খুলুন।",
+  "email.notification.action": "বিজ্ঞপ্তি খুলুন",
 };

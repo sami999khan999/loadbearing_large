@@ -49,11 +49,22 @@ export interface ContainerConfig {
   readonly email: {
     readonly url: string;
     readonly from: string;
+    // The origin a link in a message points at. Separate from `auth.baseUrl`, which is
+    // Better Auth's own: the worker sends invitation mail and has no auth config at all.
+    readonly baseUrl: string;
   };
   readonly embedding: {
     readonly apiKey: string;
     readonly model: string;
     readonly dimensions: number;
+  };
+  readonly realtime: {
+    // Per process, not per cluster: a shared counter would cost a round trip on every
+    // stream open, and the failure it prevents is one runaway tab.
+    readonly maxStreamsPerUser: number;
+    // A stream that has been open this long ends and the client reconnects, which is
+    // what stops a leaked reader holding a channel for the life of the process.
+    readonly streamMaxAgeSeconds: number;
   };
   // ── the swappable stores ───────────────────────────────────────────────────
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;

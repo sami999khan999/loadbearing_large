@@ -25,14 +25,23 @@ The technology-prefix rule is what makes a seam visible at a glance. Seeing `PgV
 
 **Banned suffixes:** `Manager`, `Helper`, `Util`, `Handler`, and bare `Service`. They describe
 nothing. If a class fits none of `UseCase`, `Repository`, `Gateway`, `Store`, `Reader`, `Logger`,
-`Provider`, `Publisher`, `Resolver`, `Bus`, `Policy`, `Strategy`, `Entity`, `Registry`, it probably
-wants splitting. `Policy` is the escape valve for a domain rule too broad for one entity.
+`Provider`, `Publisher`, `Resolver`, `Renderer`, `Rules`, `Subscriber`, `Policy`, `Strategy`,
+`Entity`, `Registry`, it probably wants splitting. `Policy` is the escape valve for a domain rule too broad
+for one entity, and `Rules` is what several writes over one subject share — `RoleRules` exists
+because a create that allows what an update refuses is a hole reachable by creating and then
+editing. A `Renderer` turns data into a document and touches no transport.
 
 The list is longer than it looks because it is descriptive: every suffix on it names a port that
 exists. A `Reader` reads and never writes — `LogReader` is the whole reason that
 distinction is worth a word, because a write method on it would silently make a derived store
 authoritative ([Data and scale](data-and-scale.md) §2). Adding a suffix means adding a row here and a row in
 [Files](files.md), which is the friction that keeps `Manager` out.
+
+**`Bus` was on this list and is not any more**, and it is worth knowing why rather than rediscovering
+it. An `EventBus` port was declared, faked, and deleted with no adapter — and when the design that
+was going to justify it finally landed, it turned out to be a *publisher*, a *gateway* and a set of
+*subscribers*. Nothing in it is a bus. A descriptive list that names a shape nobody built is the
+thing this list exists not to be.
 
 ## Methods
 

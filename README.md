@@ -64,6 +64,11 @@ the root `.env` themselves.
 **6 · First sign-in.** Sign up at `/sign-up`. `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on, so
 the verification mail lands in Mailpit — open it and click through.
 
+> Every message in this system is a job on `QueueName.MAIL`, rendered and sent by the worker, so
+> **nothing reaches Mailpit unless the worker is running**. `pnpm dev` starts both. What that buys
+> is one send path with retries, backoff and a rate limiter behind it — the argument is in
+> [`packages/composition/docs/reference/mail-pipeline.md`](packages/composition/docs/reference/mail-pipeline.md).
+
 **No session is ever issued without a membership**, so how you acquire one is a decision the
 template makes for you: `AUTH_ENROLMENT_MODE=personal` ships as the default, which makes you the
 `owner` of an organization of your own with the same four system roles `pnpm db:seed` creates. It is

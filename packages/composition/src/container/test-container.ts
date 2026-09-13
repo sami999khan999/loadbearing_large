@@ -4,15 +4,22 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
   InMemoryLogReader,
+  InMemoryOutboxGateway,
+  InMemoryRealtimeHub,
+  InMemoryRealtimeSubscriber,
   InMemoryStorageGateway,
   InMemoryVectorStore,
   RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
+  RecordingDomainEventPublisher,
   RecordingEmailSender,
+  RecordingMailPublisher,
   RecordingMaintenanceGateway,
   RecordingQueuePublisher,
+  RecordingRealtimePublisher,
   StubEmbeddingProvider,
+  StubMailRenderer,
   StubSessionResolver,
 } from "../fake/index.js";
 import {
@@ -24,13 +31,19 @@ import {
   type CacheStore,
   type CapabilityInvalidator,
   type ContentSource,
+  type DomainEventPublisher,
   type EmailSender,
   type EmbeddingProvider,
   FixedClock,
   type Logger,
   type LogReader,
+  type MailPublisher,
+  type MailRenderer,
   type MaintenanceGateway,
+  type OutboxGateway,
   type QueuePublisher,
+  type RealtimePublisher,
+  type RealtimeSubscriber,
   SERVER_CATALOG,
   type SessionResolver,
   SilentLogger,
@@ -52,10 +65,16 @@ export interface TestPorts {
   readonly cache: CacheStore;
   readonly capabilities: CapabilityInvalidator;
   readonly content: ContentSource;
+  readonly events: DomainEventPublisher;
   readonly email: EmailSender;
   readonly embeddings: EmbeddingProvider;
   readonly logs: LogReader;
+  readonly mailPublisher: MailPublisher;
+  readonly mailRenderer: MailRenderer;
   readonly maintenance: MaintenanceGateway;
+  readonly outbox: OutboxGateway;
+  readonly realtime: RealtimePublisher;
+  readonly realtimeSubscriber: RealtimeSubscriber;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
@@ -96,9 +115,18 @@ export class TestContainer {
       // like `Container`: the client default carries no `email` namespace.
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),
       email: overrides.email ?? new RecordingEmailSender(),
+      events: overrides.events ?? new RecordingDomainEventPublisher(),
       embeddings: overrides.embeddings ?? new StubEmbeddingProvider(),
       logs: overrides.logs ?? new InMemoryLogReader(),
+      mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
+      mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
+      outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
+      // Deliberately not connected to each other. A spec that wants a published frame to
+      // arrive builds one `InMemoryRealtimeHub` and passes both fakes over it.
+      realtime: overrides.realtime ?? new RecordingRealtimePublisher(),
+      realtimeSubscriber:
+        overrides.realtimeSubscriber ?? new InMemoryRealtimeSubscriber(new InMemoryRealtimeHub()),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),

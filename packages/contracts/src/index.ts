@@ -16,6 +16,11 @@ export {
   type SearchDocumentsInput as SearchDocumentsContractInput,
 } from "./document/index.js";
 export {
+  type MailTemplateKey,
+  type MailTemplateParams,
+  MailTemplates,
+} from "./mail/index.js";
+export {
   type ChangeMemberRoleInput,
   type InvitationDto,
   type InviteMemberInput,
@@ -27,11 +32,55 @@ export {
   type SetMemberActiveInput,
 } from "./member/index.js";
 export {
+  ConversationContract,
+  type ConversationDto,
+  ConversationEntity,
+  type ConversationKind,
+  type ConversationMemberDto,
+  type ConversationMemberInput,
+  type ConversationMemberRole,
+  ConversationProcedures,
+  type CreateConversationInput,
+  type DeleteMessageInput,
+  type EditMessageInput,
+  type LeaveConversationInput,
+  type ListConversationsInput,
+  type ListMessagesInput,
+  type MarkConversationReadInput,
+  MessageContract,
+  type MessageDto,
+  MessageEntity,
+  type MessagePage,
+  MessageProcedures,
+  type RenameConversationInput,
+  type SendMessageInput,
+  type TypingInput,
+} from "./messaging/index.js";
+export {
+  type ListNotificationsInput,
+  type MarkNotificationReadInput,
+  type NotificationCategory,
+  type NotificationChannel,
+  NotificationContract,
+  type NotificationDto,
+  NotificationEntity,
+  type NotificationKind,
+  type NotificationMode,
+  type NotificationPreferenceDto,
+  NotificationProcedures,
+  type UpdateNotificationPreferenceInput,
+} from "./notification/index.js";
+export {
   type ApiKeyId,
+  type ConversationId,
   Envelope,
   type GoalId,
   Identifiers,
   type InvitationId,
+  Keyset,
+  type KeysetQuery,
+  type MessageId,
+  type NotificationId,
   type OrganizationId,
   Pagination,
   type PaginationQuery,
@@ -41,7 +90,19 @@ export {
   type UserId,
 } from "./primitive/index.js";
 export { type AppContract, contract } from "./procedure/index.js";
-export { ProcedurePermissions } from "./registry/index.js";
+export {
+  RealtimeContract,
+  type RealtimeEventName,
+  type RealtimeMessage,
+} from "./realtime/index.js";
+export {
+  type DomainEvent,
+  type DomainEventInput,
+  type DomainEventName,
+  type DomainEventPayload,
+  DomainEvents,
+  ProcedurePermissions,
+} from "./registry/index.js";
 export {
   type CapabilitiesDto,
   type ChangeRolePermissionInput,

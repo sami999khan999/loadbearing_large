@@ -33,6 +33,8 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.sender.ts` | `smtp-email.sender.ts` | `SmtpEmailSender` |
 | `.mailer.ts` | `content-auth.mailer.ts` | `ContentAuthMailer` |
 | `.source.ts` | `static-content.source.ts` | `StaticContentSource` |
+| `.renderer.ts` | `content-mail.renderer.ts` | `ContentMailRenderer` |
+| `.subscriber.ts` | `member-realtime.subscriber.ts` | `MemberRealtimeSubscriber` |
 | `.unit-of-work.ts` | `pg-unit-of-work.ts` | `PgUnitOfWork` |
 | `.connection.ts` | `redis.connection.ts` | `RedisConnection` |
 | `.cache.ts` | `capability.cache.ts` | `CapabilityCache` |
@@ -43,6 +45,7 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.enroller.ts` | `pg-personal-organization.enroller.ts` | `PgPersonalOrganizationEnroller` |
 | `.founder.ts` | `pg-organization.founder.ts` | `PgOrganizationFounder` |
 | `.claimer.ts` | `pg-invitation.claimer.ts` | `PgInvitationClaimer` |
+| `.rules.ts` | `role.rules.ts` | `RoleRules` |
 | `.policy.ts` | `overdue-lock.policy.ts` | `OverdueLockPolicy` |
 | `.strategy.ts` | `bearer-auth.strategy.ts` | `BearerAuthStrategy` |
 | `.plugin.ts` | `organization.plugin.ts` | `OrganizationPlugin` |
@@ -50,7 +53,6 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.interceptor.ts` | `error.interceptor.ts` | `ErrorInterceptor` |
 | `.consumer.ts` | `embedding.consumer.ts` | `EmbeddingConsumer` |
 | `.schedule.ts` | `cleanup.schedule.ts` | `CleanupSchedule` |
-| `.composer.ts` | `notification-digest.composer.ts` | `DigestComposer` |
 | `.error.ts` | `forbidden.error.ts` | `ForbiddenError` |
 | `.schema.ts` | `rbac.schema.ts` | Drizzle tables |
 | `.config.ts` | `auth.config.ts` | `AuthConfig` |

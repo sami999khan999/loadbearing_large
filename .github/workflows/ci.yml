@@ -49,6 +49,7 @@ jobs:
       # this job sends a message. A shape that parses is the whole requirement.
       SMTP_URL: smtp://localhost:1025
       EMAIL_FROM: ci@localhost
+      APP_BASE_URL: http://localhost:3000
 
       # Every remaining key both `env.ts` schemas require. Without them the job passed
       # only because nothing ever evaluated `Env` — the boot smoke below does, so a
@@ -73,6 +74,9 @@ jobs:
 
       EMBEDDING_MODEL: text-embedding-3-small
       EMBEDDING_DIMENSIONS: "1536"
+
+      REALTIME_MAX_STREAMS_PER_USER: "8"
+      REALTIME_STREAM_MAX_AGE_SECONDS: "1800"
 
     steps:
       - uses: actions/checkout@v4

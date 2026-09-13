@@ -21,6 +21,23 @@ interface SystemRole {
 // Only `owner` is a wildcard: a role granting "everything in module X" keeps granting new
 // things as X grows, which is how a reviewer acquires write access.
 
+// Everyone who can hold a membership gets an inbox. Named once because `admin` and
+// `member` grant the same three, and a second copy is how the two drift.
+const NOTIFICATION: readonly PermissionKey[] = Object.freeze([
+  "notification.inbox.read",
+  "notification.inbox.update",
+  "notification.preference.update",
+]);
+
+// The four everyone in a conversation needs. `manage` is not here: renaming a channel
+// and removing people from it is administration, and it goes to `admin` alone.
+const MESSAGING: readonly PermissionKey[] = Object.freeze([
+  "messaging.conversation.read",
+  "messaging.conversation.create",
+  "messaging.message.send",
+  "messaging.message.update",
+]);
+
 // Frozen at module load rather than left a `static readonly`, which freezes the binding
 // and not the array — the shape `docs/ai/rules/classes.md` bans.
 const ROLES: readonly SystemRole[] = Object.freeze([
@@ -29,9 +46,24 @@ const ROLES: readonly SystemRole[] = Object.freeze([
     key: "admin",
     name: "Administrator",
     scope: "org",
-    permissions: ["rbac.role.read", "rbac.role.manage", "member.read", "member.invite"],
+    permissions: [
+      "rbac.role.read",
+      "rbac.role.manage",
+      "member.read",
+      "member.invite",
+      ...NOTIFICATION,
+      ...MESSAGING,
+      "messaging.conversation.manage",
+    ],
   },
-  { key: "member", name: "Member", scope: "org", permissions: ["member.read"] },
+  {
+    key: "member",
+    name: "Member",
+    scope: "org",
+    permissions: ["member.read", ...NOTIFICATION, ...MESSAGING],
+  },
+  // Never `guest`: an inbox and a conversation are both things you hold, and a guest
+  // holds no memberships to be notified about or to talk in.
   { key: "guest", name: "Guest", scope: "org", permissions: [] },
 ]);
 
