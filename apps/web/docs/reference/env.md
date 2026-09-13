@@ -88,6 +88,17 @@ there is no host to configure. They are kept in step with the handler's `prefix`
 routes that mount them, which spell the path again because `createFileRoute()` takes a literal the
 generator reads without executing anything.
 
+### Both addresses are absolute, and the RPC one was not
+
+oRPC's `RPCLink` and Better Auth's client resolve their base through `new URL()` with **no second
+argument**. A relative value therefore throws for both — Better Auth during SSR, and `RPCLink`
+`TypeError: Failed to construct 'URL': Invalid URL` on the *first call the browser makes*.
+
+`rpc` was relative for the life of the app, so no RPC call from a browser had ever succeeded.
+Nothing saw it: SSR goes through `ApiClient.inProcess`, and every suite calls the handler or
+`/api/rpc` directly. `rpcPath` now keeps the literal for the handler prefix and the route files;
+`rpc` and `auth` are both built from one private `origin()`.
+
 ### Why the auth base URL ends in `.invalid`
 
 Better Auth's client is the one caller that cannot take a path. It resolves `baseURL` through
@@ -102,6 +113,25 @@ quietly reaching some other localhost.
 
 The desktop shell is cross-origin against both and supplies absolute URLs of its own through
 `import.meta.env`.
+
+## `vite build` must not load `.env`
+
+`dev` and `preview` load the root `.env` because they run server code that needs it. **`build` must
+not**, and the missing flag in `apps/web/package.json` is deliberate rather than an oversight.
+
+`.env` sets `NODE_ENV=development` — correct for a local process, and `.env.example` ships it. Load
+it into `vite build` and `@vitejs/plugin-react` emits the **development** JSX transform into the
+production bundle: twenty-six files calling `jsxDEV`, which the production React build does not
+export. The server then answers **500 on every page** with
+`TypeError: (0 , import_jsx_dev_runtime.jsxDEV) is not a function`, while `/api/health` — which
+renders no JSX — answers 200.
+
+Every gate passes. `pnpm build` succeeds, the bundle assertion passes, `typecheck`, `lint` and the
+suites are green, and the artefact is broken on its first request.
+
+The build reads no configuration by design: `Env` is parsed at runtime and is server-only, and the
+two addresses `Endpoint` holds are derived from `location`. Nothing at build time needs `.env`, so
+nothing should hand it one.
 
 ## The two realtime numbers are per process
 
