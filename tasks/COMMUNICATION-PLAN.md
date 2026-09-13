@@ -29,9 +29,13 @@ order found:
 | 6 | A connection in subscriber mode answers PING with `["pong", ""]`, so `healthy("subscriber")` was false — and the whole web process reported unhealthy for as long as anyone had a stream open | `f5ac82b` |
 | 7 | The RPC link was given a **relative** URL, which `RPCLink` resolves through `new URL()` with no base — **no RPC call from a browser has ever succeeded**; signing in landed on the error boundary | `edfe998` |
 | 8 | The no-flash theme script rewrites `<html>` before React hydrates, so every page load logged a hydration mismatch | `6004c40` |
+| 9 | `vite build` loaded `.env`, inheriting `NODE_ENV=development` — the production bundle called `jsxDEV`, which production React does not export, and **the built `.output` answered 500 on every page** | `8d709db` |
 
 Numbers 3 and 4 were found by writing `C5.8`'s specs; 5 hid 6; 7 and 8 came out of the first ten
 minutes of actually opening the app in Chrome, and 8 was hiding `C4.10`, which is filed and open.
+Number 9 is the one worth pausing on: **every gate passed over it.** `pnpm build` succeeded, the
+bundle assertion passed, `typecheck`, `lint` and every suite were green, and the artefact was
+broken on its first request. Nothing had ever started it.
 
 ### What is outstanding
 
@@ -39,6 +43,8 @@ minutes of actually opening the app in Chrome, and 8 was hiding `C4.10`, which i
   on focus, typing clearing, `EventSource` reconnect and its `resync` frame. Everything provable
   from the server is proven and recorded at the clause. The browser walk started and stopped when
   the Chrome extension disconnected; it got as far as signing in, which is what found 7 and 8.
+- **The built `.output` now boots and renders** (`200`, "Sign in to continue.") — that clause of
+  Phase 4 is closed. It took fixing `C4.11` to get there.
 - **`C4.10` needs a decision before it can be fixed** — the QueryClient is never dehydrated, so
   every loader prefetch is refetched in the browser. Three options are written out at the item;
   one of them is a Tier 3 dependency.
@@ -1218,6 +1224,14 @@ every suite calls the handler or `/api/rpc` directly, so nothing looked at this 
   `SYSTEM_MODE_SCRIPT` rewrites `data-mode` and `colorScheme` before React hydrates — which is its
   job — so React logged a mismatch each time. `suppressHydrationWarning` on that element alone.
   `6004c40`. `done: 2026-09-13`
+- [x] `C4.11` **`vite build` inherited `NODE_ENV=development` from `.env`**, so the production
+  bundle carried the development JSX transform — twenty-six files calling `jsxDEV`, which
+  production React does not export, and a `.output` that answered 500 on every page while
+  `/api/health` answered 200 because it renders no JSX. The build reads no configuration by
+  design, so it is handed none; `dev` and `preview` keep the flag. `8d709db`. `done: 2026-09-13`
+  **This is the one that should have a CI assertion and does not.** Every existing gate passed
+  over it. A §21 — "`apps/web`'s build script does not load `.env`" — is one grep, and the four
+  things `workflow.md` says rot quietly should arguably become five.
 - [ ] `C4.10` **The QueryClient is not dehydrated, so every loader prefetch is thrown away.**
   `getRouter`'s `dehydrate` carries messages, session and appearance — not the query cache. SSR
   renders `Members: 3`, the client hydrates the same node as `Loading…` and refetches. Measured
