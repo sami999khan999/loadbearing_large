@@ -38,6 +38,7 @@ migration.
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 ```
 
 Mounted at `/docker-entrypoint-initdb.d/01-extensions.sql`. The `01-` prefix is the execution order
@@ -47,6 +48,11 @@ ever appears.
 **`vector`** is the extension the image exists for. The column type `vector(1536)` in
 [14](../../setup/14-vector-store.md) does not exist without it, and the migration fails on
 stock Postgres with an error that reads like a typo.
+
+**`pg_stat_statements`** is the measurement that answers "which query" before any move on the
+scaling ladder. It needs `shared_preload_libraries=pg_stat_statements`, which the compose `command`
+sets — the flag without the extension gives an absent view rather than an error, which is the
+confusing half of getting it wrong.
 
 **`pg_trgm`** is trigram indexing for fuzzy text search. Every product ends up wanting
 `WHERE name % 'searchterm'`, and enabling an extension in a later migration means a lock on a live
@@ -87,16 +93,29 @@ pnpm infra:reset
 
 | Consumer | Reaches it at | For |
 |---|---|---|
-| `apps/web`, `apps/worker` (host) | `localhost:5432` | everything, via `DATABASE_URL` |
-| `drizzle-kit` (host) | `localhost:5432` | migrations, via `DATABASE_URL` in the repository-root `.env` |
+| `apps/web`, `apps/worker` (host) | `localhost:6432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
+| `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:5432` | DDL, via `DATABASE_DIRECT_URL` |
+| `PgActivityArchiveGateway` | `localhost:5432` | `DETACH … CONCURRENTLY` and a month-long stream |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
 the client is on. A container using `localhost:5432` would reach *its own* loopback and find
 nothing.
 
-Connections are pooled per process at `max: 10` ([13](../../setup/13-infrastructure-postgres.md)), so
-count processes against `max_connections`: three web replicas and two workers is fifty, which is
-fine; forty replicas is not, and is the point pgBouncer stops being optional.
+Connections are pooled per process at `DATABASE_POOL_MAX` (10 by default,
+[13](../../setup/13-infrastructure-postgres.md)) — but they are no longer counted against
+`max_connections`, because [pgBouncer](pgbouncer.md) is in front of them. What replicas cost now is
+pgBouncer *client* slots (`MAX_CLIENT_CONN`, 1000); what Postgres sees is `DEFAULT_POOL_SIZE` (20).
+That is the whole reason the pooler is in the core stack rather than filed as a later move.
+
+`max_connections` is 200 here, set by the compose `command` alongside
+`shared_preload_libraries=pg_stat_statements` and `track_io_timing=on`. Size it as
+`DEFAULT_POOL_SIZE × databases × pooler instances`, plus headroom for superusers and
+`RESERVE_POOL_SIZE`.
+
+**`DATABASE_DIRECT_URL` is this port, and it is not optional in a pooled deployment.** Migrations,
+the seed, `drizzle-kit` and the activity archive's `DETACH … CONCURRENTLY` need a connection with
+no pooler in it — and the timeout floor migration `0022` sets only reaches a session through the
+pooler once its server connections have been recycled with `RECONNECT`.
 
 ---
 

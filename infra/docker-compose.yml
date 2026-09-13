@@ -4,6 +4,18 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    # pg_stat_statements is the measurement that answers "which query" before any move on
+    # the scaling ladder. max_connections is sized for the pooler, not for the apps.
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_preload_libraries=pg_stat_statements",
+        "-c",
+        "track_io_timing=on",
+        "-c",
+        "max_connections=200",
+      ]
     environment:
       POSTGRES_USER: ratchet
       POSTGRES_PASSWORD: ratchet
@@ -14,6 +26,42 @@ services:
       - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ratchet -d ratchet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Transaction mode: a server connection is held for the length of a transaction and no
+  # longer, which is what lets many app connections share few Postgres ones.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ratchet
+      DB_PASSWORD: ratchet
+      DB_NAME: ratchet
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "20"
+      MIN_POOL_SIZE: "0"
+      RESERVE_POOL_SIZE: "5"
+      SERVER_RESET_QUERY: DISCARD ALL
+      # Without `statement_timeout` here pgBouncer refuses every connection this app
+      # makes: `pg` sends it at startup. Ignored means dropped — migration 0022 is the
+      # replacement floor. See docs/infra/reference/pgbouncer.md.
+      IGNORE_STARTUP_PARAMETERS: statement_timeout,lock_timeout,idle_in_transaction_session_timeout,extra_float_digits
+      # So `RECONNECT` and `SHOW POOLS` can be issued against the `pgbouncer` database.
+      ADMIN_USERS: ratchet
+    # 5432 inside the container, not 6432: this image's own `listen_port` is the Postgres
+    # default, and a healthcheck on 6432 would report unhealthy forever.
+    ports: ["${PGBOUNCER_PORT:-6432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ratchet"]
       interval: 5s
       timeout: 3s
       retries: 10

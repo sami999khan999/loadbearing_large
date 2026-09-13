@@ -212,7 +212,7 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
 
 #### 1.A The pool as configuration (`infrastructure`, `composition`, `web`, `worker`)
 
-- [ ] `S1.1` **`DatabaseConfig` complete** — `packages/infrastructure/src/pg/primitive/database.ts`
+- [x] `S1.1` **`DatabaseConfig` complete** — `packages/infrastructure/src/pg/primitive/database.ts`
   gains `idleTimeoutMs`, `connectionTimeoutMs` beside the existing `maxConnections` and
   `statementTimeoutMs`; the `Pool` reads all four, keeps `statement_timeout` as the startup
   parameter for direct connections, and adds `idle_in_transaction_session_timeout` (same
@@ -234,11 +234,19 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   adds `pool.on("error", …)` routed to a new `database.pool.error` (`warn`, `{ message }`) in
   the observability catalog, and `S1.7`'s deploy step is written against this: the pooler is
   never restarted under a live worker, it is `RECONNECT`ed — measured, the worker survives that.
-- [ ] `S1.2` **`ContainerConfig.database` grows** — `packages/composition/src/container/container.config.ts`:
+  `done: 2026-09-13` — all four config fields, `application_name`, and the `pool.on("error")`
+  listener routed to `database.pool.error`. Two things the build changed beyond the item's text.
+  The logger is now constructed **first** in `Container`, before the pool, because the pool is
+  handed a listener that closes over it — which is what the logger's own comment always claimed
+  and was not true. And `Database` keeps its defaults as private statics rather than letting
+  `ContainerConfig` restate them, so `new Database({ url })` in `migrate.ts` gets the same pool
+  the apps get.
+- [x] `S1.2` **`ContainerConfig.database` grows** — `packages/composition/src/container/container.config.ts`:
   `{ url, directUrl, poolMax, poolIdleTimeoutMs, poolConnectTimeoutMs, statementTimeoutMs }`, all
   but `url` optional with the defaults stated once, in `Database`, not here. **Docs:**
   `docs/setup/17`, `packages/composition/docs/reference/container.md`.
-- [ ] `S1.3` **Both `env.ts` files read the six vars** — `apps/web/src/env.ts`,
+  `done: 2026-09-13`
+- [x] `S1.3` **Both `env.ts` files read the six vars** — `apps/web/src/env.ts`,
   `apps/worker/src/env.ts`: `DATABASE_DIRECT_URL` (`z.url().optional()`, defaults to
   `DATABASE_URL` and is what `S1.11` warns about), `DATABASE_POOL_MAX` (`z.coerce.number().int()
   .min(1).default(10)`), `DATABASE_POOL_IDLE_TIMEOUT_MS` (30 000), `DATABASE_POOL_CONNECT_TIMEOUT_MS`
@@ -246,7 +254,9 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   `DATABASE_STATEMENT_TIMEOUT_MS` (web 30 000, worker 120 000 — the one place the two files
   differ, with the comment saying why). `.env.example` gains the block with the same comments.
   **Docs:** `apps/web/docs/reference/env.md`, `apps/worker/docs/reference/env.md`.
-- [ ] `S1.4` **`Database.stats()` and the health field** — `{ total, idle, waiting, max }` off the
+  `done: 2026-09-13` — `.env.example` carries the block, and `DATABASE_URL` there now names
+  `:6432` with `DATABASE_DIRECT_URL` on `:5432` beside it.
+- [x] `S1.4` **`Database.stats()` and the health field** — `{ total, idle, waiting, max }` off the
   `Pool`; `Container.health()` (`container.ts` ~773) adds `pool: DatabaseStats` to the report,
   and `apps/web`'s health endpoint renders it. **Docs:** `packages/composition/docs/reference/container.md`.
   `corrected: 2026-09-13` — `waitingCount` cannot see the pooler. Against a pgBouncer with
@@ -256,13 +266,31 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   `S1.5`'s probe, and after `query_wait_timeout` (120 s by default) it arrives as an error the
   application has never seen. The health report needs a second source: `SHOW POOLS` over the
   console port, or the pooler's own metrics endpoint. `S1.13` owes the paragraph.
-- [ ] `S1.5` **`database.pool.saturated`** — `packages/observability/src/catalog/core.events.ts`:
+  `done: 2026-09-13` — `pool: DatabaseStats` is on the report and `apps/web`'s health route
+  needed no change, because it serialises the whole report. Deliberately **not** part of
+  `healthy`: a saturated pool is load, and a readiness check that fails under load takes the
+  replica out exactly when it is busy.
+  One more thing measured while walking the Exit line, now in `pgbouncer.md`: `health()` competes
+  with the traffic it reports on. `stats()` is free, but `isHealthy()` runs `SELECT 1` and queues
+  for a pool slot like anything else, so under real saturation the probe is slow for the same
+  reason the requests are.
+- [x] `S1.5` **`database.pool.saturated`** — `packages/observability/src/catalog/core.events.ts`:
   `warn`, fields `{ waiting, total, max, forMs }`. Emitted by a probe in `Container` on a timer
   (every 5 s, only while `waiting > 0`, and only after it has been so for two consecutive ticks,
   so a burst is not a page) — the container already owns a clock and a logger. **Docs:**
   `docs/setup/09b` code table, `docs/infra/reference/postgres.md` (this is the §5 row 4 trigger,
   now observable).
-- [ ] `S1.6` **`worker.pool.oversubscribed`** — `apps/worker/src/bootstrap/worker-bootstrap.ts`
+  `corrected: 2026-09-13, built` — **"every 5 s … two consecutive ticks" can never fire.** Found by
+  running it: `waiting` cannot outlive `DATABASE_POOL_CONNECT_TIMEOUT_MS`, because the waiting
+  caller is rejected when it expires — and that default is 5 s, so the second tick arrives after
+  the queue has already cleared by rejection. The first attempt at the Exit-line rehearsal died
+  with `timeout exceeded when trying to connect` and emitted nothing at all.
+  The window is now derived: `connectTimeoutMs / 4` per tick, floor 250 ms, so two ticks is half
+  the connect timeout. At the defaults that is 1.25 s per tick and a line at 2.5 s. Measured
+  against a two-connection pool with three concurrent transactions:
+  `database.pool.saturated waiting=1 total=2 max=2 forMs=2500`, then `waiting=2 forMs=3750`.
+  Any fixed interval here is wrong; the two numbers have to move together.
+- [x] `S1.6` **`worker.pool.oversubscribed`** — `apps/worker/src/bootstrap/worker-bootstrap.ts`
   sums the six concurrencies and compares against `DATABASE_POOL_MAX` once at start; a `warn`
   with `{ concurrency, poolMax }`. Not an error: a job that holds no connection is legitimate,
   but the operator reads the line before the queue stalls. **Docs:** `apps/worker/docs/reference/env.md`
@@ -274,10 +302,16 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   tree; and `WORKER_EVENT_CONCURRENCY` (8) counts fully — `PgOutboxGateway.drain` awaits its
   relay **inside** `unitOfWork.run` (`pg-outbox.gateway.ts:52`), so every in-flight batch pins one
   pool connection and one pooler server slot for the whole of its Redis round trips.
+  `done: 2026-09-13` — summed off `worker.opts.concurrency` of the workers in `this.workers`,
+  which is the record of what started, so no bookkeeping field was needed. Measured on a real
+  boot: `worker.pool.oversubscribed concurrency=19 poolMax=10` — **19, not 20**, because
+  `AnalyticsConsumer` does not start without a ClickHouse config. The item's original "sums the
+  six concurrencies" would have printed 20 and been wrong on every deployment that runs no
+  analytics.
 
 #### 1.B Timeouts that survive a pooler (`infrastructure`)
 
-- [ ] `S1.7` **Role-level timeouts migration** — `packages/infrastructure/migrations/0021_*.sql`,
+- [x] `S1.7` **Role-level timeouts migration** — `packages/infrastructure/migrations/0021_*.sql`,
   hand-written: `ALTER ROLE CURRENT_USER SET statement_timeout = '30s'`,
   `… SET idle_in_transaction_session_timeout = '60s'`, `… SET lock_timeout = '10s'`. `CURRENT_USER`
   because the role name is the deployment's, not the repository's. Applies to new sessions only;
@@ -311,7 +345,13 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   there is a DBA — the floor lands on the wrong role and the application still runs with `0`.
   The item must either name the application role from `DATABASE_URL` or state "one role" as a
   constraint `docs/infra/reference/pgbouncer.md` carries. `unverified:` a two-role deployment.
-- [ ] `S1.8` **`SET LOCAL` in `PgUnitOfWork.run`** — when `statementTimeoutMs` differs from the
+  `done: 2026-09-13` — `0022_pooler_timeout_floor.sql`, hand-written, three `ALTER ROLE
+  CURRENT_USER SET` statements and no table. Applied over `DATABASE_DIRECT_URL`;
+  `pg_db_role_setting` carries all three, and a fresh pooled session reads `statement_timeout =
+  30s`. The one-role constraint is stated in the migration's own comment and on the reference
+  page rather than being enforced, which is the honest shape: nothing in the repository can see
+  the deployment's role split.
+- [x] `S1.8` **`SET LOCAL` in `PgUnitOfWork.run`** — when `statementTimeoutMs` differs from the
   role floor (the worker), `run` issues `set local statement_timeout = <ms>` as the first
   statement of the transaction, on the transaction handle, so it holds through pgBouncer and dies
   with the transaction. Outside a transaction the role floor applies, which is the intended
@@ -322,10 +362,18 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   statement_timeout = 120000` reads back `2min` inside `run`, `30s` on the pool handle after it,
   and `30s` again in the next transaction, which is the one that would have inherited a leak off
   a recycled server connection. The mechanism is pooler-safe as written.
+  `done: 2026-09-13` — `PgUnitOfWork` takes a `PgUnitOfWorkConfig`, and two things the spec caught
+  on the way in. Postgres accepts **no bind parameter in a `SET`**, the same trap the partition
+  DDL documents, so the statement is `sql.raw` over a truncated integer. And a nested `run()` now
+  sets nothing: `SET LOCAL` inside a savepoint outlives a rollback to that savepoint, so the inner
+  call would silently raise the outer transaction's ceiling.
+  Two spec cases, with values that are neither the default — 25 s on the pool, 90 s inside `run`,
+  25 s after. (90 000 ms renders as `90s`, not `1min 30s`; the first version of the assertion was
+  wrong about that and the failure is what proved the mechanism works.)
 
 #### 1.C pgBouncer in the stack (`infra`, `docs`)
 
-- [ ] `S1.9` **The service** — `infra/docker-compose.yml`: `pgbouncer` (`edoburu/pgbouncer`,
+- [x] `S1.9` **The service** — `infra/docker-compose.yml`: `pgbouncer` (`edoburu/pgbouncer`,
   pinned tag) in the core stack, `depends_on: postgres: condition: service_healthy`, env
   `POOL_MODE=transaction`, `MAX_CLIENT_CONN=1000`, `DEFAULT_POOL_SIZE=20`, `MIN_POOL_SIZE=0`,
   `RESERVE_POOL_SIZE=5`, `SERVER_RESET_QUERY=DISCARD ALL`, `AUTH_TYPE=scram-sha-256`,
@@ -358,7 +406,12 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   (line 151) and `SERVER_RESET_QUERY_ALWAYS` (line 152) — the second is what `S1.13` decides
   about, see `S1.7`. `application_name` needs no entry in `IGNORE_STARTUP_PARAMETERS`; pgBouncer
   tracks it (`S1.1`).
-- [ ] `S1.10` **`.env.example` and the scripts** — `DATABASE_URL` → `:6432`,
+  `done: 2026-09-13` — in the core stack, `${PGBOUNCER_PORT:-6432}:5432`, healthcheck on 5432,
+  and healthy. Postgres carries the three command flags and reports them back.
+  `postgres.init.sql` gained `pg_stat_statements` with the first-boot caveat written above it —
+  and this machine needed the extension by hand, exactly as the caveat says, because its `pgdata`
+  volume predates the line.
+- [x] `S1.10` **`.env.example` and the scripts** — `DATABASE_URL` → `:6432`,
   `DATABASE_DIRECT_URL` → `:5432`, with the comment that the second is for DDL. `packages/infrastructure/package.json`
   `db:migrate` / `db:seed` / `db:generate` / `db:studio` and `drizzle.config.ts`,
   `migrate.ts`, `seed.ts` read `DATABASE_DIRECT_URL ?? DATABASE_URL`. `tooling/scripts/boot-smoke.mjs`
@@ -377,7 +430,13 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   (`compose-wait.mjs` is the health poller, and it has none either). Write the item as "gains
   a wait on both ports" or drop the clause — measured through `:6432`, the boot smoke passes as
   it is (`process.started` with five consumers, `process.stopped`, exit 0).
-- [ ] `S1.11` **The archive's DDL goes direct** — `PgActivityArchiveGateway`'s
+  `done: 2026-09-13` — `.env.example`, `drizzle.config.ts`, `migrate.ts` and `seed.ts` all read
+  `DATABASE_DIRECT_URL ?? DATABASE_URL`, and both ran clean over `:5432` while the apps run over
+  `:6432`. **The `boot-smoke.mjs` clause is dropped rather than built**, on the simplicity rule: a
+  port wait prevents no failure the existing connection error does not already name, and the boot
+  smoke passes through the pooler as it stands. The package.json scripts needed no change — they
+  pass the environment through and the scripts choose.
+- [x] `S1.11` **The archive's DDL goes direct** — `PgActivityArchiveGateway`'s
   `detach … concurrently` cannot run inside a transaction, and the role floor `S1.7` sets is
   the wrong ceiling for it; it takes a second `Database` built from `directUrl` (the container
   owns it, `dispose()` closes it), and `PgMaintenanceGateway`'s partition DDL uses the same
@@ -422,7 +481,17 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   stalled behind one reader for as long as it reads. The maintenance drop keeps a **short**
   `lock_timeout` and retries on the next run; only the archive's detach and stream take the
   longer budget. Say so in the item and in `activity-archive.md`.
-- [ ] `S1.12` **The pooled smoke spec** — `packages/infrastructure/tests/smoke/pooled.spec.ts`:
+  `done: 2026-09-13` — `Container` builds a second `Database` from `directUrl` with `max: 1`, a
+  30-minute statement timeout and its own `application_name`; `dispose()` closes it after the
+  pooled one. `PgActivityArchiveGateway` takes it.
+  **`PgMaintenanceGateway` deliberately does not**, which is the correction above applied rather
+  than the item's original text: its `drop table` needs `AccessExclusiveLock` on the *parent*, so
+  it keeps the role's short `lock_timeout` and retries on the next run instead of holding every
+  reader of `notifications` and `outbox_event` behind it.
+  `reattach()` now checks `pg_inherits.inhdetachpending` and issues `finalize` before `attach`.
+  Without that the recovery path cannot recover: a cancelled detach leaves the partition a child,
+  so `attach` is not its inverse, and the month reads as empty and rejects every insert.
+- [x] `S1.12` **The pooled smoke spec** — `packages/infrastructure/tests/smoke/pooled.spec.ts`:
   through `DATABASE_URL`, `SHOW statement_timeout` inside a `PgUnitOfWork.run` equals the
   worker override and outside equals the role floor (`S1.7`); nested `run` is a savepoint that
   rolls back alone; two connections contend on `pg_advisory_xact_lock` and serialise;
@@ -457,7 +526,19 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   green** — every enroller, the claimer, the founder, both messaging repositories, the outbox,
   maintenance, the vector store, the tenant cascade. Nothing in the repository's Postgres surface
   depends on session affinity.
-- [ ] `S1.13` **Docs** — new `docs/infra/reference/pgbouncer.md` (why transaction mode, the
+  `done: 2026-09-13` — `tests/smoke/pooled.smoke.spec.ts` (the `.smoke.` infix the config
+  requires), with `Stack.database: { url, directUrl }` provided from `vitest.smoke.config.ts` the
+  way `stack.redis` is. Six cases, all green under `pnpm smoke`: a non-zero `statement_timeout`
+  through the pooler, `SET LOCAL` raising and restoring it, the savepoint rolling back alone,
+  `pg_advisory_xact_lock(int, int)` serialising, two `drain` callers claiming disjoint rows, and
+  `DETACH … CONCURRENTLY` succeeding as a statement while failing inside `run`.
+  **The Better Auth case is not in it, and cannot be.** `packages/infrastructure` sits left of
+  `packages/auth` in the layering, so a spec there may not import `AuthFactory`; and the auth
+  package's own specs hand `AuthFactory` a stub `Database`, so there is no live-database test to
+  add it to. It stays proven by hand (a sign-in through `:6432` writing a session and resolving
+  `activeOrganizationId`) and unautomated. A `packages/auth` integration spec is the place for it
+  if it ever earns one.
+- [x] `S1.13` **Docs** — new `docs/infra/reference/pgbouncer.md` (why transaction mode, the
   startup-parameter trap and the role floor that closes it, what `DISCARD ALL` costs, sizing:
   `DEFAULT_POOL_SIZE × databases` against `max_connections`, and the managed-pooler swap), added
   to `docs/infra/reference/meta.json` and `docs/infra/index.md`; `docs/infra/reference/postgres.md`
@@ -476,13 +557,39 @@ nesting through `PgUnitOfWork`, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED
   page owes from this pass: `SHOW POOLS` and `query_wait_timeout` as the saturation signal the
   application cannot see (`S1.4`), and `RECONNECT`, never restart, as the only safe verb under a
   live worker (`S1.1`).
+  `done: 2026-09-13` — new `docs/infra/reference/pgbouncer.md` with all of the above, registered
+  in `reference/meta.json` and named from `docs/infra/index.md` (which gains a pgbouncer row in
+  the file table, the ports table and the profile table). `postgres.md`'s sizing paragraph,
+  connection table and init listing rewritten around the pooler; `unit-of-work.md` gains the
+  `SET LOCAL` section; `docs/setup/13` §13.2, §13.5 and §13.6 annotated; both `env.md` pages gain
+  a database section; `docs/opinions/data-and-scale.md` §5 row 4 marked built with the argument
+  for taking it early; `docs/ai/rules/data.md` gains the pooling bullet.
+  Two notes. `docs/ai/rules/workflow.md`'s command block said **`18 assertions`** — the drift the
+  second verification pass found — and is now 20; the `db:partitions` and `infra:up:sharded`
+  entries are left for the phases that add them, since naming a script that does not exist is the
+  kind of doc defect `check:architecture` exists to catch. And "what `DISCARD ALL` costs" is
+  replaced by the rule: no session-level `SET`, ever, with the measured pool-poisoning as the
+  reason. `SERVER_RESET_QUERY_ALWAYS` stays off — the round trip per transaction is the price of
+  not trusting the tree, and the tree is clean.
 
-**Exit.** `pnpm infra:up` starts pgBouncer healthy; `pnpm db:migrate` applies `0021` over the
-direct URL; the web app and the worker connect through `:6432`; `pnpm smoke` includes
-`pooled.spec.ts` green; `pg_stat_activity` shows `application_name` per process; setting
-`DATABASE_POOL_MAX=2` and running the worker prints `worker.pool.oversubscribed` once; holding
-three concurrent `pg_sleep(10)` against that pool prints `database.pool.saturated` and the health
-endpoint shows `waiting: 1`; `check:architecture` is 20/20.
+**Exit.** ✅ **Met 2026-09-13**, clause by clause, watched rather than assumed:
+
+| Clause | Result |
+|---|---|
+| `pnpm infra:up` starts pgBouncer healthy | `Up (healthy)` |
+| `pnpm db:migrate` applies the role migration over the direct URL | `0022`, and `pg_db_role_setting` carries all three |
+| the web app and the worker connect through `:6432` | `pg_stat_activity` shows both arriving from the pgBouncer container |
+| `pnpm smoke` includes the pooled spec green | `pooled.smoke.spec.ts`, 6 cases; suite 18 passed |
+| `pg_stat_activity` shows `application_name` per process | `worker`, and `<app>-direct` for the archive handle |
+| the worker prints `worker.pool.oversubscribed` once | `concurrency=19 poolMax=10`, at the defaults — no `DATABASE_POOL_MAX=2` needed |
+| holding concurrent transactions prints `database.pool.saturated` | `waiting=1 total=2 max=2 forMs=2500` — after `S1.5`'s window was corrected |
+| the health endpoint shows the pool | `pool: { total, idle, waiting, max }` on the report |
+| `check:architecture` is 20/20 | 20/20, no skips |
+
+Plus `pnpm typecheck`, `pnpm lint` over 986 files, and `pnpm test` — every package green.
+The one Exit clause **not** met as written is `pg_sleep(10)`: a caller cannot wait ten seconds for
+a connection, because `DATABASE_POOL_CONNECT_TIMEOUT_MS` rejects it at five. That is `S1.5`'s
+correction, and the rehearsal uses four-second transactions instead.
 
 ---
 
@@ -1135,4 +1242,5 @@ constraint `S4.1` names and on nothing else.
 |---|---|---|
 | 2026-09-13 | @sami | Created from a read of the tree at `c72ca9e`: four phases covering connection pooling and pgBouncer, partition policy and guards, the virtual-sharding seam with a pluggable strategy, a directory and an env map, and the filed physical split |
 | 2026-09-13 | @sami | Premises tested against a live stack and the tree at `49703c9`; no phase started. Four hold as written — the startup-parameter trap (worse than described: through the pooler `statement_timeout` reads `0`, not a smaller number), `SET LOCAL` in `PgUnitOfWork.run`, `ALTER ROLE` inside drizzle's migrator, and FNV-1a in SQL matching TypeScript on all ten vectors. `S3.14`'s guess is confirmed by experiment and is total, not partial: an oRPC middleware's `AsyncLocalStorage` reaches a unary handler and reaches an async-generator handler on no frame at all. Four are wrong and are corrected in place: `S1.11` (`DETACH … CONCURRENTLY` succeeds through a transaction pooler; the transaction, not the pooler, is the constraint), `S2.5` (the notification read carries no lower bound on the partition column, so it scans every month — new `S2.9`), `S3.12` (four of six use-case group names do not exist), `S3.18` (`CROSS_PLACEMENT_KNOWN` is one file and §22 as specified could not see it — new `S3.23`; and §9's `TENANT_EXEMPT` must not be derived from `CatalogTable`). Two smaller ones: the migration numbers shift by one, and `S1.7` needs a pooler reconnect it did not ask for |
+| 2026-09-13 | @sami | **Phase 1 built and its Exit met.** Pool configuration, `Database.stats()`, the saturation and oversubscription lines, migration `0022`'s role floor, `SET LOCAL` in `PgUnitOfWork`, pgBouncer in the core stack, the scripts on `DATABASE_DIRECT_URL`, the archive on a direct handle with a FINALIZE recovery, `pooled.smoke.spec.ts`, and the docs. Four things the build changed that verification had not: `S1.5`'s fixed 5 s window could never fire against a 5 s connect timeout and is now derived from it; `S1.6` sums 19 rather than 20, because the analytics consumer does not start without ClickHouse; `PgUnitOfWork` needed `sql.raw` because Postgres takes no bind parameter in a `SET`, and a nested `run` must set nothing at all; and the Better Auth smoke case is impossible where the plan put it, because `infrastructure` sits left of `auth`. `S1.10`'s `boot-smoke.mjs` port wait was dropped rather than built |
 | 2026-09-13 | @sami | Second pass, stricter: the first pass's own rigor gaps closed and every tree claim outside the fourteen items checked. Confirmed by measurement: drizzle's real statements with bound parameters scan every partition with zero runtime pruning (`S2.5` table rewritten from them); S3.14 over a real `RPCHandler` and a `Request`, frame 0 included, with the snapshot fix; FNV-1a on multibyte keys; the whole infrastructure suite — 26 files, 145 tests — green through pgBouncer; boot smoke green through it. Newly found: a pgBouncer **restart** kills an idle worker (`Database` has no `pool.on("error")`; `S1.1`) while `RECONNECT` does not; `server_reset_query` never runs in transaction mode, so one session-level `SET` poisoned all 25 fresh clients (`S1.7`, `S1.13`); pooler-side queueing is invisible to `waitingCount` (`S1.4`); S1.9's port mapping and healthcheck are wrong for the image; an interrupted `DETACH CONCURRENTLY` leaves a month invisible **and unwritable** until `FINALIZE`, and `reattach()` cannot recover it (`S1.11`); `drop table` on a partition locks the parent, so maintenance DDL must keep a short `lock_timeout` (`S1.11`); `ensureMonthlyPartitions` races between replicas with `42P07` (`S2.2`); the worker's routed paths run under the NIL platform principal with the tenant in the payload, so `keyOf(principal)` cannot route them (`S3.11`, `S3.15`); four catalog transactions bypass `PgUnitOfWork` (`S3.8`); the smoke harness has no database and bans `process.env`, so `pooled.spec.ts` and `sharded.spec.ts` cannot exist as named (`S1.12`, `S3.20`); §23's real sites and the fifth `new Database(` (`S3.18`); nine routed→catalog FKs, not two (`S3.20`, `S4.1`); `workflow.md:14` already says `18`. First-pass text fixed: fifteen `run` sites not sixteen, `member` is four not five, and the `DISCARD ALL` mechanism |

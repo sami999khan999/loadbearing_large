@@ -82,6 +82,24 @@ jobs, every one of which may hold a Postgres connection.
   event fans out to one job per subscriber. The drain itself runs at `priority: 1` ahead of them,
   so a delivery backlog cannot starve it.
 
+## Count your processes, and now your concurrencies
+
+The five knobs above are per instance, and they are also drawn against one pool. `WorkerBootstrap`
+sums the concurrency of the consumers that actually **started** — not the six in the tree, because
+`AnalyticsConsumer` starts only with a ClickHouse config — and emits `worker.pool.oversubscribed`
+when the sum exceeds `DATABASE_POOL_MAX`. At the defaults that is 20 against 10, and the line fires
+on every boot until one of the two numbers moves.
+
+It is a warning rather than an error because plenty of jobs hold no connection at all. But
+`WORKER_EVENT_CONCURRENCY` (8) counts fully: `PgOutboxGateway.drain` awaits its relay **inside**
+`unitOfWork.run`, so an in-flight batch pins a pool connection — and a pgBouncer server slot — for
+the whole of its Redis round trips.
+
+`DATABASE_STATEMENT_TIMEOUT_MS` defaults to 120 s here against the web app's 30 s, and that is the
+one field the two schemas deliberately disagree about. Through pgBouncer it reaches the server as a
+`SET LOCAL` inside `PgUnitOfWork.run`, never as a startup parameter — see
+[`docs/infra/reference/pgbouncer.md`](../../../../docs/infra/reference/pgbouncer.md).
+
 ## The two realtime numbers are per process
 
 `REALTIME_MAX_STREAMS_PER_USER` (8) caps how many concurrent streams one person may hold **on this

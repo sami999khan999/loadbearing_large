@@ -177,14 +177,25 @@ export class Container {
   // a refetch is cheaper than the memory, and it is the same on every deployment.
   private static readonly REALTIME_QUEUE_SIZE = 256;
 
-  // Five seconds, and two consecutive ticks before the first line: a burst that drains
-  // inside ten seconds is load, not an incident.
-  private static readonly POOL_PROBE_MS = 5_000;
+  // Two consecutive ticks before the first line, so a burst that drains is load rather
+  // than an incident — and the pair has to fit inside the connect timeout, see below.
   private static readonly POOL_PROBE_TICKS = 2;
+  // A quarter of the connect timeout, so `TICKS` of them is half of it. A fixed window
+  // longer than that timeout could never fire — the caller is rejected before tick two.
+  private static readonly POOL_PROBE_DIVISOR = 4;
+  private static readonly POOL_PROBE_MIN_MS = 250;
+
+  // Thirty minutes. A month of `activity_log` streamed to S3 is the only work in this
+  // system that legitimately runs this long, and it holds one connection to do it.
+  private static readonly DIRECT_STATEMENT_TIMEOUT_MS = 1_800_000;
 
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
+  // The same server with no pooler in front, and a pool of one: it exists for DDL the
+  // archive runs on a schedule, not for request traffic.
+  private readonly directDatabase: Database;
   private readonly poolProbe: ReturnType<typeof setInterval>;
+  private readonly poolProbeMs: number;
   // Consecutive ticks with somebody waiting. Reset the moment the queue clears, so the
   // `forMs` on the line is the length of *this* episode.
   private poolWaitingTicks = 0;
@@ -330,9 +341,20 @@ export class Container {
       onError: (error) => this.logger.emit("database.pool.error", { message: error.message }),
     });
 
+    // One connection, and a budget the role floor does not cap: this handle exists for a
+    // detach-and-stream that runs monthly and legitimately takes minutes.
+    this.directDatabase = new Database({
+      url: config.database.directUrl ?? config.database.url,
+      maxConnections: 1,
+      statementTimeoutMs: Container.DIRECT_STATEMENT_TIMEOUT_MS,
+      applicationName: `${config.logging.app}-direct`,
+      onError: (error) => this.logger.emit("database.pool.error", { message: error.message }),
+    });
+
     // Unreferenced, so a script that builds a container and finishes is not held open by
     // a timer nobody is reading.
-    this.poolProbe = setInterval(() => this.probePool(), Container.POOL_PROBE_MS);
+    this.poolProbeMs = Container.probeIntervalFor(config.database.poolConnectTimeoutMs);
+    this.poolProbe = setInterval(() => this.probePool(), this.poolProbeMs);
     this.poolProbe.unref();
     this.redis = new RedisConnection({
       cacheUrl: config.redis.cacheUrl,
@@ -649,10 +671,10 @@ export class Container {
       };
     }
 
-    // Takes the storage gateway: archiving a partition is a database read and an object
-    // write in one operation.
+    // The *direct* pool, not the shared one: a month-sized detach and stream needs a
+    // budget the 30 s role floor will not give it. See docs/infra/reference/pgbouncer.md.
     this.activityArchive = new PgActivityArchiveGateway(
-      this.database,
+      this.directDatabase,
       this.transactions,
       this.storage,
     );
@@ -842,8 +864,18 @@ export class Container {
       waiting: pool.waiting,
       total: pool.total,
       max: pool.max,
-      forMs: this.poolWaitingTicks * Container.POOL_PROBE_MS,
+      forMs: this.poolWaitingTicks * this.poolProbeMs,
     });
+  }
+
+  // `Database`'s own default when the config omits one, because the two numbers have to
+  // agree: a probe slower than the connect timeout watches a queue that is never there.
+  private static probeIntervalFor(connectTimeoutMs: number | undefined): number {
+    const timeout = connectTimeoutMs ?? 5_000;
+    return Math.max(
+      Container.POOL_PROBE_MIN_MS,
+      Math.floor(timeout / Container.POOL_PROBE_DIVISOR),
+    );
   }
 
   // Reverse construction order: closing Redis while BullMQ holds blocking connections
@@ -857,6 +889,7 @@ export class Container {
     // its own reason to be here, not a step in the ordering above.
     await this.emailSender.close();
     await this.database.close();
+    await this.directDatabase.close();
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The

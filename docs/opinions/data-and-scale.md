@@ -459,7 +459,7 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 1 | Add an index, rewrite a query | A single slow query | Hours |
 | 2 | KPI snapshot tables | Dashboard over 1s on a warm cache | A day |
 | 3 | Read replica for dashboards | Reads competing with writes | A day; one adapter change |
-| 4 | pgBouncer, transaction mode | Past ~100 connections | Hours |
+| 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `DB-SCALING-PLAN.md` Phase 1 |
 | 5 | ClickHouse reads, behind a new `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **One env var, then a day** |
 | 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
 | 7 | Shard Postgres by `organization_id` | Writes past a single primary | Weeks — needs 4.1 |
@@ -467,6 +467,15 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 
 Most products never get past #2. Each step is ordered by cost, so exhaust the cheap ones first —
 "Postgres does not scale" is usually said by someone who skipped #1 and #4.
+
+**#4 is the one exception to "do not build in advance", and it was taken deliberately.** Retrofitting
+a pooler is not the hours this table says once an application has been written against a direct
+connection: `statement_timeout` moves from a startup parameter to a role default, DDL splits onto a
+second URL, and every session-level `SET` in the codebase becomes a bug. Doing it at zero
+connections costs one compose service and one migration; doing it at a hundred costs an audit.
+The trigger for the *next* move is now observable rather than guessed at —
+`database.pool.saturated` on this side of the pooler, `SHOW POOLS` on the other. See
+[`docs/infra/reference/pgbouncer.md`](../infra/reference/pgbouncer.md).
 
 ### On ClickHouse specifically
 

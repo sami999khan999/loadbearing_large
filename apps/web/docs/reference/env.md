@@ -133,6 +133,26 @@ The build reads no configuration by design: `Env` is parsed at runtime and is se
 two addresses `Endpoint` holds are derived from `location`. Nothing at build time needs `.env`, so
 nothing should hand it one.
 
+## The six database variables, and which of them the pooler can see
+
+`DATABASE_URL` goes through pgBouncer in transaction mode. `DATABASE_DIRECT_URL` goes past it, and
+is what migrations, the seed, `drizzle-kit` and the activity archive use; it defaults to
+`DATABASE_URL`, which is correct only while nothing is pooling.
+
+`DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT_MS` and `DATABASE_POOL_CONNECT_TIMEOUT_MS` are
+this process's own `pg.Pool`, per replica rather than per cluster. The connect timeout is the one
+with no previous default worth having: without it an unreachable Postgres holds a request for the
+OS default, which is longer than every timeout in front of it.
+
+`DATABASE_STATEMENT_TIMEOUT_MS` is the one value this file and `apps/worker/src/env.ts` deliberately
+disagree about — 30 s here, 120 s there. A request a browser is waiting on and a batch nobody is
+waiting on do not want the same ceiling.
+
+**Through the pooler, that variable is not what enforces the timeout.** `pg` sends it as a startup
+parameter, pgBouncer drops it, and `SHOW statement_timeout` reads `0`. Migration `0022`'s role
+setting is the floor, and `PgUnitOfWork` raises it per transaction with `SET LOCAL`. The full
+mechanism is in [`docs/infra/reference/pgbouncer.md`](../../../../docs/infra/reference/pgbouncer.md).
+
 ## The two realtime numbers are per process
 
 `REALTIME_MAX_STREAMS_PER_USER` (8) caps how many concurrent streams one person may hold **on this

@@ -28,6 +28,12 @@ export default defineConfig({
     // The whole environment read, once, here — see `tests/smoke/support/stack.ts`.
     provide: {
       stack: {
+        database: {
+          url: required("DATABASE_URL"),
+          // Falls back rather than being required: a deployment running no pooler has
+          // one URL, and the pooler-sensitive cases still mean something against it.
+          directUrl: optional("DATABASE_DIRECT_URL") ?? required("DATABASE_URL"),
+        },
         redis: {
           cacheUrl: required("REDIS_CACHE_URL"),
           queueUrl: required("REDIS_QUEUE_URL"),
