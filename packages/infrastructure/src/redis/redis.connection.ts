@@ -48,7 +48,10 @@ export class RedisConnection {
   // this would report on a socket nothing else uses — green while the cache is down.
   public async healthy(role: RedisRole): Promise<boolean> {
     try {
-      return (await this.resolve(role).ping()) === "PONG";
+      const reply: unknown = await this.resolve(role).ping();
+      // A connection in subscriber mode answers `["pong", ""]`, not the simple string —
+      // and that connection is the one this check exists for.
+      return Array.isArray(reply) ? reply[0] === "pong" : reply === "PONG";
     } catch {
       return false;
     }
