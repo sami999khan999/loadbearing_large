@@ -18,10 +18,10 @@ let roleId: string;
 const identifiers: string[] = [];
 const invited: string[] = [];
 
-// Far enough out that nothing has been here: the spec is about the CREATE path, and a
-// month that already has a partition tests the `to_regclass` probe instead.
-const FROM = new Date("2032-07-01T00:00:00.000Z");
-const NAMES = ["activity_log_2032_07", "activity_log_2032_08"];
+// Deliberately in the past, for the reason `sweepExpired` gives below: the drop cases
+// take a cutoff and no table filter, so a month after today takes the real partitions.
+const FROM = new Date("2020-07-01T00:00:00.000Z");
+const NAMES = ["activity_log_2020_07", "activity_log_2020_08"];
 
 beforeAll(async () => {
   database = openDatabase();
@@ -70,7 +70,7 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
           from pg_class c
           join pg_inherits i on i.inhrelid = c.oid
           join pg_class p on p.oid = i.inhparent
-          where p.relname = 'activity_log' and c.relname like 'activity_log_2032_%'
+          where p.relname = 'activity_log' and c.relname like 'activity_log_2020_%'
           order by c.relname`,
     );
 
@@ -96,11 +96,15 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
 
     const dropped = await gateway.dropMonthlyPartitionsBefore(
       PartitionedTable.ACTIVITY_LOG,
-      new Date("2032-08-15T00:00:00.000Z"),
+      new Date("2020-08-15T00:00:00.000Z"),
     );
 
-    expect(dropped).toContain("activity_log_2032_07");
-    expect(dropped).not.toContain("activity_log_2032_08");
+    expect(dropped).toContain("activity_log_2020_07");
+    expect(dropped).not.toContain("activity_log_2020_08");
+
+    // The regression, and the reason the months above are in the past: a cutoff later
+    // than today sweeps every partition the migrations made, under every other spec.
+    expect(dropped.filter((name) => !NAMES.includes(name))).toEqual([]);
   });
 
   // The loop holds a `drop table`, so a child it cannot parse has to be left alone: an
@@ -108,13 +112,13 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
   it("leaves a child whose name is not <table>_<yyyy>_<mm> alone", async () => {
     await database.client.execute(
       sql`create table if not exists activity_log_scratch partition of activity_log
-          for values from ('2033-01-01') to ('2033-02-01')`,
+          for values from ('2021-01-01') to ('2021-02-01')`,
     );
 
     try {
       const dropped = await gateway.dropMonthlyPartitionsBefore(
         PartitionedTable.ACTIVITY_LOG,
-        new Date("2034-01-01T00:00:00.000Z"),
+        new Date("2021-06-01T00:00:00.000Z"),
       );
 
       expect(dropped).not.toContain("activity_log_scratch");
