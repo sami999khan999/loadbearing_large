@@ -141,6 +141,13 @@
       "when": 1789261160006,
       "tag": "0019_black_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789263274150,
+      "tag": "0020_chubby_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

@@ -26,6 +26,9 @@ export const messagingEvents = {
     messageId: Identifiers.messageId,
     // The partition hint every reader of this row needs to find the message again.
     createdAt: z.coerce.date(),
+    // Carried so the notification policy can tell a DM from a channel without a second
+    // query. A channel produces no bell item — that is the §6 amplification case.
+    conversationKind: z.enum(["direct", "channel"]),
   }),
   "message.edited": z.object({
     conversationId: Identifiers.conversationId,

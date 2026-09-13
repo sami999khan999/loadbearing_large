@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  type ConversationId,
   eq,
   exists,
   gt,
@@ -14,6 +15,7 @@ import {
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { users } from "../schema/auth.schema.js";
+import { conversationMembers } from "../schema/messaging.schema.js";
 import { memberships, rolePermissions } from "../schema/rbac.schema.js";
 
 export class PgNotificationRecipientReader
@@ -48,6 +50,42 @@ export class PgNotificationRecipientReader
         ),
       )
       .orderBy(asc(memberships.userId))
+      .limit(limit);
+
+    return rows.map((row) => PgNotificationRecipientReader.toRecipient(row));
+  }
+
+  // Joined through `memberships` as well, so somebody deactivated from the tenant stops
+  // being notified even while their conversation membership row survives.
+  public async conversationMembers(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    limit: number,
+  ): Promise<readonly Recipient[]> {
+    const rows = await this.db
+      .select({
+        userId: conversationMembers.userId,
+        email: users.email,
+        name: users.name,
+        locale: users.locale,
+      })
+      .from(conversationMembers)
+      .innerJoin(users, eq(users.id, conversationMembers.userId))
+      .innerJoin(
+        memberships,
+        and(
+          eq(memberships.userId, conversationMembers.userId),
+          eq(memberships.organizationId, conversationMembers.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(conversationMembers.organizationId, organizationId),
+          eq(conversationMembers.conversationId, conversationId),
+          isNull(memberships.deactivatedAt),
+        ),
+      )
+      .orderBy(asc(conversationMembers.userId))
       .limit(limit);
 
     return rows.map((row) => PgNotificationRecipientReader.toRecipient(row));

@@ -95,3 +95,15 @@ an unhandled rejection reported beside a green suite rather than as a failure.
 So the unwind destroys the gzip stream and its source **and awaits `close`** before re-attaching.
 `destroy()` returns before the page already in flight does, and the caller drops the partition the
 instant `archive()` throws. Waiting is what makes "no query is outstanding" true rather than likely.
+
+## What comes next through this pipeline
+
+`messages` is the obvious second table: it grows with activity, it is never deleted by retention,
+and a conversation older than a year is read about as often as an audit entry older than a year.
+
+It needs one thing answered first. This pipeline detaches a **partition**, and `messages` is not
+partitioned — the send-dedupe index cannot exist on a partitioned table, which
+[`packages/application/docs/reference/messaging.md`](../../../application/docs/reference/messaging.md)
+argues at length. Whatever resolves that (a per-partition index built alongside each month, or a
+side table holding the client keys) has to land before this can, and it is a schema change on a
+table that will by then hold rows.

@@ -132,7 +132,7 @@ This is the payoff. Every feature you ever add touches the same twelve places, i
     packages/composition/src/container/container.ts        expose the new use-cases
 ```
 
-**The kit ships three slices built exactly this way**, and they are worth reading in that order.
+**The kit ships four slices built exactly this way**, and they are worth reading in that order.
 
 `role` is the one to read first. Its list is the smallest possible walk of all twelve steps — it
 reuses `rbac.role.read` rather than adding a permission, and lands at `/settings/roles` behind a
@@ -185,6 +185,24 @@ Its one cached value is the unread count, and the cache is not an optimisation a
 counting unread rows is the query the bell asks on every page load, so it is a read-through with a
 60-second TTL invalidated on every write, capped in SQL rather than in the client. The rows
 themselves are never cached, because a stale inbox is a bug and a stale badge is a rounding error.
+
+`messaging` is the one to read last, and the one that shows what the checklist does *not* say.
+Three of its lessons are worth having before you write a slice of your own:
+
+- **A permission is necessary and never sufficient.** `messaging.conversation.read` says this
+  person may read conversations; `ConversationAccess.assertMember` says which. Every use-case in
+  the slice asks both, and a third member of the organization gets `FORBIDDEN` rather than an
+  empty page. Any slice whose rows belong to a *group* smaller than the tenant needs this second
+  question, and the checklist has no step for it.
+- **The twelve steps are not twelve commits.** Four merge points bind together — the permission
+  catalog, the module gates, the procedure map and the contract registration — because the specs
+  that keep them honest assert in both directions: every key gates a reachable procedure *and*
+  every procedure has a key, every gate has a page. Registering any one alone turns the tree red.
+  Build the whole server slice, then commit it.
+- **Step 6 can refuse.** `messages` is not partitioned even though it grows with activity,
+  because Postgres will not accept the unique index that makes a retried send one row instead of
+  two on a partitioned table. That is a rule and a constraint disagreeing, and the answer was to
+  write down which one wins and why rather than to satisfy the rule and lose the guarantee.
 
 The organization plugin (switch, create, accept) is deliberately **not** a slice, and reading it as
 one is a mistake: those actions are identity-gated, no permission a non-owner holds could gate them,

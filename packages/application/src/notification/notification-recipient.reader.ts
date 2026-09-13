@@ -1,4 +1,4 @@
-import type { Locale, OrganizationId, PermissionKey, UserId } from "../import.js";
+import type { ConversationId, Locale, OrganizationId, PermissionKey, UserId } from "../import.js";
 
 export interface Recipient {
   readonly userId: UserId;
@@ -24,5 +24,13 @@ export abstract class NotificationRecipientReader {
   public abstract users(
     organizationId: OrganizationId,
     userIds: readonly UserId[],
+  ): Promise<readonly Recipient[]>;
+
+  // No permission argument, unlike `organizationMembers`: membership of the conversation
+  // is the authorization, and everyone in one can already read what is in it.
+  public abstract conversationMembers(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    limit: number,
   ): Promise<readonly Recipient[]>;
 }

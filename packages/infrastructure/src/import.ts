@@ -122,6 +122,7 @@ export {
   type MessageId,
   type NotificationCategory,
   type NotificationId,
+  type NotificationKind,
   type OrganizationId,
   type PaginationQuery,
   RealtimeContract,

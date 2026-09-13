@@ -564,6 +564,23 @@ partition is created ahead of need and dropped after twelve months by the same l
 the audit trail and the outbox. Retention is a number in one table there, not a job someone has to
 remember to write.
 
+### Message fan-out
+
+A message in a conversation of N members is one row and N realtime publishes — the
+`MessagingRealtimeSubscriber` loop that keeps every member's inbox ordered. That is the
+amplification to watch, and it is bounded deliberately in three places.
+[`packages/application/docs/reference/messaging.md`](../../packages/application/docs/reference/messaging.md)
+carries the whole argument; the shape is: the **body** rides the conversation channel and is
+published once, the **user** channels get a compact "something changed" frame and only for the
+three events that reorder a list, and the notification policy stops at direct conversations
+entirely — a busy channel producing a bell item per member per message is this section's failure
+with a table attached.
+
+Unread is the other half, and it is computed rather than counted: `last_read_at` is the only
+state and the count is a capped `LATERAL` per row of a page, so there is no per-member write per
+message and nothing to drift. The swap at 100k is that method behind a Redis counter, with
+`last_read_at` still the record.
+
 > [!TIP]
 > Load-test these three paths at 10× expected volume **before** launch, with realistic data
 > distribution. Everything else can be fixed reactively; these fail in ways that take a week to

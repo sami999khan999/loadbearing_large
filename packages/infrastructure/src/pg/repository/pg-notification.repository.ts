@@ -6,6 +6,7 @@ import {
   isNull,
   type NewNotification,
   type NotificationId,
+  type NotificationKind,
   type NotificationPage,
   type NotificationRecord,
   type NotificationRepository,
@@ -100,6 +101,7 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
             category: record.category,
             params: { ...record.params },
             link: record.link,
+            subjectId: record.subjectId,
             // From the event, not `defaultNow()`: the dedupe index carries this column,
             // so a redelivery has to compute the same value to collide with itself.
             createdAt: record.createdAt,
@@ -112,6 +114,31 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
     }
 
     return written;
+  }
+
+  // One indexed query against `notifications_subject_idx`, and what keeps a burst of ten
+  // messages to one bell item rather than ten.
+  public async existsUnread(
+    organizationId: OrganizationId,
+    userId: UserId,
+    kind: NotificationKind,
+    subjectId: string,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.organizationId, organizationId),
+          eq(notifications.userId, userId),
+          eq(notifications.kind, kind),
+          eq(notifications.subjectId, subjectId),
+          isNull(notifications.readAt),
+        ),
+      )
+      .limit(1);
+
+    return row !== undefined;
   }
 
   // `createdAt` in the predicate is the partition hint. Without it Postgres has to look

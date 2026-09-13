@@ -1171,12 +1171,21 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   page regardless of size (rows + one lateral), `list` messages one, `unreadCounts` one;
   partition-bounded cleanup as `pg-activity-replay.reader.spec.ts` does (`T-026`).
   `Container.messaging = { … }`; the subscriber joins the frozen list in `C2.9`.
-- [ ] `C5.9` **Notification policy rows** — `message.sent` in a **direct** conversation →
+- [x] `C5.9` **Notification policy rows** — `message.sent` in a **direct** conversation →
   kind `message.received`, recipients: members minus author, in-app `immediate`, email
   `digest` by default; suppressed while the recipient already has an unread `message.received`
   for that conversation (`NotificationRepository.existsUnread(organizationId, userId, kind, conversationId)`
   — one indexed query). Channels get no bell item by default (the §6 write-amplification
   case); a mention feature is the follow-up that changes that.
+  `done: 2026-09-13` — the suppression needed a **column** the plan did not specify:
+  `notifications.subject_id`, with a partial index on
+  `(organization_id, user_id, kind, subject_id) WHERE read_at IS NULL AND subject_id IS NOT NULL`.
+  Matching on `params->>'conversationId'` would have been an unindexed jsonb read on the hottest
+  delivery path there is. The policy row gained two optional members for it, `subject` and
+  `when`, so "direct only" and "one unread at a time" are both declared in the table rather than
+  branched on in the use-case. `message.sent` carries `conversationKind` now, so the policy tells
+  a DM from a channel without a second query.
+  **unverified:** migration `0020` needs a live Postgres.
 
 #### 5.F Client
 
@@ -1217,12 +1226,16 @@ rate-limited to one signal per two seconds per conversation in the use-case.
 
 #### 5.G Docs
 
-- [ ] `C5.14` — `packages/application/docs/reference/messaging.md` (direct-key uniqueness,
+- [x] `C5.14` — `packages/application/docs/reference/messaging.md` (direct-key uniqueness,
   computed unread and its cap, fast path vs durable path and client dedupe, why typing rides
   the conversation channel), `packages/contracts/docs/reference/keyset.md` beside
   `envelope.md`, `docs/setup/27` third worked example, `data-and-scale.md` §6 gains a
   "Message fan-out" paragraph pointing at the code, `activity-archive.md` names messages as the
   next candidate for the detach-and-ship pipeline (`C6.4`).
+  `done: 2026-09-13` — `contracts/docs/reference/keyset.md` already existed from `C3.0`, so it
+  was not written twice. `docs/setup/27` gains messaging as its **fourth** worked example rather
+  than its third — `role`, `member` and `notification` were already there — carrying the three
+  lessons the twelve-step checklist has no step for.
 
 **Exit.** Two members DM each other across two browsers: the message appears optimistically,
 is confirmed by the stream, edits and deletes propagate, typing shows and clears, unread
@@ -1230,6 +1243,27 @@ counts move in the list and clear on open, a retried send with the same `clientI
 row, and a third member of the organization gets `FORBIDDEN` on `message.list` for that
 conversation. `check:architecture` 20/20, all suites green including the Postgres integration
 specs and the smoke suite.
+
+> **Status, 2026-09-13.** Every item `C5.1`–`C5.14` is `[x]`. `check:architecture` is 20/20 with
+> no skip, `typecheck` and `lint` are clean, and every suite is green except the Postgres and
+> Redis integration specs, which fail identically on the untouched tree. Forty-seven new specs.
+>
+> **Two findings worth reading before anything here is trusted.**
+> 1. **A blocking defect from Phase 3, found and fixed.** `notifications_dedupe_uq` omitted
+>    `created_at` on a `PARTITION BY RANGE (created_at)` table, which Postgres refuses outright:
+>    `pnpm db:migrate` would have aborted on `0017`. Because that migration has never been
+>    applicable anywhere, it was fixed in place — SQL and snapshot — rather than by a follow-up.
+>    The index now carries the column, and delivery sets `created_at` from the event's
+>    `occurred_at` rather than the clock, which is the only thing that keeps the dedupe real.
+> 2. **`messages` is not partitioned**, a deliberate deviation from `data.md`, argued at the
+>    table and in `application/docs/reference/messaging.md`. The same Postgres rule forbids the
+>    send-dedupe index there, and no version of that index survives adding the partition key.
+>
+> **The Exit line itself is unticked**: every clause needs two browsers and a running stack.
+> `C5.8`'s fixed-query-count integration specs are **not written** — they need a live Postgres to
+> be worth anything, and a version against a fake would assert only that drizzle builds the query
+> the spec already spells out. They are the one piece of Phase 5 outstanding, and they belong in
+> the same run as the Exit line.
 
 ---
 

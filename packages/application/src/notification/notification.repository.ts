@@ -33,6 +33,9 @@ export interface NewNotification {
   readonly category: NotificationCategory;
   readonly params: Readonly<Record<string, string>>;
   readonly link: string | null;
+  // What the notification is about, when that is narrower than the event — a
+  // conversation id, say. Null for the rows whose subject is the event itself.
+  readonly subjectId: string | null;
   // The **event's** timestamp, never the clock's. It is part of the dedupe key, which a
   // partitioned table forces to carry the partition column — see the pg schema.
   readonly createdAt: Date;
@@ -60,6 +63,15 @@ export abstract class NotificationRepository {
   // One statement for N recipients, and `ON CONFLICT DO NOTHING` on the dedupe index.
   // Returns how many rows were new, which is what tells the caller whom to notify.
   public abstract saveMany(records: readonly NewNotification[]): Promise<readonly UserId[]>;
+
+  // "Is there already an unread one of these about this thing." One indexed query, and
+  // what keeps a burst of ten messages to one bell item rather than ten.
+  public abstract existsUnread(
+    organizationId: OrganizationId,
+    userId: UserId,
+    kind: NotificationKind,
+    subjectId: string,
+  ): Promise<boolean>;
 
   // `createdAt` is the partition hint. Without it Postgres has to look in every month.
   public abstract markRead(

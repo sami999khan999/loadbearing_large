@@ -40,6 +40,10 @@ class Counting implements NotificationRepository {
     return Promise.resolve([]);
   }
 
+  public existsUnread(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   public markRead(): Promise<void> {
     return Promise.resolve();
   }

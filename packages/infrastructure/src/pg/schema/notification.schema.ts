@@ -37,6 +37,9 @@ export const notifications = pgTable(
     category: text("category").notNull(),
     params: jsonb("params").$type<Record<string, string>>().notNull().default({}),
     link: text("link"),
+    // What the row is about when that is narrower than the event — a conversation id.
+    // Null for the rows whose subject is the event itself.
+    subjectId: text("subject_id"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -62,6 +65,11 @@ export const notifications = pgTable(
       t.kind,
       t.createdAt,
     ),
+    // "Is there already an unread one of these about this thing." Partial, so it holds
+    // only the rows the suppression check can ever match.
+    index("notifications_subject_idx")
+      .on(t.organizationId, t.userId, t.kind, t.subjectId)
+      .where(sql`read_at is null and subject_id is not null`),
     index("notifications_user_fk_idx").on(t.userId),
   ],
 );

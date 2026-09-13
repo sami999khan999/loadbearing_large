@@ -1,4 +1,4 @@
-import { type SendMessageInput, Uuid } from "../import.js";
+import { type ConversationKind, type SendMessageInput, Uuid } from "../import.js";
 import type { DomainEventPublisher, RealtimePublisher, UnitOfWork } from "../port/index.js";
 import { type Authorizer, type Principal, RealtimeChannels } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
@@ -18,9 +18,9 @@ export class SendMessageUseCase {
 
   public async execute(actor: Principal, input: SendMessageInput): Promise<MessageRecord> {
     this.authorizer.assert(actor, "messaging.message.send");
-    await this.access.assertMember(actor, input.conversationId);
+    const conversation = await this.access.assertMember(actor, input.conversationId);
 
-    const message = await this.unitOfWork.run(() => this.write(actor, input));
+    const message = await this.unitOfWork.run(() => this.write(actor, input, conversation.kind));
 
     // The **fast path**, after the commit and best effort. The subscriber publishes the
     // same frame durably, and the client dedupes by message id — so a lost one costs nothing.
@@ -40,7 +40,11 @@ export class SendMessageUseCase {
 
   // No `activity.record`. Chat volume is not an audit trail, and the outbox row is the
   // durable fact — writing both would double the write rate for nobody's benefit.
-  private async write(actor: Principal, input: SendMessageInput): Promise<MessageRecord> {
+  private async write(
+    actor: Principal,
+    input: SendMessageInput,
+    conversationKind: ConversationKind,
+  ): Promise<MessageRecord> {
     const message = await this.messages.save({
       organizationId: actor.organizationId,
       conversationId: input.conversationId,
@@ -62,6 +66,7 @@ export class SendMessageUseCase {
         conversationId: input.conversationId,
         messageId: message.id,
         createdAt: message.createdAt,
+        conversationKind,
       },
     });
 

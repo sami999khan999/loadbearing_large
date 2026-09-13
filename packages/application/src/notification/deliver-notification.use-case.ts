@@ -1,4 +1,5 @@
 import {
+  type ConversationId,
   type DomainEvent,
   type NotificationChannel,
   type NotificationMode,
@@ -34,9 +35,11 @@ export class DeliverNotificationUseCase {
 
   public async execute(actor: Principal, event: DomainEvent): Promise<void> {
     const row = NotificationPolicy.rowFor(event.name);
-    if (!row) return;
+    // `applies` is the per-event half of the row: a message in a channel matches the
+    // name and still produces nothing.
+    if (!row || !NotificationPolicy.applies(event)) return;
 
-    const audience = await this.audienceFor(event, row);
+    const audience = await this.suppressed(event, await this.audienceFor(event, row), row);
     if (audience.length === 0) return;
 
     // One statement for N recipients, and idempotent on `(event_id, user_id, kind)`.
@@ -70,6 +73,17 @@ export class DeliverNotificationUseCase {
         const recipient = await this.recipients.user(organizationId, subject);
         return recipient ? [recipient] : [];
       }
+      case "conversationMembers": {
+        const conversationId = DeliverNotificationUseCase.conversationOf(event);
+        if (!conversationId) return [];
+
+        const all = await this.recipients.conversationMembers(
+          organizationId,
+          conversationId,
+          RECIPIENT_LIMIT,
+        );
+        return all.filter((recipient) => recipient.userId !== event.actorId);
+      }
       case "organizationMembers": {
         const all = await this.recipients.organizationMembers(
           organizationId,
@@ -82,6 +96,34 @@ export class DeliverNotificationUseCase {
         return all.filter((recipient) => recipient.userId !== event.actorId);
       }
     }
+  }
+
+  // Drops anyone who already has an unread one about this subject. One query per
+  // recipient, and only for the rows that declare a subject at all.
+  private async suppressed(
+    event: DomainEvent,
+    audience: readonly Recipient[],
+    row: PolicyRow,
+  ): Promise<readonly Recipient[]> {
+    const subjectId = NotificationPolicy.subjectOf(event);
+    if (!subjectId) return audience;
+
+    const kept: Recipient[] = [];
+    for (const recipient of audience) {
+      const already = await this.notifications.existsUnread(
+        event.organizationId,
+        recipient.userId,
+        row.kind,
+        subjectId,
+      );
+      if (!already) kept.push(recipient);
+    }
+
+    return kept;
+  }
+
+  private static conversationOf(event: DomainEvent): ConversationId | null {
+    return "conversationId" in event.payload ? event.payload.conversationId : null;
   }
 
   // Best effort, and after the row is written: a failed publish is a missing frame, and
@@ -158,6 +200,7 @@ export class DeliverNotificationUseCase {
       // by somebody who was never authorised for the thing it describes.
       params: { actorId: event.actorId },
       link: row.link(event),
+      subjectId: NotificationPolicy.subjectOf(event),
       // The event's own instant. It is half the dedupe key, so a redelivery must compute
       // the same one — and a notification is about when the thing happened anyway.
       createdAt: event.occurredAt,

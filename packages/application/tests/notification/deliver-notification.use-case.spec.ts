@@ -50,6 +50,19 @@ class Notifications implements NotificationRepository {
     return Promise.resolve(0);
   }
 
+  // False by default: every existing spec here delivers a `membership` row, and those
+  // declare no subject, so suppression never runs for them.
+  public unreadSubjects: readonly string[] = [];
+
+  public existsUnread(
+    _organizationId: unknown,
+    _userId: unknown,
+    _kind: unknown,
+    subjectId: string,
+  ): Promise<boolean> {
+    return Promise.resolve(this.unreadSubjects.includes(subjectId));
+  }
+
   public saveMany(records: readonly NewNotification[]): Promise<readonly (typeof TARGET)[]> {
     const fresh = records.filter(
       (record) =>
@@ -113,6 +126,10 @@ class Recipients implements NotificationRecipientReader {
   }
 
   public users(): Promise<readonly Recipient[]> {
+    return Promise.resolve(this.members);
+  }
+
+  public conversationMembers(): Promise<readonly Recipient[]> {
     return Promise.resolve(this.members);
   }
 }

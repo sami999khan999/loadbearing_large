@@ -59,7 +59,15 @@ describe("GetNotificationPreferencesUseCase", () => {
 
     const resolved = await useCase.execute(actorHolding("notification.inbox.read"));
 
-    expect(resolved.map((entry) => entry.channel)).toEqual(["in_app", "email"]);
+    // Every category the policy names, times both channels — the complete grid, not the
+    // stored rows. A form rendering only what was saved shows an empty screen on day one.
+    expect(resolved.map((entry) => entry.category)).toEqual([
+      "membership",
+      "membership",
+      "messaging",
+      "messaging",
+    ]);
+    expect(resolved.map((entry) => entry.channel)).toEqual(["in_app", "email", "in_app", "email"]);
     expect(resolved.every((entry) => entry.mode !== undefined)).toBe(true);
   });
 
@@ -74,7 +82,9 @@ describe("GetNotificationPreferencesUseCase", () => {
 
     const resolved = await useCase.execute(actorHolding("notification.inbox.read"));
 
-    expect(resolved.find((entry) => entry.channel === "email")?.mode).toBe("off");
+    expect(
+      resolved.find((entry) => entry.category === "membership" && entry.channel === "email")?.mode,
+    ).toBe("off");
   });
 
   it("refuses a principal without the read permission", async () => {
