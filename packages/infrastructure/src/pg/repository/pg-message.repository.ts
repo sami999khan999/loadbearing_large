@@ -172,14 +172,16 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
     const rows = await this.db
       .select({
         conversationId: conversationMembers.conversationId,
+        // Spelled out, never `${messages.conversationId}`: drizzle renders a column in a
+        // raw fragment unqualified here, so every correlation came out as `x = x`.
         count: sql<number>`(
           select count(*) from (
-            select 1 from ${messages}
-            where ${messages.organizationId} = ${conversationMembers.organizationId}
-              and ${messages.conversationId} = ${conversationMembers.conversationId}
-              and ${messages.createdAt} > coalesce(${conversationMembers.lastReadAt}, '-infinity'::timestamptz)
-              and ${messages.authorId} <> ${userId}
-              and ${messages.deletedAt} is null
+            select 1 from messages m
+            where m.organization_id = conversation_members.organization_id
+              and m.conversation_id = conversation_members.conversation_id
+              and m.created_at > coalesce(conversation_members.last_read_at, '-infinity'::timestamptz)
+              and m.author_id <> ${userId}
+              and m.deleted_at is null
             limit ${UNREAD_CAP}
           ) capped
         )`.as("count"),
