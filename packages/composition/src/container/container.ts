@@ -23,6 +23,7 @@ import {
   CreateConversationUseCase,
   CreateRoleUseCase,
   Database,
+  type DatabaseStats,
   DeleteMessageUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
@@ -164,6 +165,9 @@ export interface HealthReport {
   // `null` in a process that has opened no subscriber connection, which is every worker.
   // Not a failure, and not something to open a connection in order to report on.
   readonly realtime: boolean | null;
+  // This process's own pool, and only that: a client waiting inside pgBouncer reads as
+  // `waiting: 0` here. See docs/infra/reference/pgbouncer.md.
+  readonly pool: DatabaseStats;
 }
 
 // The only class in the repository that knows both an abstract port and the concrete
@@ -173,8 +177,17 @@ export class Container {
   // a refetch is cheaper than the memory, and it is the same on every deployment.
   private static readonly REALTIME_QUEUE_SIZE = 256;
 
+  // Five seconds, and two consecutive ticks before the first line: a burst that drains
+  // inside ten seconds is load, not an incident.
+  private static readonly POOL_PROBE_MS = 5_000;
+  private static readonly POOL_PROBE_TICKS = 2;
+
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
+  private readonly poolProbe: ReturnType<typeof setInterval>;
+  // Consecutive ticks with somebody waiting. Reset the moment the queue clears, so the
+  // `forMs` on the line is the length of *this* episode.
+  private poolWaitingTicks = 0;
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
   // Held concretely for the same reason as the two above: `dispose()` needs `close()`,
@@ -298,20 +311,34 @@ export class Container {
   private readonly memberUseCases: MemberUseCases | undefined;
 
   public constructor(config: ContainerConfig) {
-    this.database = new Database(config.database);
-    this.redis = new RedisConnection({
-      cacheUrl: config.redis.cacheUrl,
-      queueUrl: config.redis.queueUrl,
-    });
-    this.transactions = new TransactionScope();
-
-    // First, so a failure in anything below it has somewhere to be recorded. `app` and
-    // `env` are bound because they belong on every line.
+    // First, and now genuinely first: the pool below hands it a listener, and a pool
+    // error arriving with nowhere to go is an `uncaughtException` that ends the process.
     this.logger = new JsonLogger({
       level: config.logging.level,
       pretty: config.logging.pretty,
       bound: { app: config.logging.app, env: config.logging.env },
     });
+
+    this.database = new Database({
+      url: config.database.url,
+      maxConnections: config.database.poolMax,
+      statementTimeoutMs: config.database.statementTimeoutMs,
+      idleTimeoutMs: config.database.poolIdleTimeoutMs,
+      connectionTimeoutMs: config.database.poolConnectTimeoutMs,
+      // The log label, so `pg_stat_activity` names the process holding a connection.
+      applicationName: config.logging.app,
+      onError: (error) => this.logger.emit("database.pool.error", { message: error.message }),
+    });
+
+    // Unreferenced, so a script that builds a container and finishes is not held open by
+    // a timer nobody is reading.
+    this.poolProbe = setInterval(() => this.probePool(), Container.POOL_PROBE_MS);
+    this.poolProbe.unref();
+    this.redis = new RedisConnection({
+      cacheUrl: config.redis.cacheUrl,
+      queueUrl: config.redis.queueUrl,
+    });
+    this.transactions = new TransactionScope();
 
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
@@ -790,12 +817,37 @@ export class Container {
       queue,
       analytics,
       realtime,
+      // Not part of `healthy`: a saturated pool is a load signal, not a broken
+      // dependency, and a health check that fails under load takes the process out.
+      pool: this.database.stats(),
     };
+  }
+
+  // One line per episode, not per tick: the counter keeps climbing while the queue stays
+  // non-empty, and `forMs` is what says whether this is a spike or a ceiling.
+  private probePool(): void {
+    const pool = this.database.stats();
+
+    if (pool.waiting === 0) {
+      this.poolWaitingTicks = 0;
+      return;
+    }
+
+    this.poolWaitingTicks += 1;
+    if (this.poolWaitingTicks < Container.POOL_PROBE_TICKS) return;
+
+    this.logger.emit("database.pool.saturated", {
+      waiting: pool.waiting,
+      total: pool.total,
+      max: pool.max,
+      forMs: this.poolWaitingTicks * Container.POOL_PROBE_MS,
+    });
   }
 
   // Reverse construction order: closing Redis while BullMQ holds blocking connections
   // hangs on shutdown, and it is a deadlock.
   public async dispose(): Promise<void> {
+    clearInterval(this.poolProbe);
     await this.queuePublisher.close();
     await this.redis.close();
     await this.clickhouse?.close();

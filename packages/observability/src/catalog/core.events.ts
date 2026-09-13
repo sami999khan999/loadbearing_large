@@ -17,6 +17,16 @@ export const coreEvents = {
   "queue.job.stalled": { level: "warn" },
   "queue.schedule.registered": { level: "info" },
 
+  // `saturated` is the pool's own queue, and it is blind to a pooler in front: a wait
+  // inside pgBouncer reads as zero here. See docs/infra/reference/pgbouncer.md.
+  "database.pool.saturated": { level: "warn" },
+  // An idle connection whose socket died — a restarted pooler, a failover. Warn, not
+  // error: `pg` opens another, and the alternative to catching it is the process exiting.
+  "database.pool.error": { level: "warn" },
+  // The sum of what the consumers that actually started will run concurrently, against
+  // the pool they share. Once at boot.
+  "worker.pool.oversubscribed": { level: "warn" },
+
   // Alert on `partitions.ensured` when `created` stays 0 for a month: the job ran and
   // the runway is not being extended.
   "maintenance.sweep.completed": { level: "info" },

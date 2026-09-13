@@ -5,6 +5,15 @@ import { z } from "zod";
 const Schema = z
   .object({
     DATABASE_URL: z.url(),
+    // The same server without the pooler. Migrations, the seed and the archive's DDL
+    // use it — see docs/reference/env.md.
+    DATABASE_DIRECT_URL: z.url().optional(),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
+    DATABASE_POOL_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1).default(5_000),
+    // 120 s, against the web app's 30 s: a batch holds no browser open, and the outbox
+    // relay inside `PgUnitOfWork.run` is the long transaction this exists for.
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1).default(120_000),
     REDIS_CACHE_URL: z.url(),
     REDIS_QUEUE_URL: z.url(),
 
@@ -148,12 +157,25 @@ export class Env {
     return Env.parsed.WORKER_NOTIFICATION_CONCURRENCY;
   }
 
+  // Read by `WorkerBootstrap` to compare against what it is about to run concurrently.
+  // The pool itself is built from `containerConfig()`; this is the same number.
+  public static get databasePoolMax(): number {
+    return Env.parsed.DATABASE_POOL_MAX;
+  }
+
   // Where environment becomes `ContainerConfig`. No `auth` block, so this process holds
   // no session secret.
   public static containerConfig() {
     const e = Env.parsed;
     return {
-      database: { url: e.DATABASE_URL },
+      database: {
+        url: e.DATABASE_URL,
+        directUrl: e.DATABASE_DIRECT_URL ?? e.DATABASE_URL,
+        poolMax: e.DATABASE_POOL_MAX,
+        poolIdleTimeoutMs: e.DATABASE_POOL_IDLE_TIMEOUT_MS,
+        poolConnectTimeoutMs: e.DATABASE_POOL_CONNECT_TIMEOUT_MS,
+        statementTimeoutMs: e.DATABASE_STATEMENT_TIMEOUT_MS,
+      },
       redis: { cacheUrl: e.REDIS_CACHE_URL, queueUrl: e.REDIS_QUEUE_URL },
       storage: {
         endpoint: e.S3_ENDPOINT,

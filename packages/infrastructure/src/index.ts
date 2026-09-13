@@ -16,6 +16,7 @@ export {
   BaseRepository,
   Database,
   type DatabaseConfig,
+  type DatabaseStats,
   type DrizzleClient,
   KeysetCursor,
   PgActivityArchiveGateway,

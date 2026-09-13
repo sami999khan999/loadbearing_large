@@ -36,6 +36,22 @@ export interface EventShape {
   readonly "queue.job.stalled": { readonly queue: string; readonly jobId: string };
   readonly "queue.schedule.registered": { readonly queue: string; readonly jobId: string };
 
+  readonly "database.pool.saturated": {
+    readonly waiting: number;
+    readonly total: number;
+    readonly max: number;
+    // How long this episode has been going, not how long the process has been up: the
+    // counter resets the moment nobody is waiting.
+    readonly forMs: number;
+  };
+  // The driver's own text. There is no code to normalise against — this is a socket that
+  // died, not a query that failed.
+  readonly "database.pool.error": { readonly message: string };
+  readonly "worker.pool.oversubscribed": {
+    readonly concurrency: number;
+    readonly poolMax: number;
+  };
+
   readonly "maintenance.sweep.completed": {
     readonly sessions: number;
     readonly verifications: number;

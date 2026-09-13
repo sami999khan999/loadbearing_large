@@ -8,6 +8,17 @@ import { z } from "zod";
 const Schema = z
   .object({
     DATABASE_URL: z.url(),
+    // The same server without the pooler. Defaults to `DATABASE_URL`, which is correct
+    // only while nothing is pooling — see docs/reference/env.md.
+    DATABASE_DIRECT_URL: z.url().optional(),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
+    // Today an unreachable Postgres hangs the request for the OS default, which is
+    // longer than every timeout in front of it.
+    DATABASE_POOL_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1).default(5_000),
+    // 30 s here and 120 s in the worker: a request nobody is waiting on may take longer
+    // than one a browser is. The only field whose default differs between the two apps.
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1).default(30_000),
     REDIS_CACHE_URL: z.url(),
     REDIS_QUEUE_URL: z.url(),
 
@@ -160,7 +171,14 @@ export class Env {
   public static containerConfig() {
     const e = Env.parsed;
     return {
-      database: { url: e.DATABASE_URL },
+      database: {
+        url: e.DATABASE_URL,
+        directUrl: e.DATABASE_DIRECT_URL ?? e.DATABASE_URL,
+        poolMax: e.DATABASE_POOL_MAX,
+        poolIdleTimeoutMs: e.DATABASE_POOL_IDLE_TIMEOUT_MS,
+        poolConnectTimeoutMs: e.DATABASE_POOL_CONNECT_TIMEOUT_MS,
+        statementTimeoutMs: e.DATABASE_STATEMENT_TIMEOUT_MS,
+      },
       redis: { cacheUrl: e.REDIS_CACHE_URL, queueUrl: e.REDIS_QUEUE_URL },
       storage: {
         endpoint: e.S3_ENDPOINT,

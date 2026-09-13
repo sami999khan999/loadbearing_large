@@ -159,6 +159,7 @@ export {
   ClickHouseAnalyticsProjector,
   ClickHouseConnection,
   Database,
+  type DatabaseStats,
   LokiLogReader,
   OpenAiEmbeddingProvider,
   PgActivityArchiveGateway,

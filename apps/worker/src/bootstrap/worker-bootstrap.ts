@@ -94,12 +94,30 @@ export class WorkerBootstrap {
       await new ReconcileSchedule(this.container, this.redis.queueClient()).register();
     }
 
+    this.warnIfOversubscribed();
+
     this.container.logger.emit("process.started", {
       service: "worker",
       // The only difference on the wire between a worker running the analytics pipeline
       // and one built without a store to project into.
       consumers: this.workers.length,
     });
+  }
+
+  // Off the workers that actually started, never the consumers in the tree: without a
+  // ClickHouse config the analytics consumer is not running and must not be counted.
+  private warnIfOversubscribed(): void {
+    // `?? 1` is BullMQ's own default, and every consumer here passes a number anyway.
+    const concurrency = this.workers.reduce(
+      (sum, worker) => sum + (worker.opts.concurrency ?? 1),
+      0,
+    );
+    const poolMax = Env.databasePoolMax;
+    if (concurrency <= poolMax) return;
+
+    // A warning, not a throw: a job that holds no connection is legitimate, and plenty
+    // hold none. The operator wants this line before the queue stalls, not after.
+    this.container.logger.emit("worker.pool.oversubscribed", { concurrency, poolMax });
   }
 
   // Idempotent, and a second signal *joins* the drain already running. Returning early
