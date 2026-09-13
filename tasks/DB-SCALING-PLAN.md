@@ -17,7 +17,8 @@ verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same da
 >    `unverified:` naming the command when the proof needs a container the executor lacks.
 >    A `verified:` line means the item's *premise* was tested against a live stack and holds;
 >    a `corrected:` line means it did not and the text above was changed. Neither moves a
->    checkbox: nothing here has been built.
+>    checkbox on its own — both predate the build and are kept because they say *why* an
+>    item reads the way it does.
 > 3. Phases run in order. A phase may start when the previous phase's **Exit** line is true.
 >    Inside a phase, checklists run top to bottom; items inside one are independent unless
 >    **Depends on** says otherwise.
@@ -616,14 +617,19 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
 
 #### 2.A The allowlist carries the policy (`application`, `worker`)
 
-- [ ] `S2.1` **`PartitionedTable` entries** —
+- [x] `S2.1` **`PartitionedTable` entries** —
   `packages/application/src/primitive/partitioned-table.ts`: `ALL` becomes
   `readonly { name, column: "occurred_at" | "created_at", retentionMonths: number | null }[]`,
   frozen; `PartitionedTableName` stays derived; `PartitionedTable.byName(name)` returns the entry.
   `apps/worker/src/consumer/maintenance.consumer.ts` deletes `PRUNE_AFTER_MONTHS` and reads
   `entry.retentionMonths`; the outbox-lag guard stays. **Docs:** `packages/application/docs/reference/ports.md`
   (the `MaintenanceGateway` paragraph), `apps/worker/docs/reference/consumers.md`.
-- [ ] `S2.2` **`MaintenanceGateway.monthlyPartitionsAfter(table, from): Promise<number>`** —
+  `done: 2026-09-13` — `ALL` is three frozen entries and `PRUNE_AFTER_MONTHS` is gone, so the
+  retention for a table lives beside its column instead of in a record the worker kept.
+  One addition the item did not name: **`PartitionedTable.NAMES`**. Several callers iterate the
+  allowlist for names alone, and `ALL` no longer is one — the worker spec caught it, which is what
+  `expect(PartitionedTable.ALL).toContain("activity_log")` was there for.
+- [x] `S2.2` **`MaintenanceGateway.monthlyPartitionsAfter(table, from): Promise<number>`** —
   the port and `PgMaintenanceGateway`, reading `pg_inherits` the way
   `dropMonthlyPartitionsBefore` already does. **Docs:** `packages/application/docs/reference/ports.md`.
   `corrected: 2026-09-13, second pass` — `ensureMonthlyPartitions` is not safe to call from two
@@ -636,7 +642,20 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   it. Fix here, in the gateway: `pg_advisory_xact_lock` on the table name inside a transaction
   around probe-and-create, keeping the `to_regclass` answer the caller needs. `S2.3` depends on
   this.
-- [ ] `S2.3` **Runway at boot and the low-runway line** — `worker-bootstrap.ts` enqueues
+  `done: 2026-09-13` — both halves. `monthlyPartitionsAfter` counts strictly after the month
+  `from` falls in, off the same `pg_inherits` read the drop uses (now one private `childrenOf`).
+  `ensureMonthlyPartitions` runs inside `unitOfWork.run` under
+  `pg_advisory_xact_lock(namespace, lockFor(table))`, which is why `PgMaintenanceGateway` now
+  takes a `UnitOfWork` — the fifth argument-shape change in the container, and the last one Phase
+  2 needs.
+  **The race was reproduced before the guard was written**, with a forced interleaving: two
+  transactions both probing `to_regclass` absent, then creating — the second gets `42P07`. Under
+  `Promise.all` through the public API it usually does *not* interleave that way, which is the
+  trap: the first version of the spec passed with the lock removed. The spec now holds the same
+  lock from another connection and asserts the ensure blocks until it commits, and it fails
+  without the lock. `lockFor` is public for that reason — an advisory lock is a cross-process
+  protocol, so another process naming the same lock is the contract, not a test backdoor.
+- [x] `S2.3` **Runway at boot and the low-runway line** — `worker-bootstrap.ts` enqueues
   `partitions` once at start with a fixed `jobId: "partitions-boot"` (BullMQ dedupes a second
   replica's copy), and `MaintenanceConsumer.partitions()` emits `partition.runway.low`
   (`warn`, `{ table, monthsAhead }`) when `monthlyPartitionsAfter` returns fewer than two after
@@ -656,6 +675,23 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   — a run that creates zero is the healthy case and the starved case alike.
   **Depends on:** `S2.2`'s second-pass correction — without the lock, the boot-time call from a
   second replica fails on `42P07` and the failed job retries into the same race.
+  `corrected: 2026-09-13, built` — **"after ensuring" makes the line unfireable.**
+  `ensureMonthlyPartitions` with `MONTHS_PER_RUN = 3` always leaves two months ahead, and the
+  threshold is two, so a check after it is a check on the run's own work. The same defect as
+  `S1.5`'s probe window, found the same way — by running it and watching nothing happen.
+  The check reads the runway **before** ensuring. That also makes it the more useful signal: the
+  run is about to fix the runway, so what an operator needs to know is that it *had* to — the
+  monthly schedule is not keeping up, or something dropped a month by hand. A spec pins the
+  ordering so it cannot drift back.
+  `done: 2026-09-13` — `PartitionsSchedule.runOnce()` enqueues one `partitions` job at boot with
+  `jobId: "partitions-boot"`, before the schedules register. Watched on a live worker with five
+  future `notifications` partitions dropped: `partition.runway.low table=notifications
+  monthsAhead=0`, then `maintenance.partitions.ensured created=2`. With the runway healthy the
+  warning stays silent and only the `ensured` lines appear.
+  One note for whoever runs this next: **`pkill` does not exist in this environment**, and a
+  failed `pkill` left several workers running that quietly competed for the boot job — the new
+  worker's job was being processed by an older one, whose output went to an older log. Stop
+  workers with `Stop-Process` and check for strays before reading a log and believing it.
 
 #### 2.B The guard and the proof (`tooling`, `infrastructure`)
 
@@ -713,6 +749,14 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   would assert today's behaviour — every inbox page and every bell count touching every month,
   six today and fourteen once `notifications` retention fills its year.
   The spec is still worth having; it now has a fix to assert against. **Depends on:** `S2.9`.
+  `corrected: 2026-09-13, measuring S2.9` — **"exactly one `Append` child" is unreachable for
+  `list` by any lower bound.** A `created_at >= x` predicate cannot prune a *future* partition:
+  rows could legitimately land there. A 30-day floor against the fifteen-partition steady state
+  scans **four** — the current month, the one before it, and the two months of runway ahead. One
+  is reachable only with a floor *and* a ceiling, which a "newest first" read does not have.
+  Write the assertion as a ceiling on partitions scanned, or as "the retention tail is pruned",
+  and say which. `markRead`'s equality and the activity rollup's closed range are the two places
+  "exactly one" is honest.
 - [ ] `S2.6` **`messages` — the recorded exception** — no code. `messaging.schema.ts`'s comment
   gains the trigger: reopen when one month of `messages` passes 50 M rows or
   `messages_keyset_idx` passes 10 GB, and the shape to build then is `PARTITION BY RANGE
@@ -731,7 +775,7 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `docs/opinions/data-and-scale.md` §4.2 rewritten around the allowlist entry shape;
   `docs/ai/rules/data.md` partition bullet updated; `docs/setup/13` §13.6 hand-edit paragraph
   points at §21.
-- [ ] `S2.9` **The reads get a partition bound** — filed by the `EXPLAIN` at `S2.5`, which found
+- [!] `S2.9` **The reads get a partition bound** — filed by the `EXPLAIN` at `S2.5`, which found
   that three of the four hot reads over a partitioned table scan every month. The shape is a
   floor, not a window: a read that walks backwards in time needs a lower bound it can push to
   the pruner, and the keyset cursor is the wrong half of the predicate.
@@ -748,6 +792,33 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `packages/infrastructure/docs/reference/partitions.md` (`S2.8`),
   `packages/application/docs/reference/ports.md` (the `UnreadQuery` shape).
   **Depends on:** `S2.1`.
+  `corrected: 2026-09-13` — **this item's own default is worse than doing nothing**, and the
+  measurement says so. Against a scratch mirror of `notifications` at the steady state this item
+  is about — 150 000 rows, 200 users, the full fifteen partitions, both hot indexes —
+  `EXPLAIN (ANALYZE, BUFFERS)` on the real query shapes:
+
+  | query | time | partitions | shared buffers |
+  |---|---|---|---|
+  | `list`, unbounded | 0.21 ms | 15 | 222 |
+  | `list`, 30-day floor | 0.15 ms | **4** | 75 |
+  | `countUnread`, unbounded | 0.87 ms | 15 | 363 |
+  | `countUnread`, 30-day floor | 0.26 ms | **4** | 162 |
+  | `countUnread`, **retention-horizon floor** | **1.57 ms** | 15 | 384 |
+
+  The last row is this item as written. A twelve-month floor against twelve months of retention
+  prunes nothing and adds a filter to every row it still visits, so it is **slower than the
+  unbounded query it was meant to fix**. Delete that default whatever else happens here.
+  Two things the numbers settle beyond the default. The absolute cost is sub-millisecond, and it
+  is roughly **constant in row count** — the indexes lead with `(organization_id, user_id)`, so
+  what the partition count buys is index probes, not rows. It scales with *retention*, which is
+  capped at fifteen. And a floor tight enough to be worth having (30 days) changes what the badge
+  counts, which is a product decision rather than an engineering one.
+  **Blocked on that decision**, with three shapes measured: drop the item and record the numbers
+  with a trigger to revisit; a 30-day floor on the first page and the bell count, accepting that
+  an unread notification older than 30 days stops counting; or a floor on `list` alone with a
+  widening retry, which preserves semantics exactly and leaves `countUnread` at 0.87 ms.
+  `unverified:` the outbox drain's bound — its partitions are near-empty by design, so the same
+  measurement has to be taken there rather than assumed from these.
 
 **Exit.** `pnpm check:architecture` is 21/21 with §21 passing on the twenty-two existing
 migrations; removing `notifications` from `PartitionedTable.ALL` fails §21; starting the worker
@@ -1242,5 +1313,6 @@ constraint `S4.1` names and on nothing else.
 |---|---|---|
 | 2026-09-13 | @sami | Created from a read of the tree at `c72ca9e`: four phases covering connection pooling and pgBouncer, partition policy and guards, the virtual-sharding seam with a pluggable strategy, a directory and an env map, and the filed physical split |
 | 2026-09-13 | @sami | Premises tested against a live stack and the tree at `49703c9`; no phase started. Four hold as written — the startup-parameter trap (worse than described: through the pooler `statement_timeout` reads `0`, not a smaller number), `SET LOCAL` in `PgUnitOfWork.run`, `ALTER ROLE` inside drizzle's migrator, and FNV-1a in SQL matching TypeScript on all ten vectors. `S3.14`'s guess is confirmed by experiment and is total, not partial: an oRPC middleware's `AsyncLocalStorage` reaches a unary handler and reaches an async-generator handler on no frame at all. Four are wrong and are corrected in place: `S1.11` (`DETACH … CONCURRENTLY` succeeds through a transaction pooler; the transaction, not the pooler, is the constraint), `S2.5` (the notification read carries no lower bound on the partition column, so it scans every month — new `S2.9`), `S3.12` (four of six use-case group names do not exist), `S3.18` (`CROSS_PLACEMENT_KNOWN` is one file and §22 as specified could not see it — new `S3.23`; and §9's `TENANT_EXEMPT` must not be derived from `CatalogTable`). Two smaller ones: the migration numbers shift by one, and `S1.7` needs a pooler reconnect it did not ask for |
+| 2026-09-13 | @sami | **Phase 2, section 2.A built.** The allowlist carries each table's column and retention (`PRUNE_AFTER_MONTHS` deleted), `monthlyPartitionsAfter` lands, `ensureMonthlyPartitions` runs under a per-table advisory lock, and the worker enqueues a `partitions` job at boot. Two findings. The `42P07` race is real and was reproduced with a forced interleaving before the guard was written — and the first spec for it passed with the lock removed, because `Promise.all` through the public API does not reliably interleave; it now holds the lock from another connection instead. And `partition.runway.low` as specified could never fire: the check ran after an ensure that always leaves two months ahead, so it reads its own work. It now reads before, which is also the more useful signal. `S2.9` is **blocked on a product decision**: measured at the fifteen-partition steady state the unbounded reads cost 0.21–0.87 ms and are constant in row count, and the item's own retention-horizon default measures **slower** than no bound at all (1.57 ms) |
 | 2026-09-13 | @sami | **Phase 1 built and its Exit met.** Pool configuration, `Database.stats()`, the saturation and oversubscription lines, migration `0022`'s role floor, `SET LOCAL` in `PgUnitOfWork`, pgBouncer in the core stack, the scripts on `DATABASE_DIRECT_URL`, the archive on a direct handle with a FINALIZE recovery, `pooled.smoke.spec.ts`, and the docs. Four things the build changed that verification had not: `S1.5`'s fixed 5 s window could never fire against a 5 s connect timeout and is now derived from it; `S1.6` sums 19 rather than 20, because the analytics consumer does not start without ClickHouse; `PgUnitOfWork` needed `sql.raw` because Postgres takes no bind parameter in a `SET`, and a nested `run` must set nothing at all; and the Better Auth smoke case is impossible where the plan put it, because `infrastructure` sits left of `auth`. `S1.10`'s `boot-smoke.mjs` port wait was dropped rather than built |
 | 2026-09-13 | @sami | Second pass, stricter: the first pass's own rigor gaps closed and every tree claim outside the fourteen items checked. Confirmed by measurement: drizzle's real statements with bound parameters scan every partition with zero runtime pruning (`S2.5` table rewritten from them); S3.14 over a real `RPCHandler` and a `Request`, frame 0 included, with the snapshot fix; FNV-1a on multibyte keys; the whole infrastructure suite — 26 files, 145 tests — green through pgBouncer; boot smoke green through it. Newly found: a pgBouncer **restart** kills an idle worker (`Database` has no `pool.on("error")`; `S1.1`) while `RECONNECT` does not; `server_reset_query` never runs in transaction mode, so one session-level `SET` poisoned all 25 fresh clients (`S1.7`, `S1.13`); pooler-side queueing is invisible to `waitingCount` (`S1.4`); S1.9's port mapping and healthcheck are wrong for the image; an interrupted `DETACH CONCURRENTLY` leaves a month invisible **and unwritable** until `FINALIZE`, and `reattach()` cannot recover it (`S1.11`); `drop table` on a partition locks the parent, so maintenance DDL must keep a short `lock_timeout` (`S1.11`); `ensureMonthlyPartitions` races between replicas with `42P07` (`S2.2`); the worker's routed paths run under the NIL platform principal with the tenant in the payload, so `keyOf(principal)` cannot route them (`S3.11`, `S3.15`); four catalog transactions bypass `PgUnitOfWork` (`S3.8`); the smoke harness has no database and bans `process.env`, so `pooled.spec.ts` and `sharded.spec.ts` cannot exist as named (`S1.12`, `S3.20`); §23's real sites and the fifth `new Database(` (`S3.18`); nine routed→catalog FKs, not two (`S3.20`, `S4.1`); `workflow.md:14` already says `18`. First-pass text fixed: fifteen `run` sites not sixteen, `member` is four not five, and the `DISCARD ALL` mechanism |
