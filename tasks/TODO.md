@@ -1,6 +1,6 @@
 ---
 title: TODO — loadbearing starter kit
-updated: 2026-09-12
+updated: 2026-09-13
 owner: sami
 schema: todo/v1
 ---
@@ -224,6 +224,12 @@ probe.
   - **Files:** `tasks/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
+- [ ] `T-037` **Database scaling plan: connection pooling, partitioning, virtual sharding** `@sami` `P1` `~80h` `#db` `#infra`
+  - **Goal:** One pool per process at a hardwired ten, no pooler, partition policy living in a worker constant with no assertion over the hand-edited DDL, and no routing seam — so `data-and-scale.md` §5's "shard by `organization_id`" is weeks because everything changes at once. One plan builds the knobs, the guards and the seam, and files the physical split.
+  - **Done when:** Every built phase in [`DB-SCALING-PLAN.md`](DB-SCALING-PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `tasks/DB-SCALING-PLAN.md`
+  - **Depends on:** `none` — Phase 1 of the plan is independent of `T-036`; Phase 3 routes the tables `T-036` added.
+  - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: a pluggable `ShardingStrategy` with `organization_id` as the shipped key, placement by directory row rather than by hash, 256 virtual shards fixed forever, three table placements with a transaction tripwire, pgBouncer always on with timeouts moved to the role, and the two-node proof filed behind the foreign-key decision.
   - **Phase 1 complete, 2026-09-12.** `C1.1`–`C1.25` are all `[x]` across six commits. Every mail
     in the system — Better Auth's four and the invitation — is now a job on `QueueName.MAIL`,
     rendered by `MailConsumer` in the worker and sent through `EmailSender`. No new package, no new
@@ -472,3 +478,4 @@ probe.
 | 2026-09-12 | @sami   | Phase 1 of `T-036` built: one mail pipeline, every message a queue job. `QueueName.MAIL`, `MailPublisher`/`MailRenderer`, the template manifest, `MailLayout`, `MailConsumer`, and both mailers moved onto it. `DigestComposer` deleted; `.composer.ts` retired with it |
 | 2026-09-12 | @sami   | Filed `T-036` and `COMMUNICATION-PLAN.md`: six phases for mail, the outbox, notifications, real-time and messaging. `T-031` annotated with the two corrections Phase 2 makes |
 | 2026-09-12 | @sami   | Revised Phase 1 on review: hand-written HTML templates instead of a react-email package, and no mail table — a send is a queue job. The plan now introduces no new package and no new dependency |
+| 2026-09-13 | @sami   | Filed `T-037` and `DB-SCALING-PLAN.md`: four phases for connection pooling and pgBouncer, partition policy and guards, the virtual-sharding seam with a pluggable strategy, a directory and an env map, and the filed physical split |
