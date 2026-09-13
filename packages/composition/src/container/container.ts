@@ -347,7 +347,9 @@ export class Container {
     this.storage = new S3StorageGateway(config.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
-    this.unitOfWork = new PgUnitOfWork(this.database, this.transactions);
+    this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
+      statementTimeoutMs: config.database.statementTimeoutMs,
+    });
     this.maintenance = new PgMaintenanceGateway(this.database, this.transactions);
 
     // ── the swap points ──

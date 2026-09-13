@@ -41,6 +41,7 @@ export {
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
+  type PgUnitOfWorkConfig,
   PgVectorStore,
   TransactionScope,
 } from "./pg/index.js";

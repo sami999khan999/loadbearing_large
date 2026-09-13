@@ -32,4 +32,8 @@ export {
   PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";
-export { PgUnitOfWork, TransactionScope } from "./transaction/index.js";
+export {
+  PgUnitOfWork,
+  type PgUnitOfWorkConfig,
+  TransactionScope,
+} from "./transaction/index.js";

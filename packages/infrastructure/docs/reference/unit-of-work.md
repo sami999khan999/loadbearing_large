@@ -127,3 +127,33 @@ expect(counter.count).toBe(3);
 `PgCapabilityRepository.resolveFor` is the hottest query in the system. "Three queries" decays silently
 — someone adds a lookup inside the loop and it becomes 3 + N, invisible at ten users and fatal at five
 thousand. Without the logger seam there is no way to notice.
+
+## The statement timeout is set here, not on the connection
+
+`PgUnitOfWork` takes an optional `statementTimeoutMs`, and when it is set `run()` issues
+`set local statement_timeout = <ms>` as the first statement of the transaction. The worker passes
+120 000; the web app passes 30 000, which is already the role floor, so the statement is a no-op
+there and costs one round trip per transaction.
+
+**`SET LOCAL`, never `SET`.** This is the whole reason the knob lives here rather than on the pool.
+`pg` can send `statement_timeout` as a startup parameter, and that works on a direct connection —
+but through pgBouncer in transaction mode the parameter is dropped, and `SHOW statement_timeout`
+reads `0`. Unlimited, on every application connection. Migration `0022` puts a floor back with
+`ALTER ROLE`, and `SET LOCAL` is how a transaction raises it above that floor for work that needs
+longer, because it dies with the transaction and cannot follow the server connection to the next
+client.
+
+A plain `SET` would do the opposite of what it looks like. In transaction mode pgBouncer does not
+run `server_reset_query` at all, so a session-level `SET` on a pooled connection is inherited by
+every client that later gets handed that connection. Measured: one client setting `7s` was followed
+by twenty-five fresh clients all reading `7s`. **Nothing in this repository may issue a
+session-level `SET`.**
+
+**A nested `run()` sets nothing.** The inner call is a savepoint on the same transaction, and
+`SET LOCAL` inside a savepoint outlives a rollback to it — the outer transaction would silently keep
+the inner call's ceiling. `applyStatementTimeout` returns early when a transaction is already in
+scope.
+
+The spec asserts both directions with two values that are neither the default: 25 s on the pool,
+90 s inside `run()`, and 25 s again on the pool afterwards. A `SET LOCAL` that never ran and one
+that leaked both fail it.
