@@ -1171,6 +1171,13 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   page regardless of size (rows + one lateral), `list` messages one, `unreadCounts` one;
   partition-bounded cleanup as `pg-activity-replay.reader.spec.ts` does (`T-026`).
   `Container.messaging = { … }`; the subscriber joins the frozen list in `C2.9`.
+  `done: 2026-09-13` — the two adapters, the cursor codec and the container wiring. **The
+  fixed-query-count integration specs are NOT written**, which is the one piece of Phase 5
+  outstanding: they need a live Postgres to mean anything, and a version against a fake would
+  assert only that drizzle builds the query the spec already spells out. Write them in the same
+  run as the Exit line. Until then the query counts this item promises — two statements for a
+  conversation page, one for a message page, one for `unreadCounts` — are a design claim and not
+  a measured one.
 - [x] `C5.9` **Notification policy rows** — `message.sent` in a **direct** conversation →
   kind `message.received`, recipients: members minus author, in-app `immediate`, email
   `digest` by default; suppressed while the recipient already has an unread `message.received`
