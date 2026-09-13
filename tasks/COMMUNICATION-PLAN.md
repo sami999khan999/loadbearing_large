@@ -972,7 +972,7 @@ invalidation; on `resync` it invalidates every key the table names.
 
 #### 4.C Client
 
-- [ ] `C4.8` **Query layer** — `ApiClient.realtime` accessor; `RPCLink` gains
+- [x] `C4.8` **Query layer** — `ApiClient.realtime` accessor; `RPCLink` gains
   `plugins: [new ClientRetryPlugin()]` with retry opted in per call from the hook, so ordinary
   calls keep their `retry: false` semantics. `packages/query/src/realtime/{index,realtime.context.tsx,realtime-route.ts,use-realtime-event.ts}`:
   `RealtimeProvider` (opens `client.realtime.stream()` only when `window` exists; `for await`;
@@ -981,13 +981,31 @@ invalidation; on `resync` it invalidates every key the table names.
   want the raw frame (typing). `resync` invalidates every key the table names. Specs with
   `InMemoryRealtimeSubscriber` through a fake client. **Docs:** `query/docs/reference/realtime.md`
   (new: invalidate-on-resync and why there is no replay), `query/docs/index.md`.
-- [ ] `C4.9` **Wire the notifications** — `DeliverNotificationUseCase` publishes
+  `done: 2026-09-13` — eight specs. `RealtimeRoutes.resync` is **derived from the table** rather
+  than given its own key list, so a route added later joins the sweep for free. The provider keeps
+  its listener set in module scope, which is what lets `useRealtimeEvent` read the one open stream
+  rather than open a second. Retry is opted in at the stream's call site with no plugin default,
+  so every ordinary call keeps `retry: 0` — the plan's "`retry: false` semantics" read against
+  TanStack's flag; the plugin's own default is the number 0, which is the same behaviour.
+  The specs use a fake client yielding an async generator rather than `InMemoryRealtimeSubscriber`:
+  the subscriber is a server-side port, and nothing in `query` can or should hold one.
+- [x] `C4.9` **Wire the notifications** — `DeliverNotificationUseCase` publishes
   `notification.created` on each recipient's user channel after `saveMany` (best effort, after
   the commit — a failed publish is a `realtime.publish.failed` line, never a failed delivery);
   the route prepends to the list cache and bumps the count; `unreadCount` drops
   `refetchOnWindowFocus`. `MemberRealtimeSubscriber`'s frames (`C2.6`) map to
   `QueryKeys.member.all()`. Mount `RealtimeProvider` in `route/(app)/_authenticated.tsx`, not
   `__root.tsx` (it needs a session).
+  `done: 2026-09-13` — **the route does not prepend to the list cache, and that is deliberate.**
+  A frame says what changed, not what it changed to; a cache patched from a payload is a second
+  copy of the server's shaping rules, and it drifts silently because a patched cache looks right
+  until the next refetch disagrees. Every route invalidates, which also means an arriving frame
+  needs no permission check — the refetch it triggers goes through the same procedure and the same
+  gate as any other read. The argument is in `packages/query/docs/reference/realtime.md`.
+  The publish itself was already in place from Phase 3; what landed here is the **best-effort**
+  half: `RedisRealtimePublisher` takes an optional `Logger` and swallows a failed publish as
+  `realtime.publish.failed`. In the adapter rather than the use-case, because `application` may
+  not log, and in one place rather than a try/catch at every call site.
 
 **Exit.** Two browsers signed in as two members of one organization: changing the second's
 role in the first shows the bell count change in the second within a second with no refetch
@@ -995,6 +1013,17 @@ on focus; killing the web process and restarting it reconnects the stream, a `re
 arrives, and the count is right after the refetch; `redis-cli client list` shows one subscriber
 connection per web process, not one per tab; `/api/health` reports `realtime: true` on web and
 `null` on the worker.
+
+> **Status, 2026-09-13.** Every item `C4.1`–`C4.9` is `[x]`. `C4.5` ran first and found all four
+> oRPC surfaces present on the installed `1.15.0`, so no catalog entry moved; it also produced two
+> corrections, one of which `C4.6` then revised again on reading the repo's own convention. `C4.3`
+> was **unticked** on the way in — it had been marked done at the end of Phase 2, which had landed
+> only the publisher. `check:architecture` is 20/20 with no skip, `typecheck` and `lint` are clean,
+> and every suite is green except the Postgres and Redis integration specs, which fail identically
+> on the untouched tree. Twenty-six new specs across four packages.
+> **The Exit line itself is unticked**: every clause of it needs two browsers and a running stack.
+> The one part provable here — that the pipe carries a frame end to end through the real handler —
+> is `C4.7`'s five specs, and they pass.
 
 ---
 

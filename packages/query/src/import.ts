@@ -33,6 +33,8 @@ export type {
   NotificationDto,
   PaginationQuery,
   QueuedDocumentDto,
+  RealtimeEventName,
+  RealtimeMessage,
   RevokeApiKeyInput,
   RevokeInvitationInput,
   RoleDto,
@@ -65,4 +67,4 @@ export {
 } from "@tanstack/react-query";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export { createContext, type ReactNode, useContext } from "react";
+export { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";

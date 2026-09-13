@@ -91,7 +91,9 @@ export {
   ApiKeyQueries,
   createQueryClient,
   MemberQueries,
+  RealtimeProvider,
   RoleQueries,
+  useApiClient,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────

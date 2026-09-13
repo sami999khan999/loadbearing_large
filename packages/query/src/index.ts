@@ -9,6 +9,15 @@ export { NotificationMutations, NotificationQueries } from "./notification/index
 export { OrganizationMutations } from "./organization/index.js";
 export { RoleMutations, RoleQueries } from "./rbac/index.js";
 export {
+  RealtimeProvider,
+  type RealtimeProviderProps,
+  RealtimeRoutes,
+  type RealtimeState,
+  subscribeToFrames,
+  useRealtime,
+  useRealtimeEvent,
+} from "./realtime/index.js";
+export {
   ApiClientProvider,
   type ApiClientProviderProps,
   type AppMutationOptions,

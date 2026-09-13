@@ -22,14 +22,13 @@ export class NotificationQueries {
     });
   }
 
-  // `refetchOnWindowFocus` until Phase 4 streams it. The badge being a tab-switch out of
-  // date is the honest interim, and the option is what Phase 4 removes.
+  // No `refetchOnWindowFocus`: the stream invalidates this key the moment a row is
+  // written, so refetching on every tab switch is a request that changes nothing.
   public static unreadCount(client: ApiClient) {
     return queryOptions({
       queryKey: QueryKeys.notification.unreadCount(),
       queryFn: () => client.notification.unreadCount(),
       staleTime: 30_000,
-      refetchOnWindowFocus: true,
     });
   }
 

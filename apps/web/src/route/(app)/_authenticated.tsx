@@ -8,8 +8,10 @@ import {
   NotificationBell,
   OrganizationClient,
   OrganizationSwitcher,
+  RealtimeProvider,
   ROUTES,
   SignOutButton,
+  useApiClient,
   useCapabilities,
   useMemo,
   useMessages,
@@ -56,6 +58,9 @@ function AuthenticatedLayout() {
   const router = useRouter();
   const { session, queryClient, appearance, appearanceSnapshot } = Route.useRouteContext();
 
+  // Here rather than in `__root`, because a stream opened before there is a session is
+  // a request that 401s and then retries forever.
+  const api = useApiClient();
   const auth = useMemo(() => new AuthClient({ baseUrl: Endpoint.auth }), []);
   const organization = useMemo(() => new OrganizationClient(auth), [auth]);
 
@@ -73,7 +78,7 @@ function AuthenticatedLayout() {
   const switched = refresh("/");
 
   return (
-    <>
+    <RealtimeProvider client={api}>
       {
         // First in the tab order and visible only while focused: without it a keyboard
         // reader walks the whole header again on every navigation.
@@ -127,6 +132,6 @@ function AuthenticatedLayout() {
       <main id="main" tabIndex={-1}>
         <Outlet />
       </main>
-    </>
+    </RealtimeProvider>
   );
 }
