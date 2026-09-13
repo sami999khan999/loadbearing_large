@@ -8,6 +8,53 @@ source: tree at 927cdec (main), 2026-09-12
 
 # Communication plan
 
+## Resume here
+
+**State, 2026-09-13.** Phases 1–5 are built and pushed on `claude/sleepy-franklin-yqa9av`.
+Phase 6 is filed and deliberately not built. Every closed item carries a `done:` note saying what
+actually landed and where it deviated; every phase ends in a status block. `check:architecture` is
+20/20, `check:contrast`, `typecheck`, `lint` and every unit suite are green.
+
+**Nothing that needs a container has ever run.** It was built without Docker, so the Postgres and
+Redis integration suites, both smoke suites, all five **Exit** lines and every migration are
+unproven. Fourteen `unverified:` notes mark exactly which item needs what — `grep -n "unverified:"`
+this file to list them.
+
+### The order to run it in
+
+```bash
+pnpm install
+pnpm build:packages && pnpm --filter @loadbearing/web build
+pnpm infra:up
+pnpm db:migrate          # ← the first thing that can fail. See below.
+pnpm db:seed
+pnpm --filter @loadbearing/infrastructure test    # 30 specs that have never passed
+pnpm --filter @loadbearing/composition test       # 2 more
+pnpm smoke
+pnpm dev                 # Mailpit on :8025; the worker must run for any mail to send
+```
+
+Then walk the five **Exit** lines, phase by phase. Two of them need two browsers signed in as two
+members of one organization.
+
+### Check these two first
+
+1. **Migration `0017` was edited in place.** Its unique index omitted the partition key, which
+   Postgres refuses outright — `db:migrate` would have aborted there. The fix depends on
+   notification rows taking `created_at` from the event rather than the clock, so if delivery
+   ever writes a duplicate, that is where to look. Phase 3's status block has the detail.
+2. **`messages` is deliberately not partitioned**, against `docs/ai/rules/data.md`. The argument
+   is at the table and in `packages/application/docs/reference/messaging.md`. Disagree with it
+   before the table holds rows, not after.
+
+### What is outstanding
+
+- **`C5.8`'s fixed-query-count integration specs are not written.** The one gap inside a built
+  phase. They need a live Postgres, so write them during the run above.
+- **Phase 6**, eleven items, filed with their reasoning. `C6.8` (the 10× load test) is the one
+  worth promoting: it is the only one that could invalidate something already built.
+
+
 > **How to use this file**
 >
 > 1. Every item has a unique ID (`C1.3`). Never reuse or renumber one.
