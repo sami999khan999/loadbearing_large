@@ -840,7 +840,7 @@ invalidation; on `resync` it invalidates every key the table names.
   two fakes are **not** wired together by default, because nearly every spec asks only what was
   published; a spec asserting arrival builds the hub itself. `typing` stays deferred to Phase 5,
   for the reason above.
-- [ ] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
+- [x] `C4.3` **Redis adapters** — `infrastructure/src/redis/redis-realtime.publisher.ts`
   (cache client, `PUBLISH` of the JSON envelope, `id = Uuid.v7()`), `redis-realtime.subscriber.ts`
   (`constructor(redis /* subscriber role */, config: { maxStreamsPerUser; maxAgeMs; queueSize })`,
   the demux, ref counting and bounded sinks above); `RedisConnection` gains the `"subscriber"`
@@ -853,6 +853,17 @@ invalidation; on `resync` it invalidates every key the table names.
   `unticked: 2026-09-12` — was marked `[x]` at the end of Phase 2, which was wrong: Phase 2
   landed `RedisRealtimePublisher` and nothing else. The subscriber, the `"subscriber"` role and
   every spec listed here are Phase 4's, and the tick was hiding them.
+  `done: 2026-09-13` — the subscriber, the role, eight branch specs and two smoke specs.
+  Three decisions. The cap counts **user** channels only, via a new `RealtimeChannels.isUser`:
+  a conversation channel is one channel with many readers, and counting it the same way would
+  cap the room rather than the person the first time Phase 5 opens one. The subscriber client
+  carries the cache client's key prefix even though `PUBLISH`/`SUBSCRIBE` declare no key, because
+  `SPUBLISH`/`SSUBSCRIBE` do and the asymmetry would be silent. And `RedisConnection.opened(role)`
+  answers whether a connection exists without creating one, which `C4.4`'s `realtime: null` needs
+  — `healthy()` alone would open a subscriber connection on the worker in order to report that it
+  has none. Every frame is `safeParse`d rather than cast, because `at` crosses as a string and the
+  contract coerces it.
+  **unverified:** the two smoke specs need a live Redis (`pnpm infra:up`).
 - [ ] `C4.4` **Container + config + health** — `realtime: RealtimePublisher`,
   `realtimeSubscriber: RealtimeSubscriber` (public — the router needs it), built in every
   process; `ContainerConfig.realtime: { maxStreamsPerUser; streamMaxAgeSeconds }` from env

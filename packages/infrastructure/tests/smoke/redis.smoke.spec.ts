@@ -1,8 +1,14 @@
-import { QueueName } from "@loadbearing/application";
+import { QueueName, RealtimeChannels } from "@loadbearing/application";
 import { Queue } from "bullmq";
 import { afterAll, describe, expect, inject, it } from "vitest";
 import { BullMqQueuePublisher } from "../../src/bullmq/index.js";
-import { RedisCacheStore, RedisConnection } from "../../src/redis/index.js";
+import type { RealtimeMessage } from "../../src/import.js";
+import {
+  RedisCacheStore,
+  RedisConnection,
+  RedisRealtimePublisher,
+  RedisRealtimeSubscriber,
+} from "../../src/redis/index.js";
 import type {} from "./support/stack.js";
 
 const stack = inject("stack");
@@ -28,6 +34,63 @@ describe("RedisCacheStore against the running instance", () => {
   it("answers healthy for both instances, separately", async () => {
     expect(await redis.healthy("cache")).toBe(true);
     expect(await redis.healthy("queue")).toBe(true);
+  });
+});
+
+describe("realtime against the running cache instance", () => {
+  const ORG = "00000000-0000-7000-8000-000000000001";
+  const USER = "00000000-0000-7000-8000-000000000002";
+  const CHANNEL = RealtimeChannels.user(ORG, USER);
+
+  // The one thing no fake can answer: that the publisher's channel string and the
+  // subscriber's are the same string after ioredis has finished with both.
+  it("delivers a published frame to a subscriber on the other client", async () => {
+    const publisher = new RedisRealtimePublisher(redis.client());
+    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+      maxStreamsPerUser: 8,
+      maxAgeMs: 5_000,
+      queueSize: 256,
+    });
+    const controller = new AbortController();
+    const received: RealtimeMessage[] = [];
+
+    const reading = (async () => {
+      for await (const message of subscriber.subscribe([CHANNEL], controller.signal)) {
+        received.push(message);
+        break;
+      }
+      controller.abort();
+    })();
+
+    // The SUBSCRIBE has to be on the wire before the PUBLISH: pub/sub has no replay, so
+    // a frame published first is not late, it is gone.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await publisher.publish(CHANNEL, {
+      kind: "event",
+      id: "00000000-0000-7000-8000-00000000000a",
+      name: "member.changed",
+      at: new Date("2026-01-01T00:00:00Z"),
+      payload: { organizationId: ORG },
+    });
+    await reading;
+
+    expect(received.map((message) => message.id)).toEqual(["00000000-0000-7000-8000-00000000000a"]);
+  });
+
+  // PING is one of the eight commands valid in subscriber mode, which is what lets the
+  // health check report on the connection the streams are actually on.
+  it("answers healthy on a connection that has entered subscriber mode", async () => {
+    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+      maxStreamsPerUser: 8,
+      maxAgeMs: 50,
+      queueSize: 8,
+    });
+    const controller = new AbortController();
+
+    for await (const _ of subscriber.subscribe([CHANNEL], controller.signal)) break;
+
+    expect(redis.opened("subscriber")).toBe(true);
+    expect(await redis.healthy("subscriber")).toBe(true);
   });
 });
 

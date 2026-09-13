@@ -14,4 +14,10 @@ export class RealtimeChannels {
   public static user(organizationId: string, userId: string): RealtimeChannel {
     return `org:${organizationId}:user:${userId}` as RealtimeChannel;
   }
+
+  // The per-user stream cap counts only these. A conversation channel is one channel with
+  // many readers, and counting it the same way would cap the room rather than the person.
+  public static isUser(channel: RealtimeChannel): boolean {
+    return /^org:[^:]+:user:[^:]+$/.test(channel);
+  }
 }
