@@ -29,6 +29,15 @@ const NOTIFICATION: readonly PermissionKey[] = Object.freeze([
   "notification.preference.update",
 ]);
 
+// The four everyone in a conversation needs. `manage` is not here: renaming a channel
+// and removing people from it is administration, and it goes to `admin` alone.
+const MESSAGING: readonly PermissionKey[] = Object.freeze([
+  "messaging.conversation.read",
+  "messaging.conversation.create",
+  "messaging.message.send",
+  "messaging.message.update",
+]);
+
 // Frozen at module load rather than left a `static readonly`, which freezes the binding
 // and not the array — the shape `docs/ai/rules/classes.md` bans.
 const ROLES: readonly SystemRole[] = Object.freeze([
@@ -43,11 +52,18 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       "member.read",
       "member.invite",
       ...NOTIFICATION,
+      ...MESSAGING,
+      "messaging.conversation.manage",
     ],
   },
-  { key: "member", name: "Member", scope: "org", permissions: ["member.read", ...NOTIFICATION] },
-  // Never `guest`: an inbox is a thing you hold, and a guest holds no memberships to
-  // be notified about.
+  {
+    key: "member",
+    name: "Member",
+    scope: "org",
+    permissions: ["member.read", ...NOTIFICATION, ...MESSAGING],
+  },
+  // Never `guest`: an inbox and a conversation are both things you hold, and a guest
+  // holds no memberships to be notified about or to talk in.
   { key: "guest", name: "Guest", scope: "org", permissions: [] },
 ]);
 

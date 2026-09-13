@@ -17,6 +17,23 @@ export class RealtimeRoutes {
     "notification.created": (queryClient) => {
       void queryClient.invalidateQueries({ queryKey: QueryKeys.notification.all() });
     },
+    // The user-stream frames. A conversation's own frames ride the conversation channel
+    // and are handled by the component that opened it, not by this table.
+    "conversation.changed": (queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.conversation.all() });
+    },
+    "conversation.read": (queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.conversation.all() });
+    },
+    "message.sent": (queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.message.all() });
+    },
+    "message.edited": (queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.message.all() });
+    },
+    "message.deleted": (queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.message.all() });
+    },
   });
 
   public static apply(queryClient: QueryClient, name: RealtimeEventName): void {

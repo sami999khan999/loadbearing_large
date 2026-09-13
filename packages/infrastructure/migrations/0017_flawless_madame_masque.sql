@@ -46,5 +46,10 @@ CREATE INDEX "notifications_inbox_idx" ON "notifications" USING btree ("organiza
 CREATE INDEX "notifications_unread_idx" ON "notifications" USING btree ("organization_id","user_id") WHERE read_at is null;--> statement-breakpoint
 -- The idempotency key, and the reason a replayed event writes no second row. Tenant-
 -- leading, per §17.
-CREATE UNIQUE INDEX "notifications_dedupe_uq" ON "notifications" USING btree ("organization_id","user_id","event_id","kind");--> statement-breakpoint
+--
+-- `created_at` is in it because Postgres refuses a unique index on a partitioned table
+-- that does not carry every partitioning column. That is only sound because the column
+-- is the **event's** `occurred_at` and not `now()`: a redelivery of the same event
+-- computes the same value, so the row collides instead of landing beside itself.
+CREATE UNIQUE INDEX "notifications_dedupe_uq" ON "notifications" USING btree ("organization_id","user_id","event_id","kind","created_at");--> statement-breakpoint
 CREATE INDEX "notifications_user_fk_idx" ON "notifications" USING btree ("user_id");

@@ -17,6 +17,7 @@ const ITEMS = [
   { module: "apikey", labelKey: "nav.apiKeys", icon: "key", order: 30 },
   { module: "document", labelKey: "nav.documents", icon: "check", order: 40 },
   { module: "notification", labelKey: "nav.notifications", icon: "bell", order: 50 },
+  { module: "messaging", labelKey: "nav.messages", icon: "chat", order: 60 },
 ] as const satisfies readonly NavRecord[];
 
 export const navItems: readonly NavItem[] = NavContract.collection.parse(ITEMS);

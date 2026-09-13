@@ -33,6 +33,9 @@ export interface NewNotification {
   readonly category: NotificationCategory;
   readonly params: Readonly<Record<string, string>>;
   readonly link: string | null;
+  // The **event's** timestamp, never the clock's. It is part of the dedupe key, which a
+  // partitioned table forces to carry the partition column — see the pg schema.
+  readonly createdAt: Date;
 }
 
 export interface UnreadQuery extends KeysetQuery {

@@ -1,6 +1,8 @@
 import { ApiKeyRouter } from "./api-key.router.js";
 import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
+import { MessageRouter } from "./message.router.js";
+import { ConversationRouter } from "./messaging.router.js";
 import { NotificationRouter } from "./notification.router.js";
 import { RealtimeRouter } from "./realtime.router.js";
 import { RoleRouter } from "./role.router.js";
@@ -14,4 +16,6 @@ export const appRouter = {
   document: DocumentRouter.all,
   notification: NotificationRouter.all,
   realtime: RealtimeRouter.all,
+  conversation: ConversationRouter.all,
+  message: MessageRouter.all,
 };

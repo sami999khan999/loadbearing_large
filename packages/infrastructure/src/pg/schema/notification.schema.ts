@@ -53,9 +53,15 @@ export const notifications = pgTable(
     ),
     // The bell's count, partial so the index holds only what it will ever be asked for.
     index("notifications_unread_idx").on(t.organizationId, t.userId).where(sql`read_at is null`),
-    // The idempotency key. Delivery is at-least-once, so a replayed event has to find a
-    // row rather than write a second one — tenant-leading, per §17.
-    uniqueIndex("notifications_dedupe_uq").on(t.organizationId, t.userId, t.eventId, t.kind),
+    // The idempotency key, and `createdAt` is in it because a partitioned table demands
+    // the partition column — sound only because that value is the event's, not the clock's.
+    uniqueIndex("notifications_dedupe_uq").on(
+      t.organizationId,
+      t.userId,
+      t.eventId,
+      t.kind,
+      t.createdAt,
+    ),
     index("notifications_user_fk_idx").on(t.userId),
   ],
 );

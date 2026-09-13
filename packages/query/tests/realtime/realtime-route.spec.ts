@@ -41,6 +41,14 @@ describe("RealtimeRoutes", () => {
   it("names every event the contract declares", () => {
     // The type already fails the build if the table is not total. This catches the
     // reverse: a route left behind for a name the contract has dropped.
-    expect([...RealtimeRoutes.names()].sort()).toEqual(["member.changed", "notification.created"]);
+    expect([...RealtimeRoutes.names()].sort()).toEqual([
+      "conversation.changed",
+      "conversation.read",
+      "member.changed",
+      "message.deleted",
+      "message.edited",
+      "message.sent",
+      "notification.created",
+    ]);
   });
 });

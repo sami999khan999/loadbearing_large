@@ -5,6 +5,12 @@ export { ApiKeyMutations, ApiKeyQueries } from "./apikey/index.js";
 export { DocumentMutations } from "./document/index.js";
 export { QueryKeys } from "./key/index.js";
 export { MemberMutations, MemberQueries } from "./member/index.js";
+export {
+  type ConversationStreamState,
+  MessagingMutations,
+  MessagingQueries,
+  useConversationStream,
+} from "./messaging/index.js";
 export { NotificationMutations, NotificationQueries } from "./notification/index.js";
 export { OrganizationMutations } from "./organization/index.js";
 export { RoleMutations, RoleQueries } from "./rbac/index.js";

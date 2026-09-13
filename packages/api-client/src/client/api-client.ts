@@ -13,6 +13,10 @@ import {
 // edit. The second argument is the retry context — an opt-in knob, defaulting to 0.
 export type AppClient = ContractRouterClient<AppContract, ClientRetryPluginContext>;
 
+// What a call site may pass as `context`. Named so the in-process transport can build a
+// client with the same one — a narrower client would not be assignable to `AppClient`.
+export type AppClientContext = ClientRetryPluginContext;
+
 // `fetch` off `globalThis`, since `lib: ["ES2024"]` declares neither it nor `Request`.
 // `unknown` in and `never` out: both flow through untouched, so neither is named.
 type FetchLike = (input: unknown, init?: Record<string, unknown>) => Promise<never>;
@@ -93,6 +97,14 @@ export class ApiClient {
 
   public get realtime(): AppClient["realtime"] {
     return this.rpc.realtime;
+  }
+
+  public get conversation(): AppClient["conversation"] {
+    return this.rpc.conversation;
+  }
+
+  public get message(): AppClient["message"] {
+    return this.rpc.message;
   }
 
   // The escape hatch for a namespace with no accessor yet.

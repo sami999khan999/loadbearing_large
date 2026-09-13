@@ -55,9 +55,10 @@ export function RealtimeProvider({ client, children }: RealtimeProviderProps): R
 
       for await (const message of stream) {
         if (cancelled) break;
-        // A resync means frames were lost, so everything the table names is suspect.
+        // A resync means frames were lost, so everything the table names is suspect. A
+        // typing frame invalidates nothing and expires on its own — it goes to listeners.
         if (message.kind === "resync") RealtimeRoutes.resync(cache.current);
-        else RealtimeRoutes.apply(cache.current, message.name);
+        else if (message.kind === "event") RealtimeRoutes.apply(cache.current, message.name);
 
         for (const listener of listeners) listener(message);
       }

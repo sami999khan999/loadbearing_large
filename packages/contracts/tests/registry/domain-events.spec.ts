@@ -16,11 +16,14 @@ const joined = {
 };
 
 describe("DomainEvents", () => {
-  // A permission is a right you hold; an event is a fact that happened. Getting the tense
-  // wrong is the silent failure, so the vocabulary rule is asserted rather than trusted.
+  // English has irregular participles, so the regex below is a heuristic for the rule
+  // and not the rule: renaming `message.sent` to fit it would be the tail wagging.
+  const IRREGULAR = new Set(["sent", "read", "left", "built", "lost", "won"]);
+
   it("names every event in the past tense", () => {
     for (const name of DomainEvents.names()) {
       const action = name.split(".").at(-1) ?? "";
+      if (IRREGULAR.has(action)) continue;
       expect(action, name).toMatch(/(ed|en)$/);
     }
   });

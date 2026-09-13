@@ -7,6 +7,7 @@
 export {
   AccountClient,
   ApiClient,
+  type AppClientContext,
   AuthClient,
   CookieAuthStrategy,
   OrganizationClient,
@@ -36,6 +37,7 @@ export {
   ApiKeyList,
   ChangeEmailForm,
   ChangePasswordForm,
+  ConversationList,
   CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
@@ -49,6 +51,8 @@ export {
   LinkedAccountList,
   MemberCount,
   MemberList,
+  MessageComposer,
+  MessageList,
   MessageProvider,
   ModuleNav,
   NotificationBell,
@@ -68,6 +72,7 @@ export {
   TwoFactorForm,
   TwoFactorPanel,
   TwoFactorSetup,
+  TypingNotice,
   useCapabilities,
   useErrorMessage,
   useMessages,
@@ -94,6 +99,7 @@ export {
   RealtimeProvider,
   RoleQueries,
   useApiClient,
+  useConversationStream,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────

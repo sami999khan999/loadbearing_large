@@ -158,10 +158,19 @@ export class DeliverNotificationUseCase {
       // by somebody who was never authorised for the thing it describes.
       params: { actorId: event.actorId },
       link: row.link(event),
+      // The event's own instant. It is half the dedupe key, so a redelivery must compute
+      // the same one — and a notification is about when the thing happened anyway.
+      createdAt: event.occurredAt,
     };
   }
 
+  // Named positively rather than by exclusion. The event union has grown past the three
+  // this policy knows, and an `!== "member.invited"` test would read a field off the rest.
   private static subjectOf(event: DomainEvent): UserId | null {
-    return event.name === "member.invited" ? null : event.payload.userId;
+    if (event.name === "member.joined" || event.name === "member.role.changed") {
+      return event.payload.userId;
+    }
+
+    return null;
   }
 }

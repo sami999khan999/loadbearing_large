@@ -2,6 +2,7 @@ import {
   type ActivityArchiveGateway,
   type ActivityLogger,
   type ActivityReplayReader,
+  AddConversationMemberUseCase,
   type AnalyticsProjector,
   ApiKeyResolver,
   AuthFactory,
@@ -16,15 +17,20 @@ import {
   ClickHouseConnection,
   type Clock,
   type ContentSource,
+  ConversationAccess,
   CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
+  CreateConversationUseCase,
   CreateRoleUseCase,
   Database,
+  DeleteMessageUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
   type DomainEventPublisher,
+  EditMessageUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  GetConversationUseCase,
   GetNotificationPreferencesUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -33,10 +39,13 @@ import {
   InvitationClaimingEnroller,
   InviteMemberUseCase,
   JsonLogger,
+  LeaveConversationUseCase,
   ListApiKeysUseCase,
+  ListConversationsUseCase,
   ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
+  ListMessagesUseCase,
   ListNotificationsUseCase,
   ListRolesUseCase,
   type Logger,
@@ -46,10 +55,12 @@ import {
   type MailRenderer,
   type MaintenanceGateway,
   MarkAllNotificationsReadUseCase,
+  MarkConversationReadUseCase,
   MarkNotificationReadUseCase,
   MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
+  MessagingRealtimeSubscriber,
   NotificationSubscriber,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
@@ -61,11 +72,13 @@ import {
   PgApiKeyRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
+  PgConversationRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMaintenanceGateway,
   PgMemberRepository,
   PgMembershipReader,
+  PgMessageRepository,
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
   PgNotificationRepository,
@@ -85,6 +98,8 @@ import {
   RedisConnection,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  RemoveConversationMemberUseCase,
+  RenameConversationUseCase,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
@@ -92,9 +107,11 @@ import {
   SERVER_CATALOG,
   SearchDocumentsUseCase,
   SendMailUseCase,
+  SendMessageUseCase,
   SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
+  SignalTypingUseCase,
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
@@ -249,6 +266,21 @@ export class Container {
     readonly sendDigest: SendNotificationDigestUseCase;
     readonly digestOrganizations: ListDigestOrganizationsUseCase;
   };
+  public readonly messaging: {
+    readonly listConversations: ListConversationsUseCase;
+    readonly getConversation: GetConversationUseCase;
+    readonly createConversation: CreateConversationUseCase;
+    readonly addMember: AddConversationMemberUseCase;
+    readonly removeMember: RemoveConversationMemberUseCase;
+    readonly leave: LeaveConversationUseCase;
+    readonly rename: RenameConversationUseCase;
+    readonly markRead: MarkConversationReadUseCase;
+    readonly listMessages: ListMessagesUseCase;
+    readonly send: SendMessageUseCase;
+    readonly edit: EditMessageUseCase;
+    readonly remove: DeleteMessageUseCase;
+    readonly typing: SignalTypingUseCase;
+  };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
@@ -386,11 +418,89 @@ export class Container {
       digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
     };
 
+    const conversations = new PgConversationRepository(this.database, this.transactions);
+    const messages = new PgMessageRepository(this.database, this.transactions);
+    // One instance, shared: the membership check is the same question every messaging
+    // use-case asks, and a second copy is a second place for it to drift.
+    const conversationAccess = new ConversationAccess(conversations);
+
+    this.messaging = {
+      listConversations: new ListConversationsUseCase(this.authorizer, conversations, messages),
+      getConversation: new GetConversationUseCase(this.authorizer, conversationAccess, messages),
+      createConversation: new CreateConversationUseCase(
+        this.authorizer,
+        conversations,
+        this.eventPublisher,
+        this.unitOfWork,
+      ),
+      addMember: new AddConversationMemberUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      removeMember: new RemoveConversationMemberUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      leave: new LeaveConversationUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      rename: new RenameConversationUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.eventPublisher,
+      ),
+      markRead: new MarkConversationReadUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        this.realtime,
+      ),
+      listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
+      send: new SendMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        conversations,
+        messages,
+        this.eventPublisher,
+        this.realtime,
+        this.unitOfWork,
+      ),
+      edit: new EditMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        this.eventPublisher,
+        this.clock,
+      ),
+      remove: new DeleteMessageUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        this.eventPublisher,
+        this.clock,
+      ),
+      typing: new SignalTypingUseCase(
+        this.authorizer,
+        conversationAccess,
+        this.realtime,
+        this.cache,
+      ),
+    };
+
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
     this.subscribers = new SubscriberRegistry([
       new MemberRealtimeSubscriber(this.realtime),
       new NotificationSubscriber(this.notification.deliver),
+      new MessagingRealtimeSubscriber(this.realtime, conversations),
     ]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding

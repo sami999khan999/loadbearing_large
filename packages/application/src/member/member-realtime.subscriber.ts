@@ -44,8 +44,13 @@ export class MemberRealtimeSubscriber extends EventSubscriber {
     return subject && subject !== event.actorId ? [event.actorId, subject] : [event.actorId];
   }
 
+  // Narrowed by naming the two, not by excluding one: the union has other members now,
+  // and an `!== "member.invited"` test would have gone on compiling and reading nothing.
   private static subjectOf(event: DomainEvent): string | null {
-    if (event.name === "member.invited") return null;
-    return event.payload.userId;
+    if (event.name === "member.joined" || event.name === "member.role.changed") {
+      return event.payload.userId;
+    }
+
+    return null;
   }
 }

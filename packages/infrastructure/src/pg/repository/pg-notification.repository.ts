@@ -100,6 +100,9 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
             category: record.category,
             params: { ...record.params },
             link: record.link,
+            // From the event, not `defaultNow()`: the dedupe index carries this column,
+            // so a redelivery has to compute the same value to collide with itself.
+            createdAt: record.createdAt,
           })),
         )
         .onConflictDoNothing()

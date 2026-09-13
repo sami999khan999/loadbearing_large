@@ -1,5 +1,6 @@
 import { accountRoutes } from "./account.routes.js";
 import { documentRoutes } from "./document.routes.js";
+import { messagingRoutes } from "./messaging.routes.js";
 import { notificationRoutes } from "./notification.routes.js";
 import { organizationRoutes } from "./organization.routes.js";
 import { rbacRoutes } from "./rbac.routes.js";
@@ -17,6 +18,7 @@ export const ROUTES = {
   organization: organizationRoutes,
   document: documentRoutes,
   notification: notificationRoutes,
+  messaging: messagingRoutes,
 } as const;
 
 // Union of every path the table declares. `Extract<…, string>` so a group may later hold

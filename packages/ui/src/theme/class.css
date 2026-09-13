@@ -5,6 +5,7 @@
 @import "./class/base.css";
 @import "./class/button.css";
 @import "./class/input.css";
+@import "./class/textarea.css";
 @import "./class/field.css";
 @import "./class/status-badge.css";
 @import "./class/callout.css";

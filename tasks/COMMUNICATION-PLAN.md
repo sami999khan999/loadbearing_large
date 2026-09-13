@@ -1051,16 +1051,31 @@ rate-limited to one signal per two seconds per conversation in the use-case.
 
 #### 5.A Permissions, routes, gate
 
-- [ ] `C5.1` — `messaging.permissions.ts`: `messaging.conversation.read`, `.create`, `.manage`,
+- [x] `C5.1` — `messaging.permissions.ts`: `messaging.conversation.read`, `.create`, `.manage`,
   `messaging.message.send`, `.update`; routes `messaging.routes.ts`: `inbox: "/messages"`,
   `conversation: "/messages/$conversationId"` (the builder form `AppRoute` reserved for);
   gate on `messaging.conversation.read`. Migration grants `read/create/send/update` to
   `owner/admin/member`, `manage` to `owner/admin`. Membership of a conversation is checked in
   every use-case in addition — a permission is never sufficient on its own.
+  `done: 2026-09-13` — the conversation route is the framework's `"/messages/$conversationId"`
+  literal, not a builder: both route specs already know that shape, `route.spec.ts` iterates
+  `Object.values` as strings, and `AppRoute`'s `Extract<…, string>` is what reserves room for a
+  builder the day a `<Link>` needs one. Grants land in **both** places, as `0016` established:
+  `SystemRoleSeed` for tenants created from here on, and `0018_messaging_grants.sql` for the ones
+  that already exist. `manage` is granted separately, by `EXISTS(rbac.role.manage)` rather than by
+  role key — administering a channel is the same power as administering a role.
+  **unverified:** the migration needs a live Postgres.
+  **The whole server slice is one commit, and that is forced rather than chosen.** Four merge
+  points bind together: `messagingPermissions` in `CATALOG` (the gate fragment and the seed need
+  the keys to be `PermissionKey`s at all), `messagingGates` in `GATES` (`route.spec.ts` wants a
+  page per gate), `messagingProcedurePermissions` (`procedure-permissions.spec.ts` wants a
+  procedure per key **and** a key per procedure), and the contract registration (which wants the
+  `apps/web` router). Any one of them alone turns the tree red. Phase 3 hit the same wall at
+  `C3.15`; this time it is written down at the merge point itself.
 
 #### 5.B Contracts
 
-- [ ] `C5.2` — `contracts/src/messaging/{index,conversation.contract,conversation.entity,conversation.procedures,message.contract,message.entity,message.procedures}.ts`;
+- [x] `C5.2` — `contracts/src/messaging/{index,conversation.contract,conversation.entity,conversation.procedures,message.contract,message.entity,message.procedures}.ts`;
   ids `ConversationId`, `MessageId`. Procedures: `conversation.list` (keyset on
   `lastMessageAt, id`), `create ({ kind, title?, memberIds })`, `get`, `addMember`,
   `removeMember`, `leave`, `rename`, `markRead ({ conversationId, messageId, createdAt })`;
@@ -1068,10 +1083,16 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   (`clientId` is the optimistic key and the dedupe key: a retried send is one row),
   `edit`, `delete`, `typing`. Permission map in `catalog/messaging.permissions.ts`.
   DTOs never carry another tenant's ids; `MessageDto.deleted` is a boolean, the body is empty.
+  `done: 2026-09-13` — thirteen specs. Three shapes differ from the plan. `message.list` returns
+  `{ items, olderCursor }` rather than `Keyset.page`, because it pages **backwards** and a field
+  called `nextCursor` would read as "newer". `conversation.markRead` keeps its own shape rather
+  than reusing the notification one. And `ConversationDto.unreadCount` is on the entity, so
+  `get` and `create` compute it too — a page reached from a link would otherwise carry one field
+  fewer than the same page reached from the list.
 
 #### 5.C Schema
 
-- [ ] `C5.3` **`conversations`, `conversation_members`** — `pg/schema/messaging.schema.ts`.
+- [x] `C5.3` **`conversations`, `conversation_members`** — `pg/schema/messaging.schema.ts`.
   `conversations`: `organization_id` (cascade), `id`, `kind` (`direct | channel`), `title`
   nullable, `direct_key` nullable, `created_by`, `created_at`, `last_message_at`,
   `last_message_id` nullable; unique `(organization_id, direct_key) WHERE direct_key IS NOT NULL`;
@@ -1081,7 +1102,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   `last_read_message_id`, `muted_at` (no `unread_count` — see `C5.5`); unique
   `(organization_id, conversation_id, user_id)`; index `(organization_id, user_id, last_read_at)`;
   FK indexes on `conversation_id`, `user_id` (§18).
-- [ ] `C5.4` **`messages`** — partitioned monthly on `created_at`, PK `(id, created_at)`,
+- [x] `C5.4` **`messages`** — partitioned monthly on `created_at`, PK `(id, created_at)`,
   `organization_id` (cascade), `conversation_id` (NO ACTION; FK from a partitioned table is
   supported), `author_id` (no FK), `client_id uuid`, `body text`, `edited_at`, `deleted_at`;
   unique `(organization_id, conversation_id, client_id)` (the send dedupe — tenant-leading);
@@ -1089,10 +1110,18 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   `messages_conversation_fk_idx (conversation_id)`. **Never dropped** by retention — messages
   are domain data; the partitions exist for pruning and for the archive follow-up (`C6.4`).
   Migration reviewed; §17/§18/§20. **Docs:** `data-and-scale.md` §9 gains three rows.
+  `done: 2026-09-13` — **`messages` is NOT partitioned, and that is a deliberate deviation from
+  `data.md`.** Postgres refuses a unique index on a partitioned table that omits a partition
+  column, and `messages_client_uq` on `(organization_id, conversation_id, client_id)` is the send
+  dedupe. Adding `created_at` to it would not weaken the guarantee, it would delete it: two
+  attempts seconds apart carry different timestamps. The alternatives were a per-partition index
+  built by the maintenance gateway, or a non-partitioned side table plus a write per message —
+  both real, both more structure than the archive path (`C6.4`, filed and not built) is worth
+  today. The trade is recorded at the table and argued in the reference page.
 
 #### 5.D Domain (`application/src/messaging/`)
 
-- [ ] `C5.5` **Ports** — `conversation.repository.ts` (`listByMember(organizationId, userId, page)`,
+- [x] `C5.5` **Ports** — `conversation.repository.ts` (`listByMember(organizationId, userId, page)`,
   `findById`, `findByDirectKey`, `save` (insert `ON CONFLICT DO NOTHING` on the partial unique
   index), `isMember`, `memberIds(organizationId, conversationId)`, `saveMember`, `deleteMember`,
   `markRead(organizationId, conversationId, userId, messageId, at)` — `SET last_read_at = GREATEST(last_read_at, ?)`,
@@ -1106,7 +1135,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   adapter behind the same method with `last_read_at` still the record. (This replaces the
   `unread_count` column in `C5.3`: drop it from the schema item.) Every method takes the
   tenant first.
-- [ ] `C5.6` **Use-cases** — `list-conversations`, `create-conversation` (direct:
+- [x] `C5.6` **Use-cases** — `list-conversations`, `create-conversation` (direct:
   `MessagingRules.directKey(a, b)` sorted; conversation + both members in one `unitOfWork.run`,
   `ON CONFLICT DO NOTHING`, then `findByDirectKey` — race-safe; publishes `conversation.created`),
   `get-conversation` (asserts membership — also what the conversation stream calls first),
@@ -1126,7 +1155,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   `RoleRules` shape — **flag** that `.rules.ts` is missing from the `files.md` table and add it)
   holds `directKey`, the body limit, the edit window and the typing rate. Specs with
   hand-rolled doubles; the send spec pins one `save`, one `touch`, one event.
-- [ ] `C5.7` **`MessagingRealtimeSubscriber`** — `application/src/messaging/messaging-realtime.subscriber.ts`,
+- [x] `C5.7` **`MessagingRealtimeSubscriber`** — `application/src/messaging/messaging-realtime.subscriber.ts`,
   `events` = the seven outboxed messaging events; the **durable path**: for each, the full
   frame on the conversation channel (a duplicate of the fast path — the client dedupes by
   message id, so a lost fast-path frame costs nothing) and, for `message.sent` /
@@ -1137,7 +1166,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
 
 #### 5.E Adapters, composition, worker
 
-- [ ] `C5.8` — `PgConversationRepository`, `PgMessageRepository`; `KeysetCursor` codec
+- [x] `C5.8` — `PgConversationRepository`, `PgMessageRepository`; `KeysetCursor` codec
   (`C3.0`); integration specs with fixed query counts: `listByMember` is two statements for a
   page regardless of size (rows + one lateral), `list` messages one, `unreadCounts` one;
   partition-bounded cleanup as `pg-activity-replay.reader.spec.ts` does (`T-026`).
@@ -1151,7 +1180,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
 
 #### 5.F Client
 
-- [ ] `C5.10` **Conversation stream** — `conversation.stream ({ conversationId })` in the
+- [x] `C5.10` **Conversation stream** — `conversation.stream ({ conversationId })` in the
   messaging procedures, `output(eventIterator(RealtimeContract.message))`, permission
   `messaging.conversation.read`; the handler calls `getConversation` (membership) then
   `yield*`s `realtimeSubscriber.subscribe([RealtimeChannel.conversation(…)], signal)`. Opened
@@ -1160,7 +1189,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   (replacing the optimistic row by `clientId`, deduping by message id) and holds
   `typing: Map<userId, expiresAt>`. Two streams per tab at most: the user stream and the open
   conversation.
-- [ ] `C5.11` **Query layer** — `ApiClient.conversation`, `.message`, `.typing`;
+- [x] `C5.11` **Query layer** — `ApiClient.conversation`, `.message`, `.typing`;
   `QueryKeys.conversation = { all, list(params), get(id) }`, `QueryKeys.message = { all, list(conversationId) }`
   (the cursor lives in the page data, never in the key); `MessagingQueries.conversations`,
   `.conversation(id)`, `.messages(conversationId)` (`infiniteQueryOptions`, `getNextPageParam: last => last.nextCursor`);
@@ -1169,7 +1198,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   (optimistic `unreadCount: 0` on the list), `useCreateConversation`, `useAddMember`,
   `useLeave`, `useStartTyping` (no invalidation, throttled by the composer). `RealtimeRoutes`
   entries for the user-stream frames (`conversation.*` → `QueryKeys.conversation.all()`).
-- [ ] `C5.12` **Copy + UI + feature** — `content` namespace `messaging` (en, bn) registered
+- [x] `C5.12` **Copy + UI + feature** — `content` namespace `messaging` (en, bn) registered
   in `NamespaceShape`, `ClientNamespace`, `CLIENT_NAMESPACES`, both catalogs; `ui` gains
   `Textarea` (the one primitive missing; the same `Field` association as `Input`);
   `feature/src/messaging/` following the stated `<subject>.<role>.tsx` rule (the `member/`
@@ -1179,7 +1208,7 @@ rate-limited to one signal per two seconds per conversation in the use-case.
   the bottom, deleted rows as a placeholder, `useConversationStream`), `message-composer.form.tsx`
   (Enter sends, Shift+Enter newline, throttled `useStartTyping`), `typing.notice.tsx`. Icon
   `chat` in `asset`. Specs for the list states and the optimistic send/rollback.
-- [ ] `C5.13` **Transport + routes** — `orpc/messaging.router.ts` (`conversation`, `message`,
+- [x] `C5.13` **Transport + routes** — `orpc/messaging.router.ts` (`conversation`, `message`,
   `typing` groups; paths stay `<subject>.<action>`), mounted; routes
   `(app)/_authenticated/messages/{index,$conversationId}.tsx` behind
   `requirePermission("messaging.conversation.read")`, `staticData.messages = ["messaging"]`,

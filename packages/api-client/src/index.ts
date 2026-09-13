@@ -15,4 +15,4 @@ export {
   TokenProvider,
   type TwoFactorEnrolment,
 } from "./auth/index.js";
-export { ApiClient, type AppClient } from "./client/index.js";
+export { ApiClient, type AppClient, type AppClientContext } from "./client/index.js";
