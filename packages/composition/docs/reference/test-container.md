@@ -130,7 +130,7 @@ be a second implementation of the thing under test.
 for something rather than the only thing that exists. That has not always held: `EventBus` was
 declared and faked here while nothing bound it in `Container`, which meant a publishing use-case
 would have published into this recording fake under test and into nothing at all in production. It
-was deleted rather than implemented — the outbox design it reserved is in `tasks/TODO.md`.
+was deleted rather than implemented — the outbox design it reserved is in `plans/TODO.md`.
 
 The property is worth keeping deliberately, because this file is where it breaks first: a fake is
 cheap to add and a real adapter is not, so a port faked here and unbound in `Container` reads as

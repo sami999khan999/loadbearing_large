@@ -19,7 +19,7 @@ source: split from DB-SCALING-PLAN.md at 5777eba, 2026-09-14
 
 ## Items
 
-- [ ] `S2.15` **Retention as data, not as a deploy** — global
+- [-] `S2.15` **Retention as data, not as a deploy** — global
   `retention_policy (table_name text primary key, hot_months integer not null, updated_at)`, read
   by the consumer on every run, **absent row = the allowlist value**. That last clause is the whole
   design, borrowed from `notification_preferences`: an empty table behaves exactly like today, so
@@ -32,8 +32,11 @@ source: split from DB-SCALING-PLAN.md at 5777eba, 2026-09-14
   **Deferred 2026-09-14, decision 14.** Until a platform tier exists the row has no editor but
   SQL, and a SQL edit and an allowlist edit plus a deploy are the same operation with a review
   attached to the second. **Reopen when** `S5.6` is built.
+  `moved: 2026-09-14` — reopened the same day, as `A2.3`–`A2.7` in
+  [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md), with two more columns (cold months, cold
+  mode) and a `store` column so the ClickHouse TTL is a row in the same table.
 
-- [ ] `S5.6` **The platform tier and the retention dashboard** — the editor this work was asked
+- [-] `S5.6` **The platform tier and the retention dashboard** — the editor this work was asked
   for cannot be written today, and the reason is worth recording rather than discovering twice.
   Retention is global (`DB-SCALING-PLAN.md` 2.C, second finding), and this repo has no
   authorization tier above an organization: `PermissionScope` is `"org" | "goal"`,
@@ -50,9 +53,14 @@ source: split from DB-SCALING-PLAN.md at 5777eba, 2026-09-14
   **Deferred 2026-09-14, decision 14.** **Reopen when** the super-admin Loki reader in
   `docs/opinions/data-and-scale.md` §1 is scheduled, or an operator asks to change retention
   without a deploy. The tier is built once, for both.
+  `moved: 2026-09-14` — reopened the same day, as Phase 1 of
+  [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md). One thing changed on the way: the grant is
+  **not** an env-listed user id. It rides RBAC — a platform organization, a third scope, a seeded
+  `platform_admin` role, and `pnpm platform:grant` for the first holder.
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-14 | @sami | Created. `S2.15` and `S5.6` moved here from `DB-SCALING-PLAN.md` by decision 14, IDs kept |
+| 2026-09-14 | @sami | Both items reopened the same day by `PLATFORM-ADMIN-PLAN.md`; marked moved, bodies kept as the record. The file stays for the next deferral |

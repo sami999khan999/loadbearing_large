@@ -28,7 +28,9 @@ lists them.
 | 3 | `S3.1` `S3.2` · `S3.3` · `S3.4` `S3.5` `S3.6` `S3.7` `S3.8` `S3.9` `S3.10` `S3.23` · `S3.11` `S3.12` `S3.13` · `S3.14` `S3.15` `S3.16` · `S3.17` · `S3.18` · `S3.19` `S3.20` · `S3.21` `S3.22` |
 | 5 | `S5.1` `S5.2` `S5.3` `S5.4` `S5.5` — needs 2.C and nothing else |
 
-Dropped: `S2.9` (decision 13); `S2.15` and `S5.6` (decision 14, both in the deferred file).
+Dropped: `S2.9` (decision 13); `S2.15` and `S5.6` (decision 14, both in the deferred file, and
+both reopened the same day as [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md) — see decision 14's
+`revised:` line).
 
 ### Running it again
 
@@ -68,7 +70,7 @@ pnpm --filter @loadbearing/infrastructure test && pnpm smoke
 > 5. Every table follows `docs/ai/rules/data.md`; every new file role is in the closed suffix
 >    table (this plan adds none); every new folder name is a row in `docs/opinions/folders.md`
 >    in the same commit (this plan adds one: `shard/` in `composition`).
-> 6. `tasks/TODO.md` stays the task ledger: `T-037` points here. Defects found while executing
+> 6. `plans/TODO.md` stays the task ledger: `T-037` points here. Defects found while executing
 >    go to the bottom of the relevant phase.
 > 7. Commit per layer with the closed `scope-enum` in `commitlint.config.js`. No scope is added:
 >    this plan adds no package. No author or tool trailers (`docs/ai/rules/workflow.md`).
@@ -187,6 +189,11 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     tier exists (`S5.6`), and until then a SQL edit and an allowlist edit plus a deploy are the same
     operation with a review attached to the second. Both items are in
     [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md), IDs kept.
+    `revised: 2026-09-14` — reopened the same day by a broader request: an administrator managing
+    ClickHouse projection, cold storage and the replica from a screen. That needs the tier, so
+    [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md) builds it on RBAC (`A1.*`) and the row
+    (`A2.3`–`A2.7`). The half of this decision that survives: the allowlist stays the default an
+    absent row falls back to, and nothing in this plan reads a row.
 15. **Phase 3 is built in full.** (2026-09-14) The routing machinery — `ShardKey`, `ShardScope`,
     `DatabaseCluster`, the resolver, the directory, the env map — lands with the placement tripwire,
     not after it. A tripwire-only cut and a resolve-at-the-edge cut were both offered and neither
@@ -1029,6 +1036,8 @@ allowlist entry (decision 14).
   `dropped: 2026-09-14 — decision 14.` The design is preserved under the same ID in
   [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md), with the trigger that reopens it.
   `activity_log`'s `retentionMonths` still goes from `null` to `13`, in `S2.14`.
+  `moved: 2026-09-14` — the trigger fired the same day; it is `A2.3`–`A2.7` in
+  [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md), which depends on this plan's 2.C.
 
 - [ ] `S2.16` **Deleting a tenant reaches cold storage** — the moment `S2.11` lands, deleting an
   organization cascades cleanly through Postgres and leaves every one of its S3 objects behind.
@@ -1548,7 +1557,8 @@ constraint `S4.1` names.
   are never projected. The move job re-projects the moved keys, or the checkpoint is keyed per
   virtual shard; not decided.
 - [ ] `S4.4` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
-  the dashboard and analytics reads moved onto it; §5 row 3.
+  the dashboard and analytics reads moved onto it; §5 row 3. The admin's view of it — health, lag,
+  and the switch — is `A4.1`–`A4.2` in `PLATFORM-ADMIN-PLAN.md` and waits on this.
 - [ ] `S4.5` **The catalog is the last single primary** — measure first: capability and shard
   resolution are both cached; the catalog's write rate is sign-ups and role edits. If it hurts,
   a replica for its reads before anything else.
@@ -1622,6 +1632,8 @@ procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, 
 - [-] `S5.6` **Filed, not built: the platform tier and the retention dashboard** —
   `dropped: 2026-09-14 — decision 14.` Moved under the same ID to
   [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md) with `S2.15`, which it is the editor for.
+  `moved: 2026-09-14` — the tier is Phase 1 of [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md),
+  built on RBAC rather than an env list.
 
 **Exit.** A seeded user with a month in cold storage opens the archived view and reads their own
 rows; a user in another organization reading the same month gets nothing, proven by a spec rather
@@ -1665,3 +1677,4 @@ can silently disagree.
 | 2026-09-13 | @sami | **Phase 1 built and its Exit met.** Pool configuration, `Database.stats()`, the saturation and oversubscription lines, migration `0022`'s role floor, `SET LOCAL` in `PgUnitOfWork`, pgBouncer in the core stack, the scripts on `DATABASE_DIRECT_URL`, the archive on a direct handle with a FINALIZE recovery, `pooled.smoke.spec.ts`, and the docs. Four things the build changed that verification had not: `S1.5`'s fixed 5 s window could never fire against a 5 s connect timeout and is now derived from it; `S1.6` sums 19 rather than 20, because the analytics consumer does not start without ClickHouse; `PgUnitOfWork` needed `sql.raw` because Postgres takes no bind parameter in a `SET`, and a nested `run` must set nothing at all; and the Better Auth smoke case is impossible where the plan put it, because `infrastructure` sits left of `auth`. `S1.10`'s `boot-smoke.mjs` port wait was dropped rather than built |
 | 2026-09-13 | @sami | Second pass, stricter: the first pass's own rigor gaps closed and every tree claim outside the fourteen items checked. Confirmed by measurement: drizzle's real statements with bound parameters scan every partition with zero runtime pruning (`S2.5` table rewritten from them); S3.14 over a real `RPCHandler` and a `Request`, frame 0 included, with the snapshot fix; FNV-1a on multibyte keys; the whole infrastructure suite — 26 files, 145 tests — green through pgBouncer; boot smoke green through it. Newly found: a pgBouncer **restart** kills an idle worker (`Database` has no `pool.on("error")`; `S1.1`) while `RECONNECT` does not; `server_reset_query` never runs in transaction mode, so one session-level `SET` poisoned all 25 fresh clients (`S1.7`, `S1.13`); pooler-side queueing is invisible to `waitingCount` (`S1.4`); S1.9's port mapping and healthcheck are wrong for the image; an interrupted `DETACH CONCURRENTLY` leaves a month invisible **and unwritable** until `FINALIZE`, and `reattach()` cannot recover it (`S1.11`); `drop table` on a partition locks the parent, so maintenance DDL must keep a short `lock_timeout` (`S1.11`); `ensureMonthlyPartitions` races between replicas with `42P07` (`S2.2`); the worker's routed paths run under the NIL platform principal with the tenant in the payload, so `keyOf(principal)` cannot route them (`S3.11`, `S3.15`); four catalog transactions bypass `PgUnitOfWork` (`S3.8`); the smoke harness has no database and bans `process.env`, so `pooled.spec.ts` and `sharded.spec.ts` cannot exist as named (`S1.12`, `S3.20`); §23's real sites and the fifth `new Database(` (`S3.18`); nine routed→catalog FKs, not two (`S3.20`, `S4.1`); `workflow.md:14` already says `18`. First-pass text fixed: fifteen `run` sites not sixteen, `member` is four not five, and the `DISCARD ALL` mechanism |
 | 2026-09-14 | @sami | **Third pass: four decisions, and every open item read against `5777eba`.** `S2.9` dropped with its measurements kept (decision 13); retention stays on the allowlist and `retention_policy` is deferred with `S5.6` to a new `DB-SCALING-DEFERRED.md`, IDs kept (14) — which reverses the row above that said the number "moves into a `retention_policy` row"; Phase 3 stays in full (15); all three tables archive (16). Corrections on open items: decision 5 names `partition_archive` as `catalog` and counts twenty-four tables; the shard segment is out of the cold key and `partition_archive` grows no shard column, because a tenant move would orphan both; `SystemRoleSeed` is the twenty-third `BaseRepository` and §22 globs all of `pg/`; `ArchivedPartition` is kept and reshaped, `ArchivedMonth` never existed; `S2.14` deletes the `archive` job, `ArchiveSchedule` and `RETAIN_MONTHS`; one code for an archived month, not two; `S2.16` had no trigger and gets `db:partitions --sweep`; `S3.13` builds the single-shard test cluster `S3.22` assumed; the session-`SET` grep is decided against; `S4.3` files the ClickHouse checkpoint gap; `S5.1` names its per-page read cost; new `S2.18` makes §15 read source comments. Decision 12's count is still twenty-three. A `## Resume here` section now opens the file. No premise was re-measured against a live stack; this pass read the tree, and `check:architecture` and `lint` stay green over the edit |
+| 2026-09-14 | @sami | Decision 14 revised: `S2.15` and `S5.6` reopened by `PLATFORM-ADMIN-PLAN.md`, which builds the platform tier on RBAC and makes retention, cold storage and the ClickHouse policy rows an administrator edits. The allowlist stays the default. `S4.4` gains a pointer to the replica panel filed behind it |

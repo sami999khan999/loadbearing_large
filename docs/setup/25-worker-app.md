@@ -340,7 +340,7 @@ lookup rather than a second system. `users.locale` is where it comes from, which
 > [!NOTE]
 > `DigestComposer` used to live in a `notification/` folder beside `consumer/`, and was
 > constructed only by its own spec. It is deleted: the digest returns in Phase 3 of
-> [`tasks/COMMUNICATION-PLAN.md`](../../tasks/COMMUNICATION-PLAN.md) as a real schedule with a real
+> [`plans/COMMUNICATION-PLAN.md`](../../plans/COMMUNICATION-PLAN.md) as a real schedule with a real
 > consumer, and a class with no caller is worse documentation than its absence.
 
 > [!IMPORTANT]

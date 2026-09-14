@@ -303,7 +303,7 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 > `infrastructure` and no field here. A use-case that published would have published into a
 > recording fake under test and into nothing at all in production, which is worse than a missing
 > feature: it reads as working. It was deleted; the transactional outbox it was reserving is a
-> backlog item in `tasks/TODO.md`, and it lands as a port, an adapter and a `Container` line
+> backlog item in `plans/TODO.md`, and it lands as a port, an adapter and a `Container` line
 > together or not at all.
 
 ---

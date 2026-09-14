@@ -104,7 +104,7 @@ applies; `docker volume rm ratchet_clickhousedata` is the fix.
 > 5. Every slice follows the twelve steps of `docs/ai/skills/add-slice.md`; every table follows
 >    `docs/ai/rules/data.md`; every new file role is in the closed suffix table or is added to
 >    it in the same commit (`docs/opinions/files.md` + `docs/ai/rules/files.md`).
-> 6. `tasks/TODO.md` stays the task ledger: `T-036` points here, and Phase 2 closes `T-031`.
+> 6. `plans/TODO.md` stays the task ledger: `T-036` points here, and Phase 2 closes `T-031`.
 >    New defects found while executing go to the bottom of the relevant phase.
 > 7. Commit per layer with the closed `scope-enum` in `commitlint.config.js`. **No scope is
 >    added:** that line said Phase 1 adds `mail`, which was true of the draft that had a
