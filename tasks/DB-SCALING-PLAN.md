@@ -19,7 +19,9 @@ verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same da
 >    a `corrected:` line means it did not and the text above was changed. Neither moves a
 >    checkbox on its own — both predate the build and are kept because they say *why* an
 >    item reads the way it does.
-> 3. Phases run in order. A phase may start when the previous phase's **Exit** line is true.
+> 3. Phases 1 to 4 run in order — a phase may start when the previous phase's **Exit** line is
+>    true. **Phase 5 is the exception**: it needs `2.C` and nothing else, and is listed last
+>    because it is a feature rather than scaling plumbing.
 >    Inside a phase, checklists run top to bottom; items inside one are independent unless
 >    **Depends on** says otherwise.
 > 4. Every item that touches code lists the doc it must update. A code change with the doc
@@ -173,17 +175,20 @@ against twenty-two migrations, not twenty-one.
 | Env, pool (both `env.ts`) | `DATABASE_URL` (pooled), `DATABASE_DIRECT_URL`, `DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT_MS`, `DATABASE_POOL_CONNECT_TIMEOUT_MS`, `DATABASE_STATEMENT_TIMEOUT_MS` |
 | Env, shards | `DATABASE_SHARD_<n>_URL`, `DATABASE_SHARD_<n>_DIRECT_URL`, `DATABASE_SHARD_<n>_VIRTUAL` (`128-255`, or `1,7,9-20`), `n ≥ 1` |
 | Table (catalog) | `shard_assignments` |
-| Primitives (`application/src/primitive/`) | `ShardKey`, `VirtualShard`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (grows `column`, `retentionMonths`) |
+| Tables (cold storage) | `partition_archive` (per tenant, per table, per month), `retention_policy` (global, one row per table) |
+| Primitives (`application/src/primitive/`) | `ShardKey`, `VirtualShard`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (grows `column`, `retentionMonths` — a *fallback* after `S2.15`) |
+| Ports (cold storage) | `PartitionArchiveGateway` (replaces `ActivityArchiveGateway`), `ColdArchiveReader` |
 | Ports (`application/src/port/`) | `ShardingStrategy`, `ShardPlacementPolicy`, `ShardResolver`, `ShardAssignmentRepository` |
 | Infrastructure (`pg/primitive/`) | `ShardMap`, `DatabaseCluster` |
 | Infrastructure (`pg/transaction/`) | `ShardScope`, `TransactionScope` (carries placement) |
 | Infrastructure (`pg/repository/`) | `PgShardResolver`, `PgShardAssignmentRepository` |
 | Composition (`src/shard/`, new folder) | `OrganizationShardingStrategy`, `HashShardPlacementPolicy` |
-| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn), `shard.assignment.created` (info), `shard.resolution.failed` (error) |
+| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn), `shard.assignment.created` (info), `shard.resolution.failed` (error), `cold.partition.archived` (info), `cold.partition.restored` (info), `cold.objects.swept` (info) |
+| S3 prefix | `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz` — one lifecycle rule on `cold/` tiers every table |
 | Scripts | `pnpm db:partitions`, `pnpm infra:up:sharded` |
 | Compose services | `pgbouncer` (core), `postgres-shard-1` (profile `sharded`) |
 | Assertions | §21 partition DDL ↔ allowlist · §22 one placement per repository file · §23 `new Database(` only in the cluster and the scripts |
-| Docs pages (new) | `docs/infra/reference/pgbouncer.md`, `packages/infrastructure/docs/reference/sharding.md`, `packages/infrastructure/docs/reference/partitions.md` |
+| Docs pages (new) | `docs/infra/reference/pgbouncer.md`, `packages/infrastructure/docs/reference/sharding.md`, `packages/infrastructure/docs/reference/partitions.md`, `packages/infrastructure/docs/reference/cold-storage.md` |
 
 ---
 
@@ -596,11 +601,12 @@ correction, and the rehearsal uses four-second transactions instead.
 
 ### Phase 2 — Partitioning: the policy on the table, the runway guarded
 
-**Goal.** Each partitioned table declares its own column and retention in one place, the guard
-that a hand-edited migration matches that declaration is a build failure rather than a paragraph in
-`docs/setup/13`, the runway cannot be lost by a worker that was asleep on the first of the month,
-partition pruning is proven by `EXPLAIN` rather than assumed, and the one exception (`messages`)
-carries the trigger that reopens it.
+**Goal.** Each partitioned table declares its own column in one place and its retention as data,
+the guard that a hand-edited migration matches that declaration is a build failure rather than a
+paragraph in `docs/setup/13`, the runway cannot be lost by a worker that was asleep on the first of
+the month, partition pruning is proven by `EXPLAIN` rather than assumed, the one exception
+(`messages`) carries the trigger that reopens it — and **no month is ever destroyed**: retention
+moves a partition to S3 and drops it only once the object is written and verified (`2.C`).
 
 **Design in one paragraph.** `PartitionedTable.ALL` becomes a frozen list of
 `{ name, column, retentionMonths }` so `MaintenanceConsumer.PRUNE_AFTER_MONTHS` disappears and the
@@ -615,6 +621,13 @@ integration spec runs `EXPLAIN (FORMAT JSON)` over each partitioned table's keys
 asserts one partition is scanned. `pnpm db:partitions` gives the operator the same routine from
 a shell. Everything here is written against one `Database` and Phase 3 loops it per shard.
 
+`2.C` then changes what retention *means*. Today `prune()` drops a partition and the month is
+gone; `activity_log` is the only table that survives, because `PgActivityArchiveGateway` already
+detaches it, streams it to S3 as gzipped NDJSON, records it and verifies the object before
+dropping. That mechanism is generalised to every partitioned table, its objects are cut per tenant
+so a user can be given their own rows back, a restore is built and round-tripped by a spec, and the
+retention number moves out of the code into a row an operator can edit without a deploy.
+
 #### 2.A The allowlist carries the policy (`application`, `worker`)
 
 - [x] `S2.1` **`PartitionedTable` entries** —
@@ -624,6 +637,11 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `apps/worker/src/consumer/maintenance.consumer.ts` deletes `PRUNE_AFTER_MONTHS` and reads
   `entry.retentionMonths`; the outbox-lag guard stays. **Docs:** `packages/application/docs/reference/ports.md`
   (the `MaintenanceGateway` paragraph), `apps/worker/docs/reference/consumers.md`.
+  `superseded: 2026-09-14 by S2.15` — `retentionMonths` stays on the entry but becomes the
+  **fallback**, not the policy: the number an operator edits lives in `retention_policy`, and an
+  absent row means this value. The request that prompted it was "one file where we can add what
+  table, and the time duration" — the file is this one, and it keeps the table; only the duration
+  moves, because a table name reaches DDL and a number does not. See `2.C`.
   `done: 2026-09-13` — `ALL` is three frozen entries and `PRUNE_AFTER_MONTHS` is gone, so the
   retention for a table lives beside its column instead of in a record the worker kept.
   One addition the item did not name: **`PartitionedTable.NAMES`**. Several callers iterate the
@@ -820,12 +838,136 @@ a shell. Everything here is written against one `Database` and Phase 3 loops it 
   `unverified:` the outbox drain's bound — its partitions are near-empty by design, so the same
   measurement has to be taken there rather than assumed from these.
 
+#### 2.C Cold storage: retention stops meaning deletion (`application`, `infrastructure`, `worker`, `tooling`)
+
+Added 2026-09-14. Retention today **destroys** a month — `outbox_event` at two, `notifications` at
+twelve — and only `activity_log` survives, because the archive gateway detaches it, streams it to
+S3 and verifies the object before dropping. Every item here generalises that one mechanism rather
+than building a second.
+
+**Two findings from reading the tree decide the shape, and both are worth knowing before the first
+line is written.**
+
+**The archive object is one cross-tenant blob per month.** `objectKey()` is
+`activity-archive/<yyyy>/<mm>/activity_log.ndjson.gz`, holding every organization's rows
+interleaved and ordered by `(occurred_at, id)`; `check-architecture.mjs:429-432` records that as
+intent. Serving one tenant their own old rows out of that shape means downloading and discarding
+every other tenant's month, on a user request path. So objects are cut **per tenant** (`S2.11`),
+which is also the only layout that could ever be handed to a browser as a presigned URL.
+
+**Retention cannot be per-organization.** A partition is the unit of archival *and* of dropping:
+`notifications_2026_09` holds every tenant's September. Per-org retention would mean `DELETE`-ing
+one tenant's rows out of a shared partition — precisely the bloat-and-vacuum problem partitioning
+exists to avoid. The policy row is therefore `(table_name → months)`, global. That is what makes
+the dashboard editor need an authorization tier this repo does not have, which `S5.6` files
+honestly rather than smuggling in under an org permission.
+
+- [ ] `S2.10` **One archive gateway for every partitioned table** —
+  `ActivityArchiveGateway.archive(period)` becomes
+  `PartitionArchiveGateway.archive(table, period): Promise<ArchivedMonth>`; the table comes from
+  `PartitionedTableName` and the partition column from `PartitionedTable.byName(table).column`, so
+  every `activity_log` and `occurred_at` literal inside the adapter becomes a parameter.
+  `PgActivityArchiveGateway` → `PgPartitionArchiveGateway`.
+  **This trips the port tripwire twice**: `test-container.spec.ts` counts `application/src/port/*.ts`
+  *and* pins a sorted list of twenty-five names, and `TestPorts` / `TestContainer.build` are a
+  compile error until the rename lands there too — which is what they are for. Rename
+  `RecordingActivityArchiveGateway` with them. The five-step order is untouched and is the
+  invariant: detach → stream → record → verify → **then** drop, with `reattach()` (and its
+  `inhdetachpending` → `finalize` path, proven in `S1.11`) guarding every failure.
+  **Docs:** `packages/application/docs/reference/ports.md`, `activity-archive.md` (absorbed by
+  `S2.17`).
+
+- [ ] `S2.11` **Per-tenant objects, and an index that can be read back** — the key becomes
+  `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`. `cold/` rather than `activity-archive/`
+  because one S3 lifecycle rule on that prefix tiers every table to Glacier without naming a
+  single object, which is the reason `storage.gateway.ts` fixes a prefix layout at all.
+  New table `partition_archive (organization_id, table_name, period, object_key, row_count,
+  checksum, archived_at)`, primary key `(organization_id, table_name, period)`. Leading with the
+  tenant is not cosmetic: it satisfies §9 and §17 with no exemption, where `activity_archive`
+  needed one. **`organization_id` is deliberately not a foreign key**, for the reason
+  `activity_log` already gives — an archive record outlives the tenant it names — which is also
+  why `S2.16` exists rather than a cascade.
+  The migration copies any existing `activity_archive` rows under the nil-uuid sentinel (the one
+  `SystemPrincipal` already uses for "no tenant") and leaves that table in place; it is dropped in
+  a later migration, once no deployment can still hold objects under the old key.
+  **Docs:** `docs/setup/13` §13.3, `cold-storage.md` (`S2.17`).
+
+- [ ] `S2.12` **The export, cut on the tenant boundary** — `rows()` takes an organization:
+  `select distinct organization_id from <partition>` first (cheap — `activity_log`, `outbox_event`
+  and `notifications` each carry an index leading with it), then the existing keyset stream per
+  org, one `putStream` per object. The detach and the drop stay **once per partition**; only the
+  stream/record/verify middle repeats per tenant, so a partial failure still re-attaches the whole
+  month and drops nothing. A month with no rows writes no object and records no row — an absent
+  `partition_archive` row means "nothing to restore", never "not archived".
+  **Docs:** `cold-storage.md`.
+
+- [ ] `S2.13` **Restore, proven by a round trip** —
+  `restore(table, period, organizationId): Promise<RestoredMonth>` reads the object through
+  `storage.get()`, gunzips, and inserts into a **scratch** table named for the month — never
+  straight back into the live parent. A restore that re-attaches silently puts archived rows back
+  in the hot database and leaves the retention job arguing with itself about them.
+  The spec is the item: archive a seeded month, drop it, restore it, and assert the row count and
+  a checksum over the sorted ids match what `partition_archive` recorded. **An archive nobody has
+  restored is a deletion with extra steps**, and this is the only thing that makes the difference
+  checkable rather than asserted.
+  `cold.partition.restored` (`info`, `{ table, period, organizationId, rows }`).
+  **Docs:** `cold-storage.md`.
+
+- [ ] `S2.14` **`prune()` becomes archive-then-drop, for every table** —
+  `MaintenanceConsumer.prune()` archives the month first and drops **only** what was written and
+  verified. `RETAIN_MONTHS = 13` disappears into the same number as `retentionMonths` (`S2.15`),
+  which removes the last place two retention constants could disagree. The `outboxIsBehind` guard
+  stays exactly as it is: an unpublished event is never dropped by the calendar, and now it is
+  never archived out from under the drain either.
+  `maintenance.partition.archived` gains `table`; `maintenance.partition.dropped` keeps its name
+  and loses its old meaning — after this item it can only ever fire behind a verified object, so
+  the catalog comment that calls it "a partition whose rows were never worth keeping" is wrong and
+  must be rewritten.
+  **Depends on:** `S2.10`, `S2.11`, `S2.12`. **Docs:** `apps/worker/docs/reference/consumers.md`,
+  `schedules.md` (the "Retention now drops partitions" heading is no longer true).
+
+- [ ] `S2.15` **Retention as data, not as a deploy** — global
+  `retention_policy (table_name text primary key, hot_months integer not null, updated_at)`, read
+  by the consumer on every run, **absent row = the code default**. That last clause is the whole
+  design, borrowed from `notification_preferences`: an empty table behaves exactly like today, so
+  the migration changes no behaviour and the first edit is the first change.
+  Global, so it needs a `TENANT_EXEMPT` entry in §9 carrying a comment that says *why* — the
+  precedent is `activity_archive`, and the reason here is the second finding above: a partition
+  spans every tenant, so a per-tenant retention row would be describing something the storage
+  engine cannot do.
+  `PartitionedTableEntry.retentionMonths` stays as the fallback and `activity_log`'s `null`
+  becomes `13`. **Docs:** `cold-storage.md`, `docs/ai/rules/data.md`.
+
+- [ ] `S2.16` **Deleting a tenant reaches cold storage** — the moment `S2.11` lands, deleting an
+  organization cascades cleanly through Postgres and leaves every one of its S3 objects behind.
+  That is a GDPR-shaped hole and it is created by this phase, so this phase closes it: a
+  `MAINTENANCE` job sweeps `partition_archive` for the tenant, `storage.delete()`s each object,
+  then removes the rows — in that order, so a crash leaves a row pointing at a deleted object
+  (recoverable, re-runnable) rather than an object nothing points at (invisible forever).
+  `cold.objects.swept` (`info`, `{ organizationId, objects }`).
+  **Depends on:** `S2.11`. **Docs:** `cold-storage.md`.
+
+- [ ] `S2.17` **Docs** — new `packages/infrastructure/docs/reference/cold-storage.md`: the
+  sequenced invariant and why the order is the job, the per-tenant key and the lifecycle rule,
+  `partition_archive` as the index a read starts from, restore, and the two findings above.
+  Registered in `reference/meta.json` and named from `docs/index.md`.
+  Rewrites, each of which currently states that retention deletes: `activity-archive.md`
+  (absorbed), `apps/worker/docs/reference/consumers.md` (the "archive reach-back 13 months" row),
+  `schedules.md` (the retention heading and both paragraphs under it),
+  `docs/opinions/data-and-scale.md` §4.2 and the "dropped after twelve months" paragraph,
+  `docs/ai/rules/data.md`, `docs/setup/13` §13.6, and
+  `packages/infrastructure/docs/reference/clickhouse.md` (the replay source key changes shape).
+
 **Exit.** `pnpm check:architecture` is 21/21 with §21 passing on the twenty-two existing
 migrations; removing `notifications` from `PartitionedTable.ALL` fails §21; starting the worker
 against a database whose future partitions were dropped by hand recreates them and prints nothing;
 dropping them down to one future month prints `partition.runway.low`; `partition-pruning.spec.ts`
 is green — which now means `S2.9` has landed, since on the tree as found it cannot be;
-`pnpm db:partitions` prints three tables with their runway.
+`pnpm db:partitions` prints three tables with their runway. No partitioned table is dropped without a
+verified object behind it: archive a seeded month per table, confirm one object per organization in
+MinIO, confirm the `partition_archive` rows, restore one and watch the row count and id checksum
+match. `retention_policy` empty behaves exactly as the code defaults did; one row changes the
+window with no deploy. Deleting a seeded organization leaves no object behind it.
 
 ---
 
@@ -1120,7 +1262,9 @@ to fail on the catalog foreign keys until `S4.1`.
   `container.outbox.drain` once per physical shard (`PgOutboxGateway` takes the `Database` it
   drains; `SKIP LOCKED` is per shard and two replicas still share each); `MaintenanceConsumer`
   ensures and prunes partitions on every shard (`PgMaintenanceGateway` likewise);
-  `PgActivityArchiveGateway` archives per shard with the shard index in the S3 key;
+  `PgPartitionArchiveGateway` (`S2.10`) archives per shard, with the shard index joining the tenant
+  in the key — `cold/<shard>/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, and
+  `partition_archive` grows a shard column to match;
   `PgActivityReplayReader` reads per shard and the ClickHouse projection gains a `shard UInt8`
   column so "ask the destination for its last row" is per shard (`docs/setup/15`);
   `PgNotificationPreferenceRepository.organizationsWithDigest` runs per shard and the digest
@@ -1289,6 +1433,83 @@ constraint `S4.1` names.
 
 ---
 
+### Phase 5 — Archived data, where the person it belongs to can read it
+
+**Goal.** A user who asks for their old notifications gets them, straight out of S3, with the same
+tenancy rules the live inbox has and no restore to wait for.
+
+**Independent of Phases 3 and 4.** It needs `2.C` and nothing else, so it can be built the day
+cold storage lands. It is listed last because it is a feature rather than scaling plumbing, not
+because it comes last.
+
+**Design in one paragraph.** The whole read side of `StorageGateway` — `get`, `delete`, `exists`,
+`presignDownload` — is already written, already faked, and **called by nothing**; the only caller
+of the gateway at all is the archive, and it only ever writes. So this phase adds no storage port
+method: `S2.11`'s per-tenant objects are small enough to `get()` whole (roughly 8 MB gzipped for a
+four-thousand-user organization-month), and a streaming read is the escape hatch if one ever
+exceeds ~50 MB, not day-one work. Every other hop copies `notification.list` exactly — contract,
+procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, list component.
+
+- [ ] `S5.1` **`ColdArchiveReader`** — port in `application/src/port/`, `S3ColdArchiveReader` in
+  `infrastructure/src/s3/`. `list(organizationId, userId, table, period, cursor, limit)`: look up
+  the object key in `partition_archive`, `storage.get()`, gunzip, parse NDJSON, filter to the user,
+  page. The cursor is a **line ordinal within a named object**, not a `(timestamp, id)` keyset —
+  `KeysetCursor` does not describe this and gets a sibling rather than a widening that makes both
+  harder to read. A missing `partition_archive` row is an empty page, never an error: a month with
+  no rows for this tenant was never written.
+  **Note the layering:** the port may name no framework (§1), so the signature speaks
+  `AsyncIterable<Uint8Array>` and plain types the way `putStream` already does.
+  **Depends on:** `S2.11`. **Docs:** `packages/application/docs/reference/ports.md`.
+
+- [ ] `S5.2` **Contract, procedure, permission** — `notification.archived` returning the existing
+  `Keyset.page(NotificationContract.entity)`, so the client renders it with the component it
+  already has. New permission key `notification.archive.read` in
+  `packages/permissions/src/catalog/notification.permissions.ts`, and the matching
+  `PROCEDURE_PERMISSIONS` entry in `packages/contracts/src/catalog/notification.permissions.ts`.
+  **Forgetting the second is a hard 403 rather than an open door** — `principalMiddleware` denies
+  any procedure with no mapping — which is the fail-closed behaviour to rely on, not to route
+  around. A second procedure, `notification.archivedMonths`, lists the months that actually exist
+  from `partition_archive`, so the UI offers real months instead of a date picker that mostly
+  returns nothing.
+
+- [ ] `S5.3` **The use-case** — `ListArchivedNotificationsUseCase.execute(actor, input)`:
+  `authorizer.assert(actor, "notification.archive.read")`, then the tenant **and the user** off
+  `actor`, never off `input`. `ListNotificationsUseCase` already carries the rule in a comment —
+  "there is no 'list someone else's': the permission grants you *your* notifications, and a userId
+  input would be the hole" — and an archive read is exactly where that hole would be easiest to
+  open, because the object on disk holds the whole tenant.
+
+- [ ] `S5.4` **Router, route, UI** — a three-line handler beside the others; an "Older than a year"
+  view on the existing notifications page, gated with `RouteGuard.requirePermission` the way
+  `settings/roles.tsx` is. Query keys join `QueryKeys.notification`.
+
+- [ ] `S5.5` **Docs** — the notification reference gains the archived read;
+  `apps/web/docs/reference/enforcement-surfaces.md` gains nothing new (this is an ordinary
+  procedure), which is itself worth one sentence — the surface count does not grow.
+
+- [ ] `S5.6` **Filed, not built: the platform tier and the retention dashboard** — the editor this
+  work was asked for cannot be written today, and the reason is worth recording rather than
+  discovering twice. Retention is global (`2.C`, second finding), and this repo has no
+  authorization tier above an organization: `PermissionScope` is `"org" | "goal"`,
+  `CapabilitySet` is always resolved *for* one tenant and never consults an organization id, and
+  `SystemPrincipal.platform()` deliberately holds nothing at all.
+  What the dashboard needs, in order: a `"platform"` scope on `PermissionScope`, a capability that
+  can be held outside any tenant, and a way to grant it — **an env-listed user id is the right
+  first cut**, not a new table, because the alternative is a bootstrapping problem about who may
+  edit the table of who may edit things. This is the same tier the super-admin dashboard in
+  `docs/opinions/data-and-scale.md` already assumes for reading Loki, so it is worth building once
+  and deliberately rather than smuggling a global setting in under an org permission — which would
+  mean any owner of any tenant could change every tenant's retention.
+  Until it lands, `retention_policy` is edited with SQL, which is the whole point of `S2.15`
+  making it a row.
+
+**Exit.** A seeded user with a month in cold storage opens the archived view and reads their own
+rows; a user in another organization reading the same month gets nothing, proven by a spec rather
+than by the absence of a bug report; `notification.archived` with the permission revoked is a 403;
+a month that was never archived is an empty page.
+
+---
+
 ## Verification — the whole plan
 
 ```bash
@@ -1302,8 +1523,13 @@ pnpm infra:up:sharded        # then DATABASE_SHARD_1_* in .env, db:migrate, smok
 
 Then by hand, per phase Exit line: the pooler is in the connection path (`pg_stat_activity`
 shows `application_name` and connections arriving from the pgBouncer container); the runway
-survives a stopped worker; a wrong placement trips on one node; the rehearsal spec fails on the
-constraint `S4.1` names and on nothing else.
+survives a stopped worker; **a month archived to S3 restores with a matching row count and id
+checksum, and no partition is dropped without an object behind it**; a wrong placement trips on one
+node; the rehearsal spec fails on the constraint `S4.1` names and on nothing else.
+
+The one whole-plan check that cannot be automated and must not be skipped: **delete a seeded
+organization and confirm no object of its survives in the bucket** (`S2.16`). Postgres cascades
+cleanly and S3 does not, so this is the only place the two can silently disagree.
 
 ---
 
@@ -1313,6 +1539,7 @@ constraint `S4.1` names and on nothing else.
 |---|---|---|
 | 2026-09-13 | @sami | Created from a read of the tree at `c72ca9e`: four phases covering connection pooling and pgBouncer, partition policy and guards, the virtual-sharding seam with a pluggable strategy, a directory and an env map, and the filed physical split |
 | 2026-09-13 | @sami | Premises tested against a live stack and the tree at `49703c9`; no phase started. Four hold as written — the startup-parameter trap (worse than described: through the pooler `statement_timeout` reads `0`, not a smaller number), `SET LOCAL` in `PgUnitOfWork.run`, `ALTER ROLE` inside drizzle's migrator, and FNV-1a in SQL matching TypeScript on all ten vectors. `S3.14`'s guess is confirmed by experiment and is total, not partial: an oRPC middleware's `AsyncLocalStorage` reaches a unary handler and reaches an async-generator handler on no frame at all. Four are wrong and are corrected in place: `S1.11` (`DETACH … CONCURRENTLY` succeeds through a transaction pooler; the transaction, not the pooler, is the constraint), `S2.5` (the notification read carries no lower bound on the partition column, so it scans every month — new `S2.9`), `S3.12` (four of six use-case group names do not exist), `S3.18` (`CROSS_PLACEMENT_KNOWN` is one file and §22 as specified could not see it — new `S3.23`; and §9's `TENANT_EXEMPT` must not be derived from `CatalogTable`). Two smaller ones: the migration numbers shift by one, and `S1.7` needs a pooler reconnect it did not ask for |
+| 2026-09-14 | @sami | **Cold storage planned: retention stops meaning deletion.** New `2.C` (`S2.10`–`S2.17`) generalises the archive gateway from `activity_log` to every partitioned table, cuts objects per tenant under `cold/`, builds a restore with a round-trip spec, turns `prune()` into archive-then-drop, moves the retention number into a `retention_policy` row an operator edits without a deploy, and closes the S3 half of a tenant delete. New Phase 5 (`S5.1`–`S5.6`) lets a user read their own archived notifications, reusing the `StorageGateway` read side that has been built, faked and called by nothing since it was written. Two findings shaped it: the existing archive object is **one cross-tenant blob per month**, so a user-facing read could not be served from it safely; and retention **cannot be per-organization**, because a partition is the unit of both archival and dropping — which is why the dashboard editor that was asked for is filed at `S5.6` with what it needs (a `platform` scope this repo has no tier for) rather than smuggled in under an org permission. The table list stays in code: a table name reaches DDL, where Postgres takes no bind parameters, and a duration does not |
 | 2026-09-13 | @sami | **Phase 2, section 2.A built.** The allowlist carries each table's column and retention (`PRUNE_AFTER_MONTHS` deleted), `monthlyPartitionsAfter` lands, `ensureMonthlyPartitions` runs under a per-table advisory lock, and the worker enqueues a `partitions` job at boot. Two findings. The `42P07` race is real and was reproduced with a forced interleaving before the guard was written — and the first spec for it passed with the lock removed, because `Promise.all` through the public API does not reliably interleave; it now holds the lock from another connection instead. And `partition.runway.low` as specified could never fire: the check ran after an ensure that always leaves two months ahead, so it reads its own work. It now reads before, which is also the more useful signal. `S2.9` is **blocked on a product decision**: measured at the fifteen-partition steady state the unbounded reads cost 0.21–0.87 ms and are constant in row count, and the item's own retention-horizon default measures **slower** than no bound at all (1.57 ms) |
 | 2026-09-13 | @sami | **Phase 1 built and its Exit met.** Pool configuration, `Database.stats()`, the saturation and oversubscription lines, migration `0022`'s role floor, `SET LOCAL` in `PgUnitOfWork`, pgBouncer in the core stack, the scripts on `DATABASE_DIRECT_URL`, the archive on a direct handle with a FINALIZE recovery, `pooled.smoke.spec.ts`, and the docs. Four things the build changed that verification had not: `S1.5`'s fixed 5 s window could never fire against a 5 s connect timeout and is now derived from it; `S1.6` sums 19 rather than 20, because the analytics consumer does not start without ClickHouse; `PgUnitOfWork` needed `sql.raw` because Postgres takes no bind parameter in a `SET`, and a nested `run` must set nothing at all; and the Better Auth smoke case is impossible where the plan put it, because `infrastructure` sits left of `auth`. `S1.10`'s `boot-smoke.mjs` port wait was dropped rather than built |
 | 2026-09-13 | @sami | Second pass, stricter: the first pass's own rigor gaps closed and every tree claim outside the fourteen items checked. Confirmed by measurement: drizzle's real statements with bound parameters scan every partition with zero runtime pruning (`S2.5` table rewritten from them); S3.14 over a real `RPCHandler` and a `Request`, frame 0 included, with the snapshot fix; FNV-1a on multibyte keys; the whole infrastructure suite — 26 files, 145 tests — green through pgBouncer; boot smoke green through it. Newly found: a pgBouncer **restart** kills an idle worker (`Database` has no `pool.on("error")`; `S1.1`) while `RECONNECT` does not; `server_reset_query` never runs in transaction mode, so one session-level `SET` poisoned all 25 fresh clients (`S1.7`, `S1.13`); pooler-side queueing is invisible to `waitingCount` (`S1.4`); S1.9's port mapping and healthcheck are wrong for the image; an interrupted `DETACH CONCURRENTLY` leaves a month invisible **and unwritable** until `FINALIZE`, and `reattach()` cannot recover it (`S1.11`); `drop table` on a partition locks the parent, so maintenance DDL must keep a short `lock_timeout` (`S1.11`); `ensureMonthlyPartitions` races between replicas with `42P07` (`S2.2`); the worker's routed paths run under the NIL platform principal with the tenant in the payload, so `keyOf(principal)` cannot route them (`S3.11`, `S3.15`); four catalog transactions bypass `PgUnitOfWork` (`S3.8`); the smoke harness has no database and bans `process.env`, so `pooled.spec.ts` and `sharded.spec.ts` cannot exist as named (`S1.12`, `S3.20`); §23's real sites and the fifth `new Database(` (`S3.18`); nine routed→catalog FKs, not two (`S3.20`, `S4.1`); `workflow.md:14` already says `18`. First-pass text fixed: fifteen `run` sites not sixteen, `member` is four not five, and the `DISCARD ALL` mechanism |
