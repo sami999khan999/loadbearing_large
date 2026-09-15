@@ -11,12 +11,12 @@ pnpm build                # topological, derived from workspace:* — no order d
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
 pnpm test
-pnpm check:architecture   # 18 assertions that no linter expresses
+pnpm check:architecture   # 20 assertions that no linter expresses
 pnpm check:contrast       # WCAG AA + sRGB gamut, every theme × mode. A gate, not a report
 pnpm check:comments       # comment density and block counts; reports, never fails
 pnpm deps:check           # syncpack: one dependency, one version line
 pnpm repo:check           # sherif: workspace shape
-pnpm infra:up             # postgres, 2x redis, minio, mailpit, loki + alloy
+pnpm infra:up             # postgres, pgbouncer, 2x redis, minio, mailpit, loki + alloy
 pnpm infra:up:analytics   # the same, plus ClickHouse
 pnpm smoke                # the wiring check, against live containers
 pnpm db:generate | db:migrate | db:seed | db:studio

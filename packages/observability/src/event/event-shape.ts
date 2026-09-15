@@ -36,6 +36,22 @@ export interface EventShape {
   readonly "queue.job.stalled": { readonly queue: string; readonly jobId: string };
   readonly "queue.schedule.registered": { readonly queue: string; readonly jobId: string };
 
+  readonly "database.pool.saturated": {
+    readonly waiting: number;
+    readonly total: number;
+    readonly max: number;
+    // How long this episode has been going, not how long the process has been up: the
+    // counter resets the moment nobody is waiting.
+    readonly forMs: number;
+  };
+  // The driver's own text. There is no code to normalise against — this is a socket that
+  // died, not a query that failed.
+  readonly "database.pool.error": { readonly message: string };
+  readonly "worker.pool.oversubscribed": {
+    readonly concurrency: number;
+    readonly poolMax: number;
+  };
+
   readonly "maintenance.sweep.completed": {
     readonly sessions: number;
     readonly verifications: number;
@@ -54,6 +70,12 @@ export interface EventShape {
     readonly rowCount: number;
   };
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
+  readonly "partition.runway.low": {
+    readonly table: string;
+    // Months strictly after the current one. Zero means the next insert past month end
+    // fails, and for `activity_log` that is every write in the system.
+    readonly monthsAhead: number;
+  };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;

@@ -119,7 +119,7 @@ Two properties at once:
   the type boundary are the same boundary.**
 
 The cost is that a new locale cannot land half-finished, and the English fallback layer beneath it
-is now unreachable for anything that compiles — `T-035` in `tasks/TODO.md` holds that trade-off
+is now unreachable for anything that compiles — `T-035` in `plans/TODO.md` holds that trade-off
 open rather than settling it here.
 
 English files are `as const` rather than `NamespaceBundle<N>`: they are the source the union is

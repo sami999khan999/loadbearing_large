@@ -88,6 +88,17 @@ there is no host to configure. They are kept in step with the handler's `prefix`
 routes that mount them, which spell the path again because `createFileRoute()` takes a literal the
 generator reads without executing anything.
 
+### Both addresses are absolute, and the RPC one was not
+
+oRPC's `RPCLink` and Better Auth's client resolve their base through `new URL()` with **no second
+argument**. A relative value therefore throws for both — Better Auth during SSR, and `RPCLink`
+`TypeError: Failed to construct 'URL': Invalid URL` on the *first call the browser makes*.
+
+`rpc` was relative for the life of the app, so no RPC call from a browser had ever succeeded.
+Nothing saw it: SSR goes through `ApiClient.inProcess`, and every suite calls the handler or
+`/api/rpc` directly. `rpcPath` now keeps the literal for the handler prefix and the route files;
+`rpc` and `auth` are both built from one private `origin()`.
+
 ### Why the auth base URL ends in `.invalid`
 
 Better Auth's client is the one caller that cannot take a path. It resolves `baseURL` through
@@ -102,6 +113,45 @@ quietly reaching some other localhost.
 
 The desktop shell is cross-origin against both and supplies absolute URLs of its own through
 `import.meta.env`.
+
+## `vite build` must not load `.env`
+
+`dev` and `preview` load the root `.env` because they run server code that needs it. **`build` must
+not**, and the missing flag in `apps/web/package.json` is deliberate rather than an oversight.
+
+`.env` sets `NODE_ENV=development` — correct for a local process, and `.env.example` ships it. Load
+it into `vite build` and `@vitejs/plugin-react` emits the **development** JSX transform into the
+production bundle: twenty-six files calling `jsxDEV`, which the production React build does not
+export. The server then answers **500 on every page** with
+`TypeError: (0 , import_jsx_dev_runtime.jsxDEV) is not a function`, while `/api/health` — which
+renders no JSX — answers 200.
+
+Every gate passes. `pnpm build` succeeds, the bundle assertion passes, `typecheck`, `lint` and the
+suites are green, and the artefact is broken on its first request.
+
+The build reads no configuration by design: `Env` is parsed at runtime and is server-only, and the
+two addresses `Endpoint` holds are derived from `location`. Nothing at build time needs `.env`, so
+nothing should hand it one.
+
+## The six database variables, and which of them the pooler can see
+
+`DATABASE_URL` goes through pgBouncer in transaction mode. `DATABASE_DIRECT_URL` goes past it, and
+is what migrations, the seed, `drizzle-kit` and the activity archive use; it defaults to
+`DATABASE_URL`, which is correct only while nothing is pooling.
+
+`DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT_MS` and `DATABASE_POOL_CONNECT_TIMEOUT_MS` are
+this process's own `pg.Pool`, per replica rather than per cluster. The connect timeout is the one
+with no previous default worth having: without it an unreachable Postgres holds a request for the
+OS default, which is longer than every timeout in front of it.
+
+`DATABASE_STATEMENT_TIMEOUT_MS` is the one value this file and `apps/worker/src/env.ts` deliberately
+disagree about — 30 s here, 120 s there. A request a browser is waiting on and a batch nobody is
+waiting on do not want the same ceiling.
+
+**Through the pooler, that variable is not what enforces the timeout.** `pg` sends it as a startup
+parameter, pgBouncer drops it, and `SHOW statement_timeout` reads `0`. Migration `0022`'s role
+setting is the floor, and `PgUnitOfWork` raises it per transaction with `SET LOCAL`. The full
+mechanism is in [`docs/infra/reference/pgbouncer.md`](../../../../docs/infra/reference/pgbouncer.md).
 
 ## The two realtime numbers are per process
 

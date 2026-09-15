@@ -1,6 +1,9 @@
 // What the running stack is, resolved once in `vitest.smoke.config.ts` and injected. Read
 // there and not here: `noProcessEnv` and assertion 3 both walk `tests/`. See doc 15.
 export interface Stack {
+  // Two URLs for one server. `url` goes through pgBouncer in transaction mode; `directUrl`
+  // does not, and is what DDL a transaction pooler cannot carry uses.
+  readonly database: { readonly url: string; readonly directUrl: string };
   readonly redis: { readonly cacheUrl: string; readonly queueUrl: string };
   readonly storage: {
     readonly endpoint: string;

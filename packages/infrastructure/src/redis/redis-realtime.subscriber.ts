@@ -25,8 +25,10 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
   private readonly streamsPerChannel = new Map<string, number>();
   private listening = false;
 
+  // A factory, not a client. Resolving the role here would open the subscriber socket in
+  // every process that builds a container — see docs/reference/realtime.md.
   public constructor(
-    private readonly redis: Redis,
+    private readonly connection: () => Redis,
     private readonly config: RedisRealtimeConfig,
   ) {
     super();
@@ -130,7 +132,7 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
       }
 
       this.sinks.set(channel, new Set([sink]));
-      await this.redis.subscribe(channel);
+      await this.connection().subscribe(channel);
     }
   }
 
@@ -145,7 +147,7 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
       if (existing.size > 0) continue;
 
       this.sinks.delete(channel);
-      await this.redis.unsubscribe(channel);
+      await this.connection().unsubscribe(channel);
     }
   }
 
@@ -153,7 +155,7 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
     if (this.listening) return;
     this.listening = true;
 
-    this.redis.on("message", (channel: string, payload: string) => {
+    this.connection().on("message", (channel: string, payload: string) => {
       const sinks = this.sinks.get(channel);
       if (!sinks || sinks.size === 0) return;
 

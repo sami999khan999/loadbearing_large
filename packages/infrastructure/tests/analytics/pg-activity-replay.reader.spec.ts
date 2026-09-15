@@ -8,7 +8,7 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
 
 // Captures the statement the reader issued, so the EXPLAIN below runs the query under
@@ -45,11 +45,11 @@ beforeAll(async () => {
 
   // A partitioned table with no partition for a row's date rejects the insert, so a spec
   // that writes to a future month creates it first.
-  await new PgMaintenanceGateway(database, scope).ensureMonthlyPartitions(
-    PartitionedTable.ACTIVITY_LOG,
-    INSTANT,
-    1,
-  );
+  await new PgMaintenanceGateway(
+    database,
+    scope,
+    new PgUnitOfWork(database, scope),
+  ).ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, INSTANT, 1);
 });
 
 afterAll(async () => {

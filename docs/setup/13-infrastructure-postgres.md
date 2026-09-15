@@ -169,6 +169,25 @@ export class Database {
 
 **`Database` takes a config object, not a URL string.** It is one extra brace today and it means adding pool tuning later does not change every call site.
 
+> **This is the shape doc 13 builds. It has since grown four things**, and the reasons are worth
+> knowing before you copy the block above into a new project.
+>
+> `idleTimeoutMs` and `connectionTimeoutMs` join the config, the second because without it an
+> unreachable Postgres holds a request for the OS default — longer than every timeout in front of
+> it. `application_name` goes on the pool so `pg_stat_activity` names the process holding a
+> connection; it is the one startup parameter a transaction pooler forwards rather than dropping.
+>
+> `pool.on("error")` is registered unconditionally. `pg` emits it on an **idle** client whose socket
+> died — a restarted pooler, a failover — where no caller is waiting and nothing else can catch it;
+> `apps/worker` turns an uncaught exception into `exit(1)`, so the listener is the difference
+> between a reconnect and an outage.
+>
+> And `statement_timeout` stops being the guarantee this section says it is the moment a
+> transaction pooler is in front: it is sent as a startup parameter, pgBouncer drops it, and
+> `SHOW statement_timeout` reads `0`. Migration `0022` puts a role-level floor back and
+> `PgUnitOfWork` raises it per transaction with `SET LOCAL`. See
+> [`docs/infra/reference/pgbouncer.md`](../infra/reference/pgbouncer.md).
+
 ---
 
 ## Step 13.3 — The schema
@@ -369,6 +388,13 @@ export default defineConfig({
 
 > This file reads `process.env` and that is fine — it is a build-time tool config, not package runtime code. No extra ignore is needed: the base config's `"**/*.config.ts"` pattern already covers it.
 
+> [!IMPORTANT]
+> **Every script in this section reads `DATABASE_DIRECT_URL ?? DATABASE_URL`, not `DATABASE_URL`.**
+> Once pgBouncer is in front (Phase 1 of `plans/DB-SCALING-PLAN.md`), `DATABASE_URL` is the pooled
+> port. `drizzle-kit` introspects and `db:studio` holds a session open; migrations run DDL and
+> `0022` sets a role default. None of that belongs on a transaction pooler, and the fallback is
+> what keeps a single-URL deployment working unchanged.
+
 Add to **`packages/infrastructure/package.json`**:
 
 ```json
@@ -504,6 +530,22 @@ pnpm db:migrate
 pnpm db:studio
 ```
 > Opens a browser UI at `local.drizzle.studio` showing your tables.
+
+### A migration that changes no table: the role-settings migration
+
+`0022_pooler_timeout_floor.sql` is hand-written and contains three `ALTER ROLE CURRENT_USER SET`
+statements and nothing else. It is worth knowing about for three reasons.
+
+**It is the only enforcement of `statement_timeout` on a pooled connection.** The value `Database`
+sends is a startup parameter; pgBouncer in transaction mode drops it, and the session reads `0`.
+
+**`CURRENT_USER` is whoever ran `pnpm db:migrate`.** That role must be the role the application
+connects as. Splitting them — the ordinary shape once a deployment has a DBA — lands the floor on
+the migrator and leaves the application unlimited, silently.
+
+**It does not take effect on connections that are already open.** After deploying it, run
+`RECONNECT` on the pgBouncer console; a restart would work too and would also kill the worker.
+[`docs/infra/reference/pgbouncer.md`](../infra/reference/pgbouncer.md) has both.
 
 ---
 

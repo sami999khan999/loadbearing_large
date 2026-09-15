@@ -27,6 +27,13 @@ a subscriber connection in order to report on it. `PING` is one of the eight com
 subscriber mode, so `healthy("subscriber")` reports on the connection the streams are actually on
 rather than on a second one nothing uses.
 
+**It answers `["pong", ""]` there, not `"PONG"`.** A connection in subscriber mode replies to
+`PING` with a two-element push message, so an equality test against the simple string reports the
+one connection this check exists for as *unhealthy* — and, because the roll-up treats `false` as a
+failure, reports the whole web process as unhealthy for as long as anyone has a stream open. The
+smoke case has to assert it **while the stream is open**: the generator unsubscribes on the way
+out, and a connection that has left subscriber mode answers `"PONG"` again and passes either way.
+
 **It carries the cache client's key prefix, deliberately.** Neither `PUBLISH` nor `SUBSCRIBE`
 declares a key, so the prefix reaches no channel name today — the two sides would agree with or
 without it. `SPUBLISH` and `SSUBSCRIBE` *do* declare keys. Matching the prefix now is what keeps a

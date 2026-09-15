@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { invitations, roles, sessions, users, verifications } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
 let database: Database;
@@ -18,14 +18,15 @@ let roleId: string;
 const identifiers: string[] = [];
 const invited: string[] = [];
 
-// Far enough out that nothing has been here: the spec is about the CREATE path, and a
-// month that already has a partition tests the `to_regclass` probe instead.
-const FROM = new Date("2032-07-01T00:00:00.000Z");
-const NAMES = ["activity_log_2032_07", "activity_log_2032_08"];
+// Deliberately in the past, for the reason `sweepExpired` gives below: the drop cases
+// take a cutoff and no table filter, so a month after today takes the real partitions.
+const FROM = new Date("2020-07-01T00:00:00.000Z");
+const NAMES = ["activity_log_2020_07", "activity_log_2020_08"];
 
 beforeAll(async () => {
   database = openDatabase();
-  gateway = new PgMaintenanceGateway(database, new TransactionScope());
+  const scope = new TransactionScope();
+  gateway = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
 
   organizationId = await seedOrganizationId(database);
   sweeper = Identifiers.userId.parse(Uuid.v7());
@@ -70,7 +71,7 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
           from pg_class c
           join pg_inherits i on i.inhrelid = c.oid
           join pg_class p on p.oid = i.inhparent
-          where p.relname = 'activity_log' and c.relname like 'activity_log_2032_%'
+          where p.relname = 'activity_log' and c.relname like 'activity_log_2020_%'
           order by c.relname`,
     );
 
@@ -86,6 +87,58 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
       [],
     );
   });
+
+  // Two replicas booting together: probe-and-create is two statements, and when both
+  // probe before either creates the loser gets 42P07 — reproduced by hand.
+
+  // Held from another connection rather than raced for: a race through the public API
+  // cannot be made to interleave, and a lucky pass is worse than no spec at all.
+  it("takes an advisory lock the whole ensure runs under", async () => {
+    const lock = PgMaintenanceGateway.lockFor(PartitionedTable.ACTIVITY_LOG);
+    await database.client.execute(sql.raw(`drop table if exists ${NAMES.join(", ")}`));
+
+    // Started inside the holder's transaction, awaited outside it: awaiting inside is a
+    // self-deadlock that `lock_timeout` ends with 55P03 rather than an answer.
+    let ensure: Promise<"finished"> | undefined;
+
+    await database.client.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(${lock.namespace}, ${lock.key})`);
+
+      ensure = gateway
+        .ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)
+        .then(() => "finished" as const);
+      const blocked = new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 600),
+      );
+
+      expect(await Promise.race([ensure, blocked])).toBe("blocked");
+    });
+
+    // And it completes once the holder commits, which is what says it was waiting on the
+    // lock rather than simply failing.
+    expect(await ensure).toBe("finished");
+    expect(
+      await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM),
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("PgMaintenanceGateway.monthlyPartitionsAfter", () => {
+  // Relative, not absolute: this database also holds the real months the migrations made,
+  // and every one of them is "after" a scratch window sitting in 2020.
+  it("counts the months ahead and excludes the current one", async () => {
+    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+
+    const fromJuly = await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM);
+    const fromAugust = await gateway.monthlyPartitionsAfter(
+      PartitionedTable.ACTIVITY_LOG,
+      new Date("2020-08-01T00:00:00.000Z"),
+    );
+
+    // Exactly one partition lies between the two readings — August's — which is the
+    // "strictly after" boundary this method exists to get right.
+    expect(fromJuly - fromAugust).toBe(1);
+  });
 });
 
 describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
@@ -96,11 +149,15 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
 
     const dropped = await gateway.dropMonthlyPartitionsBefore(
       PartitionedTable.ACTIVITY_LOG,
-      new Date("2032-08-15T00:00:00.000Z"),
+      new Date("2020-08-15T00:00:00.000Z"),
     );
 
-    expect(dropped).toContain("activity_log_2032_07");
-    expect(dropped).not.toContain("activity_log_2032_08");
+    expect(dropped).toContain("activity_log_2020_07");
+    expect(dropped).not.toContain("activity_log_2020_08");
+
+    // The regression, and the reason the months above are in the past: a cutoff later
+    // than today sweeps every partition the migrations made, under every other spec.
+    expect(dropped.filter((name) => !NAMES.includes(name))).toEqual([]);
   });
 
   // The loop holds a `drop table`, so a child it cannot parse has to be left alone: an
@@ -108,13 +165,13 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
   it("leaves a child whose name is not <table>_<yyyy>_<mm> alone", async () => {
     await database.client.execute(
       sql`create table if not exists activity_log_scratch partition of activity_log
-          for values from ('2033-01-01') to ('2033-02-01')`,
+          for values from ('2021-01-01') to ('2021-02-01')`,
     );
 
     try {
       const dropped = await gateway.dropMonthlyPartitionsBefore(
         PartitionedTable.ACTIVITY_LOG,
-        new Date("2034-01-01T00:00:00.000Z"),
+        new Date("2021-06-01T00:00:00.000Z"),
       );
 
       expect(dropped).not.toContain("activity_log_scratch");

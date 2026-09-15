@@ -10,5 +10,12 @@ export default defineConfig({
     // `tests/smoke/` needs S3, Loki and ClickHouse as well as the two this suite
     // already assumes. `pnpm smoke` runs it, against a stack that is actually up.
     exclude: ["**/node_modules/**", "tests/smoke/**"],
+    // One scratch database, and several specs here assert on state no tenant owns: the
+    // outbox drain, the expiry sweep and the partition catalog are all untenanted.
+    fileParallelism: false,
+    // Every case here is a round trip to Postgres or Redis, the same reason
+    // `vitest.smoke.config.ts` raises it. The 5s default flakes under a full `pnpm test`.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

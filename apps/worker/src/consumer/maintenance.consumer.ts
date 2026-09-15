@@ -15,21 +15,13 @@ export class MaintenanceConsumer {
   // the next two, so two consecutive missed runs survive and the third is an outage.
   private static readonly MONTHS_PER_RUN = 3;
 
+  // Below this, say so — and **before** ensuring, never after. `MONTHS_PER_RUN` always
+  // leaves two months ahead, so a check after it could never fire.
+  private static readonly MIN_MONTHS_AHEAD = 2;
+
   // Thirteen months keeps a full year queryable in Postgres and archives the month that
   // has just fallen out of it.
   private static readonly RETAIN_MONTHS = 13;
-
-  // Per table, and `null` means this job never drops it. `activity_log` is archived and
-  // dropped by `archive`, which verifies the upload first — dropping it here would race.
-  private static readonly PRUNE_AFTER_MONTHS: Readonly<
-    Record<PartitionedTableName, number | null>
-  > = Object.freeze({
-    activity_log: null,
-    outbox_event: 2,
-    // Twelve months. An inbox older than a year is not read, and the row is derived
-    // from an event whose own partition went two months in.
-    notifications: 12,
-  });
 
   public constructor(
     private readonly container: Container,
@@ -124,10 +116,19 @@ export class MaintenanceConsumer {
   // Every partitioned table, from the allowlist rather than named here: a table added in
   // a later migration is covered by this schedule with no edit to the worker.
   private async partitions(): Promise<void> {
-    for (const table of PartitionedTable.ALL) {
+    for (const { name: table } of PartitionedTable.ALL) {
+      const now = this.container.clock.now();
+
+      // Read *before* ensuring: this run is about to fix the runway, so afterwards there
+      // is nothing to report. That it had to is what the operator needs to know.
+      const monthsAhead = await this.container.maintenance.monthlyPartitionsAfter(table, now);
+      if (monthsAhead < MaintenanceConsumer.MIN_MONTHS_AHEAD) {
+        this.container.logger.emit("partition.runway.low", { table, monthsAhead });
+      }
+
       const created = await this.container.maintenance.ensureMonthlyPartitions(
         table,
-        this.container.clock.now(),
+        now,
         MaintenanceConsumer.MONTHS_PER_RUN,
       );
 
@@ -151,7 +152,9 @@ export class MaintenanceConsumer {
   // Whole partitions, never a `DELETE`: dropping one is a catalog edit, and deleting a
   // month of rows leaves the vacuum problem partitioning exists to avoid.
   private async prune(table: PartitionedTableName): Promise<void> {
-    const months = MaintenanceConsumer.PRUNE_AFTER_MONTHS[table];
+    // From the table's own entry, not a record beside it: the next partitioned table is
+    // one line in the allowlist rather than one line in two places that can disagree.
+    const months = PartitionedTable.byName(table).retentionMonths;
     if (months === null) return;
 
     const now = this.container.clock.now();

@@ -37,6 +37,13 @@ with the work, like `activity_archive` at twelve rows a year, is not one of them
 delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected
 by its own check. The audit trail is the one table that names no actor by foreign key.
 
+- **Every application connection goes through pgBouncer in transaction mode, and that changes what
+  a timeout is.** `pg` sends `statement_timeout` as a startup parameter; the pooler drops it, and
+  `SHOW statement_timeout` reads `0`. A role default is the floor, `SET LOCAL` inside a transaction
+  is how work raises it, and **a session-level `SET` is banned outright** — in transaction mode the
+  reset query never runs, so one `SET` is inherited by every later client on that connection. DDL a
+  transaction cannot carry goes to `DATABASE_DIRECT_URL`.
+
 **Do not build in advance:** starting ClickHouse, a dedicated vector DB, sharding, a broker. *"The
 seam is implemented"* and *"the store is running"* are two decisions, and only the second costs
 anything to be wrong about.

@@ -29,6 +29,7 @@ on a VPS, and the order to move them to managed services in when one box stops f
 |---|---|---|
 | `docker-compose.yml` | `docker compose` | [compose](reference/compose.md) |
 | `postgres.init.sql` | Postgres, on first boot only | [postgres](reference/postgres.md) |
+| *(no file)* | pgBouncer, from compose env | [pgbouncer](reference/pgbouncer.md) |
 | `loki.config.yml` | Loki, at startup | [loki](reference/loki.md) |
 | `alloy.config.alloy` | Alloy, at startup | [alloy](reference/alloy.md) |
 | `clickhouse.init.sql` | ClickHouse, on first boot only | [clickhouse](reference/clickhouse.md) |
@@ -113,7 +114,8 @@ Two numbers per service, and confusing them is the usual source of "connection r
 
 | Service | Inside the network | From the host |
 |---|---|---|
-| postgres | `postgres:5432` | `localhost:5432` |
+| postgres | `postgres:5432` | `localhost:5432` — **direct**, `DATABASE_DIRECT_URL` |
+| pgbouncer | `pgbouncer:5432` | `localhost:6432` — **pooled**, `DATABASE_URL` |
 | redis-cache | `redis-cache:6379` | `localhost:6379` |
 | redis-queue | `redis-queue:6379` | `localhost:6380` |
 | mailpit | `mailpit:1025` | `localhost:1025`, UI `:8025` |
@@ -178,7 +180,7 @@ pnpm infra:logs            # tail every service
 
 | Profile | Services | Default |
 |---|---|---|
-| *(none)* | `postgres`, `redis-cache`, `redis-queue`, `mailpit`, `minio`, `minio-init` | always |
+| *(none)* | `postgres`, `pgbouncer`, `redis-cache`, `redis-queue`, `mailpit`, `minio`, `minio-init` | always |
 | `observability` | `loki`, `alloy` | **on** — the diagnostic stream is live today |
 | `analytics` | `clickhouse` | **off** — see [clickhouse](reference/clickhouse.md) |
 

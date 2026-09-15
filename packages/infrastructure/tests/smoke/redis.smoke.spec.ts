@@ -46,7 +46,7 @@ describe("realtime against the running cache instance", () => {
   // subscriber's are the same string after ioredis has finished with both.
   it("delivers a published frame to a subscriber on the other client", async () => {
     const publisher = new RedisRealtimePublisher(redis.client());
-    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+    const subscriber = new RedisRealtimeSubscriber(() => redis.subscriberClient(), {
       maxStreamsPerUser: 8,
       maxAgeMs: 5_000,
       queueSize: 256,
@@ -77,20 +77,30 @@ describe("realtime against the running cache instance", () => {
     expect(received.map((message) => message.id)).toEqual(["00000000-0000-7000-8000-00000000000a"]);
   });
 
-  // PING is one of the eight commands valid in subscriber mode, which is what lets the
-  // health check report on the connection the streams are actually on.
-  it("answers healthy on a connection that has entered subscriber mode", async () => {
-    const subscriber = new RedisRealtimeSubscriber(redis.subscriberClient(), {
+  // PING is one of the eight commands valid in subscriber mode, and it answers
+  // `["pong", ""]` there rather than the simple string the other connections answer.
+  it("answers healthy on a connection that is in subscriber mode", async () => {
+    const subscriber = new RedisRealtimeSubscriber(() => redis.subscriberClient(), {
       maxStreamsPerUser: 8,
-      maxAgeMs: 50,
+      maxAgeMs: 5_000,
       queueSize: 8,
     });
     const controller = new AbortController();
 
-    for await (const _ of subscriber.subscribe([CHANNEL], controller.signal)) break;
+    // Checked while the stream is open. The previous shape let the generator finish
+    // first, which unsubscribes — and a connection that has left subscriber mode passes.
+    const reading = (async () => {
+      for await (const _ of subscriber.subscribe([CHANNEL], controller.signal)) break;
+    })();
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-    expect(redis.opened("subscriber")).toBe(true);
-    expect(await redis.healthy("subscriber")).toBe(true);
+    try {
+      expect(redis.opened("subscriber")).toBe(true);
+      expect(await redis.healthy("subscriber")).toBe(true);
+    } finally {
+      controller.abort();
+      await reading;
+    }
   });
 });
 

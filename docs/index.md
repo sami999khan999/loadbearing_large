@@ -19,6 +19,11 @@ one reference set per package, next to the code it describes. [`infra/docs/`](..
 is the same idea for a directory that is not a package: a landing page beside the compose file,
 routing to the tree above.
 
+[How data flows](data-flow.md) sits beside this page rather than in a tree, because it is
+orientation rather than a rule, an argument, a build step, or the running stack. It follows one
+request from arrival to years later and names the store it touches at each point. Read it once,
+before the trees, if the question is "where does anything actually go".
+
 ## Which of the first two do I read?
 
 `ai/` holds the rule; `opinions/` holds the reason. A rule file is ~400 tokens and tells you what to

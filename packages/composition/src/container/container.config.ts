@@ -4,8 +4,16 @@ import type { LogLevel } from "../import.js";
 // the two `env.ts` files parse it, validate it, and hand this object down.
 export interface ContainerConfig {
   readonly database: {
+    // Pooled. `directUrl` is the same server without the pooler, and it is what DDL that
+    // cannot survive a transaction pooler uses — migrations, the seed, the archive.
     readonly url: string;
-    readonly maxConnections?: number;
+    readonly directUrl?: string;
+    // All optional, and the defaults are stated once, in `Database`. A second copy here
+    // is the one that drifts from the pool that actually reads them.
+    readonly poolMax?: number;
+    readonly poolIdleTimeoutMs?: number;
+    readonly poolConnectTimeoutMs?: number;
+    readonly statementTimeoutMs?: number;
   };
   readonly redis: {
     // Two instances, different durability. Neither is optional: a missing

@@ -16,6 +16,7 @@ export {
   BaseRepository,
   Database,
   type DatabaseConfig,
+  type DatabaseStats,
   type DrizzleClient,
   KeysetCursor,
   PgActivityArchiveGateway,
@@ -40,6 +41,7 @@ export {
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
+  type PgUnitOfWorkConfig,
   PgVectorStore,
   TransactionScope,
 } from "./pg/index.js";

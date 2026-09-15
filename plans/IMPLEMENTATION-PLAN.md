@@ -18,7 +18,7 @@ source: full audit of the tree at 6463935 (main), 2026-09-05
 > 4. Every item that touches code lists the doc it must update. A code change with the doc
 >    untouched is not done. `docs/opinions/` wins over `docs/ai/rules/`; if a rule file is
 >    made stale by an item, update both in the same commit (`check-architecture` §12 checks).
-> 5. `tasks/TODO.md` stays the task ledger. `T-026` and `T-030` are referenced here, not
+> 5. `plans/TODO.md` stays the task ledger. `T-026` and `T-030` are referenced here, not
 >    copied. New defects found while executing go to the bottom of the relevant phase.
 > 6. Commit per layer with the closed `scope-enum` in `commitlint.config.js`. No author or
 >    tool trailers (`docs/ai/rules/workflow.md`).
@@ -64,7 +64,7 @@ destination, `docs/reference/`.
 4. Test counts are removed from every `docs/index.md`; spec files are named instead. Counts rot.
 5. `apps/web/docs/` and `apps/worker/docs/` are created. The app-level comments are what move
    there.
-6. `tasks/TODO.md` keeps its ledger role.
+6. `plans/TODO.md` keeps its ledger role.
 
 ---
 
@@ -580,7 +580,7 @@ Postgres returned first, which stopped being one row the moment a second spec fo
 
 ## Phase 4 — Docs drift already present
 
-**Goal.** No sentence in `docs/`, `README.md`, `AGENTS.md`, `tasks/TODO.md` or
+**Goal.** No sentence in `docs/`, `README.md`, `AGENTS.md`, `plans/TODO.md` or
 `packages/*/docs` describes something that is not true of the tree. Link resolution is already
 clean (1 601 of 1 601) and every `meta.json` matches its pages; the drift is in prose, paths
 and counts.
@@ -774,7 +774,7 @@ it once and make the doc-drift gate (`P4.26`) check it.
     syntax. A brief works for both readers, and §12 already asserts it points at a router.
   - Token budgets across `docs/ai/index.md`, `docs/ai/rules/index.md` and `README.md` were
     re-measured rather than reconciled: twelve rule files are ~7,700 tokens, 410–890 each.
-- [x] `P4.17` `tasks/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
+- [x] `P4.17` `plans/TODO.md` state table — dated 2026-08-29 in a file updated 2026-09-03;
   "11/11 assertions" (13); "388 tests across 65 files" (542 / 94); "20 projects" (17 declare
   `typecheck`); "Every task T-001–T-024 is done" (through T-029); `/permissions` ×3 (is
   `/settings/roles`); T-001 names `PgMembershipEnroller` (is `PgBootstrapMembershipEnroller`)

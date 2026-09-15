@@ -77,7 +77,15 @@ function RootDocument({ children }: { children: ReactNode }) {
   } as CSSProperties;
 
   return (
-    <html lang={messages.translator.locale} data-theme={theme} data-mode={mode} style={style}>
+    // `suppressHydrationWarning` because the script below edits these two attributes
+    // before React hydrates. It covers this element only, never its children.
+    <html
+      lang={messages.translator.locale}
+      data-theme={theme}
+      data-mode={mode}
+      style={style}
+      suppressHydrationWarning
+    >
       <head>
         <HeadContent />
         {correctsMode ? <script dangerouslySetInnerHTML={{ __html: SYSTEM_MODE_SCRIPT }} /> : null}

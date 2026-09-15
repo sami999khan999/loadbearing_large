@@ -2,13 +2,13 @@ import { Principal } from "@loadbearing/application";
 import { Identifiers } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { CapabilitySet } from "@loadbearing/permissions";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Database } from "../../src/pg/primitive/index.js";
+import { Database, type DrizzleClient } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { activityLog } from "../../src/pg/schema/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
-import { openDatabase, seedOrganizationId } from "../support/database.js";
+import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
 
 let database: Database;
 let scope: TransactionScope;
@@ -115,5 +115,56 @@ describe("PgUnitOfWork", () => {
     });
 
     expect(await findByAction(action)).toHaveLength(1);
+  });
+
+  // Two distinct values, neither of them the 30s default, so a `SET LOCAL` that never ran
+  // and one that ran and leaked both fail. See docs/reference/unit-of-work.md.
+  it("applies the configured statement timeout inside run and nowhere else", async () => {
+    const pooled = new Database({ url: DATABASE_URL, statementTimeoutMs: 25_000 });
+    const timeoutScope = new TransactionScope();
+    const uow = new PgUnitOfWork(pooled, timeoutScope, { statementTimeoutMs: 90_000 });
+
+    const show = async (client: DrizzleClient) =>
+      (await client.execute<{ statement_timeout: string }>(sql`show statement_timeout`)).rows[0]
+        ?.statement_timeout;
+
+    try {
+      expect(await show(pooled.client)).toBe("25s");
+
+      await uow.run(async () => {
+        const tx = timeoutScope.current();
+        if (!tx) throw new Error("no transaction in scope");
+        expect(await show(tx)).toBe("90s");
+      });
+
+      // The connection went back to the pool with the transaction; a plain `SET` here
+      // would have followed it and become every later caller's timeout.
+      expect(await show(pooled.client)).toBe("25s");
+    } finally {
+      await pooled.close();
+    }
+  });
+
+  // Without the guard this sets the timeout on the savepoint's own `SET LOCAL`, which
+  // outlives a rollback to that savepoint and silently raises the outer transaction's.
+  it("leaves a nested run to the transaction already open", async () => {
+    const pooled = new Database({ url: DATABASE_URL, statementTimeoutMs: 25_000 });
+    const timeoutScope = new TransactionScope();
+    const uow = new PgUnitOfWork(pooled, timeoutScope, { statementTimeoutMs: 90_000 });
+
+    try {
+      await uow.run(async () => {
+        await uow.run(async () => {
+          const tx = timeoutScope.current();
+          if (!tx) throw new Error("no transaction in scope");
+          expect(
+            (await tx.execute<{ statement_timeout: string }>(sql`show statement_timeout`)).rows[0]
+              ?.statement_timeout,
+          ).toBe("90s");
+        });
+      });
+    } finally {
+      await pooled.close();
+    }
   });
 });

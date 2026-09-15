@@ -5,13 +5,23 @@ export class Endpoint {
 
   // Same-origin, so there is no host to configure. Kept in step with the handler's
   // `prefix` and with the file routes, which spell the path again.
-  public static readonly rpc = "/api/rpc";
+  public static readonly rpcPath = "/api/rpc";
   public static readonly authPath = "/api/auth";
 
-  // Better Auth resolves `baseURL` through `new URL()` in its constructor, so a relative
-  // value throws during SSR. `.invalid` never resolves — see docs/reference/env.md.
+  // oRPC's `RPCLink` resolves this through `new URL()` with no second argument, so a
+  // relative value throws `Invalid URL` on the first call — in the browser too.
+  public static get rpc(): string {
+    return `${Endpoint.origin()}${Endpoint.rpcPath}`;
+  }
+
+  // Better Auth resolves `baseURL` through `new URL()` in its constructor, the same way.
   public static get auth(): string {
-    const origin = typeof window === "undefined" ? "https://ssr.invalid" : window.location.origin;
-    return `${origin}${Endpoint.authPath}`;
+    return `${Endpoint.origin()}${Endpoint.authPath}`;
+  }
+
+  // `.invalid` never resolves, so a call that slips into SSR fails loudly rather than
+  // quietly reaching some other localhost — see docs/reference/env.md.
+  private static origin(): string {
+    return typeof window === "undefined" ? "https://ssr.invalid" : window.location.origin;
   }
 }

@@ -27,7 +27,7 @@
     "check": "biome check --write .",
     "lint": "biome check . && eslint .",
     "lint:fast": "biome check .",
-    "test": "pnpm -r --parallel run test",
+    "test": "pnpm -r run test",
     "clean": "pnpm -r --parallel run clean",
     "deps:check": "syncpack lint",
     "repo:check": "sherif -r unordered-dependencies",

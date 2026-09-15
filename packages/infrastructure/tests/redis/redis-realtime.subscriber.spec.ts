@@ -42,7 +42,7 @@ const CONFIG = { maxStreamsPerUser: 8, maxAgeMs: 60_000, queueSize: 4 };
 
 const build = (overrides: Partial<typeof CONFIG> = {}) => {
   const redis = new FakeRedis();
-  const subscriber = new RedisRealtimeSubscriber(redis as unknown as Redis, {
+  const subscriber = new RedisRealtimeSubscriber(() => redis as unknown as Redis, {
     ...CONFIG,
     ...overrides,
   });

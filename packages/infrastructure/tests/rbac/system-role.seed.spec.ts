@@ -121,10 +121,29 @@ describe("SystemRoleSeed.run", () => {
       .from(roles)
       .where(and(eq(roles.organizationId, organizationId), eq(roles.key, "member")));
 
+    if (!member) throw new Error("the seed did not create a member role");
+    const grantedTo = async () =>
+      (
+        await database.client
+          .select({ permission: rolePermissions.permission })
+          .from(rolePermissions)
+          .where(
+            and(
+              eq(rolePermissions.organizationId, organizationId),
+              eq(rolePermissions.roleId, member.id),
+            ),
+          )
+      )
+        .map((row) => row.permission)
+        .sort();
+
+    // Read rather than written down: `member`'s list grows with every slice that adds an
+    // inbox or a conversation, and a literal here is a spec that fails on the next one.
+    const intended = await grantedTo();
     const stale = PermissionRegistry.instance
       .all()
-      .find((key) => key !== "member.read" && !key.startsWith("core."));
-    if (!stale || !member) throw new Error("the permission catalog is too small for this spec");
+      .find((key) => !intended.includes(key) && !key.startsWith("core."));
+    if (!stale) throw new Error("the permission catalog is too small for this spec");
 
     await database.client
       .insert(rolePermissions)
@@ -132,17 +151,7 @@ describe("SystemRoleSeed.run", () => {
 
     await seed.run(organizationId);
 
-    const granted = await database.client
-      .select({ permission: rolePermissions.permission })
-      .from(rolePermissions)
-      .where(
-        and(
-          eq(rolePermissions.organizationId, organizationId),
-          eq(rolePermissions.roleId, member.id),
-        ),
-      );
-
-    expect(granted.map((row) => row.permission)).toEqual(["member.read"]);
+    expect(await grantedTo()).toEqual(intended);
   });
 
   // `guest` is the case a per-role delete gets wrong: its intended set is empty, so it

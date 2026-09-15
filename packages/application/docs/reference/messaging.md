@@ -52,6 +52,22 @@ the count is a `LATERAL` per row of the conversation page, **capped at a hundred
 The 100k move is `unreadCounts` behind a Redis `HINCRBY` adapter with `last_read_at` still the
 record. That is a swap of one method, which is the point of it being one method.
 
+### `messages.created_at` is stored to the millisecond, on purpose
+
+Postgres writes `now()` to the microsecond. A JavaScript `Date` holds milliseconds, so a value
+read back through the client and sent again is a *different* instant from the one on the row —
+and `findById`, `edit` and `softDelete` all carry `createdAt` back as a predicate. Every one of
+them matched zero rows: editing a message did nothing, deleting it did nothing, and a
+conversation the reader had just read still showed one unread, because `unreadCounts` compares
+`created_at > last_read_at` and `last_read_at` comes from the application clock.
+
+The column is therefore `timestamptz(3)`, which is what makes the round trip exact. `notifications`
+needs no equivalent: its `created_at` is the event's `occurred_at`, which has already been through
+a `Date` — the same property, arrived at a different way, and the reason its dedupe index holds.
+
+The general rule, for any column a caller will hand back: **if a timestamp is a key, it must be
+storable in the type the caller holds it in.**
+
 ## Two publish paths, and the client dedupes
 
 `SendMessageUseCase` publishes the full frame on the conversation channel **right after its

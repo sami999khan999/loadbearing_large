@@ -126,6 +126,14 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     const to = PgActivityArchiveGateway.iso(PgActivityArchiveGateway.nextMonth(period));
 
     try {
+      // A cancelled `detach … concurrently` leaves the partition *detach-pending*: still a
+      // child, so `attach` is not the inverse, and no row in the month can be read or written.
+      if (await this.isDetachPending(name)) {
+        await this.db.execute(
+          sql.raw(`alter table activity_log detach partition ${name} finalize`),
+        );
+      }
+
       // `sql.raw`, because Postgres accepts no bind parameters in DDL — the same trap
       // `PgMaintenanceGateway` documents. Both bounds are derived from a `Date`.
       await this.db.execute(
@@ -137,6 +145,18 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       // Swallowed on purpose: the caller needs the failure that started this, and a
       // partition that will not re-attach is an operator's problem either way.
     }
+  }
+
+  // `inhdetachpending` is the only thing that distinguishes a half-detached partition from
+  // an attached one, and the difference is a month that silently accepts no writes.
+  private async isDetachPending(name: string): Promise<boolean> {
+    const result = await this.db.execute<{ pending: boolean }>(sql`
+      select inhdetachpending as pending
+      from pg_inherits
+      where inhrelid = ${`public.${name}`}::regclass
+    `);
+
+    return result.rows[0]?.pending === true;
   }
 
   private static nextMonth(period: Date): Date {

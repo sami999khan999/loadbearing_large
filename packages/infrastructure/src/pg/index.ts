@@ -4,6 +4,7 @@ export {
   BaseRepository,
   Database,
   type DatabaseConfig,
+  type DatabaseStats,
   type DrizzleClient,
   KeysetCursor,
 } from "./primitive/index.js";
@@ -31,4 +32,8 @@ export {
   PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";
-export { PgUnitOfWork, TransactionScope } from "./transaction/index.js";
+export {
+  PgUnitOfWork,
+  type PgUnitOfWorkConfig,
+  TransactionScope,
+} from "./transaction/index.js";

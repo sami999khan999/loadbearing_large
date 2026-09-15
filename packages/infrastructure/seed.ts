@@ -20,8 +20,10 @@ import { TransactionScope } from "./src/pg/transaction/index.js";
 // at all, and `pnpm db:studio` against an empty schema tells you nothing.
 const SEED_SLUG = process.env.BOOTSTRAP_ORGANIZATION_SLUG ?? "loadbearing";
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is required.");
+// Direct, for the same reason the migrator is: this runs once, against a database that
+// may have no pooler in front of it yet.
+const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
+if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
 
 const database = new Database({ url });
 const scope = new TransactionScope();

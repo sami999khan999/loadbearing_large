@@ -108,7 +108,9 @@ export const messages = pgTable(
     // Soft: the row keeps its place so the conversation keeps its shape and the keyset
     // cursor over it stays stable. The body is blanked, not the row.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Milliseconds, not the default microseconds: every caller hands this value back as a
+    // predicate. See application/docs/reference/messaging.md.
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
   (t) => [
     // The send dedupe, tenant-leading per §17. Scoped to the conversation as well, so

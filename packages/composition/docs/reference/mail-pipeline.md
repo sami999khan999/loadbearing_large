@@ -54,7 +54,7 @@ that compound:
 A dedicated mail log is something an application adds for a stated reason — regulated retention, an
 in-app resend history, a provider whose own log expires before the question arrives — not as a
 default. The trigger for building one is written down as `C6.10` in
-[`tasks/COMMUNICATION-PLAN.md`](../../../../tasks/COMMUNICATION-PLAN.md).
+[`plans/COMMUNICATION-PLAN.md`](../../../../plans/COMMUNICATION-PLAN.md).
 
 **The outbox event table is the deliberate exception**, and the distinction is the whole point:
 Redis cannot commit atomically with Postgres, so an event published from Redis can fire for a change
