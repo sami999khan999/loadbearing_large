@@ -1,10 +1,10 @@
 ---
 title: Database scaling plan — connection pooling, partitioning, virtual sharding
-updated: 2026-09-14
+updated: 2026-09-15
 owner: sami
 schema: plan/v1
 source: tree at c72ca9e (claude/sleepy-franklin-yqa9av), 2026-09-13
-verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same day, stricter; third pass 2026-09-14 against 5777eba, open items only, no live stack
+verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same day, stricter; third pass 2026-09-14 against 5777eba, open items only, no live stack; fourth pass 2026-09-15 against 5edd129, four items, no live stack
 ---
 
 # Database scaling plan
@@ -23,7 +23,7 @@ lists them.
 
 | Section | Open items, in build order |
 |---|---|
-| 2.B | `S2.4` `S2.5` `S2.6` `S2.7` `S2.8` `S2.18` |
+| 2.B | `S2.4` `S2.5` `S2.6` `S2.7` `S2.8` `S2.18` `S2.19` |
 | 2.C | `S2.10` `S2.11` `S2.12` `S2.13` `S2.14` `S2.16` `S2.17` |
 | 3 | `S3.1` `S3.2` · `S3.3` · `S3.4` `S3.5` `S3.6` `S3.7` `S3.8` `S3.9` `S3.10` `S3.23` · `S3.11` `S3.12` `S3.13` · `S3.14` `S3.15` `S3.16` · `S3.17` · `S3.18` · `S3.19` `S3.20` · `S3.21` `S3.22` |
 | 5 | `S5.1` `S5.2` `S5.3` `S5.4` `S5.5` — needs 2.C and nothing else |
@@ -48,6 +48,9 @@ pnpm --filter @loadbearing/infrastructure test && pnpm smoke
 - Retention is the allowlist entry and nothing else; `retention_policy` is deferred (14).
 - Phase 3 is built in full as planned (15).
 - All three partitioned tables archive before a drop, `outbox_event` included (16).
+- 2026-09-15: `messages` is partitioned now, not at the trigger (17); `partition_archive` carries
+  `bytes`, `action_counts` and `projected_at`, and prune records a projection gap rather than
+  blocking a drop (18). `S2.6` is a build item, `S4.7` is absorbed, `S2.19` is new.
 
 > **How to use this file**
 >
@@ -172,6 +175,7 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     pooler-safe. The startup parameter stays for direct connections.
 11. **`messages` stays unpartitioned.** The decision at `messaging.schema.ts` holds; `S2.5` records
     the trigger that reopens it rather than leaving it to a feeling.
+    `reversed: 2026-09-15 — decision 17.`
 12. **No new package, no new dependency, no new file suffix.** One new Tier 0 (pgBouncer), one new
     folder name (`shard/` in `composition`), three new `check-architecture` assertions (§21–§23),
     which makes the count twenty-three everywhere the docs say twenty — four sites, and one of
@@ -200,12 +204,21 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     taken.
 16. **Every partitioned table archives before it drops, `outbox_event` included.** (2026-09-14)
     2.C's goal holds as written: no month is destroyed, even one that is transport.
+17. **`messages` is partitioned now, not at the trigger.** (2026-09-15) Reverses 11. The cost is
+    one cache command on the send path; the trigger stays in `messaging.md` as the number that
+    would have forced it. `retentionMonths: null` — domain data, never dropped, never archived.
+18. **`partition_archive` carries `bytes`, `action_counts` and `projected_at`, and prune records a
+    gap rather than blocking a drop.** (2026-09-15) The admin plan's storage view, cold
+    reconciliation and gap record all read this one table; nothing else in the repository records
+    an object's size, and the per-action counts are free while the rows stream out. A projection
+    that is off or behind costs a known hole, never an unbounded table.
 
 ### What exists and is reused (verified against the tree at `c72ca9e`)
 
 Re-read at `49703c9`, where every line below still holds. One thing moved: a twenty-second
 migration, `0021_cold_guardian.sql`, has landed since `c72ca9e`, so the numbers this plan
-reserves shift by one — `S1.7` is `0022`, `S3.3` is `0023` — and `check-architecture` §21 runs
+reserves shift by one — `S1.7` is `0022`, `S3.3` was `0023` and is `0024` since `S2.6` took `0023`
+(2026-09-15) — and `check-architecture` §21 runs
 against twenty-two migrations, not twenty-one.
 
 - `Database` takes a config object, not a URL — `docs/setup/13` says so it could grow pool tuning
@@ -241,15 +254,15 @@ against twenty-two migrations, not twenty-one.
 | Env, pool (both `env.ts`) | `DATABASE_URL` (pooled), `DATABASE_DIRECT_URL`, `DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT_MS`, `DATABASE_POOL_CONNECT_TIMEOUT_MS`, `DATABASE_STATEMENT_TIMEOUT_MS` |
 | Env, shards | `DATABASE_SHARD_<n>_URL`, `DATABASE_SHARD_<n>_DIRECT_URL`, `DATABASE_SHARD_<n>_VIRTUAL` (`128-255`, or `1,7,9-20`), `n ≥ 1` |
 | Table (catalog) | `shard_assignments` |
-| Tables (cold storage) | `partition_archive` (per tenant, per table, per month; `catalog`) |
-| Primitives (`application/src/primitive/`) | `ShardKey`, `VirtualShard`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (`column`, `retentionMonths`; both built in `S2.1`) |
+| Tables (cold storage) | `partition_archive` (per tenant, per table, per month; `catalog`; `bytes`, `action_counts`, `projected_at` added 2026-09-15 in `S2.11`) |
+| Primitives (`application/src/primitive/`) | `ShardKey`, `VirtualShard`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (`column`, `retentionMonths`; both built in `S2.1`; `messages` joins `ALL` in `S2.6`) |
 | Ports (cold storage) | `PartitionArchiveGateway` (replaces `ActivityArchiveGateway`), `ColdArchiveReader` |
-| Ports (`application/src/port/`) | `ShardingStrategy`, `ShardPlacementPolicy`, `ShardResolver`, `ShardAssignmentRepository` |
+| Ports (`application/src/port/`) | `ShardingStrategy`, `ShardPlacementPolicy`, `ShardResolver`, `ShardAssignmentRepository`; `MaintenanceGateway.partitionsBefore` (`S2.19`); `CacheStore.setIfAbsent` (`S2.6`) |
 | Infrastructure (`pg/primitive/`) | `ShardMap`, `DatabaseCluster` |
 | Infrastructure (`pg/transaction/`) | `ShardScope`, `TransactionScope` (carries placement) |
 | Infrastructure (`pg/repository/`) | `PgShardResolver`, `PgShardAssignmentRepository` |
 | Composition (`src/shard/`, new folder) | `OrganizationShardingStrategy`, `HashShardPlacementPolicy` |
-| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn), `shard.assignment.created` (info), `shard.resolution.failed` (error), `cold.partition.restored` (info), `cold.objects.swept` (info) — an archived month keeps the existing `maintenance.partition.archived` |
+| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn), `shard.assignment.created` (info), `shard.resolution.failed` (error), `cold.partition.restored` (info), `cold.objects.swept` (info), `analytics.projection.gap` (warn, `S2.14`) — an archived month keeps the existing `maintenance.partition.archived` |
 | S3 prefix | `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz` — one lifecycle rule on `cold/` tiers every table |
 | Scripts | `pnpm db:partitions`, `pnpm infra:up:sharded` |
 | Compose services | `pgbouncer` (core), `postgres-shard-1` (profile `sharded`) |
@@ -670,8 +683,8 @@ correction, and the rehearsal uses four-second transactions instead.
 **Goal.** Each partitioned table declares its own column in one place and its retention as data,
 the guard that a hand-edited migration matches that declaration is a build failure rather than a
 paragraph in `docs/setup/13`, the runway cannot be lost by a worker that was asleep on the first of
-the month, partition pruning is proven by `EXPLAIN` rather than assumed, the one exception
-(`messages`) carries the trigger that reopens it — and **no month is ever destroyed**: retention
+the month, partition pruning is proven by `EXPLAIN` rather than assumed, every table that grows
+with activity is on the list, `messages` included (`S2.6`) — and **no month is ever destroyed**: retention
 moves a partition to S3 and drops it only once the object is written and verified (`2.C`).
 
 **Design in one paragraph.** `PartitionedTable.ALL` becomes a frozen list of
@@ -849,12 +862,49 @@ retention number moves out of the code into a row an operator can edit without a
   It catches nothing on its own; it is the change detector, so that a bound added later fails the
   spec and is lowered deliberately with decision 13's numbers re-measured, rather than arriving
   as a badge that silently stopped counting old rows.
-- [ ] `S2.6` **`messages` — the recorded exception** — no code. `messaging.schema.ts`'s comment
-  gains the trigger: reopen when one month of `messages` passes 50 M rows or
-  `messages_keyset_idx` passes 10 GB, and the shape to build then is `PARTITION BY RANGE
-  (created_at)` with the send dedupe moved to a Redis `SET NX` keyed
-  `message:client:<org>:<conversation>:<clientId>` with a 24 h TTL, which is where a retry
-  window belongs anyway. **Docs:** `packages/application/docs/reference/messaging.md`.
+- [ ] `S2.6` **`messages` is partitioned, and the send dedupe leaves Postgres** — decision 17
+  (2026-09-15) reverses decision 11: the trigger is not waited for. The blocker was never the
+  table, it was one index — `messages_client_uq (organization_id, conversation_id, client_id)`
+  cannot exist on a partitioned table without `created_at`, and with it every retry inserts
+  (`messaging.md` §"the one table that is not partitioned"). The dedupe moves to the cache:
+  `CacheStore` gains `setIfAbsent<T>(key, value, ttlSeconds): Promise<boolean>` — one Redis
+  `SET … EX … NX`, mirrored in `InMemoryCacheStore` — and `SendMessageUseCase.execute` generates
+  `id = Uuid.v7()` and `createdAt = clock.now()` itself, then before `unitOfWork.run` calls
+  `setIfAbsent("message:client:<org>:<conversation>:<clientId>", { id, createdAt }, 86_400)`.
+  `false` means a retry: read the held `{ id, createdAt }`, `messages.findById(...)`, and return
+  that row without touching the conversation, the outbox or the fast path — the two attempts stay
+  indistinguishable, which is what `DO UPDATE … RETURNING` bought. A held key whose row is absent
+  (the first attempt's transaction rolled back after the key was set) is deleted and the send
+  proceeds as new; that branch is two lines and the spec that pins it is the one worth writing.
+  `NewMessage` gains `id` and `createdAt`; `save()` becomes a plain insert with `RETURNING`;
+  `client_id` stays as a column, with no index. `Clock` is injected into the use-case, which is
+  the first messaging use-case to hold one.
+  Schema: `messaging.schema.ts` PK becomes `(id, created_at)` the way `notifications` already is,
+  `messages_client_uq` is deleted, `messages_keyset_idx` and `messages_conversation_fk_idx` are
+  declared on the parent and propagate. `conversations.last_message_id` carries no FK
+  (`messaging.schema.ts:38`), so nothing references `messages` and the table can be replaced.
+  `messages.conversation_id → conversations` stays: a partitioned table may hold outbound FKs.
+  Migration `0023_messages_partitioned.sql`, hand-written: `drop table messages`, then the
+  `0000` shape — `create table … partition by range (created_at)` with the PK, the two indexes,
+  and six monthly children — **in place, not create-copy-swap**, because the seed writes no
+  messages and the kit ships none; the sentence "a deployment with rows copies into a new parent
+  and swaps under a lock" goes in `partitions.md`, not in the migration. `S3.3` moves to `0024`.
+  `PartitionedTable.ALL` gains `{ name: "messages", column: "created_at", retentionMonths: null }`,
+  and here `null` keeps its meaning after `S2.14`: never dropped by the calendar and therefore
+  never archived — messages are domain data — so `S2.12` exports nothing for it and 2.C's loop
+  skips it. The `partitions` job still ensures its runway. §21 (`S2.4`) then sees a fourth
+  `PARTITION BY RANGE ("created_at")` in `migrations/` and requires exactly this entry.
+  `S2.5` adds the table: **exactly one** for `findById`, `edit`, `softDelete` (`created_at =`);
+  **the tail is pruned** for `unreadCounts` (`created_at > last_read_at`, the floor is the read
+  marker rather than retention); **pinned at every partition** for `list` — the row-constructor
+  cursor is the same shape decision 13 measured, so partitioning `messages` buys a manageable
+  table and a ready archive path, not a faster page, and the item says so plainly.
+  **Docs:** `messaging.md` §"the one table that is not partitioned" rewritten as "how it is
+  partitioned and where the dedupe went" (the two rejected alternatives stay as history; a third,
+  the one built, is added); `messaging.schema.ts:87-88` comment; `partitions.md` (`S2.8`) fourth
+  table and the copy-swap sentence; `docs/setup/27` "Step 6 can refuse" paragraph becomes "Step 6
+  refused once, and the answer was a cache key"; `packages/application/docs/reference/ports.md`
+  for `setIfAbsent`. `data-and-scale.md` §4.2 names no `messages` today — nothing to change.
 - [ ] `S2.7` **`pnpm db:partitions`** — `packages/infrastructure/partitions.ts` above `src/`
   (the rule for runnable scripts, `docs/ai/rules/folders.md`): ensures three months for every
   allowlist entry over `DATABASE_DIRECT_URL` and prints the runway per table; root
@@ -867,6 +917,31 @@ retention number moves out of the code into a row an operator can edit without a
   `docs/opinions/data-and-scale.md` §4.2 rewritten around the allowlist entry shape;
   `docs/ai/rules/data.md` partition bullet updated; `docs/setup/13` §13.6 hand-edit paragraph
   points at §21.
+- [ ] `S2.19` **`MaintenanceGateway.partitionsBefore`, the read behind the retention preview** —
+  `partitionsBefore(table: PartitionedTableName, cutoff: Date): Promise<readonly PartitionEstimate[]>`,
+  `PartitionEstimate { name, period: Date, estimatedRows: number, bytes: number }`, on the port at
+  `application/src/port/maintenance.gateway.ts` (an existing port, so the count stays).
+  `childrenOf` (`pg-maintenance.gateway.ts:131-141`, private) widens to return the three columns
+  and `dropMonthlyPartitionsBefore` keeps reading names off it, so the drop loop and the preview
+  cannot disagree about what a child is:
+
+  ```sql
+  select child.relname as name,
+         greatest(child.reltuples, 0)::bigint as estimated_rows,
+         pg_total_relation_size(child.oid)::bigint as bytes
+  from pg_inherits
+  join pg_class parent on parent.oid = pg_inherits.inhparent
+  join pg_class child  on child.oid  = pg_inherits.inhrelid
+  where parent.relname = ${table}
+  ```
+
+  Filtered in code by `partitionMonth(table, name) < monthStart(cutoff)`, the same parse the drop
+  uses. `reltuples` is the planner's estimate, refreshed by autovacuum or `ANALYZE`, and `-1` on a
+  child never analysed — hence `greatest(…, 0)`, and the screen says "about". `bytes` is exact.
+  `RecordingMaintenanceGateway` (`composition/src/fake/recording-maintenance.gateway.ts`) records
+  the call and returns a list its constructor was given, default `[]`. Consumed by
+  `PLATFORM-ADMIN-PLAN.md`'s preview (`A2.15`) and its retention screen's "today" column; nothing
+  in this plan calls it. Added 2026-09-15. **Docs:** `ports.md`, `partitions.md`.
 - [-] `S2.9` **The reads get a partition bound** — filed by the `EXPLAIN` at `S2.5`, which found
   that three of the four hot reads over a partitioned table scan every month. The shape is a
   floor, not a window: a read that walks backwards in time needs a lower bound it can push to
@@ -986,6 +1061,16 @@ allowlist entry (decision 14).
   scheduled its rewrite. It becomes "kept until the drop migration; `partition_archive` leads with
   the tenant and needs no exemption", and the `activity_archive` entry leaves `TENANT_EXEMPT` in
   the migration that drops the table. `partition_archive` is `catalog` (decision 5).
+  `revised: 2026-09-15` — `partition_archive` carries three more columns from the migration that
+  creates it: `bytes bigint not null`, from `StoredObject.size`, which `s3-storage.gateway.ts:64,101`
+  computes and `pg-activity-archive.gateway.ts:74-88` discards today (`ArchivedPartition.objects[]`
+  gains `bytes` beside `rowCount`); `action_counts jsonb not null default '{}'`, `{ "<action>": n }`
+  counted while the rows stream out, which is free, and what lets the cold reconciliation subtract
+  excluded actions and the storage view break a tenant-month down (`activity_log` only; `{}` for
+  the other two tables); and `projected_at timestamptz null`, null meaning ClickHouse has not
+  received this tenant-month, stamped by `S2.14` and read by `PLATFORM-ADMIN-PLAN.md`'s re-project
+  action. Partial index `partition_archive_unprojected_idx (table_name, period) where projected_at
+  is null`, so "what has a hole" is an index read rather than a scan (decision 18).
 
 - [ ] `S2.12` **The export, cut on the tenant boundary** — `rows()` takes an organization:
   `select distinct organization_id from <partition>` first (cheap — `activity_log`, `outbox_event`
@@ -1031,6 +1116,15 @@ allowlist entry (decision 14).
   second code, `cold.partition.archived`, for the same event; it is gone, and
   `maintenance.partition.archived` is the one. `event-shape.ts` changes with `core.events.ts`, both
   files, every time. **Docs:** `schedules.md` loses the archive schedule row.
+  `revised: 2026-09-15` — after archive-then-drop, for `activity_log` only: when
+  `container.hasProjector` and `platformPolicy.get().projectionEnabled` (the switch
+  `PLATFORM-ADMIN-PLAN.md` `A3.8` builds on `platform_policy`) both hold, read
+  `projector.checkpoint()`; if `lastOccurredAt >= period end`, `update partition_archive set
+  projected_at = now() where table_name = 'activity_log' and period = $1 and projected_at is null`.
+  Otherwise leave it null and emit `analytics.projection.gap` (`warn`,
+  `{ period, reason: "disabled" | "behind" }`) — the month is archived and dropped regardless
+  (decision 18: archive, drop, record the gap), so a forgotten switch costs a known hole, never an
+  unbounded table. The code joins `core.events.ts` **and** `event-shape.ts`.
 
 - [-] `S2.15` **Retention as data, not as a deploy** —
   `dropped: 2026-09-14 — decision 14.` The design is preserved under the same ID in
@@ -1136,7 +1230,7 @@ to fail on the catalog foreign keys until `S4.1`.
   `moved_at` nullable; `shard_assignments_virtual_idx (virtual_shard)` for the move job. A
   catalog table, so no `organization_id` — §9's exemption set becomes derived from
   `CatalogTable` (`S3.18`), and this is the first table to rely on it. Migration
-  `0023_*.sql`, generated, then hand-appended with the backfill:
+  `0024_*.sql` (`0023` went to `messages`, `S2.6`, 2026-09-15), generated, then hand-appended with the backfill:
   `insert into shard_assignments (shard_key, virtual_shard) select id::text, <fnv1a-mod-256 in SQL> from organizations on conflict do nothing`
   — the same function `S3.11` ships in TypeScript, with a spec asserting both agree on the
   pinned vectors. **Docs:** `docs/setup/13` §13.3 modelling notes, `docs/opinions/vocabulary.md`
@@ -1564,7 +1658,8 @@ constraint `S4.1` names.
   a replica for its reads before anything else.
 - [ ] `S4.6` **Two-node proof** — `sharded.spec.ts` green is this phase's Exit, plus a tenant
   move under load with no lost writes.
-- [ ] `S4.7` **`messages` partitioning** when `S2.6`'s trigger fires.
+- [-] `S4.7` **`messages` partitioning** — `absorbed: 2026-09-15` into `S2.6`, built without
+  waiting for the trigger (decision 17).
 - [ ] `S4.8` **Load test** the routed paths at 10× against the sharded compose profile before any
   of this is called production-ready.
 
@@ -1678,3 +1773,4 @@ can silently disagree.
 | 2026-09-13 | @sami | Second pass, stricter: the first pass's own rigor gaps closed and every tree claim outside the fourteen items checked. Confirmed by measurement: drizzle's real statements with bound parameters scan every partition with zero runtime pruning (`S2.5` table rewritten from them); S3.14 over a real `RPCHandler` and a `Request`, frame 0 included, with the snapshot fix; FNV-1a on multibyte keys; the whole infrastructure suite — 26 files, 145 tests — green through pgBouncer; boot smoke green through it. Newly found: a pgBouncer **restart** kills an idle worker (`Database` has no `pool.on("error")`; `S1.1`) while `RECONNECT` does not; `server_reset_query` never runs in transaction mode, so one session-level `SET` poisoned all 25 fresh clients (`S1.7`, `S1.13`); pooler-side queueing is invisible to `waitingCount` (`S1.4`); S1.9's port mapping and healthcheck are wrong for the image; an interrupted `DETACH CONCURRENTLY` leaves a month invisible **and unwritable** until `FINALIZE`, and `reattach()` cannot recover it (`S1.11`); `drop table` on a partition locks the parent, so maintenance DDL must keep a short `lock_timeout` (`S1.11`); `ensureMonthlyPartitions` races between replicas with `42P07` (`S2.2`); the worker's routed paths run under the NIL platform principal with the tenant in the payload, so `keyOf(principal)` cannot route them (`S3.11`, `S3.15`); four catalog transactions bypass `PgUnitOfWork` (`S3.8`); the smoke harness has no database and bans `process.env`, so `pooled.spec.ts` and `sharded.spec.ts` cannot exist as named (`S1.12`, `S3.20`); §23's real sites and the fifth `new Database(` (`S3.18`); nine routed→catalog FKs, not two (`S3.20`, `S4.1`); `workflow.md:14` already says `18`. First-pass text fixed: fifteen `run` sites not sixteen, `member` is four not five, and the `DISCARD ALL` mechanism |
 | 2026-09-14 | @sami | **Third pass: four decisions, and every open item read against `5777eba`.** `S2.9` dropped with its measurements kept (decision 13); retention stays on the allowlist and `retention_policy` is deferred with `S5.6` to a new `DB-SCALING-DEFERRED.md`, IDs kept (14) — which reverses the row above that said the number "moves into a `retention_policy` row"; Phase 3 stays in full (15); all three tables archive (16). Corrections on open items: decision 5 names `partition_archive` as `catalog` and counts twenty-four tables; the shard segment is out of the cold key and `partition_archive` grows no shard column, because a tenant move would orphan both; `SystemRoleSeed` is the twenty-third `BaseRepository` and §22 globs all of `pg/`; `ArchivedPartition` is kept and reshaped, `ArchivedMonth` never existed; `S2.14` deletes the `archive` job, `ArchiveSchedule` and `RETAIN_MONTHS`; one code for an archived month, not two; `S2.16` had no trigger and gets `db:partitions --sweep`; `S3.13` builds the single-shard test cluster `S3.22` assumed; the session-`SET` grep is decided against; `S4.3` files the ClickHouse checkpoint gap; `S5.1` names its per-page read cost; new `S2.18` makes §15 read source comments. Decision 12's count is still twenty-three. A `## Resume here` section now opens the file. No premise was re-measured against a live stack; this pass read the tree, and `check:architecture` and `lint` stay green over the edit |
 | 2026-09-14 | @sami | Decision 14 revised: `S2.15` and `S5.6` reopened by `PLATFORM-ADMIN-PLAN.md`, which builds the platform tier on RBAC and makes retention, cold storage and the ClickHouse policy rows an administrator edits. The allowlist stays the default. `S4.4` gains a pointer to the replica panel filed behind it |
+| 2026-09-15 | @sami | **Fourth pass, with the admin plan's second pass.** Decision 17: `messages` is partitioned now — `S2.6` rewritten from a recorded exception into a build item (the dedupe moves to `CacheStore.setIfAbsent`, the PK becomes `(id, created_at)`, migration `0023` in place because the kit ships no messages), `S4.7` absorbed, `S3.3` moves to `0024`. Decision 18: `partition_archive` gains `bytes`, `action_counts` and `projected_at` with a partial index (`S2.11`), and `prune()` stamps `projected_at` when the projection has passed the month or emits `analytics.projection.gap` and drops anyway (`S2.14`). New `S2.19`: `MaintenanceGateway.partitionsBefore`, the catalog read behind the admin plan's retention preview. `S3.16`'s per-shard loop and `S2.7`'s script cover `messages` with no text change; `S3.18`'s §22/§23 counts do not change. Read against `5edd129`, no live stack |

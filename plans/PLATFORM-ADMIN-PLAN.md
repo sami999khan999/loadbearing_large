@@ -1,6 +1,6 @@
 ---
 title: Platform admin plan — the tier, retention, projection policy, the replica panel
-updated: 2026-09-14
+updated: 2026-09-15
 owner: sami
 schema: plan/v1
 source: tree at 1135d57 (claude/sleepy-franklin-yqa9av), 2026-09-14
@@ -46,6 +46,19 @@ all copyable as they stand. What does not exist is any scope above a tenant, any
 actions, any ClickHouse migration path, and any place a policy row could live.
 
 This file is the plan: four phases in the shape of `DB-SCALING-PLAN.md`, item IDs `A<phase>.<n>`.
+
+A second pass on 2026-09-15 read the plan against the question "what can the admin choose, and is
+there anything more", and found four controls it did not build and one switch it did not have. It
+planned every switch that can open a hole in ClickHouse and no action that fills one — nothing in
+the repository reads a cold-storage object back. Lowering a retention number silently scheduled a
+mass drop with no preview. Cost per tenant was not computable, because the S3 adapter computes
+every object's size and the archive gateway discards it. There was no projection on/off switch,
+and adding one made a latent gap — an archived month the projection never read — reachable by a
+click. And the daily reconcile never read the archived row counts, despite the schema comment
+saying that is the only check covering the cold window. Two things from that pass went to the
+scaling plan instead: `messages` is partitioned now (`S2.6`), and `S2.19` adds the partition-estimate
+read the preview here consumes. Queue-job retention was checked and is already capped, so it is
+not filed.
 
 ### Decisions recorded up front (do not re-litigate)
 
@@ -97,6 +110,29 @@ This file is the plan: four phases in the shape of `DB-SCALING-PLAN.md`, item ID
     `PutBucketLifecycleConfigurationCommand` ships inside `@aws-sdk/client-s3`. The port is
     `StoragePolicyGateway`. Slice ports stay in the slice. `Policy`, `Rules`, `Reader`,
     `Repository`, `Gateway` are all existing role nouns.
+12. **The ClickHouse switch is a pause, not a power switch.** (2026-09-15) The environment decides
+    whether the store runs; the switch decides whether it is used. Three states on screen: not
+    configured (toggle disabled), on, off. Off pauses the projection, the reconcile, the lag alarm
+    and the drift alarm together — a paused projection with live alarms trains people to ignore them.
+13. **A gap is recorded on the archive index, never silent, and never blocks a drop.** (2026-09-15)
+    `partition_archive.projected_at` null means ClickHouse never received that tenant-month. The
+    re-project action reads those rows and stamps them. The scaling plan's decision 18 is the other half.
+14. **Both switches live in one single-row table.** (2026-09-15) `platform_policy (id = 1,
+    projection_enabled, replica_reads_enabled)`, typed columns rather than a key-value bag. Resolves
+    where `A4.2`'s switch lives.
+15. **Cold storage is read back through the worker, not through ClickHouse's `s3()` table function.**
+    (2026-09-15) The convention that lifts `subject_id` out of the payload is one TypeScript
+    function, and an SQL copy of it is a second implementation of a convention. The scaling plan's
+    reader, whole-object at the ~8 MB tenant-month bound `S5.1` already accepts, with streaming as
+    the same escape hatch. One reader, two sinks.
+16. **Every destructive setting shows its consequence before the save.** (2026-09-15) From a read on
+    the maintenance port (`S2.19`), the same numbers the retention screen shows beside each table.
+17. **Sharding gets a map now and a button that waits.** (2026-09-15) The map reads `shard_assignments`
+    once `S3.3` lands; the move procedure lands with `S4.2`; the contract carries
+    `moves: "unavailable" | "available"` from a container getter that `S4.2` flips, so the screen
+    never guesses.
+18. **`messages` is partitioned with `retentionMonths: null`.** (2026-09-15) Messages are domain data
+    and are never dropped; the retention screen lists the table read-only, "never dropped".
 
 ### What exists and is reused (verified against the tree at `1135d57`)
 
@@ -119,6 +155,15 @@ This file is the plan: four phases in the shape of `DB-SCALING-PLAN.md`, item ID
   three queries decision 6 puts one list in front of.
 - `MaintenanceConsumer` and its schedules — the daily reconcile joins the `cleanup` cadence.
 - `docs/ai/skills/add-slice.md` — the twelve steps; Phase 2 and 3 are each one slice.
+- `StoredObject.size` — computed by the S3 adapter on every put and discarded by the archive
+  gateway; the scaling plan's `S2.11` keeps it from 2026-09-15.
+- `PgActivityReplayReader.subjectOf` — becomes `ActivitySubject.of` in `application/src/primitive/`,
+  shared by the replay reader and the re-project sink.
+- `PgMaintenanceGateway.childrenOf` — private today; `S2.19` widens it and builds the public read beside it.
+- `Container.health()` and its `analytics: boolean | null` — the "not configured" state already
+  exists as a value.
+- The scaling plan's `ColdArchiveReader` port and `S2.13`'s scratch-table restore; `S5.1`'s ~8 MB
+  bound and its streaming escape hatch.
 
 ---
 
@@ -131,21 +176,22 @@ This file is the plan: four phases in the shape of `DB-SCALING-PLAN.md`, item ID
 | Scope | `platform`, on `PermissionScope` and on `roles.scope` |
 | Column | `organizations.is_platform boolean not null default false`, `organizations_platform_uq` partial on `(is_platform) where is_platform` |
 | System role (platform org only) | `platform_admin`, `is_system`, `scope = 'platform'`, every `platform.*` key |
-| Permission keys (`packages/permissions/src/catalog/platform.permissions.ts`, module `platform`, scope `platform`) | `platform.status.read`, `platform.retention.read`, `platform.retention.manage`, `platform.analytics.read`, `platform.analytics.manage` |
-| Routes (`route/platform.routes.ts`) | `/platform/status`, `/platform/retention`, `/platform/analytics` |
+| Permission keys (`packages/permissions/src/catalog/platform.permissions.ts`, module `platform`, scope `platform`) | `platform.status.read`, `platform.retention.read`, `platform.retention.manage`, `platform.analytics.read`, `platform.analytics.manage`, `platform.storage.read`, `platform.shards.read`, `platform.shards.manage` (procedure with `S4.2`); `platform.replica.manage` arrives with `S4.4`. Restore-to-Postgres is under `platform.retention.manage`; re-project and the switch under `platform.analytics.manage` |
+| Routes (`route/platform.routes.ts`) | `/platform/status`, `/platform/retention`, `/platform/analytics`, `/platform/storage`, `/platform/shards` |
 | Gate (`gate/platform.gate.ts`) | `platform: { permission: "platform.status.read", route: ROUTES.platform.status }` |
-| Tables (catalog, tenant-exempt) | `retention_policy (store, table_name) pk`, `projection_policy (action) pk` |
+| Tables (catalog, tenant-exempt) | `retention_policy (store, table_name) pk`, `projection_policy (action) pk`, `platform_policy (id smallint pk, check (id = 1))`; `partition_archive` gains `bytes`, `action_counts`, `projected_at` in the scaling plan's `S2.11` |
+| Primitive | `application/src/primitive/activity-subject.ts` → `ActivitySubject.of(payload)`, lifted out of `PgActivityReplayReader` |
 | Action catalog (`packages/contracts/src/catalog/`) | `<slice>.actions.ts` fragments → `ACTIVITY_ACTIONS`; `ActivityAction`, `ActivityActions.isKnown` in `registry/` |
-| Application slice `platform/` | `retention-policy.repository.ts`, `projection-policy.repository.ts`, `platform.reader.ts` (ports); `retention.rules.ts`; `list-retention-policies`, `update-retention-policy`, `list-projection-policies`, `update-projection-policy`, `inspect-platform-status` use-cases |
+| Application slice `platform/` | `retention-policy.repository.ts`, `projection-policy.repository.ts`, `platform.reader.ts` (ports); `retention.rules.ts`; `list-retention-policies`, `update-retention-policy`, `list-projection-policies`, `update-projection-policy`, `inspect-platform-status` use-cases; second pass: `platform-policy.repository.ts` (port); `preview-retention-change`, `list-tenant-storage`, `restore-partition`, `reproject-partition`, `toggle-projection`, `inspect-shard-map` use-cases, `move-tenant` with `S4.2`, `toggle-replica-reads` with `S4.4` |
 | Cross-cutting port | `application/src/port/storage-policy.gateway.ts` → `StoragePolicyGateway { lifecycle(), applyLifecycle(rules) }`, `LifecycleRule { prefix, expireAfterDays }` |
-| Infrastructure | `pg/schema/platform.schema.ts`, `pg/repository/pg-retention-policy.repository.ts`, `pg-projection-policy.repository.ts`, `pg-platform.reader.ts`, `pg/seed/platform-role.seed.ts`, `s3/s3-storage-policy.gateway.ts`; scripts above `src/`: `platform-grant.ts`, `clickhouse-migrate.ts`, `clickhouse-migrations/` |
+| Infrastructure | `pg/schema/platform.schema.ts`, `pg/repository/pg-retention-policy.repository.ts`, `pg-projection-policy.repository.ts`, `pg-platform.reader.ts`, `pg-platform-policy.repository.ts`, `pg/seed/platform-role.seed.ts`, `s3/s3-storage-policy.gateway.ts`; scripts above `src/`: `platform-grant.ts`, `clickhouse-migrate.ts`, `clickhouse-migrations/` |
 | Cache prefix | `capability:platform:<userId>`, 60 s, `invalidatePlatform()` on the invalidator |
 | Content namespace | `platform` |
-| Query keys | `QueryKeys.platform.status()`, `.retention()`, `.projection()` |
-| Worker job | `retention` on `QueueName.MAINTENANCE`, daily at 03:30, `RetentionSchedule` |
-| Log event codes | `retention.lifecycle.applied` (info), `retention.lifecycle.drifted` (warn), `retention.rows.expired` (info), `analytics.retention.applied` (info). `platform.policy.changed` is an **activity**, not a log code |
+| Query keys | `QueryKeys.platform.status()`, `.retention()`, `.retentionPreview(table, months)`, `.projection()`, `.policy()`, `.storage()`, `.shards()` |
+| Worker jobs | `retention` on `QueueName.MAINTENANCE`, daily at 03:30, `RetentionSchedule`; `cold-restore` and `cold-reproject` on `MAINTENANCE`, enqueued by use-cases with `jobId: "<job>:<table>:<period>:<org|all>"` so a double click is one job |
+| Log event codes | `retention.lifecycle.applied` (info), `retention.lifecycle.drifted` (warn), `retention.rows.expired` (info), `analytics.retention.applied` (info), `cold.partition.reprojected` (info, `{ period, organizationId, rows }`); `analytics.projection.gap` (warn) is declared in the scaling plan's `S2.14` and `cold.partition.restored` in its `S2.13`. `platform.policy.changed`, `platform.projection.paused`, `platform.projection.resumed`, `platform.restore.requested`, `platform.reproject.requested`, `platform.tenant.move_requested` are **activities**, not log codes |
 | Scripts | `pnpm platform:grant <email>`, `pnpm ch:migrate` |
-| Docs pages (new) | `packages/permissions/docs/reference/platform-scope.md`, `packages/application/docs/reference/platform.md`, `packages/infrastructure/docs/reference/clickhouse-migrations.md`, `packages/infrastructure/docs/reference/storage-policy.md` |
+| Docs pages (new) | `packages/permissions/docs/reference/platform-scope.md`, `packages/application/docs/reference/platform.md`, `packages/infrastructure/docs/reference/clickhouse-migrations.md`, `packages/infrastructure/docs/reference/storage-policy.md`, `packages/infrastructure/docs/reference/cold-restore.md` |
 
 ---
 
@@ -182,8 +228,9 @@ one. A `/platform/status` page and its nav gate prove the tier end to end before
   paths from decision 2, each as a case that fails without the branch. **Docs:** new
   `packages/permissions/docs/reference/platform-scope.md` (registered in `reference/meta.json` and
   `docs/index.md`), `docs/opinions/vocabulary.md` scope row, `docs/ai/rules/vocabulary.md` qualifier line.
-- [ ] `A1.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the five keys from the
-  vocabulary, spread into `CATALOG`; `route/platform.routes.ts`; `gate/platform.gate.ts` gating the
+- [ ] `A1.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the eight keys from the
+  vocabulary (`platform.shards.manage` is registered now so the seed grants it; its procedure
+  arrives with `S4.2`), spread into `CATALOG`; `route/platform.routes.ts`; `gate/platform.gate.ts` gating the
   `platform` nav module on `platform.status.read`. `ModuleRegistry.isVisible` needs no change: it
   calls `can()` and the new branch answers. **Docs:** `packages/permissions/docs/index.md` tree.
 - [ ] `A1.3` **`Principal` carries nothing new; the audit rebase is a rule, not a field** —
@@ -246,8 +293,11 @@ one. A `/platform/status` page and its nav gate prove the tier end to end before
   `(app)/_authenticated/platform/status.tsx` copied from `settings/roles.tsx` with
   `RouteGuard.requirePermission("platform.status.read")`; content namespace `platform` (the three
   edits in `namespace.ts`, two lines in `catalog.ts`, `en/platform.ts`, `bn/platform.ts`); nav item
-  in the content nav list. **Docs:** `apps/web/docs/reference/enforcement-surfaces.md` gains nothing
-  new, `packages/content/docs/reference/namespace.md`.
+  in the content nav list. The page also shows the projection's three states read-only —
+  `health().analytics === null` is "not configured", otherwise `platform_policy` (`A3.8`) says on
+  or off — while the control itself lives on `/platform/analytics`. **Docs:**
+  `apps/web/docs/reference/enforcement-surfaces.md` gains nothing new,
+  `packages/content/docs/reference/namespace.md`.
 - [ ] `A1.13` **§9 and the tripwires** — `check-architecture.mjs` §9 needs no change in this phase
   (no new table); `test-container.spec.ts` needs no change (no new cross-cutting port). Note both
   here so Phase 2 does not forget they exist. `docs/ai/skills/add-slice.md` step 1 gains "scope is
@@ -387,6 +437,57 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   retention policy at the same time") gains "and it is a row, with the allowlist as the default";
   `docs/ai/rules/data.md` retention bullet; `packages/infrastructure/docs/reference/cold-storage.md`
   (from `S2.17`) gains the lifecycle section; `DB-SCALING-DEFERRED.md` `S2.15` marked moved here.
+- [ ] `A2.15` **Preview before a retention change** — depends on the scaling plan's `S2.19`.
+  `preview-retention-change.use-case.ts` (`platform.retention.read`; input `{ tableName, hotMonths }`,
+  `tableName` from `PartitionedTable.NAMES`; computes the cutoff the way `prune()` does and returns
+  `maintenance.partitionsBefore(table, cutoff)` — `{ name, period, estimatedRows, bytes }[]` — plus
+  totals). Procedure `retention.preview` GET `/platform/retention/preview`, the permission entry,
+  the router, `PlatformQueries.retentionPreview` (`staleTime: 0`). `retention-policy.form.tsx`: the
+  hot-months field calls the preview on change, debounced 300 ms; the row shows "the next run drops
+  N partitions, about R rows, B" with a `Callout tone="danger"` when N > 0, and **the save button is
+  disabled until a preview for the current value has loaded**. The screen says rows are an estimate
+  refreshed by autovacuum. The same read with a cutoff past the runway gives each table its
+  "partitions / rows / bytes today" column, `messages` included, read-only (decision 18).
+  **Docs:** `platform.md`, `packages/feature/docs/index.md`.
+- [ ] `A2.16` **Per-tenant storage** — depends on `S2.11`'s `bytes` and `action_counts`.
+  `list-tenant-storage.use-case.ts` (`platform.storage.read`; `partition_archive` grouped by
+  `organization_id, table_name`: `sum(bytes)`, `sum(row_count)`, months covered, joined to
+  `organizations.name`; sorted by bytes descending; paginated; an optional `organizationId` filter
+  that also returns the per-month rows and the per-action breakdown from `action_counts`).
+  Procedure `storage.list`, route `/platform/storage`, `tenant-storage.list.tsx` over `DataTable`.
+  The screen says **cold storage only**: hot Postgres bytes cannot be attributed to a tenant because
+  a partition mixes every tenant's rows, and hot bytes per *table* are on the retention screen
+  (`A2.15`). **Docs:** `platform.md`, `cold-storage.md`.
+- [ ] `A2.17` **The cold reader, pulled forward from `S5.1`** — the scaling plan's `ColdArchiveReader`
+  (`application/src/port/`, `S3ColdArchiveReader` in `infrastructure/src/s3/`) is built here, with
+  a bulk method first: `rows(entry: PartitionArchiveEntry): Promise<readonly Readonly<Record<string, unknown>>[]>`
+  — `storage.get()` the object, gunzip through `node:zlib` re-exported in `import.ts`, split NDJSON,
+  verify sha-256 against `entry.checksum` and length against `entry.rowCount`, and throw
+  `ConflictError("cold", "checksum")` otherwise. `S5.1` later adds its paged, user-filtered `list()`
+  to the same port; two features adding a method each is what puts the port in `port/`.
+  Whole-object, at the ~8 MB tenant-month bound `S5.1` states, with the same 50 MB streaming escape
+  hatch. `InMemoryColdArchiveReader` in `composition/src/fake/`, fed by the fake storage gateway.
+  **Tripwire:** `test-container.spec.ts` moves to twenty-seven — this port arrives before `S5.1`
+  would have added it. `ActivitySubject.of` is lifted to `application/src/primitive/activity-subject.ts`
+  and `PgActivityReplayReader` calls it. **Docs:** new `packages/infrastructure/docs/reference/cold-restore.md`
+  (registered), `activity-archive.md` gains "reading it back", `ports.md`.
+- [ ] `A2.18` **Restore a month, on `S2.13`'s rule** — `S2.13` restores into a **scratch table, never
+  the live parent**, because a re-attached month leaves the retention job arguing with itself. This
+  action keeps that rule and adds the one case where attaching is right: the month is inside the
+  table's hot window. `restore-partition.use-case.ts` (`platform.retention.manage`; input
+  `{ tableName, period, organizationId? }`; validates matching `partition_archive` rows exist,
+  records `platform.restore.requested` (rebased per decision 9), enqueues `cold-restore` with the
+  dedupe `jobId`). `MaintenanceConsumer.restore()`: `S2.13`'s `restore()` per object into the scratch
+  table, `cold.partition.restored` per object; then, **only if** the period is at or after the
+  cutoff `prune()` would compute from the table's hot months, `maintenance.attachMonthlyPartition(table,
+  period, scratch)` — one `alter table … attach partition … for values from … to …`, a new method on
+  the existing port, mirrored in `RecordingMaintenanceGateway` — and the month is live again. Outside
+  the window the scratch table stays as evidence: nothing sweeps it, on purpose; the next restore of
+  the same month replaces it, and the screen says "raise hot months to *N* first to bring it live".
+  `outbox_event` restored rows carry `published_at`, so `drain` never re-publishes them, and the item
+  says so. Restore panel on `/platform/retention`: table, month, optional tenant → button → `Callout`
+  with the job id and which of the two outcomes applies. **Docs:** `cold-restore.md`, `cold-storage.md`
+  (`S2.13`'s section gains the attach case), `consumers.md`, `schedules.md`, `ports.md`.
 
 **Exit.** With `retention_policy` empty, `pnpm test` and the worker behave exactly as before this
 phase. Set `notifications` hot months to 6 on the screen: the audit row lands under the platform
@@ -396,8 +497,13 @@ expiring at 731 days, and the screen shows no drift. Set the ClickHouse TTL to 3
 `select engine_full from system.tables where name = 'activity_events'` carries `INTERVAL 36 MONTH`.
 Delete the rule from the bucket by hand: the next `retention` run emits `drifted`, then `applied`,
 and the rule is back. `pnpm ch:migrate` on an empty ClickHouse creates the table; on a full one it
-prints nothing to do. `check:architecture` green with one more `TENANT_EXEMPT` line;
-`test-container.spec.ts` pins twenty-six.
+prints nothing to do. Lower `notifications` hot months on the screen: the preview names the
+partitions and the estimate before the save is enabled. Restore last month for the seeded tenant:
+the scratch table holds the rows, the count matches `partition_archive`, `cold.partition.restored`
+is emitted, and — with hot months raised to cover it — the attach step makes the month live again.
+`/platform/storage` lists the seeded tenant with a byte total equal to the object sizes in MinIO.
+`check:architecture` green with one more `TENANT_EXEMPT` line; `test-container.spec.ts` pins
+twenty-seven (`A2.5` and `A2.17`).
 
 ---
 
@@ -460,29 +566,92 @@ reads the exclusion list once per run and passes it to all three queries.
 - [ ] `A3.7` **Docs** — `clickhouse.md` §"What is not wired" rewritten: the policy is wired, the
   read driver still is not; `docs/opinions/data-and-scale.md` "On ClickHouse specifically" gains one
   sentence on the policy rows; `DB-SCALING-DEFERRED.md` `S5.6` marked moved here.
+- [ ] `A3.8` **`platform_policy` and the switch** — `platform.schema.ts`: `platform_policy (id smallint
+  primary key check (id = 1), projection_enabled boolean not null default true,
+  replica_reads_enabled boolean not null default false, updated_at)`; a `TENANT_EXEMPT` line with
+  the comment (a deployment-wide switch has no tenant). `platform-policy.repository.ts` (`get()` →
+  the row or the defaults, `save(row)`), `pg-platform-policy.repository.ts`.
+  `toggle-projection.use-case.ts` (`platform.analytics.manage`; refuses with
+  `ConflictError("analytics", "not_configured")` when `health().analytics === null`; the write and
+  the `platform.projection.paused` / `platform.projection.resumed` audit in the transaction).
+  Procedures `policy.get`, `policy.updateProjection`. Screen: a three-state control at the top of
+  `/platform/analytics` — "Not configured" (disabled, naming `CLICKHOUSE_URL`), "On", "Off" — and on
+  "Off" a `Callout tone="danger"` with the deadline: rows stop being projected now; the audit table
+  keeps *N* months (from the retention row); re-enable within that or fill the gap from cold storage
+  (`A3.10`). Decision 12: a pause, not a power switch. **Docs:** `platform.md`, `clickhouse.md`,
+  `docs/setup/13` §13.3, `docs/setup/26` §9.
+- [ ] `A3.9` **The consumer honours it** — `AnalyticsConsumer.project()` and `reconcile()` read
+  `platformPolicy.get()` first and return when off: no batches, no lag computation, no drift
+  comparison, and no log line — 288 lines a day is noise, and the status page shows the state. The
+  `retention` job's `applyRetention` still runs when off: the connection exists, and a TTL edit is
+  not a projection. Resume needs nothing, because the checkpoint is read from ClickHouse.
+  Integration spec: off → insert rows → run → ClickHouse unchanged and no `lagged` line; on → run →
+  the rows land. **Docs:** `consumers.md`.
+- [ ] `A3.10` **Re-project from cold storage** — `reproject-partition.use-case.ts`
+  (`platform.analytics.manage`; input `{ period, organizationId? }`, `activity_log` only; refuses
+  when not configured; records `platform.reproject.requested`; enqueues `cold-reproject` on
+  `MAINTENANCE` with `jobId: "cold-reproject:activity_log:<period>:<org|all>"`, so a double click is
+  one job). `AnalyticsConsumer.reproject()` — it owns the projector: for each `partition_archive`
+  row for that period (and tenant, if given): `coldArchive.read(entry)` (`S2.13`'s reader) → map to
+  `ActivityRecord` with `ActivitySubject.of` → drop excluded actions (`A3.3`'s list) →
+  `projector.project` in batches of 5,000 → stamp `projected_at` →
+  `cold.partition.reprojected { period, organizationId, rows }`. Idempotent through
+  `ReplacingMergeTree`. Screen: a **Gaps** panel on `/platform/analytics` listing periods with any
+  `projected_at is null` row (the partial index from `S2.11`), tenant counts, and a re-project
+  button per period; the reason on the `analytics.projection.gap` line is not stored, so the panel
+  shows only that a gap exists. **Docs:** `cold-restore.md`, `clickhouse.md`, `consumers.md`.
+- [ ] `A3.11` **Reconcile covers the cold window** — `reconcile()` also compares, for each archived
+  period of `activity_log`, `sum(partition_archive.row_count)` minus the excluded actions' counts
+  from `action_counts` against ClickHouse's `dailyCounts` summed over that month; drift emits
+  `analytics.reconciliation.drifted` with `source: "cold"`. A period with any `projected_at is null`
+  row is skipped: a known gap is not drift. Closes the promise at `analytics.schema.ts:8-9`, which
+  names a check nothing ever ran. **Docs:** `clickhouse.md` reconciliation section.
 
 **Exit.** Toggle `ai.document.searched` off: the next projection writes none, the next reconcile
 reports zero drift, and the screen shows the warning. Give `member.invited` a 12-month TTL with
 the default at 60: `engine_full` carries both clauses and the `NOT IN`. Add a fifteenth
-`activity.record` call with an unregistered string: typecheck fails. `check:architecture` green
-with two `TENANT_EXEMPT` lines from this plan.
+`activity.record` call with an unregistered string: typecheck fails. Switch the projection off,
+insert rows, wait a run: ClickHouse unchanged and no `lagged` line; switch it on: the rows land.
+Pause it and let a month prune: `partition_archive.projected_at` is null for that month and
+`analytics.projection.gap` was emitted with `reason: "disabled"`; re-project it from the Gaps
+panel: the rows land, `projected_at` is stamped, and the next reconcile reports no cold drift.
+`check:architecture` green with three `TENANT_EXEMPT` lines from this plan.
 
 ---
 
-### Phase 4 — The replica panel (filed, not built)
+### Phase 4 — The replica panel and the shard map (built after the scaling plan's Phase 3 and 4)
 
-**Depends on:** `DB-SCALING-PLAN.md` Phase 3 (the cluster) and `S4.4` (the replica handle and
-`cluster.reader(key)`).
+**Depends on:** `DB-SCALING-PLAN.md` Phase 3 for the map (`S3.3`, `S3.4`); `S4.2` for the move
+button's procedure; `S4.4` for the replica handle and `cluster.reader(key)`.
 
 - [ ] `A4.1` **Status** — `InspectPlatformStatusUseCase` grows `replica: { healthy, lagSeconds } | null`
   from the cluster's replica handle (`now() - pg_last_xact_replay_timestamp()`), rendered on
   `/platform/status`. Nothing to switch yet.
-- [ ] `A4.2` **The switch** — a `replica_reads_enabled` boolean, home decided when `S4.4` decides what
-  reads route there (worker batch reads first, web never in the first cut). Until then a switch
-  would switch nothing.
+- [ ] `A4.2` **The switch** — `platform_policy.replica_reads_enabled` (decision 14; the column is
+  created in `A3.8` and read by nothing until here), `toggle-replica-reads.use-case.ts` under a
+  `platform.replica.manage` key registered with `S4.4`, which is also what decides what reads route
+  there (worker batch reads first, web never in the first cut). Until then a switch would switch
+  nothing, so the use-case and the control land with `S4.4`.
 - [ ] `A4.3` **Colder storage class** — a `transitionAfterDays` and storage class on `LifecycleRule`,
   once someone pays for Glacier; MinIO needs a configured tier to honour it, which is why it is not
   in Phase 2.
+- [ ] `A4.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): 256 rows —
+  virtual shard, physical node from `ShardMap`, tenant count from `shard_assignments` grouped by
+  `virtual_shard`, most recent `assigned_at` — plus a tenant lookup (organization id or slug → its
+  virtual and physical shard) and the tenants of one virtual shard on expand, paginated. The output
+  carries `moves: "unavailable" | "available"` from `container.hasShardMoves`, a getter that is a
+  constant `false` with the comment until `S4.2` registers the move job; the seam earns its place
+  because the retrofit touches contract, screen and use-case (decision 17). Procedure `shards.map`,
+  route `/platform/shards`, `shard-map.panel.tsx`. **Docs:** `platform.md`, `sharding.md` (from `S3.21`).
+- [ ] `A4.5` **The move button** — rendered on every tenant row; disabled with the copy "tenant moves
+  need the physical split; scaling plan Phase 4" while `moves === "unavailable"`.
+  `move-tenant.use-case.ts` (`platform.shards.manage`; input `{ organizationId, toVirtualShard }`;
+  records `platform.tenant.move_requested`; enqueues `S4.2`'s job) and the `shards.move` procedure
+  **land with `S4.2`**, in that commit, and flip `hasShardMoves`. **Docs:** `sharding.md`.
+
+**Exit (the built part).** `/platform/shards` renders 256 rows on the single-node compose stack, every
+tenant on physical node 0, the move button disabled with its reason; the tenant lookup finds the
+seeded organization.
 
 ---
 
@@ -495,6 +664,7 @@ pnpm typecheck && pnpm lint && pnpm test
 pnpm infra:up:analytics && pnpm db:migrate && pnpm db:seed && pnpm ch:migrate
 pnpm platform:grant alice@example.test
 pnpm --filter @loadbearing/infrastructure test && pnpm smoke
+# second pass: the restore and re-project round trips run under `pnpm smoke` against MinIO and ClickHouse
 ```
 
 Then by hand, per phase Exit line. The one check that cannot be automated: **sign in as a tenant
@@ -508,3 +678,4 @@ redirect to `/forbidden` is the tier working, and every other surface can hide a
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-14 | @sami | Created. Un-defers `S2.15` and `S5.6` from `DB-SCALING-DEFERRED.md` into a platform tier built on RBAC (a platform organization, a third scope, a seeded role, a grant script), a retention slice covering Postgres hot months, cold months and mode, the bucket lifecycle the app now owns, and the ClickHouse TTL, a projection-policy slice over a new activity-action catalog with per-action inclusion and TTL, and a replica panel filed behind `S4.4`. Two findings shaped it: `StorageGateway` disclaims bucket-level concerns in its own header, so lifecycle is a second port; and activity actions are fourteen free-form literals with no list, so per-action policy needs a catalog first, in `contracts`, because the screen must list it |
+| 2026-09-15 | @sami | **Second pass: what the admin could not yet do.** Decisions 12–18. The projection switch (a pause, not a power switch; three states; off pauses both alarms) on a single-row `platform_policy` that also homes the replica switch (`A3.8`, `A3.9`, `A4.2`); a projection gap is recorded on `partition_archive.projected_at` and filled by a re-project action reading cold storage through the worker (`A3.10`); the reconcile finally covers the cold window (`A3.11`); a preview before every retention change (`A2.15`); per-tenant cold storage (`A2.16`); a restore action built on the scaling plan's scratch-table restore with a live attach only inside the hot window (`A2.17`, `A2.18`); a shard map now and a move button that waits on `S4.2` (`A4.4`, `A4.5`). `messages` partitioning and the partition-estimate read went to the scaling plan (`S2.6`, `S2.19`). Queue-job retention checked and already capped, not filed |
