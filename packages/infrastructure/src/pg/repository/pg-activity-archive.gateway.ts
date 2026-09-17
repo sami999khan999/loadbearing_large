@@ -2,7 +2,9 @@ import {
   type ActivityArchiveGateway,
   type ArchivedPartition,
   createGzip,
+  type OrganizationId,
   once,
+  PartitionedTable,
   Readable,
   type StorageGateway,
   sql,
@@ -10,6 +12,7 @@ import {
 import type { Database } from "../primitive/index.js";
 import { BaseRepository } from "../primitive/index.js";
 import { activityArchive } from "../schema/index.js";
+import { TenantPartitionSeed } from "../seed/index.js";
 import type { TransactionScope } from "../transaction/index.js";
 
 // Rows per round trip out of the detached partition. Large enough that the cursor
@@ -44,15 +47,18 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
 
   // detach → stream to S3 → record → verify → drop. The order is the job: dropping before
   // verifying is unrecoverable. See docs/reference/activity-archive.md.
-  public async archive(period: Date): Promise<ArchivedPartition> {
-    const name = PgActivityArchiveGateway.partitionName(period);
-    const key = PgActivityArchiveGateway.objectKey(period);
+  public async archive(organizationId: OrganizationId, period: Date): Promise<ArchivedPartition> {
+    // The parent is the tenant's partition, not the table: `activity_log` is split by
+    // tenant first and by month underneath, so a month belongs to exactly one tenant.
+    const parent = TenantPartitionSeed.partitionName(PartitionedTable.ACTIVITY_LOG, organizationId);
+    const name = `${parent}_${PgActivityArchiveGateway.monthSuffix(period)}`;
+    const key = PgActivityArchiveGateway.objectKey(organizationId, period);
 
     // ── 1. detach ──
     // CONCURRENTLY so the parent is not locked against writers while it happens. It
     // cannot run inside a transaction, which is also why this whole method is not one.
     await this.db.execute(
-      sql`alter table ${sql.identifier("activity_log")} detach partition ${sql.identifier(name)} concurrently`,
+      sql`alter table ${sql.identifier(parent)} detach partition ${sql.identifier(name)} concurrently`,
     );
 
     // Built before the try so the failure path can stop them. `Readable.from` pulls as
@@ -77,13 +83,14 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       await this.db
         .insert(activityArchive)
         .values({
+          organizationId,
           period: PgActivityArchiveGateway.iso(period),
           objectKey: stored.key,
           rowCount,
           checksum: stored.checksum,
         })
         .onConflictDoUpdate({
-          target: activityArchive.period,
+          target: [activityArchive.organizationId, activityArchive.period],
           set: { objectKey: stored.key, rowCount, checksum: stored.checksum },
         });
 
@@ -96,10 +103,15 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       // ── 5. only now ──
       await this.db.execute(sql`drop table ${sql.identifier(name)}`);
 
-      return { period: PgActivityArchiveGateway.iso(period), key: stored.key, rowCount };
+      return {
+        organizationId,
+        period: PgActivityArchiveGateway.iso(period),
+        key: stored.key,
+        rowCount,
+      };
     } catch (error: unknown) {
       await PgActivityArchiveGateway.stop(source, body);
-      await this.reattach(name, period);
+      await this.reattach(parent, name, period);
       throw error;
     }
   }
@@ -121,7 +133,7 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
 
   // Puts the partition back where it was, so a failed run leaves the table as it found
   // it. Best effort: a re-attach that itself fails must not replace the real error.
-  private async reattach(name: string, period: Date): Promise<void> {
+  private async reattach(parent: string, name: string, period: Date): Promise<void> {
     const from = PgActivityArchiveGateway.iso(period);
     const to = PgActivityArchiveGateway.iso(PgActivityArchiveGateway.nextMonth(period));
 
@@ -129,16 +141,14 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
       // A cancelled `detach … concurrently` leaves the partition *detach-pending*: still a
       // child, so `attach` is not the inverse, and no row in the month can be read or written.
       if (await this.isDetachPending(name)) {
-        await this.db.execute(
-          sql.raw(`alter table activity_log detach partition ${name} finalize`),
-        );
+        await this.db.execute(sql.raw(`alter table ${parent} detach partition ${name} finalize`));
       }
 
       // `sql.raw`, because Postgres accepts no bind parameters in DDL — the same trap
       // `PgMaintenanceGateway` documents. Both bounds are derived from a `Date`.
       await this.db.execute(
         sql.raw(
-          `alter table activity_log attach partition ${name} for values from ('${from}') to ('${to}')`,
+          `alter table ${parent} attach partition ${name} for values from ('${from}') to ('${to}')`,
         ),
       );
     } catch {
@@ -205,16 +215,15 @@ export class PgActivityArchiveGateway extends BaseRepository implements Activity
     }
   }
 
-  private static partitionName(period: Date): string {
-    const month = String(period.getUTCMonth() + 1).padStart(2, "0");
-    return `activity_log_${period.getUTCFullYear()}_${month}`;
+  private static monthSuffix(period: Date): string {
+    return `${period.getUTCFullYear()}_${String(period.getUTCMonth() + 1).padStart(2, "0")}`;
   }
 
-  // The same prefix layout every other object uses, so a lifecycle rule can move archives
-  // to cold storage without naming them individually.
-  private static objectKey(period: Date): string {
+  // The same prefix layout every other object uses, and the tenant is the leaf rather
+  // than the prefix: one rule on `activity-archive/` still covers every tenant's months.
+  private static objectKey(organizationId: OrganizationId, period: Date): string {
     const month = String(period.getUTCMonth() + 1).padStart(2, "0");
-    return `activity-archive/${period.getUTCFullYear()}/${month}/activity_log.ndjson.gz`;
+    return `activity-archive/${period.getUTCFullYear()}/${month}/${organizationId}.ndjson.gz`;
   }
 
   private static iso(value: Date): string {

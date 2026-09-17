@@ -36,6 +36,7 @@ export {
   PgNotificationRecipientReader,
   PgNotificationRepository,
   PgOrganizationFounder,
+  PgOrganizationReader,
   PgOutboxGateway,
   PgOutboxPublisher,
   PgPersonalOrganizationEnroller,

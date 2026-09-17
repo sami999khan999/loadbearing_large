@@ -2,6 +2,7 @@ import type {
   ActivityRecord,
   AnalyticsProjector,
   DailyCount,
+  OrganizationId,
   ProjectionCheckpoint,
 } from "../import.js";
 import type { ClickHouseConnection } from "./clickhouse.connection.js";
@@ -13,18 +14,22 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
 
   public constructor(private readonly connection: ClickHouseConnection) {}
 
-  // Read from the destination, never a cursor kept beside it: one in Postgres or Redis
-  // can silently disagree with what actually landed.
-  public async checkpoint(): Promise<ProjectionCheckpoint> {
+  // Read from the destination, never a cursor beside it. Per tenant, and cheap under
+  // `ORDER BY (organization_id, occurred_at, id)` — ClickHouse is not per node.
+  public async checkpoint(organizationId: OrganizationId): Promise<ProjectionCheckpoint> {
     const rows = await this.connection.query<{
       readonly last_occurred_at: string | null;
       readonly last_id: string | null;
-    }>(`
+    }>(
+      `
       SELECT
         toString(max(occurred_at))       AS last_occurred_at,
         argMax(id, (occurred_at, id))    AS last_id
       FROM ${this.connection.qualified(ClickHouseAnalyticsProjector.TABLE)}
-    `);
+      WHERE organization_id = {organizationId:UUID}
+    `,
+      { organizationId },
+    );
 
     const row = rows[0];
     // An empty table answers with ClickHouse's zero value rather than null, which is 1970
@@ -64,18 +69,23 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
 
   // `FINAL`, so an unmerged duplicate is not counted twice: a false alarm on this check
   // is how a real one stops being read.
-  public async dailyCounts(from: Date, to: Date): Promise<readonly DailyCount[]> {
+  public async dailyCounts(
+    organizationId: OrganizationId,
+    from: Date,
+    to: Date,
+  ): Promise<readonly DailyCount[]> {
     return this.connection.query<DailyCount>(
       `
       SELECT
         formatDateTime(toDate(occurred_at), '%Y-%m-%d') AS day,
         toUInt32(count())                               AS rows
       FROM ${this.connection.qualified(ClickHouseAnalyticsProjector.TABLE)} FINAL
-      WHERE occurred_at >= {from:DateTime64(3)} AND occurred_at < {to:DateTime64(3)}
+      WHERE organization_id = {organizationId:UUID}
+        AND occurred_at >= {from:DateTime64(3)} AND occurred_at < {to:DateTime64(3)}
       GROUP BY day
       ORDER BY day
     `,
-      { from, to },
+      { organizationId, from, to },
     );
   }
 

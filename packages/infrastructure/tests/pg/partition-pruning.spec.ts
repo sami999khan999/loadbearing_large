@@ -1,6 +1,8 @@
 import { PartitionedTable, type PartitionedTableName } from "@loadbearing/application";
 import {
+  type ConversationId,
   Identifiers,
+  type MessageId,
   type NotificationId,
   type OrganizationId,
   type UserId,
@@ -13,14 +15,30 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import { KeysetCursor } from "../../src/pg/primitive/index.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
+import { PgMessageRepository } from "../../src/pg/repository/pg-message.repository.js";
 import { PgNotificationRepository } from "../../src/pg/repository/pg-notification.repository.js";
 import { PgOutboxGateway } from "../../src/pg/repository/pg-outbox.gateway.js";
-import { activityLog, notifications, outboxEvent, users } from "../../src/pg/schema/index.js";
+import {
+  activityLog,
+  conversations,
+  messages,
+  notifications,
+  organizations,
+  outboxEvent,
+  users,
+} from "../../src/pg/schema/index.js";
+import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
-import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
+import {
+  DATABASE_URL,
+  dropTenant,
+  openDatabase,
+  seedOrganizationId,
+  seedTenant,
+} from "../support/database.js";
 
 // The ruler every retention change after this one is measured with: a predicate that
-// stops naming the partition column is a plan nobody reads until production is slow.
+// stops naming a partition key is a plan nobody reads until production is slow.
 
 // Captures every statement as drizzle issues it, so the EXPLAIN below plans the query
 // under test rather than a hand-written copy of it that drifts.
@@ -32,25 +50,35 @@ class RecordingLogger implements Logger {
   }
 }
 
+// One leaf partition, and which tenant and month it belongs to. Two levels since `0023`:
+// `<table>_<32hex>` splits by tenant and `_<yyyy>_<mm>` splits that by month.
+interface Leaf {
+  readonly name: string;
+  readonly tenant: string;
+  readonly month: number | null;
+}
+
 const recorder = new RecordingLogger();
 
 let database: Database;
 let explain: Pool;
 let inbox: PgNotificationRepository;
+let chat: PgMessageRepository;
 let replay: PgActivityReplayReader;
 let outbox: PgOutboxGateway;
 let organizationId: OrganizationId;
+let neighbour: OrganizationId;
 let reader: UserId;
+let conversationId: ConversationId;
 let written: { id: NotificationId; createdAt: Date };
 
 // Two months far enough out that no migration and no other spec owns them, so this file
 // creates every partition it reads and drops every one it created.
 const FIRST = new Date("2032-05-01T00:00:00.000Z");
 const SECOND = new Date("2032-06-01T00:00:00.000Z");
-const MONTHS = ["2032_05", "2032_06"];
 
-const notification = (createdAt: Date) => ({
-  organizationId,
+const notification = (organization: OrganizationId, createdAt: Date) => ({
+  organizationId: organization,
   userId: reader,
   eventId: Uuid.v7(),
   kind: "message.received" as const,
@@ -61,33 +89,15 @@ const notification = (createdAt: Date) => ({
   createdAt,
 });
 
-beforeAll(async () => {
-  database = openDatabase(recorder);
-  explain = new Pool({ connectionString: DATABASE_URL });
-
-  const scope = new TransactionScope();
-  const unitOfWork = new PgUnitOfWork(database, scope);
-  inbox = new PgNotificationRepository(database, scope);
-  replay = new PgActivityReplayReader(database, scope);
-  outbox = new PgOutboxGateway(database, scope, unitOfWork);
-
-  const maintenance = new PgMaintenanceGateway(database, scope, unitOfWork);
-  for (const table of PartitionedTable.NAMES) {
-    await maintenance.ensureMonthlyPartitions(table, FIRST, 2);
-  }
-
-  organizationId = await seedOrganizationId(database);
-  reader = Identifiers.userId.parse(Uuid.v7());
-  await database.client
-    .insert(users)
-    .values({ id: reader, name: "Pruning", email: `${reader}@example.test` });
-
-  await inbox.saveMany([notification(FIRST), notification(SECOND)]);
+// Rows in both months, under both tenants. The neighbour is what makes "one tenant
+// partition" an assertion rather than a tautology on a database holding one tenant.
+const writeRows = async (organization: OrganizationId, conversation: ConversationId) => {
+  await inbox.saveMany([notification(organization, FIRST), notification(organization, SECOND)]);
 
   for (const at of [FIRST, SECOND]) {
     await database.client.insert(activityLog).values({
       id: Uuid.v7(),
-      organizationId,
+      organizationId: organization,
       actorId: reader,
       action: "task.reactivated",
       payload: {},
@@ -96,7 +106,7 @@ beforeAll(async () => {
 
     await database.client.insert(outboxEvent).values({
       id: Uuid.v7(),
-      organizationId,
+      organizationId: organization,
       actorId: reader,
       name: "task.reactivated",
       payload: {},
@@ -105,7 +115,65 @@ beforeAll(async () => {
       // these rows and no other spec's view of the queue moves underneath it.
       publishedAt: at,
     });
+
+    await chat.save({
+      id: Uuid.v7() as MessageId,
+      createdAt: at,
+      organizationId: organization,
+      conversationId: conversation,
+      authorId: reader,
+      clientId: Uuid.v7(),
+      body: "hello",
+    });
   }
+};
+
+const conversationFor = async (organization: OrganizationId): Promise<ConversationId> => {
+  const id = Identifiers.conversationId.parse(Uuid.v7());
+  await database.client.insert(conversations).values({
+    id,
+    organizationId: organization,
+    kind: "channel",
+    title: "Pruning",
+    directKey: null,
+    createdBy: reader,
+  });
+  return id;
+};
+
+beforeAll(async () => {
+  database = openDatabase(recorder);
+  explain = new Pool({ connectionString: DATABASE_URL });
+
+  const scope = new TransactionScope();
+  const unitOfWork = new PgUnitOfWork(database, scope);
+  inbox = new PgNotificationRepository(database, scope);
+  chat = new PgMessageRepository(database, scope);
+  replay = new PgActivityReplayReader(database, scope);
+  outbox = new PgOutboxGateway(database, scope, unitOfWork);
+
+  organizationId = await seedOrganizationId(database);
+  reader = Identifiers.userId.parse(Uuid.v7());
+  await database.client
+    .insert(users)
+    .values({ id: reader, name: "Pruning", email: `${reader}@example.test` });
+
+  neighbour = Identifiers.organizationId.parse(Uuid.v7());
+  await database.client
+    .insert(organizations)
+    .values({ id: neighbour, slug: `pruning-${neighbour}`, name: "Neighbour" });
+  await seedTenant(database, neighbour);
+
+  const maintenance = new PgMaintenanceGateway(database, scope, unitOfWork);
+  for (const entry of PartitionedTable.MONTH_PARTITIONED) {
+    for (const tenant of entry.tenantKey ? [organizationId, neighbour] : [null]) {
+      await maintenance.ensureMonthlyPartitions(entry.name, tenant, FIRST, 2);
+    }
+  }
+
+  conversationId = await conversationFor(organizationId);
+  await writeRows(organizationId, conversationId);
+  await writeRows(neighbour, await conversationFor(neighbour));
 
   const [row] = await database.client
     .select({ id: notifications.id, createdAt: notifications.createdAt })
@@ -119,14 +187,22 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Dropping the partitions takes this spec's rows with them, which is what leaves the
-  // user below deletable without a cascade reaching anything it did not write.
-  for (const table of PartitionedTable.NAMES) {
-    for (const month of MONTHS) {
-      await database.client.execute(sql.raw(`drop table if exists ${table}_${month}`));
+  // The neighbour goes whole — seven partitions and their months — and the seeded
+  // tenant keeps its own, so only the two months this file created are dropped there.
+  await dropTenant(database, neighbour);
+  await database.client.delete(organizations).where(eq(organizations.id, neighbour));
+
+  for (const entry of PartitionedTable.MONTH_PARTITIONED) {
+    const parent = entry.tenantKey
+      ? TenantPartitionSeed.partitionName(entry.name, organizationId)
+      : entry.name;
+
+    for (const month of ["2032_05", "2032_06"]) {
+      await database.client.execute(sql.raw(`drop table if exists ${parent}_${month}`));
     }
   }
 
+  await database.client.delete(conversations).where(eq(conversations.id, conversationId));
   await database.client.delete(users).where(eq(users.id, reader));
   await explain.end();
   await database.close();
@@ -146,19 +222,54 @@ const capture = async (
   return statement;
 };
 
-// Read from the catalog every time: other specs create and drop months of their own, and
-// a list captured once is one this file would go on asserting against after it moved.
-const partitionsOf = async (table: PartitionedTableName): Promise<readonly string[]> => {
+const childrenOf = async (parent: string): Promise<readonly string[]> => {
   const rows = await database.client.execute<{ name: string }>(sql`
     select child.relname as name
     from pg_inherits
     join pg_class parent on parent.oid = pg_inherits.inhparent
     join pg_class child on child.oid = pg_inherits.inhrelid
-    where parent.relname = ${table}
+    where parent.relname = ${parent}
     order by child.relname
   `);
 
   return rows.rows.map((row) => row.name);
+};
+
+// `<parent>_<yyyy>_<mm>` as a month index, null for a child this file did not name — the
+// floor assertions leave those alone rather than guess which month they hold.
+const monthOf = (parent: string, name: string): number | null => {
+  const escaped = parent.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^${escaped}_(\\d{4})_(\\d{2})$`).exec(name);
+  if (!match?.[1] || !match[2]) return null;
+  return Number(match[1]) * 12 + Number(match[2]) - 1;
+};
+
+const monthIndex = (at: Date): number => at.getUTCFullYear() * 12 + at.getUTCMonth();
+
+// Read from the catalog every time: other specs create and drop months of their own, and
+// a list captured once is one this file would go on asserting against after it moved.
+const leavesOf = async (table: PartitionedTableName): Promise<readonly Leaf[]> => {
+  const entry = PartitionedTable.byName(table);
+  const leaves: Leaf[] = [];
+
+  if (!entry.tenantKey) {
+    for (const name of await childrenOf(table)) {
+      leaves.push({ name, tenant: table, month: monthOf(table, name) });
+    }
+    return leaves;
+  }
+
+  for (const tenant of await childrenOf(table)) {
+    if (!entry.column) {
+      leaves.push({ name: tenant, tenant, month: null });
+      continue;
+    }
+    for (const name of await childrenOf(tenant)) {
+      leaves.push({ name, tenant, month: monthOf(tenant, name) });
+    }
+  }
+
+  return leaves;
 };
 
 const relationsIn = (node: unknown, into: Set<string>): void => {
@@ -178,10 +289,10 @@ const relationsIn = (node: unknown, into: Set<string>): void => {
 
 // `EXPLAIN` and never `EXPLAIN ANALYZE`: nothing executes, which is what makes planning
 // an UPDATE and a `FOR UPDATE SKIP LOCKED` against live rows safe.
-const scannedPartitions = async (
+const scanned = async (
   statement: { query: string; params: unknown[] },
   table: PartitionedTableName,
-): Promise<readonly string[]> => {
+): Promise<readonly Leaf[]> => {
   const explained = await explain.query(
     `explain (format json) ${statement.query}`,
     statement.params,
@@ -195,88 +306,133 @@ const scannedPartitions = async (
 
   // Intersected with the catalog rather than matched by name shape, so the parent a
   // ModifyTable node names is never counted as a partition that was scanned.
-  return (await partitionsOf(table)).filter((name) => relations.has(name));
+  return (await leavesOf(table)).filter((leaf) => relations.has(leaf.name));
 };
 
-// `<table>_<yyyy>_<mm>` as a month index, null for a child this file did not name — the
-// floor assertions leave those alone rather than guess which month they hold.
-const monthOf = (table: PartitionedTableName, name: string): number | null => {
-  const match = new RegExp(`^${table}_(\\d{4})_(\\d{2})$`).exec(name);
-  if (!match?.[1] || !match[2]) return null;
-  return Number(match[1]) * 12 + Number(match[2]) - 1;
+// True of every read in the system since `0023`, and the assertion that catches a
+// predicate that lost its tenant: the neighbour's subtree is not in the plan.
+const oneTenant = (leaves: readonly Leaf[], table: PartitionedTableName) => {
+  const mine = TenantPartitionSeed.partitionName(table, organizationId);
+  expect(leaves.length).toBeGreaterThan(0);
+  expect([...new Set(leaves.map((leaf) => leaf.tenant))]).toEqual([mine]);
 };
 
-const monthIndex = (at: Date): number => at.getUTCFullYear() * 12 + at.getUTCMonth();
+const olderThan = (leaves: readonly Leaf[], floor: Date) =>
+  leaves.filter((leaf) => leaf.month !== null && leaf.month < monthIndex(floor));
 
-describe("exactly one partition, for the reads carrying an equality or a closed range", () => {
+// Every leaf under this tenant's partition, which is what the unbounded reads scan.
+const everyMonthOf = async (table: PartitionedTableName): Promise<readonly string[]> => {
+  const mine = TenantPartitionSeed.partitionName(table, organizationId);
+  return (await leavesOf(table)).filter((leaf) => leaf.tenant === mine).map((leaf) => leaf.name);
+};
+
+describe("one tenant partition, for every read there is", () => {
+  it("prunes the neighbour's subtree out of an inbox page", async () => {
+    const statement = await capture(
+      () => inbox.list(organizationId, reader, { limit: 20, unreadOnly: false }),
+      /from "notifications"/i,
+    );
+
+    oneTenant(await scanned(statement, PartitionedTable.NOTIFICATIONS), "notifications");
+  });
+
+  it("prunes the neighbour's subtree out of a conversation page", async () => {
+    const statement = await capture(
+      () => chat.list(organizationId, { conversationId, limit: 20 }),
+      /from "messages"/i,
+    );
+
+    oneTenant(await scanned(statement, PartitionedTable.MESSAGES), "messages");
+  });
+});
+
+describe("exactly one month, for the reads carrying an equality or a closed range", () => {
   it("markRead plans against the one month its createdAt names", async () => {
     const statement = await capture(
       () => inbox.markRead(organizationId, reader, written.id, written.createdAt, new Date()),
       /update "notifications"/i,
     );
 
-    expect(await scannedPartitions(statement, PartitionedTable.NOTIFICATIONS)).toEqual([
-      "notifications_2032_05",
-    ]);
+    const leaves = await scanned(statement, PartitionedTable.NOTIFICATIONS);
+    oneTenant(leaves, "notifications");
+    expect(leaves.map((leaf) => leaf.month)).toEqual([monthIndex(FIRST)]);
+  });
+
+  it("findById plans against the one month its createdAt names", async () => {
+    const [row] = await database.client
+      .select({ id: messages.id, createdAt: messages.createdAt })
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(asc(messages.createdAt))
+      .limit(1);
+    if (!row) throw new Error("expected this spec to have written two messages");
+
+    const statement = await capture(
+      () => chat.findById(organizationId, conversationId, row.id, row.createdAt),
+      /from "messages"/i,
+    );
+
+    const leaves = await scanned(statement, PartitionedTable.MESSAGES);
+    oneTenant(leaves, "messages");
+    expect(leaves).toHaveLength(1);
   });
 
   it("the activity rollup plans against the one month its range falls inside", async () => {
     const statement = await capture(
-      () => replay.dailyCounts(FIRST, new Date("2032-05-02T00:00:00.000Z")),
+      () => replay.dailyCounts(organizationId, FIRST, new Date("2032-05-02T00:00:00.000Z")),
       /from "activity_log"/i,
     );
 
-    expect(await scannedPartitions(statement, PartitionedTable.ACTIVITY_LOG)).toEqual([
-      "activity_log_2032_05",
-    ]);
+    // Cross-tenant by design until `16.6` makes the projection per tenant, so this one
+    // asserts the month level alone: one month, in every tenant that has one.
+    const leaves = await scanned(statement, PartitionedTable.ACTIVITY_LOG);
+    expect(leaves.length).toBeGreaterThan(0);
+    expect([...new Set(leaves.map((leaf) => leaf.month))]).toEqual([monthIndex(FIRST)]);
   });
 });
 
-// A floor cannot prune a *future* month — rows could legitimately land in one — so this
-// is the strongest honest assertion: nothing older than the floor is in the plan.
-const olderThan = (table: PartitionedTableName, scanned: readonly string[], floor: Date) =>
-  scanned.filter((name) => {
-    const month = monthOf(table, name);
-    return month !== null && month < monthIndex(floor);
-  });
-
 describe("the retention tail is pruned, for the reads that carry a floor", () => {
+  // A floor cannot prune a *future* month — rows could legitimately land in one — so this
+  // is the strongest honest assertion: nothing older than the floor is in the plan.
   it("listUnreadSince leaves out every month before its floor", async () => {
     const statement = await capture(
       () => inbox.listUnreadSince(organizationId, reader, SECOND, 50),
       /from "notifications"/i,
     );
 
-    const scanned = await scannedPartitions(statement, PartitionedTable.NOTIFICATIONS);
-    expect(olderThan(PartitionedTable.NOTIFICATIONS, scanned, SECOND)).toEqual([]);
+    const leaves = await scanned(statement, PartitionedTable.NOTIFICATIONS);
+    oneTenant(leaves, "notifications");
+    expect(olderThan(leaves, SECOND)).toEqual([]);
     // And not vacuously: the floor's own month is still there to be read.
-    expect(scanned).toContain("notifications_2032_06");
+    expect(leaves.map((leaf) => leaf.month)).toContain(monthIndex(SECOND));
   });
 
   it("the projection walk leaves out every month before its checkpoint", async () => {
     const statement = await capture(
       () =>
         replay.since(
+          organizationId,
           { lastOccurredAt: SECOND, lastId: "00000000-0000-0000-0000-000000000000" },
           100,
         ),
       /from "activity_log"/i,
     );
 
-    const scanned = await scannedPartitions(statement, PartitionedTable.ACTIVITY_LOG);
-    expect(olderThan(PartitionedTable.ACTIVITY_LOG, scanned, SECOND)).toEqual([]);
-    expect(scanned).toContain("activity_log_2032_06");
+    const leaves = await scanned(statement, PartitionedTable.ACTIVITY_LOG);
+    expect(olderThan(leaves, SECOND)).toEqual([]);
+    expect(leaves.map((leaf) => leaf.month)).toContain(monthIndex(SECOND));
   });
 });
 
 // Today's behaviour, asserted on purpose. A row-constructor cursor is not decomposed by
 // the pruner, so these read every month there is — see docs/reference/partitions.md.
-describe("pinned at every partition, for the reads that carry no bound", () => {
+describe("pinned at every month of the tenant, for the reads that carry no bound", () => {
   const pinned = async (
     statement: { query: string; params: unknown[] },
     table: PartitionedTableName,
   ) => {
-    expect(await scannedPartitions(statement, table)).toEqual(await partitionsOf(table));
+    const leaves = await scanned(statement, table);
+    expect(leaves.map((leaf) => leaf.name)).toEqual(await everyMonthOf(table));
   };
 
   it("the inbox page reads every month, cursor or no cursor", async () => {
@@ -299,6 +455,15 @@ describe("pinned at every partition, for the reads that carry no bound", () => {
     // The cursor did not narrow the *newer* months either, which is the finding this
     // assertion exists to keep from being reversed without the numbers re-measured.
     await pinned(next, PartitionedTable.NOTIFICATIONS);
+  });
+
+  it("the conversation page reads every month of the tenant", async () => {
+    const statement = await capture(
+      () => chat.list(organizationId, { conversationId, limit: 20 }),
+      /from "messages"/i,
+    );
+
+    await pinned(statement, PartitionedTable.MESSAGES);
   });
 
   it("the bell count reads every month", async () => {
@@ -328,6 +493,8 @@ describe("pinned at every partition, for the reads that carry no bound", () => {
     await pinned(statement, PartitionedTable.NOTIFICATIONS);
   });
 
+  // The one table with no tenant level, so "every partition" is still every month: the
+  // drain polls this once a second and must not touch a partition per tenant to do it.
   it("the outbox drain claims across every month", async () => {
     const rolled = new Error("the drain is planned here, never committed");
 
@@ -341,6 +508,9 @@ describe("pinned at every partition, for the reads that carry no bound", () => {
       /skip locked/i,
     );
 
-    await pinned(statement, PartitionedTable.OUTBOX_EVENT);
+    const leaves = await scanned(statement, PartitionedTable.OUTBOX_EVENT);
+    expect(leaves.map((leaf) => leaf.name)).toEqual(
+      (await leavesOf(PartitionedTable.OUTBOX_EVENT)).map((leaf) => leaf.name),
+    );
   });
 });

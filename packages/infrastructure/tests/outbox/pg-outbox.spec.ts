@@ -38,7 +38,7 @@ beforeAll(async () => {
     database,
     scope,
     new PgUnitOfWork(database, scope),
-  ).ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, new Date(), 1);
+  ).ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, null, new Date(), 1);
 });
 
 afterEach(async () => {

@@ -15,7 +15,7 @@ import {
   roles,
   users,
 } from "../../src/pg/schema/index.js";
-import { openDatabase } from "../support/database.js";
+import { openDatabase, seedTenant as seedTenantPartitions } from "../support/database.js";
 
 let database: Database;
 let userId: UserId;
@@ -32,6 +32,8 @@ const seedTenant = async () => {
   await database.client
     .insert(organizations)
     .values({ id: organizationId, slug: `cascade-${organizationId}`, name: "Cascade" });
+  // `document_chunks` below is partitioned by tenant, so the partition comes first.
+  await seedTenantPartitions(database, organizationId);
   await database.client
     .insert(roles)
     .values({ id: roleId, organizationId, key: "owner", name: "Owner", scope: "org" });

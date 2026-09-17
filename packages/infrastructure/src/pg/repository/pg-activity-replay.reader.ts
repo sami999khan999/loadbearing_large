@@ -4,6 +4,7 @@ import {
   and,
   asc,
   type DailyCount,
+  eq,
   gt,
   gte,
   lt,
@@ -18,9 +19,10 @@ import { activityLog } from "../schema/index.js";
 // The read side of the audit trail. It exists for the projection pipeline: a derived
 // store that cannot be rebuilt has quietly become a source of truth.
 export class PgActivityReplayReader extends BaseRepository implements ActivityReplayReader {
-  // Keyset on `(occurred_at, id)`, never OFFSET. The tuple comparison is what makes the
-  // checkpoint exact: `>` drops a row sharing a microsecond and `>=` replays one forever.
+  // Keyset on `(occurred_at, id)` within one tenant: `>` drops a row sharing a microsecond,
+  // `>=` replays one forever, and no tenant predicate appends every tenant's months.
   public async since(
+    organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
   ): Promise<readonly ActivityRecord[]> {
@@ -45,7 +47,7 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
         payload: activityLog.payload,
       })
       .from(activityLog)
-      .where(after)
+      .where(and(eq(activityLog.organizationId, organizationId), after))
       .orderBy(asc(activityLog.occurredAt), asc(activityLog.id))
       .limit(limit);
 
@@ -64,7 +66,11 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
 
   // The Postgres half of the daily reconciliation. Neither store reaches into the other,
   // which is what keeps each adapter single-store.
-  public async dailyCounts(from: Date, to: Date): Promise<readonly DailyCount[]> {
+  public async dailyCounts(
+    organizationId: OrganizationId,
+    from: Date,
+    to: Date,
+  ): Promise<readonly DailyCount[]> {
     const rows = await this.db
       .select({
         day: sql<string>`to_char(date_trunc('day', ${activityLog.occurredAt}), 'YYYY-MM-DD')`.as(
@@ -73,7 +79,13 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
         rows: sql<number>`count(*)::int`.as("rows"),
       })
       .from(activityLog)
-      .where(and(gte(activityLog.occurredAt, from), lt(activityLog.occurredAt, to)))
+      .where(
+        and(
+          eq(activityLog.organizationId, organizationId),
+          gte(activityLog.occurredAt, from),
+          lt(activityLog.occurredAt, to),
+        ),
+      )
       .groupBy(sql`1`)
       .orderBy(sql`1`);
 

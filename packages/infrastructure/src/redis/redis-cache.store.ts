@@ -27,6 +27,17 @@ export class RedisCacheStore extends CacheStore {
     await this.redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
   }
 
+  // One round trip, and the atomicity is Redis's: `NX` is evaluated on the server, so
+  // two replicas racing the same key cannot both be told they wrote it.
+  public override async setIfAbsent<T>(
+    key: string,
+    value: T,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    const result = await this.redis.set(key, JSON.stringify(value), "EX", ttlSeconds, "NX");
+    return result === "OK";
+  }
+
   public override async delete(key: string): Promise<void> {
     await this.redis.del(key);
   }

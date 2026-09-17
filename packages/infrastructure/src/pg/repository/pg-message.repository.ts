@@ -16,7 +16,6 @@ import {
   sql,
   type UnreadCount,
   type UserId,
-  Uuid,
 } from "../../import.js";
 import { BaseRepository, KeysetCursor } from "../primitive/index.js";
 import { conversationMembers, messages } from "../schema/index.js";
@@ -94,22 +93,19 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
     return row ? PgMessageRepository.toRecord(row) : null;
   }
 
-  // `DO UPDATE … RETURNING` rather than `DO NOTHING`, so a retried send is handed the row
-  // it already wrote and the caller cannot tell the two attempts apart.
+  // A plain insert. The id and the timestamp arrive with the record because the send
+  // dedupe holds them in Redis — see application/docs/reference/messaging.md.
   public async save(message: NewMessage): Promise<MessageRecord> {
     const [row] = await this.db
       .insert(messages)
       .values({
-        id: Uuid.v7() as MessageId,
+        id: message.id,
         organizationId: message.organizationId,
         conversationId: message.conversationId,
         authorId: message.authorId,
         clientId: message.clientId,
         body: message.body,
-      })
-      .onConflictDoUpdate({
-        target: [messages.organizationId, messages.conversationId, messages.clientId],
-        set: { clientId: sql`excluded.client_id` },
+        createdAt: message.createdAt,
       })
       .returning();
 

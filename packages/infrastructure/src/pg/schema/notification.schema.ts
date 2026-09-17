@@ -15,7 +15,7 @@ import { users } from "./auth.schema.js";
 import { organizations } from "./rbac.schema.js";
 
 // Declared as an ordinary table so the query builder types it; the generated DDL is
-// hand-edited to `PARTITION BY RANGE (created_at)` before it is applied.
+// hand-edited to two levels — `LIST (organization_id)`, then `RANGE (created_at)`.
 export const notifications = pgTable(
   "notifications",
   {
@@ -44,9 +44,9 @@ export const notifications = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // Postgres requires the partition key in the primary key. `Uuid.v7()` is
-    // time-ordered, so the key and the partition column still increase together.
-    primaryKey({ columns: [t.id, t.createdAt] }),
+    // Postgres requires **every** partition key in the primary key, and this table has
+    // two levels. `Uuid.v7()` is time-ordered, so the key still increases with the month.
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
     // The keyset, in the exact order the list's ORDER BY asks for.
     index("notifications_inbox_idx").on(
       t.organizationId,
@@ -74,12 +74,12 @@ export const notifications = pgTable(
   ],
 );
 
-// Not partitioned: bounded by users × categories × channels, so it grows with the
-// tenant rather than with its activity.
+// Partitioned by tenant and by nothing else: it is bounded by users × categories ×
+// channels, so it grows with the tenant rather than with its activity.
 export const notificationPreferences = pgTable(
   "notification_preferences",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").notNull(),
     organizationId: uuid("organization_id")
       .$type<OrganizationId>()
       .notNull()
@@ -94,6 +94,9 @@ export const notificationPreferences = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // The tenant is a partition key, so it is in the primary key — the same rule the
+    // month level imposes one table up, at the level this table has.
+    primaryKey({ columns: [t.id, t.organizationId] }),
     // An absent row is the category's default from `NotificationPolicy`, so this table
     // holds only what somebody actually changed.
     uniqueIndex("notification_preferences_uq").on(

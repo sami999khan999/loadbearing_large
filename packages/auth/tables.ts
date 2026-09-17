@@ -23,6 +23,7 @@ const unreachable = (): never => {
 const cache: CacheStore = {
   get: unreachable,
   set: unreachable,
+  setIfAbsent: unreachable,
   delete: unreachable,
   deletePrefix: unreachable,
 };

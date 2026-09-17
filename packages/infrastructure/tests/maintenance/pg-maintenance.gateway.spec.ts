@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { invitations, roles, sessions, users, verifications } from "../../src/pg/schema/index.js";
+import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
@@ -21,7 +22,11 @@ const invited: string[] = [];
 // Deliberately in the past, for the reason `sweepExpired` gives below: the drop cases
 // take a cutoff and no table filter, so a month after today takes the real partitions.
 const FROM = new Date("2020-07-01T00:00:00.000Z");
-const NAMES = ["activity_log_2020_07", "activity_log_2020_08"];
+
+// A month is `<table>_<32hex>_<yyyy>_<mm>` since `0023`: it hangs off the tenant's list
+// partition, not off the table. Derived once the seeded tenant is known.
+let tenantPartition: string;
+let NAMES: string[] = [];
 
 beforeAll(async () => {
   database = openDatabase();
@@ -29,6 +34,12 @@ beforeAll(async () => {
   gateway = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
 
   organizationId = await seedOrganizationId(database);
+  tenantPartition = TenantPartitionSeed.partitionName(
+    PartitionedTable.ACTIVITY_LOG,
+    organizationId,
+  );
+  NAMES = [`${tenantPartition}_2020_07`, `${tenantPartition}_2020_08`];
+
   sweeper = Identifiers.userId.parse(Uuid.v7());
   await database.client
     .insert(users)
@@ -63,7 +74,12 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
   // The regression guard for the parameterised form, which failed at bind time on every
   // run: Postgres accepts no bind parameters in DDL, and no fake can reach that.
   it("actually creates the partitions it reports", async () => {
-    const created = await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+    const created = await gateway.ensureMonthlyPartitions(
+      PartitionedTable.ACTIVITY_LOG,
+      organizationId,
+      FROM,
+      2,
+    );
     expect(created).toEqual(NAMES);
 
     const rows = await database.client.execute<{ relname: string }>(
@@ -71,7 +87,7 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
           from pg_class c
           join pg_inherits i on i.inhrelid = c.oid
           join pg_class p on p.oid = i.inhparent
-          where p.relname = 'activity_log' and c.relname like 'activity_log_2020_%'
+          where p.relname = ${tenantPartition} and c.relname like ${`${tenantPartition}_2020_%`}
           order by c.relname`,
     );
 
@@ -83,9 +99,9 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
   it("is idempotent, so a second run creates nothing", async () => {
     // The schedule registers on every boot and runs monthly; a second call has to be
     // a no-op rather than an error, or a redeploy turns into a failed job.
-    expect(await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)).toEqual(
-      [],
-    );
+    expect(
+      await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organizationId, FROM, 2),
+    ).toEqual([]);
   });
 
   // Two replicas booting together: probe-and-create is two statements, and when both
@@ -105,7 +121,7 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
       await tx.execute(sql`select pg_advisory_xact_lock(${lock.namespace}, ${lock.key})`);
 
       ensure = gateway
-        .ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2)
+        .ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organizationId, FROM, 2)
         .then(() => "finished" as const);
       const blocked = new Promise<"blocked">((resolve) =>
         setTimeout(() => resolve("blocked"), 600),
@@ -118,7 +134,7 @@ describe("PgMaintenanceGateway.ensureMonthlyPartitions", () => {
     // lock rather than simply failing.
     expect(await ensure).toBe("finished");
     expect(
-      await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM),
+      await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, organizationId, FROM),
     ).toBeGreaterThan(0);
   });
 });
@@ -127,11 +143,16 @@ describe("PgMaintenanceGateway.monthlyPartitionsAfter", () => {
   // Relative, not absolute: this database also holds the real months the migrations made,
   // and every one of them is "after" a scratch window sitting in 2020.
   it("counts the months ahead and excludes the current one", async () => {
-    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organizationId, FROM, 2);
 
-    const fromJuly = await gateway.monthlyPartitionsAfter(PartitionedTable.ACTIVITY_LOG, FROM);
+    const fromJuly = await gateway.monthlyPartitionsAfter(
+      PartitionedTable.ACTIVITY_LOG,
+      organizationId,
+      FROM,
+    );
     const fromAugust = await gateway.monthlyPartitionsAfter(
       PartitionedTable.ACTIVITY_LOG,
+      organizationId,
       new Date("2020-08-01T00:00:00.000Z"),
     );
 
@@ -145,15 +166,16 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
   // The cutoff is read as a month boundary, not an instant: a partition holding the
   // cutoff's own month also holds rows newer than it, and dropping it would lose them.
   it("drops only the partitions whose month ends before the cutoff month", async () => {
-    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, FROM, 2);
+    await gateway.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organizationId, FROM, 2);
 
     const dropped = await gateway.dropMonthlyPartitionsBefore(
       PartitionedTable.ACTIVITY_LOG,
+      organizationId,
       new Date("2020-08-15T00:00:00.000Z"),
     );
 
-    expect(dropped).toContain("activity_log_2020_07");
-    expect(dropped).not.toContain("activity_log_2020_08");
+    expect(dropped).toContain(NAMES[0]);
+    expect(dropped).not.toContain(NAMES[1]);
 
     // The regression, and the reason the months above are in the past: a cutoff later
     // than today sweeps every partition the migrations made, under every other spec.
@@ -163,20 +185,22 @@ describe("PgMaintenanceGateway.dropMonthlyPartitionsBefore", () => {
   // The loop holds a `drop table`, so a child it cannot parse has to be left alone: an
   // unrecognised name is not evidence that the rows in it are expendable.
   it("leaves a child whose name is not <table>_<yyyy>_<mm> alone", async () => {
+    const scratch = `${tenantPartition}_scratch`;
     await database.client.execute(
-      sql`create table if not exists activity_log_scratch partition of activity_log
-          for values from ('2021-01-01') to ('2021-02-01')`,
+      sql.raw(`create table if not exists ${scratch} partition of ${tenantPartition}
+          for values from ('2021-01-01') to ('2021-02-01')`),
     );
 
     try {
       const dropped = await gateway.dropMonthlyPartitionsBefore(
         PartitionedTable.ACTIVITY_LOG,
+        organizationId,
         new Date("2021-06-01T00:00:00.000Z"),
       );
 
-      expect(dropped).not.toContain("activity_log_scratch");
+      expect(dropped).not.toContain(scratch);
     } finally {
-      await database.client.execute(sql`drop table if exists activity_log_scratch`);
+      await database.client.execute(sql.raw(`drop table if exists ${scratch}`));
     }
   });
 });

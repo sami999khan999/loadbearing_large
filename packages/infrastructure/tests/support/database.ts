@@ -1,6 +1,10 @@
+import type { OrganizationId } from "@loadbearing/contracts";
 import { eq } from "drizzle-orm";
 import { Database } from "../../src/pg/primitive/index.js";
+import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { organizations } from "../../src/pg/schema/index.js";
+import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
+import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 
 // The local scratch stack, whose credentials are `ratchet` everywhere on purpose so
 // a database nobody can debug is not the price of a secret ([11]).
@@ -30,4 +34,19 @@ export const seedOrganizationId = async (database: Database) => {
   const id = rows[0]?.id;
   if (!id) throw new Error("run `pnpm db:seed` first");
   return id;
+};
+
+// Every tenant-owned table is partitioned by `organization_id`, so a spec that founds its
+// own organization creates its partitions before it writes a row into one.
+export const seedTenant = async (database: Database, organizationId: OrganizationId) => {
+  const scope = new TransactionScope();
+  await new TenantPartitionSeed(database, scope).run(organizationId);
+};
+
+// And the inverse, for a spec that deletes the organization it founded: a dropped tenant
+// leaves seven partitions behind, and the next run of the same spec attaches over them.
+export const dropTenant = async (database: Database, organizationId: OrganizationId) => {
+  const scope = new TransactionScope();
+  const unitOfWork = new PgUnitOfWork(database, scope);
+  await new PgMaintenanceGateway(database, scope, unitOfWork).dropTenantPartitions(organizationId);
 };

@@ -13,7 +13,7 @@ import { PgConversationRepository } from "../../src/pg/repository/pg-conversatio
 import { PgMessageRepository } from "../../src/pg/repository/pg-message.repository.js";
 import { messages, organizations, users } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { openDatabase } from "../support/database.js";
+import { openDatabase, seedTenant } from "../support/database.js";
 
 class CountingLogger implements Logger {
   public count = 0;
@@ -43,8 +43,12 @@ const makeUser = async (name: string): Promise<UserId> => {
   return id;
 };
 
+// The id and the instant come from the caller since `0023`: `save` is a plain insert,
+// and the send dedupe that used to live on a unique index here holds both in Redis.
 const send = (conversationId: ConversationId, from: UserId, body: string) =>
   repository.save({
+    id: Uuid.v7() as MessageId,
+    createdAt: new Date(),
     organizationId,
     conversationId,
     authorId: from,
@@ -62,6 +66,7 @@ beforeAll(async () => {
   await database.client
     .insert(organizations)
     .values({ id: organizationId, name: "Message Spec", slug: `message-spec-${organizationId}` });
+  await seedTenant(database, organizationId);
 
   reader = await makeUser("Reader");
   author = await makeUser("Author");

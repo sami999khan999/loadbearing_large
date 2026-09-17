@@ -3,24 +3,27 @@ import { PartitionedTable } from "@loadbearing/application";
 import { Uuid } from "@loadbearing/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { StorageGateway, StoredObject } from "../../src/import.js";
+import type { OrganizationId, StorageGateway, StoredObject } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgActivityArchiveGateway } from "../../src/pg/repository/pg-activity-archive.gateway.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { activityArchive } from "../../src/pg/schema/index.js";
+import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
 // Its own month, so the partition this spec detaches and drops is never one another
-// spec is reading.
+// spec is reading. The name carries the tenant too: a month belongs to one tenant now.
 const PERIOD = new Date("2032-05-01T00:00:00.000Z");
-const PARTITION = "activity_log_2032_05";
 const ISO = "2032-05-01";
 
 let database: Database;
 let scope: TransactionScope;
 let logger: PgActivityLogger;
+let organizationId: OrganizationId;
+let tenantPartition: string;
+let partition: string;
 
 // Collects the stream so the bytes can be counted, and fails on demand — the two
 // failures worth pinning both happen after the detach.
@@ -51,7 +54,7 @@ const gateway = (storage: FakeStorage) =>
 
 const partitionExists = async () => {
   const result = await database.client.execute<{ present: boolean }>(
-    sql`select to_regclass(${PARTITION}) is not null as present`,
+    sql`select to_regclass(${partition}) is not null as present`,
   );
   return result.rows[0]?.present === true;
 };
@@ -60,14 +63,13 @@ const isAttached = async () => {
   const result = await database.client.execute<{ attached: boolean }>(
     sql`select exists (
       select 1 from pg_inherits
-      where inhrelid = to_regclass(${PARTITION}) and inhparent = to_regclass('activity_log')
+      where inhrelid = to_regclass(${partition}) and inhparent = to_regclass(${tenantPartition})
     ) as attached`,
   );
   return result.rows[0]?.attached === true;
 };
 
 const write = async (count: number) => {
-  const organizationId = await seedOrganizationId(database);
   const actor = { userId: Uuid.v7(), organizationId, kind: "user" as const };
   for (let i = 0; i < count; i++) {
     await logger.record(actor as never, "task.reactivated", { taskId: Uuid.v7() });
@@ -75,23 +77,30 @@ const write = async (count: number) => {
 };
 
 const freshPartition = async () => {
-  await database.client.execute(sql`drop table if exists ${sql.identifier(PARTITION)}`);
+  await database.client.execute(sql`drop table if exists ${sql.identifier(partition)}`);
   await new PgMaintenanceGateway(
     database,
     scope,
     new PgUnitOfWork(database, scope),
-  ).ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, PERIOD, 1);
+  ).ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organizationId, PERIOD, 1);
 };
 
-beforeAll(() => {
+beforeAll(async () => {
   database = openDatabase();
   scope = new TransactionScope();
   logger = new PgActivityLogger(database, scope, { now: () => PERIOD });
+
+  organizationId = await seedOrganizationId(database);
+  tenantPartition = TenantPartitionSeed.partitionName(
+    PartitionedTable.ACTIVITY_LOG,
+    organizationId,
+  );
+  partition = `${tenantPartition}_2032_05`;
 });
 
 afterEach(async () => {
   await database.client.delete(activityArchive).where(eq(activityArchive.period, ISO));
-  await database.client.execute(sql`drop table if exists ${sql.identifier(PARTITION)}`);
+  await database.client.execute(sql`drop table if exists ${sql.identifier(partition)}`);
 });
 
 afterAll(async () => {
@@ -104,7 +113,7 @@ describe("PgActivityArchiveGateway", () => {
     await write(3);
 
     const storage = new FakeStorage();
-    const result = await gateway(storage).archive(PERIOD);
+    const result = await gateway(storage).archive(organizationId, PERIOD);
 
     // The count is taken after the detach, so it describes exactly the closed set that
     // was uploaded. Counted before, a row written in between is streamed and uncounted.
@@ -130,7 +139,7 @@ describe("PgActivityArchiveGateway", () => {
     const storage = new FakeStorage();
     storage.failOnPut = true;
 
-    await expect(gateway(storage).archive(PERIOD)).rejects.toThrow("s3 is down");
+    await expect(gateway(storage).archive(organizationId, PERIOD)).rejects.toThrow("s3 is down");
 
     expect(await partitionExists()).toBe(true);
     expect(await isAttached()).toBe(true);
@@ -147,7 +156,9 @@ describe("PgActivityArchiveGateway", () => {
     const storage = new FakeStorage();
     storage.present = false;
 
-    await expect(gateway(storage).archive(PERIOD)).rejects.toThrow("Archive object missing");
+    await expect(gateway(storage).archive(organizationId, PERIOD)).rejects.toThrow(
+      "Archive object missing",
+    );
 
     expect(await isAttached()).toBe(true);
 

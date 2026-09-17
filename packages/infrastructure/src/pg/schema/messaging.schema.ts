@@ -1,9 +1,11 @@
 import {
   type ConversationId,
+  foreignKey,
   index,
   type MessageId,
   type OrganizationId,
   pgTable,
+  primaryKey,
   sql,
   text,
   timestamp,
@@ -14,12 +16,12 @@ import {
 import { users } from "./auth.schema.js";
 import { organizations } from "./rbac.schema.js";
 
-// Grows with the tenant's people rather than with its activity, so it is not
-// partitioned — the rule `data-and-scale.md` states for append-only tables.
+// Partitioned by tenant and by nothing else: it grows with the tenant's people rather
+// than with its activity, so a month level would be partitions holding nothing.
 export const conversations = pgTable(
   "conversations",
   {
-    id: uuid("id").$type<ConversationId>().primaryKey(),
+    id: uuid("id").$type<ConversationId>().notNull(),
     organizationId: uuid("organization_id")
       .$type<OrganizationId>()
       .notNull()
@@ -38,6 +40,9 @@ export const conversations = pgTable(
     lastMessageId: uuid("last_message_id").$type<MessageId>(),
   },
   (t) => [
+    // The tenant is the partition key, so it is in the primary key — and the composite
+    // is what the two foreign keys below have to name.
+    primaryKey({ columns: [t.id, t.organizationId] }),
     // Partial, because NULLs are distinct in a unique index and a channel would
     // otherwise be unconstrained against every other channel. Tenant-leading, per §17.
     uniqueIndex("conversations_direct_uq")
@@ -51,17 +56,14 @@ export const conversations = pgTable(
 export const conversationMembers = pgTable(
   "conversation_members",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").notNull(),
     organizationId: uuid("organization_id")
       .$type<OrganizationId>()
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    // NO ACTION rather than RESTRICT between siblings, so a tenant delete cascading
-    // from `organizations` is not rejected by this check on the way through.
-    conversationId: uuid("conversation_id")
-      .$type<ConversationId>()
-      .notNull()
-      .references(() => conversations.id, { onDelete: "no action" }),
+    // The foreign key is composite and declared below: `conversations` is partitioned by
+    // tenant, so its primary key is the pair and a reference to it has to name both.
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
     // Cascades: a membership is the person's, and it has no meaning without them.
     userId: uuid("user_id")
       .$type<UserId>()
@@ -76,6 +78,14 @@ export const conversationMembers = pgTable(
     mutedAt: timestamp("muted_at", { withTimezone: true }),
   },
   (t) => [
+    primaryKey({ columns: [t.id, t.organizationId] }),
+    // NO ACTION rather than RESTRICT between siblings, so a tenant delete cascading
+    // from `organizations` is not rejected by this check on the way through.
+    foreignKey({
+      columns: [t.conversationId, t.organizationId],
+      foreignColumns: [conversations.id, conversations.organizationId],
+      name: "conversation_members_conversation_fk",
+    }).onDelete("no action"),
     uniqueIndex("conversation_members_uq").on(t.organizationId, t.conversationId, t.userId),
     // "Which conversations am I in", which is the list query's driving side.
     index("conversation_members_mine_idx").on(t.organizationId, t.userId, t.lastReadAt),
@@ -84,24 +94,23 @@ export const conversationMembers = pgTable(
   ],
 );
 
-// **Not partitioned**, against the standing rule: a partitioned table refuses the unique
-// index that is the send dedupe. See application/docs/reference/messaging.md.
+// Two levels, `LIST (organization_id)` then `RANGE (created_at)`. The send dedupe that
+// used to keep it unpartitioned is a Redis key now — see application/docs/reference/messaging.md.
 export const messages = pgTable(
   "messages",
   {
-    id: uuid("id").$type<MessageId>().primaryKey(),
+    id: uuid("id").$type<MessageId>().notNull(),
     organizationId: uuid("organization_id")
       .$type<OrganizationId>()
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    conversationId: uuid("conversation_id")
-      .$type<ConversationId>()
-      .notNull()
-      .references(() => conversations.id, { onDelete: "no action" }),
+    // Composite, declared below, for the reason `conversation_members` gives.
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
     // No foreign key. A message outlives its author's account the way the audit trail
     // outlives its actor: deleting a person must not rewrite a conversation.
     authorId: uuid("author_id").$type<UserId>().notNull(),
-    // The client's own key, and the send dedupe. A retried send carries the same one.
+    // The client's own key. It is no longer indexed: the dedupe it used to enforce is a
+    // Redis `SET … NX`, because a unique index here cannot survive the month level.
     clientId: uuid("client_id").notNull(),
     body: text("body").notNull(),
     editedAt: timestamp("edited_at", { withTimezone: true }),
@@ -113,9 +122,13 @@ export const messages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
   (t) => [
-    // The send dedupe, tenant-leading per §17. Scoped to the conversation as well, so
-    // two clients that happened to generate one uuid do not collide across rooms.
-    uniqueIndex("messages_client_uq").on(t.organizationId, t.conversationId, t.clientId),
+    // Both partition keys, and `id` first so the key still reads as the row's identity.
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
+    foreignKey({
+      columns: [t.conversationId, t.organizationId],
+      foreignColumns: [conversations.id, conversations.organizationId],
+      name: "messages_conversation_fk",
+    }).onDelete("no action"),
     // The keyset, in the exact order the backwards page asks for.
     index("messages_keyset_idx").on(
       t.organizationId,

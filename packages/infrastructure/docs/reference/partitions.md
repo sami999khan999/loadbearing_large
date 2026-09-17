@@ -1,47 +1,97 @@
 ---
 title: Partitions
-description: The allowlist is the policy, drizzle cannot express PARTITION BY, and pruning is measured rather than assumed — what a partitioned table costs and what it buys.
+description: Tenant first and month underneath, the allowlist as the whole policy, and pruning measured rather than assumed — what a partitioned table costs and what it buys.
 ---
 
 # Partitions
 
-Three tables in this system are partitioned by month: `activity_log`, `outbox_event` and
-`notifications`. Each grows with activity rather than with the calendar, which is the test
+**Every tenant-owned table is a tenant partition first.** Seven of them take
+`PARTITION BY LIST ("organization_id")`, and the three that also grow with activity take
+`PARTITION BY RANGE` again underneath, one child per month:
+
+```
+notifications                         ← the parent, LIST (organization_id)
+└── notifications_<32hex>             ← one tenant,  RANGE (created_at)
+    ├── notifications_<32hex>_2026_09
+    └── notifications_<32hex>_2026_10
+```
+
+One table is deliberately month-only: `outbox_event`. The drain polls it once a second and must not
+touch a partition per tenant to do it.
+
+The month level is the test
 [`docs/ai/rules/data.md`](../../../../docs/ai/rules/data.md) applies — a table that gains twelve rows
-a year is not one of them, and partitioning it buys nothing for the cost of every mechanic below.
+a year is not one of them, and partitioning it by month buys nothing for the cost of every mechanic
+below. The tenant level is a different question: it is what makes a tenant's read prune to one
+subtree, a tenant's data a `drop table`, and a physical split a data move rather than a rewrite.
 
 ## The allowlist is the policy
 
 `PartitionedTable.ALL`, in `packages/application/src/primitive/partitioned-table.ts`, is a frozen
-list of `{ name, column, retentionMonths }`. It is the whole policy for every partitioned table, in
-one place:
+list of `{ name, tenantKey, column, retentionMonths }`. It is the whole policy for every partitioned
+table, in one place:
 
-| Table | Column | `retentionMonths` |
-| --- | --- | --- |
-| `activity_log` | `occurred_at` | `null` — the archive owns its lifecycle |
-| `outbox_event` | `occurred_at` | 2 |
-| `notifications` | `created_at` | 12 |
+| Table | `tenantKey` | `column` | `retentionMonths` |
+| --- | --- | --- | --- |
+| `activity_log` | `organization_id` | `occurred_at` | `null` — the archive owns its lifecycle |
+| `outbox_event` | — | `occurred_at` | 2 |
+| `notifications` | `organization_id` | `created_at` | 12 |
+| `messages` | `organization_id` | `created_at` | `null` — domain data |
+| `conversations` | `organization_id` | — | — |
+| `conversation_members` | `organization_id` | — | — |
+| `notification_preferences` | `organization_id` | — | — |
+| `document_chunks` | `organization_id` | — | — |
 
-`retentionMonths: null` means *this table is never dropped by the calendar*. `activity_log` carries
-it because [the archive](activity-archive.md) detaches a month, uploads it, verifies the object and
-only then drops — a calendar drop running beside that would race the verification.
+`tenantKey: null` is "not split by tenant"; `column: null` is "tenant level only, never pruned by
+the calendar"; `retentionMonths: null` is "something else owns this table's lifecycle".
+`activity_log` carries the last of those because [the archive](activity-archive.md) detaches a
+month, uploads it, verifies the object and only then drops — a calendar drop running beside that
+would race the verification.
 
-**Two consumers read this list rather than a copy of it.** `MaintenanceConsumer.partitions()` loops
-every entry to ensure its runway and prune its tail, and `PartitionedTableName` — the closed union
-every gateway signature takes — is derived from the same array. Adding a partitioned table is one
-entry, not one entry plus a record somewhere else that can disagree with it.
+**Nothing reads a copy of this list.** `TenantPartitionSeed` walks the tenant-partitioned entries,
+`MaintenanceConsumer.partitions()` walks the month-partitioned ones per tenant, and
+`PartitionedTableName` — the closed union every gateway signature takes — is derived from the same
+array. Adding a partitioned table is one entry, not one entry plus a record somewhere else that can
+disagree with it. A fork sharding on a store or a region edits `TenantKey` and its schema, and
+nothing else.
 
 `check-architecture` §21 asserts the list against `migrations/*.sql` in both directions: a table
-partitioned in a migration and missing from the allowlist stops getting partitions the month its own
-migration's runway ends, and an entry no migration partitions names a table every
-`CREATE TABLE … PARTITION OF` will be rejected against.
+partitioned in a migration and missing from the allowlist gets no partition for a new tenant and the
+notice is a failed insert on their first write, and an entry no migration partitions names a table
+every `ATTACH PARTITION` will be rejected against.
+
+## The parents are a migration; the children are a seed
+
+A migration creates the partitioned **parents only**. Every child — each tenant's partition and the
+runway months under it — is created by `TenantPartitionSeed`, which runs in the same transaction as
+the `organizations` insert on every path that founds a tenant, and which `migrate.ts` runs for every
+existing organization the moment a migration has been applied.
+
+One implementation creates partitions. A SQL copy of it inside a migration would be a second one
+that drifts from it the first time the shape changes.
+
+**Created standalone, then attached** — never `create table … partition of`. That form takes an
+`ACCESS EXCLUSIVE` lock on the parent for the rest of the transaction, which would stall every read
+on all seven tables for the length of a signup. `ALTER TABLE … ATTACH PARTITION` takes
+`SHARE UPDATE EXCLUSIVE`, which blocks nothing a request does, and an empty child attaches with no
+validation scan.
+
+Partition names are `<table>_<32hex>` and `<table>_<32hex>_<yyyy>_<mm>` — the tenant uuid with its
+hyphens stripped, validated against `^[0-9a-f]{32}$` before it reaches `sql.raw`. The longest is
+`notification_preferences_<32>` at 57 of Postgres's 63 characters.
 
 ## Two mechanics that are not optional
 
-**The partition column is in the primary key.** Postgres requires every unique constraint on a
-partitioned table to carry the partition key, so `notifications` is keyed `(id, created_at)` and
-`activity_log` `(id, occurred_at)`. `Uuid.v7()` is time-ordered, so the key and the partition column
-still increase together and the composite key costs nothing in index locality.
+**Every partition key is in the primary key.** Postgres requires every unique constraint on a
+partitioned table to carry every partition key, so a two-level table is keyed
+`(id, organization_id, created_at)` and a tenant-only one `(id, organization_id)`. `Uuid.v7()` is
+time-ordered, so the key still increases with the month and the composite costs nothing in index
+locality.
+
+That rule reaches the foreign keys too. `conversations` is keyed on the pair, so
+`messages.conversation_id` and `conversation_members.conversation_id` are composite references on
+`(conversation_id, organization_id)` — declared with drizzle's `foreignKey({ columns, foreignColumns })`,
+which is the only form that can express them.
 
 This propagates. `notifications_dedupe_uq` carries `created_at` for the same reason, and that is
 sound **only** because the value written is the *event's* timestamp rather than the clock's — a
@@ -57,12 +107,18 @@ why §21 reads the migration text rather than the schema.
 insert into a row in the wrong place, and the next `ATTACH` of that month has to scan the default to
 prove it holds nothing. §21 fails the build on one.
 
-## The runway
+## The runway, and what bounds tenants per node
 
-`MaintenanceConsumer.partitions()` runs monthly and ensures three partitions per table — the current
-month and the next two — so two consecutive missed runs survive and the third is an outage. It reads
-the runway *before* ensuring and emits `partition.runway.low` when fewer than two months lie ahead;
-read after, it could never fire, because the run that just fixed the runway has nothing to report.
+`MaintenanceConsumer.partitions()` runs monthly and ensures three partitions per table per tenant —
+the current month and the next two — so two consecutive missed runs survive and the third is an
+outage. It reads the runway *before* ensuring and emits `partition.runway.low` when fewer than two
+months lie ahead; read after, it could never fire, because the run that just fixed the runway has
+nothing to report.
+
+**The DDL per month is tenants × three tables**, one statement each, and that product is what bounds
+how many tenants a node carries. The loop pages tenants from the catalog and takes them a page at a
+time, so a month's worth of tenant DDL is a slow background trickle rather than one lock storm on
+the first.
 
 `ensureMonthlyPartitions` holds one advisory lock per table for the whole probe-and-create, because
 that is two statements: two replicas booting together both probe absent and one gets `42P07`.
@@ -76,9 +132,14 @@ of three things per query, and **which one is the finding**:
 
 | Assertion | Queries | What it protects |
 | --- | --- | --- |
-| **Exactly one partition** | `markRead`, the activity daily rollup | An equality or a closed range on the partition column |
+| **One tenant partition** | every tenant-scoped read | The tenant predicate — the neighbour's subtree is not in the plan |
+| **Exactly one month** | `markRead`, `findById`, the activity daily rollup | An equality or a closed range on the time column |
 | **The retention tail is pruned** | `listUnreadSince`, the projection walk | A floor — nothing older than it is in the plan |
-| **Pinned at every partition** | `list`, `countUnread`, `existsUnread`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
+| **Pinned at every month of the tenant** | `list`, `countUnread`, `existsUnread`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
+
+The first row is the one the tenant level bought, and the spec proves it against a second tenant
+that also holds rows in both months — otherwise it would pass on a database with one tenant in it
+whatever the predicate said.
 
 **A row-constructor cursor does not prune.** `(created_at, id) < (at, id)` is the keyset every inbox
 page uses, and the partition pruner does not decompose it — measured at plan time and again with
@@ -96,19 +157,20 @@ the change detector. A bound added later fails that assertion and is lowered del
 numbers re-measured — rather than arriving as a badge that has quietly stopped counting old rows.
 
 At the fifteen-partition steady state the unbounded reads cost 0.21–0.87 ms, which is why they were
-left unbounded.
+left unbounded — and the tenant level narrows that set to one tenant's months rather than every
+tenant's.
 
-## `messages` is not partitioned
+## `messages` had to give up an index to join the list
 
-One table grows with activity and is not on the list. `messages_client_uq`
-`(organization_id, conversation_id, client_id)` is the send's idempotency key, and it cannot exist on
-a partitioned table without `created_at` in it — with `created_at` in it, every retry inserts a
-second row instead of colliding. See
-[messaging](../../../application/docs/reference/messaging.md) for the two alternatives that were rejected.
+`messages_client_uq` on `(organization_id, conversation_id, client_id)` was the send's idempotency
+key, and it cannot exist on a partitioned table without `created_at` in it — with `created_at` in it
+every retry inserts a second row instead of colliding. The dedupe is a Redis `SET … EX … NX` now, and
+`client_id` stays as a column with no index. See
+[messaging](../../../application/docs/reference/messaging.md).
 
 ## Converting a table that already holds rows
 
-Nothing here does that yet, and the procedure is not "alter the table" — Postgres has no
-`ALTER TABLE … PARTITION BY`. A deployment with rows creates a new partitioned parent, copies into
-it, and swaps the two under a lock. The kit ships no rows in these tables, so its own migrations
-create the partitioned shape directly.
+The procedure is not "alter the table" — Postgres has no `ALTER TABLE … PARTITION BY`. A deployment
+with rows creates a new partitioned parent, copies into it, and swaps the two under a lock. The kit
+ships no rows in the seven tables `0023` rewrote, so that migration drops and recreates them in
+place; a deployment that holds rows does the copy-and-swap instead.

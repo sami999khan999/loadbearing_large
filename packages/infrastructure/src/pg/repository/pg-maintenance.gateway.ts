@@ -1,6 +1,10 @@
 import {
+  InternalError,
   lt,
   type MaintenanceGateway,
+  type OrganizationId,
+  type PartitionEstimate,
+  PartitionedTable,
   type PartitionedTableName,
   type SweepOutcome,
   sql,
@@ -8,12 +12,22 @@ import {
 } from "../../import.js";
 import { BaseRepository, type Database } from "../primitive/index.js";
 import { invitations, sessions, verifications } from "../schema/index.js";
+import { TenantPartitionSeed } from "../seed/index.js";
 import type { TransactionScope } from "../transaction/index.js";
+
+// One child of the parent, with what the retention preview wants to know about it.
+interface ChildRow extends Record<string, unknown> {
+  readonly name: string;
+  readonly estimated_rows: string;
+  readonly bytes: string;
+}
 
 export class PgMaintenanceGateway extends BaseRepository implements MaintenanceGateway {
   // A fixed namespace for `pg_advisory_xact_lock`'s two-argument form, so this lock
   // cannot collide with one taken for another reason.
   private static readonly LOCK_NAMESPACE = 0x6c62_0002 | 0;
+
+  private readonly tenantPartitions = new TenantPartitionSeed(this.database, this.scope);
 
   public constructor(
     database: Database,
@@ -47,11 +61,37 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     };
   }
 
+  // Delegated rather than reimplemented: the signup path calls the seed directly inside
+  // its own transaction, and a second copy here is the one that drifts.
+  public ensureTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
+    return this.tenantPartitions.run(organizationId);
+  }
+
+  // One transaction for all seven, months and all: a tenant half-dropped is a tenant
+  // whose reads succeed and whose writes fail.
+  public async dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
+    const dropped: string[] = [];
+
+    await this.unitOfWork.run(async () => {
+      for (const entry of PartitionedTable.TENANT_PARTITIONED) {
+        const name = TenantPartitionSeed.partitionName(entry.name, organizationId);
+        // `CASCADE`, because the month children hang off it. Dropping the tenant
+        // partition detaches nothing first — the whole subtree goes at once.
+        await this.db.execute(sql.raw(`drop table if exists ${name} cascade`));
+        dropped.push(name);
+      }
+    });
+
+    return dropped;
+  }
+
   public async ensureMonthlyPartitions(
     table: PartitionedTableName,
+    organizationId: OrganizationId | null,
     from: Date,
     months: number,
   ): Promise<readonly string[]> {
+    const parent = this.monthParent(table, organizationId);
     const created: string[] = [];
 
     // One transaction holding one advisory lock per table, because probe-and-create is
@@ -65,7 +105,7 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
       for (let offset = 0; offset < months; offset += 1) {
         const start = PgMaintenanceGateway.monthStart(from, offset);
         const end = PgMaintenanceGateway.monthStart(from, offset + 1);
-        const name = PgMaintenanceGateway.partitionName(table, start);
+        const name = `${parent}_${PgMaintenanceGateway.monthSuffix(start)}`;
 
         // `to_regclass` returns null rather than throwing, which `CREATE TABLE IF NOT
         // EXISTS … PARTITION OF` cannot tell us: it reports nothing about what it did.
@@ -74,11 +114,12 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
         );
         if (probe.rows[0]?.present) continue;
 
-        // Inlined because Postgres accepts **no** bind parameters in DDL, not even for
-        // the range bounds. No injection surface: dates, and a name from a closed union.
+        // Created standalone and then attached, for the lock reason `TenantPartitionSeed`
+        // gives. Inlined because Postgres accepts no bind parameters in DDL.
+        await this.db.execute(sql.raw(`create table ${name} (like ${parent} including all)`));
         await this.db.execute(
           sql.raw(
-            `create table ${name} partition of ${table} ` +
+            `alter table ${parent} attach partition ${name} ` +
               `for values from ('${PgMaintenanceGateway.iso(start)}') to ('${PgMaintenanceGateway.iso(end)}')`,
           ),
         );
@@ -92,52 +133,118 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
 
   // Strictly after the month `from` falls in, so the current month is never counted as
   // runway — it is the one being written to.
-  public async monthlyPartitionsAfter(table: PartitionedTableName, from: Date): Promise<number> {
+  public async monthlyPartitionsAfter(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    from: Date,
+  ): Promise<number> {
+    const parent = this.monthParent(table, organizationId);
     const boundary = PgMaintenanceGateway.monthStart(from, 1);
-    const children = await this.childrenOf(table);
+    const children = await this.childrenOf(parent);
 
-    return children.filter((name) => {
-      const start = PgMaintenanceGateway.partitionMonth(table, name);
+    return children.filter((child) => {
+      const start = PgMaintenanceGateway.partitionMonth(parent, child.name);
       return start !== null && start.getTime() >= boundary.getTime();
     }).length;
   }
 
   public async dropMonthlyPartitionsBefore(
     table: PartitionedTableName,
+    organizationId: OrganizationId | null,
     cutoff: Date,
   ): Promise<readonly string[]> {
-    const children = await this.childrenOf(table);
+    const parent = this.monthParent(table, organizationId);
+    const children = await this.childrenOf(parent);
     const boundary = PgMaintenanceGateway.monthStart(cutoff, 0);
     const dropped: string[] = [];
 
-    for (const name of children) {
-      const start = PgMaintenanceGateway.partitionMonth(table, name);
+    for (const child of children) {
+      const start = PgMaintenanceGateway.partitionMonth(parent, child.name);
       // A name the pattern does not match is left alone rather than dropped: this loop
       // is holding a `drop table`, and "I could not parse it" is not a reason to run one.
       if (!start || start.getTime() >= boundary.getTime()) continue;
 
       // Re-derived from the parsed month, never interpolated from the catalog string.
       await this.db.execute(
-        sql.raw(`drop table if exists ${PgMaintenanceGateway.partitionName(table, start)}`),
+        sql.raw(`drop table if exists ${parent}_${PgMaintenanceGateway.monthSuffix(start)}`),
       );
-      dropped.push(name);
+      dropped.push(child.name);
     }
 
     return dropped;
   }
 
+  // Across every tenant when `organizationId` is null, and the same parse the drop uses
+  // off the same read — so the two cannot disagree about what a child is.
+  public async partitionsBefore(
+    table: PartitionedTableName,
+    cutoff: Date,
+    organizationId?: OrganizationId | null,
+  ): Promise<readonly PartitionEstimate[]> {
+    const entry = PartitionedTable.byName(table);
+    const parents =
+      entry.tenantKey && !organizationId
+        ? await this.tenantPartitionsOf(table)
+        : [this.monthParent(table, organizationId ?? null)];
+
+    const boundary = PgMaintenanceGateway.monthStart(cutoff, 0);
+    const estimates: PartitionEstimate[] = [];
+
+    for (const parent of parents) {
+      for (const child of await this.childrenOf(parent)) {
+        const period = PgMaintenanceGateway.partitionMonth(parent, child.name);
+        if (!period || period.getTime() >= boundary.getTime()) continue;
+
+        estimates.push({
+          name: child.name,
+          period,
+          // `reltuples` is the planner's estimate, refreshed by autovacuum or ANALYZE,
+          // and -1 on a child never analysed — hence the floor, and hence "about".
+          estimatedRows: Math.max(0, Number(child.estimated_rows)),
+          bytes: Number(child.bytes),
+        });
+      }
+    }
+
+    return estimates;
+  }
+
+  // The parent a month hangs off: the tenant partition, or the table for `outbox_event`.
+  // An argument disagreeing with the allowlist is an error here, not a wrong `drop table`.
+  private monthParent(table: PartitionedTableName, organizationId: OrganizationId | null): string {
+    const entry = PartitionedTable.byName(table);
+    if (!entry.column) throw new InternalError(new Error(`${table} has no month level`));
+
+    if (!entry.tenantKey) {
+      if (organizationId) throw new InternalError(new Error(`${table} has no tenant level`));
+      return table;
+    }
+
+    if (!organizationId) throw new InternalError(new Error(`${table} is partitioned by tenant`));
+    return TenantPartitionSeed.partitionName(table, organizationId);
+  }
+
   // From the catalog rather than from a date range: a gap in the sequence, or a month
   // created by hand, is still a partition and still has to be found.
-  private async childrenOf(table: PartitionedTableName): Promise<readonly string[]> {
-    const rows = await this.db.execute<{ name: string }>(sql`
-      select child.relname as name
+  private async childrenOf(parent: string): Promise<readonly ChildRow[]> {
+    const rows = await this.db.execute<ChildRow>(sql`
+      select child.relname as name,
+             greatest(child.reltuples, 0)::bigint::text as estimated_rows,
+             pg_total_relation_size(child.oid)::bigint::text as bytes
       from pg_inherits
       join pg_class parent on parent.oid = pg_inherits.inhparent
       join pg_class child on child.oid = pg_inherits.inhrelid
-      where parent.relname = ${table}
+      where parent.relname = ${parent}
+      order by child.relname
     `);
 
-    return rows.rows.map((row) => row.name);
+    return rows.rows;
+  }
+
+  // Read from the catalog rather than from `organizations`: a partition with no tenant
+  // row is exactly the leak this read exists to show.
+  private async tenantPartitionsOf(table: PartitionedTableName): Promise<readonly string[]> {
+    return (await this.childrenOf(table)).map((child) => child.name);
   }
 
   // Public because an advisory lock *is* a cross-process protocol: another process has
@@ -156,15 +263,15 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     return new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + offset, 1));
   }
 
-  private static partitionName(table: PartitionedTableName, start: Date): string {
-    const month = String(start.getUTCMonth() + 1).padStart(2, "0");
-    return `${table}_${start.getUTCFullYear()}_${month}`;
+  private static monthSuffix(start: Date): string {
+    return `${start.getUTCFullYear()}_${String(start.getUTCMonth() + 1).padStart(2, "0")}`;
   }
 
-  // Null for anything that is not `<table>_<yyyy>_<mm>`, which is what makes the drop
+  // Null for anything that is not `<parent>_<yyyy>_<mm>`, which is what makes the drop
   // loop above safe to run over whatever the catalog happens to return.
-  private static partitionMonth(table: PartitionedTableName, name: string): Date | null {
-    const match = new RegExp(`^${table}_(\\d{4})_(\\d{2})$`).exec(name);
+  private static partitionMonth(parent: string, name: string): Date | null {
+    const escaped = parent.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`^${escaped}_(\\d{4})_(\\d{2})$`).exec(name);
     if (!match?.[1] || !match[2]) return null;
 
     const month = Number(match[2]);

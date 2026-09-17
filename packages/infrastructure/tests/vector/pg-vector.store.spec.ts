@@ -7,7 +7,7 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import { PgVectorStore } from "../../src/pg/repository/pg-vector.store.js";
 import { documentChunks, organizations } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
+import { DATABASE_URL, openDatabase, seedOrganizationId, seedTenant } from "../support/database.js";
 
 // Captures the SQL the store actually issued, so the EXPLAIN below runs the query under
 // test rather than a copy of it that can drift.
@@ -124,6 +124,7 @@ describe("PgVectorStore", () => {
     await database.client
       .insert(organizations)
       .values({ id: otherOrg, slug: `other-${sourceId}`, name: "Other" });
+    await seedTenant(database, otherOrg);
 
     await store.upsert(otherOrg, [
       {
@@ -179,9 +180,13 @@ describe("PgVectorStore", () => {
     try {
       const explained = await client.query(`explain ${issued.query}`, issued.params);
       const plan = explained.rows.map((row) => Object.values(row).join(" ")).join(" | ");
-      const sortKey = /Sort Key: \(\(embedding <=> [^)]*\)\)/.test(plan);
+      // The qualifier is optional: the scan is on the tenant's partition under an alias
+      // since `0023`, so the plan reads `document_chunks.embedding` rather than bare.
+      const sortKey = /Sort Key: \(\((?:\w+\.)?embedding <=> [^)]*\)\)/.test(plan);
 
-      expect(sortKey || plan.includes("document_chunks_embedding_idx")).toBe(true);
+      // And the index name is generated on the partition, so the suffix is what is
+      // stable — one HNSW graph per tenant, which is the better shape here.
+      expect(sortKey || plan.includes("_embedding_idx")).toBe(true);
     } finally {
       client.release();
       await pool.end();

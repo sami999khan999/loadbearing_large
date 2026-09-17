@@ -11,7 +11,7 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import { PgConversationRepository } from "../../src/pg/repository/pg-conversation.repository.js";
 import { organizations, users } from "../../src/pg/schema/index.js";
 import { TransactionScope } from "../../src/pg/transaction/index.js";
-import { openDatabase } from "../support/database.js";
+import { openDatabase, seedTenant } from "../support/database.js";
 
 // What the fixed-query-count claims are measured with. Drizzle calls this once per
 // statement it issues, which is the only place a second round trip shows up.
@@ -50,6 +50,9 @@ beforeAll(async () => {
     name: "Messaging Spec",
     slug: `messaging-spec-${organizationId}`,
   });
+  // Every table this spec writes to is partitioned by tenant, so the partitions come
+  // before the first row the way they do on every path that founds an organization.
+  await seedTenant(database, organizationId);
 
   alice = await makeUser("Alice");
   bob = await makeUser("Bob");

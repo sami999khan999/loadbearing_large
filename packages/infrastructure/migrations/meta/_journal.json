@@ -162,6 +162,20 @@
       "when": 1789293680005,
       "tag": "0022_pooler_timeout_floor",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789672650348,
+      "tag": "0023_tenant_partitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789673626279,
+      "tag": "0024_tenant_activity_archive",
+      "breakpoints": true
     }
   ]
 }

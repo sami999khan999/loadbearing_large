@@ -10,7 +10,7 @@ import {
 } from "../../import.js";
 
 // Declared as an ordinary table so the query builder types it; the generated DDL is
-// hand-edited to `PARTITION BY RANGE (occurred_at)` before it is applied.
+// hand-edited to two levels — `LIST (organization_id)`, then `RANGE (occurred_at)`.
 export const activityLog = pgTable(
   "activity_log",
   {
@@ -24,12 +24,12 @@ export const activityLog = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // Postgres requires the partition key in the primary key. `Uuid.v7()` is
-    // time-ordered, so the key and the partition column still increase together.
-    primaryKey({ columns: [t.id, t.occurredAt] }),
+    // Postgres requires **every** partition key in the primary key, and this table has
+    // two levels. `Uuid.v7()` is time-ordered, so the key still increases with the month.
+    primaryKey({ columns: [t.id, t.organizationId, t.occurredAt] }),
     index("activity_log_org_time_idx").on(t.organizationId, t.occurredAt.desc()),
-    // The projection's keyset, which is cross-tenant by design: without it every batch
-    // scans every partition. Ascending, matching `since()`'s ORDER BY exactly.
+    // The projection's keyset, read per tenant since `16.6`: the tenant level prunes to
+    // one list partition and this index walks the months inside it.
     index("activity_log_replay_idx").on(t.occurredAt, t.id),
   ],
 );

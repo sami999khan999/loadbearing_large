@@ -55,7 +55,9 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
         })),
       )
       .onConflictDoUpdate({
-        target: documentChunks.id,
+        // Both key columns: the table is partitioned by tenant, so its primary key is
+        // the pair and a conflict target naming only `id` matches no unique index.
+        target: [documentChunks.id, documentChunks.organizationId],
         set: {
           content: sql`excluded.content`,
           embedding: sql`excluded.embedding`,

@@ -40,6 +40,12 @@ export class MapCacheStore implements CacheStore {
     return Promise.resolve();
   }
 
+  public setIfAbsent<T>(key: string, value: T): Promise<boolean> {
+    if (this.entries.has(key)) return Promise.resolve(false);
+    this.entries.set(key, value);
+    return Promise.resolve(true);
+  }
+
   public delete(key: string): Promise<void> {
     this.entries.delete(key);
     return Promise.resolve();

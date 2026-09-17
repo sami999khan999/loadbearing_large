@@ -75,7 +75,12 @@ export {
   type NotificationRecipientReader,
   type NotificationRecord,
   type NotificationRepository,
+  type OrganizationReader,
   type OutboxGateway,
+  type PartitionEstimate,
+  // A value, not a type: the seed and the maintenance gateway both walk the allowlist.
+  PartitionedTable,
+  type PartitionedTableEntry,
   type PartitionedTableName,
   type PreferenceRecord,
   // A value, not a type: the founder and the invitation claimer construct one to write
@@ -184,6 +189,7 @@ export { migrate } from "drizzle-orm/node-postgres/migrator";
 export {
   boolean,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,

@@ -4,6 +4,7 @@ import {
   jsonb,
   type OrganizationId,
   pgTable,
+  primaryKey,
   sql,
   text,
   timestamp,
@@ -12,10 +13,12 @@ import {
 } from "../../import.js";
 import { organizations } from "./rbac.schema.js";
 
+// Partitioned by tenant and by nothing else. One HNSW graph per tenant is the better
+// shape: `search()` carries the tenant, so a query walks one small graph.
 export const documentChunks = pgTable(
   "document_chunks",
   {
-    id: uuid("id").primaryKey(),
+    id: uuid("id").notNull(),
     // The FK the other tenant tables have and this one did not, so a deleted tenant left
     // its corpus behind — embeddings nothing can reach and nothing will remove.
     organizationId: uuid("organization_id")
@@ -41,6 +44,9 @@ export const documentChunks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // The tenant is the partition key, so it is in the primary key — and `upsert`'s
+    // conflict target has to name the same pair.
+    primaryKey({ columns: [t.id, t.organizationId] }),
     index("document_chunks_source_idx").on(t.organizationId, t.sourceId),
     index("document_chunks_goal_idx").on(t.organizationId, t.goalId),
     // Partial index for the org-wide case, declared rather than left as a loose

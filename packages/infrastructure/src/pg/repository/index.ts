@@ -17,6 +17,7 @@ export { PgNotificationRepository } from "./pg-notification.repository.js";
 export { PgNotificationPreferenceRepository } from "./pg-notification-preference.repository.js";
 export { PgNotificationRecipientReader } from "./pg-notification-recipient.reader.js";
 export { PgOrganizationFounder } from "./pg-organization.founder.js";
+export { PgOrganizationReader } from "./pg-organization.reader.js";
 export { PgOutboxGateway } from "./pg-outbox.gateway.js";
 export { PgOutboxPublisher } from "./pg-outbox.publisher.js";
 export { PgPersonalOrganizationEnroller } from "./pg-personal-organization.enroller.js";

@@ -11,7 +11,7 @@ import {
 } from "../../import.js";
 import { BaseRepository, type Database } from "../primitive/index.js";
 import { memberships, organizations, roles } from "../schema/index.js";
-import { SystemRoleSeed } from "../seed/index.js";
+import { SystemRoleSeed, TenantPartitionSeed } from "../seed/index.js";
 import type { TransactionScope } from "../transaction/index.js";
 
 // The role the person who founds a tenant gets. There is no second branch: a founded
@@ -28,6 +28,7 @@ export interface OrganizationFounder {
 // and from the create endpoint. See docs/reference/enrollers.md.
 export class PgOrganizationFounder extends BaseRepository {
   private readonly systemRoles = new SystemRoleSeed(this.database, this.scope);
+  private readonly partitions = new TenantPartitionSeed(this.database, this.scope);
 
   public constructor(
     database: Database,
@@ -51,6 +52,10 @@ export class PgOrganizationFounder extends BaseRepository {
           slug: slug ?? `o-${organizationId}`,
           name,
         });
+
+        // Before anything writes a tenant-owned row: `activity.record` below writes into
+        // one of those partitioned tables inside this same transaction.
+        await this.partitions.run(organizationId);
 
         // Reused, not reimplemented, so an organization created here holds exactly the
         // grants `pnpm db:seed` would have given it.
