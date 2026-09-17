@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   closingBracket,
   columnsOf,
+  foreignKeysOf,
   indexesOf,
   lineOf,
   outsideFences,
@@ -426,10 +427,6 @@ const TENANT_EXEMPT = new Set([
   // matching the tenant column as a substring, and had never actually been checked.
   "sessions",
   "__drizzle_migrations",
-  // `activity_log` is partitioned by time, not by tenant, so one monthly partition
-  // holds every organization's rows and the archive object recording it is global.
-  // A tenant column here would have no value to carry.
-  "activity_archive",
 ]);
 
 assert("every domain table declares `organization_id`", (failures) => {
@@ -926,13 +923,25 @@ assert("every foreign key column has an index leading with it", (failures) => {
         .filter(Boolean),
     );
 
-    for (const column of columnsOf(block)) {
-      if (!column.isForeignKey) continue;
-      if (leading.has(column.property)) continue;
+    const byProperty = new Map(columnsOf(block).map((column) => [column.property, column.column]));
+
+    // Both forms. A reference to a partitioned table has to be composite, which
+    // `.references()` cannot express — and reading only that form stopped seeing them.
+    const referencing = columnsOf(block)
+      .filter((column) => column.isForeignKey)
+      .map((column) => column.property);
+
+    for (const columns of foreignKeysOf(block)) {
+      const [first] = columns;
+      if (first) referencing.push(first);
+    }
+
+    for (const property of referencing) {
+      if (leading.has(property)) continue;
 
       failures.push(
-        `${rel(block.file)}: ${block.table}.${column.column} is a foreign key with no ` +
-          "index leading with it",
+        `${rel(block.file)}: ${block.table}.${byProperty.get(property) ?? property} is a ` +
+          "foreign key with no index leading with it",
       );
     }
   }
@@ -1043,16 +1052,17 @@ assert("every migration is safe on a table that already holds rows", (failures) 
 
 // ── 21 — every partitioned table is on the allowlist, and every entry is real ─
 //
-// `PartitionedTable.ALL` is what the monthly schedule loops and what the maintenance
-// gateway's closed union derives from. A table partitioned in a migration but missing
-// from that list stops getting partitions the month its own migration's runway ends,
-// and the notice is a failed insert. The inverse is the same failure from the other
-// side: an entry with no `PARTITION BY` anywhere names a table Postgres will reject
-// every `CREATE TABLE ... PARTITION OF` against. See docs/setup/13 and
-// docs/opinions/data-and-scale.md §4.2.
+// `PartitionedTable.ALL` is what the tenant seed walks, what the monthly schedule loops,
+// and what the maintenance gateway's closed union derives from. A table partitioned in a
+// migration but missing from that list gets no partitions for a new tenant, and the
+// notice is a failed insert on their first write. The inverse is the same failure from
+// the other side: an entry with no `PARTITION BY` anywhere names a table Postgres will
+// reject every `ATTACH PARTITION` against. See docs/setup/13 and
+// packages/infrastructure/docs/reference/partitions.md.
 
-// The allowlist as `{ table -> column }`. Entries name their tables through module
-// constants, so those are resolved first; a quoted literal is read directly.
+// The allowlist as `{ table -> { tenantKey, column } }`. Entries name their tables
+// through module constants, so those are resolved first; a quoted literal is read
+// directly. `null` on either key is a level the table does not have.
 function partitionedAllowlist() {
   const file = join(ROOT, "packages/application/src/primitive/partitioned-table.ts");
   if (!existsSync(file)) return null;
@@ -1063,17 +1073,23 @@ function partitionedAllowlist() {
   );
 
   const entries = new Map();
+  const value = (raw) => (raw === "null" ? null : raw.slice(1, -1));
 
-  for (const match of source.matchAll(/\bname:\s*(\w+|"[a-z_]+")\s*,\s*column:\s*"([a-z_]+)"/g)) {
-    const [, token = "", column = ""] = match;
+  // Tempered against the next `name:` so a malformed entry cannot take the following
+  // one's keys, which is the same trap the migration parse below documents.
+  const pattern =
+    /\bname:\s*(\w+|"[a-z_]+")\s*,\s*(?:(?!name:)[\s\S])*?tenantKey:\s*(null|"[a-z_]+")\s*,\s*column:\s*(null|"[a-z_]+")/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const [, token = "", tenantKey = "null", column = "null"] = match;
     const table = token.startsWith('"') ? token.slice(1, -1) : constants.get(token);
-    if (table) entries.set(table, column);
+    if (table) entries.set(table, { tenantKey: value(tenantKey), column: value(column) });
   }
 
   return entries;
 }
 
-assert("every partitioned table is on the allowlist, with the same column", (failures) => {
+assert("every partitioned table is on the allowlist, with the same keys", (failures) => {
   const dir = join(ROOT, "packages/infrastructure/migrations");
   if (!existsSync(dir)) return "no migrations/ directory";
 
@@ -1081,7 +1097,9 @@ assert("every partitioned table is on the allowlist, with the same column", (fai
   if (!allowed) return "packages/application has no partitioned-table.ts yet";
   if (allowed.size === 0) return "PartitionedTable.ALL parsed as empty";
 
-  const partitioned = new Set();
+  // What a migration declares, last file wins: a table dropped and recreated with a
+  // different key is described by the statement that created it most recently.
+  const declared = new Map();
 
   for (const file of readdirSync(dir)
     .filter((name) => name.endsWith(".sql"))
@@ -1092,36 +1110,49 @@ assert("every partitioned table is on the allowlist, with the same column", (fai
     // of its own statement: a lazy `[\s\S]*?` binds the first table in the file to the
     // first `PARTITION BY` after it, which reported the wrong table name for 0017.
     for (const match of sql.matchAll(
-      /CREATE TABLE "([a-z_]+)" \(((?:(?!CREATE TABLE)[\s\S])*?)\n\) PARTITION BY RANGE \("([a-z_]+)"\)/g,
+      /CREATE TABLE "([a-z_]+)" \(((?:(?!CREATE TABLE)[\s\S])*?)\n\) PARTITION BY (LIST|RANGE) \("([a-z_]+)"\)/g,
     )) {
-      const [, table = "", body = "", column = ""] = match;
-      partitioned.add(table);
-
-      const declared = allowed.get(table);
-
-      if (declared === undefined) {
-        failures.push(`${file} partitions ${table}, which PartitionedTable.ALL does not name`);
-        continue;
-      }
-      if (declared !== column) {
-        failures.push(`${file} partitions ${table} by ${column}; the allowlist says ${declared}`);
-      }
-
-      // Postgres rejects a partitioned table whose primary key omits the partition key,
-      // so this only ever fires on a migration nobody applied — which is the point.
-      const key = body.match(/PRIMARY KEY\s*\(([^)]*)\)/i)?.[1] ?? "";
-      if (!key.includes(`"${column}"`)) {
-        failures.push(`${file}: ${table}'s primary key does not carry ${column}`);
-      }
+      const [, table = "", body = "", kind = "", column = ""] = match;
+      declared.set(table, { file, body, kind, column });
     }
 
-    for (const match of sql.matchAll(/PARTITION OF "([a-z_]+)"\s+DEFAULT/gi)) {
+    for (const match of sql.matchAll(/PARTITION OF "?([a-z_]+)"?\s+DEFAULT/gi)) {
       failures.push(`${file} gives ${match[1]} a DEFAULT partition, which hides a missing month`);
     }
   }
 
+  for (const [table, { file, body, kind, column }] of declared) {
+    const entry = allowed.get(table);
+
+    if (entry === undefined) {
+      failures.push(`${file} partitions ${table}, which PartitionedTable.ALL does not name`);
+      continue;
+    }
+
+    // A tenant level is `LIST (<tenantKey>)` and the month level under it is declared by
+    // the seed at runtime, so a migration shows only the outermost key.
+    const expected = entry.tenantKey ?? entry.column;
+    const expectedKind = entry.tenantKey ? "LIST" : "RANGE";
+
+    if (column !== expected || kind !== expectedKind) {
+      failures.push(
+        `${file} partitions ${table} by ${kind} (${column}); ` +
+          `the allowlist says ${expectedKind} (${expected})`,
+      );
+    }
+
+    // Postgres rejects a partitioned table whose primary key omits a partition key, so
+    // this only ever fires on a migration nobody applied — which is the point.
+    const key = body.match(/PRIMARY KEY\s*\(([^)]*)\)/i)?.[1] ?? "";
+    for (const required of [entry.tenantKey, entry.column].filter(Boolean)) {
+      if (!key.includes(`"${required}"`)) {
+        failures.push(`${file}: ${table}'s primary key does not carry ${required}`);
+      }
+    }
+  }
+
   for (const table of allowed.keys()) {
-    if (partitioned.has(table)) continue;
+    if (declared.has(table)) continue;
     failures.push(`PartitionedTable.ALL names ${table}, which no migration partitions`);
   }
 

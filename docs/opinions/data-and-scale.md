@@ -309,9 +309,21 @@ CREATE TABLE activity_log (
   organization_id uuid        NOT NULL,
   occurred_at     timestamptz NOT NULL,
   -- …
-  PRIMARY KEY (id, occurred_at)
-) PARTITION BY RANGE (occurred_at);
+  PRIMARY KEY (id, organization_id, occurred_at)
+) PARTITION BY LIST (organization_id);
 ```
+
+**Tenant first, month underneath.** The parent splits by `organization_id`; each tenant's partition
+splits again by `occurred_at`, one child per month. Every partition key has to be in the primary
+key, which is why that key is three columns rather than two — and the same rule makes a reference to
+a tenant-partitioned table a *composite* foreign key on `(id, organization_id)`.
+
+The tenant level is not the same decision as the month level and does not have the same test. A
+month level is for a table that grows with activity. A tenant level is for every table a tenant
+owns, and what it buys is three things: a tenant's read prunes to one subtree, deleting a tenant is
+a `drop table` rather than a cascade over years of rows, and a physical split becomes a data move
+rather than a rewrite. The one exemption here is the outbox: the drain polls it once a second and
+must not touch a partition per tenant to do it.
 
 Three things this buys:
 

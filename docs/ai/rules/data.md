@@ -30,9 +30,11 @@ again the first time someone introduces one because "it is just a cache."
 **Non-negotiable in any new schema:** `organization_id` on every domain table as a branded
 `OrganizationId` · an index **leading with** every foreign key and filtered column, since Postgres
 does not auto-index FKs and a composite that leads with the tenant cannot serve a cascade ·
-append-only tables that grow *with activity* **partitioned in the first migration**, because
-converting later is a rewrite with downtime — and a table that grows with the calendar rather than
-with the work, like `activity_archive` at twelve rows a year, is not one of them · query-count assertions in integration tests for anything that loops ·
+**every tenant-owned table `PARTITION BY LIST (organization_id)` in the migration that creates it**,
+and the ones that grow *with activity* `PARTITION BY RANGE` again underneath, because converting
+later is a rewrite with downtime — the parents are the migration's, every child is
+`TenantPartitionSeed`'s, and a table that grows with the calendar rather than with the work, like
+`activity_archive` at twelve rows a year, takes no month level · query-count assertions in integration tests for anything that loops ·
 **every tenant foreign key `ON DELETE CASCADE`**, because that column is the only handle a tenant
 delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected
 by its own check. The audit trail is the one table that names no actor by foreign key.

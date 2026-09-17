@@ -1,6 +1,7 @@
 import {
   type Container,
   type Job,
+  type OrganizationId,
   PartitionedTable,
   type PartitionedTableName,
   QueueName,
@@ -22,6 +23,10 @@ export class MaintenanceConsumer {
   // Thirteen months keeps a full year queryable in Postgres and archives the month that
   // has just fallen out of it.
   private static readonly RETAIN_MONTHS = 13;
+
+  // Tenants read per page from the catalog. The runway is per tenant now, so this loop
+  // is tenants x three tables of DDL a month — paced, never held in one transaction.
+  private static readonly TENANT_PAGE = 200;
 
   public constructor(
     private readonly container: Container,
@@ -96,52 +101,110 @@ export class MaintenanceConsumer {
     });
   }
 
-  // From the clock rather than the job payload, so a redelivered job archives the same
-  // month rather than one relative to the retry.
+  // From the clock rather than the job payload, and per tenant: a month partition belongs
+  // to one tenant since `0023`, so there is no global month left to archive.
   private async archive(): Promise<void> {
     const now = this.container.clock.now();
     const period = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - MaintenanceConsumer.RETAIN_MONTHS, 1),
     );
 
-    const archived = await this.container.activityArchive.archive(period);
+    let after: OrganizationId | null = null;
 
-    this.container.logger.emit("maintenance.partition.archived", {
-      period: archived.period,
-      key: archived.key,
-      rowCount: archived.rowCount,
-    });
+    for (;;) {
+      const page = await this.container.organizations.page(after, MaintenanceConsumer.TENANT_PAGE);
+      if (page.length === 0) break;
+
+      for (const organizationId of page) await this.archiveTenant(organizationId, period);
+
+      after = page[page.length - 1] ?? null;
+      if (page.length < MaintenanceConsumer.TENANT_PAGE) break;
+    }
   }
 
-  // Every partitioned table, from the allowlist rather than named here: a table added in
-  // a later migration is covered by this schedule with no edit to the worker.
-  private async partitions(): Promise<void> {
-    for (const { name: table } of PartitionedTable.ALL) {
-      const now = this.container.clock.now();
+  // One tenant's month. A failure here is logged and the loop continues: one tenant whose
+  // upload failed must not stop every tenant after it from being archived.
+  private async archiveTenant(organizationId: OrganizationId, period: Date): Promise<void> {
+    try {
+      const archived = await this.container.activityArchive.archive(organizationId, period);
 
-      // Read *before* ensuring: this run is about to fix the runway, so afterwards there
-      // is nothing to report. That it had to is what the operator needs to know.
-      const monthsAhead = await this.container.maintenance.monthlyPartitionsAfter(table, now);
-      if (monthsAhead < MaintenanceConsumer.MIN_MONTHS_AHEAD) {
-        this.container.logger.emit("partition.runway.low", { table, monthsAhead });
+      this.container.logger.emit("maintenance.partition.archived", {
+        organizationId,
+        period: archived.period,
+        key: archived.key,
+        rowCount: archived.rowCount,
+      });
+    } catch (error: unknown) {
+      this.container.logger.failure(error, { organizationId, period: period.toISOString() });
+    }
+  }
+
+  // Every month-partitioned table from the allowlist, walked per tenant where it has a
+  // tenant level. That product is what bounds how many tenants a node carries.
+  private async partitions(): Promise<void> {
+    for (const entry of PartitionedTable.MONTH_PARTITIONED) {
+      if (!entry.tenantKey) {
+        await this.partitionsFor(entry.name, null);
+        continue;
       }
 
-      const created = await this.container.maintenance.ensureMonthlyPartitions(
-        table,
-        now,
-        MaintenanceConsumer.MONTHS_PER_RUN,
-      );
+      let after: OrganizationId | null = null;
 
-      // One line per table, and `table` is a field rather than part of the code: the
-      // event catalog is the cardinality budget for the `event_code` label.
-      this.container.logger.emit("maintenance.partitions.ensured", {
-        table,
-        created: created.length,
-        months: MaintenanceConsumer.MONTHS_PER_RUN,
-      });
+      for (;;) {
+        const page = await this.container.organizations.page(
+          after,
+          MaintenanceConsumer.TENANT_PAGE,
+        );
+        if (page.length === 0) break;
 
-      await this.prune(table);
+        for (const organizationId of page) await this.partitionsFor(entry.name, organizationId);
+
+        after = page[page.length - 1] ?? null;
+        if (page.length < MaintenanceConsumer.TENANT_PAGE) break;
+      }
     }
+  }
+
+  // One table, one tenant. A bounded unit of DDL, so a month's worth is a slow trickle
+  // rather than one lock storm on the first of the month.
+  private async partitionsFor(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+  ): Promise<void> {
+    const now = this.container.clock.now();
+
+    // Read *before* ensuring: this run is about to fix the runway, so afterwards there
+    // is nothing to report. That it had to is what the operator needs to know.
+    const monthsAhead = await this.container.maintenance.monthlyPartitionsAfter(
+      table,
+      organizationId,
+      now,
+    );
+    if (monthsAhead < MaintenanceConsumer.MIN_MONTHS_AHEAD) {
+      this.container.logger.emit("partition.runway.low", {
+        table,
+        organizationId: organizationId ?? "",
+        monthsAhead,
+      });
+    }
+
+    const created = await this.container.maintenance.ensureMonthlyPartitions(
+      table,
+      organizationId,
+      now,
+      MaintenanceConsumer.MONTHS_PER_RUN,
+    );
+
+    // One line per table per tenant, and both are fields rather than part of the code:
+    // the event catalog is the cardinality budget for the `event_code` label.
+    this.container.logger.emit("maintenance.partitions.ensured", {
+      table,
+      organizationId: organizationId ?? "",
+      created: created.length,
+      months: MaintenanceConsumer.MONTHS_PER_RUN,
+    });
+
+    await this.prune(table, organizationId);
   }
 
   private async outboxIsBehind(cutoff: Date): Promise<boolean> {
@@ -151,7 +214,10 @@ export class MaintenanceConsumer {
 
   // Whole partitions, never a `DELETE`: dropping one is a catalog edit, and deleting a
   // month of rows leaves the vacuum problem partitioning exists to avoid.
-  private async prune(table: PartitionedTableName): Promise<void> {
+  private async prune(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+  ): Promise<void> {
     // From the table's own entry, not a record beside it: the next partitioned table is
     // one line in the allowlist rather than one line in two places that can disagree.
     const months = PartitionedTable.byName(table).retentionMonths;
@@ -164,7 +230,11 @@ export class MaintenanceConsumer {
     // dropped by the calendar. Applying this to every table would let one block them all.
     if (table === PartitionedTable.OUTBOX_EVENT && (await this.outboxIsBehind(cutoff))) return;
 
-    const dropped = await this.container.maintenance.dropMonthlyPartitionsBefore(table, cutoff);
+    const dropped = await this.container.maintenance.dropMonthlyPartitionsBefore(
+      table,
+      organizationId,
+      cutoff,
+    );
     for (const partition of dropped) {
       this.container.logger.emit("maintenance.partition.dropped", { table, partition });
     }

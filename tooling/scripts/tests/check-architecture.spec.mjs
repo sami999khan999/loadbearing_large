@@ -609,11 +609,36 @@ describe("18 — every foreign key column has an index leading with it", () => {
       "every foreign key column has an index leading with it",
     );
   });
+
+  // The composite form, which a reference to a partitioned table has to take. Reading
+  // only `.references()` stopped seeing these columns the moment the first one landed.
+  const composite = (extras) =>
+    schema(
+      'export const tasks = pgTable("tasks", {\n' +
+        '  organizationId: uuid("organization_id").notNull(),\n' +
+        '  goalId: uuid("goal_id").notNull(),\n' +
+        `}, (t) => [foreignKey({ columns: [t.goalId, t.organizationId], foreignColumns: [goals.id, goals.organizationId], name: "tasks_goal_fk" }), ${extras}]);\n`,
+    );
+
+  it("catches a composite foreign key no index leads with", () => {
+    fails(
+      run(composite('index("tasks_org_idx").on(t.organizationId)')),
+      "every foreign key column has an index leading with it",
+      "goal_id",
+    );
+  });
+
+  it("accepts a composite foreign key whose leading column is indexed", () => {
+    passes(
+      run(composite('index("tasks_goal_fk_idx").on(t.goalId)')),
+      "every foreign key column has an index leading with it",
+    );
+  });
 });
 
-describe("21 — every partitioned table is on the allowlist, with the same column", () => {
+describe("21 — every partitioned table is on the allowlist, with the same keys", () => {
   const ALLOWLIST = "packages/application/src/primitive/partitioned-table.ts";
-  const NAME = "every partitioned table is on the allowlist, with the same column";
+  const NAME = "every partitioned table is on the allowlist, with the same keys";
 
   // The two shapes the parser has to read: a name written through a module constant, and
   // one written as a literal. Both appear in the real file.
@@ -621,23 +646,34 @@ describe("21 — every partitioned table is on the allowlist, with the same colu
     'const ACTIVITY_LOG = "activity_log";\n' +
     `const ALL = Object.freeze([${entries}] as const);\n`;
 
+  // A table with both levels. The month level under it is declared by the tenant seed at
+  // runtime, so the migration shows only the outermost key.
+  const TENANT = (name) =>
+    `{ name: ${name}, tenantKey: "organization_id", column: "occurred_at", retentionMonths: null },`;
+
+  const MONTH = (name) =>
+    `{ name: ${name}, tenantKey: null, column: "occurred_at", retentionMonths: 2 },`;
+
   const migration = (body) => ({
     "packages/infrastructure/migrations/0000_base.sql": body,
   });
 
-  const CREATE = (table, column) =>
+  const CREATE = (table, kind, key, pk) =>
     `CREATE TABLE "${table}" (\n` +
     `\t"id" uuid NOT NULL,\n` +
-    `\tCONSTRAINT "${table}_pk" PRIMARY KEY("id","${column}")\n` +
-    `) PARTITION BY RANGE ("${column}");\n`;
+    `\tCONSTRAINT "${table}_pk" PRIMARY KEY(${pk})\n` +
+    `) PARTITION BY ${kind} ("${key}");\n`;
+
+  const TENANT_DDL = (table) =>
+    CREATE(table, "LIST", "organization_id", `"id","organization_id","occurred_at"`);
+
+  const MONTH_DDL = (table) => CREATE(table, "RANGE", "occurred_at", `"id","occurred_at"`);
 
   it("catches a migration partitioning a table the allowlist does not name", () => {
     fails(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
-        ),
-        ...migration(CREATE("notifications", "created_at") + CREATE("activity_log", "occurred_at")),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG")),
+        ...migration(TENANT_DDL("activity_log") + MONTH_DDL("outbox_event")),
       }),
       NAME,
       "which PartitionedTable.ALL does not name",
@@ -647,58 +683,46 @@ describe("21 — every partitioned table is on the allowlist, with the same colu
   it("catches an allowlist entry no migration partitions", () => {
     fails(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },' +
-            '{ name: "notifications", column: "created_at", retentionMonths: 12 },',
-        ),
-        ...migration(CREATE("activity_log", "occurred_at")),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG") + MONTH('"outbox_event"')),
+        ...migration(TENANT_DDL("activity_log")),
       }),
       NAME,
       "which no migration partitions",
     );
   });
 
-  it("catches a column the allowlist disagrees with", () => {
+  // The level the migration declares is the outermost one, so a tenant entry written as
+  // `RANGE` is a table whose months would be created directly under the parent.
+  it("catches a migration that declares the wrong level", () => {
     fails(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
-        ),
-        ...migration(CREATE("activity_log", "created_at")),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG")),
+        ...migration(MONTH_DDL("activity_log")),
       }),
       NAME,
-      "the allowlist says occurred_at",
+      "the allowlist says LIST (organization_id)",
     );
   });
 
   // Postgres rejects this itself, so it only ever fires on a migration nobody applied —
   // which is the window this assertion exists to close.
-  it("catches a primary key that omits the partition column", () => {
+  it("catches a primary key that omits a partition key", () => {
     fails(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
-        ),
-        ...migration(
-          'CREATE TABLE "activity_log" (\n' +
-            '\t"id" uuid NOT NULL,\n' +
-            '\tCONSTRAINT "activity_log_pk" PRIMARY KEY("id")\n' +
-            ') PARTITION BY RANGE ("occurred_at");\n',
-        ),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG")),
+        ...migration(CREATE("activity_log", "LIST", "organization_id", '"id","occurred_at"')),
       }),
       NAME,
-      "primary key does not carry occurred_at",
+      "primary key does not carry organization_id",
     );
   });
 
   it("catches a DEFAULT partition, which hides a missing month", () => {
     fails(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
-        ),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG")),
         ...migration(
-          CREATE("activity_log", "occurred_at") +
+          TENANT_DDL("activity_log") +
             'CREATE TABLE "activity_log_default" PARTITION OF "activity_log" DEFAULT;\n',
         ),
       }),
@@ -707,14 +731,13 @@ describe("21 — every partitioned table is on the allowlist, with the same colu
     );
   });
 
-  it("accepts a migration and an allowlist that agree", () => {
+  // The last statement wins: a table dropped and recreated with a different key is
+  // described by the migration that created it most recently.
+  it("accepts a migration and an allowlist that agree, at either level", () => {
     passes(
       run({
-        [ALLOWLIST]: allowlist(
-          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },' +
-            '{ name: "notifications", column: "created_at", retentionMonths: 12 },',
-        ),
-        ...migration(CREATE("activity_log", "occurred_at") + CREATE("notifications", "created_at")),
+        [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG") + MONTH('"outbox_event"')),
+        ...migration(TENANT_DDL("activity_log") + MONTH_DDL("outbox_event")),
       }),
       NAME,
     );

@@ -4,8 +4,10 @@ import {
   FixedClock,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryOrganizationReader,
   TestContainer,
 } from "@loadbearing/composition";
+import { Identifiers } from "@loadbearing/contracts";
 import type { Job } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
 import { AnalyticsConsumer } from "../../src/consumer/analytics.consumer.js";
@@ -13,6 +15,10 @@ import { AnalyticsConsumer } from "../../src/consumer/analytics.consumer.js";
 const NOW = new Date("2026-08-15T12:00:00.000Z");
 const ORG = "018f8c00-0000-7000-8000-000000000010";
 const ACTOR = "018f8c00-0000-7000-8000-000000000011";
+
+// The projection walks tenants since `16.6`, so a harness with no tenant list projects
+// nothing at all — which is also what a deployment with no organizations does.
+const TENANTS = [Identifiers.organizationId.parse(ORG)];
 
 const minutesBefore = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
 
@@ -32,7 +38,11 @@ function harness(records: readonly ActivityRecord[]) {
   const logger = { emit: vi.fn(), failure: vi.fn() };
 
   const container = {
-    ...TestContainer.build({ activityReplay, analyticsProjector }),
+    ...TestContainer.build({
+      activityReplay,
+      analyticsProjector,
+      organizations: new InMemoryOrganizationReader(TENANTS),
+    }),
     // The consumer reads `container.projector`; the harness names the port after the
     // abstract class. Mapping it here is what keeps both names honest.
     projector: analyticsProjector,
@@ -57,6 +67,7 @@ describe("AnalyticsConsumer project", () => {
     // The regression: lag was the age of the *newest projected* row, so a quiet system
     // that had drained everything reported an hour and a half behind.
     expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({
+      tenants: 1,
       events: 1,
       lagSeconds: 0,
       capped: false,
@@ -102,7 +113,10 @@ describe("AnalyticsConsumer reconcile", () => {
 
     await consumer.handle(job("reconcile"));
 
-    expect(emitted(logger, "analytics.reconciliation.drifted")).toHaveLength(1);
+    const drift = emitted(logger, "analytics.reconciliation.drifted");
+    expect(drift).toHaveLength(1);
+    // Per tenant, because both sides answer per tenant: a drifting day belongs to one.
+    expect(drift[0]).toMatchObject({ organizationId: ORG });
 
     // The regression: it returned early, so a reconciliation that was finding drift and
     // a consumer that had stopped were the same absence on a dashboard.

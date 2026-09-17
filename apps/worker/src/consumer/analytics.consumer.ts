@@ -1,6 +1,7 @@
 import {
   type Container,
   type Job,
+  type OrganizationId,
   type ProjectionCheckpoint,
   QueueName,
   type Redis,
@@ -14,9 +15,13 @@ export class AnalyticsConsumer {
   // see docs/reference/consumers.md.
   private static readonly BATCH_SIZE = 5_000;
 
-  // A ceiling on one job, not on the backlog: the checkpoint means the next run resumes
-  // exactly where this one ended.
+  // A ceiling on one job, not on the backlog, and total across tenants: one busy tenant
+  // cannot make the run cost tenants x batches.
   private static readonly MAX_BATCHES_PER_RUN = 20;
+
+  // Tenants read per page from the catalog, the same page size the maintenance consumer
+  // walks them in.
+  private static readonly TENANT_PAGE = 200;
 
   // Two runs of the schedule: one late run is a slow batch, two is a consumer that has
   // stopped.
@@ -73,7 +78,7 @@ export class AnalyticsConsumer {
   public async handle(job: Job): Promise<void> {
     switch (job.name) {
       case "project":
-        return this.projectOrReport();
+        return this.project();
       case "reconcile":
         return this.reconcile();
       default:
@@ -81,37 +86,99 @@ export class AnalyticsConsumer {
     }
   }
 
-  // Rethrows: BullMQ's retry is driven by rejection, so the line is a report and never
-  // a `catch` that swallows.
-  private async projectOrReport(): Promise<void> {
-    // Read before the run rather than after the throw, because the destination is what
-    // a failed run cannot be asked. It is where the replay resumes.
-    const checkpoint = await this.container.projector.checkpoint();
+  // Per tenant in both stores since `0023`: a walk with no tenant predicate appends every
+  // tenant's months into every batch.
+  private async project(): Promise<void> {
+    const startedAt = this.container.clock.now();
 
+    let projected = 0;
+    let batches = 0;
+    let lagMs = 0;
+    let tenants = 0;
+    let after: OrganizationId | null = null;
+
+    for (;;) {
+      const page = await this.container.organizations.page(after, AnalyticsConsumer.TENANT_PAGE);
+      if (page.length === 0) break;
+
+      for (const organizationId of page) {
+        tenants += 1;
+        if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) continue;
+
+        const outcome = await this.projectTenantOrReport(
+          organizationId,
+          AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
+        );
+        projected += outcome.projected;
+        batches += outcome.batches;
+        // The max over tenants, not the last one's: the run is as far behind as its
+        // furthest-behind tenant.
+        lagMs = Math.max(lagMs, outcome.lagMs);
+      }
+
+      after = page[page.length - 1] ?? null;
+      if (page.length < AnalyticsConsumer.TENANT_PAGE) break;
+    }
+
+    const now = this.container.clock.now();
+    const lagSeconds = Math.round(lagMs / 1_000);
+
+    this.container.logger.emit("analytics.projection.completed", {
+      projection: AnalyticsConsumer.PROJECTION,
+      tenants,
+      events: projected,
+      durationMs: now.getTime() - startedAt.getTime(),
+      lagSeconds,
+      capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
+    });
+
+    // `warn`, not `debug`: a projection that throws is already an error line, and one
+    // falling quietly behind produces nothing at all.
+    if (lagMs > AnalyticsConsumer.LAG_WARNING_MS) {
+      this.container.logger.emit("analytics.projection.lagged", {
+        projection: AnalyticsConsumer.PROJECTION,
+        lagSeconds,
+        thresholdSeconds: AnalyticsConsumer.LAG_WARNING_MS / 1_000,
+      });
+    }
+  }
+
+  // Rethrows: BullMQ's retry is driven by rejection. Per tenant, because the checkpoint
+  // is — there is no global "where the replay resumes" left to report.
+  private async projectTenantOrReport(
+    organizationId: OrganizationId,
+    budget: number,
+  ): Promise<{ projected: number; batches: number; lagMs: number }> {
     try {
-      await this.project();
+      return await this.projectTenant(organizationId, budget);
     } catch (error: unknown) {
+      // Read after the throw rather than before it, so the failure line names where the
+      // destination actually stands rather than where this run hoped to start.
+      const checkpoint = await this.container.projector.checkpoint(organizationId);
       this.container.logger.emit("analytics.projection.failed", {
         projection: AnalyticsConsumer.PROJECTION,
+        organizationId,
         eventId: checkpoint.lastId ?? "none",
       });
       throw error;
     }
   }
 
-  // The checkpoint advances because rows landed, never because a batch was acknowledged,
-  // so a projector that failed mid-insert resumes from what is in the table.
-  private async project(): Promise<void> {
+  // One tenant's walk, bounded by what is left of the run's batch budget. The checkpoint
+  // advances because rows landed, never because a batch was acknowledged.
+  private async projectTenant(
+    organizationId: OrganizationId,
+    budget: number,
+  ): Promise<{ projected: number; batches: number; lagMs: number }> {
     const projector = this.container.projector;
-    const startedAt = this.container.clock.now();
-
-    let checkpoint = await projector.checkpoint();
+    let checkpoint = await projector.checkpoint(organizationId);
     let projected = 0;
     let batches = 0;
     let caughtUp = false;
 
-    while (batches < AnalyticsConsumer.MAX_BATCHES_PER_RUN) {
+    while (batches < budget) {
       const records = await this.container.activityReplay.since(
+        organizationId,
         checkpoint,
         AnalyticsConsumer.BATCH_SIZE,
       );
@@ -135,40 +202,22 @@ export class AnalyticsConsumer {
       }
     }
 
-    const now = this.container.clock.now();
-    const lagMs = await this.lagMs(checkpoint, caughtUp, now);
-    const lagSeconds = Math.round(lagMs / 1_000);
-
-    this.container.logger.emit("analytics.projection.completed", {
-      projection: AnalyticsConsumer.PROJECTION,
-      events: projected,
-      durationMs: now.getTime() - startedAt.getTime(),
-      lagSeconds,
-      capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
-    });
-
-    // `warn`, not `debug`: a projection that throws is already an error line, and one
-    // falling quietly behind produces nothing at all.
-    if (lagMs > AnalyticsConsumer.LAG_WARNING_MS) {
-      this.container.logger.emit("analytics.projection.lagged", {
-        projection: AnalyticsConsumer.PROJECTION,
-        lagSeconds,
-        thresholdSeconds: AnalyticsConsumer.LAG_WARNING_MS / 1_000,
-      });
-    }
+    const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp);
+    return { projected, batches, lagMs };
   }
 
   // The age of the oldest row still unprojected, never the age of the newest projected
   // one. See docs/reference/consumers.md for what each of those answers.
   private async lagMs(
+    organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     caughtUp: boolean,
-    now: Date,
   ): Promise<number> {
     if (caughtUp) return 0;
 
-    const [oldest] = await this.container.activityReplay.since(checkpoint, 1);
-    return oldest ? now.getTime() - oldest.occurredAt.getTime() : 0;
+    const [oldest] = await this.container.activityReplay.since(organizationId, checkpoint, 1);
+    if (!oldest) return 0;
+    return this.container.clock.now().getTime() - oldest.occurredAt.getTime();
   }
 
   // Counts per day on both sides and a diff, with today excluded because a difference in
@@ -178,9 +227,43 @@ export class AnalyticsConsumer {
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const from = new Date(to.getTime() - AnalyticsConsumer.RECONCILE_DAYS * 24 * 60 * 60 * 1_000);
 
+    let days = 0;
+    let drifted = 0;
+    let after: OrganizationId | null = null;
+
+    for (;;) {
+      const page = await this.container.organizations.page(after, AnalyticsConsumer.TENANT_PAGE);
+      if (page.length === 0) break;
+
+      for (const organizationId of page) {
+        const outcome = await this.reconcileTenant(organizationId, from, to);
+        days += outcome.days;
+        drifted += outcome.drifted;
+      }
+
+      after = page[page.length - 1] ?? null;
+      if (page.length < AnalyticsConsumer.TENANT_PAGE) break;
+    }
+
+    // Emitted whether or not anything drifted. Returning early here made "reconciliation
+    // is finding drift" and "the consumer stopped" the same absence on a dashboard.
+    this.container.logger.emit("analytics.reconciliation.completed", {
+      days,
+      drifted,
+      durationMs: this.container.clock.now().getTime() - now.getTime(),
+    });
+  }
+
+  // One tenant's diff. Both stores answer per tenant, so the comparison stays a diff
+  // rather than a query that has to group by tenant on either side.
+  private async reconcileTenant(
+    organizationId: OrganizationId,
+    from: Date,
+    to: Date,
+  ): Promise<{ days: number; drifted: number }> {
     const [source, derived] = await Promise.all([
-      this.container.activityReplay.dailyCounts(from, to),
-      this.container.projector.dailyCounts(from, to),
+      this.container.activityReplay.dailyCounts(organizationId, from, to),
+      this.container.projector.dailyCounts(organizationId, from, to),
     ]);
 
     const derivedByDay = new Map(derived.map((count) => [count.day, count.rows]));
@@ -196,18 +279,13 @@ export class AnalyticsConsumer {
     // day is wrong, and the replay that fixes it has a deadline.
     for (const row of drift) {
       this.container.logger.emit("analytics.reconciliation.drifted", {
+        organizationId,
         day: row.day,
         expected: row.source,
         actual: row.derived,
       });
     }
 
-    // Emitted whether or not anything drifted. Returning early here made "reconciliation
-    // is finding drift" and "the consumer stopped" the same absence on a dashboard.
-    this.container.logger.emit("analytics.reconciliation.completed", {
-      days: source.length,
-      drifted: drift.length,
-      durationMs: this.container.clock.now().getTime() - now.getTime(),
-    });
+    return { days: source.length, drifted: drift.length };
   }
 }

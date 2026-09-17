@@ -780,26 +780,31 @@ window in which a duplicate could appear. All three have run everywhere they are
 **This history is applied to an empty database and is not replayed onto a populated one** — the
 guarantee the assertion makes is about every migration written from here on.
 
-### 21 — Every partitioned table is on the allowlist, with the same column
+### 21 — Every partitioned table is on the allowlist, with the same keys
 
 ```bash
-# packages/infrastructure/migrations/*.sql: a CREATE TABLE ... PARTITION BY RANGE whose table is
-# absent from PartitionedTable.ALL, or whose column disagrees with it, or whose PRIMARY KEY omits
-# that column — plus any DEFAULT partition. Then the inverse: an allowlist entry that no
-# migration partitions.
+# packages/infrastructure/migrations/*.sql: a CREATE TABLE ... PARTITION BY LIST|RANGE whose table
+# is absent from PartitionedTable.ALL, or whose level or key disagrees with it, or whose PRIMARY
+# KEY omits either partition key — plus any DEFAULT partition. Then the inverse: an allowlist
+# entry that no migration partitions.
 ```
 
-**Why.** `PartitionedTable.ALL` is what the monthly schedule loops and what `MaintenanceGateway`'s
-closed union derives from. The two halves fail in opposite directions and neither is loud. A table
-partitioned in a migration but missing from the list keeps getting partitions until that migration's
-own runway runs out and then stops, so the notice arrives months later as an insert failing on a
-month nobody created. An entry on the list that no migration partitions is the reverse: the schedule
-issues `CREATE TABLE … PARTITION OF` against an ordinary table and Postgres refuses every one.
+**Why.** `PartitionedTable.ALL` is what `TenantPartitionSeed` walks, what the monthly schedule
+loops, and what `MaintenanceGateway`'s closed union derives from. The two halves fail in opposite
+directions and neither is loud. A table partitioned in a migration but missing from the list gets no
+partition when a tenant is founded, so the notice arrives as an insert failing on that tenant's first
+write. An entry on the list that no migration partitions is the reverse: the seed issues
+`ALTER TABLE … ATTACH PARTITION` against an ordinary table and Postgres refuses every one.
+
+**A migration declares only the outermost level.** A tenant-partitioned table shows
+`PARTITION BY LIST ("organization_id")` and nothing else, because the month level under it is
+declared per tenant by the seed at runtime — so the assertion checks the level it can see and the
+primary key, which has to carry both.
 
 **The primary-key half only ever fires on a migration nobody applied**, because Postgres itself
-rejects a partitioned table whose key omits the partition column. It is worth checking anyway
-because this is the one kind of DDL the repository writes by hand: the failure it catches is a file
-in review, not a database in production.
+rejects a partitioned table whose key omits a partition key. It is worth checking anyway because
+this is the one kind of DDL the repository writes by hand: the failure it catches is a file in
+review, not a database in production.
 
 **No `DEFAULT` partition, on purpose.** A catch-all absorbs the rows of a month whose partition is
 missing, which turns a loud insert failure into a silent one, and attaching the real partition

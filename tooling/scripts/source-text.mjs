@@ -157,6 +157,23 @@ export function columnsOf(block) {
   });
 }
 
+// `foreignKey({ columns: [t.a, t.b], … })` → ["a", "b"], the leading property first. The
+// composite form a reference to a partitioned table has to take, which `.references()`
+// cannot express — so an assertion reading only that form stops seeing those columns.
+export function foreignKeysOf(block) {
+  const out = [];
+
+  for (const match of block.extras.matchAll(/\bforeignKey\(\s*\{/g)) {
+    const open = match.index + match[0].length - 1;
+    const args = block.extras.slice(open + 1, closingBracket(block.extras, open));
+    const columns = args.match(/columns:\s*\[([^\]]*)\]/)?.[1] ?? "";
+
+    out.push([...columns.matchAll(/\bt\.(\w+)/g)].map((column) => column[1]));
+  }
+
+  return out;
+}
+
 // `index("x").on(t.a, t.b)` → { name, unique, columns: ["a", "b"] } in property names.
 // `.using("hnsw", t.embedding.op(...))` leads with no column and is deliberately absent.
 export function indexesOf(block) {

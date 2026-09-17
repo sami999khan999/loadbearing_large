@@ -199,10 +199,12 @@ Three of its lessons are worth having before you write a slice of your own:
   that keep them honest assert in both directions: every key gates a reachable procedure *and*
   every procedure has a key, every gate has a page. Registering any one alone turns the tree red.
   Build the whole server slice, then commit it.
-- **Step 6 can refuse.** `messages` is not partitioned even though it grows with activity,
-  because Postgres will not accept the unique index that makes a retried send one row instead of
-  two on a partitioned table. That is a rule and a constraint disagreeing, and the answer was to
-  write down which one wins and why rather than to satisfy the rule and lose the guarantee.
+- **Step 6 refused once, and the answer was a cache key.** `messages` grows with activity and so
+  wants partitioning, and Postgres will not accept the unique index that makes a retried send one
+  row instead of two on a partitioned table. A rule and a constraint disagreeing is not settled by
+  satisfying the rule and losing the guarantee: the table is partitioned and the dedupe is a Redis
+  `SET … EX … NX` the use-case holds, which costs one round trip on a path that already opens a
+  transaction. See [messaging](../../packages/application/docs/reference/messaging.md).
 
 The organization plugin (switch, create, accept) is deliberately **not** a slice, and reading it as
 one is a mistake: those actions are identity-gated, no permission a non-owner holds could gate them,
