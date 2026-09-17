@@ -36,15 +36,17 @@ the communication stack (9–13, 12–13 September), connection pooling and the 
 (14–15, 13 and 17 September). Eleven are open. Of the 131 open items, 23 are filed by decision rather
 than queued — Phases 24, 25 and 26 — so the build queue proper is 108 items across Phases 16–23.
 
-**The first thing to do is not an item.** This project's Postgres is down and another project's
-container holds port 5432, so `pnpm infra:up` needs a free `POSTGRES_PORT` (and the matching pooler
-port) or the other stack stopped, before any spec that needs a database runs.
+**The first thing to do is not an item.** `pnpm infra:up` has to be running before any spec that
+needs a database does — and on a clean clone, `pnpm install` then `pnpm build:packages` before
+`pnpm typecheck`, because `route-tree.gen.ts` is generated and gitignored.
+`corrected: 2026-09-18` — the port clash this line described is gone; 5432 and 6432 were both free.
 
-**Then start at `16.1`**, the pruning spec — it is the ruler everything after is measured with. The
-five items after it (`16.2`–`16.6`) are one merge unit: committed per layer, merged together, because
-any one without the others leaves the system quietly broken. Then the rest of Phase 16, then 17, then
-19 on top of it. Phase 18 touches permissions, auth and composition only and can run beside all of
-that. Phase 23 is independent small work for any spare hour.
+**`16.1` and the merge unit after it are built** (2026-09-18): the pruning spec, the two-level
+tenant layout, its seed, the two-level maintenance gateway and the per-tenant projection, plus
+`16.8` which came with the gateway. **Start at `16.7`** — the four tenant-only tables it still has
+to cover — then `16.9`–`16.13`, then 17, then 19 on top of it. Phase 18 touches permissions, auth
+and composition only and can run beside all of that. Phase 23 is independent small work for any
+spare hour.
 
 ### Timeline
 
@@ -65,7 +67,7 @@ that. Phase 23 is independent small work for any spare hour.
 | 13 | Messaging: conversations and messages | Communication | ✅ done | 2026-09-13 | `COMMUNICATION-PLAN.md` Phase 5 |
 | 14 | Connection pooling: the pool you can see, and the pooler in front of it | Scaling | ✅ done | 2026-09-13 | `DB-SCALING-PLAN.md` Phase 1 |
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
-| 16 | Pruning proven, and the tenant layout | Scaling | ⬜ open | next | `DB-SCALING-PLAN.md` 2.B |
+| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.6, 16.8 done | `DB-SCALING-PLAN.md` 2.B |
 | 17 | Cold storage: retention stops meaning deletion | Scaling | ⬜ open | after 16 | `DB-SCALING-PLAN.md` 2.C |
 | 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
@@ -913,7 +915,7 @@ against twenty-two migrations, not twenty-one.
 
 #### The ruler
 
-- [ ] `16.1` **Pruning is proven** — `packages/infrastructure/tests/pg/partition-pruning.spec.ts`
+- [x] `16.1` **Pruning is proven** `done: 2026-09-18` — `packages/infrastructure/tests/pg/partition-pruning.spec.ts`
   (integration, needs Postgres): for each of the three tables, insert into two months, run the
   slice's keyset query with a one-month window under `EXPLAIN (FORMAT JSON)`, assert exactly one
   `Append` child. This is the assertion that a future `WHERE` clause that drops the partition
@@ -970,10 +972,20 @@ against twenty-two migrations, not twenty-one.
   It catches nothing on its own; it is the change detector, so that a bound added later fails the
   spec and is lowered deliberately with decision D22's numbers re-measured, rather than arriving
   as a badge that silently stopped counting old rows.
+  `built: 2026-09-18` — the spec walks the two-level layout from `16.3` and carries `16.7`'s first
+  assertion for the four tables it covers: **one tenant partition**, proven against a second tenant
+  that also holds rows in both months, so it cannot pass on a database with one tenant in it. The
+  plan walker intersects
+  `EXPLAIN (FORMAT JSON)`'s relation names with `pg_inherits` read fresh on every assertion, so a
+  month another spec created or dropped cannot move the answer, and the parent a `ModifyTable` node
+  names is never counted as a partition that was scanned. `partitions.md` was written with it —
+  `16.10`'s page, plus `data-and-scale.md` §4.2 corrected (the "last 30 days touches one partition"
+  bullet was wrong in exactly the way `16.1` measured) and `docs/setup/13` §13.6 pointed at §21.
+  The rest of `16.10` waits on `16.2` and `16.3`.
 
 #### The tenant layout — one merge unit
 
-- [ ] `16.2` **`messages` is partitioned, and the send dedupe leaves Postgres** — decision D26
+- [x] `16.2` **`messages` is partitioned, and the send dedupe leaves Postgres** `done: 2026-09-18` — decision D26
   (2026-09-15) reverses decision D20: the trigger is not waited for. The blocker was never the
   table, it was one index — `messages_client_uq (organization_id, conversation_id, client_id)`
   cannot exist on a partitioned table without `created_at`, and with it every retry inserts
@@ -1018,7 +1030,7 @@ against twenty-two migrations, not twenty-one.
   refused once, and the answer was a cache key"; `packages/application/docs/reference/ports.md`
   for `setIfAbsent`. `data-and-scale.md` §4.2 names no `messages` today — nothing to change.
 
-- [ ] `16.3` **Tenant partitions: the layout** — decision D29 (2026-09-16). Seven tenant-owned
+- [x] `16.3` **Tenant partitions: the layout** `done: 2026-09-18` — decision D29 (2026-09-16). Seven tenant-owned
   tables become `PARTITION BY LIST (organization_id)`, and under each tenant's partition the three
   with a time column are `PARTITION BY RANGE` again: `activity_log`/`occurred_at`,
   `notifications`/`created_at`, `messages`/`created_at`. `outbox_event` stays month-only (the drain
@@ -1082,7 +1094,7 @@ against twenty-two migrations, not twenty-one.
   is exempt), `docs/ai/rules/data.md` partition bullet, `docs/setup/13` §13.3 and §13.6,
   `messaging.md`, `packages/infrastructure/docs/reference/vector-store.md` (one graph per tenant).
 
-- [ ] `16.4` **`TenantPartitionSeed`, and who runs it** — a row for an organization with no
+- [x] `16.4` **`TenantPartitionSeed`, and who runs it** `done: 2026-09-18` — a row for an organization with no
   partition is an insert error, so every path that creates an organization creates its partitions
   in the same transaction. `pg/seed/tenant-partition.seed.ts`, the `SystemRoleSeed` shape: `run
   (organizationId)` probes each of the seven with `to_regclass` and, for each missing one, creates
@@ -1115,7 +1127,7 @@ against twenty-two migrations, not twenty-one.
   FK is the one place it could start — the seed's comment says so. **Docs:** `partitions.md`,
   `docs/setup/13` §13.4, `ports.md`, `tests/support` mention in `packages/infrastructure/docs/index.md`.
 
-- [ ] `16.5` **The maintenance gateway learns two levels** — `pg-maintenance.gateway.ts` was
+- [x] `16.5` **The maintenance gateway learns two levels** `done: 2026-09-18` — `pg-maintenance.gateway.ts` was
   written for one level and fails silently on two: `childrenOf` (`:131-141`) joins `pg_inherits`
   once and returns the tenant partitions, never the months, and `partitionMonth`'s regex
   `^${table}_(\d{4})_(\d{2})$` (`:166-174`) matches nothing under the new names, so
@@ -1140,7 +1152,7 @@ against twenty-two migrations, not twenty-one.
   background trickle rather than one lock storm on the first of the month. **Docs:**
   `consumers.md`, `schedules.md`, `partitions.md`, `ports.md`.
 
-- [ ] `16.6` **The projection goes per tenant** — `PgActivityReplayReader.since()`
+- [x] `16.6` **The projection goes per tenant** `done: 2026-09-18` — `PgActivityReplayReader.since()`
   (`pg-activity-replay.reader.ts:23-50`) is a global keyset over `activity_log` with no tenant
   predicate, and under a tenant level that is an append over every tenant's month partition per
   batch. It becomes per tenant, which is also the shape `docs/ai/rules/data.md:27` asks for. Ports:
@@ -1164,6 +1176,34 @@ against twenty-two migrations, not twenty-one.
   the catalog and never scans partitions. **Docs:** `clickhouse.md` (projection and
   reconciliation sections), `consumers.md`, `docs/ai/rules/data.md` (the exception is gone),
   `notification-policy.md`.
+  `built: 2026-09-18` — with one deviation and two things the plan did not name.
+
+  **`activity_log` keeps `retentionMonths: null`.** `16.3`'s listing gives it `13`, which is right
+  once Phase 17 makes `prune()` archive-first — today it would make the calendar drop a month the
+  archive has not uploaded, which is the exact race the entry's own comment warns about. Set it to
+  `13` in `17.5`, in the same change that makes the drop wait for a verified object.
+
+  **`PgActivityArchiveGateway` had to go per tenant, and the plan does not say so.** A month
+  partition belongs to one tenant after `16.3`, so `archive(period)` named a table that no longer
+  exists. It now takes the tenant, detaches `activity_log_<hex>_<yyyy>_<mm>` off the tenant's
+  partition, and writes the object at `activity-archive/<yyyy>/<mm>/<organization_id>.ndjson.gz` —
+  which is `17.3`'s "objects cut per tenant", arriving early because `16.3` forced it. `0024` gives
+  `activity_archive` an `organization_id` and a composite key; a row written before it carries the
+  nil uuid, which marks an object holding every tenant's month rather than naming a tenant.
+  `PartitionArchiveGateway` in `17.1` still replaces the port.
+
+  **`OrganizationReader` is a port, not a slice read.** `16.5` calls it "an `OrganizationReader.page()`
+  on the slice port" and there is no organization slice; it went to `application/src/port/` under the
+  rule `folders.md` gives — a second feature needing tenants adds a method to it, not a file beside
+  it. `Container.organizations` binds `PgOrganizationReader`.
+
+  Two assertions moved with the layout: §21 reads `PARTITION BY LIST|RANGE` and the allowlist's two
+  keys, checking the outermost level a migration can declare, and §18 learned
+  `foreignKey({ columns })` — without which it silently stopped seeing the two composite references
+  `16.3` introduced. Both have fixture cases.
+
+  `16.7` is partly done: its first assertion is in `16.1`'s spec for `notifications`, `messages`,
+  `activity_log` and `outbox_event`. The four tenant-only tables are still open.
 
 #### The trailing items
 
@@ -1179,7 +1219,7 @@ against twenty-two migrations, not twenty-one.
   after the checkpoint). The assertion form is the ceiling `16.1` already uses: partitions scanned
   ≤ partitions that exist for that tenant, and never another tenant's. **Docs:** `partitions.md`.
 
-- [ ] `16.8` **`MaintenanceGateway.partitionsBefore`, the read behind the retention preview** —
+- [x] `16.8` **`MaintenanceGateway.partitionsBefore`, the read behind the retention preview** `done: 2026-09-18` —
   `partitionsBefore(table: PartitionedTableName, cutoff: Date): Promise<readonly PartitionEstimate[]>`,
   `PartitionEstimate { name, period: Date, estimatedRows: number, bytes: number }`, on the port at
   `application/src/port/maintenance.gateway.ts` (an existing port, so the count stays).
