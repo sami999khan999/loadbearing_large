@@ -1,6 +1,6 @@
 ---
 title: Messaging
-description: Direct-key uniqueness, unread computed rather than counted, the fast path beside the durable one, and why the messages table is the one that is not partitioned.
+description: Direct-key uniqueness, unread computed rather than counted, the fast path beside the durable one, and where the send dedupe went when messages took a month level.
 ---
 
 # Messaging
@@ -87,33 +87,56 @@ to skip it would be a table with a hole in it. It is rate-limited to one signal 
 per conversation in the use-case, through a cache entry with a TTL: "have I published in the last
 two seconds" is exactly what a TTL answers, and nothing has to expire it.
 
-## `messages` is the one table that is not partitioned
+## How `messages` is partitioned, and where the dedupe went
 
-Against the standing rule in `data.md` for a table that grows with activity, and the reason is
-Postgres's own:
+It is partitioned by tenant and then by month, like `activity_log` and `notifications`. It was the
+one table that was not, and the blocker was never the table — it was one index, for a reason that
+is Postgres's own:
 
 > A unique index on a partitioned table must include every partitioning column.
 
-`messages_client_uq` on `(organization_id, conversation_id, client_id)` is the send dedupe — the
-thing that makes a retried send one row instead of two. Adding `created_at` to it would not
-weaken that guarantee, it would **delete** it: two attempts seconds apart carry different
+`messages_client_uq` on `(organization_id, conversation_id, client_id)` was the send dedupe — the
+thing that makes a retried send one row instead of two. Adding `created_at` to it would not have
+weakened that guarantee, it would have **deleted** it: two attempts seconds apart carry different
 timestamps, so every retry would insert.
 
 `notifications` survives the same constraint only because its `created_at` is the *event's*
 `occurred_at` rather than the clock's, so a redelivery recomputes the same value and collides with
 itself. A send has no such value to recompute.
 
-Two alternatives were real and both were rejected:
+**So the dedupe left Postgres.** `SendMessageUseCase` generates the id and the timestamp itself and
+claims the client id with one `SET … EX … NX` before the transaction opens:
+
+```
+message:client:<organization>:<conversation>:<clientId>  →  { id, createdAt }, 24h
+```
+
+`false` means a retry: read the held pair back, `findById` it, and return that row without touching
+the conversation, the outbox or the realtime fast path — so the two attempts stay indistinguishable,
+which is exactly what `DO UPDATE … RETURNING` bought. `save()` is now a plain insert, and `client_id`
+stays as a column with no index on it.
+
+**The branch worth knowing about** is a claim whose row is not there: the first attempt set the key
+and then rolled back. Sending as new is the only answer that does not lose the message, and the
+claim is then taken over by the attempt that succeeds, so the next retry is deduped rather than
+writing a third message. There is a spec pinned on exactly that.
+
+Three alternatives were real. Two were rejected before the table was partitioned at all:
 
 - **A unique index per partition**, created alongside each month by `MaintenanceGateway`. Correct,
   and it makes the generic partition loop carry a per-table index spec.
 - **A non-partitioned side table** holding `(organization_id, conversation_id, client_id)`, written
   in the same transaction. Also correct, and it is an extra write on the hottest path in the slice.
 
-Partitioning here buys the detach-and-ship archive path (`C6.4`), which is filed and not built.
-Neither structure is worth paying for that today, and the conversion when it is wanted is a
-rewrite that will have to answer the dedupe question first. Retention never drops a message:
-messages are domain data.
+The third is the one built: a cache key. It costs one Redis round trip on a path that already opens
+a transaction, it needs no schema, and losing it is a duplicate message rather than a lost one —
+which is the failure a chat client can already handle, because it dedupes by message id.
+
+What partitioning buys is a manageable table and a ready detach-and-ship archive path, not a faster
+page: the keyset cursor is a row constructor, which the partition pruner does not decompose, so a
+conversation page still reads every month of that tenant. See
+[partitions](../../../infrastructure/docs/reference/partitions.md) for the measurements.
+Retention never drops a message: messages are domain data, so `retentionMonths` is `null`.
 
 ## The notification policy stops at direct conversations
 

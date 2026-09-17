@@ -31,13 +31,18 @@ export interface DailyCount {
 // The read side of the audit trail. A separate port from `ActivityLogger`, because
 // merging them puts a cross-tenant scan on the port every use-case holds.
 export abstract class ActivityReplayReader {
-  // Keyset pagination on `(occurredAt, id)`. Fewer than `limit` rows means caught up,
-  // which is what the consumer stops on.
+  // Keyset on `(occurredAt, id)` within one tenant — a walk with no tenant predicate
+  // appends every tenant's months into every batch. A short page means caught up.
   public abstract since(
+    organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
   ): Promise<readonly ActivityRecord[]>;
 
-  // The authoritative half of the daily reconciliation. `[from, to)`.
-  public abstract dailyCounts(from: Date, to: Date): Promise<readonly DailyCount[]>;
+  // The authoritative half of the daily reconciliation. `[from, to)`, one tenant.
+  public abstract dailyCounts(
+    organizationId: OrganizationId,
+    from: Date,
+    to: Date,
+  ): Promise<readonly DailyCount[]>;
 }

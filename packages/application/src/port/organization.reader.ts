@@ -1,0 +1,12 @@
+import type { OrganizationId } from "../import.js";
+
+// Every tenant, a page at a time: each per-tenant loop the worker runs exists for a
+// tenant count at which reading them all into memory is the thing that stops working.
+export abstract class OrganizationReader {
+  // Keyset on `id`, exclusive, and `null` is the first page. The id is a v7 uuid, so
+  // that ordering is also creation order and a tenant added mid-loop lands at the end.
+  public abstract page(
+    after: OrganizationId | null,
+    limit: number,
+  ): Promise<readonly OrganizationId[]>;
+}

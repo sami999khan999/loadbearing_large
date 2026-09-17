@@ -169,4 +169,4 @@ from Qdrant, so a scope that is not in the argument list does not exist.
   the three that carry no `Principal`, the analytics split, and what each method refuses to offer
 
 - [Messaging](reference/messaging.md) — the direct key, unread computed rather than
-  counted, and the one table that is not partitioned.
+  counted, and where the send dedupe went when `messages` took a month level.

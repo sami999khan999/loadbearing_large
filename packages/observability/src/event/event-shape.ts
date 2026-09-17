@@ -59,12 +59,18 @@ export interface EventShape {
   };
   readonly "maintenance.partitions.ensured": {
     readonly table: string;
+    // Empty for the one table with no tenant level — `LogValue` admits no null. In the
+    // body, never a label: one stream per tenant makes a log platform unusable.
+    readonly organizationId: string;
     readonly created: number;
     // A count of partitions the run ensured, starting at the current month — not the
     // runway, which is one less. Named for what it is after the two drifted apart.
     readonly months: number;
   };
   readonly "maintenance.partition.archived": {
+    // Whose month it was. A partition is per tenant per month since `0023`, so there is
+    // no global month left to archive.
+    readonly organizationId: string;
     readonly period: string;
     readonly key: string;
     readonly rowCount: number;
@@ -72,6 +78,8 @@ export interface EventShape {
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
   readonly "partition.runway.low": {
     readonly table: string;
+    // Which tenant ran out, empty for the table that has no tenant level. Body, not label.
+    readonly organizationId: string;
     // Months strictly after the current one. Zero means the next insert past month end
     // fails, and for `activity_log` that is every write in the system.
     readonly monthsAhead: number;
@@ -116,6 +124,9 @@ export interface EventShape {
 
   readonly "analytics.projection.completed": {
     readonly projection: string;
+    // How many tenants the run walked. The projection is per tenant since `0023`, so a
+    // count of events alone cannot say whether the loop reached the end.
+    readonly tenants: number;
     readonly events: number;
     readonly durationMs: number;
     // On the success line, not only the warning one: a field that appears only when
@@ -127,6 +138,9 @@ export interface EventShape {
   };
   readonly "analytics.projection.failed": {
     readonly projection: string;
+    // Whose walk failed. The checkpoint is per tenant, so there is no global "where the
+    // replay resumes" left to report.
+    readonly organizationId: string;
     readonly eventId: string;
   };
   readonly "analytics.projection.lagged": {
@@ -146,6 +160,7 @@ export interface EventShape {
   // One line per drifting day, not one listing them: a field is something you filter on,
   // and a day is the grain an operator groups by.
   readonly "analytics.reconciliation.drifted": {
+    readonly organizationId: string;
     readonly day: string;
     readonly expected: number;
     readonly actual: number;

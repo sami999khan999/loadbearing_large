@@ -1,9 +1,20 @@
+import type { MessageId } from "@loadbearing/contracts";
+import { FixedClock } from "@loadbearing/core";
 import { describe, expect, it } from "vitest";
 import type { ConversationRepository } from "../../src/messaging/conversation.repository.js";
 import { ConversationAccess } from "../../src/messaging/conversation-access.js";
-import type { MessageRepository, NewMessage } from "../../src/messaging/message.repository.js";
+import type {
+  MessageRecord,
+  MessageRepository,
+  NewMessage,
+} from "../../src/messaging/message.repository.js";
 import { SendMessageUseCase } from "../../src/messaging/send-message.use-case.js";
-import type { DomainEventPublisher, RealtimePublisher, UnitOfWork } from "../../src/port/index.js";
+import type {
+  CacheStore,
+  DomainEventPublisher,
+  RealtimePublisher,
+  UnitOfWork,
+} from "../../src/port/index.js";
 import {
   authorizer,
   CONVERSATION,
@@ -11,6 +22,8 @@ import {
   conversation,
   GRACE,
   message,
+  NOW,
+  ORG,
   OUTSIDER,
   principal,
   RecordingEvents,
@@ -27,16 +40,59 @@ class Conversations {
   };
 }
 
+// Keyed by id, because the dedupe's whole claim is that a retry is handed back the row
+// the first attempt wrote rather than a second copy of it.
 class Messages {
   public readonly saved: NewMessage[] = [];
+  private readonly rows = new Map<string, MessageRecord>();
 
   public save = (input: NewMessage) => {
     this.saved.push(input);
-    return Promise.resolve(message({ body: input.body, clientId: input.clientId }));
+    const row = message({
+      id: input.id,
+      body: input.body,
+      clientId: input.clientId,
+      createdAt: input.createdAt,
+    });
+    this.rows.set(input.id, row);
+    return Promise.resolve(row);
   };
+
+  public findById = (_org: unknown, _conversation: unknown, id: MessageId) =>
+    Promise.resolve(this.rows.get(id) ?? null);
 }
 
-const build = (conversations = new Conversations(), messages = new Messages()) => {
+// The one behaviour under test: `setIfAbsent` writes only when the key is absent and
+// says which happened. Real Redis evaluates `NX` on the server.
+class Cache {
+  public readonly entries = new Map<string, unknown>();
+
+  public get = <T>(key: string) => Promise.resolve((this.entries.get(key) as T) ?? null);
+
+  public set = <T>(key: string, value: T) => {
+    this.entries.set(key, value);
+    return Promise.resolve();
+  };
+
+  public setIfAbsent = <T>(key: string, value: T) => {
+    if (this.entries.has(key)) return Promise.resolve(false);
+    this.entries.set(key, value);
+    return Promise.resolve(true);
+  };
+
+  public delete = (key: string) => {
+    this.entries.delete(key);
+    return Promise.resolve();
+  };
+
+  public deletePrefix = () => Promise.resolve();
+}
+
+const build = (
+  conversations = new Conversations(),
+  messages = new Messages(),
+  cache = new Cache(),
+) => {
   const events = new RecordingEvents();
   const realtime = new RecordingRealtime();
   const unitOfWork = new CountingUnitOfWork();
@@ -45,6 +101,7 @@ const build = (conversations = new Conversations(), messages = new Messages()) =
   return {
     conversations,
     messages,
+    cache,
     events,
     realtime,
     unitOfWork,
@@ -56,11 +113,15 @@ const build = (conversations = new Conversations(), messages = new Messages()) =
       events as unknown as DomainEventPublisher,
       realtime as unknown as RealtimePublisher,
       unitOfWork as unknown as UnitOfWork,
+      cache as unknown as CacheStore,
+      new FixedClock(NOW),
     ),
   };
 };
 
 const input = { conversationId: CONVERSATION, body: "hello", clientId: message().clientId };
+
+const dedupeKey = `message:client:${ORG}:${CONVERSATION}:${input.clientId}`;
 
 describe("SendMessageUseCase", () => {
   // One save, one touch, one event — the write shape the whole slice's cost rests on.
@@ -113,8 +174,53 @@ describe("SendMessageUseCase", () => {
 
     expect(event?.payload).toMatchObject({
       conversationId: CONVERSATION,
-      messageId: message().id,
-      createdAt: message().createdAt,
+      messageId: harness.messages.saved[0]?.id,
+      createdAt: NOW,
     });
+  });
+});
+
+// The dedupe left Postgres when `messages` took a month level: a unique index there has
+// to carry `created_at`, which a retry never reproduces. See reference/messaging.md.
+describe("SendMessageUseCase, the send dedupe", () => {
+  it("claims the client id under a key scoped to the conversation", async () => {
+    const harness = build();
+
+    await harness.useCase.execute(principal(), input);
+
+    expect([...harness.cache.entries.keys()]).toEqual([dedupeKey]);
+  });
+
+  // Indistinguishable from the first attempt, which is what `DO UPDATE … RETURNING`
+  // bought before: the same row back, and nothing written a second time.
+  it("hands a retry the row the first attempt wrote", async () => {
+    const harness = build();
+
+    const first = await harness.useCase.execute(principal(), input);
+    const retry = await harness.useCase.execute(principal(), input);
+
+    expect(retry).toEqual(first);
+    expect(harness.messages.saved).toHaveLength(1);
+    expect(harness.conversations.touched).toBe(1);
+    expect(harness.events.published).toHaveLength(1);
+    expect(harness.realtime.frames).toHaveLength(1);
+  });
+
+  // The branch worth the spec: the first attempt set the key and then rolled back, so
+  // the claim names a row that is not there.
+  it("sends as new when the claim names a row that was never written", async () => {
+    const harness = build();
+    harness.cache.entries.set(dedupeKey, {
+      id: "018f8c00-0000-7000-8000-0000000000de",
+      createdAt: NOW.toISOString(),
+    });
+
+    const sent = await harness.useCase.execute(principal(), input);
+
+    expect(harness.messages.saved).toHaveLength(1);
+    expect(sent.id).toBe(harness.messages.saved[0]?.id);
+    // And the claim now names the row that exists, so the *next* retry is deduped
+    // rather than writing a third message.
+    expect(harness.cache.entries.get(dedupeKey)).toMatchObject({ id: sent.id });
   });
 });

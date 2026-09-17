@@ -163,6 +163,10 @@ class Cache implements CacheStore {
     return Promise.resolve();
   }
 
+  public setIfAbsent(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
   public delete(key: string): Promise<void> {
     this.deleted.push(key);
     return Promise.resolve();

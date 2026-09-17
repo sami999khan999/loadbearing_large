@@ -1,3 +1,4 @@
+import type { OrganizationId } from "../import.js";
 import type { PartitionedTableName } from "../primitive/index.js";
 
 export interface SweepOutcome {
@@ -8,6 +9,15 @@ export interface SweepOutcome {
   readonly invitations: number;
 }
 
+// What the retention preview reads. `estimatedRows` is the planner's number and the
+// screen says "about"; `bytes` is exact.
+export interface PartitionEstimate {
+  readonly name: string;
+  readonly period: Date;
+  readonly estimatedRows: number;
+  readonly bytes: number;
+}
+
 // Platform housekeeping, with no `Principal` on any method: nothing here belongs to a
 // tenant. See docs/reference/ports.md.
 export abstract class MaintenanceGateway {
@@ -15,22 +25,46 @@ export abstract class MaintenanceGateway {
   // in its own schema comment. This sweep is what makes that trade hold.
   public abstract sweepExpired(now: Date): Promise<SweepOutcome>;
 
-  // `months` counts partitions created, starting at the month `from` falls in — so three
-  // is the current month and the next two, which is two months of runway.
+  // The tenant level: seven partitions, plus runway months under the three with a time
+  // column. Every path that creates an organization calls this in the same transaction.
+  public abstract ensureTenantPartitions(
+    organizationId: OrganizationId,
+  ): Promise<readonly string[]>;
+
+  // The whole tenant level for one organization, months included. What a tenant delete
+  // and a tenant move each need, and the one place that drop is written.
+  public abstract dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]>;
+
+  // `months` counts partitions from the month `from` falls in, so three is the current
+  // month and two of runway. `organizationId` is null only for a table with no tenant.
   public abstract ensureMonthlyPartitions(
     table: PartitionedTableName,
+    organizationId: OrganizationId | null,
     from: Date,
     months: number,
   ): Promise<readonly string[]>;
 
   // Partitions for months strictly after the one `from` falls in. A runway check has to
   // ask what *exists*, because a run that created nothing is healthy or starved alike.
-  public abstract monthlyPartitionsAfter(table: PartitionedTableName, from: Date): Promise<number>;
+  public abstract monthlyPartitionsAfter(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    from: Date,
+  ): Promise<number>;
 
   // Returns what it dropped. Whole partitions rather than a `DELETE`, because dropping a
   // partition is a catalog edit and deleting a month of rows is a vacuum problem.
   public abstract dropMonthlyPartitionsBefore(
     table: PartitionedTableName,
+    organizationId: OrganizationId | null,
     cutoff: Date,
   ): Promise<readonly string[]>;
+
+  // The read behind the retention preview: every month partition older than the cutoff,
+  // with its size. Across every tenant when `organizationId` is null.
+  public abstract partitionsBefore(
+    table: PartitionedTableName,
+    cutoff: Date,
+    organizationId?: OrganizationId | null,
+  ): Promise<readonly PartitionEstimate[]>;
 }

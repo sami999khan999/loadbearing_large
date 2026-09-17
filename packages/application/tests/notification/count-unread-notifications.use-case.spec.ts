@@ -69,6 +69,12 @@ class Memory implements CacheStore {
     return Promise.resolve();
   }
 
+  public setIfAbsent<T>(key: string, value: T): Promise<boolean> {
+    if (this.store.has(key)) return Promise.resolve(false);
+    this.store.set(key, value);
+    return Promise.resolve(true);
+  }
+
   public delete(key: string): Promise<void> {
     this.store.delete(key);
     return Promise.resolve();
