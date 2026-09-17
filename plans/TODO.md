@@ -78,7 +78,7 @@ probe.
 > `pnpm/action-setup@v4` with "No pnpm version is specified" — the root `package.json` declares
 > `devEngines.packageManager` rather than the `packageManager` field the action reads. It fails
 > identically on every run of the default branch, so nothing here has ever been verified by CI.
-> `P8.12` in [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
+> `P8.12` in [`IMPLEMENTATION-PLAN.md`](archive/IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
 > lands, "covered in CI" is not an answer any task may give.
 
 ---
@@ -199,7 +199,7 @@ probe.
     `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
     file that exists. The analytics projection is the second consumer class and already works
     without this: it reads `activity_log`, which is a different stream with a different guarantee.
-  - **Closed 2026-09-12 by Phase 2 of [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md)**
+  - **Closed 2026-09-12 by Phase 2 of [`COMMUNICATION-PLAN.md`](archive/COMMUNICATION-PLAN.md)**
     (`C2.1`–`C2.9`). The four broker-shaped properties hold, and one publisher plus one subscriber
     landed with the port, the adapter and the `Container` line in one change, as `P5.11` requires.
     **Both corrections above are now applied:**
@@ -220,8 +220,8 @@ probe.
 
 - [ ] `T-036` **Communication plan: unified mail, outbox, notifications, real-time, messaging** `@sami` `P1` `~120h` `#api` `#ui` `#db`
   - **Goal:** Mail is sent from two unrelated places with no record and no retry, `QueueName.NOTIFICATION` has no consumer, `DigestComposer` has no caller, there is no notification table, no event spine and no real-time path. One plan covers all of it in the order each piece compiles against the last.
-  - **Done when:** Every phase in [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) reports its **Exit** line true. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/COMMUNICATION-PLAN.md`
+  - **Done when:** Every item in Part C of [`PLAN.md`](PLAN.md) is closed and the eight client-side **Exit** clauses [`archive/COMMUNICATION-PLAN.md`](archive/COMMUNICATION-PLAN.md) still lists as unmet report true. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Part C); history in `plans/archive/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
   - **Revised 2026-09-12, before any of it was built.** Two Phase 1 decisions were reversed on review and the plan carries the reasoning. Templates are hand-written HTML in `packages/composition/src/mail/` rather than react-email, which removes the only new package in the plan and both of its dependencies. And a send is a BullMQ job with no `mail_deliveries` table: the queue already supplies retries, backoff and duplicate suppression, the mail provider is where a delivery record belongs at scale, and a table would put the plaintext invitation token in Postgres against the reason its hash is stored. The outbox event table stays, and the distinction is the point — Redis cannot commit atomically with Postgres. **The plan now adds no package and no dependency at all.**
@@ -239,19 +239,25 @@ probe.
     Redis, and the environment this was built in has no Docker.
 - [ ] `T-037` **Database scaling plan: connection pooling, partitioning, virtual sharding** `@sami` `P1` `~80h` `#db` `#infra`
   - **Goal:** One pool per process at a hardwired ten, no pooler, partition policy living in a worker constant with no assertion over the hand-edited DDL, and no routing seam — so `data-and-scale.md` §5's "shard by `organization_id`" is weeks because everything changes at once. One plan builds the knobs, the guards and the seam, and files the physical split.
-  - **Done when:** Every built phase in [`DB-SCALING-PLAN.md`](DB-SCALING-PLAN.md) reports its **Exit** line true; Phase 4 stays filed, and [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md) holds what was deferred out of the plan. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/DB-SCALING-PLAN.md`, `plans/DB-SCALING-DEFERRED.md`
+  - **Done when:** Every built phase in Part S of [`PLAN.md`](PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Part S); history in `plans/archive/DB-SCALING-PLAN.md` and `plans/archive/DB-SCALING-DEFERRED.md`
   - **Depends on:** `none` — Phase 1 of the plan is independent of `T-036`; Phase 3 routes the tables `T-036` added.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: a pluggable `ShardingStrategy` with `organization_id` as the shipped key, placement by directory row rather than by hash, 256 virtual shards fixed forever, three table placements with a transaction tripwire, pgBouncer always on with timeouts moved to the role, and the two-node proof filed behind the foreign-key decision.
   - **Phase 1 and section 2.A built, 2026-09-13.** Third pass 2026-09-14: `S2.9` dropped with its measurements kept, `S2.15` and `S5.6` deferred to the second file, and every open item corrected against the tree at `5777eba` — the plan's changelog carries the list.
   - **Second pass with the admin plan, 2026-09-15:** `messages` is partitioned now (`S2.6` rewritten as a build item, `S4.7` absorbed, decision 17); `partition_archive` gains `bytes`, `action_counts` and `projected_at` (`S2.11`); prune stamps `projected_at` or records a gap rather than blocking a drop (`S2.14`, decision 18); `S2.19` adds the partition-estimate read the admin preview consumes.
+  - **Fifth pass, 2026-09-16:** the shard is the organization and the tenant is a partition (decisions 19, 20); `S2.20`–`S2.24` new (the layout, the tenant partition seed, the two-level maintenance gateway, the per-tenant projection, pruning asserted per tenant); Phase 3 minus the 256 layer, `S3.4` and `S4.3` dropped.
+  - **2026-09-16, second:** `S2.25` partition DDL generator; `S2.20` reshaped to `tenantKey` and to parents-only migrations with `migrate.ts` running the seed; `S3.18` one tenant-column constant; the four-edit shard-key recipe in `S3.21`.
+  - **2026-09-17:** `S2.21`/`S2.22` create children standalone and attach them (the `partition of` form would have locked the parents on every signup); `S2.26` measures the tenant ceiling; `S4.9` files the pooled partition for the long tail.
 - [ ] `T-038` **Platform admin: the tier on RBAC, retention and projection policy as rows, the replica panel** `@sami` `P2` `~60h` `#api` `#ui` `#db` `#infra`
   - **Goal:** There is no authorization scope above an organization, so nothing global — how long a partition stays hot, what goes to cold storage and for how long, which activity actions reach ClickHouse and for how long each — can be edited by anyone without a deploy, and the ClickHouse schema cannot be changed at all after first boot. One plan builds the tier as a platform organization whose roles carry `platform`-scoped keys, then the policy rows and the screens over them, and files the replica panel behind the scaling plan's `S4.4`.
-  - **Done when:** Every built phase in [`PLATFORM-ADMIN-PLAN.md`](PLATFORM-ADMIN-PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/PLATFORM-ADMIN-PLAN.md`
+  - **Done when:** Every built phase in Part A of [`PLAN.md`](PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Part A); history in `plans/archive/PLATFORM-ADMIN-PLAN.md`
   - **Depends on:** `T-037` — Phase 2 needs `DB-SCALING-PLAN.md` section 2.C (cold storage) built; Phase 4 needs its `S4.4`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: the tier is an organization marked `is_platform`, `platform` is a third permission scope no tenant wildcard reaches, the first admin is seeded by `pnpm platform:grant` and every later one is invited, absent row = code default for every policy table, the app owns the bucket lifecycle configuration through a second storage port, the projection filter is one list read by three queries, ClickHouse gets a migration path before the app issues DDL, and activity actions become a catalog in `contracts`. Reopens `S2.15` and `S5.6` from `DB-SCALING-DEFERRED.md`.
   - **Second pass 2026-09-15:** the projection switch (a pause, not a power switch), gap recording and re-project from cold storage, restore a month to Postgres, a preview before every retention change, per-tenant storage, and a shard map with a move button that waits on `S4.2`; decisions 12–18. Queue-job retention was checked and is already capped, so it is not filed.
+  - **Third pass 2026-09-16:** per-tenant retention override (`A2.19`), tenant deletion (`A2.20`), the shard map is per node with tenants underneath; decisions 19, 20.
+  - **2026-09-16, second:** decision 21 and the "what the admin changes, and what stays a file" section.
+  - **2026-09-17:** tenant deletion forgets the tenant in ClickHouse too (`A2.20`); tenant export (`A2.21`).
 
 ## ⛔ Blocked
 
@@ -491,3 +497,7 @@ probe.
 | 2026-09-14 | @sami   | `T-037` third pass: the plan is five phases now (cold storage and the archived-notifications read were added 2026-09-14), `S2.9` dropped on the measured numbers, `S2.15` and `S5.6` deferred to a new `DB-SCALING-DEFERRED.md`, and every open item corrected against `5777eba`. Two `T-036` notes that had been filed under `T-037` moved back where they belong |
 | 2026-09-14 | @sami   | Filed `T-038` and `PLATFORM-ADMIN-PLAN.md`: the platform tier on RBAC, retention and cold-storage policy as rows the app applies to the bucket and to ClickHouse, a projection policy over a new activity-action catalog, and the replica panel filed behind `S4.4`. Reopens `S2.15` and `S5.6`. `tasks/` renamed to `plans/`; every doc reference updated |
 | 2026-09-15 | @sami   | Second pass on both plans: `T-038` gains the projection switch, gap recording and re-project, restore, retention preview, per-tenant storage, and the shard map with a waiting move button (decisions 12–18); `T-037` partitions `messages` now (`S2.6`, decision 17), grows `partition_archive` and stamps `projected_at` at prune (`S2.11`, `S2.14`, decision 18), and adds `S2.19` |
+| 2026-09-16 | @sami   | The shard is the organization: `T-037` drops the 256 layer, LIST-partitions the seven tenant-owned tables by tenant with months underneath (`S2.20`–`S2.24`, decisions 19–20); `T-038` gains per-tenant retention (`A2.19`) and tenant deletion (`A2.20`) |
+| 2026-09-16 | @sami   | Customizing the layout: `T-037` gains the partition DDL generator (`S2.25`) and a one-alias shard key with the fork recipe; `T-038` records the file-versus-dashboard line (decision 21) and a coverage section |
+| 2026-09-17 | @sami   | Review of the tenant layout: `T-037` attaches children instead of creating them in place (a signup would have blocked every read), measures the tenant ceiling (`S2.26`), files the pooled partition (`S4.9`); `T-038` deletes tenants from ClickHouse too and gains tenant export (`A2.21`) |
+| 2026-09-17 | @sami   | The plans folder consolidated: every open item from four plans — 121 of them — now lives in `plans/PLAN.md`, IDs and text unchanged apart from decision citations gaining a part prefix; the five plan files moved verbatim to `plans/archive/`; `T-036`, `T-037` and `T-038` point at the one file. `S2.4` built the same day (`§21`, 21/21) |

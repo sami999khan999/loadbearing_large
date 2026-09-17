@@ -181,5 +181,5 @@ one-second schedule, means the drain is not running rather than that it is busy.
 
 > [!NOTE]
 > `QueueName.NOTIFICATION` still has no consumer. It gains one in Phase 3 of
-> [`plans/COMMUNICATION-PLAN.md`](../../../../plans/COMMUNICATION-PLAN.md), with the digest
+> [`plans/archive/COMMUNICATION-PLAN.md`](../../../../plans/archive/COMMUNICATION-PLAN.md), with the digest
 > schedule. `DigestComposer`, which nothing but its own spec ever constructed, is deleted.
