@@ -1,6 +1,6 @@
 ---
 title: Platform admin plan — the tier, retention, projection policy, the replica panel
-updated: 2026-09-15
+updated: 2026-09-16
 owner: sami
 schema: plan/v1
 source: tree at 1135d57 (claude/sleepy-franklin-yqa9av), 2026-09-14
@@ -59,6 +59,12 @@ saying that is the only check covering the cold window. Two things from that pas
 scaling plan instead: `messages` is partitioned now (`S2.6`), and `S2.19` adds the partition-estimate
 read the preview here consumes. Queue-job retention was checked and is already capped, so it is
 not filed.
+
+On 2026-09-16 the scaling plan's shard became the organization and its tenant became a partition
+(its decisions 19 and 20). Three things follow here: retention can now differ per tenant, so the
+screen gains an override row (`A2.19`); a tenant can now be deleted as seven partition drops and a
+catalog cascade, so deletion becomes a platform action (`A2.20`); and the shard map is one row per
+node with tenants underneath, because there is no longer a 256-row grid to show.
 
 ### Decisions recorded up front (do not re-litigate)
 
@@ -133,6 +139,39 @@ not filed.
     never guesses.
 18. **`messages` is partitioned with `retentionMonths: null`.** (2026-09-15) Messages are domain data
     and are never dropped; the retention screen lists the table read-only, "never dropped".
+19. **Per-tenant retention is an override row, with the table default as the fallback.** (2026-09-16)
+    Hot months are exact, because prune drops that tenant's month child. Cold months per tenant are
+    enforced by the worker's sweep, not by the bucket: lifecycle rules match a prefix and are capped
+    at 1,000 per bucket, so the per-table rule stays as the ceiling and the app enforces anything
+    shorter.
+20. **Tenant deletion archives first, drops the tenant's partitions, lets the catalog cascade, and
+    keeps cold objects thirty days.** (2026-09-16) A platform action under its own key. Nothing is
+    destroyed at the click; the sweep thirty days later is what forgets the tenant.
+21. **Structure is a file; policy is the dashboard; the line is "does changing it rewrite a
+    table".** (2026-09-16) Which tables are split, by what key and by what time column, is one
+    allowlist line and a generated migration (`S2.20`, `S2.25`). Every number and switch over that
+    structure is a screen. A control that re-partitions a live table is a deploy wearing a
+    setting's clothes, and it is not built.
+
+### What the admin changes, and what stays a file
+
+| Change | Where | Why there |
+|---|---|---|
+| Which tables are split by tenant, by month, or both | one line in `packages/application/src/primitive/partitioned-table.ts`, then `db:generate` (`S2.20`, `S2.25`) | table structure |
+| Which tables are shared versus per-tenant | the catalog list (`S3.1`) | structure |
+| What the shard key is | the `TenantKey` alias and one strategy class (`S3.21`'s four-edit recipe) | one place, replaced whole |
+| How long each table keeps data | `/platform/retention` (`A2.3`) | a number |
+| How long one tenant keeps data | the tenant row (`A2.19`) | a number |
+| Which server a tenant lives on | the shard map, once the split exists (`A4.4`, `A4.5`) | one directory row |
+| Whether ClickHouse is on, what reaches it, for how long | `/platform/analytics` (`A3.1`, `A3.8`) | switches and numbers |
+| Restore, re-project, delete a tenant | the screens (`A2.18`, `A3.10`, `A2.20`) | actions over structure |
+
+**Deliberate constants.** The runway of two future months, the projection cadence of five minutes
+and its ten-minute lag alarm, the daily and monthly cron times, batch sizes, cache TTLs, and the
+thirty-day grace before a deleted tenant's cold objects are swept. Each is a code constant with its
+reason beside it. Two of them — the runway and the grace — are policy-shaped and could move onto
+`platform_policy` in an afternoon if an operator asks; none of the others should, because a screen
+that edits a cron pattern has to re-register every repeatable job, and there is no user for it.
 
 ### What exists and is reused (verified against the tree at `1135d57`)
 
@@ -176,21 +215,21 @@ not filed.
 | Scope | `platform`, on `PermissionScope` and on `roles.scope` |
 | Column | `organizations.is_platform boolean not null default false`, `organizations_platform_uq` partial on `(is_platform) where is_platform` |
 | System role (platform org only) | `platform_admin`, `is_system`, `scope = 'platform'`, every `platform.*` key |
-| Permission keys (`packages/permissions/src/catalog/platform.permissions.ts`, module `platform`, scope `platform`) | `platform.status.read`, `platform.retention.read`, `platform.retention.manage`, `platform.analytics.read`, `platform.analytics.manage`, `platform.storage.read`, `platform.shards.read`, `platform.shards.manage` (procedure with `S4.2`); `platform.replica.manage` arrives with `S4.4`. Restore-to-Postgres is under `platform.retention.manage`; re-project and the switch under `platform.analytics.manage` |
+| Permission keys (`packages/permissions/src/catalog/platform.permissions.ts`, module `platform`, scope `platform`) | `platform.status.read`, `platform.retention.read`, `platform.retention.manage`, `platform.analytics.read`, `platform.analytics.manage`, `platform.storage.read`, `platform.shards.read`, `platform.shards.manage` (procedure with `S4.2`), `platform.tenant.manage` (`A2.20`); `platform.replica.manage` arrives with `S4.4`. Restore-to-Postgres is under `platform.retention.manage`; re-project and the switch under `platform.analytics.manage` |
 | Routes (`route/platform.routes.ts`) | `/platform/status`, `/platform/retention`, `/platform/analytics`, `/platform/storage`, `/platform/shards` |
 | Gate (`gate/platform.gate.ts`) | `platform: { permission: "platform.status.read", route: ROUTES.platform.status }` |
-| Tables (catalog, tenant-exempt) | `retention_policy (store, table_name) pk`, `projection_policy (action) pk`, `platform_policy (id smallint pk, check (id = 1))`; `partition_archive` gains `bytes`, `action_counts`, `projected_at` in the scaling plan's `S2.11` |
+| Tables (catalog, tenant-exempt) | `retention_policy (store, table_name) pk`, `projection_policy (action) pk`, `platform_policy (id smallint pk, check (id = 1))`; `partition_archive` gains `bytes`, `action_counts`, `projected_at` in the scaling plan's `S2.11`. Not exempt, because it leads with the tenant: `tenant_retention_policy (organization_id, table_name) pk` (`A2.19`) |
 | Primitive | `application/src/primitive/activity-subject.ts` → `ActivitySubject.of(payload)`, lifted out of `PgActivityReplayReader` |
 | Action catalog (`packages/contracts/src/catalog/`) | `<slice>.actions.ts` fragments → `ACTIVITY_ACTIONS`; `ActivityAction`, `ActivityActions.isKnown` in `registry/` |
-| Application slice `platform/` | `retention-policy.repository.ts`, `projection-policy.repository.ts`, `platform.reader.ts` (ports); `retention.rules.ts`; `list-retention-policies`, `update-retention-policy`, `list-projection-policies`, `update-projection-policy`, `inspect-platform-status` use-cases; second pass: `platform-policy.repository.ts` (port); `preview-retention-change`, `list-tenant-storage`, `restore-partition`, `reproject-partition`, `toggle-projection`, `inspect-shard-map` use-cases, `move-tenant` with `S4.2`, `toggle-replica-reads` with `S4.4` |
+| Application slice `platform/` | `retention-policy.repository.ts`, `projection-policy.repository.ts`, `platform.reader.ts` (ports); `retention.rules.ts`; `list-retention-policies`, `update-retention-policy`, `list-projection-policies`, `update-projection-policy`, `inspect-platform-status` use-cases; second pass: `platform-policy.repository.ts` (port); `preview-retention-change`, `list-tenant-storage`, `restore-partition`, `reproject-partition`, `toggle-projection`, `inspect-shard-map` use-cases, `move-tenant` with `S4.2`, `toggle-replica-reads` with `S4.4`; third pass: `tenant-retention-policy.repository.ts` (port), `update-tenant-retention`, `delete-organization` use-cases |
 | Cross-cutting port | `application/src/port/storage-policy.gateway.ts` → `StoragePolicyGateway { lifecycle(), applyLifecycle(rules) }`, `LifecycleRule { prefix, expireAfterDays }` |
 | Infrastructure | `pg/schema/platform.schema.ts`, `pg/repository/pg-retention-policy.repository.ts`, `pg-projection-policy.repository.ts`, `pg-platform.reader.ts`, `pg-platform-policy.repository.ts`, `pg/seed/platform-role.seed.ts`, `s3/s3-storage-policy.gateway.ts`; scripts above `src/`: `platform-grant.ts`, `clickhouse-migrate.ts`, `clickhouse-migrations/` |
 | Cache prefix | `capability:platform:<userId>`, 60 s, `invalidatePlatform()` on the invalidator |
 | Content namespace | `platform` |
 | Query keys | `QueryKeys.platform.status()`, `.retention()`, `.retentionPreview(table, months)`, `.projection()`, `.policy()`, `.storage()`, `.shards()` |
 | Worker jobs | `retention` on `QueueName.MAINTENANCE`, daily at 03:30, `RetentionSchedule`; `cold-restore` and `cold-reproject` on `MAINTENANCE`, enqueued by use-cases with `jobId: "<job>:<table>:<period>:<org|all>"` so a double click is one job |
-| Log event codes | `retention.lifecycle.applied` (info), `retention.lifecycle.drifted` (warn), `retention.rows.expired` (info), `analytics.retention.applied` (info), `cold.partition.reprojected` (info, `{ period, organizationId, rows }`); `analytics.projection.gap` (warn) is declared in the scaling plan's `S2.14` and `cold.partition.restored` in its `S2.13`. `platform.policy.changed`, `platform.projection.paused`, `platform.projection.resumed`, `platform.restore.requested`, `platform.reproject.requested`, `platform.tenant.move_requested` are **activities**, not log codes |
-| Scripts | `pnpm platform:grant <email>`, `pnpm ch:migrate` |
+| Log event codes | `retention.lifecycle.applied` (info), `retention.lifecycle.drifted` (warn), `retention.rows.expired` (info), `analytics.retention.applied` (info), `cold.partition.reprojected` (info, `{ period, organizationId, rows }`); `analytics.projection.gap` (warn) is declared in the scaling plan's `S2.14` and `cold.partition.restored` in its `S2.13`. `platform.policy.changed`, `platform.projection.paused`, `platform.projection.resumed`, `platform.restore.requested`, `platform.reproject.requested`, `platform.tenant.move_requested`, `tenant.retention.changed`, `tenant.deleted`, `tenant.export_requested` are **activities**, not log codes; `cold.objects.swept` gains `reason: "tenant_deleted"` (`A2.20`); `cold.tenant.exported` (info, `A2.21`) |
+| Scripts | `pnpm platform:grant <email>`, `pnpm ch:migrate`; `pnpm db:generate` has two halves after the scaling plan's `S2.25` |
 | Docs pages (new) | `packages/permissions/docs/reference/platform-scope.md`, `packages/application/docs/reference/platform.md`, `packages/infrastructure/docs/reference/clickhouse-migrations.md`, `packages/infrastructure/docs/reference/storage-policy.md`, `packages/infrastructure/docs/reference/cold-restore.md` |
 
 ---
@@ -228,7 +267,7 @@ one. A `/platform/status` page and its nav gate prove the tier end to end before
   paths from decision 2, each as a case that fails without the branch. **Docs:** new
   `packages/permissions/docs/reference/platform-scope.md` (registered in `reference/meta.json` and
   `docs/index.md`), `docs/opinions/vocabulary.md` scope row, `docs/ai/rules/vocabulary.md` qualifier line.
-- [ ] `A1.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the eight keys from the
+- [ ] `A1.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the nine keys from the
   vocabulary (`platform.shards.manage` is registered now so the seed grants it; its procedure
   arrives with `S4.2`), spread into `CATALOG`; `route/platform.routes.ts`; `gate/platform.gate.ts` gating the
   `platform` nav module on `platform.status.read`. `ModuleRegistry.isVisible` needs no change: it
@@ -488,6 +527,54 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   says so. Restore panel on `/platform/retention`: table, month, optional tenant → button → `Callout`
   with the job id and which of the two outcomes applies. **Docs:** `cold-restore.md`, `cold-storage.md`
   (`S2.13`'s section gains the attach case), `consumers.md`, `schedules.md`, `ports.md`.
+- [ ] `A2.19` **Per-tenant retention override** — the scaling plan's decision 20 makes a tenant's
+  month its own partition, so retention can differ per tenant. `tenant_retention_policy
+  (organization_id, table_name) primary key, hot_months integer not null, cold_months integer null,
+  updated_at` in `platform.schema.ts`; it leads with the tenant, so no §9 exemption.
+  `tenant-retention-policy.repository.ts` (`findBy(organizationId, table)`, `forTable(table)`,
+  `save`), `pg-tenant-retention-policy.repository.ts`. `update-tenant-retention.use-case.ts`
+  (`platform.retention.manage`; `tableName` from `PartitionedTable.NAMES` where `tenantKey` is set;
+  write and the `tenant.retention.changed` audit in the transaction). `prune()` resolves, per
+  tenant-month, `override ?? retention_policy row ?? allowlist`. Cold months per tenant are
+  enforced by the `retention` job's sweep (delete objects and rows older than the tenant's cold
+  months), not by the bucket: S3 lifecycle rules match a prefix and are capped at 1,000 per
+  bucket, so the per-table rule stays as the ceiling and the app enforces anything shorter.
+  `A2.15`'s preview takes an optional `organizationId`. Edited from the tenant row on the shard map
+  (`A4.4`) and a tenant panel on `/platform/retention`. Decision 19. **Docs:** `platform.md`,
+  `cold-storage.md`, `docs/setup/13` §13.3.
+- [ ] `A2.20` **Delete a tenant** — the first tenant deletion in the repository, which is the
+  trigger `S2.16` was written without. `delete-organization.use-case.ts` under a new
+  `platform.tenant.manage` key (registered in `A1.2`; the seed grants it to `platform_admin`):
+  refuses the platform organization itself; archives every tenant-month first (the `S2.14` path
+  with the cutoff at now, so nothing is destroyed); `maintenance.dropTenantPartitions
+  (organizationId)` for the seven tables; deletes the `organizations` row, whose cascades cover
+  the catalog — `api_keys`, `sessions`, `invitations`, `roles`, `role_permissions`, `memberships`,
+  `goal_members`, `permission_overrides`, `outbox_event`, with `users.last_active_organization_id`
+  set null — and whose seven partitioned referrers are already gone; `capabilities.
+  invalidateOrganization` and `shards.invalidate(key)`; `projector.deleteTenant(organizationId)` —
+  a ClickHouse lightweight `DELETE FROM activity_events WHERE organization_id = {org:UUID}`, one
+  `command()`, so the analytics copy forgets the tenant too rather than keeping them until the
+  table's own five-year expiry (`revised: 2026-09-17`; the port gains the method, mirrored in the
+  fake, skipped when not configured); audit `tenant.deleted` under the platform organization
+  (decision 9). Cold objects stay thirty days: the `retention` job's sweep deletes
+  `partition_archive` rows and objects whose organization no longer exists and whose `archived_at`
+  is older than that, `cold.objects.swept` with `reason: "tenant_deleted"`. Procedure
+  `tenants.delete`, a confirmation that requires typing the slug, on the shard map's tenant row.
+  Decision 20. **Docs:** `platform.md`, `cold-storage.md` (`S2.16`'s section gains its trigger),
+  `sharding.md`.
+- [ ] `A2.21` **Export a tenant** — the design was sold partly on "hand a customer every byte they
+  own", and nothing built it. `export-organization.use-case.ts` (`platform.tenant.manage`; records
+  `tenant.export_requested`; enqueues `tenant-export` on `MAINTENANCE` with the dedupe `jobId`).
+  `MaintenanceConsumer.export()`: for each of the seven tenant-owned tables, stream that tenant's
+  rows through the archive gateway's existing per-tenant NDJSON writer (`S2.12`'s `rows()` and
+  `putStream`), live rather than detached, into one object per table under
+  `export/<organization_id>/<yyyy-mm-dd>/<table>.ndjson.gz`; plus the tenant's catalog rows —
+  memberships, roles, role grants, invitations, API keys with their hashes redacted — as an eighth
+  object; plus a manifest with row counts and checksums. `cold.tenant.exported` (`info`,
+  `{ organizationId, objects, rows, bytes }`). The screen offers a presigned download per object,
+  the first caller of `presignDownload`. Objects under `export/` expire by a lifecycle rule after
+  seven days, the one prefix rule the app adds beside `cold/` (`A2.5`). Added 2026-09-17.
+  **Docs:** `platform.md`, `cold-storage.md`, `storage-policy.md` (the second prefix), `consumers.md`.
 
 **Exit.** With `retention_policy` empty, `pnpm test` and the worker behave exactly as before this
 phase. Set `notifications` hot months to 6 on the screen: the audit row lands under the platform
@@ -502,6 +589,12 @@ partitions and the estimate before the save is enabled. Restore last month for t
 the scratch table holds the rows, the count matches `partition_archive`, `cold.partition.restored`
 is emitted, and — with hot months raised to cover it — the attach step makes the month live again.
 `/platform/storage` lists the seeded tenant with a byte total equal to the object sizes in MinIO.
+Set one tenant's hot months to 3: only that tenant's fourth month is archived and dropped on the
+next run. Delete the seeded second tenant from the shard map: its seven partitions are gone, its
+catalog rows are gone, its cold objects remain and `partition_archive` still names them; thirty days
+later (clock-advanced in the spec) the sweep removes them, and its rows are absent from
+ClickHouse on the next query. Export the seeded tenant: eight objects and a manifest under
+`export/`, every download link works, and the objects are gone after seven days.
 `check:architecture` green with one more `TENANT_EXEMPT` line; `test-container.spec.ts` pins
 twenty-seven (`A2.5` and `A2.17`).
 
@@ -621,7 +714,7 @@ panel: the rows land, `projected_at` is stamped, and the next reconcile reports 
 
 ### Phase 4 — The replica panel and the shard map (built after the scaling plan's Phase 3 and 4)
 
-**Depends on:** `DB-SCALING-PLAN.md` Phase 3 for the map (`S3.3`, `S3.4`); `S4.2` for the move
+**Depends on:** `DB-SCALING-PLAN.md` Phase 3 for the map (`S3.3`, `S3.5`); `S4.2` for the move
 button's procedure; `S4.4` for the replica handle and `cluster.reader(key)`.
 
 - [ ] `A4.1` **Status** — `InspectPlatformStatusUseCase` grows `replica: { healthy, lagSeconds } | null`
@@ -635,23 +728,24 @@ button's procedure; `S4.4` for the replica handle and `cluster.reader(key)`.
 - [ ] `A4.3` **Colder storage class** — a `transitionAfterDays` and storage class on `LifecycleRule`,
   once someone pays for Glacier; MinIO needs a configured tier to honour it, which is why it is not
   in Phase 2.
-- [ ] `A4.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): 256 rows —
-  virtual shard, physical node from `ShardMap`, tenant count from `shard_assignments` grouped by
-  `virtual_shard`, most recent `assigned_at` — plus a tenant lookup (organization id or slug → its
-  virtual and physical shard) and the tenants of one virtual shard on expand, paginated. The output
+- [ ] `A4.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): one row per
+  physical node — tenant count from `shard_assignments` grouped by `node`, most recent `assigned_at`
+  — with the tenants of a node on expand, paginated, each tenant row carrying its retention override
+  (`A2.19`), the move button (`A4.5`) and the delete action (`A2.20`); plus a tenant lookup
+  (organization id or slug → its node). `revised: 2026-09-16` — the shard is the organization. The output
   carries `moves: "unavailable" | "available"` from `container.hasShardMoves`, a getter that is a
   constant `false` with the comment until `S4.2` registers the move job; the seam earns its place
   because the retrofit touches contract, screen and use-case (decision 17). Procedure `shards.map`,
   route `/platform/shards`, `shard-map.panel.tsx`. **Docs:** `platform.md`, `sharding.md` (from `S3.21`).
 - [ ] `A4.5` **The move button** — rendered on every tenant row; disabled with the copy "tenant moves
   need the physical split; scaling plan Phase 4" while `moves === "unavailable"`.
-  `move-tenant.use-case.ts` (`platform.shards.manage`; input `{ organizationId, toVirtualShard }`;
+  `move-tenant.use-case.ts` (`platform.shards.manage`; input `{ organizationId, toNode }`;
   records `platform.tenant.move_requested`; enqueues `S4.2`'s job) and the `shards.move` procedure
   **land with `S4.2`**, in that commit, and flip `hasShardMoves`. **Docs:** `sharding.md`.
 
-**Exit (the built part).** `/platform/shards` renders 256 rows on the single-node compose stack, every
-tenant on physical node 0, the move button disabled with its reason; the tenant lookup finds the
-seeded organization.
+**Exit (the built part).** `/platform/shards` renders one row for node 0 on the single-node compose
+stack with the seeded tenants underneath, the move button disabled with its reason; the tenant lookup
+finds the seeded organization.
 
 ---
 
@@ -679,3 +773,6 @@ redirect to `/forbidden` is the tier working, and every other surface can hide a
 |---|---|---|
 | 2026-09-14 | @sami | Created. Un-defers `S2.15` and `S5.6` from `DB-SCALING-DEFERRED.md` into a platform tier built on RBAC (a platform organization, a third scope, a seeded role, a grant script), a retention slice covering Postgres hot months, cold months and mode, the bucket lifecycle the app now owns, and the ClickHouse TTL, a projection-policy slice over a new activity-action catalog with per-action inclusion and TTL, and a replica panel filed behind `S4.4`. Two findings shaped it: `StorageGateway` disclaims bucket-level concerns in its own header, so lifecycle is a second port; and activity actions are fourteen free-form literals with no list, so per-action policy needs a catalog first, in `contracts`, because the screen must list it |
 | 2026-09-15 | @sami | **Second pass: what the admin could not yet do.** Decisions 12–18. The projection switch (a pause, not a power switch; three states; off pauses both alarms) on a single-row `platform_policy` that also homes the replica switch (`A3.8`, `A3.9`, `A4.2`); a projection gap is recorded on `partition_archive.projected_at` and filled by a re-project action reading cold storage through the worker (`A3.10`); the reconcile finally covers the cold window (`A3.11`); a preview before every retention change (`A2.15`); per-tenant cold storage (`A2.16`); a restore action built on the scaling plan's scratch-table restore with a live attach only inside the hot window (`A2.17`, `A2.18`); a shard map now and a move button that waits on `S4.2` (`A4.4`, `A4.5`). `messages` partitioning and the partition-estimate read went to the scaling plan (`S2.6`, `S2.19`). Queue-job retention checked and already capped, not filed |
+| 2026-09-16 | @sami | **Third pass, following the scaling plan's tenant layout.** Decisions 19 and 20. Per-tenant retention as an override row with the table default as fallback, hot months exact and cold months app-enforced (`A2.19`); tenant deletion as a platform action under `platform.tenant.manage` — archive first, drop seven partitions, cascade the catalog, keep cold objects thirty days (`A2.20`); the shard map is one row per node with tenants underneath and the move button targets a node (`A4.4`, `A4.5`); nine permission keys |
+| 2026-09-16 | @sami | Same day, second row: decision 21 draws the line between what is a file and what is a screen, and a new section lists every control on each side plus the constants that stay constants on purpose. The scaling plan's `S2.25` generator is what makes the file side one line |
+| 2026-09-17 | @sami | Two improvements from a review. Tenant deletion (`A2.20`) now issues a ClickHouse lightweight delete, so a deleted customer is not kept in the analytics copy for five years. New `A2.21` exports a tenant — seven tables live through the archive writer, the catalog rows as an eighth object, a manifest, presigned downloads, a seven-day expiry under `export/` — which closes a promise the design made and no item kept |

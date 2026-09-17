@@ -1,10 +1,10 @@
 ---
 title: Database scaling plan — connection pooling, partitioning, virtual sharding
-updated: 2026-09-15
+updated: 2026-09-16
 owner: sami
 schema: plan/v1
 source: tree at c72ca9e (claude/sleepy-franklin-yqa9av), 2026-09-13
-verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same day, stricter; third pass 2026-09-14 against 5777eba, open items only, no live stack; fourth pass 2026-09-15 against 5edd129, four items, no live stack
+verified: tree at 49703c9, against a live stack, 2026-09-13; second pass same day, stricter; third pass 2026-09-14 against 5777eba, open items only, no live stack; fourth pass 2026-09-15 against 5edd129, four items, no live stack; fifth pass 2026-09-16 against d9cd25b, tenant layout, no live stack
 ---
 
 # Database scaling plan
@@ -17,15 +17,17 @@ open — decisions 13 to 16 below — and two items left this file for
 [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md): `S2.15` (retention as a table) and `S5.6` (the
 platform tier). The same pass read every open item against the tree at `5777eba` and corrected what
 it contradicts; each correction is a `corrected: 2026-09-14` line on its item, and the changelog row
-lists them.
+lists them. On 2026-09-16 the shard became the organization and the tenant became a partition
+(decisions 19 and 20): five new items in 2.B, 2.C per tenant-month, and Phase 3 simplified, not
+removed.
 
 ### What is outstanding
 
 | Section | Open items, in build order |
 |---|---|
-| 2.B | `S2.4` `S2.5` `S2.6` `S2.7` `S2.8` `S2.18` `S2.19` |
+| 2.B | `S2.4` `S2.5` `S2.6` `S2.7` `S2.8` `S2.18` `S2.19` `S2.20` `S2.21` `S2.22` `S2.23` `S2.24` `S2.25` `S2.26` |
 | 2.C | `S2.10` `S2.11` `S2.12` `S2.13` `S2.14` `S2.16` `S2.17` |
-| 3 | `S3.1` `S3.2` · `S3.3` · `S3.4` `S3.5` `S3.6` `S3.7` `S3.8` `S3.9` `S3.10` `S3.23` · `S3.11` `S3.12` `S3.13` · `S3.14` `S3.15` `S3.16` · `S3.17` · `S3.18` · `S3.19` `S3.20` · `S3.21` `S3.22` |
+| 3 | `S3.1` `S3.2` · `S3.3` · `S3.5` `S3.6` `S3.7` `S3.8` `S3.9` `S3.10` `S3.23` · `S3.11` `S3.12` `S3.13` · `S3.14` `S3.15` `S3.16` · `S3.17` · `S3.18` · `S3.19` `S3.20` · `S3.21` `S3.22` |
 | 5 | `S5.1` `S5.2` `S5.3` `S5.4` `S5.5` — needs 2.C and nothing else |
 
 Dropped: `S2.9` (decision 13); `S2.15` and `S5.6` (decision 14, both in the deferred file, and
@@ -51,6 +53,10 @@ pnpm --filter @loadbearing/infrastructure test && pnpm smoke
 - 2026-09-15: `messages` is partitioned now, not at the trigger (17); `partition_archive` carries
   `bytes`, `action_counts` and `projected_at`, and prune records a projection gap rather than
   blocking a drop (18). `S2.6` is a build item, `S4.7` is absorbed, `S2.19` is new.
+- 2026-09-16: the shard is the organization — no 256 layer, no hash, no range map, node 0 until
+  the split (19); the tenant is a partition, not a container — seven tables `LIST` by tenant with
+  months underneath for three (20). `S2.20`–`S2.24` are new, `S3.4` and `S4.3` are dropped, the
+  projection goes per tenant, and per-tenant retention and deletion live in the admin plan.
 
 > **How to use this file**
 >
@@ -117,12 +123,17 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
    see any of it (`data-and-scale.md` §7 holds).
 2. **256 virtual shards, fixed forever.** `VirtualShard.COUNT` is a constant nobody edits: the
    directory makes changing it unnecessary, and changing it would re-place every key.
+   `reversed: 2026-09-16 — decision 19.`
 3. **Placement is a directory row, not a hash.** `shard_assignments (shard_key, virtual_shard)`
    on the catalog, written once per key by the `ShardPlacementPolicy` the container binds
    (default `HashShardPlacementPolicy`: FNV-1a over the key, even spread, no state). Moving one
    tenant is rewriting one row; moving a virtual shard is editing one env entry. A key with no
    row is an `InternalError` — the backfill migration and the founder together mean it cannot
    happen, and a lazy insert on the read path would hide the case where it did.
+   `revised: 2026-09-16` — the row is `(shard_key, node)`; there is no hash, no policy port and no
+   env range: every new tenant lands on node 0 until the physical split, and the split (`S4.1`) is
+   where a placement policy earns its place. The last sentence stands: a key with no row is an
+   `InternalError`.
 4. **Physical shard 0 is the catalog and always exists.** It is `DATABASE_URL`. Every physical
    shard carries the full schema (one migration set, looped), so catalog tables exist empty on
    shards 1+; that is harmless and is what keeps `migrate.ts` a loop rather than a branch.
@@ -202,6 +213,9 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     `DatabaseCluster`, the resolver, the directory, the env map — lands with the placement tripwire,
     not after it. A tripwire-only cut and a resolve-at-the-edge cut were both offered and neither
     taken.
+    `revised: 2026-09-16` — still in full, minus the 256 layer: `VirtualShard`, `ShardMap`, the
+    hash policy and the `_VIRTUAL` env go; `ShardKey`, `ShardScope`, `DatabaseCluster`, the
+    resolver, the directory and the tripwire stay.
 16. **Every partitioned table archives before it drops, `outbox_event` included.** (2026-09-14)
     2.C's goal holds as written: no month is destroyed, even one that is transport.
 17. **`messages` is partitioned now, not at the trigger.** (2026-09-15) Reverses 11. The cost is
@@ -212,6 +226,20 @@ This file is the plan: four phases in the shape of `COMMUNICATION-PLAN.md`.
     reconciliation and gap record all read this one table; nothing else in the repository records
     an object's size, and the per-action counts are free while the rows stream out. A projection
     that is off or behind costs a known hole, never an unbounded table.
+19. **The shard is the organization.** (2026-09-16) One virtual shard per tenant; the organization
+    id is the `ShardKey`; the directory maps it to a physical node; node 0 until the split. What
+    the 256 layer bought — moving a group with one env edit — is not needed when a tenant is one
+    partition per table and moves by detach and attach. Reverses 2; revises 3 and 15.
+20. **The tenant is a partition, not a container.** (2026-09-16) The seven tenant-owned tables are
+    `PARTITION BY LIST (organization_id)`; `activity_log`, `notifications` and `messages` are
+    sub-partitioned by month inside each tenant. Every query already carries the tenant, so every
+    query prunes to one partition for free; a tenant's month is one child to archive, drop or
+    restore; a tenant is seven partitions to drop. The shared login and permission tables stay
+    shared because a user belongs to several organizations; `outbox_event` stays month-only
+    because the drain polls it every second. The one cross-tenant query, the projection replay,
+    becomes per tenant (`S2.23`). Capacity per node is now bounded by partition count — tenants ×
+    tables × months kept — before it is bounded by data size; a few hundred tenants per node is
+    comfortable, which is why the split stays planned.
 
 ### What exists and is reused (verified against the tree at `c72ca9e`)
 
@@ -252,19 +280,21 @@ against twenty-two migrations, not twenty-one.
 | Thing | Name |
 |---|---|
 | Env, pool (both `env.ts`) | `DATABASE_URL` (pooled), `DATABASE_DIRECT_URL`, `DATABASE_POOL_MAX`, `DATABASE_POOL_IDLE_TIMEOUT_MS`, `DATABASE_POOL_CONNECT_TIMEOUT_MS`, `DATABASE_STATEMENT_TIMEOUT_MS` |
-| Env, shards | `DATABASE_SHARD_<n>_URL`, `DATABASE_SHARD_<n>_DIRECT_URL`, `DATABASE_SHARD_<n>_VIRTUAL` (`128-255`, or `1,7,9-20`), `n ≥ 1` |
-| Table (catalog) | `shard_assignments` |
+| Env, shards | `DATABASE_SHARD_<n>_URL`, `DATABASE_SHARD_<n>_DIRECT_URL`, `n ≥ 1` (no range map since 2026-09-16: the directory names the node) |
+| Table (catalog) | `shard_assignments (shard_key, node)` |
+| Seeds (`pg/seed/`) | `TenantPartitionSeed` (`S2.21`), run wherever an organization is created |
+| Partition names | `<table>_<32hex>` and `<table>_<32hex>_<yyyy>_<mm>`; the longest is 57 of Postgres's 63 characters |
 | Tables (cold storage) | `partition_archive` (per tenant, per table, per month; `catalog`; `bytes`, `action_counts`, `projected_at` added 2026-09-15 in `S2.11`) |
-| Primitives (`application/src/primitive/`) | `ShardKey`, `VirtualShard`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (`column`, `retentionMonths`; both built in `S2.1`; `messages` joins `ALL` in `S2.6`) |
+| Primitives (`application/src/primitive/`) | `ShardKey`, `Placement` (`"catalog" \| "local" \| "routed"`), `CatalogTable`, `PartitionedTable` (`column`, `retentionMonths` built in `S2.1`; `messages` joins `ALL` in `S2.6`; `tenantKey` and `column \| null` with eight entries in `S2.20`) |
 | Ports (cold storage) | `PartitionArchiveGateway` (replaces `ActivityArchiveGateway`), `ColdArchiveReader` |
-| Ports (`application/src/port/`) | `ShardingStrategy`, `ShardPlacementPolicy`, `ShardResolver`, `ShardAssignmentRepository`; `MaintenanceGateway.partitionsBefore` (`S2.19`); `CacheStore.setIfAbsent` (`S2.6`) |
-| Infrastructure (`pg/primitive/`) | `ShardMap`, `DatabaseCluster` |
+| Ports (`application/src/port/`) | `ShardingStrategy`, `ShardResolver`, `ShardAssignmentRepository`; `MaintenanceGateway.partitionsBefore` (`S2.19`), `.ensureTenantPartitions` (`S2.21`), `.dropTenantPartitions` (`S2.22`); `AnalyticsProjector.checkpoint(organizationId)` (`S2.23`); `CacheStore.setIfAbsent` (`S2.6`) |
+| Infrastructure (`pg/primitive/`) | `DatabaseCluster` |
 | Infrastructure (`pg/transaction/`) | `ShardScope`, `TransactionScope` (carries placement) |
 | Infrastructure (`pg/repository/`) | `PgShardResolver`, `PgShardAssignmentRepository` |
-| Composition (`src/shard/`, new folder) | `OrganizationShardingStrategy`, `HashShardPlacementPolicy` |
-| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn), `shard.assignment.created` (info), `shard.resolution.failed` (error), `cold.partition.restored` (info), `cold.objects.swept` (info), `analytics.projection.gap` (warn, `S2.14`) — an archived month keeps the existing `maintenance.partition.archived` |
+| Composition (`src/shard/`, new folder) | `OrganizationShardingStrategy` |
+| Log event codes | `database.pool.saturated` (warn), `worker.pool.oversubscribed` (warn), `partition.runway.low` (warn, gains `organizationId` in `S2.22`), `shard.assignment.created` (info, `{ key, node }`), `shard.resolution.failed` (error), `cold.partition.restored` (info), `cold.objects.swept` (info), `analytics.projection.gap` (warn, `S2.14`), `analytics.reconciliation.drifted` gains `organizationId` (`S2.23`) — an archived month keeps the existing `maintenance.partition.archived` |
 | S3 prefix | `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz` — one lifecycle rule on `cold/` tiers every table |
-| Scripts | `pnpm db:partitions`, `pnpm infra:up:sharded` |
+| Scripts | `pnpm db:partitions`, `pnpm infra:up:sharded`; `pnpm db:generate` becomes `drizzle-kit generate` then `partition-ddl.ts` (`S2.25`) |
 | Compose services | `pgbouncer` (core), `postgres-shard-1` (profile `sharded`) |
 | Assertions | §21 partition DDL ↔ allowlist · §22 one placement per repository file · §23 `new Database(` only in the cluster and the scripts |
 | Docs pages (new) | `docs/infra/reference/pgbouncer.md`, `packages/infrastructure/docs/reference/sharding.md`, `packages/infrastructure/docs/reference/partitions.md`, `packages/infrastructure/docs/reference/cold-storage.md` |
@@ -684,7 +714,8 @@ correction, and the rehearsal uses four-second transactions instead.
 the guard that a hand-edited migration matches that declaration is a build failure rather than a
 paragraph in `docs/setup/13`, the runway cannot be lost by a worker that was asleep on the first of
 the month, partition pruning is proven by `EXPLAIN` rather than assumed, every table that grows
-with activity is on the list, `messages` included (`S2.6`) — and **no month is ever destroyed**: retention
+with activity is on the list, `messages` included (`S2.6`), every tenant-owned table is a tenant
+partition first (`S2.20`) — and **no month is ever destroyed**: retention
 moves a partition to S3 and drops it only once the object is written and verified (`2.C`).
 
 **Design in one paragraph.** `PartitionedTable.ALL` becomes a frozen list of
@@ -884,7 +915,8 @@ retention number moves out of the code into a row an operator can edit without a
   declared on the parent and propagate. `conversations.last_message_id` carries no FK
   (`messaging.schema.ts:38`), so nothing references `messages` and the table can be replaced.
   `messages.conversation_id → conversations` stays: a partitioned table may hold outbound FKs.
-  Migration `0023_messages_partitioned.sql`, hand-written: `drop table messages`, then the
+  Migration `0023_tenant_partitions.sql` (`revised: 2026-09-16` — folded into `S2.20`'s migration;
+  the PK is `(id, organization_id, created_at)`), hand-written: `drop table messages`, then the
   `0000` shape — `create table … partition by range (created_at)` with the PK, the two indexes,
   and six monthly children — **in place, not create-copy-swap**, because the seed writes no
   messages and the kit ships none; the sentence "a deployment with rows copies into a new parent
@@ -942,6 +974,198 @@ retention number moves out of the code into a row an operator can edit without a
   the call and returns a list its constructor was given, default `[]`. Consumed by
   `PLATFORM-ADMIN-PLAN.md`'s preview (`A2.15`) and its retention screen's "today" column; nothing
   in this plan calls it. Added 2026-09-15. **Docs:** `ports.md`, `partitions.md`.
+- [ ] `S2.20` **Tenant partitions: the layout** — decision 20 (2026-09-16). Seven tenant-owned
+  tables become `PARTITION BY LIST (organization_id)`, and under each tenant's partition the three
+  with a time column are `PARTITION BY RANGE` again: `activity_log`/`occurred_at`,
+  `notifications`/`created_at`, `messages`/`created_at`. `outbox_event` stays month-only (the drain
+  polls it once a second and must not touch a thousand partitions to do it); every catalog table is
+  untouched. Postgres requires every unique constraint on a partitioned table to carry every
+  partition key, which rewrites the primary keys: `notifications` `(id, created_at)`
+  (`notification.schema.ts:49`) → `(id, organization_id, created_at)`; `activity_log`
+  `(id, occurred_at)` (`activity.schema.ts:29`) → `(id, organization_id, occurred_at)`; `messages`
+  `id` (`messaging.schema.ts:92`) → `(id, organization_id, created_at)`; `conversations` `id`
+  (`:22`), `conversation_members` `id` (`:54`), `notification_preferences` `id`
+  (`notification.schema.ts:82`) and `document_chunks` `id` (`vector.schema.ts:18`) → `(id,
+  organization_id)`. Every existing unique index already leads with `organization_id`
+  (`notifications_dedupe_uq` also carries `created_at`, because it is the event's `occurred_at`,
+  not `now()`); `messages_client_uq` is the one that cannot survive the range level and it goes as
+  `S2.6` already decided, with the Redis `setIfAbsent` dedupe in its place. Two foreign keys point
+  at a table whose primary key now has two columns and must become composite:
+  `conversation_members.conversation_id` (`messaging.schema.ts:61-64`) and `messages.conversation_id`
+  (`:97-100`) become `foreignKey({ columns: [t.conversationId, t.organizationId], foreignColumns:
+  [conversations.id, conversations.organizationId], name })` in the table's third argument, still
+  `no action` — `import.ts` gains `foreignKey` from `drizzle-orm/pg-core`, the first composite FK in
+  the tree. The nine FKs to catalog tables are unaffected: a partitioned table may reference a plain
+  one. `pg-vector.store.ts:57-58` `target: documentChunks.id` → `[documentChunks.id,
+  documentChunks.organizationId]`; the insert already supplies the tenant (`:47`).
+  `document_chunks_embedding_idx` becomes one HNSW graph per tenant, which is the better shape:
+  `search()` carries `organization_id` (`pg-vector.store.ts:107-113`), so a query prunes to one
+  small graph instead of walking everyone's. `PartitionedTableEntry` becomes `{ name, tenantKey:
+  TenantKey | null, column: PartitionColumn | null, retentionMonths }`, with
+  `export type TenantKey = "organization_id"` declared once beside `PartitionColumn`, and `ALL`
+  lists eight:
+
+  ```ts
+  { name: ACTIVITY_LOG,             tenantKey: "organization_id", column: "occurred_at", retentionMonths: 13 },
+  { name: OUTBOX_EVENT,             tenantKey: null,              column: "occurred_at", retentionMonths: 2 },
+  { name: NOTIFICATIONS,            tenantKey: "organization_id", column: "created_at",  retentionMonths: 12 },
+  { name: MESSAGES,                 tenantKey: "organization_id", column: "created_at",  retentionMonths: null },
+  { name: CONVERSATIONS,            tenantKey: "organization_id", column: null,          retentionMonths: null },
+  { name: CONVERSATION_MEMBERS,     tenantKey: "organization_id", column: null,          retentionMonths: null },
+  { name: NOTIFICATION_PREFERENCES, tenantKey: "organization_id", column: null,          retentionMonths: null },
+  { name: DOCUMENT_CHUNKS,          tenantKey: "organization_id", column: null,          retentionMonths: null },
+  ```
+
+  `tenantKey: null` means "not split by tenant"; `column: null` means "tenant level only, never
+  pruned by the calendar"; `PartitionedTableName` grows to eight. The seed's `for values in`, the
+  maintenance gateway's names, the generator (`S2.25`) and §21 all read `entry.tenantKey`, so a
+  fork sharding by another column edits the alias and its schema and nothing else. Partition names are `<table>_<32hex>` and `<table>_<32hex>_<yyyy>_<mm>`, the
+  uuid with hyphens stripped and validated `^[0-9a-f]{32}$` before it reaches `sql.raw` — the
+  longest is `notification_preferences_<32>` at 57 of 63 characters. Migration
+  `0023_tenant_partitions.sql`, hand-written: drop and recreate the seven tables in place with the
+  new keys and both partition levels (the kit ships no rows in them; the sentence "a deployment
+  with rows copies into a new parent and swaps under a lock" goes in `partitions.md`), `S2.6`'s
+  `messages` DDL folded in. The migration creates the partitioned **parents only**. Children — every
+  existing tenant's partitions and the runway months — are created by `TenantPartitionSeed`
+  (`S2.21`), which `migrate.ts` runs for every organization immediately after `migrate()` returns,
+  over the same direct connection. One implementation creates partitions everywhere; a SQL copy of
+  it in the migration would be a second one that drifts. This migration is a rewrite of seven live
+  tables and is hand-written; `S2.25`'s generator refuses exactly this case and serves the *next*
+  partitioned table a fork adds.
+  §21 (`S2.4`) extends: an entry with a `tenantKey` must have `PARTITION BY LIST ("<tenantKey>")` in
+  `migrations/`, its primary key must name that column and, when `column` is set, that column too. **Docs:** `partitions.md` (`S2.8`, the two-level shape and the copy-swap sentence),
+  `docs/opinions/data-and-scale.md` §4.2 (a tenant level above the month level, and why the outbox
+  is exempt), `docs/ai/rules/data.md` partition bullet, `docs/setup/13` §13.3 and §13.6,
+  `messaging.md`, `packages/infrastructure/docs/reference/vector-store.md` (one graph per tenant).
+- [ ] `S2.21` **`TenantPartitionSeed`, and who runs it** — a row for an organization with no
+  partition is an insert error, so every path that creates an organization creates its partitions
+  in the same transaction. `pg/seed/tenant-partition.seed.ts`, the `SystemRoleSeed` shape: `run
+  (organizationId)` probes each of the seven with `to_regclass` and, for each missing one, creates
+  the child as a standalone table (`create table <name> (like <parent> including all)`, with
+  `partition by range (<column>)` for the three time tables) and then
+  `alter table <parent> attach partition <name> for values in ('<uuid>')` — never
+  `create table … partition of`, which takes an `ACCESS EXCLUSIVE` lock on the parent for the rest
+  of the transaction and would stall every read on all seven tables for the length of a signup;
+  `attach` takes `SHARE UPDATE EXCLUSIVE`, which blocks nothing a request does, and an empty child
+  attaches without a validation scan (`revised: 2026-09-17`). Then the current month and the next
+  two under each time table, the same way. Over `this.db` so it joins the caller's transaction —
+  DDL through the pooled handle inside a transaction is proven by `pooled.smoke.spec.ts:83,198-203`.
+  Callers:
+  `migrate.ts`, which after `migrate()` pages `organizations` and runs the seed for each, so a fresh
+  migration leaves no parent without children before the web app can take a request;
+  `PgOrganizationFounder.found()` — the call goes after the `organizations` insert
+  (`pg-organization.founder.ts:47-53`) and before `this.systemRoles.run` (`:57`), because
+  `activity.record` at `:75` writes the tenant's first `activity_log` row in this same transaction
+  and needs the partition to exist; `seed.ts:46` after its insert; a new `seedTenant(database,
+  organizationId)` in `tests/support/database.ts`, called by the four specs that insert
+  `organizations` directly (`tests/messaging/pg-conversation.repository.spec.ts:48`,
+  `pg-message.repository.spec.ts:63`, `tests/rbac/tenant-cascade.spec.ts:33`,
+  `tests/vector/pg-vector.store.spec.ts:125`) and by the two analytics specs that today create a
+  month with an ad-hoc `PgMaintenanceGateway` (`pg-activity-archive.gateway.spec.ts:83`,
+  `pg-activity-replay.reader.spec.ts:52`). `MaintenanceGateway.ensureTenantPartitions
+  (organizationId): Promise<readonly string[]>` on the port delegates to the seed, so the tenant
+  move (`S4.2`) and the deletion action (`A2.20`) reach it through the port; mirrored in
+  `RecordingMaintenanceGateway`. No nil-tenant partition: the survey found no writer that can put
+  a tenant-owned row under `SystemPrincipal.platform()`'s nil uuid, and `activity_log` having no
+  FK is the one place it could start — the seed's comment says so. **Docs:** `partitions.md`,
+  `docs/setup/13` §13.4, `ports.md`, `tests/support` mention in `packages/infrastructure/docs/index.md`.
+- [ ] `S2.22` **The maintenance gateway learns two levels** — `pg-maintenance.gateway.ts` was
+  written for one level and fails silently on two: `childrenOf` (`:131-141`) joins `pg_inherits`
+  once and returns the tenant partitions, never the months, and `partitionMonth`'s regex
+  `^${table}_(\d{4})_(\d{2})$` (`:166-174`) matches nothing under the new names, so
+  `dropMonthlyPartitionsBefore` would parse `null` and skip every partition — retention stops with
+  no error. `childrenOf(table, organizationId?)` joins `pg_inherits` twice (parent → tenant → month)
+  and `partitionMonth` takes `^${table}_[0-9a-f]{32}_(\d{4})_(\d{2})$`. Signatures gain the tenant:
+  `ensureMonthlyPartitions(table, organizationId, from, months)`, `monthlyPartitionsAfter(table,
+  organizationId, from)`, `dropMonthlyPartitionsBefore(table, organizationId, cutoff)`,
+  `partitionsBefore(table, cutoff, organizationId?)` (`S2.19`, the whole-table form for the status
+  column), plus `dropTenantPartitions(organizationId): Promise<readonly string[]>` (the seven list
+  partitions, months included, in one transaction). `lockFor` stays per table. `outbox_event` keeps
+  the single-level path as an `if (!entry.tenantKey)` branch inside the same methods, not a second
+  gateway. `MaintenanceConsumer.partitions()` (`maintenance.consumer.ts:118-145`) loops
+  `organizations` — a paged `select id` from the catalog, an `OrganizationReader.page()` on the
+  slice port — times the three time tables, ensuring runway and pruning per tenant;
+  `partition.runway.low` and `maintenance.partitions.ensured` gain `organizationId`. `S2.7`'s
+  `db:partitions` loops tenants the same way. The per-tenant DDL count per month is tenants × three,
+  one statement each, which is what bounds tenants per node before the split. The runway job
+  attaches the same way `S2.21` does (create standalone, then `attach`; `revised: 2026-09-17`),
+  keeps `lock_timeout` short as `S1.11` already requires, and paces itself — a bounded number of
+  tenants per transaction, one transaction at a time — so a month's worth of tenant DDL is a slow
+  background trickle rather than one lock storm on the first of the month. **Docs:**
+  `consumers.md`, `schedules.md`, `partitions.md`, `ports.md`.
+- [ ] `S2.23` **The projection goes per tenant** — `PgActivityReplayReader.since()`
+  (`pg-activity-replay.reader.ts:23-50`) is a global keyset over `activity_log` with no tenant
+  predicate, and under a tenant level that is an append over every tenant's month partition per
+  batch. It becomes per tenant, which is also the shape `docs/ai/rules/data.md:27` asks for. Ports:
+  `AnalyticsProjector.checkpoint(organizationId)` — ClickHouse `max(occurred_at), argMax(id,
+  (occurred_at, id)) … where organization_id = {org:UUID}`, cheap under `ORDER BY
+  (organization_id, occurred_at, id)`; `ActivityReplayReader.since(organizationId, checkpoint,
+  limit, excluding)` and `dailyCounts(organizationId, from, to, excluding)`;
+  `AnalyticsProjector.dailyCounts(organizationId, from, to, excluding)`. `AnalyticsConsumer.project()`
+  loops organizations (the same paged catalog read `S2.22` uses), batches of 5,000 per tenant, a
+  per-run cap on total rows in place of `MAX_BATCHES_PER_RUN`, `lagMs` becomes the max over tenants
+  of the oldest unprojected row's age, `analytics.projection.completed` gains `tenants`;
+  `reconcile()` compares per tenant and `analytics.reconciliation.drifted` gains `organizationId`.
+  `activity_log_replay_idx` (`activity.schema.ts:33`) becomes a local `(occurred_at, id)` index on
+  each month partition and its "cross-tenant by design" comment is rewritten. Two things dissolve:
+  `S4.3`'s filed ClickHouse-checkpoint gap (a tenant's checkpoint is keyed on the tenant, and
+  ClickHouse is not per node, so a moved tenant resumes where it was), and `S3.16`'s projection
+  clause (loop tenants, resolve each tenant's node; no per-shard checkpoint). The one remaining
+  cross-tenant read on a tenant-owned table, `organizationsWithDigest()`
+  (`pg-notification-preference.repository.ts:92-99`), moves to a catalog column
+  `organizations.digest_enabled` maintained by the preference write, so the digest schedule reads
+  the catalog and never scans partitions. **Docs:** `clickhouse.md` (projection and
+  reconciliation sections), `consumers.md`, `docs/ai/rules/data.md` (the exception is gone),
+  `notification-policy.md`.
+- [ ] `S2.24` **Pruning per tenant, asserted** — `S2.5`'s `EXPLAIN` spec extends to the seven
+  tables with a first assertion that is now true of every read: exactly one tenant partition is
+  scanned. Per table: `notifications` `list`, `countUnread`, `existsUnread`, `markRead`,
+  `markAllRead` (one tenant; `markRead` one month); `messages` `findById`, `edit`, `softDelete` (one
+  tenant, one month), `unreadCounts` (one tenant, the tail from `last_read_at`), `list` (one tenant,
+  pinned at that tenant's months — decision 13's finding unchanged, now over a tenant-sized set);
+  `conversations` `findById`, `listRecent`, `findDirect` and `conversation_members` reads,
+  `notification_preferences` `find`/`upsert`, `document_chunks` `search`, `deleteBySource`,
+  `upsert` (one tenant each); `activity_log` `since(organizationId, …)` (one tenant, the months
+  after the checkpoint). The assertion form is the ceiling `S2.5` already uses: partitions scanned
+  ≤ partitions that exist for that tenant, and never another tenant's. **Docs:** `partitions.md`.
+- [ ] `S2.25` **The partition DDL generator** — adding a partitioned table today is one allowlist
+  line and then `PARTITION BY` written by hand, because drizzle cannot express it and its
+  snapshots do not know it exists. `packages/infrastructure/partition-ddl.ts`, above `src/` like
+  `migrate.ts`, runs as the second half of `db:generate` (`"drizzle-kit generate && tsx partition-ddl.ts"`
+  in `packages/infrastructure/package.json`): it opens only the migration the last
+  `meta/_journal.json` entry names — the one just generated, never an applied one, because the
+  migrator hashes each file's whole text — and for every `CREATE TABLE "<t>"` whose `<t>` is in
+  `PartitionedTable.ALL` and whose statement carries no `PARTITION BY` yet, rewrites the closing
+  `);` to `) PARTITION BY LIST ("<tenantKey>");` when `tenantKey` is set, or
+  `) PARTITION BY RANGE ("<column>");` when only `column` is. It never invents a key: the statement's
+  `PRIMARY KEY(…)` must already name the tenant key and, when `column` is set, that column — drizzle
+  emits the composite form only when the schema declares `primaryKey({ columns })` — and a
+  statement that fails that check stops the run with the message "declare the composite primary
+  key in the schema; the generator does not synthesize keys". It creates no children: `S2.21`'s
+  seed does, at migrate time and at signup, so the migration holds parents only. Idempotent (a
+  statement already partitioned is skipped), and it refuses a `<t>` whose `CREATE TABLE` already
+  appears unpartitioned in an earlier migration — that is a rewrite of a live table, which is
+  `partitions.md`'s copy-swap procedure and a hand-written migration, never a generator's job
+  (`S2.20`'s own migration is that case). §21 (`S2.4`) then checks the other direction: every
+  allowlist entry has its `PARTITION BY` in `migrations/`, with the right kind and keys. The two
+  together make "add a partitioned table" one allowlist line and one ordinary `db:generate`.
+  Spec: a fixture migration through the rewriter, pinned before and after; the refusal on an
+  inline `PRIMARY KEY`; the refusal on a live-table conversion. Added 2026-09-16. **Docs:**
+  `partitions.md` (the three steps: schema with a composite key, one allowlist line, `db:generate`),
+  `docs/setup/13` §13.6 (the hand-edit paragraph becomes "the generator does this; here is what it
+  refuses"), `docs/ai/rules/workflow.md` command block (`db:generate` now has two halves),
+  `docs/setup/26` (§21 and the generator are the two directions of one check).
+- [ ] `S2.26` **The tenant ceiling, measured** — decision 20 says "a few hundred tenants per node is
+  comfortable" and nothing in this plan proves it. `packages/infrastructure/tests/smoke/tenant-ceiling.spec.ts`,
+  under `pnpm smoke`, gated on `TENANT_CEILING=<n>`: creates `n` synthetic organizations through
+  `TenantPartitionSeed` (so `n × 7` tenant partitions and `n × 3 × 3` month children), then times
+  three things and prints them as a table — a pruned read on `notifications` for one tenant
+  (`EXPLAIN ANALYZE`, planning time and execution time separately), one `partitions` run over every
+  tenant (`S2.22`), and one `db:migrate` no-op — at `n` = 100, 500 and 2,000. The numbers go into
+  `partitions.md` as the ceiling with the date and the Postgres version, and decision 20's "a few
+  hundred" is replaced by them. **Reopen `S4.9` when** the pruned read's planning time passes 5 ms
+  or the runway run passes ten minutes at a tenant count a deployment could plausibly reach. Added
+  2026-09-17. **Docs:** `partitions.md`, `docs/opinions/data-and-scale.md` §4.2.
 - [-] `S2.9` **The reads get a partition bound** — filed by the `EXPLAIN` at `S2.5`, which found
   that three of the four hot reads over a partitioned table scan every month. The shape is a
   floor, not a window: a read that walks backwards in time needs a lower bound it can push to
@@ -1041,6 +1265,10 @@ allowlist entry (decision 14).
   name stays and the shape changes with `S2.11`: `{ table, period, objects: readonly
   { organizationId, key, rowCount, checksum }[] }`. `RecordingActivityArchiveGateway` returns it
   with an empty `objects`.
+  `revised: 2026-09-16` — the archive unit is the tenant-month child `<table>_<org>_<yyyy>_<mm>`
+  (decision 20): detach it, stream it as the one object `S2.11` already keys per tenant, record,
+  verify, drop. The `directDatabase` handle does N detaches per month instead of one, still one at
+  a time.
 
 - [ ] `S2.11` **Per-tenant objects, and an index that can be read back** — the key becomes
   `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`. `cold/` rather than `activity-archive/`
@@ -1080,6 +1308,9 @@ allowlist entry (decision 14).
   month and drops nothing. A month with no rows writes no object and records no row — an absent
   `partition_archive` row means "nothing to restore", never "not archived".
   **Docs:** `cold-storage.md`.
+  `revised: 2026-09-16` — "detach once per month, stream per tenant" collapses into one loop over
+  the tenant-month children of that month (decision 20); an empty child is detached and dropped
+  with no object and no row.
 
 - [ ] `S2.13` **Restore, proven by a round trip** —
   `restore(table, period, organizationId): Promise<RestoredMonth>` reads the object through
@@ -1092,6 +1323,9 @@ allowlist entry (decision 14).
   checkable rather than asserted.
   `cold.partition.restored` (`info`, `{ table, period, organizationId, rows }`).
   **Docs:** `cold-storage.md`.
+  `revised: 2026-09-16` — `restore(table, period, organizationId)` restores one tenant-month child
+  into the scratch table; the admin plan's `A2.18` attach step attaches it under the tenant's
+  LIST partition.
 
 - [ ] `S2.14` **`prune()` becomes archive-then-drop, for every table** —
   `MaintenanceConsumer.prune()` archives the month first and drops **only** what was written and
@@ -1125,6 +1359,10 @@ allowlist entry (decision 14).
   `{ period, reason: "disabled" | "behind" }`) — the month is archived and dropped regardless
   (decision 18: archive, drop, record the gap), so a forgotten switch costs a known hole, never an
   unbounded table. The code joins `core.events.ts` **and** `event-shape.ts`.
+  `revised: 2026-09-16` — prune runs per tenant-month with
+  `retention = tenantOverride ?? retention_policy row ?? allowlist` (admin plan `A2.19`);
+  `outbox_event` keeps the month-only path. The `projected_at` stamp is per tenant-month, which the
+  row already is.
 
 - [-] `S2.15` **Retention as data, not as a deploy** —
   `dropped: 2026-09-14 — decision 14.` The design is preserved under the same ID in
@@ -1147,6 +1385,9 @@ allowlist entry (decision 14).
   exists, and until then run by an operator: `pnpm db:partitions --sweep <organization_id>`, one
   flag on the script `S2.7` builds. The whole-plan check at the bottom of this file runs it that
   way. One sentence in `cold-storage.md` says a future delete use-case must enqueue it.
+  `revised: 2026-09-16` — the trigger exists: `PLATFORM-ADMIN-PLAN.md` `A2.20` deletes a tenant,
+  and the `retention` job sweeps `partition_archive` rows whose organization no longer exists
+  once `archived_at` is thirty days old. The `--sweep` flag stays for the operator.
 
 - [ ] `S2.17` **Docs** — new `packages/infrastructure/docs/reference/cold-storage.md`: the
   sequenced invariant and why the order is the job, the per-tenant key and the lifecycle rule,
@@ -1168,56 +1409,62 @@ is green against the reads as they are (decision 13);
 verified object behind it: archive a seeded month per table, confirm one object per organization in
 MinIO, confirm the `partition_archive` rows, restore one and watch the row count and id checksum
 match. `pnpm db:partitions --sweep <organization_id>` on a deleted seeded organization leaves no
-object of its behind.
+object of its behind. A new organization's partitions exist the instant its row does, in the same
+transaction; a spec inserting a tenant-owned row for an organization with no partitions fails
+with the Postgres error, never silently; `EXPLAIN` on every tenant-owned read shows one tenant
+partition; the projection and the reconcile report per tenant (`S2.20`–`S2.24`). A signup running
+while another connection reads `notifications` never makes that read wait on the signup's lock
+(`S2.21`); `TENANT_CEILING=500 pnpm smoke` prints the three timings (`S2.26`).
 
 ---
 
 ### Phase 3 — Virtual sharding: the seam, verified on one node
 
 **Goal.** Every routed query is placed by a key the strategy derives, resolved through a directory
-to one of 256 virtual shards and through the env map to one physical `Database`; the catalog and
+to one physical `Database`; the catalog and
 the routed transactions are distinct and a repository that crosses them throws on one node; the
 migrator, the seed, the health probe and every cross-tenant worker path loop the physical shards;
-and a second physical shard is one compose profile and three env lines away — with the proof of
+and a second physical shard is one compose profile and two env lines away — with the proof of
 that split filed, not claimed.
 
 **Design in one paragraph.** `ShardingStrategy.keyOf(principal)` runs once per request in a
 `shardMiddleware` after `principalMiddleware`, and once per job in the worker's consumers, and
 puts the `ShardKey` in `ShardScope` (an `AsyncLocalStorage<ShardKey>` beside `TransactionScope`).
-`DatabaseCluster` holds one `Database` per physical shard from `ShardMap` (parsed from
-`DATABASE_SHARD_<n>_*`, full coverage of 0–255, no overlap, unassigned → 0) and answers
-`catalog()`, `forKey(key)` (via `ShardResolver`, which reads `shard_assignments` on the catalog
-through a `CacheStore` read-through with a 300 s TTL and an explicit `invalidate(key)`), and
-`each()`. `TransactionScope` stores `{ client, placement }`; `BaseRepository` declares its
+`DatabaseCluster` holds one `Database` per physical shard from `DATABASE_SHARD_<n>_*` and answers
+`catalog()`, `forKey(key)` (via `ShardResolver`, which reads the node from `shard_assignments` on
+the catalog through a `CacheStore` read-through with a 300 s TTL and an explicit `invalidate(key)`),
+and `each()`. `TransactionScope` stores `{ client, placement }`; `BaseRepository` declares its
 placement and `this.db` resolves to the open transaction when placements agree, the right pool
 when no transaction is open, and an `InternalError` when they disagree. Two `PgUnitOfWork`
 instances — catalog and routed — are bound per slice in `Container`. `PgOrganizationFounder`
 writes the `shard_assignments` row inside the catalog transaction that creates the organization;
-a backfill migration writes one per existing organization. The shipped strategy and placement
-policy live in `packages/composition/src/shard/`, which is the fork's swap point. Verification is
-on one Postgres: the whole suite through the cluster, the tripwire spec, and the map/hash/scope
-unit specs; the two-node rehearsal spec is written, gated on `DATABASE_SHARD_1_URL`, and expected
-to fail on the catalog foreign keys until `S4.1`.
+a backfill migration writes one per existing organization, naming node 0. The shipped strategy
+lives in `packages/composition/src/shard/`, which is the fork's swap point; no placement policy
+ships until the split (decision 3, revised 2026-09-16). Verification is on one Postgres: the whole
+suite through the cluster, the tripwire spec, and the scope unit specs; the two-node rehearsal spec
+is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog foreign keys until
+`S4.1`.
 
 #### 3.0 Primitives and ports (`application`)
 
 - [ ] `S3.1` **Primitives** — `packages/application/src/primitive/shard.ts`: `ShardKey` (branded
-  string, `ShardKey.of(raw)` rejects empty), `VirtualShard` (`COUNT = 256`, `of(n)` validates
-  the range, branded number), `Placement` (`"catalog" | "local" | "routed"`), and
+  string, `ShardKey.of(raw)` rejects empty), `Placement` (`"catalog" | "local" | "routed"`), and
   `CatalogTable` — a frozen closed list of the catalog table names decision 5 lists (a list, not a
   number: it is sixteen while `activity_archive` exists and fifteen after its drop) plus
-  `LOCAL` for the two local ones; `placementOf(table)` derives the third case. The comment on
-  `COUNT` says it is never edited and why. **Docs:** `packages/application/docs/index.md` tree,
+  `LOCAL` for the two local ones; `placementOf(table)` derives the third case.
+  `revised: 2026-09-16` — no `VirtualShard`: the shard is the organization (decision 19).
+  **Docs:** `packages/application/docs/index.md` tree,
   `docs/opinions/vocabulary.md` (a "Shard vocabulary" row set).
 - [ ] `S3.2` **Ports** — `packages/application/src/port/sharding.strategy.ts`
-  (`keyOf(principal: Principal): ShardKey`), `shard-placement.policy.ts`
-  (`place(key: ShardKey): VirtualShard`), `shard.resolver.ts`
-  (`resolve(key): Promise<VirtualShard>`, `invalidate(key)`), `shard-assignment.repository.ts`
-  (`findByKey`, `save({ key, virtualShard })`, `all(page)` for the move job). No principal on
-  any of the last three: they are platform seams, like `MaintenanceGateway`. **Tripwire:**
+  (`keyOf(principal: Principal): ShardKey`), `shard.resolver.ts`
+  (`resolve(key): Promise<number>` — the physical node — and `invalidate(key)`),
+  `shard-assignment.repository.ts` (`findByKey`, `save({ key, node })`, `all(page)` for the move
+  job). No principal on the last two: they are platform seams, like `MaintenanceGateway`.
+  `revised: 2026-09-16` — three ports, not four: `shard-placement.policy.ts` is gone with the hash
+  (decision 3, revised); a policy earns its place at the split. **Tripwire:**
   `test-container.spec.ts` pins the sorted port list and counts `src/port/*.ts`, so this commit
   also updates `TestContainer` (`S3.13`). **Docs:** `packages/application/docs/reference/ports.md`
-  gains "The four shard ports".
+  gains "The three shard ports".
   `verified: 2026-09-13, second pass` — the tripwire is real: `test-container.spec.ts:30-37`
   reads `application/src/port/` with `readdirSync`, asserts the harness has exactly that many
   keys plus the four `NOT_PORTS`, and pins the sorted list. Four new port files break both in one
@@ -1226,49 +1473,24 @@ to fail on the catalog foreign keys until `S4.1`.
 #### 3.A Schema (`infrastructure`)
 
 - [ ] `S3.3` **`shard_assignments`** — `packages/infrastructure/src/pg/schema/shard.schema.ts`:
-  `shard_key text primary key`, `virtual_shard smallint not null`, `assigned_at`,
-  `moved_at` nullable; `shard_assignments_virtual_idx (virtual_shard)` for the move job. A
+  `shard_key text primary key`, `node smallint not null default 0`, `assigned_at`,
+  `moved_at` nullable; `shard_assignments_node_idx (node)` for the move job and the shard map. A
   catalog table, so no `organization_id` — §9's exemption set becomes derived from
   `CatalogTable` (`S3.18`), and this is the first table to rely on it. Migration
   `0024_*.sql` (`0023` went to `messages`, `S2.6`, 2026-09-15), generated, then hand-appended with the backfill:
-  `insert into shard_assignments (shard_key, virtual_shard) select id::text, <fnv1a-mod-256 in SQL> from organizations on conflict do nothing`
-  — the same function `S3.11` ships in TypeScript, with a spec asserting both agree on the
-  pinned vectors. **Docs:** `docs/setup/13` §13.3 modelling notes, `docs/opinions/vocabulary.md`
-  table list.
-  `verified: 2026-09-13` — "FNV-1a in SQL" is real, in both the forms a migration could use, and
-  both agree with `Math.imul(h, 0x01000193) >>> 0` on all ten pinned uuids (`206, 209, 145, 188,
-  117, 226, 249, 143, 255, 48`). No script fallback is needed. The backfill takes the recursive
-  CTE, so it stays one `insert … select` and leaves no function behind:
-
-  ```sql
-  with recursive fold(id, i, h) as (
-    select id, 0, 2166136261::bigint from organizations
-    union all
-    select f.id, f.i + 1,
-           ((f.h # get_byte(convert_to(f.id::text, 'UTF8'), f.i)::bigint) * 16777619) & 4294967295
-    from fold f where f.i < octet_length(convert_to(f.id::text, 'UTF8'))
-  )
-  insert into shard_assignments (shard_key, virtual_shard)
-  select id::text, (h % 256)::smallint from fold
-  where i = octet_length(convert_to(id::text, 'UTF8'))
-  on conflict do nothing;
-  ```
-
-  Two details the spec must pin, because getting either wrong is silent and re-places every
-  tenant: the mask `& 4294967295` after **every** multiply, not once at the end, and `#` on a
-  `bigint` — an `int` overflows the multiply before the mask can run.
+  `insert into shard_assignments (shard_key, node) select id::text, 0 from organizations on conflict do nothing`.
+  **Docs:** `docs/setup/13` §13.3 modelling notes, `docs/opinions/vocabulary.md` table list.
+  `superseded: 2026-09-16` — the FNV-1a verification this item carried (SQL and TypeScript agreeing
+  on ten pinned vectors, the recursive CTE, the mask after every multiply) is gone with the hash:
+  there is nothing to verify, the backfill is a constant (decision 19).
 
 #### 3.B Routing (`infrastructure`)
 
-- [ ] `S3.4` **`ShardMap`** — `packages/infrastructure/src/pg/primitive/shard-map.ts`: built from
-  `{ url, directUrl, shards: [{ index, url, directUrl, virtual: string }] }`; parses `virtual`
-  (`a-b`, `n`, comma-joined), rejects overlap and out-of-range, fills gaps with 0, exposes
-  `physicalOf(virtual): number` as a frozen 256-entry array. Unit spec covers coverage, overlap,
-  gaps, the single-shard default. **Docs:** `packages/infrastructure/docs/reference/sharding.md`
-  (new, `S3.21`).
+- [-] `S3.4` **`ShardMap`** — `dropped: 2026-09-16 — decision 19; there is no map, the directory
+  names the node.` The cluster reads `DATABASE_SHARD_<n>_*` for its handles and nothing else.
 - [ ] `S3.5` **`DatabaseCluster`** — `pg/primitive/database-cluster.ts`: one `Database` (and one
   direct `Database`, `S1.11`) per physical index; `catalog()`, `forKey(key)` (awaits
-  `ShardResolver.resolve` then `physicalOf`), `forVirtual(v)`, `each()`, `isHealthy()` per shard
+  `ShardResolver.resolve`, which is the node), `each()`, `isHealthy()` per shard
   as `Record<index, boolean>`, `close()`. It is the only file in `src/` that writes
   `new Database(` (`S3.18` §23). **Docs:** `sharding.md`.
 - [ ] `S3.6` **`ShardScope` and placement in `TransactionScope`** — `pg/transaction/shard-scope.ts`
@@ -1325,9 +1547,9 @@ to fail on the catalog foreign keys until `S4.1`.
   divergence is deliberate (a placement changes once a year) and the item should say so rather
   than let a reader think one of the two numbers is a typo.
 - [ ] `S3.10` **`PgShardAssignmentRepository`** — `pg/repository/pg-shard-assignment.repository.ts`,
-  `catalog` placement: `findByKey`, `save` (upsert, `moved_at` set when `virtual_shard` changes,
+  `catalog` placement: `findByKey`, `save` (upsert, `moved_at` set when `node` changes,
   then `resolver.invalidate(key)`), `all(page)` keyset over `shard_key`. Emits nothing; the
-  founder emits `shard.assignment.created` (`info`, `{ key, virtualShard }`). **Docs:** `sharding.md`.
+  founder emits `shard.assignment.created` (`info`, `{ key, node }`). **Docs:** `sharding.md`.
 - [ ] `S3.23` **`PgNotificationRecipientReader.conversationMembers` is split** — filed by the
   audit at `S3.18`, and it is the only cross-placement query in the repository. The method joins
   `conversation_members` (routed) to `users` and `memberships` (both catalog) in one statement, so
@@ -1355,11 +1577,9 @@ to fail on the catalog foreign keys until `S4.1`.
   and `docs/ai/rules/folders.md`. `organization-sharding.strategy.ts` →
   `OrganizationShardingStrategy.keyOf(principal) = ShardKey.of(principal.organizationId)`, with
   the `NIL` organization of `SystemPrincipal.platform()` rejected (platform work uses `each()`,
-  never a key). `hash-shard-placement.policy.ts` → `HashShardPlacementPolicy`: FNV-1a 32-bit over
-  the UTF-8 bytes of the key, `mod 256`; a spec pins ten `(key, virtualShard)` vectors so a
-  change to the function is a failing build, and asserts 10 000 v7 uuids land within ±25 % of
-  uniform per shard (the time-ordered prefix is why FNV over the whole string, not the first
-  bytes). **Docs:** `packages/composition/docs/index.md` tree, `sharding.md` ("how a fork shards
+  never a key). `revised: 2026-09-16` — no placement policy ships: the founder writes node 0
+  (decision 3, revised), and the hash policy this item described is gone with the 256 layer
+  (decision 19). **Docs:** `packages/composition/docs/index.md` tree, `sharding.md` ("how a fork shards
   by something else": one strategy class, one key column on its tables, nothing else).
   `corrected: 2026-09-13, second pass` — "the `NIL` organization of `SystemPrincipal.platform()`
   rejected (platform work uses `each()`, never a key)" assumes platform work never touches a
@@ -1374,14 +1594,15 @@ to fail on the catalog foreign keys until `S4.1`.
   worker path out of four, and rejecting NIL throws on the other three. The strategy stays
   principal-based for the web edge; `S3.15` derives the worker's key from the payload.
 - [ ] `S3.12` **`Container`** — `container.config.ts` `database` becomes
-  `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl, virtual }[] }`; both
+  `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl }[] }`; both
   `env.ts` collect `DATABASE_SHARD_<n>_*` with a `z.preprocess` over `process.env` keys (still
-  the one reader). `Container` builds `ShardMap` → `DatabaseCluster`, `ShardScope`,
+  the one reader). `Container` builds `DatabaseCluster`, `ShardScope`,
   `PgShardResolver`, `PgShardAssignmentRepository`, both `PgUnitOfWork`s, binds
-  `OrganizationShardingStrategy` and `HashShardPlacementPolicy`, passes the catalog unit of work
+  `OrganizationShardingStrategy`, passes the catalog unit of work
   to `container.rbac`, `container.member`, `container.apiKey`, the enrollers, claimer and founder,
   and the routed one to `container.notification`, `container.messaging`, `container.ai`;
-  `PgOrganizationFounder.found` writes the assignment via the policy inside its transaction;
+  `PgOrganizationFounder.found` writes the assignment `{ key, node: 0 }` inside its transaction
+  (`revised: 2026-09-16` — no policy, no `ShardMap`, no `virtual` in the config; decision 19);
   `health()` reports `database: Record<index, boolean>` and `dispose()` closes the cluster last.
   `Container` exposes `shards: ShardScope`, `sharding: ShardingStrategy` and `cluster` for the
   edges (`S3.14`, `S3.15`). **Docs:** `docs/setup/17`, `packages/composition/docs/reference/container.md`.
@@ -1414,8 +1635,9 @@ to fail on the catalog foreign keys until `S4.1`.
   only; `ConversationAccess` reads `ConversationRepository` alone. Decision 6 has nothing to
   forgive in the use-cases.
 - [ ] `S3.13` **`TestContainer` and fakes** — `packages/composition/src/fake/`: `FakeShardResolver`
-  (a `Map`), `FakeShardAssignmentRepository`, `FixedShardingStrategy`, `FixedShardPlacementPolicy`;
-  `TestPorts` gains the four; `test-container.spec.ts` pinned list updated. **Docs:**
+  (a `Map`), `FakeShardAssignmentRepository`, `FixedShardingStrategy`;
+  `TestPorts` gains the three (`revised: 2026-09-16` — no placement policy); `test-container.spec.ts`
+  pinned list updated. **Docs:**
   `packages/composition/docs/index.md`.
   `corrected: 2026-09-14` — `S3.22` says "every Postgres suite now runs through `DatabaseCluster`
   with one shard" and no item builds that. `tests/support/database.ts:11` returns a bare
@@ -1485,8 +1707,9 @@ to fail on the catalog foreign keys until `S4.1`.
   put the shard index in both, and `S4.2` or `S4.3` would then leave every key and row naming the
   shard the tenant had left; the partition is per shard, the object is per tenant, only the loop
   is per shard);
-  `PgActivityReplayReader` reads per shard and the ClickHouse projection gains a `shard UInt8`
-  column so "ask the destination for its last row" is per shard (`docs/setup/15`);
+  the projection loops tenants (`S2.23`), resolving each tenant's node through the resolver, and
+  needs no per-shard checkpoint and no `shard` column in ClickHouse (`revised: 2026-09-16` — the
+  first text keyed the checkpoint per physical shard);
   `PgNotificationPreferenceRepository.organizationsWithDigest` runs per shard and the digest
   fan-out sets the key per organization. Each keeps its query count; the loop is over shards, not
   tenants. **Docs:** `apps/worker/docs/reference/schedules.md`, `consumers.md`,
@@ -1559,6 +1782,10 @@ to fail on the catalog foreign keys until `S4.1`.
   the statement; the rule stays in `pgbouncer.md` and the pooled smoke spec is the detector. And
   `TENANT_EXEMPT` gains exactly one line from this plan, `shard_assignments` — `partition_archive`
   leads with the tenant and needs none.
+  `revised: 2026-09-16` — §9 and §17 read the tenant column from one constant `TENANT_COLUMN` at
+  the top of the script rather than the literal `organization_id` in two places, so a fork
+  sharding by another column edits it once; its value is asserted equal to `TenantKey` on the
+  allowlist, the way §9 parses that file.
 
 #### 3.G The rehearsal kit (`infra`, `infrastructure`)
 
@@ -1566,10 +1793,11 @@ to fail on the catalog foreign keys until `S4.1`.
   image, same `init.sql`, port `${POSTGRES_SHARD_1_PORT:-5433}`, own volume) and
   `pgbouncer-shard-1` on `:6433`; root script `infra:up:sharded`; `.env.example` gains a commented
   block `DATABASE_SHARD_1_URL=postgres://…:6433/ratchet`, `DATABASE_SHARD_1_DIRECT_URL`,
-  `DATABASE_SHARD_1_VIRTUAL=128-255`. **Docs:** `docs/infra/reference/compose.md`, `docs/setup/11`.
+  and no range line (`revised: 2026-09-16` — the directory names the node). **Docs:**
+  `docs/infra/reference/compose.md`, `docs/setup/11`.
 - [ ] `S3.20` **The rehearsal spec** — `packages/infrastructure/tests/smoke/sharded.spec.ts`,
   `describe.skipIf(!process.env.DATABASE_SHARD_1_URL)`: migrates both shards, creates two
-  organizations whose assignments put them on virtual 3 and virtual 200, sends one message in
+  organizations whose assignment rows, written by the spec, name node 0 and node 1, sends one message in
   each through `MessagingUseCases`, asserts each `messages` row exists on exactly its physical
   shard and that `shard_assignments` on the catalog has both rows. **Expected to fail on
   `notifications.user_id → users` and `… organization_id → organizations` on shard 1 until
@@ -1591,8 +1819,13 @@ to fail on the catalog foreign keys until `S4.1`.
 #### 3.H Docs and verify
 
 - [ ] `S3.21` **Docs** — new `packages/infrastructure/docs/reference/sharding.md` (the key, the
-  directory, the map, the three placements and the tripwire, the two unit-of-works, the edges,
-  the loops, how a fork changes the strategy, rehearsing the split, what §4 still owes),
+  directory, the three placements and the tripwire, the two unit-of-works, the edges,
+  the loops, how a fork shards by something else — the four edits and nothing else: (1) `TenantKey`
+  on the allowlist and the column it names on every tenant-owned table; (2) one strategy class in
+  `composition/src/shard/`, `keyOf(principal)`; (3) `TENANT_COLUMN` in `check-architecture.mjs`
+  (`S3.18`); (4) `S3.15`'s worker-side key derivation from job data; the directory's `shard_key` is
+  opaque text and does not change, and the generator and the seed read the alias — rehearsing
+  the split, what §4 still owes),
   registered in `reference/meta.json` and `docs/index.md`. `docs/opinions/data-and-scale.md`:
   new §4.5 "Route by key from the first line" (the seam-early argument, quoting
   `simplicity.md`'s exception), §5 row 7 split into "7a — the seam (built; this plan)" and
@@ -1608,7 +1841,7 @@ to fail on the catalog foreign keys until `S4.1`.
   `pnpm check:architecture` 23/23 no skip; `pnpm typecheck && pnpm lint && pnpm test`;
   `pnpm infra:up && pnpm db:migrate && pnpm db:seed`; `pnpm --filter @loadbearing/infrastructure
   test` (every Postgres suite now runs through `DatabaseCluster` with one shard); `pnpm smoke`;
-  then `pnpm infra:up:sharded` with the three env lines and `pnpm smoke` again to watch
+  then `pnpm infra:up:sharded` with the two env lines and `pnpm smoke` again to watch
   `sharded.spec.ts` fail on the foreign key and nothing else.
 
 **Exit.** With one physical shard: every suite green, `check:architecture` 23/23; a repository
@@ -1616,7 +1849,7 @@ given the wrong placement fails its first spec with the tripwire's message; an o
 key in scope to a routed procedure is impossible by construction (`authed` chains the middleware)
 and a direct `routedUnitOfWork.run` without one throws; `shard_assignments` holds one row per
 organization after `db:migrate` and gains one on every organization created; `curl /health` shows
-`database: { "0": true }`. With `infra:up:sharded` and the three env lines: `db:migrate` migrates
+`database: { "0": true }`. With `infra:up:sharded` and the two env lines: `db:migrate` migrates
 both, `/health` shows two shards, and `sharded.spec.ts` fails on exactly the foreign-key
 constraint `S4.1` names.
 
@@ -1640,16 +1873,15 @@ constraint `S4.1` names.
   option (a) produces: `messages.author_id` (`messaging.schema.ts:101-103`) and
   `notifications.event_id` (`notification.schema.ts:33-35`). Option (a) drops nine constraints
   and has to replace nine cascades with one sweep.
-- [ ] `S4.2` **Tenant move** as a `MaintenanceConsumer` job: `shard_assignments.moving_to`,
-  copy every routed table's rows for the key in keyset batches, verify counts per table, flip
-  `virtual_shard`, `resolver.invalidate`, delete from the source after a grace period. The write
-  freeze during the flip is a `ForbiddenError` from `shardMiddleware` for that key.
-- [ ] `S4.3` **Virtual-shard move** — the same job over every key in a virtual shard, then the
-  `DATABASE_SHARD_<n>_VIRTUAL` edit; the map refuses a range that still has rows on the old side.
-  Filed with it (2026-09-14): the ClickHouse checkpoint `S3.16` keys per physical shard does not
-  survive the move — moved rows carry an `occurred_at` older than the destination's checkpoint and
-  are never projected. The move job re-projects the moved keys, or the checkpoint is keyed per
-  virtual shard; not decided.
+- [ ] `S4.2` **Tenant move** as a `MaintenanceConsumer` job: `shard_assignments.moving_to` (a node),
+  create the tenant's partitions on the target (`ensureTenantPartitions`, `S2.21`), copy each tenant
+  partition's rows in keyset batches, verify counts per table, flip `node`, `resolver.invalidate`,
+  drop the source tenant partitions after a grace period. The write freeze during the flip is a
+  `ForbiddenError` from `shardMiddleware` for that key. `revised: 2026-09-16` — decision 19; and
+  `S4.3`'s filed ClickHouse note is resolved by `S2.23`: the checkpoint is per tenant and ClickHouse
+  is not per node, so a moved tenant resumes where it was.
+- [-] `S4.3` **Virtual-shard move** — `dropped: 2026-09-16 — decision 19; a virtual shard is one
+  tenant, and S4.2 moves it.` The ClickHouse checkpoint note it carried is resolved in `S4.2`.
 - [ ] `S4.4` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
   the dashboard and analytics reads moved onto it; §5 row 3. The admin's view of it — health, lag,
   and the switch — is `A4.1`–`A4.2` in `PLATFORM-ADMIN-PLAN.md` and waits on this.
@@ -1662,6 +1894,15 @@ constraint `S4.1` names.
   waiting for the trigger (decision 17).
 - [ ] `S4.8` **Load test** the routed paths at 10× against the sharded compose profile before any
   of this is called production-ready.
+- [ ] `S4.9` **A pooled partition for the long tail** — filed 2026-09-17 with `S2.26`. Every tenant
+  costs about fifty relations whether it holds ten rows or ten million, and the `personal`
+  enrolment mode lets anyone create one. A list partition may hold many values, so small tenants
+  can share one `<table>_pool` partition (`for values in (a, b, c, …)`, months underneath as usual)
+  and graduate to their own when they cross a size line: create the new partition, copy the
+  tenant's rows, detach the pool, recreate it without that value, re-attach — a rare operation
+  under a write freeze for that tenant, the same freeze `S4.2` uses. `PartitionedTable` gains
+  nothing; the seed and the maintenance gateway learn a second placement, "pool", and the directory
+  row records which. Not built until `S2.26`'s number says it is needed.
 
 ---
 
@@ -1774,3 +2015,6 @@ can silently disagree.
 | 2026-09-14 | @sami | **Third pass: four decisions, and every open item read against `5777eba`.** `S2.9` dropped with its measurements kept (decision 13); retention stays on the allowlist and `retention_policy` is deferred with `S5.6` to a new `DB-SCALING-DEFERRED.md`, IDs kept (14) — which reverses the row above that said the number "moves into a `retention_policy` row"; Phase 3 stays in full (15); all three tables archive (16). Corrections on open items: decision 5 names `partition_archive` as `catalog` and counts twenty-four tables; the shard segment is out of the cold key and `partition_archive` grows no shard column, because a tenant move would orphan both; `SystemRoleSeed` is the twenty-third `BaseRepository` and §22 globs all of `pg/`; `ArchivedPartition` is kept and reshaped, `ArchivedMonth` never existed; `S2.14` deletes the `archive` job, `ArchiveSchedule` and `RETAIN_MONTHS`; one code for an archived month, not two; `S2.16` had no trigger and gets `db:partitions --sweep`; `S3.13` builds the single-shard test cluster `S3.22` assumed; the session-`SET` grep is decided against; `S4.3` files the ClickHouse checkpoint gap; `S5.1` names its per-page read cost; new `S2.18` makes §15 read source comments. Decision 12's count is still twenty-three. A `## Resume here` section now opens the file. No premise was re-measured against a live stack; this pass read the tree, and `check:architecture` and `lint` stay green over the edit |
 | 2026-09-14 | @sami | Decision 14 revised: `S2.15` and `S5.6` reopened by `PLATFORM-ADMIN-PLAN.md`, which builds the platform tier on RBAC and makes retention, cold storage and the ClickHouse policy rows an administrator edits. The allowlist stays the default. `S4.4` gains a pointer to the replica panel filed behind it |
 | 2026-09-15 | @sami | **Fourth pass, with the admin plan's second pass.** Decision 17: `messages` is partitioned now — `S2.6` rewritten from a recorded exception into a build item (the dedupe moves to `CacheStore.setIfAbsent`, the PK becomes `(id, created_at)`, migration `0023` in place because the kit ships no messages), `S4.7` absorbed, `S3.3` moves to `0024`. Decision 18: `partition_archive` gains `bytes`, `action_counts` and `projected_at` with a partial index (`S2.11`), and `prune()` stamps `projected_at` when the projection has passed the month or emits `analytics.projection.gap` and drops anyway (`S2.14`). New `S2.19`: `MaintenanceGateway.partitionsBefore`, the catalog read behind the admin plan's retention preview. `S3.16`'s per-shard loop and `S2.7`'s script cover `messages` with no text change; `S3.18`'s §22/§23 counts do not change. Read against `5edd129`, no live stack |
+| 2026-09-16 | @sami | **Fifth pass: the shard is the organization, the tenant is a partition.** Decision 19 reverses 2 and revises 3 and 15: one virtual shard per tenant, the directory names the node, no hash, no range map, node 0 until the split — `S3.4` and `S4.3` dropped, `S3.1` `S3.2` `S3.3` `S3.5` `S3.10` `S3.11` `S3.12` `S3.13` `S3.16` `S3.19` `S3.20` `S3.21` revised, three env lines become two, `S4.2` moves tenant partitions. Decision 20: the seven tenant-owned tables are LIST-partitioned by tenant with months underneath for three — new `S2.20` (the layout, the composite FKs, the eight-entry allowlist, one migration), `S2.21` (`TenantPartitionSeed`, run inside the founder's transaction), `S2.22` (the maintenance gateway learns two levels, and would otherwise skip every drop silently), `S2.23` (the projection goes per tenant, which dissolves `S4.3`'s checkpoint gap and the rule's one exception), `S2.24` (pruning per tenant asserted); 2.C archives, restores and prunes per tenant-month. Per-tenant retention and tenant deletion live in the admin plan (`A2.19`, `A2.20`). Read against `d9cd25b`, no live stack |
+| 2026-09-16 | @sami | **Same day, second row: the layout becomes one allowlist line.** New `S2.25`, a generator that runs as the second half of `db:generate`, rewrites the freshly generated migration's `CREATE TABLE` for allowlisted tables into `PARTITION BY` form, checks the composite key rather than inventing it, and refuses to convert a live table. `S2.20` reshaped: `tenant: boolean` becomes `tenantKey: TenantKey \| null` with the alias declared once, and the migration creates parents only — `migrate.ts` runs `TenantPartitionSeed` for every organization afterwards (`S2.21`), so one implementation creates partitions everywhere. `S3.18` reads the tenant column from one constant; `S3.21` writes down the four edits a fork makes to shard by something else. The admin plan records the line: structure is a file, policy is the dashboard |
+| 2026-09-17 | @sami | Four improvements from a review of the tenant layout. `S2.21` and `S2.22` create children standalone and `attach` them — `create table … partition of` takes an `ACCESS EXCLUSIVE` lock on the parent and would have stalled every read for the length of every signup; the runway job paces itself for the same reason. New `S2.26` measures the tenant ceiling decision 20 only asserted, and files `S4.9`, a pooled partition for the long tail the `personal` enrolment mode invites. The admin plan's tenant deletion now forgets the tenant in ClickHouse too, and gains an export action |
