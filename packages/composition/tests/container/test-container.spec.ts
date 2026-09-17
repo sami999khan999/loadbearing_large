@@ -52,6 +52,7 @@ describe("TestContainer", () => {
       "mailPublisher",
       "mailRenderer",
       "maintenance",
+      "organizations",
       "outbox",
       "queue",
       "realtime",

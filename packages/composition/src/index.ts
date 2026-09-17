@@ -20,6 +20,7 @@ export {
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
   InMemoryLogReader,
+  InMemoryOrganizationReader,
   InMemoryOutboxGateway,
   InMemoryStorageGateway,
   InMemoryVectorStore,

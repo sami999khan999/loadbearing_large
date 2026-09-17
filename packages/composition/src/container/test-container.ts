@@ -4,6 +4,7 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
   InMemoryLogReader,
+  InMemoryOrganizationReader,
   InMemoryOutboxGateway,
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
@@ -40,6 +41,7 @@ import {
   type MailPublisher,
   type MailRenderer,
   type MaintenanceGateway,
+  type OrganizationReader,
   type OutboxGateway,
   type QueuePublisher,
   type RealtimePublisher,
@@ -72,6 +74,7 @@ export interface TestPorts {
   readonly mailPublisher: MailPublisher;
   readonly mailRenderer: MailRenderer;
   readonly maintenance: MaintenanceGateway;
+  readonly organizations: OrganizationReader;
   readonly outbox: OutboxGateway;
   readonly realtime: RealtimePublisher;
   readonly realtimeSubscriber: RealtimeSubscriber;
@@ -121,6 +124,7 @@ export class TestContainer {
       mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
+      organizations: overrides.organizations ?? new InMemoryOrganizationReader(),
       outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
       // Deliberately not connected to each other. A spec that wants a published frame to
       // arrive builds one `InMemoryRealtimeHub` and passes both fakes over it.

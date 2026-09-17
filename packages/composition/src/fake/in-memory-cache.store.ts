@@ -15,6 +15,14 @@ export class InMemoryCacheStore extends CacheStore {
     return Promise.resolve();
   }
 
+  // Single-threaded, so the check and the write cannot interleave here the way `NX`
+  // stops them interleaving on the server.
+  public override setIfAbsent<T>(key: string, value: T, ttlSeconds: number): Promise<boolean> {
+    if (this.entries.has(key)) return Promise.resolve(false);
+    this.entries.set(key, { value, ttlSeconds });
+    return Promise.resolve(true);
+  }
+
   public override delete(key: string): Promise<void> {
     this.entries.delete(key);
     return Promise.resolve();

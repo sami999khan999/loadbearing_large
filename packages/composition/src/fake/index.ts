@@ -3,6 +3,7 @@ export { InMemoryActivityReplayReader } from "./in-memory-activity-replay.reader
 export { InMemoryAnalyticsProjector } from "./in-memory-analytics.projector.js";
 export { InMemoryCacheStore } from "./in-memory-cache.store.js";
 export { InMemoryLogReader } from "./in-memory-log.reader.js";
+export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
 export { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";

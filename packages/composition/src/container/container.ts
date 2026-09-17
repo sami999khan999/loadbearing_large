@@ -66,6 +66,7 @@ import {
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
   type OrganizationFounder,
+  type OrganizationReader,
   type OutboxGateway,
   PgActivityArchiveGateway,
   PgActivityLogger,
@@ -84,6 +85,7 @@ import {
   PgNotificationRecipientReader,
   PgNotificationRepository,
   PgOrganizationFounder,
+  PgOrganizationReader,
   PgOutboxGateway,
   PgOutboxPublisher,
   PgPersonalOrganizationEnroller,
@@ -242,6 +244,9 @@ export class Container {
   // No principal, because it owns no tenant's rows. Reachable only from the worker's
   // schedules, never from a request path.
   public readonly maintenance: MaintenanceGateway;
+  // The one read in this system that is cross-tenant by definition: every per-tenant
+  // loop the worker runs starts from it.
+  public readonly organizations: OrganizationReader;
   public readonly activityArchive: ActivityArchiveGateway;
   // Always built: replaying the audit trail is useful with or without a derived store
   // behind it, and a reconciliation against nothing is simply a count.
@@ -373,6 +378,7 @@ export class Container {
       statementTimeoutMs: config.database.statementTimeoutMs,
     });
     this.maintenance = new PgMaintenanceGateway(this.database, this.transactions, this.unitOfWork);
+    this.organizations = new PgOrganizationReader(this.database, this.transactions);
 
     // ── the swap points ──
     // Each reads a `driver` rather than naming a class: the alternative is named in a
@@ -523,6 +529,8 @@ export class Container {
         this.eventPublisher,
         this.realtime,
         this.unitOfWork,
+        this.cache,
+        this.clock,
       ),
       edit: new EditMessageUseCase(
         this.authorizer,

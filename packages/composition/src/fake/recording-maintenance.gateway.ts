@@ -1,14 +1,28 @@
-import { MaintenanceGateway, type PartitionedTableName, type SweepOutcome } from "../import.js";
+import {
+  MaintenanceGateway,
+  type OrganizationId,
+  type PartitionEstimate,
+  type PartitionedTableName,
+  type SweepOutcome,
+} from "../import.js";
 
 export interface EnsuredPartitions {
   readonly table: PartitionedTableName;
+  readonly organizationId: OrganizationId | null;
   readonly from: Date;
   readonly months: number;
 }
 
 export interface DroppedPartitions {
   readonly table: PartitionedTableName;
+  readonly organizationId: OrganizationId | null;
   readonly cutoff: Date;
+}
+
+export interface RunwayCheck {
+  readonly table: PartitionedTableName;
+  readonly organizationId: OrganizationId | null;
+  readonly from: Date;
 }
 
 // Records rather than counts, for the same reason `RecordingActivityLogger` does: the
@@ -17,13 +31,18 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   private readonly sweeps: Date[] = [];
   private readonly partitionRuns: EnsuredPartitions[] = [];
   private readonly dropRuns: DroppedPartitions[] = [];
-  private readonly runwayChecks: { table: PartitionedTableName; from: Date }[] = [];
+  private readonly runwayChecks: RunwayCheck[] = [];
+  private readonly tenantRuns: OrganizationId[] = [];
+  private readonly tenantDrops: OrganizationId[] = [];
 
   public constructor(
     private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
     // What `monthlyPartitionsAfter` answers. The default is healthy, so a spec that does
     // not care about the runway does not have to say so.
     private readonly monthsAhead = 2,
+    // What `partitionsBefore` returns. Empty, so the preview reads "nothing to archive"
+    // unless a spec is about the preview.
+    private readonly estimates: readonly PartitionEstimate[] = [],
   ) {
     super();
   }
@@ -33,26 +52,48 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
     return Promise.resolve(this.outcome);
   }
 
-  public override ensureMonthlyPartitions(
-    table: PartitionedTableName,
-    from: Date,
-    months: number,
+  public override ensureTenantPartitions(
+    organizationId: OrganizationId,
   ): Promise<readonly string[]> {
-    this.partitionRuns.push({ table, from, months });
+    this.tenantRuns.push(organizationId);
     return Promise.resolve([]);
   }
 
-  public override monthlyPartitionsAfter(table: PartitionedTableName, from: Date): Promise<number> {
-    this.runwayChecks.push({ table, from });
+  public override dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
+    this.tenantDrops.push(organizationId);
+    return Promise.resolve([]);
+  }
+
+  public override ensureMonthlyPartitions(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    from: Date,
+    months: number,
+  ): Promise<readonly string[]> {
+    this.partitionRuns.push({ table, organizationId, from, months });
+    return Promise.resolve([]);
+  }
+
+  public override monthlyPartitionsAfter(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    from: Date,
+  ): Promise<number> {
+    this.runwayChecks.push({ table, organizationId, from });
     return Promise.resolve(this.monthsAhead);
   }
 
   public override dropMonthlyPartitionsBefore(
     table: PartitionedTableName,
+    organizationId: OrganizationId | null,
     cutoff: Date,
   ): Promise<readonly string[]> {
-    this.dropRuns.push({ table, cutoff });
+    this.dropRuns.push({ table, organizationId, cutoff });
     return Promise.resolve([]);
+  }
+
+  public override partitionsBefore(): Promise<readonly PartitionEstimate[]> {
+    return Promise.resolve(this.estimates);
   }
 
   public swept(): readonly Date[] {
@@ -67,7 +108,15 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
     return this.dropRuns;
   }
 
-  public runwayChecked(): readonly { table: PartitionedTableName; from: Date }[] {
+  public runwayChecked(): readonly RunwayCheck[] {
     return this.runwayChecks;
+  }
+
+  public tenantsEnsured(): readonly OrganizationId[] {
+    return this.tenantRuns;
+  }
+
+  public tenantsDropped(): readonly OrganizationId[] {
+    return this.tenantDrops;
   }
 }
