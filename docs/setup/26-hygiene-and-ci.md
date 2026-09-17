@@ -366,9 +366,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty architectural assertions
+## Step 26.4 — The twenty-one architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Eighteen greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-one greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -780,6 +780,31 @@ window in which a duplicate could appear. All three have run everywhere they are
 **This history is applied to an empty database and is not replayed onto a populated one** — the
 guarantee the assertion makes is about every migration written from here on.
 
+### 21 — Every partitioned table is on the allowlist, with the same column
+
+```bash
+# packages/infrastructure/migrations/*.sql: a CREATE TABLE ... PARTITION BY RANGE whose table is
+# absent from PartitionedTable.ALL, or whose column disagrees with it, or whose PRIMARY KEY omits
+# that column — plus any DEFAULT partition. Then the inverse: an allowlist entry that no
+# migration partitions.
+```
+
+**Why.** `PartitionedTable.ALL` is what the monthly schedule loops and what `MaintenanceGateway`'s
+closed union derives from. The two halves fail in opposite directions and neither is loud. A table
+partitioned in a migration but missing from the list keeps getting partitions until that migration's
+own runway runs out and then stops, so the notice arrives months later as an insert failing on a
+month nobody created. An entry on the list that no migration partitions is the reverse: the schedule
+issues `CREATE TABLE … PARTITION OF` against an ordinary table and Postgres refuses every one.
+
+**The primary-key half only ever fires on a migration nobody applied**, because Postgres itself
+rejects a partitioned table whose key omits the partition column. It is worth checking anyway
+because this is the one kind of DDL the repository writes by hand: the failure it catches is a file
+in review, not a database in production.
+
+**No `DEFAULT` partition, on purpose.** A catch-all absorbs the rows of a month whose partition is
+missing, which turns a loud insert failure into a silent one, and attaching the real partition
+afterwards means moving those rows back out of it.
+
 ---
 
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
@@ -789,7 +814,7 @@ pnpm check:contrast   # node tooling/scripts/check-contrast.mjs
 OK 117 pairings meet WCAG AA and 108 colours are inside sRGB, across every theme and mode.
 ```
 
-**Fifteen assertions above read source; this one computes.** It resolves the twelve colour names
+**Twenty-one assertions above read source; this one computes.** It resolves the twelve colour names
 ([Opinions · Colour](../ai/rules/color.md)) for every theme in every mode, walks the pairings
 `packages/ui/src/theme/class/` actually produces, and fails on a contrast ratio under WCAG AA, a
 name a theme forgot to declare, or an `oklch()` value outside the sRGB gamut.

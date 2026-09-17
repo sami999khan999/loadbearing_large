@@ -821,7 +821,7 @@ retention number moves out of the code into a row an operator can edit without a
 
 #### 2.B The guard and the proof (`tooling`, `infrastructure`)
 
-- [ ] `S2.4` **§21 in `check-architecture.mjs`** — for each `migrations/*.sql`, every
+- [x] `S2.4` **§21 in `check-architecture.mjs`** — for each `migrations/*.sql`, every
   `CREATE TABLE "<t>" (…) PARTITION BY RANGE ("<c>")`: `<t>` in `PartitionedTable.ALL` (parsed
   from the primitive file the way §9 parses schema blocks) with `column === <c>`; the `PRIMARY
   KEY` in that statement names `<c>`; no `… DEFAULT` partition of `<t>` anywhere in
@@ -836,6 +836,20 @@ retention number moves out of the code into a row an operator can edit without a
   same statement carries the column, and no `DEFAULT` partition exists in any migration. The
   count edit is four sites in three files, not one — decision 12 names them — and
   `workflow.md:14` goes from `18` to twenty-three, not from twenty.
+  `done: 2026-09-17` — §21 built and green at 21/21. Two departures from the text, both
+  deliberate. The count went to **twenty-one now** rather than waiting to go straight to
+  twenty-three at the end of Phase 3: the tool prints its own count, so docs saying twenty while
+  it prints 21 is exactly the drift `workflow.md` lists as one of the four things that rot
+  quietly. All four sites decision 12 names are updated, plus two more in `docs/setup/26` that
+  were already stale by three ("Eighteen greps can", "Fifteen assertions above read source").
+  And the `CREATE TABLE` body is **tempered against a second `CREATE TABLE`** rather than merely
+  lazy: written lazily it bound the first table in a file to the first `PARTITION BY` after it,
+  and reported `0017` as partitioning `notification_preferences`. The assertion caught its own
+  bug on the first run, which is the only reason the wrong table name was ever visible.
+  Proven to fail, not just to pass: the allowlist column for `notifications` was changed to
+  `occurred_at` and the run reported the mismatch by name before it was put back.
+  `docs/opinions/index.md`'s "Where these rules are enforced" table stops at §13 and was already
+  missing §14–§20; left alone here rather than widened silently, and worth its own small item.
 - [ ] `S2.5` **Pruning is proven** — `packages/infrastructure/tests/pg/partition-pruning.spec.ts`
   (integration, needs Postgres): for each of the three tables, insert into two months, run the
   slice's keyset query with a one-month window under `EXPLAIN (FORMAT JSON)`, assert exactly one

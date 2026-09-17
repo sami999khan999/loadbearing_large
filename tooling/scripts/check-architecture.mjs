@@ -1041,6 +1041,93 @@ assert("every migration is safe on a table that already holds rows", (failures) 
   return null;
 });
 
+// ── 21 — every partitioned table is on the allowlist, and every entry is real ─
+//
+// `PartitionedTable.ALL` is what the monthly schedule loops and what the maintenance
+// gateway's closed union derives from. A table partitioned in a migration but missing
+// from that list stops getting partitions the month its own migration's runway ends,
+// and the notice is a failed insert. The inverse is the same failure from the other
+// side: an entry with no `PARTITION BY` anywhere names a table Postgres will reject
+// every `CREATE TABLE ... PARTITION OF` against. See docs/setup/13 and
+// docs/opinions/data-and-scale.md §4.2.
+
+// The allowlist as `{ table -> column }`. Entries name their tables through module
+// constants, so those are resolved first; a quoted literal is read directly.
+function partitionedAllowlist() {
+  const file = join(ROOT, "packages/application/src/primitive/partitioned-table.ts");
+  if (!existsSync(file)) return null;
+
+  const source = readFileSync(file, "utf8");
+  const constants = new Map(
+    [...source.matchAll(/^const (\w+) = "([a-z_]+)";$/gm)].map((match) => [match[1], match[2]]),
+  );
+
+  const entries = new Map();
+
+  for (const match of source.matchAll(/\bname:\s*(\w+|"[a-z_]+")\s*,\s*column:\s*"([a-z_]+)"/g)) {
+    const [, token = "", column = ""] = match;
+    const table = token.startsWith('"') ? token.slice(1, -1) : constants.get(token);
+    if (table) entries.set(table, column);
+  }
+
+  return entries;
+}
+
+assert("every partitioned table is on the allowlist, with the same column", (failures) => {
+  const dir = join(ROOT, "packages/infrastructure/migrations");
+  if (!existsSync(dir)) return "no migrations/ directory";
+
+  const allowed = partitionedAllowlist();
+  if (!allowed) return "packages/application has no partitioned-table.ts yet";
+  if (allowed.size === 0) return "PartitionedTable.ALL parsed as empty";
+
+  const partitioned = new Set();
+
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()) {
+    const sql = readFileSync(join(dir, file), "utf8");
+
+    // The body is tempered against `CREATE TABLE` so the match cannot run past the end
+    // of its own statement: a lazy `[\s\S]*?` binds the first table in the file to the
+    // first `PARTITION BY` after it, which reported the wrong table name for 0017.
+    for (const match of sql.matchAll(
+      /CREATE TABLE "([a-z_]+)" \(((?:(?!CREATE TABLE)[\s\S])*?)\n\) PARTITION BY RANGE \("([a-z_]+)"\)/g,
+    )) {
+      const [, table = "", body = "", column = ""] = match;
+      partitioned.add(table);
+
+      const declared = allowed.get(table);
+
+      if (declared === undefined) {
+        failures.push(`${file} partitions ${table}, which PartitionedTable.ALL does not name`);
+        continue;
+      }
+      if (declared !== column) {
+        failures.push(`${file} partitions ${table} by ${column}; the allowlist says ${declared}`);
+      }
+
+      // Postgres rejects a partitioned table whose primary key omits the partition key,
+      // so this only ever fires on a migration nobody applied — which is the point.
+      const key = body.match(/PRIMARY KEY\s*\(([^)]*)\)/i)?.[1] ?? "";
+      if (!key.includes(`"${column}"`)) {
+        failures.push(`${file}: ${table}'s primary key does not carry ${column}`);
+      }
+    }
+
+    for (const match of sql.matchAll(/PARTITION OF "([a-z_]+)"\s+DEFAULT/gi)) {
+      failures.push(`${file} gives ${match[1]} a DEFAULT partition, which hides a missing month`);
+    }
+  }
+
+  for (const table of allowed.keys()) {
+    if (partitioned.has(table)) continue;
+    failures.push(`PartitionedTable.ALL names ${table}, which no migration partitions`);
+  }
+
+  return null;
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 let failed = 0;
