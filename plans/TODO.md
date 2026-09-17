@@ -1,6 +1,6 @@
 ---
 title: TODO — loadbearing starter kit
-updated: 2026-09-13
+updated: 2026-09-17
 owner: sami
 schema: todo/v1
 ---
@@ -89,87 +89,6 @@ probe.
 
 ## 📋 Backlog
 
-- [ ] `T-033` **Assert that every event code has an emitter** `@unassigned` `P3` `~1h` `#tooling`
-  - **Goal:** `P5.14` found eight of twenty-four declared codes with no production call site. A
-    declared code that nothing emits is a dashboard panel that stays empty forever, and an empty
-    panel is indistinguishable from a healthy system. The catalog is clean today and nothing stops
-    it drifting again.
-  - **Done when:** `check-architecture.mjs` gains an assertion — every key in `EVENT_CATALOG` has at
-    least one `logger.emit("<code>"` outside `core.events.ts`, `event-shape.ts` and `tests/`. The
-    grep is the one `P5.14` used:
-    `grep -rn '"<code>"' packages apps --include=*.ts | grep -v node_modules | grep -v dist`.
-  - **Notes:** deliberately not done inside `P5.14`. A new assertion means renumbering "fifteen
-    assertions" across `docs/ai/rules/workflow.md`, `docs/setup/26`, `AGENTS.md` and the `TODO.md`
-    state table, which is churn worth doing once rather than mid-phase. The same shape would serve
-    `permissions`: every key in `CATALOG` used by at least one `PROCEDURE_PERMISSIONS` entry, which
-    is Phase 5's own exit criterion.
-
-
-- [ ] `T-032` **The production SSR bundle throws `jsxDEV is not a function`** `@unassigned` `P1` `~3h` `#ui`
-  - **Goal:** `pnpm --filter @loadbearing/web build` succeeds and `node .output/server/index.mjs`
-    returns 500 on **every** page. `RootDocument` in `__root.tsx` calls
-    `import_jsx_dev_runtime.jsxDEV`, which the production React runtime does not export — a
-    development JSX transform reached the server build. `pnpm dev` is unaffected, which is why
-    nothing has noticed: every check in CI and every local gate passes on a build that cannot serve
-    a request.
-  - **Found while verifying `P5.10`.** Confirmed pre-existing by stashing that change and
-    rebuilding from a clean `.output`: the baseline fails identically. Not caused by the isomorphic
-    transport.
-  - **Where to look first.** `vite.config.ts` prepends the `development` export condition only when
-    `command === "serve"`, and its own comment records that leaving it in a build once shipped
-    `@tanstack/react-router`'s dev build to the client. This is the same failure on the **ssr**
-    side: `ssr.resolve.conditions` and `ssr.resolve.externalConditions` both take `devCondition`,
-    so check what `react/jsx-dev-runtime` resolves to in the server graph. `esbuild` appears twice
-    in the pnpm store at two versions (`0.27.7`, `0.28.2`), which is worth ruling out too.
-  - **Done when:** a built `.output` serves `/`, `/sign-up` and `/settings/roles`, and the ✅ Gate
-    in `docs/setup/24` gains a line asserting it — the existing gate checks the *client* bundle
-    carries no dev build and never checks that the server bundle runs at all.
-
-
-- [ ] `T-035` **The English fallback layer is now dead payload** `@unassigned` `P3` `~3h` `#ui`
-  - **Goal:** `StaticContentSource` loads English *beneath* every locale, per namespace, so a key
-    the locale had not translated still rendered a sentence. `P5.9` made `NamespaceBundle` a total
-    `Record`, so a bundle with a gap no longer compiles — and the layer beneath it can no longer be
-    reached by anything that ships.
-  - **What it costs:** every non-English page carries both copies. Measured on `/sign-in` under
-    `locale=bn`: the dehydrated payload holds the full `common` + `error` + `auth` English bundle
-    *and* the full Bengali one, roughly doubling the message bytes on the wire and in memory.
-  - **Why this is not just "delete it".** The layer is also what makes a *partially loaded* set of
-    namespaces work, and it is the safety net if copy ever arrives from somewhere `tsc` does not
-    see — a CMS behind `ContentSource`, which is the swap that seam exists for. Removing it makes
-    adding a locale all-or-nothing at runtime as well as at compile time, which is a real barrier
-    to a contributor landing a third language incrementally.
-  - **Done when:** one of two decisions is made and written down — either the base layer is dropped
-    for a locale whose bundles are statically known total (and `StaticContentSource` gains the test
-    that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
-    `check-architecture` assertion counting the gap instead. Do not ship both.
-
-
-- [ ] `T-034` **Bring back an analytics reader, with the first dashboard** `@unassigned` `P3` `~8h` `#api` `#db`
-  - **Goal:** Nothing reads the analytics store. `P5.12` deleted `AnalyticsReader`, both its
-    implementations, its two rollup tables and the `ANALYTICS_DRIVER` flag, because nothing ever
-    called any of it — a shape guessed at with no consumer to check it against, kept in step by hand
-    across two adapters. The write half stayed: `AnalyticsProjector` fills `activity_events` and the
-    nightly reconciliation checks it.
-  - **The trigger, and it is not "the table is large".** Snapshot tables stop covering the questions
-    people ask — the specific moment somebody wants an aggregate nobody precomputed.
-  - **Do it in this order**, which is the whole point of having deleted the seam: set
-    `CLICKHOUSE_URL` and let the projection fill and reconcile for days first, then write the reader
-    against a store with real data in it and a dashboard with a real query.
-  - **Four decisions carry over** and should not be re-litigated:
-    - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
-      `project()` on the object a dashboard query holds.
-    - **Read-only by construction.** A write method is the moment a derived store becomes
-      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
-    - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
-      analytics store holds no `CapabilitySet` and can join back to nothing.
-    - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return
-      different shapes and each adapter normalises.
-  - **A driver flag comes back only if a second implementation does**, and only once the first has a
-    caller. Its absence is currently a feature — a flag that moved reads the moment the pipeline
-    started would cut a dashboard over to a store that is still backfilling.
-
-
 - [x] `T-031` **Transactional outbox for cross-slice events** `@sami` `P3` `~12h` `#api` `#db` `done: 2026-09-12`
   - **Goal:** A finance use-case should publish `invoice.approved` rather than importing the
     notification slice. Without a seam for that, slice ownership decays into a call graph where
@@ -220,8 +139,8 @@ probe.
 
 - [ ] `T-036` **Communication plan: unified mail, outbox, notifications, real-time, messaging** `@sami` `P1` `~120h` `#api` `#ui` `#db`
   - **Goal:** Mail is sent from two unrelated places with no record and no retry, `QueueName.NOTIFICATION` has no consumer, `DigestComposer` has no caller, there is no notification table, no event spine and no real-time path. One plan covers all of it in the order each piece compiles against the last.
-  - **Done when:** Every item in Part C of [`PLAN.md`](PLAN.md) is closed and the eight client-side **Exit** clauses [`archive/COMMUNICATION-PLAN.md`](archive/COMMUNICATION-PLAN.md) still lists as unmet report true. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/PLAN.md` (Part C); history in `plans/archive/COMMUNICATION-PLAN.md`
+  - **Done when:** Every item of Phases 9–13 and 26 in [`PLAN.md`](PLAN.md) is closed, together with their leftovers in Phase 23 (`23.1`–`23.3`, and `23.5`–`23.12` — the eight client-side **Exit** clauses). The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Phases 9–13, 23 and 26); history in `plans/archive/COMMUNICATION-PLAN.md`
   - **Depends on:** `none` — Phase 2 of the plan closes `T-031`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: every mail queued (auth mail included), in-app + email with per-user preferences, conversations (DM + channel) with threads/reactions/attachments deferred, SSE over oRPC event iterators with Redis pub/sub fan-out, the outbox built now, and "design for 100k" read as shape-for-the-swap rather than run-the-topology.
   - **Revised 2026-09-12, before any of it was built.** Two Phase 1 decisions were reversed on review and the plan carries the reasoning. Templates are hand-written HTML in `packages/composition/src/mail/` rather than react-email, which removes the only new package in the plan and both of its dependencies. And a send is a BullMQ job with no `mail_deliveries` table: the queue already supplies retries, backoff and duplicate suppression, the mail provider is where a delivery record belongs at scale, and a table would put the plaintext invitation token in Postgres against the reason its hash is stored. The outbox event table stays, and the distinction is the point — Redis cannot commit atomically with Postgres. **The plan now adds no package and no dependency at all.**
@@ -239,9 +158,9 @@ probe.
     Redis, and the environment this was built in has no Docker.
 - [ ] `T-037` **Database scaling plan: connection pooling, partitioning, virtual sharding** `@sami` `P1` `~80h` `#db` `#infra`
   - **Goal:** One pool per process at a hardwired ten, no pooler, partition policy living in a worker constant with no assertion over the hand-edited DDL, and no routing seam — so `data-and-scale.md` §5's "shard by `organization_id`" is weeks because everything changes at once. One plan builds the knobs, the guards and the seam, and files the physical split.
-  - **Done when:** Every built phase in Part S of [`PLAN.md`](PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/PLAN.md` (Part S); history in `plans/archive/DB-SCALING-PLAN.md` and `plans/archive/DB-SCALING-DEFERRED.md`
-  - **Depends on:** `none` — Phase 1 of the plan is independent of `T-036`; Phase 3 routes the tables `T-036` added.
+  - **Done when:** Phases 14–17, 21 and 22 of [`PLAN.md`](PLAN.md) report their **Exit** lines true; Phase 24 stays filed. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Phases 14–17, 21, 22 and 24); history in `plans/archive/DB-SCALING-PLAN.md` and `plans/archive/DB-SCALING-DEFERRED.md`
+  - **Depends on:** `none` — Phase 14 is independent of `T-036`; Phase 22 routes the tables `T-036` added.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: a pluggable `ShardingStrategy` with `organization_id` as the shipped key, placement by directory row rather than by hash, 256 virtual shards fixed forever, three table placements with a transaction tripwire, pgBouncer always on with timeouts moved to the role, and the two-node proof filed behind the foreign-key decision.
   - **Phase 1 and section 2.A built, 2026-09-13.** Third pass 2026-09-14: `S2.9` dropped with its measurements kept, `S2.15` and `S5.6` deferred to the second file, and every open item corrected against the tree at `5777eba` — the plan's changelog carries the list.
   - **Second pass with the admin plan, 2026-09-15:** `messages` is partitioned now (`S2.6` rewritten as a build item, `S4.7` absorbed, decision 17); `partition_archive` gains `bytes`, `action_counts` and `projected_at` (`S2.11`); prune stamps `projected_at` or records a gap rather than blocking a drop (`S2.14`, decision 18); `S2.19` adds the partition-estimate read the admin preview consumes.
@@ -250,9 +169,9 @@ probe.
   - **2026-09-17:** `S2.21`/`S2.22` create children standalone and attach them (the `partition of` form would have locked the parents on every signup); `S2.26` measures the tenant ceiling; `S4.9` files the pooled partition for the long tail.
 - [ ] `T-038` **Platform admin: the tier on RBAC, retention and projection policy as rows, the replica panel** `@sami` `P2` `~60h` `#api` `#ui` `#db` `#infra`
   - **Goal:** There is no authorization scope above an organization, so nothing global — how long a partition stays hot, what goes to cold storage and for how long, which activity actions reach ClickHouse and for how long each — can be edited by anyone without a deploy, and the ClickHouse schema cannot be changed at all after first boot. One plan builds the tier as a platform organization whose roles carry `platform`-scoped keys, then the policy rows and the screens over them, and files the replica panel behind the scaling plan's `S4.4`.
-  - **Done when:** Every built phase in Part A of [`PLAN.md`](PLAN.md) reports its **Exit** line true; Phase 4 stays filed. The plan is the checklist; this entry is the ledger row.
-  - **Files:** `plans/PLAN.md` (Part A); history in `plans/archive/PLATFORM-ADMIN-PLAN.md`
-  - **Depends on:** `T-037` — Phase 2 needs `DB-SCALING-PLAN.md` section 2.C (cold storage) built; Phase 4 needs its `S4.4`.
+  - **Done when:** Phases 18–20 of [`PLAN.md`](PLAN.md) report their **Exit** lines true; Phase 25 stays filed. The plan is the checklist; this entry is the ledger row.
+  - **Files:** `plans/PLAN.md` (Phases 18–20 and 25); history in `plans/archive/PLATFORM-ADMIN-PLAN.md`
+  - **Depends on:** `T-037` — Phase 19 needs Phase 17 (cold storage) built; Phase 25 needs `24.3`.
   - **Notes:** Decisions taken at planning time and recorded in the plan's "Decisions" section: the tier is an organization marked `is_platform`, `platform` is a third permission scope no tenant wildcard reaches, the first admin is seeded by `pnpm platform:grant` and every later one is invited, absent row = code default for every policy table, the app owns the bucket lifecycle configuration through a second storage port, the projection filter is one list read by three queries, ClickHouse gets a migration path before the app issues DDL, and activity actions become a catalog in `contracts`. Reopens `S2.15` and `S5.6` from `DB-SCALING-DEFERRED.md`.
   - **Second pass 2026-09-15:** the projection switch (a pause, not a power switch), gap recording and re-project from cold storage, restore a month to Postgres, a preview before every retention change, per-tenant storage, and a shard map with a move button that waits on `S4.2`; decisions 12–18. Queue-job retention was checked and is already capped, so it is not filed.
   - **Third pass 2026-09-16:** per-tenant retention override (`A2.19`), tenant deletion (`A2.20`), the shard map is per node with tenants underneath; decisions 19, 20.
@@ -264,6 +183,29 @@ probe.
 *(nothing blocked)*
 
 ## ✅ Done
+
+- [x] `T-032` **The production SSR bundle throws `jsxDEV is not a function`** `@unassigned` `P1` `~3h` `#ui` `done: 2026-09-13`
+  - **Goal:** `pnpm --filter @loadbearing/web build` succeeds and `node .output/server/index.mjs`
+    returns 500 on **every** page. `RootDocument` in `__root.tsx` calls
+    `import_jsx_dev_runtime.jsxDEV`, which the production React runtime does not export — a
+    development JSX transform reached the server build. `pnpm dev` is unaffected, which is why
+    nothing has noticed: every check in CI and every local gate passes on a build that cannot serve
+    a request.
+  - **Found while verifying `P5.10`.** Confirmed pre-existing by stashing that change and
+    rebuilding from a clean `.output`: the baseline fails identically. Not caused by the isomorphic
+    transport.
+  - **Where to look first.** `vite.config.ts` prepends the `development` export condition only when
+    `command === "serve"`, and its own comment records that leaving it in a build once shipped
+    `@tanstack/react-router`'s dev build to the client. This is the same failure on the **ssr**
+    side: `ssr.resolve.conditions` and `ssr.resolve.externalConditions` both take `devCondition`,
+    so check what `react/jsx-dev-runtime` resolves to in the server graph. `esbuild` appears twice
+    in the pnpm store at two versions (`0.27.7`, `0.28.2`), which is worth ruling out too.
+  - **Done when:** a built `.output` serves `/`, `/sign-up` and `/settings/roles`, and the ✅ Gate
+    in `docs/setup/24` gains a line asserting it — the existing gate checks the *client* bundle
+    carries no dev build and never checks that the server bundle runs at all.
+  - **Closed by `C4.11`** (`8d709db`, 2026-09-13): `vite build` inherited `NODE_ENV=development` from
+    `.env`; the build is now handed no configuration and the built `.output` boots. `12.12` in
+    [`PLAN.md`](PLAN.md).
 
 - [x] `T-030` **`core.activity.write` is unreachable for anyone but `owner`** `@sami` `P2` `~1h` `#api` `done: 2026-09-05`
   - **Goal:** `core.permissions.ts` says the key is "held by every principal … a property of acting at all", but `PgCapabilityRepository.resolveFor` grants only through roles and only `owner`'s wildcard carries it. `IndexDocumentUseCase` asserts it, so a `member` cannot index a document.
@@ -474,7 +416,65 @@ probe.
 
 ## 🗑 Dropped
 
-*(nothing dropped)*
+- [-] `T-033` **Assert that every event code has an emitter** `@unassigned` `P3` `~1h` `#tooling`
+  - **Moved:** `moved: 2026-09-17` → [`PLAN.md`](PLAN.md) `23.13`; tracked there from now on.
+  - **Goal:** `P5.14` found eight of twenty-four declared codes with no production call site. A
+    declared code that nothing emits is a dashboard panel that stays empty forever, and an empty
+    panel is indistinguishable from a healthy system. The catalog is clean today and nothing stops
+    it drifting again.
+  - **Done when:** `check-architecture.mjs` gains an assertion — every key in `EVENT_CATALOG` has at
+    least one `logger.emit("<code>"` outside `core.events.ts`, `event-shape.ts` and `tests/`. The
+    grep is the one `P5.14` used:
+    `grep -rn '"<code>"' packages apps --include=*.ts | grep -v node_modules | grep -v dist`.
+  - **Notes:** deliberately not done inside `P5.14`. A new assertion means renumbering "fifteen
+    assertions" across `docs/ai/rules/workflow.md`, `docs/setup/26`, `AGENTS.md` and the `TODO.md`
+    state table, which is churn worth doing once rather than mid-phase. The same shape would serve
+    `permissions`: every key in `CATALOG` used by at least one `PROCEDURE_PERMISSIONS` entry, which
+    is Phase 5's own exit criterion.
+
+- [-] `T-034` **Bring back an analytics reader, with the first dashboard** `@unassigned` `P3` `~8h` `#api` `#db`
+  - **Moved:** `moved: 2026-09-17` → [`PLAN.md`](PLAN.md) `23.14`; tracked there from now on.
+  - **Goal:** Nothing reads the analytics store. `P5.12` deleted `AnalyticsReader`, both its
+    implementations, its two rollup tables and the `ANALYTICS_DRIVER` flag, because nothing ever
+    called any of it — a shape guessed at with no consumer to check it against, kept in step by hand
+    across two adapters. The write half stayed: `AnalyticsProjector` fills `activity_events` and the
+    nightly reconciliation checks it.
+  - **The trigger, and it is not "the table is large".** Snapshot tables stop covering the questions
+    people ask — the specific moment somebody wants an aggregate nobody precomputed.
+  - **Do it in this order**, which is the whole point of having deleted the seam: set
+    `CLICKHOUSE_URL` and let the projection fill and reconcile for days first, then write the reader
+    against a store with real data in it and a dashboard with a real query.
+  - **Four decisions carry over** and should not be re-litigated:
+    - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
+      `project()` on the object a dashboard query holds.
+    - **Read-only by construction.** A write method is the moment a derived store becomes
+      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
+    - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
+      analytics store holds no `CapabilitySet` and can join back to nothing.
+    - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return
+      different shapes and each adapter normalises.
+  - **A driver flag comes back only if a second implementation does**, and only once the first has a
+    caller. Its absence is currently a feature — a flag that moved reads the moment the pipeline
+    started would cut a dashboard over to a store that is still backfilling.
+
+- [-] `T-035` **The English fallback layer is now dead payload** `@unassigned` `P3` `~3h` `#ui`
+  - **Moved:** `moved: 2026-09-17` → [`PLAN.md`](PLAN.md) `23.15`; tracked there from now on.
+  - **Goal:** `StaticContentSource` loads English *beneath* every locale, per namespace, so a key
+    the locale had not translated still rendered a sentence. `P5.9` made `NamespaceBundle` a total
+    `Record`, so a bundle with a gap no longer compiles — and the layer beneath it can no longer be
+    reached by anything that ships.
+  - **What it costs:** every non-English page carries both copies. Measured on `/sign-in` under
+    `locale=bn`: the dehydrated payload holds the full `common` + `error` + `auth` English bundle
+    *and* the full Bengali one, roughly doubling the message bytes on the wire and in memory.
+  - **Why this is not just "delete it".** The layer is also what makes a *partially loaded* set of
+    namespaces work, and it is the safety net if copy ever arrives from somewhere `tsc` does not
+    see — a CMS behind `ContentSource`, which is the swap that seam exists for. Removing it makes
+    adding a locale all-or-nothing at runtime as well as at compile time, which is a real barrier
+    to a contributor landing a third language incrementally.
+  - **Done when:** one of two decisions is made and written down — either the base layer is dropped
+    for a locale whose bundles are statically known total (and `StaticContentSource` gains the test
+    that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
+    `check-architecture` assertion counting the gap instead. Do not ship both.
 
 ---
 
@@ -501,3 +501,4 @@ probe.
 | 2026-09-16 | @sami   | Customizing the layout: `T-037` gains the partition DDL generator (`S2.25`) and a one-alias shard key with the fork recipe; `T-038` records the file-versus-dashboard line (decision 21) and a coverage section |
 | 2026-09-17 | @sami   | Review of the tenant layout: `T-037` attaches children instead of creating them in place (a signup would have blocked every read), measures the tenant ceiling (`S2.26`), files the pooled partition (`S4.9`); `T-038` deletes tenants from ClickHouse too and gains tenant export (`A2.21`) |
 | 2026-09-17 | @sami   | The plans folder consolidated: every open item from four plans — 121 of them — now lives in `plans/PLAN.md`, IDs and text unchanged apart from decision citations gaining a part prefix; the five plan files moved verbatim to `plans/archive/`; `T-036`, `T-037` and `T-038` point at the one file. `S2.4` built the same day (`§21`, 21/21) |
+| 2026-09-17 | @sami   | `PLAN.md` rewritten as one chronological file: 26 numbered phases, items `<phase>.<item>`, decisions `D1`–`D50`. `T-033`–`T-035` moved there as `23.13`–`23.15`; `T-032` closed — `C4.11` fixed it on 2026-09-13 (`8d709db`); `T-036`–`T-038` repointed at phase numbers. This file is history from here |
