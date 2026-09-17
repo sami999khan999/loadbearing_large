@@ -315,17 +315,30 @@ CREATE TABLE activity_log (
 
 Three things this buys:
 
-- A "last 30 days" query touches one partition instead of the whole table.
 - Dropping old data is `DROP PARTITION` — instant, rather than a `DELETE` that bloats the table.
 - Index maintenance stays bounded, because each partition's index is small.
+- A query carrying a *range* on the partition column reads only the months that range covers.
 
-**Which tables are partitioned is a list, not a convention.** `PartitionedTable.ALL` in
-`packages/application/src/primitive/partitioned-table.ts` names them, `MaintenanceGateway`'s two
-methods take that union rather than a `string`, and the monthly schedule loops it. Two things fall
-out of writing it down: Postgres accepts no bind parameters in DDL, so the adapter interpolates the
-table name and the closed union is the only boundary there is; and a table that is partitioned in a
-migration but never added to the list quietly stops getting partitions the month the migration's
-own runway ends.
+**The third one is narrower than it is usually written, and it was measured.** A "last 30 days"
+floor prunes the retention tail and nothing else — a future month could legitimately hold rows, so
+it stays in the plan. And a keyset cursor written as a row constructor, `(created_at, id) < (at, id)`,
+does not prune at all: the planner does not decompose it, so a paged read widens to every partition
+that exists. Only an equality or a closed range reaches one. See
+[partitions](../../packages/infrastructure/docs/reference/partitions.md), where each query is
+asserted at the shape it actually plans to.
+
+**Which tables are partitioned is a list, not a convention, and so is their retention.**
+`PartitionedTable.ALL` in `packages/application/src/primitive/partitioned-table.ts` is a frozen list
+of `{ name, column, retentionMonths }` — the whole policy for a table in one entry, so the next
+partitioned table is one line rather than one line plus a record somewhere else. `MaintenanceGateway`
+takes the union derived from it rather than a `string`, and the monthly schedule loops it. Three
+things fall out of writing it down. Postgres accepts no bind parameters in DDL, so the adapter
+interpolates the table name and the closed union is the only boundary there is. A `retentionMonths`
+of `null` says something else owns the table's lifecycle — `activity_log`'s archive drops a month
+only after the upload is verified, and a calendar drop beside it would race that. And a table
+partitioned in a migration but never added to the list quietly stops getting partitions the month
+the migration's own runway ends, which is why `check-architecture` §21 reads the migration text and
+asserts the list against it in both directions.
 
 Create partitions ahead of time with a scheduled job, or use `pg_partman`.
 

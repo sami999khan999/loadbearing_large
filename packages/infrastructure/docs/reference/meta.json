@@ -5,6 +5,7 @@
     "unit-of-work",
     "enrollers",
     "pgvector",
+    "partitions",
     "activity-archive",
     "clickhouse",
     "loki",

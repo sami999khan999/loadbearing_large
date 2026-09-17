@@ -459,6 +459,8 @@ pnpm db:generate
 
 **Drizzle cannot express `PARTITION BY`.** The schema declares an ordinary table so the query builder still types it; the generated DDL is edited by hand before it is applied. That is not a workaround bolted on — it is why migrations here are generated, read, and committed rather than pushed, and it is the same channel the permission-seeding SQL below already uses.
 
+**A hand edit is the one change no linter reads, so an assertion does.** `check-architecture` §21 parses `PARTITION BY RANGE ("<col>")` out of every file in `migrations/`, requires the table to be in `PartitionedTable.ALL` with that same column, requires the statement's primary key to carry it, and fails on a `DEFAULT` partition — the edit you forget to make and the edit you make wrongly, from the same read. It also runs the other way: an allowlist entry no migration partitions fails too. See [26](26-hygiene-and-ci.md) and [partitions](../../packages/infrastructure/docs/reference/partitions.md).
+
 Replace the generated `CREATE TABLE activity_log (...)` with:
 
 ```sql

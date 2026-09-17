@@ -64,10 +64,6 @@ packages/infrastructure/
 execute it on import — the failure that moved `seed.ts` out when `PgPersonalOrganizationEnroller`
 needed `SystemRoleSeed`. `src/pg/seed/` keeps the class; `seed.ts` is the thing you run.
 
-**The four runnable scripts sit above `src/`.** A script inside a folder makes that folder's barrel
-execute it on import — the failure that moved `seed.ts` out when `PgPersonalOrganizationEnroller`
-needed `SystemRoleSeed`. `src/pg/seed/` keeps the class; `seed.ts` is the thing you run.
-
 **One folder per external system**, so `ls src/` answers "what does this package depend on?" in one
 line. The filenames already led with the technology ([Files](../../../docs/opinions/files.md) — *"you
 should be able to see what you would delete"*); the folders agree with them, which makes each one a
@@ -268,6 +264,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   they protect against, and why every one of them binds structurally.
 - [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
   the `ORDER BY` that stops the index being used.
+- [Partitions](reference/partitions.md) — the allowlist as the whole policy, the two mechanics that
+  are not optional, and which reads prune to one month and which read every one.
 - [The activity archive](reference/activity-archive.md) — detach, stream, record, verify, drop, and
   what the unwind has to put back.
 - [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
