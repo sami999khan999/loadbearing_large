@@ -390,7 +390,7 @@ export default defineConfig({
 
 > [!IMPORTANT]
 > **Every script in this section reads `DATABASE_DIRECT_URL ?? DATABASE_URL`, not `DATABASE_URL`.**
-> Once pgBouncer is in front (Phase 1 of `plans/DB-SCALING-PLAN.md`), `DATABASE_URL` is the pooled
+> Once pgBouncer is in front (Phase 1 of `plans/archive/DB-SCALING-PLAN.md`), `DATABASE_URL` is the pooled
 > port. `drizzle-kit` introspects and `db:studio` holds a session open; migrations run DDL and
 > `0022` sets a role default. None of that belongs on a transaction pooler, and the fallback is
 > what keeps a single-URL deployment working unchanged.

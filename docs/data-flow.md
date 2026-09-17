@@ -132,5 +132,4 @@ copies can all be rebuilt, and that is what makes them safe to lose.
 | The ClickHouse table and its expiry | `infra/clickhouse.init.sql` |
 
 The positions behind all of this are in [`docs/opinions/data-and-scale.md`](opinions/data-and-scale.md).
-What is planned and not yet built is in [`plans/DB-SCALING-PLAN.md`](../plans/DB-SCALING-PLAN.md) and
-[`plans/PLATFORM-ADMIN-PLAN.md`](../plans/PLATFORM-ADMIN-PLAN.md).
+What is planned and not yet built is in [`plans/PLAN.md`](../plans/PLAN.md).

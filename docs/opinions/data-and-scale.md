@@ -459,7 +459,7 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 1 | Add an index, rewrite a query | A single slow query | Hours |
 | 2 | KPI snapshot tables | Dashboard over 1s on a warm cache | A day |
 | 3 | Read replica for dashboards | Reads competing with writes | A day; one adapter change |
-| 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `DB-SCALING-PLAN.md` Phase 1 |
+| 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `plans/archive/DB-SCALING-PLAN.md` Phase 1 |
 | 5 | ClickHouse reads, behind a new `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **One env var, then a day** |
 | 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
 | 7 | Shard Postgres by `organization_id` | Writes past a single primary | Weeks — needs 4.1 |

@@ -92,7 +92,7 @@ enqueue is the one step that cannot be made atomic with the invitation.
 
 The window that leaves is a crash between the commit and the enqueue, and the answer to it is a
 resend action rather than a delivery table — filed as `C6.9` in
-[`plans/COMMUNICATION-PLAN.md`](../../../../plans/COMMUNICATION-PLAN.md). Once the job is on the
+[`plans/archive/COMMUNICATION-PLAN.md`](../../../../plans/archive/COMMUNICATION-PLAN.md). Once the job is on the
 queue, BullMQ's retries and backoff cover a transport that is down, and `MailConsumer` emits
 `mail.delivery.failed` on the final attempt. The operator action is still to invite again, which
 replaces the row and issues a new token.
