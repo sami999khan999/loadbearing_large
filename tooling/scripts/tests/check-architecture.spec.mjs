@@ -131,7 +131,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(20);
+    expect(results).toHaveLength(21);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -607,6 +607,116 @@ describe("18 — every foreign key column has an index leading with it", () => {
     passes(
       run(table('index("tasks_owner_idx").on(t.ownerId, t.organizationId)')),
       "every foreign key column has an index leading with it",
+    );
+  });
+});
+
+describe("21 — every partitioned table is on the allowlist, with the same column", () => {
+  const ALLOWLIST = "packages/application/src/primitive/partitioned-table.ts";
+  const NAME = "every partitioned table is on the allowlist, with the same column";
+
+  // The two shapes the parser has to read: a name written through a module constant, and
+  // one written as a literal. Both appear in the real file.
+  const allowlist = (entries) =>
+    'const ACTIVITY_LOG = "activity_log";\n' +
+    `const ALL = Object.freeze([${entries}] as const);\n`;
+
+  const migration = (body) => ({
+    "packages/infrastructure/migrations/0000_base.sql": body,
+  });
+
+  const CREATE = (table, column) =>
+    `CREATE TABLE "${table}" (\n` +
+    `\t"id" uuid NOT NULL,\n` +
+    `\tCONSTRAINT "${table}_pk" PRIMARY KEY("id","${column}")\n` +
+    `) PARTITION BY RANGE ("${column}");\n`;
+
+  it("catches a migration partitioning a table the allowlist does not name", () => {
+    fails(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
+        ),
+        ...migration(CREATE("notifications", "created_at") + CREATE("activity_log", "occurred_at")),
+      }),
+      NAME,
+      "which PartitionedTable.ALL does not name",
+    );
+  });
+
+  it("catches an allowlist entry no migration partitions", () => {
+    fails(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },' +
+            '{ name: "notifications", column: "created_at", retentionMonths: 12 },',
+        ),
+        ...migration(CREATE("activity_log", "occurred_at")),
+      }),
+      NAME,
+      "which no migration partitions",
+    );
+  });
+
+  it("catches a column the allowlist disagrees with", () => {
+    fails(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
+        ),
+        ...migration(CREATE("activity_log", "created_at")),
+      }),
+      NAME,
+      "the allowlist says occurred_at",
+    );
+  });
+
+  // Postgres rejects this itself, so it only ever fires on a migration nobody applied —
+  // which is the window this assertion exists to close.
+  it("catches a primary key that omits the partition column", () => {
+    fails(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
+        ),
+        ...migration(
+          'CREATE TABLE "activity_log" (\n' +
+            '\t"id" uuid NOT NULL,\n' +
+            '\tCONSTRAINT "activity_log_pk" PRIMARY KEY("id")\n' +
+            ') PARTITION BY RANGE ("occurred_at");\n',
+        ),
+      }),
+      NAME,
+      "primary key does not carry occurred_at",
+    );
+  });
+
+  it("catches a DEFAULT partition, which hides a missing month", () => {
+    fails(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },',
+        ),
+        ...migration(
+          CREATE("activity_log", "occurred_at") +
+            'CREATE TABLE "activity_log_default" PARTITION OF "activity_log" DEFAULT;\n',
+        ),
+      }),
+      NAME,
+      "DEFAULT partition",
+    );
+  });
+
+  it("accepts a migration and an allowlist that agree", () => {
+    passes(
+      run({
+        [ALLOWLIST]: allowlist(
+          '{ name: ACTIVITY_LOG, column: "occurred_at", retentionMonths: null },' +
+            '{ name: "notifications", column: "created_at", retentionMonths: 12 },',
+        ),
+        ...migration(CREATE("activity_log", "occurred_at") + CREATE("notifications", "created_at")),
+      }),
+      NAME,
     );
   });
 });
