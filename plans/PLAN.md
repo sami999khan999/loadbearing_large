@@ -43,8 +43,7 @@ needs a database does — and on a clean clone, `pnpm install` then `pnpm build:
 
 **`16.1` and the merge unit after it are built** (2026-09-18): the pruning spec, the two-level
 tenant layout, its seed, the two-level maintenance gateway and the per-tenant projection, plus
-`16.7` through `16.11`. **Start at `16.12`** — the tenant ceiling, measured — then `16.13`, then 17,
-then 19 on top of it. Phase 18 touches permissions, auth
+**Phase 16 is done** (2026-09-18). **Start at Phase 17** — cold storage — then 19 on top of it. Phase 18 touches permissions, auth
 and composition only and can run beside all of that. Phase 23 is independent small work for any
 spare hour.
 
@@ -67,7 +66,7 @@ spare hour.
 | 13 | Messaging: conversations and messages | Communication | ✅ done | 2026-09-13 | `COMMUNICATION-PLAN.md` Phase 5 |
 | 14 | Connection pooling: the pool you can see, and the pooler in front of it | Scaling | ✅ done | 2026-09-13 | `DB-SCALING-PLAN.md` Phase 1 |
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
-| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.11 done | `DB-SCALING-PLAN.md` 2.B |
+| 16 | Pruning proven, and the tenant layout | Scaling | ✅ done | 2026-09-18 | `DB-SCALING-PLAN.md` 2.B |
 | 17 | Cold storage: retention stops meaning deletion | Scaling | ⬜ open | after 16 | `DB-SCALING-PLAN.md` 2.C |
 | 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
@@ -271,6 +270,14 @@ D29. **The tenant is a partition, not a container.** (2026-09-16) The seven tena
     becomes per tenant (`16.6`). Capacity per node is now bounded by partition count — tenants ×
     tables × months kept — before it is bounded by data size; a few hundred tenants per node is
     comfortable, which is why the split stays planned. *(was S-20)*
+    `measured: 2026-09-18 — 16.12.` "A few hundred is comfortable" holds and understates two of the
+    three axes. On Postgres 17, at 500 tenants and 8,022 partitions: a pruned read plans in 0.21 ms
+    and executes in 0.03 ms — **flat**, because the tenant predicate prunes before the planner
+    considers a month; a runway run costs ~13 ms per tenant, so ten minutes is near fifty thousand
+    tenants; a `db:migrate` no-op stays at 11 ms. **The binding cost is signup**, not the node: one
+    tenant's sixteen partitions take 1.4–1.8 s of DDL inside the transaction that creates the
+    organization, and that is per tenant rather than per node. Numbers and the caveats in
+    `packages/infrastructure/docs/reference/partitions.md`. Two thousand was not run.
 
 ### Admin — D30 to D50 (2026-09-14 to 16)
 
@@ -1329,7 +1336,7 @@ against twenty-two migrations, not twenty-one.
   leaves the file `drizzle-kit` already wrote on disk, since the two halves are one `&&`; the
   message says fix the schema and regenerate, and `partitions.md` says so too.
 
-- [ ] `16.12` **The tenant ceiling, measured** — decision D29 says "a few hundred tenants per node is
+- [x] `16.12` **The tenant ceiling, measured** `done: 2026-09-18` — decision D29 says "a few hundred tenants per node is
   comfortable" and nothing in this plan proves it. `packages/infrastructure/tests/smoke/tenant-ceiling.spec.ts`,
   under `pnpm smoke`, gated on `TENANT_CEILING=<n>`: creates `n` synthetic organizations through
   `TenantPartitionSeed` (so `n × 7` tenant partitions and `n × 3 × 3` month children), then times
@@ -1340,6 +1347,20 @@ against twenty-two migrations, not twenty-one.
   hundred" is replaced by them. **Reopen `24.7` when** the pruned read's planning time passes 5 ms
   or the runway run passes ten minutes at a tenant count a deployment could plausibly reach. Added
   2026-09-17. **Docs:** `partitions.md`, `docs/opinions/data-and-scale.md` §4.2.
+  `built: 2026-09-18` — 100 and 500 measured on Postgres 17; **2,000 was not**, and the page says so
+  rather than implying it was: at the measured rate it is about fifty minutes of creation and half
+  an hour of cleanup, and neither reading suggests the shape changes. `TENANT_CEILING=2000 pnpm smoke`
+  is the command.
+
+  Two things the item did not anticipate. The first `partitions` column counted `pg_inherits` whole,
+  which carries a row per **index** partition too — 26,190 where the answer was 1,622. It counts
+  `relkind in ('r','p')` now, and the readings check out exactly: tenants × 16 plus the seeded
+  tenant and the outbox's months.
+
+  The second is that a run killed mid-cleanup leaves partitions whose organization row is gone — the
+  drop is one transaction and the row delete after it is another, so a dying process commits the
+  second alone. The spec sweeps those before it measures as well as after, or the next run counts
+  them as its own. That is also the only reason to reach for `TENANT_CEILING` twice.
 
 - [x] `16.13` **§15 reads source comments too** `done: 2026-09-18` — `docs/ai/rules/comments.md` tells an author to
   write `// see docs/reference/x.md` and let the page carry the why, and §15 walks only `docs/`,
