@@ -9,6 +9,7 @@ export {
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,
 } from "./retention-preview.notice.js";
+export { TenantExportPanel } from "./tenant-export.panel.js";
 export {
   TenantRetentionForm,
   type TenantRetentionFormProps,

@@ -2,11 +2,13 @@ import {
   type ArchivedObject,
   type ArchivedPartition,
   type DeletedTenantSweep,
+  type ExportedObject,
   type OrganizationId,
   type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionedTableName,
   type RestoredMonth,
+  type TenantExport,
 } from "../import.js";
 
 export interface ArchiveRequest {
@@ -31,6 +33,8 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
   private readonly deletedSweeps: Date[] = [];
+  private readonly exports: { organizationId: OrganizationId; day: string }[] = [];
+  private exported: readonly ExportedObject[] = [];
   private deleted: DeletedTenantSweep = { organizations: 0, objects: 0 };
 
   // What every `archive` call reports it wrote. Empty by default, so a spec that is not
@@ -129,6 +133,27 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
 
   public deletedSwept(): readonly Date[] {
     return this.deletedSweeps;
+  }
+
+  // Staged, because the objects are what the consumer logs and what the screen lists.
+  public stageExport(objects: readonly ExportedObject[]): void {
+    this.exported = objects;
+  }
+
+  public override exportTenant(organizationId: OrganizationId, day: Date): Promise<TenantExport> {
+    const stamp = day.toISOString().slice(0, 10);
+    this.exports.push({ organizationId, day: stamp });
+
+    return Promise.resolve({
+      organizationId,
+      day: stamp,
+      objects: this.exported,
+      manifestKey: `export/${organizationId}/${stamp}/manifest.json`,
+    });
+  }
+
+  public tenantExports(): readonly { organizationId: OrganizationId; day: string }[] {
+    return this.exports;
   }
 
   public archived(): readonly ArchiveRequest[] {

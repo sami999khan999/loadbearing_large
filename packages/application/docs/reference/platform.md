@@ -122,6 +122,25 @@ confirmation only the client checks is a confirmation the API does not have.
 What it does **not** do is delete the cold objects. Those stay thirty days; see
 `packages/infrastructure/docs/reference/cold-storage.md`.
 
+## `ExportOrganizationUseCase` — queued, and the day is the request's
+
+An export is a full read of seven tables plus the catalog, streamed to S3. It is a job, like a
+restore and unlike a delete, and the shape is the restore's: validate, audit, enqueue, hand back
+the job id.
+
+The day comes from the clock **once**, in the use-case, and travels in the payload. A retry the
+next morning then writes the objects the job id already claimed rather than a second day's set.
+The id is dotted — `tenant-export.<organization>.<day>` — because BullMQ rejects a colon.
+
+`ListTenantExportsUseCase` reads the bucket rather than a table, and that is deliberate: nothing
+records an export in Postgres, so there is no second index to disagree with what is actually
+downloadable. Every URL is presigned for fifteen minutes, which is why the query that reads them
+has `staleTime: 0` — a cached page is a page of links that have quietly stopped working.
+
+What the export **does not** carry is the hashes. `invitations.token_hash` and
+`api_keys.token_hash` are nulled on the way out: a hash is a credential, not data the customer
+owns, and handing one back is handing back the ability to brute-force the key it was made from.
+
 ## What lands here next
 
 | Phase | Files |

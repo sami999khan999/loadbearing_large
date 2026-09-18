@@ -30,9 +30,24 @@ That decides the shape of everything above it:
 - The rules are **sorted by prefix**, so two runs over the same rows compare equal. Without that,
   the daily job would see a difference whenever the row order changed and rewrite the bucket for
   nothing.
-- An empty list **deletes** the configuration. That is the honest reading of "no row names a cold
-  window", and the alternative — leaving the last rule in place — is a bucket expiring objects to
-  a policy nobody can see any more.
+- An empty list **deletes** the configuration, with `DeleteBucketLifecycle` rather than a `Put` of
+  zero rules — S3 and MinIO both answer `InvalidArgument` to that. Deleting is the honest reading
+  of "no row names a cold window"; the alternative, leaving the last rule in place, is a bucket
+  expiring objects to a policy nobody can see any more.
+
+## Two prefixes, and only one of them comes from a row
+
+`cold/<table>/` is composed per retention row. `export/` is not: it is a flat rule at seven days,
+present whether or not anyone has ever exported a tenant, because a lifecycle rule has to exist
+before the objects it governs do.
+
+That is the one thing an empty `retention_policy` still writes. A fresh deployment's first
+`retention` run applies one rule and every run after it applies none — which is the same
+converge-then-stop behaviour the rest of this page describes, starting from one rather than zero.
+
+The `export/` rule is flat rather than per tenant for the reason the cold rules are per table
+rather than per tenant-month: **a bucket takes at most a thousand lifecycle rules**, and one per
+customer is a ceiling with a date on it.
 
 ## "No configuration" is an error, and treating it as one would never converge
 

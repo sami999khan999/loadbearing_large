@@ -3,6 +3,7 @@ import {
   Can,
   type ClientNamespace,
   DeleteTenantPanel,
+  TenantExportPanel,
   TenantStorageList,
   useCapabilities,
   useMessages,
@@ -32,6 +33,7 @@ function PlatformStorage() {
         // Here rather than on a shard map, which does not exist yet: this is the one
         // screen that lists tenants, and a delete belongs beside what it removes.
         <Can permission="platform.tenant.manage" capabilities={capabilities}>
+          <TenantExportPanel />
           <DeleteTenantPanel />
         </Can>
       }

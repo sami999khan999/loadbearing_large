@@ -22,6 +22,13 @@ interface RestoreJob {
   readonly organizationId: OrganizationId | null;
 }
 
+// What `tenant-export` carries. The day comes from the request rather than the clock, so
+// a retry the next morning writes the objects the job id already claimed.
+interface ExportJob {
+  readonly organizationId: OrganizationId;
+  readonly day: string;
+}
+
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
 export class MaintenanceConsumer {
@@ -101,6 +108,8 @@ export class MaintenanceConsumer {
         return this.retention();
       case "cold-restore":
         return this.restore(job.data as RestoreJob);
+      case "tenant-export":
+        return this.export(job.data as ExportJob);
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }
@@ -155,6 +164,24 @@ export class MaintenanceConsumer {
         attached: inWindow,
       });
     }
+  }
+
+  // One object per tenant-owned table, plus the catalog, plus a manifest — live rows,
+  // so an export never takes the tenant's data offline.
+  private async export(data: ExportJob): Promise<void> {
+    const exported = await this.container.partitionArchive.exportTenant(
+      data.organizationId,
+      new Date(`${data.day}T00:00:00.000Z`),
+    );
+
+    // One line per export, not one per object: nine lines a run would be nine lines
+    // saying the same thing, and the counts are what an operator reads.
+    this.container.logger.emit("cold.tenant.exported", {
+      organizationId: data.organizationId,
+      objects: exported.objects.length,
+      rows: exported.objects.reduce((total, object) => total + object.rowCount, 0),
+      bytes: exported.objects.reduce((total, object) => total + object.bytes, 0),
+    });
   }
 
   private async cleanup(): Promise<void> {

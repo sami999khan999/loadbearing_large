@@ -1,10 +1,12 @@
 import type {
   ApiClient,
+  ExportRequestedDto,
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
   TenantDeletedDto,
   TenantDeleteInput,
+  TenantExportInput,
   TenantRetentionUpdateInput,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
@@ -37,6 +39,15 @@ export class PlatformMutations {
     return useAppMutation<TenantDeletedDto, TenantDeleteInput>({
       mutationFn: (input) => client.platform.deleteTenant(input),
       invalidates: [QueryKeys.platform.all()],
+    });
+  }
+
+  // Invalidates nothing, for the reason the restore below gives: the job has only been
+  // queued, so refetching the list now would show the objects the last export wrote.
+  public static useExportTenant(client: ApiClient) {
+    return useAppMutation<ExportRequestedDto, TenantExportInput>({
+      mutationFn: (input) => client.platform.exportTenant(input),
+      invalidates: [],
     });
   }
 

@@ -97,6 +97,7 @@ export {
   RetentionPolicyForm,
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,
+  TenantExportPanel,
   TenantRetentionForm,
   type TenantRetentionFormProps,
   TenantStorageList,

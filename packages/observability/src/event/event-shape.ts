@@ -109,6 +109,12 @@ export interface EventShape {
     readonly organizations: number;
     readonly objects: number;
   };
+  readonly "cold.tenant.exported": {
+    readonly organizationId: string;
+    readonly objects: number;
+    readonly rows: number;
+    readonly bytes: number;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

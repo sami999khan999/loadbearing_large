@@ -65,6 +65,12 @@ export class InMemoryStorageGateway extends StorageGateway {
     return Promise.resolve(this.objects.has(key));
   }
 
+  // Sorted, because S3 returns a page in lexicographic order and a fake that returned
+  // insertion order would let a caller depending on the wrong one pass.
+  public override list(prefix: string): Promise<readonly string[]> {
+    return Promise.resolve([...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort());
+  }
+
   public override presignUpload(
     key: string,
     contentType: string,

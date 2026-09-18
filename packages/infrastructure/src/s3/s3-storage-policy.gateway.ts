@@ -1,4 +1,5 @@
 import {
+  DeleteBucketLifecycleCommand,
   GetBucketLifecycleConfigurationCommand,
   type LifecycleRule,
   PutBucketLifecycleConfigurationCommand,
@@ -51,6 +52,13 @@ export class S3StoragePolicyGateway extends StoragePolicyGateway {
   // **Replaces the whole configuration**, which is S3's only offer. An empty list
   // deletes it, the honest reading of "no row names a cold window".
   public async applyLifecycle(rules: readonly LifecycleRule[]): Promise<void> {
+    // A `Put` with zero rules is `InvalidArgument`, not "no rules" — S3 and MinIO both
+    // reject it. Deleting is what "no row names a cold window" actually means.
+    if (rules.length === 0) {
+      await this.s3.send(new DeleteBucketLifecycleCommand({ Bucket: this.config.bucket }));
+      return;
+    }
+
     await this.s3.send(
       new PutBucketLifecycleConfigurationCommand({
         Bucket: this.config.bucket,

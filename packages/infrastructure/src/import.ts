@@ -12,10 +12,12 @@ export { createGunzip, createGzip } from "node:zlib";
 
 // ── @aws-sdk/client-s3 ───────────────────────────────────────────────────────
 export {
+  DeleteBucketLifecycleCommand,
   DeleteObjectCommand,
   GetBucketLifecycleConfigurationCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutBucketLifecycleConfigurationCommand,
   PutObjectCommand,
   S3Client,
@@ -56,6 +58,7 @@ export {
   type EmailReceipt,
   EmailSender,
   EmbeddingProvider,
+  type ExportedObject,
   type InvitationPage,
   type InvitationRecord,
   type InvitationRepository,
@@ -116,6 +119,7 @@ export {
   StoragePolicyGateway,
   type StoredObject,
   type SweepOutcome,
+  type TenantExport,
   type TenantRecord,
   type TenantRepository,
   type TenantRetentionPolicyRecord,

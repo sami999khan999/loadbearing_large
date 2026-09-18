@@ -4,6 +4,11 @@ export {
   DeleteOrganizationUseCase,
 } from "./delete-organization.use-case.js";
 export {
+  type ExportOrganizationInput,
+  ExportOrganizationUseCase,
+  type ExportRequested,
+} from "./export-organization.use-case.js";
+export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
@@ -13,6 +18,11 @@ export {
   type RetentionEntry,
   type RetentionPolicies,
 } from "./list-retention-policies.use-case.js";
+export {
+  type ListTenantExportsInput,
+  ListTenantExportsUseCase,
+  type TenantExportObject,
+} from "./list-tenant-exports.use-case.js";
 export {
   type ListTenantStorageInput,
   ListTenantStorageUseCase,

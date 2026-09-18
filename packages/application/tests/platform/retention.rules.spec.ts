@@ -11,22 +11,28 @@ const row = (overrides: Partial<RetentionPolicyRecord> = {}): RetentionPolicyRec
   ...overrides,
 });
 
+// Not composed from a row: an export is a copy of a tenant's data sitting in a bucket,
+// and seven days is how long that is a download rather than a liability.
+const EXPORT_RULE = { prefix: "export/", expireAfterDays: 7 };
+
 describe("RetentionRules.lifecycleFor", () => {
   it("writes one rule per postgres table with a cold window", () => {
     expect(RetentionRules.lifecycleFor([row()])).toEqual([
       { prefix: "cold/activity_log/", expireAfterDays: 731 },
+      EXPORT_RULE,
     ]);
   });
 
   // Null is "never expires", which is a different statement from zero — and a rule with
   // no expiry is not a rule S3 can express, so the table simply gets none.
   it("writes no rule for a table with no cold window", () => {
-    expect(RetentionRules.lifecycleFor([row({ coldMonths: null })])).toEqual([]);
+    expect(RetentionRules.lifecycleFor([row({ coldMonths: null })])).toEqual([EXPORT_RULE]);
   });
 
   it("writes a rule that expires immediately for zero", () => {
     expect(RetentionRules.lifecycleFor([row({ coldMonths: 0 })])).toEqual([
       { prefix: "cold/activity_log/", expireAfterDays: 0 },
+      EXPORT_RULE,
     ]);
   });
 
@@ -35,7 +41,7 @@ describe("RetentionRules.lifecycleFor", () => {
   it("ignores the clickhouse row", () => {
     expect(
       RetentionRules.lifecycleFor([row({ store: "clickhouse", tableName: "activity_events" })]),
-    ).toEqual([]);
+    ).toEqual([EXPORT_RULE]);
   });
 
   // Sorted, and it is not cosmetic: the daily job compares what the rows compose to
@@ -50,7 +56,11 @@ describe("RetentionRules.lifecycleFor", () => {
       row({ tableName: "notifications" }),
     ]);
 
-    expect(one.map((rule) => rule.prefix)).toEqual(["cold/activity_log/", "cold/notifications/"]);
+    expect(one.map((rule) => rule.prefix)).toEqual([
+      "cold/activity_log/",
+      "cold/notifications/",
+      "export/",
+    ]);
     expect(RetentionRules.lifecycleMatches(one, other)).toBe(true);
   });
 });

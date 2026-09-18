@@ -133,7 +133,7 @@ function harness(
   };
 }
 
-const job = (name: string): Job => ({ name }) as Job;
+const job = (name: string, data: unknown = {}): Job => ({ name, data }) as Job;
 
 const emitted = (logger: { emit: ReturnType<typeof vi.fn> }, code: string) =>
   logger.emit.mock.calls.filter((call) => call[0] === code).map((call) => call[1]);
@@ -351,11 +351,14 @@ describe("MaintenanceConsumer — the retention job", () => {
 
     expect(await storagePolicy.lifecycle()).toEqual([
       { prefix: "cold/activity_log/", expireAfterDays: 731 },
+      // Not composed from a row: an export is a copy of a tenant's data in a bucket,
+      // and seven days is how long that is a download rather than a liability.
+      { prefix: "export/", expireAfterDays: 7 },
     ]);
     // Drift first, then the repair: a lone `applied` cannot tell "the reconcile is
     // doing its job" from "somebody edited the bucket by hand last night".
     expect(emitted(logger, "retention.lifecycle.drifted")).toHaveLength(1);
-    expect(emitted(logger, "retention.lifecycle.applied")).toEqual([{ rules: 1 }]);
+    expect(emitted(logger, "retention.lifecycle.applied")).toEqual([{ rules: 2 }]);
   });
 
   // The one that matters most: `PutBucketLifecycleConfiguration` replaces everything,
@@ -372,15 +375,16 @@ describe("MaintenanceConsumer — the retention job", () => {
     expect(emitted(logger, "retention.lifecycle.applied")).toHaveLength(1);
   });
 
-  // An empty table is the state every deployment starts in, and a fresh bucket answers
-  // "no configuration" rather than an empty list — the two have to agree at once.
-  it("converges immediately with no rows and an empty bucket", async () => {
+  // An empty table is the state every deployment starts in, and `export/` is the one
+  // rule it still writes — once, then the comparison holds and nothing is rewritten.
+  it("writes only the export rule with no rows, and nothing on the second run", async () => {
     const { container, storagePolicy, logger } = harness();
 
     await consumerFor(container).handle(job("retention"));
+    await consumerFor(container).handle(job("retention"));
 
-    expect(storagePolicy.applied()).toEqual([]);
-    expect(emitted(logger, "retention.lifecycle.drifted")).toEqual([]);
+    expect(storagePolicy.applied()).toEqual([[{ prefix: "export/", expireAfterDays: 7 }]]);
+    expect(emitted(logger, "retention.lifecycle.applied")).toEqual([{ rules: 1 }]);
   });
 
   // The rows only. The bucket's own rule deleted the object; a row still pointing at one
@@ -393,6 +397,39 @@ describe("MaintenanceConsumer — the retention job", () => {
     // 2026-08 less thirty-six months.
     expect(partitionArchive.forgets()).toEqual([
       { table: "activity_log", period: new Date(Date.UTC(2023, 7, 1)) },
+    ]);
+  });
+
+  // One line per export, not one per object. The counts are what an operator reads,
+  // and nine lines a run saying the same thing is nine lines nobody reads.
+  it("exports a tenant and logs the totals once", async () => {
+    const { container, partitionArchive, logger } = harness();
+    partitionArchive.stageExport([
+      {
+        table: "activity_log",
+        key: "export/a/activity_log.ndjson.gz",
+        rowCount: 10,
+        bytes: 100,
+        checksum: "x",
+      },
+      {
+        table: "api_keys",
+        key: "export/a/api_keys.ndjson.gz",
+        rowCount: 2,
+        bytes: 20,
+        checksum: "y",
+      },
+    ]);
+
+    await consumerFor(container).handle(
+      job("tenant-export", { organizationId: FIRST, day: "2026-08-15" }),
+    );
+
+    expect(partitionArchive.tenantExports()).toEqual([
+      { organizationId: FIRST, day: "2026-08-15" },
+    ]);
+    expect(emitted(logger, "cold.tenant.exported")).toEqual([
+      { organizationId: FIRST, objects: 2, rows: 12, bytes: 120 },
     ]);
   });
 

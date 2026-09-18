@@ -32,6 +32,7 @@ import {
   EditMessageUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  ExportOrganizationUseCase,
   GetConversationUseCase,
   GetNotificationPreferencesUseCase,
   GrantPermissionUseCase,
@@ -52,6 +53,7 @@ import {
   ListNotificationsUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
+  ListTenantExportsUseCase,
   ListTenantStorageUseCase,
   type Logger,
   type LogReader,
@@ -341,6 +343,8 @@ export class Container {
   // "which organization is the tier" and the other is what an admin may do to it.
   public readonly platformAdmin: {
     readonly deleteOrganization: DeleteOrganizationUseCase;
+    readonly exportOrganization: ExportOrganizationUseCase;
+    readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly listStorage: ListTenantStorageUseCase;
@@ -763,6 +767,15 @@ export class Container {
         this.clock,
         this.analyticsProjector ?? null,
       ),
+      exportOrganization: new ExportOrganizationUseCase(
+        this.authorizer,
+        new PgTenantRepository(this.database, this.transactions),
+        this.queuePublisher,
+        this.platform,
+        this.activity,
+        this.clock,
+      ),
+      listExports: new ListTenantExportsUseCase(this.authorizer, this.storage),
       inspectStatus: new InspectPlatformStatusUseCase(
         this.authorizer,
         this.platform,

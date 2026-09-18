@@ -1,4 +1,4 @@
-import { oc } from "../import.js";
+import { oc, z } from "../import.js";
 import { Envelope } from "../primitive/index.js";
 import { PlatformContract } from "./platform.contract.js";
 
@@ -43,6 +43,18 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantDelete)
     .output(PlatformContract.tenantDeleted);
 
+  // `POST` and a job id back: an export is a full read of seven tables streamed to
+  // S3, and a request that waited for it would hold a connection open for minutes.
+  public static readonly exportTenant = oc
+    .route({ method: "POST", path: "/platform/tenants/export" })
+    .input(PlatformContract.tenantExport)
+    .output(PlatformContract.exportRequested);
+
+  public static readonly listExports = oc
+    .route({ method: "GET", path: "/platform/tenants/export" })
+    .input(PlatformContract.tenantExport)
+    .output(z.array(PlatformContract.tenantExportObject).readonly());
+
   public static readonly listStorage = oc
     .route({ method: "GET", path: "/platform/storage" })
     .input(PlatformContract.tenantStorageQuery)
@@ -65,6 +77,8 @@ export class PlatformProcedures {
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
     listStorage: PlatformProcedures.listStorage,
     deleteTenant: PlatformProcedures.deleteTenant,
+    exportTenant: PlatformProcedures.exportTenant,
+    listExports: PlatformProcedures.listExports,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

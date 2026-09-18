@@ -57,6 +57,7 @@ export class QueryKeys {
     retentionPreview: (table: string, months: number) =>
       ["platform", "retention", "preview", table, months] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
+    exports: (organizationId: string) => ["platform", "export", organizationId] as const,
   };
 
   public static readonly rbac = {

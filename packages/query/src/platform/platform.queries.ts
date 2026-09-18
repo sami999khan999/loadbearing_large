@@ -1,4 +1,4 @@
-import type { ApiClient, TenantStorageQuery } from "../import.js";
+import type { ApiClient, OrganizationId, TenantStorageQuery } from "../import.js";
 import { queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
@@ -32,6 +32,16 @@ export class PlatformQueries {
       queryKey: QueryKeys.platform.storage(params),
       queryFn: () => client.platform.listStorage(params),
       staleTime: 60_000,
+    });
+  }
+
+  // `staleTime: 0`: every URL in the answer is presigned and expires, so a cached
+  // page is a page of links that have quietly stopped working.
+  public static exports(client: ApiClient, organizationId: OrganizationId) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.exports(organizationId),
+      queryFn: () => client.platform.listExports({ organizationId }),
+      staleTime: 0,
     });
   }
 

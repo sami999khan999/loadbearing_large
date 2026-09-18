@@ -1630,7 +1630,7 @@ allowlist entry (decision D23).
   unrelated to this phase and is fixed with it: it listed `activity_archive`, which has carried
   `organization_id` since `0024` and is not exempt, and it omitted `sessions`, which is.
 
-- [-] `17.8` **Retention as data, not as a deploy** `dropped: 2026-09-14` — decision D23 — reopened the same day as `19.3`–`19.7`, where the row gets an editor.
+- [-] `17.8` **Retention as data, not as a deploy** `dropped: 2026-09-14` — decision D23 — reopened the same day as `19.3`–`19.7`, where the row gets an editor. **Moved to Phase 19** and delivered there (`19.3`–`19.7`, `19.13`, `19.15`, `19.19`); recorded here by `19.14`.
 
 **Exit (Phases 16 and 17 together).** `pnpm check:architecture` is 21/21 with §21 passing on the twenty-two existing
 migrations; removing `notifications` from `PartitionedTable.ALL` fails §21; starting the worker
@@ -2198,10 +2198,15 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `<label>`: biome cannot see that `Input` renders one, so a bare label is an a11y error and, more
   to the point, an input announced as unlabelled.
 
-- [ ] `19.14` **Docs** — `docs/opinions/data-and-scale.md` §4.2's closing paragraph ("decide the
+- [x] `19.14` **Docs** — `docs/opinions/data-and-scale.md` §4.2's closing paragraph ("decide the
   retention policy at the same time") gains "and it is a row, with the allowlist as the default";
   `docs/ai/rules/data.md` retention bullet; `packages/infrastructure/docs/reference/cold-storage.md`
   (from `17.7`) gains the lifecycle section; `17.8` marked moved here.
+  `done: 2026-09-19` — `data-and-scale.md` §4.2 gains "and it is a row, with the allowlist as the
+  default"; `docs/ai/rules/data.md` gains two bullets, the second being the thirty-day window a
+  deleted tenant's cold objects keep (`19.20`); `cold-storage.md` gains the lifecycle section,
+  including why the rule is per table and what a tenant window *longer* than its table's cannot
+  do; `17.8` marked moved.
 
 - [x] `19.15` **Preview before a retention change** — depends on the scaling plan's `16.8`.
   `preview-retention-change.use-case.ts` (`platform.retention.read`; input `{ tableName, hotMonths }`,
@@ -2340,7 +2345,7 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   at a 90-day cutoff and swept at a 0-day one with the object gone from MinIO, and the ClickHouse
   lightweight delete accepted.
 
-- [ ] `19.21` **Export a tenant** — the design was sold partly on "hand a customer every byte they
+- [x] `19.21` **Export a tenant** — the design was sold partly on "hand a customer every byte they
   own", and nothing built it. `export-organization.use-case.ts` (`platform.tenant.manage`; records
   `tenant.export_requested`; enqueues `tenant-export` on `MAINTENANCE` with the dedupe `jobId`).
   `MaintenanceConsumer.export()`: for each of the seven tenant-owned tables, stream that tenant's
@@ -2380,6 +2385,28 @@ twenty-seven (`19.5` and `19.17`).
 
 ---
 
+**Exit met 2026-09-19**, with one clause corrected. Verified:
+
+- `pnpm check:architecture` 21/21, `pnpm typecheck`, `pnpm lint` and all eighteen test packages
+  green; `pnpm build:packages` and the web build clean.
+- **Corrected:** "with `retention_policy` empty the worker behaves exactly as before this phase"
+  no longer holds by exactly one rule. `19.21`'s `export/` lifecycle rule is unconditional, so a
+  fresh deployment's first `retention` run applies one rule and every run after it applies none.
+  Two worker specs say so.
+- Lifecycle convergence against live MinIO: `lifecycleFor` composed, applied, read back identical,
+  and `lifecycleMatches` true — so the daily job writes once and then stops.
+- **A bug the Exit clause found.** `applyLifecycle([])` sent a `Put` with zero rules, which S3 and
+  MinIO both reject with `InvalidArgument` — the doc already claimed it deleted the configuration
+  and it did not. Latent before this phase (an empty list only reached the adapter when the last
+  cold window was removed from a bucket that had one) and unreachable after it, because the
+  `export/` rule makes the list never empty. Fixed with `DeleteBucketLifecycle`, verified live:
+  empty → deleted, write → applied, empty again → deleted.
+- Cold restore, the sweep, the tenant delete and the tenant export all verified against live
+  Postgres, MinIO and ClickHouse — the per-item `verified:` lines above say what each one asserted.
+- **Not verified through a browser.** Every screen in this phase is wired and typechecked and its
+  use-case is unit-tested, but no clause below the API was exercised by clicking. The screens are
+  `/platform/retention` and `/platform/storage`.
+
 ## Phase 20 — Projection policy: which actions reach ClickHouse, and for how long each
 
 **Depends on:** Phase 19's Exit.
@@ -2400,6 +2427,19 @@ passed `ActivityActions.isKnown`. `RetentionRules.clickhouseTtlFor` composes one
 clause per row with a TTL and a default clause carrying `WHERE action NOT IN (…)` over those same
 actions (decision D35). The `retention` job applies it exactly as Phase 19 does. `AnalyticsConsumer`
 reads the exclusion list once per run and passes it to all three queries.
+  `done: 2026-09-19` — `corrected:` the export needed `StorageGateway.list(prefix)`. Nothing
+  records an export in Postgres and a table that could disagree with the bucket would be worse, so
+  the screen lists the prefix and presigns each key for fifteen minutes. `corrected:` fourteen
+  objects, not eight — the seven tenant-owned tables plus seven catalog tables, each its own
+  object, because one combined catalog object would make a manifest entry meaningless. A table the
+  tenant has no rows in writes none. `corrected:` the keyset is `id` for every table but
+  `role_permissions`, whose primary key carries no `id`. `corrected:` the `export/` lifecycle rule
+  is unconditional, so an empty `retention_policy` now writes exactly one rule on a deployment's
+  first `retention` run — two worker specs and the phase Exit clause's "behaves exactly as before"
+  change by that one rule, and both specs now say so.
+  `verified:` against live Postgres and MinIO — six objects for the seeded tenant, every row count
+  matching the manifest, empty tables writing nothing, and `token_hash` null in both
+  `api_keys.ndjson.gz` and `invitations.ndjson.gz`.
 
 - [ ] `20.1` **The action catalog** — `contracts/src/catalog/<slice>.actions.ts` for `rbac`, `member`,
   `apikey`, `ai`, `platform` (the fourteen existing literals plus `platform.policy.changed`), each

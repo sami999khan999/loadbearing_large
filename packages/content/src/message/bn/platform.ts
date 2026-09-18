@@ -45,6 +45,13 @@ export const platform = {
   "platform.tenantRetention.organization": "প্রতিষ্ঠানের আইডি",
   "platform.tenantRetention.coldNote": "টেবিলের চেয়ে কম কোল্ড মাস বাকেট নয়, রাতের কাজ কার্যকর করে।",
   "platform.tenantRetention.saved": "সংরক্ষিত।",
+  "platform.tenantExport.title": "একটি টেন্যান্ট রপ্তানি",
+  "platform.tenantExport.description":
+    "টেন্যান্টের প্রতিটি টেবিলের জন্য একটি করে অবজেক্ট, সঙ্গে ক্যাটালগ সারি এবং গণনা ও চেকসামের একটি ম্যানিফেস্ট। এপিআই কী ও আমন্ত্রণের হ্যাশ বাদ দেওয়া হয়।",
+  "platform.tenantExport.action": "রপ্তানি শুরু",
+  "platform.tenantExport.queued": "{jobId} হিসেবে সারিবদ্ধ। ওয়ার্কার শেষ করলে অবজেক্টগুলি নিচে দেখা যাবে।",
+  "platform.tenantExport.empty": "এই টেন্যান্টের কোনো রপ্তানি অবজেক্ট নেই।",
+  "platform.tenantExport.expiry": "ডাউনলোড লিঙ্ক পনেরো মিনিটে শেষ হয়; অবজেক্টগুলি সাত দিন পর মুছে যায়।",
   "platform.tenantDelete.title": "একটি টেন্যান্ট মুছুন",
   "platform.tenantDelete.warning":
     "প্রতিটি মাস আগে কোল্ড স্টোরেজে আর্কাইভ হয়, তারপর টেন্যান্টের পার্টিশন ও ক্যাটালগ সারি সরানো হয়। আর্কাইভ করা অবজেক্ট ত্রিশ দিন পর মুছে যায়।",

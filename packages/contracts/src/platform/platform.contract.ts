@@ -123,6 +123,22 @@ export class PlatformContract {
     slug: z.string().min(1).max(64),
   });
 
+  public static readonly tenantExport = z.object({
+    organizationId: Identifiers.organizationId,
+  });
+
+  public static readonly exportRequested = z.object({
+    jobId: z.string().min(1),
+  });
+
+  public static readonly tenantExportObject = z.object({
+    key: z.string().min(1),
+    day: z.string(),
+    // Presigned and short-lived. Never a permanent public URL, which is why this is
+    // read on every render rather than stored.
+    url: z.string().min(1),
+  });
+
   public static readonly tenantDeleted = z.object({
     // What it cost, so the screen can say what happened rather than "done".
     archived: z.number().int(),
@@ -186,6 +202,9 @@ export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequest
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type TenantDeleteInput = z.infer<typeof PlatformContract.tenantDelete>;
+export type TenantExportInput = z.infer<typeof PlatformContract.tenantExport>;
+export type ExportRequestedDto = z.infer<typeof PlatformContract.exportRequested>;
+export type TenantExportObjectDto = z.infer<typeof PlatformContract.tenantExportObject>;
 export type TenantDeletedDto = z.infer<typeof PlatformContract.tenantDeleted>;
 export type TenantStorageDto = z.infer<typeof PlatformContract.tenantStorage>;
 export type TenantStorageRowDto = z.infer<typeof PlatformContract.tenantStorageRow>;

@@ -5,6 +5,7 @@ import {
   createGunzip,
   createGzip,
   type DeletedTenantSweep,
+  type ExportedObject,
   InternalError,
   NotFoundError,
   type OrganizationId,
@@ -17,8 +18,10 @@ import {
   pipeline,
   Readable,
   type RestoredMonth,
+  type SQL,
   type StorageGateway,
   sql,
+  type TenantExport,
 } from "../../import.js";
 import type { Database } from "../primitive/index.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -40,6 +43,27 @@ const NEWLINE = "\n";
 // Postgres truncates an identifier past this, and a truncated scratch table collides
 // silently with the next tenant's.
 const MAX_IDENTIFIER = 63;
+
+// Where an export lands, and the rule `RetentionRules` writes for it: seven days.
+const EXPORT_PREFIX = "export";
+
+// Rows per page when walking a tenant's live table. Smaller than `PAGE`: this runs
+// against a table that is still being written to, so each round trip holds less.
+const EXPORT_PAGE = 5_000;
+
+// Beyond the seven partitioned tables, the rows a tenant owns in the catalog — and the
+// columns each one redacts. A hash is a credential, not data the customer owns.
+const CATALOG_TABLES = Object.freeze([
+  Object.freeze({ name: "memberships", key: "id", redacted: [] as readonly string[] }),
+  Object.freeze({ name: "roles", key: "id", redacted: [] as readonly string[] }),
+  // Keyed on the permission: its primary key is `(organization_id, role_id, permission)`
+  // and it has no `id` column, so the keyset cannot be the one every other table uses.
+  Object.freeze({ name: "role_permissions", key: "permission", redacted: [] as readonly string[] }),
+  Object.freeze({ name: "goal_members", key: "id", redacted: [] as readonly string[] }),
+  Object.freeze({ name: "permission_overrides", key: "id", redacted: [] as readonly string[] }),
+  Object.freeze({ name: "invitations", key: "id", redacted: ["token_hash"] as readonly string[] }),
+  Object.freeze({ name: "api_keys", key: "id", redacted: ["token_hash"] as readonly string[] }),
+]);
 
 // An alias rather than an interface: drizzle's `execute<T>` constrains `T` to
 // `Record<string, unknown>`, and only aliases get an implicit index signature.
@@ -67,6 +91,13 @@ type EntryRow = {
   checksum: string;
   action_counts: Record<string, number>;
   projected_at: string | null;
+};
+
+// An alias, not an interface, for the reason `ArchiveRow` gives: drizzle's `execute<T>`
+// wants an implicit index signature and only aliases have one.
+type ExportRow = {
+  line: string;
+  cursor: string;
 };
 
 interface Cursor {
@@ -300,6 +331,135 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     );
 
     return rows.rows.length;
+  }
+
+  // Live rows, never detached: an export must not take the tenant's data offline. One
+  // object per tenant-owned table, plus the catalog, plus a manifest.
+  public async exportTenant(organizationId: OrganizationId, day: Date): Promise<TenantExport> {
+    const stamp = PgPartitionArchiveGateway.iso(day);
+    const objects: ExportedObject[] = [];
+
+    for (const entry of PartitionedTable.TENANT_PARTITIONED) {
+      const object = await this.exportTable(
+        organizationId,
+        stamp,
+        entry.name,
+        "id",
+        [],
+        sql`select row_to_json(t)::text as line, t.id::text as cursor
+            from ${sql.identifier(entry.name)} t
+            where t.organization_id = ${organizationId}::uuid`,
+      );
+      if (object) objects.push(object);
+    }
+
+    for (const table of CATALOG_TABLES) {
+      const object = await this.exportTable(
+        organizationId,
+        stamp,
+        table.name,
+        table.key,
+        table.redacted,
+        sql`select row_to_json(t)::text as line, t.${sql.identifier(table.key)}::text as cursor
+            from ${sql.identifier(table.name)} t
+            where t.organization_id = ${organizationId}::uuid`,
+      );
+      if (object) objects.push(object);
+    }
+
+    const manifestKey = `${EXPORT_PREFIX}/${organizationId}/${stamp}/manifest.json`;
+    const manifest = await this.storage.put(
+      manifestKey,
+      Buffer.from(`${JSON.stringify({ organizationId, day: stamp, objects }, null, 2)}\n`),
+      "application/json",
+    );
+
+    return { organizationId, day: stamp, objects, manifestKey: manifest.key };
+  }
+
+  // Null for a table the tenant has no rows in: an absent object is "nothing to
+  // export", and writing an empty one would put a gzip header in every manifest.
+  private async exportTable(
+    organizationId: OrganizationId,
+    stamp: string,
+    table: string,
+    key: string,
+    redacted: readonly string[],
+    base: SQL,
+  ): Promise<ExportedObject | null> {
+    const counted = { rows: 0 };
+    const source = Readable.from(this.exportRows(base, key, redacted, counted));
+    const body = source.pipe(createGzip());
+    const objectKey = `${EXPORT_PREFIX}/${organizationId}/${stamp}/${table}.ndjson.gz`;
+
+    try {
+      const stored = await this.storage.putStream(objectKey, body, "application/x-ndjson+gzip");
+
+      if (counted.rows === 0) {
+        // Deleted rather than not written: the row count is only known once the stream
+        // has drained, and draining it is what the upload does.
+        await this.storage.delete(stored.key);
+        return null;
+      }
+
+      return {
+        table,
+        key: stored.key,
+        rowCount: counted.rows,
+        bytes: stored.size,
+        checksum: stored.checksum,
+      };
+    } catch (error: unknown) {
+      await PgPartitionArchiveGateway.stop(source, body);
+      throw error;
+    }
+  }
+
+  // Keyset on one column, which every table here has a unique one of within the tenant.
+  // `OFFSET` would re-scan the table once per page and skip rows written in between.
+  private async *exportRows(
+    base: SQL,
+    key: string,
+    redacted: readonly string[],
+    counted: { rows: number },
+  ): AsyncGenerator<Uint8Array> {
+    const encoder = new TextEncoder();
+    const column = sql.identifier(key);
+    let after: string | null = null;
+
+    for (;;) {
+      // Annotated, both of them: a ternary between two `sql` templates infers through
+      // `after` and back, which the compiler reports as an implicit `any`.
+      const keyset: SQL = after === null ? sql`` : sql`and t.${column}::text > ${after}`;
+      const page: ExportRow[] = (
+        await this.db.execute<ExportRow>(
+          sql`${base} ${keyset} order by t.${column} limit ${EXPORT_PAGE}`,
+        )
+      ).rows;
+
+      if (page.length === 0) return;
+
+      for (const row of page) {
+        counted.rows += 1;
+        yield encoder.encode(`${PgPartitionArchiveGateway.redact(row.line, redacted)}${NEWLINE}`);
+      }
+
+      after = page[page.length - 1]?.cursor ?? null;
+      if (page.length < EXPORT_PAGE) return;
+    }
+  }
+
+  // Re-serialised rather than string-replaced: a token hash is base64 and a naive
+  // replace over the JSON would also hit a column that happens to contain it.
+  private static redact(line: string, redacted: readonly string[]): string {
+    if (redacted.length === 0) return line;
+
+    const row = JSON.parse(line) as Record<string, unknown>;
+    for (const field of redacted) {
+      if (field in row) row[field] = null;
+    }
+
+    return JSON.stringify(row);
   }
 
   // Tenants Postgres has forgotten and the bucket has not. `not exists` rather than a

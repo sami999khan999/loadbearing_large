@@ -29,6 +29,15 @@ again the first time someone introduces one because "it is just a cache."
   `partition_archive` and verified **before** it is dropped — `outbox_event` included. An absent
   row means "nothing to restore", never "not archived", and a tenant delete has to sweep those
   objects itself, because the index carries no foreign key that could cascade.
+- **How long is a row, and the allowlist is only the default.** `retention_policy` holds one row
+  per store and table and `tenant_retention_policy` one per tenant and table; an absent row *is*
+  `PartitionedTable`'s value, so an empty table behaves as the deploy before it existed. The
+  bucket's lifecycle rules and the ClickHouse TTL are **converged to those rows nightly**, never
+  written once and trusted — and compared before they are written, because `MODIFY TTL`
+  materialises every part of the table.
+- **A deleted tenant keeps its cold objects for thirty days.** The archive index carries no
+  foreign key, so nothing cascades; the nightly sweep is what ends the window, and it is what
+  makes a delete recoverable at the moment it is most likely to have been a mistake.
 - **ClickHouse is purely derived and must stay so.** Only the projection consumer writes to it.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate in application
   code cannot be sharded; those belong in the analytics store from day one.

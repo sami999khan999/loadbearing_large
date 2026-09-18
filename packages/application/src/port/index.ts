@@ -29,8 +29,10 @@ export {
   type ArchivedObject,
   type ArchivedPartition,
   type DeletedTenantSweep,
+  type ExportedObject,
   PartitionArchiveGateway,
   type RestoredMonth,
+  type TenantExport,
 } from "./partition-archive.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";

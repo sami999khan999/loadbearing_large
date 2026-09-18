@@ -34,6 +34,14 @@ export class PlatformRouter {
     context.container.platformAdmin.deleteOrganization.execute(context.principal, input),
   );
 
+  public static readonly exportTenant = authed.platform.exportTenant.handler(({ input, context }) =>
+    context.container.platformAdmin.exportOrganization.execute(context.principal, input),
+  );
+
+  public static readonly listExports = authed.platform.listExports.handler(({ input, context }) =>
+    context.container.platformAdmin.listExports.execute(context.principal, input),
+  );
+
   public static readonly listStorage = authed.platform.listStorage.handler(({ input, context }) =>
     context.container.platformAdmin.listStorage.execute(context.principal, input),
   );
@@ -57,6 +65,8 @@ export class PlatformRouter {
     updateTenantRetention: PlatformRouter.updateTenantRetention,
     listStorage: PlatformRouter.listStorage,
     deleteTenant: PlatformRouter.deleteTenant,
+    exportTenant: PlatformRouter.exportTenant,
+    listExports: PlatformRouter.listExports,
     updateRetention: PlatformRouter.updateRetention,
   } as const;
 }

@@ -1,5 +1,6 @@
 export {
   type ColdModeDto,
+  type ExportRequestedDto,
   PlatformContract,
   type PlatformHealthDto,
   type PlatformStatusDto,
@@ -11,6 +12,8 @@ export {
   type RetentionUpdateInput,
   type TenantDeletedDto,
   type TenantDeleteInput,
+  type TenantExportInput,
+  type TenantExportObjectDto,
   type TenantRetentionUpdateInput,
   type TenantStorageDto,
   type TenantStorageMonthDto,

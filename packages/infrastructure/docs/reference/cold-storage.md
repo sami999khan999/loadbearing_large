@@ -73,6 +73,21 @@ a partition per tenant to do it — writes its month under `PartitionArchiveGate
 nil uuid. It names no row, which is what makes an object under it readable as "this one spans every
 tenant" rather than as somebody's.
 
+**The rule is per table, and it is composed from a row.** `cold/<table>/` is the prefix a
+lifecycle rule matches, and `RetentionRules.lifecycleFor` writes one per `retention_policy` row
+that names a cold window. The whole configuration is replaced on every write — S3 offers no
+per-rule edit — so the rules are sorted by prefix and compared before anything is applied.
+
+It is per table rather than per tenant-month because **a bucket takes at most a thousand
+lifecycle rules**. A tenant whose cold window is shorter than its table's is enforced by the
+nightly sweep instead: the per-table rule is the ceiling, and the app does anything tighter. A
+tenant whose window is *longer* than the table's cannot be honoured at all, which is why
+`update-tenant-retention` says so on the screen rather than saving a number the bucket will
+ignore.
+
+Months are converted to days at 30.44 and **rounded up**: rounding down expires an object inside
+the window an operator asked for, which is the direction that loses data.
+
 ## `partition_archive` is the index a read starts from
 
 ```
@@ -177,6 +192,32 @@ when thirty days is not the answer:
 ```bash
 pnpm db:partitions --sweep <organization_id>
 ```
+
+## An export is the same writer, pointed at live rows
+
+`exportTenant(organizationId, day)` reuses the NDJSON-and-gzip path above and changes one thing:
+it reads **live** rows rather than a detached partition. An export must not take the tenant's data
+offline, so there is no detach, no drop, and no `partition_archive` row — the objects are a copy,
+not the archive.
+
+One object per tenant-owned table under `export/<organization_id>/<yyyy-mm-dd>/<table>.ndjson.gz`,
+plus one per catalog table, plus a `manifest.json` carrying every object's row count, byte size
+and checksum. A table the tenant has no rows in gets **no object**: the row count is only known
+once the stream has drained, so the upload happens and the empty object is deleted, which is
+cheaper than counting the table twice.
+
+The keyset is one column — `id` for every table but `role_permissions`, whose primary key is
+`(organization_id, role_id, permission)` and which has no `id` at all. `OFFSET` would re-scan the
+table once per page and skip rows written in between, which on a live table is not a theoretical
+problem.
+
+`invitations.token_hash` and `api_keys.token_hash` are nulled, by re-serialising the row rather
+than replacing text in the JSON: a hash is base64, and a naive replace would also hit a column
+that happened to contain it.
+
+Objects under `export/` expire after seven days, by the one lifecycle rule the app writes that is
+not composed from a retention row — see
+[`storage-policy.md`](storage-policy.md).
 
 ## A failure between detach and drop re-attaches
 

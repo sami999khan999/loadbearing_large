@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   getSignedUrl,
   HeadObjectCommand,
+  ListObjectsV2Command,
   NotFoundError,
   PutObjectCommand,
   Readable,
@@ -120,6 +121,16 @@ export class S3StorageGateway extends StorageGateway {
     } catch {
       return false;
     }
+  }
+
+  // `ListObjectsV2` returns up to a thousand keys and this asks for no more: the one
+  // reader is a tenant's exports, which is nine objects a day for seven days.
+  public override async list(prefix: string): Promise<readonly string[]> {
+    const response = await this.s3.send(
+      new ListObjectsV2Command({ Bucket: this.config.bucket, Prefix: prefix }),
+    );
+
+    return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
   }
 
   // Expiry is the caller's, not the gateway's: a link in an email needs longer than

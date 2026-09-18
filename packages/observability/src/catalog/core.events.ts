@@ -57,6 +57,9 @@ export const coreEvents = {
   // Cold storage outliving a deleted tenant is the hole this mechanism created, so
   // this is the line that says it closed. One per run, not one per object.
   "cold.objects.swept": { level: "info" },
+  // One per export, not one per object: nine lines a run would be nine lines saying
+  // the same thing, and the counts are what an operator reads.
+  "cold.tenant.exported": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.

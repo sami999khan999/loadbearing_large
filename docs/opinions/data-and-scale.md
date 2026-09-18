@@ -402,6 +402,13 @@ store, and every older partition in S3 under `cold/<table>/<yyyy>/<mm>/<organiza
 behind a row in `partition_archive`. No month is destroyed, `outbox_event` included. A month with
 no rows writes no object, so an absent row means "nothing to restore" rather than "not archived".
 
+**And it is a row, with the allowlist as the default.** The numbers live in `retention_policy`,
+one row per store and table, and an absent row *is* `PartitionedTable`'s value — so an empty table
+behaves exactly as the deploy before the table existed. A tenant may override its own in
+`tenant_retention_policy`, which is only possible because a tenant's month is its own partition.
+The row is the truth, and the bucket's lifecycle rules and the ClickHouse TTL are converged to it
+nightly rather than written once and trusted.
+
 ### 4.3 The write path is built; the read seam is not
 
 The projection is real: `AnalyticsProjector`, `ClickHouseAnalyticsProjector`, the projection

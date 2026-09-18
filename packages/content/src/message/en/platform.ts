@@ -57,6 +57,17 @@ export const platform = {
   "platform.tenantRetention.coldNote":
     "Cold months shorter than the table's are enforced by the nightly run rather than by the bucket.",
   "platform.tenantRetention.saved": "Saved.",
+  "platform.tenantExport.title": "Export a tenant",
+  "platform.tenantExport.description":
+    "One object per table the tenant owns, plus its catalog rows and a manifest of counts and checksums. API key and invitation hashes are redacted.",
+  "platform.tenantExport.action": "Start export",
+  "platform.tenantExport.queued":
+    "Queued as {jobId}. Objects appear below once the worker finishes.",
+  "platform.tenantExport.empty": "No export objects for this tenant.",
+  // Two expiries, and they are not the same one: the link is minutes, the object is
+  // days. Saying only the first would read as "download it whenever".
+  "platform.tenantExport.expiry":
+    "Download links expire in fifteen minutes; the objects themselves are deleted after seven days.",
   "platform.tenantDelete.title": "Delete a tenant",
   // Said before the fields: every month is archived first, so this is recoverable for
   // thirty days and then the nightly sweep removes the objects too.

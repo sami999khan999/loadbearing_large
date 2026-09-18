@@ -9,6 +9,11 @@ const DAYS_PER_MONTH = 30.44;
 // capped at 1,000 per bucket, so a shorter per-tenant window is the worker's job.
 const COLD_PREFIX = "cold/";
 
+// The only rule not composed from a row. An export is a copy of a tenant's data in a
+// bucket, and seven days is how long that is a download rather than a liability.
+const EXPORT_PREFIX = "export/";
+const EXPORT_DAYS = 7;
+
 // ClickHouse's own spelling: it rewrites `INTERVAL 5 MONTH` as `toIntervalMonth(5)`, so
 // emitting the readable form would make the daily comparison rewrite the table forever.
 const TTL_COLUMN = "toDateTime(occurred_at)";
@@ -25,13 +30,16 @@ export class RetentionRules {
   // Sorted by prefix, so two runs over the same rows compare equal — otherwise the daily
   // job rewrites the bucket every time the row order changes.
   public static lifecycleFor(rows: readonly RetentionPolicyRecord[]): readonly LifecycleRule[] {
-    return rows
+    const cold = rows
       .filter((row) => row.store === "postgres" && row.coldMonths !== null)
       .map((row) => ({
         prefix: `${COLD_PREFIX}${row.tableName}/`,
         expireAfterDays: RetentionRules.daysFor(row.coldMonths ?? 0),
-      }))
-      .sort((left, right) => left.prefix.localeCompare(right.prefix));
+      }));
+
+    return [...cold, { prefix: EXPORT_PREFIX, expireAfterDays: EXPORT_DAYS }].sort((left, right) =>
+      left.prefix.localeCompare(right.prefix),
+    );
   }
 
   // In the form ClickHouse reads back. `perAction` is Phase 20's: the default clause has

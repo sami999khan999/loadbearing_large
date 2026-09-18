@@ -36,6 +36,27 @@ export interface RestoredMonth {
   readonly rowCount: number;
 }
 
+// One object of one export. `table` is the tenant-owned table it holds, or `catalog`
+// for the eighth object, which is every row the seven do not cover.
+export interface ExportedObject {
+  readonly table: string;
+  readonly key: string;
+  readonly rowCount: number;
+  readonly bytes: number;
+  readonly checksum: string;
+}
+
+export interface TenantExport {
+  readonly organizationId: OrganizationId;
+  // `YYYY-MM-DD`, in the key. Two exports on one day replace each other, which is what
+  // an operator retrying a download means.
+  readonly day: string;
+  readonly objects: readonly ExportedObject[];
+  // Counts and checksums for every object above, as a ninth object. It is what makes a
+  // download verifiable without this system.
+  readonly manifestKey: string;
+}
+
 // Counted two ways, because they answer different questions: how many customers this
 // finally forgot, and how many objects the bucket stopped being billed for.
 export interface DeletedTenantSweep {
@@ -77,6 +98,10 @@ export abstract class PartitionArchiveGateway {
   // Objects first, rows second: a crash leaves a row pointing at a deleted object, which
   // is re-runnable, rather than an object nothing points at, which is invisible forever.
   public abstract sweep(organizationId: OrganizationId): Promise<number>;
+
+  // Live rows, never detached: an export must not take the tenant's data offline while
+  // it runs. One object per tenant-owned table, plus the catalog, plus the manifest.
+  public abstract exportTenant(organizationId: OrganizationId, day: Date): Promise<TenantExport>;
 
   // Every tenant whose `organizations` row is gone and whose objects were archived
   // before `before`. The delay is deliberate: a deletion is recoverable for that long.

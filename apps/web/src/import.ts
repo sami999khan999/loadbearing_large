@@ -73,6 +73,7 @@ export {
   SignOutButton,
   SignUpForm,
   SocialSignIn,
+  TenantExportPanel,
   TenantRetentionForm,
   TenantStorageList,
   TwoFactorForm,
