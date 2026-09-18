@@ -126,10 +126,33 @@ sound **only** because the value written is the *event's* timestamp rather than 
 redelivered event computes the same value and collides with itself. A dedupe index carrying a
 `defaultNow()` column would be a unique index that never fires.
 
-**Drizzle cannot express `PARTITION BY`.** Every partitioned table is declared as an ordinary
-`pgTable` so the query builder types it, and the generated DDL is hand-edited before it is applied.
-The schema files say so at the top of each. Its snapshots do not know the clause exists, which is
-why §21 reads the migration text rather than the schema.
+**Drizzle cannot express `PARTITION BY`,** and its snapshots do not know the clause exists — which
+is why §21 reads the migration text rather than the schema. Every partitioned table is declared as
+an ordinary `pgTable` so the query builder types it, and the clause is written onto the generated
+DDL afterwards.
+
+## Adding a partitioned table is three steps
+
+1. **The schema**, with a composite primary key: `primaryKey({ columns })` naming every partition
+   key. Drizzle emits the composite form only when the schema declares it.
+2. **One allowlist line** in `PartitionedTable.ALL`, listed ahead of any table that references it.
+3. **`pnpm db:generate`.**
+
+That last one is two halves — `drizzle-kit generate && tsx partition-ddl.ts`. The generator opens
+only the migration the last `meta/_journal.json` entry names, which is the one just written and
+never an applied one, because the migrator hashes each file's whole text. For every `CREATE TABLE`
+whose table is on the allowlist and carries no clause yet, it appends
+`PARTITION BY LIST ("<tenantKey>")`, or `RANGE ("<column>")` for a table with no tenant level. It
+creates no children — those are the seed's — and running it twice rewrites nothing.
+
+**It refuses twice rather than guessing.** A primary key that omits a partition key stops the run
+with *"declare the composite primary key in the schema; the generator does not synthesize keys"* —
+the fix is the schema, not the migration. And a table an earlier migration already created
+unpartitioned stops it too: converting a live table is the copy-and-swap below, written by hand.
+`0023` is exactly that case, which is why it is hand-written.
+
+A refusal leaves the file `drizzle-kit` wrote already on disk. Fix the schema and regenerate; the
+migration has not been applied, and the journal entry is rewritten with it.
 
 **No `DEFAULT` partition, ever.** A default partition turns "the month nobody created" from a failed
 insert into a row in the wrong place, and the next `ATTACH` of that month has to scan the default to
@@ -150,6 +173,23 @@ the first.
 
 `ensureMonthlyPartitions` holds one advisory lock per table for the whole probe-and-create, because
 that is two statements: two replicas booting together both probe absent and one gets `42P07`.
+
+**`pnpm db:partitions` is the same routine from a shell**, for the operator whose worker was down on
+the first of the month. It prints a row per table per tenant:
+
+```
+┌─────────┬─────────────────┬──────────────────────────────────────┬─────────┬───────┐
+│ (index) │ table           │ tenant                               │ created │ ahead │
+├─────────┼─────────────────┼──────────────────────────────────────┼─────────┼───────┤
+│ 2       │ 'notifications' │ '01a0b342-18da-7337-83c9-a39020f26f78' │ 2     │ 0     │
+└─────────┴─────────────────┴──────────────────────────────────────┴─────────┴───────┘
+1 of 4 had under two months of runway.
+```
+
+**`ahead` is what existed *before* the run**, which is the reading that matters: a zero there says
+the next insert past month end would have failed. `created` is what this run had to add to fix it.
+Read the other way round — after ensuring — the column could never be anything but healthy, which is
+the same trap the consumer documents.
 
 ## Pruning is measured, not assumed
 

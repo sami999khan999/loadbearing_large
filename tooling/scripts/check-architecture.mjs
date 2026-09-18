@@ -199,7 +199,7 @@ const ENV_EXEMPT = [
   // Every runnable script sits above `src/`, so a folder barrel can be imported without
   // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
   /^packages\/auth\/tables\.ts$/,
-  /^packages\/infrastructure\/(migrate|seed|smoke)\.ts$/,
+  /^packages\/infrastructure\/(migrate|partitions|seed|smoke)\.ts$/,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {

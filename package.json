@@ -42,6 +42,7 @@
     "infra:logs": "docker compose -f infra/docker-compose.yml --profile \"*\" logs -f",
     "db:generate": "pnpm --filter @loadbearing/infrastructure run db:generate",
     "db:migrate": "pnpm --filter @loadbearing/infrastructure run db:migrate",
+    "db:partitions": "pnpm --filter @loadbearing/infrastructure run db:partitions",
     "db:seed": "pnpm --filter @loadbearing/infrastructure run db:seed",
     "db:studio": "pnpm --filter @loadbearing/infrastructure run db:studio",
     "auth:tables": "pnpm --filter @loadbearing/auth run auth:tables",

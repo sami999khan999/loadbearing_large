@@ -134,6 +134,7 @@
         "apps/*/*.config.mjs",
         "packages/auth/tables.ts",
         "packages/infrastructure/migrate.ts",
+        "packages/infrastructure/partitions.ts",
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
         "tooling/scripts/check-architecture.mjs"
@@ -171,6 +172,8 @@
         "**/*.mjs",
         "packages/auth/tables.ts",
         "packages/infrastructure/migrate.ts",
+        "packages/infrastructure/partition-ddl.ts",
+        "packages/infrastructure/partitions.ts",
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
         "packages/observability/src/logger/json.logger.ts"
