@@ -31,11 +31,11 @@ source: rewritten 2026-09-17 from plans/PLAN.md and plans/archive/* at 1a302f8; 
 
 ## Where we are
 
-**State, 2026-09-19.** Seventeen phases are built: the implementation audit (1–8, 5–6 September),
+**State, 2026-09-19.** Eighteen phases are built: the implementation audit (1–8, 5–6 September),
 the communication stack (9–13, 12–13 September), connection pooling and the partition allowlist
-(14–15, 13 and 17 September), the tenant layout (16, 18 September) and cold storage (17,
-19 September). Nine are open. Of the open items, 23 are filed by decision rather than queued —
-Phases 24, 25 and 26 — so the build queue proper is Phases 18–23.
+(14–15, 13 and 17 September), the tenant layout (16, 18 September), cold storage and the platform
+tier (17 and 18, 19 September). Eight are open. Of the open items, 23 are filed by decision rather
+than queued — Phases 24, 25 and 26 — so the build queue proper is Phases 19–23.
 
 **The first thing to do is not an item.** `pnpm infra:up` has to be running before any spec that
 needs a database does — and on a clean clone, `pnpm install` then `pnpm build:packages` before
@@ -45,9 +45,9 @@ needs a database does — and on a clean clone, `pnpm install` then `pnpm build:
 **Phase 16 is done** (2026-09-18) and **Phase 17 is done** (2026-09-19): retention is
 archive-then-drop for every partitioned table, objects are per tenant under `cold/`,
 `partition_archive` is the index a read starts from, and a restore is proven against MinIO rather
-than asserted. **Start at Phase 18** — the platform tier, which has no gate — then 19 on top of 17
-and 18. Phase 21 and Phase 22 are both unblocked by 17 as well. Phase 23 is independent small work
-for any spare hour.
+than asserted. **Start at Phase 19** — retention as a row, which both of them were the prerequisites for. Phase 21
+and Phase 22 are unblocked by 17 as well, and neither waits on 19. Phase 23 is independent small
+work for any spare hour.
 
 ### Timeline
 
@@ -70,7 +70,7 @@ for any spare hour.
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
 | 16 | Pruning proven, and the tenant layout | Scaling | ✅ done | 2026-09-18 | `DB-SCALING-PLAN.md` 2.B |
 | 17 | Cold storage: retention stops meaning deletion | Scaling | ✅ done | 2026-09-19 | `DB-SCALING-PLAN.md` 2.C |
-| 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
+| 18 | The platform tier, on RBAC | Admin | ✅ done | 2026-09-19 | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
 | 20 | Projection policy: which actions reach ClickHouse, and for how long each | Admin | ⬜ open | after 19 | `PLATFORM-ADMIN-PLAN.md` Phase 3 |
 | 21 | Archived data, where the person it belongs to can read it | Scaling | ⬜ open | any time after 17 | `DB-SCALING-PLAN.md` Phase 5 |
@@ -1808,7 +1808,7 @@ that edits a cron pattern has to re-register every repeatable job, and there is 
 
 #### The scope (`permissions`, `application`)
 
-- [ ] `18.1` **Third scope** — `permission-registry.ts` `PermissionScope = "org" | "goal" | "platform"`;
+- [x] `18.1` **Third scope** — `permission-registry.ts` `PermissionScope = "org" | "goal" | "platform"`;
   `PermissionRegistry.byScope(scope)` beside `byModule`, so the seed and the matrix can exclude by
   scope rather than by module name. `capability-set.ts`: `CapabilitySetDto.platform: ScopedSetDto`
   (`from()` treats a missing axis as empty, so a stale cached DTO degrades to "no platform rights"
@@ -1818,27 +1818,45 @@ that edits a cron pattern has to re-register every repeatable job, and there is 
   paths from decision D31, each as a case that fails without the branch. **Docs:** new
   `packages/permissions/docs/reference/platform-scope.md` (registered in `reference/meta.json` and
   `docs/index.md`), `docs/opinions/vocabulary.md` scope row, `docs/ai/rules/vocabulary.md` qualifier line.
+  `done: 2026-09-19` — `platform` is **optional** on the DTO rather than required, which the item
+  called for and is worth restating: a set cached in Redis or serialised into an SSR payload before
+  this axis existed comes back without it, and a required field would throw on every request behind
+  it until the TTL. `byScope` is built the way `byModule` is, one frozen map at module load.
 
-- [ ] `18.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the nine keys from the
+- [x] `18.2` **Keys, routes, gate** — `catalog/platform.permissions.ts` with the nine keys from the
   vocabulary (`platform.shards.manage` is registered now so the seed grants it; its procedure
   arrives with `24.2`), spread into `CATALOG`; `route/platform.routes.ts`; `gate/platform.gate.ts` gating the
   `platform` nav module on `platform.status.read`. `ModuleRegistry.isVisible` needs no change: it
   calls `can()` and the new branch answers. **Docs:** `packages/permissions/docs/index.md` tree.
+  `done: 2026-09-19` — `module-registry.spec.ts` asserted every gate was **org**-scoped, with the
+  reason "`visibleModules()` asks without a `goalId`". The reason is about `goal`, not about `org`,
+  so the assertion is now "no gate is goal-scoped" and a case was added for the platform module
+  being hidden from a tenant wildcard and shown to a holder.
 
-- [ ] `18.3` **`Principal` carries nothing new; the audit rebase is a rule, not a field** —
+- [x] `18.3` **`Principal` carries nothing new; the audit rebase is a rule, not a field** —
   `application/src/platform/platform.reader.ts`: `PlatformReader.organizationId(): Promise<OrganizationId>`
   (throws `InternalError` if no organization is marked — the seed guarantees one). Platform use-cases
   call `activity.record(new Principal(platformOrganizationId, actor.userId, actor.capabilities, actor.kind), …)`
   with the comment from decision D38. **Docs:** `packages/application/docs/reference/platform.md` (new).
+  `done: 2026-09-19` — the rebase is a **rule** and stays one: Phase 18 ships no writing platform
+  use-case, so a `PlatformRebase` helper would have had no caller. `platform.md` states the shape
+  before `19.7` writes the first one. `PlatformReader` carries a second method, `organization()`,
+  because the status page needs the slug and name and `organizationId()` is on the hot path —
+  `CapabilityCache` asks it on every RBAC write.
 
 #### Resolution and cache (`infrastructure`, `auth`)
 
-- [ ] `18.4` **`organizations.is_platform`** — `rbac.schema.ts` gains the column and the partial unique
+- [x] `18.4` **`organizations.is_platform`** — `rbac.schema.ts` gains the column and the partial unique
   index; `roles.scope` enum gains `"platform"`; migration generated then hand-checked (§20: a
   `boolean not null default false` is safe on a populated table). `seed.ts` marks the `loadbearing`
   organization `is_platform = true` after creating it. **Docs:** `docs/setup/13` §13.3, `docs/opinions/vocabulary.md` table list.
+  `done: 2026-09-19` — migration `0026_platform_tier.sql`, and the mark is **every run** rather than
+  only on create: a database seeded before the tier existed has the organization and not the flag.
+  §20 refused the partial unique index for want of a de-dup, and it was right to: two rows marked by
+  hand would abort the migration halfway. The repair is an `UPDATE` clearing the flag, not a
+  `DELETE` — so §20 learned that an `UPDATE` de-dups a **partial** index, and only a partial one.
 
-- [ ] `18.5` **`PgCapabilityRepository.resolvePlatformFor(userId)`** — one query for grants
+- [x] `18.5` **`PgCapabilityRepository.resolvePlatformFor(userId)`** — one query for grants
   (`memberships ⋈ roles ⋈ role_permissions` where `organizations.is_platform`, `deactivated_at is null`)
   and one for overrides, filtered in code to `scopeOf(key) === "platform"` after `isKnown`. The port
   `CapabilityRepository` gains the method. `CapabilityCache.platformFor(userId)` under
@@ -1846,45 +1864,77 @@ that edits a cron pattern has to re-register every repeatable job, and there is 
   prefix, and every RBAC write use-case calls it **when the actor's organization is the platform one**
   (a role edit in a customer tenant cannot change a platform grant). **Docs:** the capability page
   under `packages/auth/docs/reference/`, `docs/setup/16`.
+  `done: 2026-09-19` — the "when the actor's organization is the platform one" test is in
+  **`CapabilityCache`**, not in the four use-cases. It is the only thing that knows which
+  organization is the tier, so both `invalidate` and `invalidateOrganization` ask `PlatformReader`
+  and flush the second prefix on a match. No use-case changed, the port gained `invalidatePlatform()`
+  for the fake to record, and the rule cannot be half-applied by a fifth write somebody adds.
 
-- [ ] `18.6` **`PrincipalBuilder` merges** — after `memberships.isActive`, `capabilities.forUser` and
+- [x] `18.6` **`PrincipalBuilder` merges** — after `memberships.isActive`, `capabilities.forUser` and
   `capabilities.platformFor` run in parallel and the principal is built from the merged DTO. The
   API-key branch and `SystemPrincipal.platform()`/`forOrganization()` pass an empty platform set
   explicitly. `session.fn.ts` ships the merged `toJSON()`, so the router context and `SessionProvider`
   carry it with no change. **Docs:** `apps/web/docs/reference/enforcement-surfaces.md` (the DTO now
   has three axes; the surface count does not grow).
+  `done: 2026-09-19` — `session.fn.ts` does **not** ship `PrincipalBuilder`'s `toJSON()`; it never
+  went through `PrincipalBuilder` (see `server-functions.md`) and resolves capabilities itself. So
+  the merge is written twice, once in each, and the enforcement-surfaces page says why: without the
+  second copy, `RouteGuard` and `<Can>` would hide a platform page the server would have served.
 
-- [ ] `18.7` **The wire DTO** — `role.contract.ts` `capabilities` schema gains `platform: scopedSet`
+- [x] `18.7` **The wire DTO** — `role.contract.ts` `capabilities` schema gains `platform: scopedSet`
   (the contract restates the DTO on purpose; it must be restated here too). `packages/query`'s
   session snapshot type follows from the contract. **Docs:** `packages/contracts/docs/index.md`.
+  `done: 2026-09-19` — `.optional()`, matching the DTO exactly. Two things the item did not name and
+  the compiler did: `RoleContract.scope` and `RoleRecord.scope` widen to admit `platform`, because a
+  seeded platform role is listed like any other; and `role.create` takes a **narrower**
+  `creatableScope` of `org | goal`, because a widened `scope` would otherwise have let any tenant
+  create a platform-scoped role over the wire.
 
 #### Seeds, the first admin, the matrix (`infrastructure`, `feature`, `application`)
 
-- [ ] `18.8` **`owner: "all"` stops at the tenant** — `SystemRoleSeed` resolves `"all"` as
+- [x] `18.8` **`owner: "all"` stops at the tenant** — `SystemRoleSeed` resolves `"all"` as
   `PermissionRegistry.instance.all().filter(scope !== "platform")`, with the comment that a tenant
   owner is not a platform admin. `reconcile()` therefore removes any platform key a tenant `owner`
   might hold from an earlier deploy. Spec pins it. **Docs:** `docs/setup/13` §13.4 seed paragraph.
+  `done: 2026-09-19` — the doc paragraph is §13.8, not §13.4: the setup file's seed section moved
+  since the item was written. `system-role.seed.spec.ts` asserted `owner` held
+  `PermissionRegistry.instance.all()` exactly, and now asserts the catalog minus the platform scope
+  plus "no key starts with `platform.`" — the second half being the one that fails if `TENANT_KEYS`
+  is ever widened back.
 
-- [ ] `18.9` **`PlatformRoleSeed`** — `pg/seed/platform-role.seed.ts`, same idempotent shape as
+- [x] `18.9` **`PlatformRoleSeed`** — `pg/seed/platform-role.seed.ts`, same idempotent shape as
   `SystemRoleSeed`, runs only for the organization where `is_platform`: one role `platform_admin`,
   `is_system`, `scope = 'platform'`, holding `PermissionRegistry.instance.byScope("platform")`,
   reconciled on every seed so a new platform key reaches admins on the next deploy. `seed.ts` calls
   it after marking the organization. `RoleRules.RESERVED_KEYS` gains `platform_admin`. **Docs:** `docs/setup/13` §13.4.
+  `done: 2026-09-19` — `run()` takes no argument and resolves the organization by the flag, returning
+  null when none is marked: the tier is a property of a row, not of the slug in an env file. Its
+  `reconcile()` is a plain `not in` rather than `SystemRoleSeed`'s row-value form, because it has one
+  role rather than four.
 
-- [ ] `18.10` **`pnpm platform:grant <email>`** — `packages/infrastructure/platform-grant.ts` above
+- [x] `18.10` **`pnpm platform:grant <email>`** — `packages/infrastructure/platform-grant.ts` above
   `src/` (the rule for runnable scripts), over `DATABASE_DIRECT_URL ?? DATABASE_URL`: find the user by
   email, find the platform organization and its `platform_admin` role, upsert the membership
   (insert, or change the role if already a member), print what it did. Root `package.json` script.
   The only way the first platform admin exists; the members screen is the way every later one does.
   **Docs:** `docs/ai/rules/workflow.md` command block, `docs/setup/13` §13.5.
+  `done: 2026-09-19` — three outcomes rather than two, and it prints which: `granted`, `moved` (a
+  member of the tier under some other role) and `already`. "Already" and "granted" are different
+  answers to "why can this person not see /platform", and both look like success otherwise. The
+  script joins the `noProcessEnv` exemption in **both** places §3 keeps byte-for-byte in step.
+  `verified: 2026-09-19` — a grant, a re-run reading `already`, and an unknown address refusing.
 
-- [ ] `18.11` **The tenant role editor cannot see platform keys** — `PermissionMatrix` takes an
+- [x] `18.11` **The tenant role editor cannot see platform keys** — `PermissionMatrix` takes an
   `excludeScopes` prop; `RoleMatrix` passes `["platform"]` unless the session's active organization is
   the platform one (the SSR snapshot gains `isPlatformOrganization: boolean`, read off `organizations`
   by `session.fn.ts`). The grant use-case already refuses a key the granter does not hold; this item
   removes the checkbox that would have produced the 403. **Docs:** `packages/feature/docs/index.md`.
+  `done: 2026-09-19` — the flag rides `SessionSnapshot` → `SessionProvider` → `useIsPlatformOrganization`,
+  defaulted to `false` at the provider so a caller that has not been updated renders as an ordinary
+  tenant. `excludeScopes` is a frozen module constant rather than an inline array: it is a prop, and
+  a fresh one each render would invalidate the memo inside the matrix.
 
-- [ ] `18.12` **`/platform/status`, the proof page** — `packages/application/src/platform/inspect-platform-status.use-case.ts`
+- [x] `18.12` **`/platform/status`, the proof page** — `packages/application/src/platform/inspect-platform-status.use-case.ts`
   (`authorizer.assert(actor, "platform.status.read")`, returns `Container.health()`'s report plus the
   platform organization's id and name); contract `platform.status` + `catalog/platform.permissions.ts`
   entry + `platform.router.ts` + `contract.platform` + `appRouter.platform` (one commit, rule 5);
@@ -1897,16 +1947,35 @@ that edits a cron pattern has to re-register every repeatable job, and there is 
   or off — while the control itself lives on `/platform/analytics`. **Docs:**
   `apps/web/docs/reference/enforcement-surfaces.md` gains nothing new,
   `packages/content/docs/reference/namespace.md`.
+  `done: 2026-09-19` — the projection's three states are **not** on the page yet: `platform_policy`
+  is `20.8`'s table, so "on" and "off" have nowhere to come from. The page shows
+  `health().analytics` as configured / up / down, which is the honest subset, and `20.8` adds the
+  switch beside it. `Container.health()` reaches the use-case through `PlatformHealthReader`, a
+  **slice** port rather than one in `port/`: `application` may not name `composition`, so the seam
+  is forced by the layering — and putting it in the slice is what keeps `test-container.spec.ts` at
+  twenty-five ports, which `18.13` predicted. `ContainerHealthReader` is the one place the container
+  implements a port, built last in the constructor and called only on a request.
 
-- [ ] `18.13` **§9 and the tripwires** — `check-architecture.mjs` §9 needs no change in this phase
+- [x] `18.13` **§9 and the tripwires** — `check-architecture.mjs` §9 needs no change in this phase
   (no new table); `test-container.spec.ts` needs no change (no new cross-cutting port). Note both
   here so Phase 19 does not forget they exist. `docs/ai/skills/add-slice.md` step 1 gains "scope is
   `org` unless the slice is platform-wide, and then it is `platform` and its keys never reach a
   tenant role".
+  `done: 2026-09-19` — both predictions held: no new table and no new cross-cutting port, so §9 and
+  `test-container.spec.ts` are untouched. One tripwire the item did not predict **did** fire:
+  `procedure-permissions.spec.ts` asserts every catalog key has a procedure behind it, and eight of
+  the nine platform keys are registered ahead of the screens that assert them. They are named in an
+  `AWAITING_A_PROCEDURE` set with the item that removes each — a list that only ever shrinks — and
+  the assertion stays sharp for everything else.
 
-- [ ] `18.14` **Docs** — `docs/opinions/data-and-scale.md` §1: the super-admin dashboard now has a
+- [x] `18.14` **Docs** — `docs/opinions/data-and-scale.md` §1: the super-admin dashboard now has a
   tier and this file is where it lands; `platform-scope.md` (`18.1`): the three axes, the four leak
   paths and what closes each, the platform organization, the seed script, why not an env list.
+  `done: 2026-09-19` — plus four the item did not list: `capability-cache.md` (the second prefix and
+  who flushes it), `enforcement-surfaces.md` (three axes, one merge written twice), `container.md`
+  (the one port the container implements, and why it is not the lazy instantiation that page bans),
+  and `add-slice.md` step 1. `packages/content/docs/index.md` was stale by five namespaces before
+  this phase and is corrected with it.
 
 **Exit.** `pnpm db:seed` marks `loadbearing` platform and seeds `platform_admin`;
 `pnpm platform:grant alice@example.test` prints the membership; signed in as alice with a customer
@@ -1915,6 +1984,25 @@ tenant active, `/platform/status` renders and the nav shows the module; signed i
 a tenant owner calling `role.grant` with a platform key gets `FORBIDDEN`; the capability spec fails
 each of decision D31's four leak paths with the branch removed; `pnpm check:architecture` 20/20 and
 every suite green.
+
+`verified: 2026-09-19` — `pnpm check:architecture` is **21/21**, not 20/20: the count was 21 before
+this phase and this phase adds no assertion. `pnpm typecheck`, `pnpm lint` and `pnpm test` green.
+`pnpm db:seed` marks `loadbearing` and seeds `platform_admin` with exactly the nine platform keys,
+`owner` with the other twenty-three and no platform key among them;
+`pnpm platform:grant <email>` prints `granted`, then `already` on a re-run, and refuses an address
+with no user.
+
+Three clauses are read differently from how they are written, and each is recorded rather than
+quietly passed:
+
+- **"signed in as alice … renders"** and **"signed in as a tenant owner … redirects"** were not
+  driven through a browser. Every link in the chain is asserted instead:
+  `resolvePlatformFor` against Postgres, the merge in `CapabilityCache` and `PrincipalBuilder`,
+  the use-case's own `assert` refusing a wildcard holder, and `routes.spec.ts` proving the gate's
+  path has a page. What is untested end to end is the browser round trip alone.
+- **"the role editor shows no `platform` module"** is asserted on `PermissionMatrix`, which is
+  where the exclusion lives: the platform rows are gone and every other row is still there.
+- **`pnpm check:architecture` 20/20** was already wrong when it was written.
 
 ---
 
@@ -3273,6 +3361,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-19 | @sami | Phase 18 done. `platform` is a third `PermissionScope` held through a role in the one organization marked `is_platform`; `can()` gained the branch that closes D31's four leak paths, `owner: "all"` stops at the tenant, `pnpm platform:grant` seeds the first admin, and `/platform/status` proves the tier end to end |
 | 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |
 | 2026-09-17 | @sami | `P2.20` (now `2.20`) closed as moot: its dependency `P5.15` had deleted the component. 120 open |
