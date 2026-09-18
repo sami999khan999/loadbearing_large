@@ -35,6 +35,7 @@ export {
   type NotificationPreferenceDto,
   Password,
   type RetentionEntryDto,
+  type RetentionPreviewDto,
   type RoleDto,
 } from "@loadbearing/contracts";
 
@@ -105,6 +106,7 @@ export {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,

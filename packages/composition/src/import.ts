@@ -75,6 +75,7 @@ export {
   PlatformHealthReader,
   PlatformReader,
   type PlatformStatus,
+  PreviewRetentionChangeUseCase,
   type Principal,
   type ProjectionCheckpoint,
   QueueDocumentIndexUseCase,

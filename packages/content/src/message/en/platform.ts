@@ -40,6 +40,14 @@ export const platform = {
   "platform.retention.neverDropped": "Never dropped — domain data.",
   "platform.retention.clickhouse": "ClickHouse",
   "platform.retention.clickhouse.months": "Months of analytics history",
+  "platform.retention.preview.loading": "Working out what this would drop…",
+  "platform.retention.preview.invalid": "Enter a whole number of months, at least one.",
+  "platform.retention.preview.failed": "Could not work out what this would drop.",
+  "platform.retention.preview.none": "The next run would drop nothing.",
+  // Rows are the planner's estimate, refreshed by autovacuum — hence "about", which is
+  // the honest word and not a hedge.
+  "platform.retention.preview.summary":
+    "The next run drops {partitions} partitions, about {rows} rows, {bytes} bytes.",
   "platform.retention.drift":
     "The store holds something else. The nightly run will put this right; it now holds {actual}.",
 } as const;

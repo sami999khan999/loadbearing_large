@@ -1,2 +1,6 @@
 export { PlatformStatusPanel } from "./platform-status.panel.js";
 export { RetentionPolicyForm } from "./retention-policy.form.js";
+export {
+  RetentionPreviewNotice,
+  type RetentionPreviewNoticeProps,
+} from "./retention-preview.notice.js";

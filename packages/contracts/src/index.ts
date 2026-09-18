@@ -77,6 +77,7 @@ export {
   type PlatformStatusDto,
   type RetentionDto,
   type RetentionEntryDto,
+  type RetentionPreviewDto,
   type RetentionUpdateInput,
 } from "./platform/index.js";
 export {

@@ -67,6 +67,31 @@ export class PlatformContract {
     }),
   });
 
+  public static readonly previewQuery = z.object({
+    tableName: z.string().min(1).max(64),
+    hotMonths: z.coerce.number().int().min(1).max(600),
+  });
+
+  public static readonly retentionPreview = z.object({
+    tableName: z.string().min(1),
+    hotMonths: z.number().int(),
+    partitions: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          period: z.string().min(1),
+          estimatedRows: z.number().int(),
+          bytes: z.number().int(),
+        }),
+      )
+      .readonly(),
+    totalPartitions: z.number().int(),
+    // The planner's number, refreshed by autovacuum — the screen says "about", and the
+    // field is named for what it is rather than for what a reader would like it to be.
+    estimatedRows: z.number().int(),
+    bytes: z.number().int(),
+  });
+
   // `tableName` stays a string and is validated against `PartitionedTable.NAMES` in the
   // use-case: a table name never comes from data, and the closed union is one layer in.
   public static readonly retentionUpdate = z.object({
@@ -82,5 +107,6 @@ export type ColdModeDto = z.infer<typeof PlatformContract.coldMode>;
 export type PlatformHealthDto = z.infer<typeof PlatformContract.health>;
 export type RetentionDto = z.infer<typeof PlatformContract.retention>;
 export type RetentionEntryDto = z.infer<typeof PlatformContract.retentionEntry>;
+export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type PlatformStatusDto = z.infer<typeof PlatformContract.status>;

@@ -52,6 +52,10 @@ export class QueryKeys {
     all: () => ["platform"] as const,
     status: () => ["platform", "status"] as const,
     retention: () => ["platform", "retention"] as const,
+    // The typed value is in the key, because that is what the answer is about: two
+    // previews of two different numbers are two answers, not one refetched.
+    retentionPreview: (table: string, months: number) =>
+      ["platform", "retention", "preview", table, months] as const,
   };
 
   public static readonly rbac = {

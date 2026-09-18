@@ -15,6 +15,16 @@ export class PlatformQueries {
     });
   }
 
+  // `staleTime: 0`, and `enabled` is the caller's: this answers "what would this
+  // number destroy", and a cached answer is the wrong one.
+  public static retentionPreview(client: ApiClient, tableName: string, hotMonths: number) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.retentionPreview(tableName, hotMonths),
+      queryFn: () => client.platform.previewRetention({ tableName, hotMonths }),
+      staleTime: 0,
+    });
+  }
+
   // A minute, like every other settings read: the rows change when somebody saves, and
   // the mutation invalidates this key. The backstop is for a second tab.
   public static retention(client: ApiClient) {

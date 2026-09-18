@@ -10,6 +10,12 @@ export {
 } from "./list-retention-policies.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
+export {
+  type PreviewedPartition,
+  type PreviewRetentionChangeInput,
+  PreviewRetentionChangeUseCase,
+  type RetentionPreview,
+} from "./preview-retention-change.use-case.js";
 export { RetentionRules } from "./retention.rules.js";
 export {
   type ColdMode,

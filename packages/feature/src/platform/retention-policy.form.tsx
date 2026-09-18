@@ -13,8 +13,10 @@ import {
   StatusBadge,
   useApiClient,
   useAppQuery,
+  useCallback,
   useState,
 } from "../import.js";
+import { RetentionPreviewNotice } from "./retention-preview.notice.js";
 
 // Two buttons rather than a `<select>`: `ui` has no select primitive, and two options
 // is a choice a person can see rather than open — `MODES` in the notification form.
@@ -53,6 +55,17 @@ export function RetentionPolicyForm() {
   // Keyed by table, and only for the rows somebody has touched: an uncontrolled input
   // per row would lose its value on every refetch.
   const [drafts, setDrafts] = useState<Readonly<Record<string, Draft>>>({});
+  // **The save is disabled until a preview for the current value has loaded.** Lowering
+  // a retention number schedules a mass drop, and this is the last thing before it.
+  const [previewed, setPreviewed] = useState<Readonly<Record<string, boolean>>>({});
+
+  const markPreviewed = useCallback(
+    (tableName: string) => (ready: boolean) =>
+      setPreviewed((current) =>
+        current[tableName] === ready ? current : { ...current, [tableName]: ready },
+      ),
+    [],
+  );
 
   if (retention.isPending) return <DataTable.Skeleton columns={4} rows={4} />;
   if (retention.isError) {
@@ -143,8 +156,18 @@ export function RetentionPolicyForm() {
               ) : null
             }
 
+            <RetentionPreviewNotice
+              tableName={row.tableName}
+              hotMonths={draft.hotMonths}
+              onReady={markPreviewed(row.tableName)}
+            />
+
             <Button
-              disabled={update.isPending || monthsOf(draft.hotMonths) === null}
+              disabled={
+                update.isPending ||
+                monthsOf(draft.hotMonths) === null ||
+                previewed[row.tableName] !== true
+              }
               onClick={() =>
                 update.mutate({
                   store: "postgres",

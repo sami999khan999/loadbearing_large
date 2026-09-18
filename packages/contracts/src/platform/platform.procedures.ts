@@ -15,6 +15,13 @@ export class PlatformProcedures {
     .route({ method: "GET", path: "/platform/retention" })
     .output(PlatformContract.retention);
 
+  // `GET` with the value being *typed* in the query string, not the value saved: a
+  // preview of what is already stored tells an operator nothing they did not have.
+  public static readonly previewRetention = oc
+    .route({ method: "GET", path: "/platform/retention/preview" })
+    .input(PlatformContract.previewQuery)
+    .output(PlatformContract.retentionPreview);
+
   // `PUT` rather than `PATCH`: the body carries every field of one row, and a partial
   // retention change is not a thing an operator means.
   public static readonly updateRetention = oc
@@ -27,6 +34,7 @@ export class PlatformProcedures {
   public static readonly all = {
     status: PlatformProcedures.status,
     listRetention: PlatformProcedures.listRetention,
+    previewRetention: PlatformProcedures.previewRetention,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

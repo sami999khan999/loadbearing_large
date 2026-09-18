@@ -97,6 +97,7 @@ import {
   PgUnitOfWork,
   PgVectorStore,
   type PlatformReader,
+  PreviewRetentionChangeUseCase,
   PrincipalBuilder,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
@@ -331,6 +332,7 @@ export class Container {
   public readonly platformAdmin: {
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
+    readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
@@ -732,6 +734,11 @@ export class Container {
         this.retentionPolicies,
         this.storagePolicy,
         this.analyticsProjector ?? null,
+      ),
+      previewRetention: new PreviewRetentionChangeUseCase(
+        this.authorizer,
+        this.maintenance,
+        this.clock,
       ),
       updateRetention: new UpdateRetentionPolicyUseCase(
         this.authorizer,

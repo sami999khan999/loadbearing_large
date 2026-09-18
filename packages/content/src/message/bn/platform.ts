@@ -33,5 +33,11 @@ export const platform = {
   "platform.retention.neverDropped": "কখনও বাদ দেওয়া হয় না — ডোমেইন তথ্য।",
   "platform.retention.clickhouse": "ক্লিকহাউস",
   "platform.retention.clickhouse.months": "বিশ্লেষণ ইতিহাসের মাস",
+  "platform.retention.preview.loading": "এটি কী বাদ দেবে তা হিসাব করা হচ্ছে…",
+  "platform.retention.preview.invalid": "অন্তত এক, পূর্ণসংখ্যায় মাস লিখুন।",
+  "platform.retention.preview.failed": "এটি কী বাদ দেবে তা হিসাব করা যায়নি।",
+  "platform.retention.preview.none": "পরবর্তী চালনায় কিছুই বাদ যাবে না।",
+  "platform.retention.preview.summary":
+    "পরবর্তী চালনা {partitions}টি পার্টিশন, আনুমানিক {rows}টি সারি, {bytes} বাইট বাদ দেবে।",
   "platform.retention.drift": "স্টোরে অন্য কিছু আছে। রাতের কাজ এটি ঠিক করবে; এখন সেখানে আছে {actual}।",
 } as const;

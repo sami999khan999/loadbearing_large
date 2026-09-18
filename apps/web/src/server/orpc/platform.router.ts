@@ -13,6 +13,11 @@ export class PlatformRouter {
     context.container.platformAdmin.listRetention.execute(context.principal),
   );
 
+  public static readonly previewRetention = authed.platform.previewRetention.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.previewRetention.execute(context.principal, input),
+  );
+
   // `acknowledged` rather than the row: the screen refetches the list, which also
   // carries what the bucket and ClickHouse now hold, and one of those may have drifted.
   public static readonly updateRetention = authed.platform.updateRetention.handler(
@@ -27,6 +32,7 @@ export class PlatformRouter {
   public static readonly all = {
     status: PlatformRouter.status,
     listRetention: PlatformRouter.listRetention,
+    previewRetention: PlatformRouter.previewRetention,
     updateRetention: PlatformRouter.updateRetention,
   } as const;
 }
