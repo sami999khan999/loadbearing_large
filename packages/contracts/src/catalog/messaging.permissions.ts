@@ -1,7 +1,7 @@
 import type { PermissionKey } from "../import.js";
 
 // A permission here is necessary and never sufficient: every use-case also asserts
-// membership of the conversation. See docs/reference/messaging.md.
+// membership of the conversation. See packages/application/docs/reference/messaging.md.
 export const messagingProcedurePermissions = {
   "conversation.list": "messaging.conversation.read",
   "conversation.get": "messaging.conversation.read",

@@ -57,7 +57,7 @@ export class ApiClient {
   }
 
   // A relative base is correct in a browser and never correct under Node, where `fetch`
-  // has no document to resolve against. See docs/reference/transports.md.
+  // has no document to resolve against. See docs/reference/transport.md.
   private static assertResolvable(baseUrl: string): void {
     if (platform().window !== undefined) return;
     if (platform().URL.canParse(baseUrl)) return;

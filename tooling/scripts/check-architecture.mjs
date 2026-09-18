@@ -839,6 +839,52 @@ assert("every backticked path in the docs exists", (failures) => {
       }
     });
   }
+
+  // The other half, and the one nothing else covers: `docs/ai/rules/comments.md` tells an
+  // author to say the constraint in the code and leave `// see docs/reference/x.md`, so a
+  // page that was never written passes every check that walks `docs/` alone.
+  //
+  // Resolved against the *owning* package, unlike the doc half above. A doc page writing
+  // `docs/reference/` is usually speaking generically; a source comment is a pointer a
+  // reader follows from that file, so one meaning another package's page names the path.
+  for (const dir of sourceDirs()) {
+    for (const file of walk(join(dir, "src"), [".ts", ".tsx"])) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          // `(?<!:)` so the `//` of `https://` is not read as the start of a comment.
+          const comment = line.search(/(?<!:)\/\//u);
+          if (comment === -1) return;
+
+          const text = line.slice(comment);
+
+          // The escape the message below offers, checked: a comment that names the path
+          // from the root rather than the package has to name one that is there.
+          for (const [rooted] of text.matchAll(
+            /\b(?:(?:packages|apps|tooling|infra)\/|docs\/(?!reference\/))[\w./-]+\.md\b/gu,
+          )) {
+            if (existsSync(join(ROOT, rooted))) continue;
+            failures.push(`${rel(file)}:${index + 1} names ${rooted}, which does not exist`);
+          }
+
+          // Not preceded by a path separator: `packages/x/docs/reference/y.md` is a path
+          // from the root, and the loop above resolves that one.
+          for (const [, page] of text.matchAll(/(?<![\w/-])docs\/reference\/([a-z0-9-]+\.md)/gu)) {
+            const name = page ?? "";
+            if (existsSync(join(dir, "docs", "reference", name))) continue;
+
+            const elsewhere = sourceDirs().find((other) =>
+              existsSync(join(other, "docs", "reference", name)),
+            );
+
+            failures.push(
+              `${rel(file)}:${index + 1} names docs/reference/${name}, which ` +
+                (elsewhere ? `lives in ${rel(elsewhere)} — name the path` : "does not exist"),
+            );
+          }
+        });
+    }
+  }
 });
 
 // ── 16 — the two pnpm version declarations agree ─────────────────────────────

@@ -1341,7 +1341,7 @@ against twenty-two migrations, not twenty-one.
   or the runway run passes ten minutes at a tenant count a deployment could plausibly reach. Added
   2026-09-17. **Docs:** `partitions.md`, `docs/opinions/data-and-scale.md` §4.2.
 
-- [ ] `16.13` **§15 reads source comments too** — `docs/ai/rules/comments.md` tells an author to
+- [x] `16.13` **§15 reads source comments too** `done: 2026-09-18` — `docs/ai/rules/comments.md` tells an author to
   write `// see docs/reference/x.md` and let the page carry the why, and §15 walks only `docs/`,
   so a comment naming a page that was never written passes. Two do today:
   `pg-notification.repository.ts:23` names `docs/reference/notifications.md`, and
@@ -1350,6 +1350,23 @@ against twenty-two migrations, not twenty-one.
   `docs/reference/<name>.md` and resolves each against that package's `docs/reference/`. Same
   assertion number, wider input, so decision D21's count holds. The first reference is fixed by
   writing the page or deleting the sentence — decided when built. **Docs:** `docs/setup/26` §15.
+  `built: 2026-09-18` — **five, not two.** The item counted the two missing pages and missed the
+  three comments naming a page that exists somewhere else: `api-client` wrote `transports.md` for a
+  page called `transport.md`, and two `contracts` files named `docs/reference/messaging.md` for a
+  page that lives in `application`.
+
+  Both missing pages had the sentence deleted rather than a page invented: each comment already
+  said the whole thing it was pointing away from — the parameter cap on a chunked insert, and the
+  correlated `EXISTS` that keeps the recipient query one statement. **`22.10` re-adds the pointer to
+  `notification-recipients.md` when it writes that page**, and the assertion is what will hold it to
+  writing the page rather than only the sentence.
+
+  One thing the item did not name and the check needs: a source comment resolves against **its own**
+  package, unlike a doc span, which resolves against any. That is the difference between "the
+  package's `docs/reference/`" spoken generically in an opinions page and a pointer a reader follows
+  out of one file. The message offers "name the path" for a page in another package — so the same
+  walk now resolves a root-relative path in a comment too, or that fix would be an unchecked escape
+  from the rule it is fixing.
 
 #### Dropped
 

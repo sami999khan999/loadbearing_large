@@ -668,7 +668,8 @@ Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generat
 
 ```js
 // fail if a backticked repo-relative path in docs/**, README.md, AGENTS.md or a
-// package's docs/** names nothing on disk
+// package's docs/** names nothing on disk — and, in a `//` comment under
+// packages/*/src or apps/*/src, a docs/reference/<page>.md the package does not have
 ```
 
 The cheapest kind of documentation rot and the one a reader trusts most: a path in backticks reads
@@ -691,6 +692,19 @@ add exemptions rather than fix paths:
 
 `apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
 move there, and doc [30](30-desktop-app.md) is a plan for one of them.
+
+**It reads source comments too, and that is the half nothing else covers.**
+[Comments](../ai/rules/comments.md) tells an author to say the constraint in the code and leave
+`// see docs/reference/x.md`, letting the page carry the why — so a page that was never written
+passes every check that walks `docs/` alone. Five did when this half was first run: one named a page
+whose real name was singular, two named a page that lives in another package, and two named pages
+nobody has written.
+
+**A source comment resolves against its own package, unlike a doc span.** A doc page writing
+`docs/reference/` is usually speaking generically; a source comment is a pointer a reader follows
+from that file, and one that means another package's page has to name the path. So the check offers
+that as the fix — and then resolves the path it offered, or "name the path" would be an unchecked
+escape from the rule.
 
 ### 16 — Both pnpm version declarations agree
 

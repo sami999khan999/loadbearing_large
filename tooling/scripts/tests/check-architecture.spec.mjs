@@ -426,16 +426,59 @@ describe("14 — no comment block over two lines", () => {
 });
 
 describe("15 — every backticked path in the docs exists", () => {
+  const NAME = "every backticked path in the docs exists";
+
   it("catches a path that names nothing, and ignores one inside a fence", () => {
     fails(
       run({ "docs/index.md": "See `packages/nowhere/src/index.ts`.\n" }),
-      "every backticked path in the docs exists",
+      NAME,
       "packages/nowhere/src/index.ts",
     );
-    passes(
-      run({ "docs/index.md": "```\n`packages/nowhere/src/index.ts`\n```\n" }),
-      "every backticked path in the docs exists",
+    passes(run({ "docs/index.md": "```\n`packages/nowhere/src/index.ts`\n```\n" }), NAME);
+  });
+
+  // The source half. `comments.md` tells an author to leave `// see docs/reference/x.md`
+  // and let the page carry the why, so a page nobody wrote passes every `docs/` walk.
+  const commented = (body) => ({ "packages/application/src/index.ts": body });
+
+  it("catches a comment naming a reference page the package does not have", () => {
+    fails(
+      run(commented("// See docs/reference/nowhere.md.\nexport const A = 1;\n")),
+      NAME,
+      "nowhere.md",
     );
+  });
+
+  it("accepts one the package does have", () => {
+    passes(
+      run({
+        ...commented("// See docs/reference/ports.md.\nexport const A = 1;\n"),
+        "packages/application/docs/reference/ports.md": "Ports.\n",
+      }),
+      NAME,
+    );
+  });
+
+  // The message offers "name the path" as the fix for a page in another package, so the
+  // path a comment names has to be checked too, or the fix is an unchecked escape.
+  it("checks a root-relative path a comment names", () => {
+    fails(
+      run(commented("// See packages/nowhere/docs/reference/ports.md.\nexport const A = 1;\n")),
+      NAME,
+      "packages/nowhere/docs/reference/ports.md",
+    );
+    passes(
+      run({
+        ...commented("// See packages/other/docs/reference/ports.md.\nexport const A = 1;\n"),
+        "packages/other/package.json": PKG("other"),
+        "packages/other/docs/reference/ports.md": "Ports.\n",
+      }),
+      NAME,
+    );
+  });
+
+  it("does not read a URL as a comment, or a path outside one", () => {
+    passes(run(commented('export const A = "https://x/docs/reference/nowhere.md";\n')), NAME);
   });
 });
 

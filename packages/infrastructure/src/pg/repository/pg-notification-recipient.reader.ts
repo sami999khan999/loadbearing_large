@@ -142,7 +142,7 @@ export class PgNotificationRecipientReader
   }
 
   // A correlated `EXISTS` on the membership's role, which keeps the whole recipient
-  // query one statement. See docs/reference/notification-recipients.md.
+  // query one statement.
   private grants(organizationId: OrganizationId, permission: PermissionKey) {
     return exists(
       this.db

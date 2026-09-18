@@ -42,7 +42,7 @@ export class ConversationContract {
     lastMessageId: Identifiers.messageId.nullable(),
     members: z.array(ConversationContract.member).readonly(),
     // Computed per request from `last_read_at`, capped at 100 — there is no stored
-    // counter to drift. See docs/reference/messaging.md.
+    // counter to drift. See packages/application/docs/reference/messaging.md.
     unreadCount: z.number().int().nonnegative(),
   });
 

@@ -20,7 +20,7 @@ import { BaseRepository, KeysetCursor } from "../primitive/index.js";
 import { notifications } from "../schema/index.js";
 
 // Postgres caps a single insert's parameter count, and a delivery to a large
-// organization is the one path that can approach it. See docs/reference/notifications.md.
+// organization is the one path that can approach it.
 const CHUNK = 1_000;
 
 export class PgNotificationRepository extends BaseRepository implements NotificationRepository {
