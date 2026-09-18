@@ -2034,7 +2034,7 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
 
 #### ClickHouse can change (`infrastructure`, `infra`)
 
-- [ ] `19.1` **Migration path** — `packages/infrastructure/clickhouse-migrations/0000_activity_events.sql`
+- [x] `19.1` **Migration path** — `packages/infrastructure/clickhouse-migrations/0000_activity_events.sql`
   is `infra/clickhouse.init.sql` moved. `packages/infrastructure/clickhouse-migrate.ts` above `src/`
   creates `schema_migrations (version UInt32, name String, applied_at DateTime) ENGINE = MergeTree ORDER BY version`
   if absent, then applies every file whose version is not in it, in order, one `command()` per
@@ -2044,28 +2044,49 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `packages/infrastructure/docs/reference/clickhouse-migrations.md` (registered), `clickhouse.md`
   gains "how the schema changes", `docs/infra/reference/clickhouse.md`, `docs/ai/rules/workflow.md`
   command block.
+  `done: 2026-09-19` — **the statement splitter is not `split(";")`**, and `0000` is why: its own
+  comments read "… archives the rest to S3; this is where …", so a naive split cut the
+  `CREATE TABLE` in half inside a comment and failed with a parse error naming neither. The
+  scanner knows line comments, block comments and escaped quotes, is exported for a spec the way
+  `partition-ddl.ts` exports its rewriter, and has a case for each. Two more corrections the item
+  did not carry: the file drops its `ratchet.` prefix, because the migrator sends `database=` on
+  the query string and a hard-coded database is wrong on a deployment that renamed it; and its TTL
+  becomes `INTERVAL 60 MONTH` rather than `5 YEAR` — see `19.6`.
+  `verified: 2026-09-19` — against a live ClickHouse: a first run applies `0000`, a second prints
+  "nothing to do", and `system.tables` carries the table and the version row.
 
-- [ ] `19.2` **`AnalyticsProjector.applyRetention` and `retention()`** — the port gains
+- [x] `19.2` **`AnalyticsProjector.applyRetention` and `retention()`** — the port gains
   `retention(): Promise<string>` (the current TTL expression read from `system.tables.engine_full`,
   normalised) and `applyRetention(expression): Promise<void>` (`ALTER TABLE … MODIFY TTL`, one
   `command()`). `MODIFY TTL` materialises on existing parts, which is a rewrite; the caller compares
   first and applies only on difference, which is why `retention()` exists. **Docs:** `clickhouse.md`,
   `packages/application/docs/reference/ports.md`.
+  `done: 2026-09-19` — `retention()` reads `system.tables.engine_full` and normalises whitespace
+  and nothing else, because the **writer** is what was made to match: see `19.6`.
+  `verified: 2026-09-19` — read, changed to three years, read back, changed back, against a live
+  ClickHouse. That round trip is what turned up the unit problem `19.6` records.
 
 #### The slice (`application`, `infrastructure`, `contracts`, `composition`)
 
-- [ ] `19.3` **Schema** — `pg/schema/platform.schema.ts`: `retention_policy` as above, primary key
+- [x] `19.3` **Schema** — `pg/schema/platform.schema.ts`: `retention_policy` as above, primary key
   `(store, table_name)`, `check` constraints on `store` and `cold_mode`, `hot_months >= 1`,
   `cold_months >= 0` or null. Global, so a `TENANT_EXEMPT` line in §9 with the comment: a partition
   spans every tenant, so a per-tenant retention row would describe something the storage engine
   cannot do. Migration generated. **Docs:** `docs/setup/13` §13.3, `docs/setup/26` §9 entry.
+  `done: 2026-09-19` — migration `0027_retention_policy.sql`. `store` and `cold_mode` are `text`
+  with drizzle-side enums rather than Postgres ones, the choice `roles.scope` already makes:
+  widening either is then a type change with no DDL.
 
-- [ ] `19.4` **Port and adapter** — `application/src/platform/retention-policy.repository.ts`
+- [x] `19.4` **Port and adapter** — `application/src/platform/retention-policy.repository.ts`
   (`all()`, `findBy(store, table)`, `save(row)`); `pg-retention-policy.repository.ts`, `catalog`
   placement once `22.6` lands (until then, the ordinary base constructor). `PlatformReader` (`18.3`)
   gets its `PgPlatformReader`. **Docs:** `platform.md`.
+  `done: 2026-09-19` — a fourth method the item did not name, `forPostgres()`: the prune pass walks
+  the whole allowlist, and `findBy` per table is a query per table forever. It keys the map by the
+  closed union, so a row naming a table the allowlist no longer has is dropped there rather than
+  reaching a `drop table`. `PgPlatformReader` landed with `18.3`.
 
-- [ ] `19.5` **`StoragePolicyGateway`** — `application/src/port/storage-policy.gateway.ts`:
+- [x] `19.5` **`StoragePolicyGateway`** — `application/src/port/storage-policy.gateway.ts`:
   `LifecycleRule { readonly prefix: string; readonly expireAfterDays: number }`,
   `lifecycle(): Promise<readonly LifecycleRule[]>`, `applyLifecycle(rules): Promise<void>`.
   `infrastructure/src/s3/s3-storage-policy.gateway.ts` over `GetBucketLifecycleConfigurationCommand`
@@ -2077,15 +2098,30 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   MinIO honours the same API with the root credentials the compose stack already uses; `minio-init`
   needs no change. **Docs:** new `packages/infrastructure/docs/reference/storage-policy.md`
   (registered), `docs/infra/reference/minio.md` (the ILM paragraph it already gestures at), `ports.md`.
+  `done: 2026-09-19` — the tripwire moved to **twenty-six** as predicted. Two things the item
+  understates: `NoSuchLifecycleConfiguration` is an **error code** rather than an empty body, and a
+  caller that let it propagate would report drift forever on a fresh bucket — the one shape it most
+  needs to work on; and a rule with no prefix filter, or an expiry expressed as a date, is reported
+  as absent, so the next apply removes it. The bucket's configuration is derived from the rows, and
+  a rule with no row behind it is drift by definition.
 
-- [ ] `19.6` **`RetentionRules`** — `application/src/platform/retention.rules.ts`, pure:
+- [x] `19.6` **`RetentionRules`** — `application/src/platform/retention.rules.ts`, pure:
   `lifecycleFor(rows)` (one rule per postgres row with a non-null `cold_months`, sorted by prefix so
   two runs compare equal), `clickhouseTtlFor(defaultMonths, perAction)` (Phase 20 fills `perAction`;
   here it is `[]` and the expression is `toDateTime(occurred_at) + INTERVAL <n> MONTH`),
   `daysFor(months) = Math.ceil(months * 30.44)` with the comment that S3 counts days and the screen
   says "about". Unit spec with pinned expressions. **Docs:** `platform.md`.
+  `corrected: 2026-09-19` — **the expression is `toDateTime(occurred_at) + toIntervalMonth(n)`, not
+  `INTERVAL <n> MONTH`.** ClickHouse rewrites the readable form the moment it stores the clause, so
+  emitting it would make `19.11`'s daily comparison report a difference on every run and re-apply
+  the TTL — which materialises on every existing part, and on a years-deep table is a full rewrite,
+  nightly, forever. Measured against a live ClickHouse rather than guessed. `0000`'s own clause
+  moves from `INTERVAL 5 YEAR` to `INTERVAL 60 MONTH` for the same reason: the two have to agree by
+  construction, or a freshly migrated deployment rewrites the table once for nothing.
+  `done: 2026-09-19` — plus `lifecycleMatches`, which the item did not name and `19.11` needs:
+  "apply on difference" has to be one readable expression, and both sides are sorted so it can be.
 
-- [ ] `19.7` **Use-cases** — `list-retention-policies.use-case.ts` (`platform.retention.read`;
+- [x] `19.7` **Use-cases** — `list-retention-policies.use-case.ts` (`platform.retention.read`;
   returns every `PartitionedTable.ALL` entry joined to its row or the default, plus the clickhouse
   row or `ActivityEvents.DEFAULT_TTL_MONTHS = 60`, plus what the bucket and ClickHouse currently
   hold so the screen can show drift) and `update-retention-policy.use-case.ts`
@@ -2094,38 +2130,62 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `platform.policy.changed` audit — rebased per decision D38 — inside `unitOfWork.run`; the two
   `apply*` calls after it, failures logged as `retention.lifecycle.drifted` / not rethrown, because
   the row is the truth and the daily job closes the gap). **Docs:** `platform.md`.
+  `done: 2026-09-19` — the list returns every `MONTH_PARTITIONED` entry whether or not a row exists,
+  each marked `isDefault`, because the screen lists what is partitionable rather than what somebody
+  has already edited. It also returns what the bucket and ClickHouse **currently** hold beside what
+  the rows compose to: without that the screen says "saved" about a post-commit call that failed.
+  The update use-case takes the logger as a callback rather than importing one — `application` never
+  logs, and this is the one place that rule and "do not rethrow" meet.
 
-- [ ] `19.8` **Contract, procedures, permissions, router** — `contracts/src/platform/platform.contract.ts`
+- [x] `19.8` **Contract, procedures, permissions, router** — `contracts/src/platform/platform.contract.ts`
   (`retentionEntity`, `retentionUpdate`), `platform.procedures.ts` (`retention.list` GET
   `/platform/retention`, `retention.update` PUT `/platform/retention`), `catalog/platform.permissions.ts`
   entries, `platform.router.ts` handlers. **Docs:** `packages/contracts/docs/index.md`.
+  `done: 2026-09-19` — named `listRetention` and `updateRetention` rather than `retention.list` and
+  `retention.update`: the contract is one flat `platform` namespace, and a nested one would have
+  made `PlatformProcedures.all` two objects. Two names leave `AWAITING_A_PROCEDURE`.
 
-- [ ] `19.9` **Container** — `container.platform = { status, listRetention, updateRetention }`;
+- [x] `19.9` **Container** — `container.platform = { status, listRetention, updateRetention }`;
   `storagePolicy` port on the container and on `TestPorts`; the repositories built like every other.
   **Docs:** `packages/composition/docs/reference/container.md`.
+  `done: 2026-09-19` — the group is `container.platformAdmin`, named apart from `container.platform`,
+  which is the `PlatformReader` beside it: one is "which organization is the tier" and the other is
+  what an admin may do to it.
 
 #### The worker applies it (`worker`)
 
-- [ ] `19.10` **`prune()` reads the row** — `MaintenanceConsumer.prune(table)`: hot months from
+- [x] `19.10` **`prune()` reads the row** — `MaintenanceConsumer.prune(table)`: hot months from
   `retentionPolicies.findBy("postgres", table)?.hotMonths ?? entry.retentionMonths`; `cold_mode`
   `'drop'` skips the archive step and drops directly (the `outboxIsBehind` guard stays regardless).
   **Docs:** `apps/worker/docs/reference/consumers.md`.
+  `done: 2026-09-19` — one `forPostgres()` read per run rather than one per table, and the row is
+  passed down rather than looked up again. `cold_mode: drop` exposed an asymmetry worth fixing
+  rather than working around: `partitionsBefore(table, cutoff)` reads across every tenant when the
+  organization is null and `dropMonthlyPartitionsBefore` threw on the same argument, so a caller
+  would have dropped less than it previewed. The drop now reads null the same way.
 
-- [ ] `19.11` **The `retention` job** — daily 03:30, `RetentionSchedule`, job `retention` on
+- [x] `19.11` **The `retention` job** — daily 03:30, `RetentionSchedule`, job `retention` on
   `MAINTENANCE`: compose the lifecycle from rows, read the bucket's, apply on difference and emit
   `retention.lifecycle.applied { rules }` or `retention.lifecycle.drifted { expected, actual }` first;
   same for the ClickHouse TTL via `projector.retention()` / `applyRetention()`,
   `analytics.retention.applied`; then delete `partition_archive` rows older than each table's cold
   months, `retention.rows.expired { table, rows }`. All four codes join `core.events.ts` **and**
   `event-shape.ts`. **Docs:** `apps/worker/docs/reference/schedules.md`, `docs/setup/09b` code table.
+  `done: 2026-09-19` — the ClickHouse half compares before it writes, which is the whole reason
+  `19.2` reads: `MODIFY TTL` is a rewrite, and a job that wrote every night would never finish on a
+  years-deep table. Pinned by a spec that runs the job twice and asserts one write.
+  `PartitionArchiveGateway.forget(table, before)` is the row expiry, and it deletes **rows only** —
+  the bucket's own rule removed the object, so deleting it again is a round trip per row.
 
 #### The screen (`query`, `feature`, `content`, `web`)
 
-- [ ] `19.12` **Query and mutation** — `PlatformQueries.retention(client)` (`staleTime` 60 s),
+- [x] `19.12` **Query and mutation** — `PlatformQueries.retention(client)` (`staleTime` 60 s),
   `PlatformMutations.useUpdateRetention(client)` invalidating `QueryKeys.platform.retention()`; no
   optimistic update, for the reason `useUpdatePreference` gives. **Docs:** `packages/query/docs/index.md`.
+  `done: 2026-09-19` — and a second reason worth stating: the refetched list carries what the bucket
+  and ClickHouse *now* hold, so an optimistic row would show the intent while hiding the drift.
 
-- [ ] `19.13` **`retention-policy.form.tsx`** — one `fieldset` per table: hot months (number),
+- [x] `19.13` **`retention-policy.form.tsx`** — one `fieldset` per table: hot months (number),
   cold months (number, blank = never expires), cold mode (two buttons, `archive` / `drop`, the
   `MODES` shape from the notification form); the ClickHouse row shows months only. Beside each row,
   what the store currently holds, and a `Callout tone="warning"` when it differs. A second callout
@@ -2133,6 +2193,10 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   route `platform/retention.tsx` from `roles.tsx`, read gate on the route,
   `<Can permission="platform.retention.manage">` around the editor. Copy in `en/platform.ts` and
   `bn/platform.ts`. **Docs:** `packages/feature/docs/index.md`.
+  `done: 2026-09-19` — the preview `19.15` adds is not here yet, so the save button is disabled only
+  on an unparseable hot-months value. Every label goes through `ui`'s `Field` rather than a bare
+  `<label>`: biome cannot see that `Input` renders one, so a bare label is an a11y error and, more
+  to the point, an input announced as unlabelled.
 
 - [ ] `19.14` **Docs** — `docs/opinions/data-and-scale.md` §4.2's closing paragraph ("decide the
   retention policy at the same time") gains "and it is a row, with the allowlist as the default";
