@@ -11,6 +11,7 @@ export {
   type SessionProviderProps,
   type SessionUser,
   useCapabilities,
+  useIsPlatformOrganization,
   useSession,
 } from "./session.context.js";
 export { SignInForm, type SignInFormProps } from "./sign-in.form.js";

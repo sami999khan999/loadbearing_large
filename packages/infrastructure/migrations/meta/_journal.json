@@ -183,6 +183,13 @@
       "when": 1789757517378,
       "tag": "0025_cold_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789759572739,
+      "tag": "0026_platform_tier",
+      "breakpoints": true
     }
   ]
 }

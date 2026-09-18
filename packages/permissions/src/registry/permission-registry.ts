@@ -1,6 +1,8 @@
 import { CATALOG } from "../catalog/index.js";
 
-export type PermissionScope = "org" | "goal";
+// `platform` is above the tenant, and it is never reached by accident: a tenant's
+// wildcard does not grant it and the `core` exception does not apply to it.
+export type PermissionScope = "org" | "goal" | "platform";
 
 export interface PermissionMeta {
   readonly scope: PermissionScope;
@@ -28,6 +30,20 @@ const BY_MODULE: ReadonlyMap<string, readonly PermissionKey[]> = ((): ReadonlyMa
   return new Map([...grouped].map(([module, keys]) => [module, Object.freeze(keys)]));
 })();
 
+const BY_SCOPE: ReadonlyMap<PermissionScope, readonly PermissionKey[]> = ((): ReadonlyMap<
+  PermissionScope,
+  readonly PermissionKey[]
+> => {
+  const grouped = new Map<PermissionScope, PermissionKey[]>();
+  for (const key of ALL_KEYS) {
+    const scope = CATALOG[key].scope;
+    const bucket = grouped.get(scope);
+    if (bucket) bucket.push(key);
+    else grouped.set(scope, [key]);
+  }
+  return new Map([...grouped].map(([scope, keys]) => [scope, Object.freeze(keys)]));
+})();
+
 const MODULES: readonly string[] = Object.freeze([...BY_MODULE.keys()]);
 
 const NO_KEYS: readonly PermissionKey[] = Object.freeze([]);
@@ -52,6 +68,12 @@ export class PermissionRegistry {
 
   public byModule(module: string): readonly PermissionKey[] {
     return BY_MODULE.get(module) ?? NO_KEYS;
+  }
+
+  // Beside `byModule`, because the seed and the role editor exclude by *scope*: a module
+  // name is a label, and "not a tenant's to hold" is a property of the scope.
+  public byScope(scope: PermissionScope): readonly PermissionKey[] {
+    return BY_SCOPE.get(scope) ?? NO_KEYS;
   }
 
   // Permission strings from the database pass this before they are trusted.

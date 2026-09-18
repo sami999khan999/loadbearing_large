@@ -9,4 +9,8 @@ export abstract class CapabilityRepository {
     organizationId: OrganizationId,
     userId: UserId,
   ): Promise<CapabilitySet>;
+
+  // Keyed on the user alone: the tier is one organization, and the answer does not
+  // change with whichever tenant the session is pointed at. **Only** the platform axis.
+  public abstract resolvePlatformFor(userId: UserId): Promise<CapabilitySet>;
 }

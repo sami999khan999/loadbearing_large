@@ -69,6 +69,14 @@ const ROLES: readonly SystemRole[] = Object.freeze([
 
 const KEYS: readonly string[] = Object.freeze(ROLES.map((definition) => definition.key));
 
+// What `"all"` resolves to. **A tenant owner is not a platform admin**, and
+// `reconcile()` takes back any platform key an earlier deploy's `all` handed out.
+const TENANT_KEYS: readonly PermissionKey[] = Object.freeze(
+  PermissionRegistry.instance.all().filter((key) => {
+    return PermissionRegistry.instance.scopeOf(key) !== "platform";
+  }),
+);
+
 export class SystemRoleSeed extends BaseRepository {
   // Idempotent: safe to run on every deploy. Per organization, because system roles
   // are rows in a tenant's table rather than global constants.
@@ -104,10 +112,7 @@ export class SystemRoleSeed extends BaseRepository {
 
       // Resolved at seed time, so every permission a feature adds reaches owners on
       // the next deploy. That is why the seed must re-run rather than run once.
-      const permissions =
-        definition.permissions === "all"
-          ? PermissionRegistry.instance.all()
-          : definition.permissions;
+      const permissions = definition.permissions === "all" ? TENANT_KEYS : definition.permissions;
 
       return permissions.map((permission) => ({ organizationId, roleId, permission }));
     });

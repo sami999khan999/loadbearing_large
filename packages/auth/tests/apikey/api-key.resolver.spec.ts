@@ -9,6 +9,7 @@ import {
   MapCacheStore,
   RecordingCapabilityRepository,
   StubApiKeyRepository,
+  StubPlatformReader,
 } from "../support/doubles.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
@@ -40,6 +41,7 @@ function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet) {
   const capabilities = new CapabilityCache(
     new RecordingCapabilityRepository(new Map([[`${ORG}:${ISSUER}`, issuer]])),
     new MapCacheStore(),
+    new StubPlatformReader(),
   );
 
   return { repository, resolver: new ApiKeyResolver(repository, capabilities) };

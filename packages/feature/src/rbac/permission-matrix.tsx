@@ -1,5 +1,10 @@
 import { useMessages } from "../i18n/index.js";
-import { type CapabilitySet, type PermissionKey, PermissionRegistry } from "../import.js";
+import {
+  type CapabilitySet,
+  type PermissionKey,
+  PermissionRegistry,
+  type PermissionScope,
+} from "../import.js";
 
 export interface MatrixSubject {
   readonly id: string;
@@ -16,17 +21,32 @@ export interface PermissionMatrixProps {
   readonly subjects: readonly MatrixSubject[];
   readonly goalId?: string;
   readonly onToggle?: (subjectId: string, permission: PermissionKey) => void;
+  // By scope, never by module name: "not a tenant's to hold" is a property of the
+  // scope, and a module list here would go stale the first time one is renamed.
+  readonly excludeScopes?: readonly PermissionScope[];
 }
 
 // Rows are every permission in the catalog, grouped by module; columns are subjects.
 // Doc 23 names this component and specifies no body.
-export function PermissionMatrix({ subjects, goalId, onToggle }: PermissionMatrixProps) {
+export function PermissionMatrix({
+  subjects,
+  goalId,
+  onToggle,
+  excludeScopes,
+}: PermissionMatrixProps) {
   const { t } = useMessages("common");
   // The column of permission names has no visible heading, and an empty `<th>` is
   // announced as blank. `role` is loaded by the only screen that renders this.
   const { t: rbac } = useMessages("role");
   const registry = PermissionRegistry.instance;
-  const permissions = registry.all();
+  // The grant use-case already refuses a key the granter does not hold, so this removes
+  // the checkbox that would have produced the 403 rather than the enforcement.
+  const permissions = excludeScopes?.length
+    ? registry.all().filter((key) => {
+        const scope = registry.scopeOf(key);
+        return scope === undefined || !excludeScopes.includes(scope);
+      })
+    : registry.all();
 
   if (subjects.length === 0 || permissions.length === 0) return <p>{t("state.empty")}</p>;
 

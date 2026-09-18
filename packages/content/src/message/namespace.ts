@@ -10,6 +10,7 @@ import type { messaging } from "./en/messaging.js";
 import type { nav } from "./en/nav.js";
 import type { notification } from "./en/notification.js";
 import type { organization } from "./en/organization.js";
+import type { platform } from "./en/platform.js";
 import type { role } from "./en/role.js";
 
 // Type-only. `verbatimModuleSyntax` erases the imports above, so the key union stays
@@ -22,6 +23,7 @@ interface NamespaceShape {
   readonly role: typeof role;
   readonly member: typeof member;
   readonly organization: typeof organization;
+  readonly platform: typeof platform;
   readonly apikey: typeof apikey;
   readonly document: typeof document;
   readonly messaging: typeof messaging;
@@ -44,7 +46,8 @@ export type ClientNamespace =
   | "apikey"
   | "messaging"
   | "notification"
-  | "document";
+  | "document"
+  | "platform";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -80,4 +83,5 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "document",
   "messaging",
   "notification",
+  "platform",
 ];

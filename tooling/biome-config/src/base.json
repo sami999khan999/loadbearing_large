@@ -135,6 +135,7 @@
         "packages/auth/tables.ts",
         "packages/infrastructure/migrate.ts",
         "packages/infrastructure/partitions.ts",
+        "packages/infrastructure/platform-grant.ts",
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
         "tooling/scripts/check-architecture.mjs"
@@ -174,6 +175,7 @@
         "packages/infrastructure/migrate.ts",
         "packages/infrastructure/partition-ddl.ts",
         "packages/infrastructure/partitions.ts",
+        "packages/infrastructure/platform-grant.ts",
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
         "packages/infrastructure/tests/smoke/tenant-ceiling.smoke.spec.ts",

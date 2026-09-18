@@ -18,11 +18,19 @@ export const organizations = pgTable(
     id: uuid("id").$type<OrganizationId>().primaryKey(),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
+    // The platform tier is an organization, so a platform grant rides the roles and
+    // memberships every other grant does. Marked by the seed, never by a user.
+    isPlatform: boolean("is_platform").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  // The seed and every enroller resolve a slug with `.limit(1)`, so a duplicate is a
-  // silent coin flip about which tenant a new member lands in.
-  (t) => [uniqueIndex("organizations_slug_uq").on(t.slug)],
+  (t) => [
+    // The seed and every enroller resolve a slug with `.limit(1)`, so a duplicate is a
+    // silent coin flip about which tenant a new member lands in.
+    uniqueIndex("organizations_slug_uq").on(t.slug),
+    // Partial, so it constrains only the true rows: at most one platform tier, and any
+    // number of ordinary tenants. `resolvePlatformFor` resolves one row or none.
+    uniqueIndex("organizations_platform_uq").on(t.isPlatform).where(sql`is_platform`),
+  ],
 );
 
 export const roles = pgTable(
@@ -35,7 +43,9 @@ export const roles = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    scope: text("scope", { enum: ["org", "goal"] }).notNull(),
+    // `platform` appears only on the platform organization's own roles, where the seed
+    // puts it. Nothing here validates that; the grant path is what refuses the rest.
+    scope: text("scope", { enum: ["org", "goal", "platform"] }).notNull(),
     isSystem: boolean("is_system").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,4 +1,4 @@
-import { useCapabilities } from "../auth/index.js";
+import { useCapabilities, useIsPlatformOrganization } from "../auth/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Callout,
@@ -6,6 +6,7 @@ import {
   EmptyState,
   type PermissionKey,
   PermissionRegistry,
+  type PermissionScope,
   type RoleDto,
   RoleMutations,
   RoleQueries,
@@ -17,6 +18,10 @@ import {
 } from "../import.js";
 import { type MatrixSubject, PermissionMatrix } from "./permission-matrix.js";
 import { useRoleFailure } from "./use-role-failure.js";
+
+// Frozen once rather than rebuilt per render: it is a prop, and a fresh array each
+// render would invalidate the memo inside the matrix.
+const PLATFORM_ONLY: readonly PermissionScope[] = Object.freeze(["platform"]);
 
 export interface RoleMatrixProps {
   // Paged rather than unbounded: `Pagination.query` caps `limit` at 100, so asking for
@@ -34,6 +39,7 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   const failureCopy = useRoleFailure();
   const client = useApiClient();
   const capabilities = useCapabilities();
+  const isPlatformOrganization = useIsPlatformOrganization();
   const roles = useAppQuery(RoleQueries.list(client, { limit, offset: 0 }));
   const grant = RoleMutations.useGrant(client);
   const revoke = RoleMutations.useRevoke(client);
@@ -94,7 +100,15 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
     <section>
       <p>{t("role.subtitle")}</p>
       {failure ? <Callout tone="danger">{failure}</Callout> : null}
-      <PermissionMatrix subjects={subjects} onToggle={editable ? toggle : undefined} />
+      {
+        // A platform key is held through a role in the tier and nowhere else. The grant
+        // use-case refuses it already; this removes the checkbox that would have 403'd.
+      }
+      <PermissionMatrix
+        subjects={subjects}
+        onToggle={editable ? toggle : undefined}
+        excludeScopes={isPlatformOrganization ? undefined : PLATFORM_ONLY}
+      />
       {items.some((role) => role.key === "owner") ? (
         <StatusBadge tone="neutral">{t("role.hint.owner")}</StatusBadge>
       ) : null}

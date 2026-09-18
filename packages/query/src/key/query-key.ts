@@ -46,6 +46,13 @@ export class QueryKeys {
     list: (conversationId: string) => ["message", "list", conversationId] as const,
   };
 
+  // Above the tenant, so nothing here is keyed by organization: switching tenants
+  // does not change what a platform admin is looking at.
+  public static readonly platform = {
+    all: () => ["platform"] as const,
+    status: () => ["platform", "status"] as const,
+  };
+
   public static readonly rbac = {
     all: () => ["rbac"] as const,
     roles: (params: unknown) => ["rbac", "role", "list", params] as const,

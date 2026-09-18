@@ -26,6 +26,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:partitions": "tsx --env-file-if-exists=../../.env partitions.ts",
+    "platform:grant": "tsx --env-file-if-exists=../../.env platform-grant.ts",
     "db:seed": "tsx --env-file-if-exists=../../.env seed.ts",
     "smoke": "vitest run -c vitest.smoke.config.ts"
   },

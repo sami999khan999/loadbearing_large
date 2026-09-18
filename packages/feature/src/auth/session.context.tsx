@@ -32,6 +32,9 @@ export interface SessionUser {
 interface SessionValue {
   readonly user: SessionUser | null;
   readonly capabilities: CapabilitySet;
+  // Whether the *active* tenant is the platform tier — not whether this user is a
+  // platform admin, which is the third axis of `capabilities`.
+  readonly isPlatformOrganization: boolean;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -41,15 +44,27 @@ export interface SessionProviderProps {
   // The DTO, not the class: this crosses the SSR boundary as JSON, and reconstructing it
   // is what makes client `can()` the same `can()` the server ran.
   readonly capabilities: CapabilitySetDto;
+  // Defaulted, so a caller that has not been updated renders as an ordinary tenant —
+  // which is the safe reading: the platform module stays hidden.
+  readonly isPlatformOrganization?: boolean;
   readonly children: ReactNode;
 }
 
-export function SessionProvider({ user, capabilities, children }: SessionProviderProps) {
+export function SessionProvider({
+  user,
+  capabilities,
+  isPlatformOrganization = false,
+  children,
+}: SessionProviderProps) {
   // Memoised so a re-render does not rebuild the internal Sets and invalidate every
   // downstream memo.
   const value = useMemo<SessionValue>(
-    () => ({ user, capabilities: CapabilitySet.from(capabilities) }),
-    [user, capabilities],
+    () => ({
+      user,
+      capabilities: CapabilitySet.from(capabilities),
+      isPlatformOrganization,
+    }),
+    [user, capabilities, isPlatformOrganization],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -63,4 +78,8 @@ export function useSession(): SessionValue {
 
 export function useCapabilities(): CapabilitySet {
   return useSession().capabilities;
+}
+
+export function useIsPlatformOrganization(): boolean {
+  return useSession().isPlatformOrganization;
 }

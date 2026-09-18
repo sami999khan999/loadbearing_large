@@ -37,6 +37,7 @@ packages/permissions/
 │   ├── catalog/                     ← one fragment per slice, team-owned
 │   │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   │   ├── core.permissions.ts      ←   held by every principal (rule 5)
+│   │   ├── platform.permissions.ts  ←   above the tenant; never in a tenant role
 │   │   ├── rbac.permissions.ts
 │   │   ├── member.permissions.ts
 │   │   ├── apikey.permissions.ts
@@ -92,6 +93,16 @@ CapabilitySet.from(caps.toJSON());       // server → SSR payload → browser, 
 Deny by default, explicit deny beats every grant including the wildcard, and a goal-scoped
 permission asked without a `goalId` is `false` rather than a throw. Four rules, one implementation,
 four runtimes.
+
+### [The platform scope](reference/platform-scope.md) — above the tenant
+
+```ts
+caps.can("platform.retention.manage");   // the third axis, and only the third axis
+```
+
+A tenant's wildcard does not reach it, the `core` exception does not apply to it, an API key's
+`intersect` empties it, and `owner: "all"` excludes it at seed time. Four leak paths, one branch
+in `can()`, four cases in the spec.
 
 ### [`ModuleRegistry`](reference/module-registry.md) — the nav gates
 
@@ -193,6 +204,6 @@ reach that branch rather than leaving rule 3 unverified until a slice adds a goa
 
 ## See also
 
-- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [ModuleRegistry](reference/module-registry.md) · [ROUTES](reference/routes.md)
+- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [The platform scope](reference/platform-scope.md) · [ModuleRegistry](reference/module-registry.md) · [ROUTES](reference/routes.md)
 - [Build order · 08 · permissions](../../../docs/setup/08-permissions-package.md)
 - [`@loadbearing/core`](../../core/docs/index.md) — the layer below

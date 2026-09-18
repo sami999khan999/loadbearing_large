@@ -4,6 +4,7 @@ import type { AnyContractRouter } from "../import.js";
 import { MemberProcedures } from "../member/index.js";
 import { ConversationProcedures, MessageProcedures } from "../messaging/index.js";
 import { NotificationProcedures } from "../notification/index.js";
+import { PlatformProcedures } from "../platform/index.js";
 import { RealtimeProcedures } from "../realtime/index.js";
 import { RoleProcedures } from "../role/index.js";
 
@@ -18,6 +19,7 @@ export const contract = {
   conversation: ConversationProcedures.all,
   message: MessageProcedures.all,
   realtime: RealtimeProcedures.all,
+  platform: PlatformProcedures.all,
 } as const satisfies AnyContractRouter;
 
 export type AppContract = typeof contract;

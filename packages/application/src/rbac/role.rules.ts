@@ -9,7 +9,9 @@ import type { RoleRecord } from "./role.repository.js";
 // Frozen at module load rather than a `static readonly`, which freezes the binding and
 // not the array.
 const RESERVED_KEYS: ReadonlySet<string> = Object.freeze(
-  new Set(["owner", "admin", "member", "guest"]),
+  // `platform_admin` is `PlatformRoleSeed`'s, reserved for the reason the other four
+  // are: a user-created role by that key collects every platform key on the next deploy.
+  new Set(["owner", "admin", "member", "guest", "platform_admin"]),
 );
 
 // The rules every role write shares. Written once, because a create that allows what an

@@ -199,7 +199,7 @@ const ENV_EXEMPT = [
   // Every runnable script sits above `src/`, so a folder barrel can be imported without
   // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
   /^packages\/auth\/tables\.ts$/,
-  /^packages\/infrastructure\/(migrate|partitions|seed|smoke)\.ts$/,
+  /^packages\/infrastructure\/(migrate|partitions|platform-grant|seed|smoke)\.ts$/,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {
@@ -1078,10 +1078,17 @@ assert("every migration is safe on a table that already holds rows", (failures) 
       [...sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?"([a-z_]+)"/g)].map((m) => m[1]),
     );
     const deleted = new Set([...sql.matchAll(/DELETE FROM "([a-z_]+)"/g)].map((m) => m[1]));
+    // The other way to de-dup, and the only one available to a **partial** index: an
+    // `UPDATE` that moves the offending rows out of the predicate. Deleting the rows
+    // would be the wrong repair when the duplicate is a flag rather than the row.
+    const narrowed = new Set([...sql.matchAll(/UPDATE "([a-z_]+)" SET/g)].map((m) => m[1]));
 
-    for (const match of sql.matchAll(/CREATE UNIQUE INDEX[^;]*? ON "([a-z_]+)"/g)) {
-      const table = match[1] ?? "";
+    for (const match of sql.matchAll(/CREATE UNIQUE INDEX([^;]*?) ON "([a-z_]+)"([^;]*)/g)) {
+      const [, , table = "", rest = ""] = match;
       if (fresh.has(table) || deleted.has(table)) continue;
+      // An `UPDATE` counts only for a partial index. Over a full one it is not evidence
+      // of anything: the duplicate rows are still there, still colliding.
+      if (/\bWHERE\b/i.test(rest) && narrowed.has(table)) continue;
       failures.push(`${file} indexes ${table} uniquely with no de-dup before it`);
     }
 

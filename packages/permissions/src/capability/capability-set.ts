@@ -11,10 +11,20 @@ export interface ScopedSetDto {
   readonly denies: readonly PermissionKey[];
 }
 
+// Frozen once rather than rebuilt per call: it is read on every `from()` and the arrays
+// escape into a DTO that callers may hold.
+const EMPTY_SET: ScopedSetDto = Object.freeze({
+  grants: Object.freeze([]),
+  denies: Object.freeze([]),
+});
+
 export interface CapabilitySetDto {
   readonly wildcard: boolean;
   readonly org: ScopedSetDto;
   readonly goals: Readonly<Record<string, ScopedSetDto>>;
+  // Optional on the wire only. A DTO cached before this axis existed degrades to "no
+  // platform rights", which is the safe reading; a required field would throw instead.
+  readonly platform?: ScopedSetDto;
 }
 
 class ScopedSet {
@@ -38,10 +48,12 @@ class ScopedSet {
 // Resolved capabilities for one principal — user or API key, same shape.
 export class CapabilitySet {
   private readonly orgSet: ScopedSet;
+  private readonly platformSet: ScopedSet;
   private readonly goalSets: ReadonlyMap<string, ScopedSet>;
 
   private constructor(private readonly dto: CapabilitySetDto) {
     this.orgSet = new ScopedSet(dto.org);
+    this.platformSet = new ScopedSet(dto.platform ?? EMPTY_SET);
     this.goalSets = new Map(
       Object.entries(dto.goals).map(([id, s]): [string, ScopedSet] => [id, new ScopedSet(s)]),
     );
@@ -54,7 +66,12 @@ export class CapabilitySet {
   }
 
   public static empty(): CapabilitySet {
-    return new CapabilitySet({ wildcard: false, org: { grants: [], denies: [] }, goals: {} });
+    return new CapabilitySet({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: EMPTY_SET,
+    });
   }
 
   private static union(
@@ -77,6 +94,7 @@ export class CapabilitySet {
     return {
       wildcard: dto.wildcard,
       org: CapabilitySet.scopedSet(dto.org),
+      platform: CapabilitySet.scopedSet(dto.platform ?? EMPTY_SET),
       goals: Object.fromEntries(
         Object.entries(dto.goals).map(([id, set]): [string, ScopedSetDto] => [
           id,
@@ -91,6 +109,13 @@ export class CapabilitySet {
   public can(permission: PermissionKey, goalId?: string): boolean {
     const scope = PermissionRegistry.instance.scopeOf(permission);
     if (!scope) return false;
+
+    // The whole branch, and every line of it is load-bearing: a tenant's `wildcard` does
+    // not reach a platform key, and `isCore` is not consulted. See docs/reference.
+    if (scope === "platform") {
+      if (this.platformSet.deniesPermission(permission)) return false;
+      return this.platformSet.grantsPermission(permission);
+    }
 
     if (scope === "goal") {
       if (!goalId) return false;
@@ -128,6 +153,9 @@ export class CapabilitySet {
 
     return CapabilitySet.from({
       wildcard: this.dto.wildcard && other.dto.wildcard,
+      // Emptied, never intersected. An API key is issued by a user who may be a platform
+      // admin, and a key that could act as one is a platform admin nobody can revoke.
+      platform: EMPTY_SET,
       org: {
         grants: orgCandidates.filter(
           (permission) => this.allowsAtOrg(permission) && other.allowsAtOrg(permission),

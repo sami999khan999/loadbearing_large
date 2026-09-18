@@ -1,5 +1,5 @@
 import type { ApiKeyResolver } from "../apikey/api-key.resolver.js";
-import { Principal, type RequestHeaders, type SessionResolver } from "../import.js";
+import { CapabilitySet, Principal, type RequestHeaders, type SessionResolver } from "../import.js";
 import type { MembershipReader } from "../session/membership.reader.js";
 import type { CapabilityCache } from "./capability.cache.js";
 
@@ -26,7 +26,20 @@ export class PrincipalBuilder {
     // nothing granted — it is no principal at all. One row on `memberships_uq`.
     if (!(await this.memberships.isActive(session.userId, session.organizationId))) return null;
 
-    const capabilities = await this.capabilities.forUser(session.organizationId, session.userId);
+    // In parallel: two independent reads, both usually cache hits, and serialising them
+    // puts a second round trip on every request that misses.
+    const [tenant, platform] = await Promise.all([
+      this.capabilities.forUser(session.organizationId, session.userId),
+      this.capabilities.platformFor(session.userId),
+    ]);
+
+    // Merged rather than chosen between: a platform admin switched into a customer tenant
+    // is still a platform admin, and is still only a member of that tenant.
+    const capabilities = CapabilitySet.from({
+      ...tenant.toJSON(),
+      platform: platform.toJSON().platform,
+    });
+
     return new Principal(session.organizationId, session.userId, capabilities, "user");
   }
 }

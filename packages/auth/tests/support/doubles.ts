@@ -5,9 +5,11 @@ import type {
   ApiKeySummary,
   CacheStore,
   CapabilityRepository,
+  PlatformOrganization,
+  PlatformReader,
 } from "@loadbearing/application";
 import type { ApiKeyId, OrganizationId, UserId } from "@loadbearing/contracts";
-import type { CapabilitySet } from "@loadbearing/permissions";
+import { CapabilitySet } from "@loadbearing/permissions";
 import type { RequestHeaders, ResolvedSession, SessionResolver } from "../../src/import.js";
 
 // Hand-written rather than `composition`'s fakes, which would close a cycle. Each
@@ -15,14 +17,41 @@ import type { RequestHeaders, ResolvedSession, SessionResolver } from "../../src
 
 export class RecordingCapabilityRepository implements CapabilityRepository {
   public readonly calls: { organizationId: string; userId: string }[] = [];
+  public readonly platformCalls: string[] = [];
 
-  public constructor(private readonly sets: ReadonlyMap<string, CapabilitySet>) {}
+  public constructor(
+    private readonly sets: ReadonlyMap<string, CapabilitySet>,
+    // Keyed on the user alone, like the resolution it stands in for. Empty by default,
+    // so a spec that is not about the tier does not have to stage one.
+    private readonly platformSets: ReadonlyMap<string, CapabilitySet> = new Map(),
+  ) {}
 
   public resolveFor(organizationId: OrganizationId, userId: UserId): Promise<CapabilitySet> {
     this.calls.push({ organizationId, userId });
     const set = this.sets.get(`${organizationId}:${userId}`);
     if (!set) throw new Error(`No capability set staged for ${organizationId}:${userId}`);
     return Promise.resolve(set);
+  }
+
+  public resolvePlatformFor(userId: UserId): Promise<CapabilitySet> {
+    this.platformCalls.push(userId);
+    return Promise.resolve(this.platformSets.get(userId) ?? CapabilitySet.empty());
+  }
+}
+
+// The tier's own id, so `CapabilityCache` can tell "flush a tenant" from "flush the
+// tier". A spec that names no platform organization gets one nothing else uses.
+export class StubPlatformReader implements PlatformReader {
+  public constructor(
+    private readonly id: OrganizationId = "018f8c00-0000-7000-8000-0000000000ff" as OrganizationId,
+  ) {}
+
+  public organizationId(): Promise<OrganizationId> {
+    return Promise.resolve(this.id);
+  }
+
+  public organization(): Promise<PlatformOrganization> {
+    return Promise.resolve({ id: this.id, slug: "platform", name: "Platform" });
   }
 }
 

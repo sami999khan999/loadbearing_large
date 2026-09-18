@@ -8,6 +8,7 @@ export {
   ApiKeyRules,
   type CacheStore,
   type CapabilityRepository,
+  type PlatformReader,
   Principal,
   type RequestHeaders,
   type ResolvedSession,

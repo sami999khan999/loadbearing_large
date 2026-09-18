@@ -107,6 +107,12 @@ class RecordingCapabilities implements CapabilityInvalidator {
     this.flushed.push(organizationId);
     return Promise.resolve();
   }
+
+  // The adapter decides when this fires — it is the only thing that knows which tenant
+  // is the tier — so a use-case calling it directly is the bug this throw names.
+  public invalidatePlatform(): Promise<void> {
+    throw new Error("the cache flushes the platform axis, never a use-case");
+  }
 }
 
 let roles: RecordingRoles;

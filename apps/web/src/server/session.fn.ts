@@ -10,6 +10,7 @@ import { container } from "./container.js";
 const anonymous = (): SessionSnapshot => ({
   user: null,
   capabilities: CapabilitySet.empty().toJSON(),
+  isPlatformOrganization: false,
   googleEnabled: Env.googleEnabled,
 });
 
@@ -29,12 +30,19 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
 
     const userId = result.session.userId as UserId;
 
-    // The same cache `PrincipalBuilder` reads, so client `can()` and server `assert()`
-    // answer off one set. The membership list rides along for the switcher.
-    const [capabilities, organizations] = await Promise.all([
+    // The same cache and the same merge `PrincipalBuilder` runs, so client `can()` and
+    // server `assert()` answer off one set. The membership list rides along too.
+    const [tenant, platform, organizations, platformOrganizationId] = await Promise.all([
       container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
+      container.capabilities.platformFor(userId),
       container.memberships.organizationsFor(userId),
+      container.platform.organizationId(),
     ]);
+
+    const capabilities = CapabilitySet.from({
+      ...tenant.toJSON(),
+      platform: platform.toJSON().platform,
+    });
 
     return {
       user: {
@@ -51,6 +59,7 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
         twoFactorEnabled: (result.user as { twoFactorEnabled?: boolean }).twoFactorEnabled === true,
       },
       capabilities: capabilities.toJSON(),
+      isPlatformOrganization: activeOrganizationId === platformOrganizationId,
       googleEnabled: Env.googleEnabled,
     };
   },

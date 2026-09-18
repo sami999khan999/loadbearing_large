@@ -12,6 +12,7 @@ import {
   MapCacheStore,
   RecordingCapabilityRepository,
   StubApiKeyRepository,
+  StubPlatformReader,
   StubSessionResolver,
 } from "../support/doubles.js";
 
@@ -79,6 +80,7 @@ async function build(options: {
       ]),
     ),
     new MapCacheStore(),
+    new StubPlatformReader(),
   );
 
   const keyRepository = new StubApiKeyRepository(options.keys ?? []);

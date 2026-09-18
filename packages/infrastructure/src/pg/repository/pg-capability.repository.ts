@@ -12,7 +12,13 @@ import {
   type UserId,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { goalMembers, memberships, permissionOverrides, rolePermissions } from "../schema/index.js";
+import {
+  goalMembers,
+  memberships,
+  organizations,
+  permissionOverrides,
+  rolePermissions,
+} from "../schema/index.js";
 
 interface MutableScoped {
   grants: Set<PermissionKey>;
@@ -94,5 +100,59 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
     };
 
     return CapabilitySet.from(dto);
+  }
+
+  // Two queries against the one organization marked `is_platform`, filtered to keys the
+  // registry calls platform-scoped — a tenant key granted there reaches no axis at all.
+  public async resolvePlatformFor(userId: UserId): Promise<CapabilitySet> {
+    const registry = PermissionRegistry.instance;
+    const grants = new Set<PermissionKey>();
+    const denies = new Set<PermissionKey>();
+
+    const grantRows = await this.db
+      .select({ permission: rolePermissions.permission })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
+      .innerJoin(rolePermissions, eq(rolePermissions.roleId, memberships.roleId))
+      // Deactivated grants nothing, here most of all: removing someone's platform rights
+      // is deactivating their membership in the tier.
+      .where(
+        and(
+          eq(organizations.isPlatform, true),
+          eq(memberships.userId, userId),
+          isNull(memberships.deactivatedAt),
+        ),
+      );
+
+    for (const row of grantRows) {
+      if (registry.isKnown(row.permission) && registry.scopeOf(row.permission) === "platform") {
+        grants.add(row.permission);
+      }
+    }
+
+    // A platform deny for one user, on the tier's own organization. `goal_id` is ignored:
+    // a platform key has no goal level, and a row carrying one is a mis-write.
+    const overrideRows = await this.db
+      .select({
+        permission: permissionOverrides.permission,
+        effect: permissionOverrides.effect,
+      })
+      .from(permissionOverrides)
+      .innerJoin(organizations, eq(organizations.id, permissionOverrides.organizationId))
+      .where(and(eq(organizations.isPlatform, true), eq(permissionOverrides.userId, userId)));
+
+    for (const row of overrideRows) {
+      if (!registry.isKnown(row.permission)) continue;
+      if (registry.scopeOf(row.permission) !== "platform") continue;
+      if (row.effect === "deny") denies.add(row.permission);
+      else grants.add(row.permission);
+    }
+
+    return CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: { grants: [...grants], denies: [...denies] },
+    });
   }
 }

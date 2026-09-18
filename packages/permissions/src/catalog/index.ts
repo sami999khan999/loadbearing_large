@@ -4,6 +4,7 @@ import { corePermissions } from "./core.permissions.js";
 import { memberPermissions } from "./member.permissions.js";
 import { messagingPermissions } from "./messaging.permissions.js";
 import { notificationPermissions } from "./notification.permissions.js";
+import { platformPermissions } from "./platform.permissions.js";
 import { rbacPermissions } from "./rbac.permissions.js";
 
 // Merged from team-owned fragments. Add them here — `...taskPermissions`.
@@ -15,4 +16,5 @@ export const CATALOG = {
   ...notificationPermissions,
   ...apiKeyPermissions,
   ...aiPermissions,
+  ...platformPermissions,
 } as const;

@@ -4,10 +4,20 @@ import { CapabilityInvalidator, type OrganizationId, type UserId } from "../impo
 // one of these leaves a revoked permission working for a minute, so this records.
 export class RecordingCapabilityInvalidator extends CapabilityInvalidator {
   private readonly entries: string[] = [];
+  private platformFlushes = 0;
 
   public override invalidate(organizationId: OrganizationId, userId: UserId): Promise<void> {
     this.entries.push(`${organizationId}:${userId}`);
     return Promise.resolve();
+  }
+
+  public override invalidatePlatform(): Promise<void> {
+    this.platformFlushes += 1;
+    return Promise.resolve();
+  }
+
+  public flushedPlatform(): number {
+    return this.platformFlushes;
   }
 
   public override invalidateOrganization(organizationId: OrganizationId): Promise<void> {

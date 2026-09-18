@@ -4,9 +4,13 @@ import { Identifiers, Pagination } from "../primitive/index.js";
 export class RoleContract {
   private constructor() {}
 
-  // Mirrors `roles.scope`: an org-scoped role's grants apply tenant-wide, a
-  // goal-scoped one only inside the goals a membership names.
-  public static readonly scope = z.enum(["org", "goal"]);
+  // Mirrors `roles.scope`: org-scoped grants apply tenant-wide, goal-scoped only inside
+  // the goals a membership names, platform-scoped only on the tier's own roles.
+  public static readonly scope = z.enum(["org", "goal", "platform"]);
+
+  // Narrower than what a role *is*. A platform-scoped role is `PlatformRoleSeed`'s;
+  // nothing creates one over the wire, in any tenant, ever.
+  public static readonly creatableScope = z.enum(["org", "goal"]);
 
   public static readonly entity = z.object({
     id: Identifiers.roleId,
@@ -37,6 +41,9 @@ export class RoleContract {
     // Keyed by goal id. A record rather than an array, because that is what
     // `CapabilitySet` indexes and a list would be re-keyed on every read.
     goals: z.record(z.string(), RoleContract.scopedSet),
+    // Optional for the reason the DTO gives: a snapshot serialised before this axis
+    // existed degrades to "no platform rights" rather than failing validation.
+    platform: RoleContract.scopedSet.optional(),
   });
 
   public static readonly inspect = z.object({ userId: Identifiers.userId });
@@ -53,7 +60,7 @@ export class RoleContract {
     key: RoleContract.key,
     name: z.string().min(1).max(120),
     description: z.string().max(500).nullable().default(null),
-    scope: RoleContract.scope,
+    scope: RoleContract.creatableScope,
   });
 
   // No `key` and no `scope`: both are what other rows point at by meaning, and an

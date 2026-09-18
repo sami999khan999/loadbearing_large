@@ -21,5 +21,6 @@ export { PgOutboxGateway } from "./pg-outbox.gateway.js";
 export { PgOutboxPublisher } from "./pg-outbox.publisher.js";
 export { PgPartitionArchiveGateway } from "./pg-partition-archive.gateway.js";
 export { PgPersonalOrganizationEnroller } from "./pg-personal-organization.enroller.js";
+export { PgPlatformReader } from "./pg-platform.reader.js";
 export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgVectorStore } from "./pg-vector.store.js";

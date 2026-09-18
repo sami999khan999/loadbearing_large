@@ -45,6 +45,7 @@
     "db:partitions": "pnpm --filter @loadbearing/infrastructure run db:partitions",
     "db:seed": "pnpm --filter @loadbearing/infrastructure run db:seed",
     "db:studio": "pnpm --filter @loadbearing/infrastructure run db:studio",
+    "platform:grant": "pnpm --filter @loadbearing/infrastructure run platform:grant",
     "auth:tables": "pnpm --filter @loadbearing/auth run auth:tables",
     "smoke": "pnpm --filter @loadbearing/infrastructure run smoke",
     "prepare": "husky"

@@ -8,4 +8,8 @@ export abstract class CapabilityInvalidator {
   // A role edit affects every holder, and the holders are not known here. Cheaper to
   // flush the tenant than to enumerate them, and never wider than the tenant.
   public abstract invalidateOrganization(organizationId: OrganizationId): Promise<void>;
+
+  // The third axis is cached under its own key, so flushing a tenant does not reach it.
+  // Called by the adapter when the tenant being flushed *is* the platform one.
+  public abstract invalidatePlatform(): Promise<void>;
 }

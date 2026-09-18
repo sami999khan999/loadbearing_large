@@ -357,3 +357,102 @@ describe("CapabilitySet.intersect", () => {
     expect(a.intersect(b).can("member.invite")).toBe(false);
   });
 });
+
+// Decision D31: four things would each leak a platform key, and each is a case here that
+// fails the moment the `scope === "platform"` branch is removed from `can()`.
+describe("CapabilitySet — the platform axis", () => {
+  const PLATFORM: PermissionKey = "platform.status.read";
+
+  it("denies a platform key nothing granted", () => {
+    expect(CapabilitySet.empty().can(PLATFORM)).toBe(false);
+  });
+
+  // Leak 1. A tenant owner holds `wildcard`, and a wildcard that reached the third axis
+  // would make every owner of every customer tenant a platform admin.
+  it("does not let a tenant wildcard reach it", () => {
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.can(PLATFORM)).toBe(false);
+    expect(caps.can("rbac.role.read")).toBe(true);
+  });
+
+  // Leak 2. An org-level grant of the same key — which a tenant role could carry if the
+  // grant use-case were ever bypassed — is not the platform set and must not read as it.
+  it("does not accept an org grant in place of a platform grant", () => {
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [PLATFORM], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.can(PLATFORM)).toBe(false);
+  });
+
+  it("grants a platform key the platform set holds, and honours its deny", () => {
+    const granted = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: { grants: [PLATFORM], denies: [] },
+    });
+    expect(granted.can(PLATFORM)).toBe(true);
+
+    const denied = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: { grants: [PLATFORM], denies: [PLATFORM] },
+    });
+    expect(denied.can(PLATFORM)).toBe(false);
+  });
+
+  // Leak 3. An API key is issued by a user who may be a platform admin. A key that could
+  // act as one is a platform admin nobody can revoke by removing a membership.
+  it("empties the axis when a key intersects its issuer", () => {
+    const issuer = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["rbac.role.read"], denies: [] },
+      goals: {},
+      platform: { grants: [PLATFORM], denies: [] },
+    });
+    const key = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["rbac.role.read"], denies: [] },
+      goals: {},
+      platform: { grants: [PLATFORM], denies: [] },
+    });
+
+    const intersected = issuer.intersect(key);
+    expect(intersected.can(PLATFORM)).toBe(false);
+    expect(intersected.can("rbac.role.read")).toBe(true);
+  });
+
+  // Leak 4. The `core` exception grants without a role. A platform key in a core module
+  // would be held by every principal in the system, resolved or not.
+  it("does not consult the core exception", () => {
+    vi.spyOn(PermissionRegistry.instance, "meta").mockReturnValue({
+      scope: "platform",
+      module: "core",
+      label: "core-looking platform key",
+    });
+
+    expect(CapabilitySet.empty().can(PLATFORM)).toBe(false);
+  });
+
+  // A DTO cached before the axis existed comes back without it. Degrading to "no
+  // platform rights" is the safe reading; throwing would 500 every request behind it.
+  it("reads a DTO with no platform axis as holding none", () => {
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.can(PLATFORM)).toBe(false);
+    expect(caps.toJSON().platform).toEqual({ grants: [], denies: [] });
+  });
+});

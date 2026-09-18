@@ -7,7 +7,9 @@ export interface RoleRecord {
   readonly key: string;
   readonly name: string;
   readonly description: string | null;
-  readonly scope: "org" | "goal";
+  // Mirrors `roles.scope`. `platform` appears only on the platform organization's own
+  // roles; a tenant's role editor never offers it.
+  readonly scope: "org" | "goal" | "platform";
   readonly isSystem: boolean;
   // Raw and unfiltered: a repository that dropped unknown keys would hide a rename
   // rather than surface it. The registry decides.

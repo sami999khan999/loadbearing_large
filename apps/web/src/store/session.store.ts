@@ -5,6 +5,9 @@ import { CapabilitySet, type CapabilitySetDto, type SessionUser } from "~/import
 export interface SessionSnapshot {
   readonly user: SessionUser | null;
   readonly capabilities: CapabilitySetDto;
+  // Whether the *active* tenant is the tier — not whether the user is a platform admin,
+  // which is the third axis of `capabilities`. The role editor reads this one.
+  readonly isPlatformOrganization: boolean;
   // Not about the user, and it rides here anyway: `Env` is server-only, and this is the
   // one payload the root route already awaits on every request.
   readonly googleEnabled: boolean;
@@ -15,6 +18,7 @@ export interface SessionSnapshot {
 const ANONYMOUS: SessionSnapshot = {
   user: null,
   capabilities: CapabilitySet.empty().toJSON(),
+  isPlatformOrganization: false,
   // Off until the server says otherwise, so an unresolved store renders no button rather
   // than one that leads nowhere.
   googleEnabled: false,
@@ -60,6 +64,10 @@ export class SessionStore {
   // which is dehydrated, and a class with methods is rejected at the type level.
   public get dto(): CapabilitySetDto {
     return this.snapshot.capabilities;
+  }
+
+  public get isPlatformOrganization(): boolean {
+    return this.snapshot.isPlatformOrganization;
   }
 
   public get googleEnabled(): boolean {

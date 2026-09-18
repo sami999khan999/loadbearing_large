@@ -109,6 +109,14 @@ export {
   UpdateNotificationPreferenceUseCase,
 } from "./notification/index.js";
 export {
+  InspectPlatformStatusUseCase,
+  type PlatformHealth,
+  PlatformHealthReader,
+  type PlatformOrganization,
+  PlatformReader,
+  type PlatformStatus,
+} from "./platform/index.js";
+export {
   ActivityLogger,
   type ActivityRecord,
   ActivityReplayReader,

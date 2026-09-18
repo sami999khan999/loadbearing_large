@@ -40,6 +40,7 @@ export {
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
+  PgPlatformReader,
   PgRoleRepository,
   PgUnitOfWork,
   type PgUnitOfWorkConfig,

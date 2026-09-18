@@ -73,7 +73,9 @@ describe("SystemRoleSeed.run", () => {
     expect(after.map((row) => row.id).sort()).toEqual(before.map((row) => row.id).sort());
   });
 
-  it("grants the owner every permission the registry defines", async () => {
+  // Every permission **but the platform scope**: a tenant owner is not a platform
+  // admin, and `reconcile()` removes any platform key an earlier deploy's `all` gave.
+  it("grants the owner every tenant permission the registry defines, and no platform key", async () => {
     const [owner] = await database.client
       .select({ id: roles.id })
       .from(roles)
@@ -89,9 +91,12 @@ describe("SystemRoleSeed.run", () => {
         ),
       );
 
-    expect(granted.map((row) => row.permission).sort()).toEqual(
-      [...PermissionRegistry.instance.all()].sort(),
-    );
+    const tenantKeys = PermissionRegistry.instance
+      .all()
+      .filter((key) => PermissionRegistry.instance.scopeOf(key) !== "platform");
+
+    expect(granted.map((row) => row.permission).sort()).toEqual([...tenantKeys].sort());
+    expect(granted.some((row) => row.permission.startsWith("platform."))).toBe(false);
   });
 
   it("grants the guest nothing at all", async () => {

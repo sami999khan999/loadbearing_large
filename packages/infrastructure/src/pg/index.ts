@@ -30,6 +30,7 @@ export {
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
+  PgPlatformReader,
   PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";

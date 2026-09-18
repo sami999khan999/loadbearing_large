@@ -48,6 +48,7 @@ export {
   ModuleRegistry,
   type PermissionKey,
   PermissionRegistry,
+  type PermissionScope,
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ export {
   NotificationMutations,
   NotificationQueries,
   OrganizationMutations,
+  PlatformQueries,
   RoleMutations,
   RoleQueries,
   SessionMutations,

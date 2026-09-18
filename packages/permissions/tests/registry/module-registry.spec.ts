@@ -49,10 +49,29 @@ describe("ModuleRegistry", () => {
   });
 
   // `visibleModules()` asks without a `goalId`, so a module gated on a goal-scoped key
-  // would be invisible to everyone, forever, with nothing to indicate why.
-  it("gates every module on an org-scoped permission", () => {
+  // is invisible to everyone forever. `platform` is fine: `can()` answers it without one.
+  it("gates no module on a goal-scoped permission", () => {
     for (const [module, gate] of Object.entries(GATES)) {
-      expect(PermissionRegistry.instance.scopeOf(gate.permission), module).toBe("org");
+      expect(PermissionRegistry.instance.scopeOf(gate.permission), module).not.toBe("goal");
     }
+  });
+
+  // The nav is the first surface a leak shows on, and the wildcard case above already
+  // proves it — this names why, so a future edit to that list cannot quietly drop it.
+  it("hides the platform module from a tenant wildcard and shows it to a holder", () => {
+    const owner = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: [] },
+      goals: {},
+    });
+    expect(registry.isVisible("platform", owner)).toBe(false);
+
+    const admin = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: { grants: ["platform.status.read"], denies: [] },
+    });
+    expect(registry.isVisible("platform", admin)).toBe(true);
   });
 });

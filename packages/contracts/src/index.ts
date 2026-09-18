@@ -71,6 +71,11 @@ export {
   type UpdateNotificationPreferenceInput,
 } from "./notification/index.js";
 export {
+  PlatformContract,
+  type PlatformHealthDto,
+  type PlatformStatusDto,
+} from "./platform/index.js";
+export {
   type ApiKeyId,
   type ConversationId,
   Envelope,

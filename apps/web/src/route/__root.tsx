@@ -35,6 +35,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     return {
       user: context.session.user,
       capabilities: context.session.dto,
+      isPlatformOrganization: context.session.isPlatformOrganization,
       googleEnabled: context.session.googleEnabled,
       appearanceSnapshot: context.appearance.current,
     };
@@ -61,8 +62,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
-  const { messages, queryClient, api, user, capabilities, appearanceSnapshot } =
-    Route.useRouteContext();
+  const {
+    messages,
+    queryClient,
+    api,
+    user,
+    capabilities,
+    isPlatformOrganization,
+    appearanceSnapshot,
+  } = Route.useRouteContext();
   const { theme, mode, preference, font } = appearanceSnapshot;
 
   // Only when the server guessed, and only upgrading light to dark — so it cannot fight
@@ -94,7 +102,11 @@ function RootDocument({ children }: { children: ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <ApiClientProvider client={api}>
             <MessageProvider messages={messages}>
-              <SessionProvider user={user} capabilities={capabilities}>
+              <SessionProvider
+                user={user}
+                capabilities={capabilities}
+                isPlatformOrganization={isPlatformOrganization}
+              >
                 {children}
               </SessionProvider>
             </MessageProvider>

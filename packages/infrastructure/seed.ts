@@ -7,7 +7,7 @@ import "dotenv/config";
 import { eq, Identifiers, Uuid } from "./src/import.js";
 import { Database } from "./src/pg/primitive/index.js";
 import { organizations } from "./src/pg/schema/index.js";
-import { SystemRoleSeed, TenantPartitionSeed } from "./src/pg/seed/index.js";
+import { PlatformRoleSeed, SystemRoleSeed, TenantPartitionSeed } from "./src/pg/seed/index.js";
 import { TransactionScope } from "./src/pg/transaction/index.js";
 
 // The same variable `apps/web/src/env.ts` reads. Naming it in both places is what
@@ -43,13 +43,23 @@ const organizationId = await database.client.transaction(async (tx) =>
     const id = existing[0]?.id ?? Identifiers.organizationId.parse(Uuid.v7());
 
     if (!existing[0]) {
-      await tx.insert(organizations).values({ id, slug: SEED_SLUG, name: "Loadbearing" });
+      await tx
+        .insert(organizations)
+        .values({ id, slug: SEED_SLUG, name: "Loadbearing", isPlatform: true });
     }
+
+    // Marked every run, not only on create: a database seeded before the tier existed
+    // has the organization and not the flag, and `organizations_platform_uq` makes
+    // marking a second one an error rather than a silent second tier.
+    await tx.update(organizations).set({ isPlatform: true }).where(eq(organizations.id, id));
 
     // Idempotent, and first: every tenant-owned table is partitioned by this id, so a
     // tenant with no partitions is a tenant the first write to it fails against.
     await new TenantPartitionSeed(database, scope).run(id);
     await new SystemRoleSeed(database, scope).run(id);
+    // After the mark, because it resolves the organization by the flag rather than by
+    // the slug: the tier is a property of a row, not of a name in an env file.
+    await new PlatformRoleSeed(database, scope).run();
     return id;
   }),
 );

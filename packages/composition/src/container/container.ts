@@ -35,6 +35,7 @@ import {
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
+  InspectPlatformStatusUseCase,
   type InvitationClaimer,
   InvitationClaimingEnroller,
   InviteMemberUseCase,
@@ -89,9 +90,11 @@ import {
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
+  PgPlatformReader,
   PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
+  type PlatformReader,
   PrincipalBuilder,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
@@ -133,6 +136,7 @@ import {
   QueuedMailPublisher,
 } from "../mail/index.js";
 import type { ContainerConfig } from "./container.config.js";
+import { ContainerHealthReader } from "./container-health.reader.js";
 
 // The API-key slice's use-cases. Grouped like the member ones, and absent for the same
 // reason: the worker authenticates nothing and issues nothing.
@@ -263,6 +267,9 @@ export class Container {
   private readonly sessionResolver: SessionResolver | undefined;
   private readonly principalBuilder: PrincipalBuilder | undefined;
   public readonly capabilities: CapabilityCache;
+  // Which organization is the tier. Read by the capability cache on every RBAC
+  // write, and by every platform use-case that records an audit row.
+  public readonly platform: PlatformReader;
 
   // ── membership, built in every process ────────────────────
   // The worker reads none, and building them there costs nothing: none opens a
@@ -313,6 +320,11 @@ export class Container {
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
+  // Named `platformAdmin` rather than `platform`, which is the reader beside it: one is
+  // "which organization is the tier" and the other is what an admin may do to it.
+  public readonly platformAdmin: {
+    readonly inspectStatus: InspectPlatformStatusUseCase;
+  };
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
@@ -412,7 +424,8 @@ export class Container {
     this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
-    this.capabilities = new CapabilityCache(capabilityRepository, this.cache);
+    this.platform = new PgPlatformReader(this.database, this.transactions);
+    this.capabilities = new CapabilityCache(capabilityRepository, this.cache, this.platform);
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
@@ -688,6 +701,16 @@ export class Container {
     );
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
+
+    // `this` is fully assigned by here, and `report()` is only ever called on a
+    // request — the reader holds the container, it does not read it during the build.
+    this.platformAdmin = {
+      inspectStatus: new InspectPlatformStatusUseCase(
+        this.authorizer,
+        this.platform,
+        new ContainerHealthReader(this),
+      ),
+    };
 
     this.rbac = {
       listRoles: new ListRolesUseCase(this.authorizer, roles),

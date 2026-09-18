@@ -48,6 +48,19 @@ describe("ContractWalker", () => {
   });
 });
 
+// Registered ahead of the procedure that asserts each, so the seed grants them once
+// rather than per deploy. Each line names the item that removes it; the list only shrinks.
+const AWAITING_A_PROCEDURE: ReadonlySet<string> = new Set([
+  "platform.retention.read", // 19.8
+  "platform.retention.manage", // 19.8
+  "platform.analytics.read", // 20.6
+  "platform.analytics.manage", // 20.6
+  "platform.storage.read", // 19.16
+  "platform.shards.read", // 22.19
+  "platform.shards.manage", // 24.2
+  "platform.tenant.manage", // 19.20
+]);
+
 describe("ProcedurePermissions", () => {
   it("gates every procedure the contract router declares", () => {
     const declared = ContractWalker.paths(contract);
@@ -84,6 +97,7 @@ describe("ProcedurePermissions", () => {
       // `core` is held implicitly by every principal in `CapabilitySet.can()` rather
       // than granted through a role, so no procedure asserts it and none should.
       .filter((key) => PermissionRegistry.instance.meta(key)?.module !== CORE_MODULE)
+      .filter((key) => !AWAITING_A_PROCEDURE.has(key))
       .filter((key) => !gated.has(key));
 
     expect(orphans).toEqual([]);

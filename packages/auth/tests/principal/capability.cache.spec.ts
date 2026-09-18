@@ -2,20 +2,29 @@ import { Identifiers } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
-import { MapCacheStore, RecordingCapabilityRepository } from "../support/doubles.js";
+import {
+  MapCacheStore,
+  RecordingCapabilityRepository,
+  StubPlatformReader,
+} from "../support/doubles.js";
 
 const ORG_A = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000a1");
 const ORG_B = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000b1");
 const USER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
+const PLATFORM_ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000ff");
 
 function holding(...grants: readonly PermissionKey[]): CapabilitySet {
   return CapabilitySet.from({ wildcard: false, org: { grants, denies: [] }, goals: {} });
 }
 
-function cacheWith(sets: ReadonlyMap<string, CapabilitySet>) {
-  const repository = new RecordingCapabilityRepository(sets);
+function cacheWith(
+  sets: ReadonlyMap<string, CapabilitySet>,
+  platformSets: ReadonlyMap<string, CapabilitySet> = new Map(),
+) {
+  const repository = new RecordingCapabilityRepository(sets, platformSets);
   const store = new MapCacheStore();
-  return { repository, store, cache: new CapabilityCache(repository, store) };
+  const cache = new CapabilityCache(repository, store, new StubPlatformReader(PLATFORM_ORG));
+  return { repository, store, cache };
 }
 
 describe("CapabilityCache", () => {

@@ -16,6 +16,7 @@ const OWNER: SessionSnapshot = {
     org: { grants: ["rbac.role.read"], denies: [] },
     goals: {},
   }).toJSON(),
+  isPlatformOrganization: false,
   googleEnabled: false,
 };
 

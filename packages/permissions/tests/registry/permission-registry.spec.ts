@@ -32,6 +32,7 @@ describe("PermissionRegistry", () => {
       "notification",
       "apikey",
       "ai",
+      "platform",
     ]);
 
     const grouped = registry.modules().flatMap((module) => registry.byModule(module));
