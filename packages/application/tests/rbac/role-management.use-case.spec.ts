@@ -310,6 +310,45 @@ describe("GrantPermissionUseCase", () => {
     expect(result.permissions).toEqual(["member.deactivate"]);
   });
 
+  // The wildcard's one exclusion, and the reason the first platform admin has to come
+  // from a script: an owner who could grant a platform key is a platform admin.
+  it("refuses a platform key even to a tenant owner holding the wildcard", async () => {
+    reset([role()]);
+    const owner = new Principal(
+      ORG,
+      ACTOR,
+      CapabilitySet.from({ wildcard: true, org: { grants: [], denies: [] }, goals: {} }),
+    );
+
+    await expect(
+      grant().execute(owner, { roleId: EDITABLE, permission: "platform.status.read" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(roles.saved).toEqual([]);
+  });
+
+  // And the other direction, so the refusal above is the scope and not a typo: a real
+  // platform admin hands the key out the way every other one is handed out.
+  it("lets a holder of the platform key grant it", async () => {
+    reset([role()]);
+    const admin = new Principal(
+      ORG,
+      ACTOR,
+      CapabilitySet.from({
+        wildcard: false,
+        org: { grants: ["rbac.permission.grant"], denies: [] },
+        goals: {},
+        platform: { grants: ["platform.status.read"], denies: [] },
+      }),
+    );
+
+    const result = await grant().execute(admin, {
+      roleId: EDITABLE,
+      permission: "platform.status.read",
+    });
+
+    expect(result.permissions).toEqual(["platform.status.read"]);
+  });
+
   it("refuses a permission the catalog does not know", async () => {
     reset([role()]);
 

@@ -91,3 +91,41 @@ describe("PermissionMatrix", () => {
     expect(screen.getByRole("columnheader", { name: "Permission" })).toBeDefined();
   });
 });
+
+// `18.11`: the checkbox a tenant owner would have ticked to get a 403. The grant
+// use-case refuses it either way; this is the affordance, not the enforcement.
+describe("PermissionMatrix — excludeScopes", () => {
+  const PLATFORM_KEYS = PermissionRegistry.instance.byScope("platform");
+
+  it("drops every row of an excluded scope and keeps the rest", async () => {
+    await renderWithFakes(
+      <PermissionMatrix
+        subjects={[{ id: "a", label: "A", capabilities: CapabilitySet.empty() }]}
+        excludeScopes={["platform"]}
+      />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
+    );
+
+    expect(PLATFORM_KEYS.length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("row")).toHaveLength(ALL.length - PLATFORM_KEYS.length + 1);
+
+    for (const key of PLATFORM_KEYS) expect(screen.queryByText(key)).toBeNull();
+  });
+
+  it("keeps every row when no scope is excluded", async () => {
+    await renderWithFakes(
+      <PermissionMatrix
+        subjects={[{ id: "a", label: "A", capabilities: CapabilitySet.empty() }]}
+      />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
+    );
+
+    const first = PLATFORM_KEYS[0];
+    if (!first) throw new Error("no platform key is registered");
+    expect(screen.getByText(first)).toBeDefined();
+  });
+});

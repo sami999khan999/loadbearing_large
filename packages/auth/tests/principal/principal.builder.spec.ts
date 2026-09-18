@@ -58,6 +58,9 @@ async function build(options: {
   readonly session: boolean;
   readonly keys?: readonly ApiKeyRecord[];
   readonly active?: boolean;
+  // The third axis, resolved per user. Absent by default, which is every user but a
+  // handful in any deployment.
+  readonly platform?: readonly PermissionKey[];
 }) {
   const sessions = new StubSessionResolver(
     options.session
@@ -78,6 +81,21 @@ async function build(options: {
         [`${ORG}:${COOKIE_USER}`, holding("rbac.role.read", "rbac.role.manage", "member.read")],
         [`${ORG}:${KEY_ISSUER}`, holding("member.read")],
       ]),
+      new Map(
+        options.platform
+          ? [
+              [
+                COOKIE_USER,
+                CapabilitySet.from({
+                  wildcard: false,
+                  org: { grants: [], denies: [] },
+                  goals: {},
+                  platform: { grants: options.platform, denies: [] },
+                }),
+              ],
+            ]
+          : [],
+      ),
     ),
     new MapCacheStore(),
     new StubPlatformReader(),
@@ -153,5 +171,41 @@ describe("PrincipalBuilder", () => {
     // Falling through to the session here would turn a revoked integration key into a
     // working request whenever the caller happened to also hold a browser session.
     expect(await builder.fromHeaders(headers({ "x-api-key": TOKEN }))).toBeNull();
+  });
+});
+
+// Merged rather than chosen between. The session is pointed at a customer tenant
+// throughout — `ORG` is not the tier — which is the case worth pinning.
+describe("PrincipalBuilder — the platform axis", () => {
+  it("carries a platform key into a principal whose active tenant is a customer one", async () => {
+    const { builder } = await build({ session: true, platform: ["platform.status.read"] });
+
+    const principal = await builder.fromHeaders(headers());
+
+    expect(principal?.organizationId).toBe(ORG);
+    expect(principal?.can("platform.status.read")).toBe(true);
+    // And the tenant axis survived the merge, which a naive overwrite would have lost.
+    expect(principal?.can("rbac.role.manage")).toBe(true);
+  });
+
+  it("gives a user with no membership in the tier nothing on that axis", async () => {
+    const { builder } = await build({ session: true });
+
+    expect((await builder.fromHeaders(headers()))?.can("platform.status.read")).toBe(false);
+  });
+
+  // The leak that matters most here: a key issued by a platform admin must not act as
+  // one, because revoking it means finding a key rather than removing a membership.
+  it("empties the axis on the API-key path", async () => {
+    const { builder } = await build({
+      session: true,
+      keys: [await keyRecord()],
+      platform: ["platform.status.read"],
+    });
+
+    const principal = await builder.fromHeaders(headers({ "x-api-key": TOKEN }));
+
+    expect(principal?.kind).toBe("api_key");
+    expect(principal?.can("platform.status.read")).toBe(false);
   });
 });

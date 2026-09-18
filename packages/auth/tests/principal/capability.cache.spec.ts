@@ -120,3 +120,54 @@ describe("CapabilityCache", () => {
     expect(repository.calls).toHaveLength(2);
   });
 });
+
+// The third axis. Keyed on the user alone, cached under its own prefix, and flushed by
+// this class rather than by the use-cases — see docs/reference/capability-cache.md.
+describe("CapabilityCache — the platform axis", () => {
+  const admin = (...grants: readonly PermissionKey[]): CapabilitySet =>
+    CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: {},
+      platform: { grants, denies: [] },
+    });
+
+  it("caches under its own prefix, with no organization in the key", async () => {
+    const { cache, store, repository } = cacheWith(
+      new Map(),
+      new Map([[USER, admin("platform.status.read")]]),
+    );
+
+    expect((await cache.platformFor(USER)).can("platform.status.read")).toBe(true);
+    expect((await cache.platformFor(USER)).can("platform.status.read")).toBe(true);
+
+    expect(repository.platformCalls).toEqual([USER]);
+    expect([...store.entries.keys()]).toEqual([`capability:platform:${USER}`]);
+  });
+
+  // The rule that would otherwise have to live in four use-cases: only this class knows
+  // which organization is the tier.
+  it("flushes the axis when the tenant being flushed is the tier", async () => {
+    const { cache, store } = cacheWith(new Map(), new Map([[USER, admin("platform.status.read")]]));
+    await cache.platformFor(USER);
+
+    await cache.invalidateOrganization(ORG_A);
+    expect(store.entries.has(`capability:platform:${USER}`)).toBe(true);
+
+    await cache.invalidateOrganization(PLATFORM_ORG);
+    expect(store.entries.has(`capability:platform:${USER}`)).toBe(false);
+  });
+
+  // A role edit in a customer tenant must not be able to change a platform grant, and
+  // this is the half of that sentence a cache can get wrong.
+  it("leaves the axis alone when a member of a customer tenant is flushed", async () => {
+    const { cache, store } = cacheWith(new Map(), new Map([[USER, admin("platform.status.read")]]));
+    await cache.platformFor(USER);
+
+    await cache.invalidate(ORG_B, USER);
+    expect(store.entries.has(`capability:platform:${USER}`)).toBe(true);
+
+    await cache.invalidate(PLATFORM_ORG, USER);
+    expect(store.entries.has(`capability:platform:${USER}`)).toBe(false);
+  });
+});
