@@ -6,7 +6,7 @@
     "enrollers",
     "pgvector",
     "partitions",
-    "activity-archive",
+    "cold-storage",
     "clickhouse",
     "loki",
     "realtime"

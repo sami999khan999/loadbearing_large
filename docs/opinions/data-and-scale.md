@@ -327,7 +327,9 @@ must not touch a partition per tenant to do it.
 
 Three things this buys:
 
-- Dropping old data is `DROP PARTITION` — instant, rather than a `DELETE` that bloats the table.
+- Retiring old data is `DROP PARTITION` — instant, rather than a `DELETE` that bloats the table.
+  And **retiring is not deleting**: every month is detached, streamed to S3 and verified before it
+  is dropped ([cold storage](../../packages/infrastructure/docs/reference/cold-storage.md)).
 - Index maintenance stays bounded, because each partition's index is small.
 - A query carrying a *range* on the partition column reads only the months that range covers.
 
@@ -375,19 +377,23 @@ predicate carrying no partition key, so every lookup would scan every partition.
 expiry instead, and a `DELETE … WHERE expires_at < now()` on the cleanup schedule is the right tool
 ([25](../setup/25-worker-app.md)).
 
-**`activity_archive` is not on it either, and it is the case the rule reads as covering.** It is
-genuinely append-only — one row per archived month, `period` as the primary key, written by the
-`archive-monthly` schedule and by nothing else. It is also **twelve rows a year**. Partitioning it
-would put one row in each partition and buy nothing at any horizon anyone will operate over: after a
-decade it is a hundred and twenty rows, which is a page.
+**`partition_archive` is not on it either, and it is the case the rule reads as covering.** It is
+genuinely append-only — one row per tenant per table per archived month, written by the retention
+pass and by nothing else. It grows with **tenants × retired tables × the calendar**, which is a
+handful of rows a month for a small deployment and is bounded by the cold-months policy above it.
+Partitioning it would also defeat its purpose: it is the index a read of cold storage starts from,
+and that read arrives holding a tenant and a table, not a time range.
 
 The reason it looks like a candidate is that it sits beside `activity_log` and describes the same
 data. It grows with the *calendar*, not with the audit trail — which is the distinction the sentence
 above exists to make, and the reason to state it rather than leave it to be re-derived by whoever
 notices the table next.
 
-**Decide the retention policy at the same time.** The common shape: 12–24 months of detail in
-Postgres, aggregates forever in the analytics store, older partitions detached to cold storage.
+**Decide the retention policy at the same time, and say what "retention" means.** Here it means
+**archive-then-drop**: 12–24 months of detail in Postgres, aggregates forever in the analytics
+store, and every older partition in S3 under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`
+behind a row in `partition_archive`. No month is destroyed, `outbox_event` included. A month with
+no rows writes no object, so an absent row means "nothing to restore" rather than "not archived".
 
 ### 4.3 The write path is built; the read seam is not
 
@@ -594,9 +600,9 @@ Both were in the first migration, which is the only time either is cheap.
 [`packages/infrastructure/src/pg/schema/notification.schema.ts`](../../packages/infrastructure/src/pg/schema/notification.schema.ts)
 is `PARTITION BY RANGE (created_at)` with `(id, created_at)` as its key, and `notifications` is a
 member of the frozen `PartitionedTable` allowlist that `MaintenanceConsumer` walks — so the monthly
-partition is created ahead of need and dropped after twelve months by the same loop that maintains
-the audit trail and the outbox. Retention is a number in one table there, not a job someone has to
-remember to write.
+partition is created ahead of need and, after twelve months, archived to S3 and dropped by the same
+loop that maintains the audit trail and the outbox. Retention is a number in one table there, not a
+job someone has to remember to write.
 
 ### Message fan-out
 

@@ -33,7 +33,7 @@ table, in one place:
 
 | Table | `tenantKey` | `column` | `retentionMonths` |
 | --- | --- | --- | --- |
-| `activity_log` | `organization_id` | `occurred_at` | `null` — the archive owns its lifecycle |
+| `activity_log` | `organization_id` | `occurred_at` | 13 |
 | `outbox_event` | — | `occurred_at` | 2 |
 | `notifications` | `organization_id` | `created_at` | 12 |
 | `messages` | `organization_id` | `created_at` | `null` — domain data |
@@ -43,10 +43,9 @@ table, in one place:
 | `document_chunks` | `organization_id` | — | — |
 
 `tenantKey: null` is "not split by tenant"; `column: null` is "tenant level only, never pruned by
-the calendar"; `retentionMonths: null` is "something else owns this table's lifecycle".
-`activity_log` carries the last of those because [the archive](activity-archive.md) detaches a
-month, uploads it, verifies the object and only then drops — a calendar drop running beside that
-would race the verification.
+the calendar"; `retentionMonths: null` is "never retired at all", which for `messages` means domain
+data nothing drops. Every table that *is* retired goes through [cold storage](cold-storage.md)
+first: detached, uploaded, verified, and only then dropped.
 
 **Nothing reads a copy of this list.** `TenantPartitionSeed` walks the tenant-partitioned entries,
 `MaintenanceConsumer.partitions()` walks the month-partitioned ones per tenant, and

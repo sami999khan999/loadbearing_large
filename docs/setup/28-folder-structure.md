@@ -399,12 +399,12 @@ packages/infrastructure/
     │   │   ├── auth.schema.ts                ← Better Auth CLI output, committed
     │   │   ├── api-key.schema.ts
     │   │   ├── activity.schema.ts            ← activity_log, partitioned monthly
-    │   │   ├── analytics.schema.ts           ← rollup tables + activity_archive
+    │   │   ├── archive.schema.ts             ← partition_archive, the cold-storage index
     │   │   └── vector.schema.ts              ← HNSW index, cosine ops
     │   ├── repository/                       ← every adapter, one file each, flat
     │   │   ├── index.ts
     │   │   ├── pg-activity.logger.ts         → PgActivityLogger
-    │   │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
+    │   │   ├── pg-partition-archive.gateway.ts → PgPartitionArchiveGateway
     │   │   ├── pg-activity-replay.reader.ts  → PgActivityReplayReader
     │   │   ├── pg-api-key.repository.ts      → PgApiKeyRepository
     │   │   ├── pg-capability.repository.ts   → PgCapabilityRepository

@@ -10,7 +10,7 @@ page carries the arguments; the port files themselves state constraints and stop
 
 ## Three ports carry no `Principal`, and that is the design
 
-`MaintenanceGateway`, `ActivityArchiveGateway`, `ActivityReplayReader` and `OutboxGateway` take no
+`MaintenanceGateway`, `PartitionArchiveGateway`, `ActivityReplayReader` and `OutboxGateway` take no
 actor on any method. That is not a hole in the authorization story.
 
 Every *other* port reads or writes a tenant's rows, so `Authorizer.assert()` inside a use-case is
@@ -46,16 +46,28 @@ range, because a month created by hand is still a partition and still has to be 
 leaves alone any child whose name it cannot parse, since this loop is holding a `drop table` and
 "I could not read the name" is not evidence the rows are expendable.
 
-### `ActivityArchiveGateway`
+### `PartitionArchiveGateway`
 
-This is the fourth prerequisite for adopting a derived analytics store, and the one the deployment
-doc omits. Without a writer for `activity_archive`, replay past the Postgres retention window does
-not exist — which makes "no backups, because replay works" false rather than merely optimistic.
+Cold storage for **every** partitioned table, which is what makes retention stop meaning deletion.
+It is also the fourth prerequisite for adopting a derived analytics store, and the one the
+deployment doc omits: without a writer for `partition_archive`, replay past the Postgres retention
+window does not exist — which makes "no backups, because replay works" false rather than merely
+optimistic.
 
 **Detach, upload, record, verify, drop — in that order, and the order is the point.** Dropping
-before verifying is unrecoverable loss of the audit trail. The month is an ISO `YYYY-MM-DD` string
-naming the first of the archived month: the primary key of `activity_archive`, and the same string a
-replay is asked for.
+before verifying is unrecoverable loss. The unit is the tenant-month child, so `archive(table,
+period)` runs that sequence once per tenant that held rows in the month. The period is an ISO
+`YYYY-MM-DD` string naming the first of it: a third of the primary key of `partition_archive`, and
+the same string a replay is asked for.
+
+`restore()` is on the port for one reason: **an archive nobody has restored is a deletion with
+extra steps.** It reads into a scratch table, never the live parent, because a re-attached month
+puts archived rows back in the hot database and leaves the retention job arguing with itself.
+
+`sweep()` is here because objects outlive the tenant by design — the index carries no foreign key
+to `organizations`, so nothing cascades — and a GDPR-shaped hole created by cold storage is closed
+by cold storage. The long form is
+[`infrastructure/docs/reference/cold-storage.md`](../../../infrastructure/docs/reference/cold-storage.md).
 
 ### `ActivityReplayReader`
 

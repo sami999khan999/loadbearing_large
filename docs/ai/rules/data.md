@@ -15,6 +15,7 @@ description: Which store owns which data, what is derived, and what is non-negot
 | Domain events | `DomainEventPublisher` | Postgres outbox, partitioned | **in-transaction**, at-least-once, drained by the worker |
 | Diagnostics | `JsonLogger` | stdout → Loki | may be lost; 30-day retention |
 | Analytics | worker, from domain events | Postgres snapshots → ClickHouse | derived; rebuildable |
+| Retired months | the retention pass | S3 under `cold/`, indexed by `partition_archive` | archive-then-drop; restorable |
 
 **The test:** if dropping a store loses information not recoverable from Postgres or S3, it has
 become a source of truth — whether you decided that or not. Run it whenever a store is added, and
@@ -23,6 +24,11 @@ again the first time someone introduces one because "it is just a cache."
 - **Redis has three jobs and they do not have the same answer.** Capability and session caches are
   rebuildable; **BullMQ is not** — a lost job is work that never happens. Hence two instances. An
   evicted session must be a read-through, never a sign-out.
+- **Retention means archive-then-drop, never delete.** Every partitioned table's month is
+  detached, streamed to `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, recorded in
+  `partition_archive` and verified **before** it is dropped — `outbox_event` included. An absent
+  row means "nothing to restore", never "not archived", and a tenant delete has to sweep those
+  objects itself, because the index carries no foreign key that could cascade.
 - **ClickHouse is purely derived and must stay so.** Only the projection consumer writes to it.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate in application
   code cannot be sharded; those belong in the analytics store from day one.
@@ -34,7 +40,7 @@ does not auto-index FKs and a composite that leads with the tenant cannot serve 
 and the ones that grow *with activity* `PARTITION BY RANGE` again underneath, because converting
 later is a rewrite with downtime — the parents are the migration's, every child is
 `TenantPartitionSeed`'s, and a table that grows with the calendar rather than with the work, like
-`activity_archive` at twelve rows a year, takes no month level · query-count assertions in integration tests for anything that loops ·
+`partition_archive`, takes no month level · query-count assertions in integration tests for anything that loops ·
 **every tenant foreign key `ON DELETE CASCADE`**, because that column is the only handle a tenant
 delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected
 by its own check. The audit trail is the one table that names no actor by foreign key.

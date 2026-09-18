@@ -95,7 +95,7 @@ pnpm infra:reset
 |---|---|---|
 | `apps/web`, `apps/worker` (host) | `localhost:6432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
 | `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:5432` | DDL, via `DATABASE_DIRECT_URL` |
-| `PgActivityArchiveGateway` | `localhost:5432` | `DETACH … CONCURRENTLY` and a month-long stream |
+| `PgPartitionArchiveGateway` | `localhost:5432` | `DETACH … CONCURRENTLY` and a month-long stream |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
 the client is on. A container using `localhost:5432` would reach *its own* loopback and find

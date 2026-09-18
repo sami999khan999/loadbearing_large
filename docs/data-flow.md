@@ -128,7 +128,7 @@ copies can all be rebuilt, and that is what makes them safe to lose.
 | The outbox sweep and the email path | `apps/worker/src/consumer/outbox.consumer.ts` |
 | The copy into ClickHouse and the nightly comparison | `apps/worker/src/consumer/analytics.consumer.ts` |
 | Partition creation, expiry sweeps, and the archive | `apps/worker/src/consumer/maintenance.consumer.ts` |
-| Writing a month out to S3 | `packages/infrastructure/src/pg/repository/pg-activity-archive.gateway.ts` |
+| Writing a month out to S3 | `packages/infrastructure/src/pg/repository/pg-partition-archive.gateway.ts` |
 | The ClickHouse table and its expiry | `infra/clickhouse.init.sql` |
 
 The positions behind all of this are in [`docs/opinions/data-and-scale.md`](opinions/data-and-scale.md).

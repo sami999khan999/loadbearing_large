@@ -45,7 +45,7 @@ packages/composition/src/
     ├── in-memory-storage.gateway.ts  → InMemoryStorageGateway
     ├── in-memory-vector.store.ts     → InMemoryVectorStore
     ├── recording-activity.logger.ts  → RecordingActivityLogger, RecordedActivity
-    ├── recording-activity-archive.gateway.ts → RecordingActivityArchiveGateway
+    ├── recording-partition-archive.gateway.ts → RecordingPartitionArchiveGateway
     ├── recording-email.sender.ts     → RecordingEmailSender
     ├── recording-maintenance.gateway.ts → RecordingMaintenanceGateway
     ├── recording-queue.publisher.ts  → RecordingQueuePublisher, PublishedJob

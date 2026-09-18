@@ -266,8 +266,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   the `ORDER BY` that stops the index being used.
 - [Partitions](reference/partitions.md) — the allowlist as the whole policy, the two mechanics that
   are not optional, and which reads prune to one month and which read every one.
-- [The activity archive](reference/activity-archive.md) — detach, stream, record, verify, drop, and
-  what the unwind has to put back.
+- [Cold storage](reference/cold-storage.md) — the tenant-month as the unit, the `cold/` prefix,
+  `partition_archive` as the index a read starts from, and the restore that proves the difference.
 - [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
   adopted in.
 - [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to

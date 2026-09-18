@@ -45,7 +45,7 @@ packages/infrastructure/
     ├── repository/                ← every adapter, one file each, flat
     │   ├── index.ts
     │   ├── pg-activity.logger.ts          → PgActivityLogger
-    │   ├── pg-activity-archive.gateway.ts → PgActivityArchiveGateway
+    │   ├── pg-partition-archive.gateway.ts → PgPartitionArchiveGateway
     │   ├── pg-activity-replay.reader.ts   → PgActivityReplayReader
     │   ├── pg-api-key.repository.ts       → PgApiKeyRepository
     │   ├── pg-capability.repository.ts    → PgCapabilityRepository
@@ -91,7 +91,7 @@ export {
   type DrizzleClient,
 } from "./primitive/index.js";
 export {
-  PgActivityArchiveGateway,
+  PgPartitionArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
@@ -345,6 +345,8 @@ The ordering consequence is worth stating plainly: **these tables reference `use
 
 The consequence that catches people is **`roles_key_uq`**. Keyed on `(key)` alone, two organizations cannot both have an `owner` role — the second insert fails with a unique violation and it looks like a seeding bug. Every unique index on a tenant-scoped table leads with `organization_id`, and the ones that do not — `memberships_uq`, `goal_members_uq` — are already unique on columns that are themselves tenant-scoped.
 
+**`partition_archive` leads with the tenant, and carries no foreign key to it.** It is the index a read of cold storage starts from — one row per tenant per table per retired month, with the object key, the row count, the bytes, a per-action breakdown and a `projected_at` that is null until the derived store has that month. Leading with `organization_id` is what lets one tenant's cold months be read, swept and totalled without touching another's, and is why it needs no `TENANT_EXEMPT` line. The missing foreign key is deliberate for the reason the audit trail gives about its actor: **the archive is what survives the tenant**, so a cascade would erase the record of what was kept. Deleting a tenant therefore has to sweep the objects itself. See [cold storage](../../packages/infrastructure/docs/reference/cold-storage.md).
+
 **Postgres does not index foreign keys for you.** `roleId` on `memberships` and `goalMembers`, `goalId` on `goal_members` and `permission_overrides` — every one is a column something filters or joins on, and none of them is covered by the unique indexes above. An unindexed FK is also what makes deleting a role scan every membership row. The rule is mechanical: **every FK column gets an index, every filtered column gets an index**, and the review question is "which index serves this predicate" rather than "does this look slow".
 
 ---
@@ -355,7 +357,7 @@ The consequence that catches people is **`roles_key_uq`**. Keyed on `(key)` alon
 
 ```ts
 export * from "./activity.schema.js";
-export * from "./analytics.schema.js";
+export * from "./archive.schema.js";
 
 
 export * from "./rbac.schema.js";
@@ -488,7 +490,7 @@ CREATE TABLE activity_log_2026_01 PARTITION OF activity_log
 
 **Create partitions ahead of time**, with a repeatable job on the maintenance queue ([25](25-worker-app.md)) or `pg_partman`. A month that arrives with no partition is an insert that fails, so the job runs monthly and creates several months out.
 
-**Decide retention at the same time.** The usual shape is 12–24 months of detail in Postgres, aggregates kept forever in the analytics store, and older partitions detached to cold storage. Detaching a partition is instant; a `DELETE` over the same rows bloats the table and holds a lock.
+**Decide retention at the same time, and know what it does here.** The usual shape is 12–24 months of detail in Postgres, aggregates kept forever in the analytics store, and older partitions detached to cold storage. Detaching a partition is instant; a `DELETE` over the same rows bloats the table and holds a lock. In this kit retention is **archive-then-drop**: every retired tenant-month is streamed to `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, recorded in `partition_archive` and verified before the drop, `outbox_event` included. See [cold storage](../../packages/infrastructure/docs/reference/cold-storage.md).
 
 **Which tables are partitioned is a list, not a convention.** `PartitionedTable.ALL` in `packages/application/src/primitive/partitioned-table.ts` names them; `MaintenanceGateway.ensureMonthlyPartitions` and `dropMonthlyPartitionsBefore` take that union rather than a `string`, and the monthly schedule loops it. Two things fall out. Postgres accepts no bind parameter in DDL — not for the table and not for the range bounds — so the adapter interpolates, and a closed union is the only boundary there is. And a table partitioned in a migration but never added to the list quietly stops getting partitions the month that migration's own runway ends.
 

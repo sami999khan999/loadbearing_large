@@ -134,9 +134,13 @@ day is the grain an operator picks a replay window from. It is `error` and not `
 number a dashboard has shown since the first drifting day is wrong, and the fix is a replay, which
 only works while `activity_log` still covers the window. **The alert has a deadline attached.**
 
-Past that window the replay source is `activity_archive` and the objects
-[`PgActivityArchiveGateway`](../../../application/docs/index.md) wrote to S3, which is why that
-gateway exists at all.
+Past that window the replay source is [`partition_archive`](cold-storage.md) and the objects
+`PgPartitionArchiveGateway` wrote to S3, which is why that gateway exists at all. The key has a
+shape now — `cold/activity_log/<yyyy>/<mm>/<organization_id>.ndjson.gz`, one object per tenant per
+month — so a replay for one tenant reads one object rather than downloading every other tenant's
+month and discarding it. `projected_at` on that row is the other half: null means this store never
+received that tenant-month, and the partial index over it is how you find every such hole without
+a scan.
 
 ---
 

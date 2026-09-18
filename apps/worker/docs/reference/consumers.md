@@ -7,7 +7,7 @@ description: Three consumers, all serial, all with a public handle() — the bat
 
 | Consumer | Queue | Jobs | Registered |
 |---|---|---|---|
-| `MaintenanceConsumer` | `MAINTENANCE` | sweep · partitions · archive | always |
+| `MaintenanceConsumer` | `MAINTENANCE` | cleanup · partitions | always |
 | `EmbeddingConsumer` | `EMBEDDING` | index | always |
 | `MailConsumer` | `MAIL` | send | always |
 | `OutboxConsumer` | `EVENT` | drain · deliver | always |
@@ -39,10 +39,18 @@ the other should be loud.
 | Constant | Value | Why |
 |---|---|---|
 | months of partition runway | 3 | A partitioned table with no partition for the current date rejects **every** insert. At one month, a single missed run is a total write outage at midnight on the first; at three, the job can fail twice before anything breaks |
-| archive reach-back | 13 months | Keeps a full year queryable in Postgres and archives the month that has just fallen out of it |
+| `activity_log` retention | 13 months | Keeps a full year queryable in Postgres and retires the month that has just fallen out of it. On the allowlist, like every other table's — there is no constant here any more |
 
-The month to archive is computed **from the clock**, not passed in the job payload, so a redelivered
-job archives the same month rather than one relative to whenever the retry happened.
+**There is no `archive` job.** `partitions` ensures the runway and then retires what has aged out,
+and retiring is archive-then-drop: a month leaves only behind a verified object in cold storage.
+The cutoff is computed **from the clock** and the months from `PartitionedTable.byName(table)
+.retentionMonths`, so a redelivered job retires the same months rather than ones relative to
+whenever the retry happened, and adding a partitioned table is one allowlist line.
+
+The archive loop is per table-month across every tenant, and it logs one line per table-month:
+a month with five thousand tenants must not be five thousand lines. A tenant whose upload fails is
+logged and skipped, and nothing of that tenant's was dropped. See
+[`cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 **`MONTHS_PER_RUN` counts partitions, not runway, and the two differ by one.** Three is the current
 month and the next two, so the job survives two consecutive missed runs and the third is a write

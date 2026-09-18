@@ -40,7 +40,7 @@ packages/application/
 │   ├── port/                     ← abstract classes only, zero implementations
 │   │   ├── index.ts
 │   │   ├── activity.logger.ts    → ActivityLogger
-│   │   ├── activity-archive.gateway.ts → ActivityArchiveGateway, ArchivedPartition
+│   │   ├── partition-archive.gateway.ts → PartitionArchiveGateway, ArchivedPartition
 │   │   ├── activity-replay.reader.ts   → ActivityReplayReader, ActivityRecord,
 │   │   │                                 ProjectionCheckpoint, DailyCount
 │   │   ├── analytics.projector.ts → AnalyticsProjector
@@ -103,7 +103,7 @@ gives a real prototype chain and `noImplicitOverride` catches a rename.
 | Port | Implemented by | Swap target |
 | --- | --- | --- |
 | `ActivityLogger` | `PgActivityLogger` | never; audit is Postgres at every scale |
-| `ActivityArchiveGateway` | `PgActivityArchiveGateway` | never — it *is* the Postgres side |
+| `PartitionArchiveGateway` | `PgPartitionArchiveGateway` | never — it *is* the Postgres side |
 | `ActivityReplayReader` | `PgActivityReplayReader` | never — reads the source of truth |
 | `AnalyticsProjector` | `ClickHouseAnalyticsProjector` | any column store |
 | `CacheStore` | `RedisCacheStore` | managed Redis |

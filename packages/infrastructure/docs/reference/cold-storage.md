@@ -1,0 +1,209 @@
+---
+title: Cold storage
+description: Retention stops meaning deletion — the tenant-month as the unit, the cold/ prefix, partition_archive as the index a read starts from, and the restore that proves the difference.
+---
+
+# `PgPartitionArchiveGateway`
+
+Retention used to destroy a month. `outbox_event` went at two months, `notifications` at twelve,
+and only `activity_log` survived — because one gateway detached it, streamed it to S3 and verified
+the object before dropping. This generalises that one mechanism rather than building a second:
+**every partitioned table archives before it drops**, `outbox_event` included.
+
+## The unit is the tenant-month
+
+A tenant is a `LIST` partition and its months are `RANGE` partitions underneath, so one tenant's
+month is one child table: `activity_log_<32hex>_2026_05`. That is what gets detached, streamed,
+recorded, verified and dropped — one child at a time, N of them per table-month.
+
+Two findings decided the shape, and both are worth knowing before reading the code.
+
+**The old archive object was one cross-tenant blob per month.** The key was
+`activity-archive/<yyyy>/<mm>/activity_log.ndjson.gz`, holding every organization's rows
+interleaved. Serving one tenant their own old rows out of that means downloading and discarding
+every other tenant's month, on a user request path. So objects are cut per tenant, which is also
+the only layout that could ever be handed to a browser as a presigned URL.
+
+**Retention cannot be per-organization while the partition is shared.** A partition is the unit of
+archival *and* of dropping. Per-org retention over a shared partition would mean `DELETE`-ing one
+tenant's rows out of it — precisely the bloat-and-vacuum problem partitioning exists to avoid. It
+is expressible here only because the tenant-month child made the tenant the partition.
+
+## The order is the job
+
+```
+detach → stream to S3 → record → verify → drop
+```
+
+It is the order rather than the steps that matters. **Dropping before verifying is unrecoverable
+loss.**
+
+**1. Detach.** `CONCURRENTLY`, so the parent is not locked against writers while it happens — which
+is also why the method is not one transaction, since a concurrent detach cannot run inside one.
+Detaching first is what makes the export consistent: the child stops receiving rows the instant it
+is detached, so what gets uploaded is a closed set.
+
+**2. Stream to S3** as gzipped NDJSON. Compression happens *between* the database and S3 rather
+than at either end, so neither ever holds the month in memory. A `Gzip` stream is already an
+`AsyncIterable` of chunks, which is why it needs no cast to reach `putStream`.
+
+**3. Record**, before anything is destroyed.
+
+**4. Verify** the object is readable and complete. A `HEAD` is not enough: it proves an object
+exists, not that its bytes survived.
+
+**5. Only now, drop.**
+
+A month with no rows is detached and dropped with **no object and no row**. That is what makes an
+absent `partition_archive` row mean "nothing to restore" rather than "not archived".
+
+## The key, and the one lifecycle rule it buys
+
+```
+cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz
+```
+
+`cold/` rather than a per-table prefix, because one S3 lifecycle rule on that prefix tiers every
+table to Glacier without naming a single object. That is the whole reason `StorageGateway` fixes a
+prefix layout at all. The tenant is the leaf, so one tenant's month is one object and the prefix
+still covers every tenant.
+
+A table with no tenant level — `outbox_event`, whose drain polls it every second and must not touch
+a partition per tenant to do it — writes its month under `PartitionArchiveGateway.NO_TENANT`, the
+nil uuid. It names no row, which is what makes an object under it readable as "this one spans every
+tenant" rather than as somebody's.
+
+## `partition_archive` is the index a read starts from
+
+```
+partition_archive (organization_id, table_name, period) primary key
+  object_key, row_count, bytes, checksum, action_counts, projected_at, archived_at
+```
+
+Leading with the tenant is not cosmetic: it is what lets one tenant's cold months be read, swept
+and totalled without touching another's, and it is why this table needs no `TENANT_EXEMPT` line
+where `activity_archive` needed one.
+
+`organization_id` is deliberately **not** a foreign key to `organizations`, for the reason the
+audit trail already gives about its actor: an archive record outlives the tenant it names, and a
+cascade would erase it. That is also why the sweep below exists rather than a cascade.
+
+Three columns beyond what `activity_archive` carried, and each has one reader:
+
+- **`bytes`**, from `StoredObject.size`. Nothing else in this repository records what an object
+  costs, so a per-tenant storage total had nowhere to read from.
+- **`action_counts`**, `{ "<action>": n }`, counted while the rows stream out and therefore free.
+  `activity_log` only; `{}` for a table with no `action` column. It is what lets a cold
+  reconciliation subtract an excluded action without reading the object back.
+- **`projected_at`**, null meaning the derived store never received this tenant-month. A partial
+  index on `(table_name, period) where projected_at is null` makes "what has a hole" an index read
+  rather than a scan over every month ever archived.
+
+## A gap is recorded, never silent, and never blocks a drop
+
+After a month is archived, `MaintenanceConsumer` asks the projector where each tenant's checkpoint
+is. Past the end of the month, it stamps `projected_at`; short of it, or with no projector
+configured at all, it emits `analytics.projection.gap` with `reason: "disabled" | "behind"` and
+leaves the row null.
+
+The month is archived and dropped either way. A forgotten switch costs a known hole — one an index
+read finds and a re-projection closes — rather than an unbounded table.
+
+The gap line is one per table-month, not one per tenant: a month with five thousand tenants would
+otherwise be five thousand lines. So is `maintenance.partition.archived`, which carries
+`{ table, period, objects, rows }` — `objects` being tenants that had rows, which is not the same
+as tenants and not the same as partitions dropped.
+
+## Restore, and why it never re-attaches
+
+`restore(table, period, organizationId)` reads the object, gunzips it, and inserts into a **scratch
+table** named `<child>_restore` — never straight back into the live parent. A restore that
+re-attaches silently puts archived rows back in the hot database and leaves the retention job
+arguing with itself about them.
+
+The spec is the point of the method: archive a seeded month, drop it, restore it, and assert the
+row count matches what `partition_archive` recorded and that an md5 over the sorted ids matches
+what went out. **An archive nobody has restored is a deletion with extra steps**, and this is the
+only thing that makes the difference checkable rather than asserted.
+
+The rows are handed to Postgres as one JSON array per batch through
+`json_populate_recordset(null::<scratch>, …)`, so the lines never become objects in this process.
+The scratch table is dropped and recreated rather than appended to: a previous restore of the same
+month is evidence of that restore, and two runs merged into one table are evidence of neither.
+
+## Deleting a tenant reaches cold storage
+
+The moment objects are cut per tenant, deleting an organization cascades cleanly through Postgres
+and leaves every one of its S3 objects behind. That is a GDPR-shaped hole created by this
+mechanism, so this mechanism closes it.
+
+`sweep(organizationId)` reads `partition_archive` for the tenant, `storage.delete()`s each object,
+**then** removes the rows — in that order, so a crash leaves a row pointing at a deleted object,
+which is re-runnable, rather than an object nothing points at, which is invisible forever.
+
+Nothing in `packages/` deletes an organization yet. Until a delete use-case exists and enqueues
+this, an operator runs it:
+
+```bash
+pnpm db:partitions --sweep <organization_id>
+```
+
+**A future delete use-case must enqueue this sweep.** The cascade will not do it.
+
+## A failure between detach and drop re-attaches
+
+Everything from the detach to the drop runs inside a `try`. If `putStream`, the insert or the
+verification throws, the child is put back where it was and the original error is rethrown.
+
+Without that, a failed run left the partition **neither attached nor archived**: its rows invisible
+to every query against the parent, and nothing to put them back but an operator who knew to look.
+
+```ts
+sql.raw(`alter table ${parent} attach partition ${name} for values from ('${from}') to ('${to}')`)
+```
+
+`sql.raw`, because **Postgres accepts no bind parameters in DDL** — the same trap
+`PgMaintenanceGateway` documents. Both bounds are derived from a `Date`, so there is no injection
+surface, and the table name comes from `PartitionedTableName`, a closed union, which is the
+injection boundary decision D37 names.
+
+A cancelled `detach … concurrently` leaves the partition *detach-pending*: still a child, so
+`attach` is not the inverse, and no row in the month can be read or written. The unwind checks
+`inhdetachpending` and runs `detach … finalize` first.
+
+The re-attach swallows its own failure on purpose: the caller needs the error that started the
+unwind, and a partition that will not go back is an operator's problem either way.
+
+## The unwind stops the stream first, and waits for it
+
+`Readable.from` starts pulling the moment it is piped, so by the time `putStream` rejects the
+keyset loop is already paging. Nothing consumes those pages: in production a full scan of the month
+that is thrown away, and in the spec a query still in flight when `afterEach` drops the partition —
+an unhandled rejection reported beside a green suite rather than as a failure.
+
+So the unwind destroys the gzip stream and its source **and awaits `close`** before re-attaching.
+`destroy()` returns before the page already in flight does, and the caller drops the partition the
+instant `archive()` throws. Waiting is what makes "no query is outstanding" true rather than likely.
+
+## NDJSON, and paging out of a detached partition
+
+ClickHouse reads NDJSON back with `s3(…, 'JSONEachRow', …)` directly. `row_to_json` produces the
+line; the sort column and the id come back beside it so the next page's cursor costs no extra round
+trip. The separator is named as a constant because in NDJSON a newline is **data rather than
+formatting**, and naming it keeps a formatter from ever treating it as the latter.
+
+Keyset pagination on `(<partition column>, id)`, so a month that does not fit in memory never has
+to. `OFFSET` would re-scan everything it already returned. The predicate is built as a variable
+rather than inline: a ternary between two `sql` templates makes the row type infer through `after`,
+which `after` is then assigned from — a cycle the compiler reports as an implicit `any`.
+
+The count is taken **after** the detach. Detaching first is what makes the export a closed set, so
+counting first would count a different set from the one uploaded: rows written in between would be
+streamed to S3 and missing from `row_count`, and that drift is permanent and silent.
+
+## What `activity_archive` is still doing here
+
+`0025` copies every row of it into `partition_archive` under `table_name = 'activity_log'`, keeping
+the object key it already names — the object is where it is, and rewriting the key would point the
+index at nothing. The table itself stays until no deployment can still hold objects under the old
+`activity-archive/` prefix; a later migration drops it and its `TENANT_EXEMPT` line together.

@@ -10,19 +10,18 @@ description: Five repeatable entries, the fixed job ids that make registration i
 | `outbox-drain` | every second | `EVENT` |
 | `partitions-monthly` | 02:00 on the first | `MAINTENANCE` |
 | `cleanup-daily` | 03:00 daily | `MAINTENANCE` |
-| `archive-monthly` | 04:00 on the first | `MAINTENANCE` |
 | `reconcile-daily` | 05:00 daily | `ANALYTICS` |
 | `projection` | every five minutes | `ANALYTICS` |
 
 ## The clock order is not arbitrary
 
-On the first of the month all three monthly jobs run, in this order and for these reasons:
+On the first of the month both monthly jobs run, in this order and for these reasons:
 
 - **02:00 partitions.** A sweep that runs while the current month has no partition fails on a table
-  it cannot write to, so the runway is extended before anything else touches `activity_log`.
+  it cannot write to, so the runway is extended before anything else touches `activity_log`. This
+  is also the job that archives and drops what has aged out, which is why it goes first.
 - **03:00 cleanup.** After the runway exists.
-- **04:00 archive.** After both, so the three never contend for the same locks.
-- **05:00 reconcile.** So on that one morning of the month it reads a window the archive job has
+- **05:00 reconcile.** So on that one morning of the month it reads a window the retention pass has
   already finished with.
 
 ## A fixed job id is what makes registration idempotent
@@ -39,10 +38,11 @@ lands has somewhere to run. Registering a schedule onto a queue with no consumer
 
 ## None of them retries, and each for its own reason
 
-**`archive-monthly`: one attempt.** A retry would re-run `detach` on a partition that is already
-detached and fail on *that* instead of on whatever actually broke, burying the real error. Re-run it
-by hand once the cause is known. See
-[`infrastructure/docs/reference/activity-archive.md`](../../../packages/infrastructure/docs/reference/activity-archive.md).
+**`partitions-monthly`: one attempt at the archive.** A retry would re-run `detach` on a partition
+that is already detached and fail on *that* instead of on whatever actually broke, burying the real
+error. A tenant-month that fails is logged and the loop continues, and nothing it touched was
+dropped. See
+[`infrastructure/docs/reference/cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 **`projection`: the schedule is the retry.** A failed run leaves the checkpoint where it was, and the
 next tick five minutes later resumes from exactly the same place. A retry inside the job buys nothing
@@ -69,13 +69,6 @@ iterates `PartitionedTable.ALL` and calls `ensureMonthlyPartitions` once per ent
 table is one entry in that list and no edit here — and the deadline above applies to each of them
 independently.
 
-## `archive-monthly` is what makes replay possible
-
-It detaches the month that has just aged out of the retention window, ships it to S3 as gzipped
-NDJSON, and records it in `activity_archive`. That table is what makes a ClickHouse replay past the
-Postgres window automatable rather than archaeology, and nothing wrote to it before this schedule
-existed.
-
 ## `outbox-drain` is the only sub-minute schedule here
 
 Every second, and that is the commit-to-delivery budget for anything riding the outbox. It is
@@ -87,12 +80,20 @@ worst case.
 It registers under a fixed `jobId` like every other schedule here, and at `priority: 1` so the
 deliveries it creates cannot starve it.
 
-## Retention now drops partitions, and one table is guarded
+## Retention archives, then drops — and one table is guarded
 
-`partitions-monthly` ensures months ahead **and** prunes months behind, per table. `activity_log`
-is deliberately never pruned by it: `archive-monthly` owns that table and drops a partition only
-after verifying the upload, so a second dropper here would race it.
+`partitions-monthly` ensures months ahead **and** retires months behind, per table. Retiring a
+month is not a drop: the tenant-month is detached, streamed to S3, recorded in `partition_archive`
+and verified, and only then dropped. `activity_log` at thirteen months, `notifications` at twelve,
+`outbox_event` at two; `messages` is domain data and is never retired at all. There is no separate
+archive job, because there is no month left that is dropped without one.
 
-`outbox_event` is pruned after two months, with one guard: if the oldest *unpublished* row is
-older than the cutoff, the prune does nothing. A stuck event is never dropped by the calendar,
-which is the difference between retention and data loss.
+`outbox_event` carries one guard: if the oldest *unpublished* row is older than the cutoff, the
+prune does nothing. A stuck event is never archived out from under the drain, which is the
+difference between retention and data loss.
+
+`activity_log` is the one table that also reaches ClickHouse, so the pass asks the projector where
+each tenant is before it stamps `partition_archive.projected_at`. A tenant the projection has not
+caught up with keeps a null stamp and gets an `analytics.projection.gap` line. The month is
+archived and dropped either way — a forgotten switch costs a known hole, never an unbounded table.
+See [`cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
