@@ -24,6 +24,9 @@ export interface PartitionedTableEntry {
   readonly retentionMonths: number | null;
 }
 
+// **A table is listed after the tables it references**, because `dropTenantPartitions`
+// walks this backwards — see packages/infrastructure/docs/reference/partitions.md.
+
 // Frozen at module load for the reason `QueueName` gives: `static readonly` freezes the
 // binding and not the array.
 const ALL = Object.freeze([
@@ -51,16 +54,8 @@ const ALL = Object.freeze([
     column: "created_at",
     retentionMonths: 12,
   }),
-  // Never dropped by the calendar: messages are domain data, so the month level buys a
-  // manageable table and a ready archive path rather than a retention policy.
-  Object.freeze({
-    name: MESSAGES,
-    tenantKey: "organization_id",
-    column: "created_at",
-    retentionMonths: null,
-  }),
-  // The four below grow with the tenant rather than with its activity, so they take the
-  // tenant level and no month level at all.
+  // Ahead of the two tables that reference it, which is what makes the reverse of this
+  // list a safe drop order. It grows with the tenant, so it takes no month level.
   Object.freeze({
     name: CONVERSATIONS,
     tenantKey: "organization_id",
@@ -71,6 +66,14 @@ const ALL = Object.freeze([
     name: CONVERSATION_MEMBERS,
     tenantKey: "organization_id",
     column: null,
+    retentionMonths: null,
+  }),
+  // Never dropped by the calendar: messages are domain data, so the month level buys a
+  // manageable table and a ready archive path rather than a retention policy.
+  Object.freeze({
+    name: MESSAGES,
+    tenantKey: "organization_id",
+    column: "created_at",
     retentionMonths: null,
   }),
   Object.freeze({
