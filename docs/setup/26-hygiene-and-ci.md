@@ -806,6 +806,11 @@ rejects a partitioned table whose key omits a partition key. It is worth checkin
 this is the one kind of DDL the repository writes by hand: the failure it catches is a file in
 review, not a database in production.
 
+**This assertion and `partition-ddl.ts` are the two directions of one check.** The generator writes
+the clause from the allowlist onto a freshly generated migration; this reads the migrations back and
+asserts the allowlist against them. The generator cannot cover a hand-written migration — `0023` is
+one, and has to be — so the assertion is what closes the gap the generator leaves.
+
 **No `DEFAULT` partition, on purpose.** A catch-all absorbs the rows of a month whose partition is
 missing, which turns a loud insert failure into a silent one, and attaching the real partition
 afterwards means moving those rows back out of it.

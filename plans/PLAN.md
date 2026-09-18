@@ -43,8 +43,8 @@ needs a database does — and on a clean clone, `pnpm install` then `pnpm build:
 
 **`16.1` and the merge unit after it are built** (2026-09-18): the pruning spec, the two-level
 tenant layout, its seed, the two-level maintenance gateway and the per-tenant projection, plus
-`16.7` and `16.8`. **Start at `16.9`** — `pnpm db:partitions` — then `16.10`–`16.13`, then 17, then
-19 on top of it. Phase 18 touches permissions, auth
+`16.7` through `16.11`. **Start at `16.12`** — the tenant ceiling, measured — then `16.13`, then 17,
+then 19 on top of it. Phase 18 touches permissions, auth
 and composition only and can run beside all of that. Phase 23 is independent small work for any
 spare hour.
 
@@ -67,7 +67,7 @@ spare hour.
 | 13 | Messaging: conversations and messages | Communication | ✅ done | 2026-09-13 | `COMMUNICATION-PLAN.md` Phase 5 |
 | 14 | Connection pooling: the pool you can see, and the pooler in front of it | Scaling | ✅ done | 2026-09-13 | `DB-SCALING-PLAN.md` Phase 1 |
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
-| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.8 done | `DB-SCALING-PLAN.md` 2.B |
+| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.11 done | `DB-SCALING-PLAN.md` 2.B |
 | 17 | Cold storage: retention stops meaning deletion | Scaling | ⬜ open | after 16 | `DB-SCALING-PLAN.md` 2.C |
 | 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
@@ -1266,21 +1266,31 @@ against twenty-two migrations, not twenty-one.
   Phase 19's preview (`19.15`) and its retention screen's "today" column; nothing
   in this plan calls it. Added 2026-09-15. **Docs:** `ports.md`, `partitions.md`.
 
-- [ ] `16.9` **`pnpm db:partitions`** — `packages/infrastructure/partitions.ts` above `src/`
+- [x] `16.9` **`pnpm db:partitions`** `done: 2026-09-18` — `packages/infrastructure/partitions.ts` above `src/`
   (the rule for runnable scripts, `docs/ai/rules/folders.md`): ensures three months for every
   allowlist entry over `DATABASE_DIRECT_URL` and prints the runway per table; root
   `package.json` script. For the operator whose worker is down on the first. **Docs:**
   `docs/ai/rules/workflow.md` command block (written in `14.13`), `docs/setup/13`.
+  `built: 2026-09-18` — it loops tenants the way `16.5` does and prints a row per table per tenant.
+  `ahead` is read **before** ensuring and is the column that matters: a zero says the next insert
+  past month end would have failed, and `created` is what this run had to add. Proved by dropping
+  two months by hand and re-running — `ahead 0, created 2`, and the tail line naming how many were
+  starved. The script joins both `noProcessEnv` exemption lists, which §3 requires to stay in step.
 
-- [ ] `16.10` **Docs** — new `packages/infrastructure/docs/reference/partitions.md` (the
+- [x] `16.10` **Docs** `done: 2026-09-18` — new `packages/infrastructure/docs/reference/partitions.md` (the
   allowlist as the source of truth, the two mechanics — partition key in the PK, drizzle cannot
   express `PARTITION BY` — the boot-time runway, why no `DEFAULT`, the pruning spec, and the
   `messages` exception), registered in `reference/meta.json` and `docs/index.md`;
   `docs/opinions/data-and-scale.md` §4.2 rewritten around the allowlist entry shape;
   `docs/ai/rules/data.md` partition bullet updated; `docs/setup/13` §13.6 hand-edit paragraph
   points at §21.
+  `built: 2026-09-18` — all five, and four more the tenant level forced: `partitions.md` carries the
+  two-level shape, the seed, the `CASCADE` finding from `16.7`, and `db:partitions`;
+  `docs/setup/26` §21 describes both levels; `messaging.md` became "how it is partitioned and where
+  the dedupe went"; and `docs/setup/27`'s "Step 6 can refuse" became "refused once, and the answer
+  was a cache key".
 
-- [ ] `16.11` **The partition DDL generator** — adding a partitioned table today is one allowlist
+- [x] `16.11` **The partition DDL generator** `done: 2026-09-18` — adding a partitioned table today is one allowlist
   line and then `PARTITION BY` written by hand, because drizzle cannot express it and its
   snapshots do not know it exists. `packages/infrastructure/partition-ddl.ts`, above `src/` like
   `migrate.ts`, runs as the second half of `db:generate` (`"drizzle-kit generate && tsx partition-ddl.ts"`
@@ -1307,6 +1317,17 @@ against twenty-two migrations, not twenty-one.
   `docs/setup/13` §13.6 (the hand-edit paragraph becomes "the generator does this; here is what it
   refuses"), `docs/ai/rules/workflow.md` command block (`db:generate` now has two halves),
   `docs/setup/26` (§21 and the generator are the two directions of one check).
+  `built: 2026-09-18` — proved end to end rather than only by fixture: a probe table was added to
+  the schema and the allowlist, `pnpm db:generate` wrote
+  `) PARTITION BY LIST ("organization_id");` onto the statement it had just generated, §21 passed
+  against it, and the probe was reverted. Nine cases cover both refusals, the idempotence, and the
+  temper against `CREATE TABLE` that stops one statement's match running into the next.
+
+  Two shapes the item did not name. The rewriter is **exported and the runner is guarded** on
+  `import.meta.url`, because the plan asks for a spec and every other script above `src/` executes
+  on import — that guard is what lets `tests/pg/partition-ddl.spec.ts` import it. And a refusal
+  leaves the file `drizzle-kit` already wrote on disk, since the two halves are one `&&`; the
+  message says fix the schema and regenerate, and `partitions.md` says so too.
 
 - [ ] `16.12` **The tenant ceiling, measured** — decision D29 says "a few hundred tenants per node is
   comfortable" and nothing in this plan proves it. `packages/infrastructure/tests/smoke/tenant-ceiling.spec.ts`,
