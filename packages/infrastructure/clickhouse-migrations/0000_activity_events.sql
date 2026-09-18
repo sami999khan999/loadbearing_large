@@ -42,4 +42,9 @@ ORDER BY (organization_id, occurred_at, id)
 -- Longer than the Postgres retention window on purpose. Postgres keeps thirteen
 -- months and archives the rest to S3; this is where the multi-year questions are
 -- answered from, which is the entire reason for its existence.
-TTL toDateTime(occurred_at) + INTERVAL 5 YEAR;
+--
+-- **Months, not years, and the unit is load-bearing.** ClickHouse stores the clause as
+-- `toIntervalMonth(60)` / `toIntervalYear(5)` and the retention policy is written in
+-- months, so `INTERVAL 5 YEAR` here would differ from what `RetentionRules` composes —
+-- and the daily reconcile would rewrite every part of this table, once, for nothing.
+TTL toDateTime(occurred_at) + INTERVAL 60 MONTH;

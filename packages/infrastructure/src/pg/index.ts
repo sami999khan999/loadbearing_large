@@ -31,6 +31,7 @@ export {
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgPlatformReader,
+  PgRetentionPolicyRepository,
   PgRoleRepository,
   PgVectorStore,
 } from "./repository/index.js";

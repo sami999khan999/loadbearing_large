@@ -13,8 +13,10 @@ export { createGunzip, createGzip } from "node:zlib";
 // ── @aws-sdk/client-s3 ───────────────────────────────────────────────────────
 export {
   DeleteObjectCommand,
+  GetBucketLifecycleConfigurationCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutBucketLifecycleConfigurationCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -55,6 +57,7 @@ export {
   type InvitationRecord,
   type InvitationRepository,
   type JobOptions,
+  type LifecycleRule,
   type LogEntry,
   type LogQuery,
   LogReader,
@@ -98,11 +101,15 @@ export {
   RealtimeSubscriber,
   type Recipient,
   type RestoredMonth,
+  type RetentionPolicyRecord,
+  type RetentionPolicyRepository,
+  type RetentionStore,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
   type SearchHit,
   StorageGateway,
+  StoragePolicyGateway,
   type StoredObject,
   type SweepOutcome,
   UnitOfWork,
@@ -194,6 +201,7 @@ export { migrate } from "drizzle-orm/node-postgres/migrator";
 export {
   bigint,
   boolean,
+  check,
   date,
   foreignKey,
   index,

@@ -1,4 +1,8 @@
-import type { ArchivedObject, PartitionEstimate } from "@loadbearing/application";
+import type {
+  ArchivedObject,
+  PartitionEstimate,
+  RetentionPolicyRecord,
+} from "@loadbearing/application";
 import { PartitionedTable } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import {
@@ -6,6 +10,8 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryRetentionPolicyRepository,
+  InMemoryStoragePolicyGateway,
   RecordingMaintenanceGateway,
   RecordingPartitionArchiveGateway,
   TestContainer,
@@ -67,6 +73,10 @@ function harness(
     objects?: readonly ArchivedObject[];
     hasProjector?: boolean;
     projectedTo?: Date;
+    // Empty by default, which is the state that matters: an absent row is the code
+    // default, so most of these cases assert the allowlist's own numbers.
+    policies?: readonly RetentionPolicyRecord[];
+    lifecycle?: InMemoryStoragePolicyGateway;
   } = {},
 ) {
   const maintenance = new RecordingMaintenanceGateway(
@@ -77,6 +87,8 @@ function harness(
   const partitionArchive = new RecordingPartitionArchiveGateway(options.objects);
   const projector = new InMemoryAnalyticsProjector();
   const outbox = new InMemoryOutboxGateway();
+  const retentionPolicies = new InMemoryRetentionPolicyRepository(options.policies);
+  const storagePolicy = options.lifecycle ?? new InMemoryStoragePolicyGateway();
   const logger = { emit: vi.fn(), failure: vi.fn() };
 
   const container = {
@@ -88,18 +100,27 @@ function harness(
     }),
     // The harness fixes its own epoch; this spec asserts against a later month.
     clock: new FixedClock(NOW),
-    // The consumer reads `container.projector` and `container.hasProjector`; the harness
-    // names the port after the abstract class. Mapping them here keeps both honest.
-    projector: {
-      ...projector,
+    retentionPolicies,
+    storagePolicy,
+    // The **instance** with one method shadowed, never a spread: spreading a class
+    // instance into a literal copies own properties and drops every method it has.
+    projector: Object.assign(projector, {
       checkpoint: () =>
         Promise.resolve({ lastOccurredAt: options.projectedTo ?? null, lastId: null }),
-    },
+    }),
     hasProjector: options.hasProjector ?? false,
     logger,
   } as unknown as Container;
 
-  return { container, maintenance, partitionArchive, outbox, logger };
+  return {
+    container,
+    maintenance,
+    partitionArchive,
+    outbox,
+    retentionPolicies,
+    storagePolicy,
+    logger,
+  };
 }
 
 const job = (name: string): Job => ({ name }) as Job;
@@ -297,5 +318,170 @@ describe("MaintenanceConsumer", () => {
     expect(partitionArchive.projected()).toEqual([
       { table: PartitionedTable.ACTIVITY_LOG, period, organizationId: FIRST },
     ]);
+  });
+});
+
+// `19.11`: the daily converger. Neither store is written by the save alone — a bucket
+// call after the commit can fail, and a rule deleted in a console is drift.
+describe("MaintenanceConsumer — the retention job", () => {
+  const cold = (tableName: string, coldMonths: number | null): RetentionPolicyRecord => ({
+    store: "postgres",
+    tableName,
+    hotMonths: 12,
+    coldMonths,
+    coldMode: "archive",
+  });
+
+  it("writes the bucket's configuration when it does not match the rows", async () => {
+    const { container, storagePolicy, logger } = harness({
+      policies: [cold("activity_log", 24)],
+    });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(await storagePolicy.lifecycle()).toEqual([
+      { prefix: "cold/activity_log/", expireAfterDays: 731 },
+    ]);
+    // Drift first, then the repair: a lone `applied` cannot tell "the reconcile is
+    // doing its job" from "somebody edited the bucket by hand last night".
+    expect(emitted(logger, "retention.lifecycle.drifted")).toHaveLength(1);
+    expect(emitted(logger, "retention.lifecycle.applied")).toEqual([{ rules: 1 }]);
+  });
+
+  // The one that matters most: `PutBucketLifecycleConfiguration` replaces everything,
+  // so a job that wrote on every run would rewrite the bucket daily for no reason.
+  it("writes nothing on the second run", async () => {
+    const { container, storagePolicy, logger } = harness({
+      policies: [cold("activity_log", 24)],
+    });
+
+    await consumerFor(container).handle(job("retention"));
+    await consumerFor(container).handle(job("retention"));
+
+    expect(storagePolicy.applied()).toHaveLength(1);
+    expect(emitted(logger, "retention.lifecycle.applied")).toHaveLength(1);
+  });
+
+  // An empty table is the state every deployment starts in, and a fresh bucket answers
+  // "no configuration" rather than an empty list — the two have to agree at once.
+  it("converges immediately with no rows and an empty bucket", async () => {
+    const { container, storagePolicy, logger } = harness();
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(storagePolicy.applied()).toEqual([]);
+    expect(emitted(logger, "retention.lifecycle.drifted")).toEqual([]);
+  });
+
+  // The rows only. The bucket's own rule deleted the object; a row still pointing at one
+  // is a `NotFoundError` on a read that should have been an empty list.
+  it("forgets an archive row past its hot plus cold window", async () => {
+    const { container, partitionArchive } = harness({ policies: [cold("activity_log", 24)] });
+
+    await consumerFor(container).handle(job("retention"));
+
+    // 2026-08 less thirty-six months.
+    expect(partitionArchive.forgets()).toEqual([
+      { table: "activity_log", period: new Date(Date.UTC(2023, 7, 1)) },
+    ]);
+  });
+
+  it("forgets nothing for a table whose objects never expire", async () => {
+    const { container, partitionArchive } = harness({ policies: [cold("activity_log", null)] });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(partitionArchive.forgets()).toEqual([]);
+  });
+
+  // `MODIFY TTL` materialises on every existing part, which on a years-deep table is a
+  // rewrite. Compared before it is written, and the comparison is what this pins.
+  it("leaves the ClickHouse TTL alone when it already matches", async () => {
+    const { container, logger } = harness({ hasProjector: true });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(emitted(logger, "analytics.retention.applied")).toEqual([]);
+  });
+
+  it("applies the ClickHouse TTL when a row changes it", async () => {
+    const { container, logger } = harness({
+      hasProjector: true,
+      policies: [
+        {
+          store: "clickhouse",
+          tableName: "activity_events",
+          hotMonths: 36,
+          coldMonths: null,
+          coldMode: "archive",
+        },
+      ],
+    });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(emitted(logger, "analytics.retention.applied")).toEqual([
+      { expression: "toDateTime(occurred_at) + toIntervalMonth(36)" },
+    ]);
+  });
+});
+
+// `19.10`: an absent row is the code default, and a row replaces it.
+describe("MaintenanceConsumer — prune reads the row", () => {
+  const period = new Date(Date.UTC(2024, 0, 1));
+
+  it("uses the allowlist when no row exists", async () => {
+    const { container, partitionArchive } = harness({ estimates: [estimate(period)] });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    // `activity_log` at thirteen months and `notifications` at twelve, from the
+    // allowlist alone. `messages` is never retired and contributes nothing.
+    expect(partitionArchive.archived().map(({ table }) => table)).toEqual(
+      RETAINED.map((entry) => entry.name),
+    );
+  });
+
+  // The whole point of the row: a table the allowlist never retires becomes one that
+  // does, with no deploy.
+  it("retires a table the allowlist leaves alone when a row says so", async () => {
+    const { container, partitionArchive } = harness({
+      estimates: [estimate(period)],
+      policies: [
+        {
+          store: "postgres",
+          tableName: "messages",
+          hotMonths: 6,
+          coldMonths: null,
+          coldMode: "archive",
+        },
+      ],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    expect(partitionArchive.archived().map(({ table }) => table)).toContain("messages");
+  });
+
+  // `drop` destroys the month rather than archiving it — a table of transport rows
+  // deciding it is not worth the bytes. Nothing reaches cold storage.
+  it("drops rather than archives under cold_mode drop", async () => {
+    const { container, partitionArchive, maintenance } = harness({
+      estimates: [estimate(period)],
+      policies: [
+        {
+          store: "postgres",
+          tableName: "notifications",
+          hotMonths: 12,
+          coldMonths: null,
+          coldMode: "drop",
+        },
+      ],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    expect(partitionArchive.archived().map(({ table }) => table)).not.toContain("notifications");
+    expect(maintenance.partitionsDropped().map(({ table }) => table)).toContain("notifications");
   });
 });

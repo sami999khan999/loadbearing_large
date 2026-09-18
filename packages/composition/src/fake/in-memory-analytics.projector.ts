@@ -11,9 +11,9 @@ import {
 export class InMemoryAnalyticsProjector extends AnalyticsProjector {
   private readonly rows = new Map<string, ActivityRecord>();
   private readonly applied: string[] = [];
-  // The shipped `0000` migration's clause, so a fresh fake reads as a store that has
-  // been migrated rather than as one with no TTL at all.
-  private ttl = "toDateTime(occurred_at) + toIntervalYear(5)";
+  // What ClickHouse holds after the shipped `0000` migration, in the form it reads back
+  // — so a fresh fake is a migrated store and the default converges without a rewrite.
+  private ttl = "toDateTime(occurred_at) + toIntervalMonth(60)";
 
   public projected(): readonly ActivityRecord[] {
     return [...this.rows.values()];

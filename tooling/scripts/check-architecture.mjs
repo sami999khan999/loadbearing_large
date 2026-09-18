@@ -426,6 +426,10 @@ const TENANT_EXEMPT = new Set([
   // off this list despite `last_active_organization_id`. It passed until §9 stopped
   // matching the tenant column as a substring, and had never actually been checked.
   "sessions",
+  // A partition is the unit of archival and of dropping, and it spans every tenant — so
+  // a per-tenant retention row would describe something the storage engine cannot do.
+  // Per-tenant retention is `tenant_retention_policy`, which leads with the tenant.
+  "retention_policy",
   "__drizzle_migrations",
 ]);
 

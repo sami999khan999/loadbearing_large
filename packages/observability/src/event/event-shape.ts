@@ -84,6 +84,24 @@ export interface EventShape {
     // fails, and for `activity_log` that is every write in the system.
     readonly monthsAhead: number;
   };
+  readonly "retention.lifecycle.applied": {
+    // Rules written, not tables: an expired-but-unset table contributes no rule, and a
+    // count of tables would read as though it did.
+    readonly rules: number;
+  };
+  readonly "retention.lifecycle.drifted": {
+    // Both sides, serialised. The pair is the diff, and a line carrying only one of
+    // them is a line an operator has to go and look something up to read.
+    readonly expected: string;
+    readonly actual: string;
+  };
+  readonly "retention.rows.expired": {
+    readonly table: string;
+    readonly rows: number;
+  };
+  readonly "analytics.retention.applied": {
+    readonly expression: string;
+  };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;

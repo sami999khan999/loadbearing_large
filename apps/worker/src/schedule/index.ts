@@ -4,3 +4,4 @@ export { OutboxDrainSchedule } from "./outbox-drain.schedule.js";
 export { PartitionsSchedule } from "./partitions.schedule.js";
 export { ProjectionSchedule } from "./projection.schedule.js";
 export { ReconcileSchedule } from "./reconcile.schedule.js";
+export { RetentionSchedule } from "./retention.schedule.js";

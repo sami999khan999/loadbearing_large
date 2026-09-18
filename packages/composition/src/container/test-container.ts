@@ -9,6 +9,7 @@ import {
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
   InMemoryStorageGateway,
+  InMemoryStoragePolicyGateway,
   InMemoryVectorStore,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
@@ -51,6 +52,7 @@ import {
   SilentLogger,
   StaticContentSource,
   type StorageGateway,
+  type StoragePolicyGateway,
   type UnitOfWork,
   type VectorStore,
 } from "../import.js";
@@ -81,6 +83,7 @@ export interface TestPorts {
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
   readonly storage: StorageGateway;
+  readonly storagePolicy: StoragePolicyGateway;
   readonly unitOfWork: UnitOfWork;
   readonly vectors: VectorStore;
 }
@@ -134,6 +137,7 @@ export class TestContainer {
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
+      storagePolicy: overrides.storagePolicy ?? new InMemoryStoragePolicyGateway(),
       unitOfWork: overrides.unitOfWork ?? new DirectUnitOfWork(),
       vectors: overrides.vectors ?? new InMemoryVectorStore(),
     };

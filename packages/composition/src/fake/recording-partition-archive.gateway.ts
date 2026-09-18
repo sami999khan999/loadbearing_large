@@ -22,6 +22,7 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly requests: ArchiveRequest[] = [];
   private readonly restores: RestoreRequest[] = [];
   private readonly stamps: RestoreRequest[] = [];
+  private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
 
   // What every `archive` call reports it wrote. Empty by default, so a spec that is not
@@ -66,6 +67,15 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   ): Promise<void> {
     this.stamps.push({ table, period, organizationId });
     return Promise.resolve();
+  }
+
+  public override forget(table: PartitionedTableName, before: Date): Promise<number> {
+    this.forgotten.push({ table, period: before });
+    return Promise.resolve(0);
+  }
+
+  public forgets(): readonly ArchiveRequest[] {
+    return this.forgotten;
   }
 
   public override sweep(organizationId: OrganizationId): Promise<number> {

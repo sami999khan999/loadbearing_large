@@ -12,6 +12,8 @@ export {
   Principal,
   type ProjectionCheckpoint,
   QueueName,
+  type RetentionPolicyRecord,
+  RetentionRules,
 } from "@loadbearing/application";
 
 // ── @loadbearing/composition ─────────────────────────────────────────────────

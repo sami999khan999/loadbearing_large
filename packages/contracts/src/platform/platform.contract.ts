@@ -27,7 +27,60 @@ export class PlatformContract {
     organization: PlatformContract.organization,
     health: PlatformContract.health,
   });
+
+  // `archive` drops the month behind a verified object; `drop` destroys it. Two words
+  // rather than a boolean, because `skipArchive: false` reads as the opposite.
+  public static readonly coldMode = z.enum(["archive", "drop"]);
+
+  public static readonly store = z.enum(["postgres", "clickhouse"]);
+
+  public static readonly retentionEntry = z.object({
+    tableName: z.string().min(1),
+    // Null is "the calendar never retires this table" — `messages`, which is domain
+    // data. Not zero, which would mean dropping the month being written to.
+    hotMonths: z.number().int().nullable(),
+    coldMonths: z.number().int().nullable(),
+    coldMode: PlatformContract.coldMode,
+    // True when the numbers come from the allowlist rather than a row. "12 because
+    // nobody has decided" reads differently on a screen from "12".
+    isDefault: z.boolean(),
+    neverDropped: z.boolean(),
+  });
+
+  public static readonly clickhouseRetention = z.object({
+    months: z.number().int(),
+    isDefault: z.boolean(),
+    // What the store holds beside what the rows compose to. A screen showing only the
+    // rows would say "saved" about a call that failed after the commit.
+    applied: z.string(),
+    expected: z.string(),
+  });
+
+  public static readonly retention = z.object({
+    postgres: z.array(PlatformContract.retentionEntry).readonly(),
+    // Absent on a deployment running no analytics store, which is the third state the
+    // screen renders — not configured, rather than on or off.
+    clickhouse: PlatformContract.clickhouseRetention.nullable(),
+    lifecycle: z.object({
+      applied: z.array(z.string()).readonly(),
+      expected: z.array(z.string()).readonly(),
+    }),
+  });
+
+  // `tableName` stays a string and is validated against `PartitionedTable.NAMES` in the
+  // use-case: a table name never comes from data, and the closed union is one layer in.
+  public static readonly retentionUpdate = z.object({
+    store: PlatformContract.store,
+    tableName: z.string().min(1).max(64),
+    hotMonths: z.number().int().min(1).max(600),
+    coldMonths: z.number().int().min(0).max(600).nullable(),
+    coldMode: PlatformContract.coldMode,
+  });
 }
 
+export type ColdModeDto = z.infer<typeof PlatformContract.coldMode>;
 export type PlatformHealthDto = z.infer<typeof PlatformContract.health>;
+export type RetentionDto = z.infer<typeof PlatformContract.retention>;
+export type RetentionEntryDto = z.infer<typeof PlatformContract.retentionEntry>;
+export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type PlatformStatusDto = z.infer<typeof PlatformContract.status>;

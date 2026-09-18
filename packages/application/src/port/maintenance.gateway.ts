@@ -52,8 +52,8 @@ export abstract class MaintenanceGateway {
     from: Date,
   ): Promise<number>;
 
-  // Returns what it dropped. Whole partitions rather than a `DELETE`, because dropping a
-  // partition is a catalog edit and deleting a month of rows is a vacuum problem.
+  // Whole partitions rather than a `DELETE`: dropping one is a catalog edit. Null on a
+  // tenant table is **every tenant**, which is `partitionsBefore`'s reading too.
   public abstract dropMonthlyPartitionsBefore(
     table: PartitionedTableName,
     organizationId: OrganizationId | null,

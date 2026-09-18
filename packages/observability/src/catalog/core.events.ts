@@ -41,6 +41,17 @@ export const coreEvents = {
   // healthy case and the starved case alike.
   "partition.runway.low": { level: "warn" },
 
+  // `drifted` first, then `applied`: the pair says whether the reconcile is doing its
+  // job or repairing a hand edit, and a lone `applied` cannot tell them apart.
+  "retention.lifecycle.applied": { level: "info" },
+  "retention.lifecycle.drifted": { level: "warn" },
+  // An archive index row whose object the bucket has already expired. Deleted here, so
+  // an archived-notifications read is an empty list rather than a `NotFoundError`.
+  "retention.rows.expired": { level: "info" },
+  // The ClickHouse TTL, same shape. Separate from the two above because it is a
+  // different store with a different failure — `MODIFY TTL` rewrites every part.
+  "analytics.retention.applied": { level: "info" },
+
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.
   "dependency.request.failed": { level: "warn" },

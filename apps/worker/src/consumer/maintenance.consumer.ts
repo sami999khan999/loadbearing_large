@@ -8,6 +8,8 @@ import {
   type PartitionedTableName,
   QueueName,
   type Redis,
+  type RetentionPolicyRecord,
+  RetentionRules,
   Worker,
 } from "../import.js";
 
@@ -82,6 +84,8 @@ export class MaintenanceConsumer {
         return this.cleanup();
       case "partitions":
         return this.partitions();
+      case "retention":
+        return this.retention();
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }
@@ -100,10 +104,92 @@ export class MaintenanceConsumer {
   // Every month-partitioned table from the allowlist: the runway first, per tenant where
   // it has a tenant level, then the retention pass once for the table.
   private async partitions(): Promise<void> {
+    // One query for the whole run rather than one per table. An absent row is the code
+    // default, so this map is usually empty and the allowlist answers everything.
+    const rows = await this.container.retentionPolicies.forPostgres();
+
     for (const entry of PartitionedTable.MONTH_PARTITIONED) {
       await this.ensure(entry);
-      await this.prune(entry.name);
+      await this.prune(entry.name, rows.get(entry.name));
     }
+  }
+
+  // The daily converger. Neither store is written by a save alone: the call after the
+  // commit can fail, and a rule deleted by hand in a console is drift nothing else sees.
+  private async retention(): Promise<void> {
+    const rows = await this.container.retentionPolicies.all();
+
+    await this.convergeLifecycle(rows);
+    await this.convergeClickHouse(rows);
+    await this.expireArchiveRows(rows);
+  }
+
+  private async convergeLifecycle(rows: readonly RetentionPolicyRecord[]): Promise<void> {
+    const expected = RetentionRules.lifecycleFor(rows);
+    const actual = await this.container.storagePolicy.lifecycle();
+    if (RetentionRules.lifecycleMatches(expected, actual)) return;
+
+    // Drift first, then the repair. A lone `applied` cannot tell "the reconcile is
+    // doing its job" from "somebody edited the bucket by hand last night".
+    this.container.logger.emit("retention.lifecycle.drifted", {
+      expected: MaintenanceConsumer.serialise(expected),
+      actual: MaintenanceConsumer.serialise(actual),
+    });
+
+    await this.container.storagePolicy.applyLifecycle(expected);
+    this.container.logger.emit("retention.lifecycle.applied", { rules: expected.length });
+  }
+
+  // Compared before it is written, because `MODIFY TTL` materialises on every existing
+  // part — on a years-deep table that is a rewrite, and a daily one would never finish.
+  private async convergeClickHouse(rows: readonly RetentionPolicyRecord[]): Promise<void> {
+    if (!this.container.hasProjector) return;
+
+    const row = rows.find((candidate) => candidate.store === "clickhouse");
+    const expression = RetentionRules.clickhouseTtlFor(
+      row?.hotMonths ?? RetentionRules.DEFAULT_CLICKHOUSE_MONTHS,
+    );
+
+    if ((await this.container.projector.retention()) === expression) return;
+
+    await this.container.projector.applyRetention(expression);
+    this.container.logger.emit("analytics.retention.applied", { expression });
+  }
+
+  // A row pointing at an object the bucket already expired is a `NotFoundError` on the
+  // archived read. Deleted after the rule that removed the object, never before.
+  private async expireArchiveRows(rows: readonly RetentionPolicyRecord[]): Promise<void> {
+    const now = this.container.clock.now();
+
+    for (const row of rows) {
+      if (row.store !== "postgres" || row.coldMonths === null) continue;
+      if (!MaintenanceConsumer.isPartitioned(row.tableName)) continue;
+
+      const cutoff = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (row.hotMonths + row.coldMonths), 1),
+      );
+
+      const expired = await this.container.partitionArchive.forget(row.tableName, cutoff);
+      if (expired === 0) continue;
+
+      this.container.logger.emit("retention.rows.expired", {
+        table: row.tableName,
+        rows: expired,
+      });
+    }
+  }
+
+  // The closed union, checked rather than cast: a row naming a table the allowlist no
+  // longer has must not reach a method that inlines the name into DDL.
+  private static isPartitioned(table: string): table is PartitionedTableName {
+    return (PartitionedTable.NAMES as readonly string[]).includes(table);
+  }
+
+  private static serialise(rules: readonly { prefix: string; expireAfterDays: number }[]): string {
+    return [...rules]
+      .sort((left, right) => left.prefix.localeCompare(right.prefix))
+      .map((rule) => `${rule.prefix}=${rule.expireAfterDays}`)
+      .join("|");
   }
 
   // The runway, walked per tenant. That product is what bounds how many tenants a node
@@ -174,10 +260,13 @@ export class MaintenanceConsumer {
 
   // Archive, then drop — never one without the other. Retention stops meaning deletion
   // here: every month leaves for cold storage and is dropped behind a verified object.
-  private async prune(table: PartitionedTableName): Promise<void> {
-    // From the table's own entry, not a record beside it: the next partitioned table is
-    // one line in the allowlist rather than one line in two places that can disagree.
-    const months = PartitionedTable.byName(table).retentionMonths;
+  private async prune(
+    table: PartitionedTableName,
+    policy: RetentionPolicyRecord | undefined,
+  ): Promise<void> {
+    // The row, then the allowlist. An absent row **is** the code default, which is what
+    // makes an empty `retention_policy` behave exactly as the deploy before it did.
+    const months = policy?.hotMonths ?? PartitionedTable.byName(table).retentionMonths;
     if (months === null) return;
 
     const now = this.container.clock.now();
@@ -186,6 +275,19 @@ export class MaintenanceConsumer {
     // Only the outbox has a notion of "not yet handled", and a stuck event must never be
     // archived out from under the drain. One table's guard, never every table's.
     if (table === PartitionedTable.OUTBOX_EVENT && (await this.outboxIsBehind(cutoff))) return;
+
+    // `drop` destroys the month rather than archiving it, which is a table of transport
+    // rows deciding it is not worth the bytes. The outbox guard above still applies.
+    if (policy?.coldMode === "drop") {
+      for (const partition of await this.container.maintenance.dropMonthlyPartitionsBefore(
+        table,
+        null,
+        cutoff,
+      )) {
+        this.container.logger.emit("maintenance.partition.dropped", { table, partition });
+      }
+      return;
+    }
 
     for (const period of await this.periodsBefore(table, cutoff)) {
       await this.archivePeriod(table, period);

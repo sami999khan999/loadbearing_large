@@ -15,6 +15,7 @@ import {
   PartitionsSchedule,
   ProjectionSchedule,
   ReconcileSchedule,
+  RetentionSchedule,
 } from "../schedule/index.js";
 
 export class WorkerBootstrap {
@@ -90,6 +91,7 @@ export class WorkerBootstrap {
     await new DigestSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
+    await new RetentionSchedule(this.container, this.redis.queueClient()).register();
 
     if (this.container.hasProjector) {
       await new ProjectionSchedule(this.container, this.redis.queueClient()).register();

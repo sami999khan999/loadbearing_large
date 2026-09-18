@@ -36,5 +36,6 @@ export {
   SessionResolver,
 } from "./session.resolver.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
+export { type LifecycleRule, StoragePolicyGateway } from "./storage-policy.gateway.js";
 export { UnitOfWork } from "./unit-of-work.js";
 export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";

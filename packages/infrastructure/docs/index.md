@@ -268,6 +268,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   are not optional, and which reads prune to one month and which read every one.
 - [Cold storage](reference/cold-storage.md) — the tenant-month as the unit, the `cold/` prefix,
   `partition_archive` as the index a read starts from, and the restore that proves the difference.
+- [The bucket's lifecycle policy](reference/storage-policy.md) — why a second gateway, why "no
+  configuration" is an error code, and why the app owns the whole configuration rather than a rule.
 - [ClickHouse](reference/clickhouse.md) — no client library, two adapters, and the order it is
   adopted in.
 - [Loki](reference/loki.md) — why only a reader exists, and the query shapes the port refuses to

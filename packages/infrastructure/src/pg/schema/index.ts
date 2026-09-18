@@ -6,5 +6,6 @@ export * from "./invitation.schema.js";
 export * from "./messaging.schema.js";
 export * from "./notification.schema.js";
 export * from "./outbox.schema.js";
+export * from "./platform.schema.js";
 export * from "./rbac.schema.js";
 export * from "./vector.schema.js";

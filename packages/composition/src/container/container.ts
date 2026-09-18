@@ -48,6 +48,7 @@ import {
   ListMembersUseCase,
   ListMessagesUseCase,
   ListNotificationsUseCase,
+  ListRetentionPoliciesUseCase,
   ListRolesUseCase,
   type Logger,
   type LogReader,
@@ -91,6 +92,7 @@ import {
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgPlatformReader,
+  PgRetentionPolicyRepository,
   PgRoleRepository,
   PgUnitOfWork,
   PgVectorStore,
@@ -106,10 +108,12 @@ import {
   RedisRealtimeSubscriber,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
+  type RetentionPolicyRepository,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
   S3StorageGateway,
+  S3StoragePolicyGateway,
   SERVER_CATALOG,
   SearchDocumentsUseCase,
   SendMailUseCase,
@@ -121,11 +125,13 @@ import {
   SmtpEmailSender,
   StaticContentSource,
   type StorageGateway,
+  type StoragePolicyGateway,
   SubscriberRegistry,
   SystemClock,
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
+  UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   type VectorStore,
 } from "../import.js";
@@ -324,7 +330,15 @@ export class Container {
   // "which organization is the tier" and the other is what an admin may do to it.
   public readonly platformAdmin: {
     readonly inspectStatus: InspectPlatformStatusUseCase;
+    readonly listRetention: ListRetentionPoliciesUseCase;
+    readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
+  // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
+  // the worker's daily reconcile are its only two readers.
+  public readonly storagePolicy: StoragePolicyGateway;
+  // Read by the prune pass once per run, and by the screen. An absent row is the code
+  // default, so this is never the only source of a number.
+  public readonly retentionPolicies: RetentionPolicyRepository;
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
@@ -384,6 +398,7 @@ export class Container {
 
     this.cache = new RedisCacheStore(this.redis.client(), this.logger);
     this.storage = new S3StorageGateway(config.storage);
+    this.storagePolicy = new S3StoragePolicyGateway(config.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
@@ -704,11 +719,31 @@ export class Container {
 
     // `this` is fully assigned by here, and `report()` is only ever called on a
     // request — the reader holds the container, it does not read it during the build.
+    this.retentionPolicies = new PgRetentionPolicyRepository(this.database, this.transactions);
+
     this.platformAdmin = {
       inspectStatus: new InspectPlatformStatusUseCase(
         this.authorizer,
         this.platform,
         new ContainerHealthReader(this),
+      ),
+      listRetention: new ListRetentionPoliciesUseCase(
+        this.authorizer,
+        this.retentionPolicies,
+        this.storagePolicy,
+        this.analyticsProjector ?? null,
+      ),
+      updateRetention: new UpdateRetentionPolicyUseCase(
+        this.authorizer,
+        this.retentionPolicies,
+        this.storagePolicy,
+        this.platform,
+        this.activity,
+        this.unitOfWork,
+        this.analyticsProjector ?? null,
+        // Logged, never rethrown: the row is the truth and the daily job closes the
+        // gap, so a bucket that was unreachable must not fail a save that committed.
+        (error: unknown) => this.logger.failure(error, { at: "retention.apply" }),
       ),
     };
 

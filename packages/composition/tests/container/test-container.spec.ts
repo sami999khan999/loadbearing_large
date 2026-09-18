@@ -59,6 +59,7 @@ describe("TestContainer", () => {
       "realtimeSubscriber",
       "sessions",
       "storage",
+      "storagePolicy",
       "unitOfWork",
       "vectors",
     ]);

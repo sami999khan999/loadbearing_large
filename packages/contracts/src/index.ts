@@ -71,9 +71,13 @@ export {
   type UpdateNotificationPreferenceInput,
 } from "./notification/index.js";
 export {
+  type ColdModeDto,
   PlatformContract,
   type PlatformHealthDto,
   type PlatformStatusDto,
+  type RetentionDto,
+  type RetentionEntryDto,
+  type RetentionUpdateInput,
 } from "./platform/index.js";
 export {
   type ApiKeyId,

@@ -65,4 +65,8 @@ export abstract class PartitionArchiveGateway {
   // Objects first, rows second: a crash leaves a row pointing at a deleted object, which
   // is re-runnable, rather than an object nothing points at, which is invisible forever.
   public abstract sweep(organizationId: OrganizationId): Promise<number>;
+
+  // Rows only. The bucket's lifecycle rule deletes the object, and a row still pointing
+  // at one it already expired is a `NotFoundError` on a read that should be empty.
+  public abstract forget(table: PartitionedTableName, before: Date): Promise<number>;
 }

@@ -278,6 +278,18 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     return rows.rows.length;
   }
 
+  // No `storage.delete()`, and that is the whole difference from `sweep`: the bucket
+  // expired these objects itself, so deleting them again is a round trip per row.
+  public async forget(table: PartitionedTableName, before: Date): Promise<number> {
+    const result = await this.db.execute(
+      sql`delete from partition_archive
+          where table_name = ${table}
+            and period < ${PgPartitionArchiveGateway.iso(before)}::date`,
+    );
+
+    return result.rowCount ?? 0;
+  }
+
   private async objectKeyOf(
     table: PartitionedTableName,
     period: string,

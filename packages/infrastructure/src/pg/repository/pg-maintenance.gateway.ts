@@ -165,22 +165,30 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     organizationId: OrganizationId | null,
     cutoff: Date,
   ): Promise<readonly string[]> {
-    const parent = this.monthParent(table, organizationId);
-    const children = await this.childrenOf(parent);
+    const entry = PartitionedTable.byName(table);
+    // Null on a tenant-partitioned table is every tenant, the same reading
+    // `partitionsBefore` has — otherwise a caller previews across tenants and drops one.
+    const parents =
+      entry.tenantKey && !organizationId
+        ? await this.tenantPartitionsOf(table)
+        : [this.monthParent(table, organizationId)];
+
     const boundary = PgMaintenanceGateway.monthStart(cutoff, 0);
     const dropped: string[] = [];
 
-    for (const child of children) {
-      const start = PgMaintenanceGateway.partitionMonth(parent, child.name);
-      // A name the pattern does not match is left alone rather than dropped: this loop
-      // is holding a `drop table`, and "I could not parse it" is not a reason to run one.
-      if (!start || start.getTime() >= boundary.getTime()) continue;
+    for (const parent of parents) {
+      for (const child of await this.childrenOf(parent)) {
+        const start = PgMaintenanceGateway.partitionMonth(parent, child.name);
+        // A name the pattern does not match is left alone rather than dropped: this
+        // loop holds a `drop table`, and "I could not parse it" is not a reason to run.
+        if (!start || start.getTime() >= boundary.getTime()) continue;
 
-      // Re-derived from the parsed month, never interpolated from the catalog string.
-      await this.db.execute(
-        sql.raw(`drop table if exists ${parent}_${PgMaintenanceGateway.monthSuffix(start)}`),
-      );
-      dropped.push(child.name);
+        // Re-derived from the parsed month, never interpolated from the catalog string.
+        await this.db.execute(
+          sql.raw(`drop table if exists ${parent}_${PgMaintenanceGateway.monthSuffix(start)}`),
+        );
+        dropped.push(child.name);
+      }
     }
 
     return dropped;
