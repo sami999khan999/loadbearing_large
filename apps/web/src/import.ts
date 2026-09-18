@@ -62,6 +62,7 @@ export {
   PlatformStatusPanel,
   ProfileForm,
   ResetPasswordForm,
+  RetentionPolicyForm,
   RoleList,
   RoleMatrix,
   SessionProvider,

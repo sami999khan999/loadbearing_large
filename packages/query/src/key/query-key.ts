@@ -51,6 +51,7 @@ export class QueryKeys {
   public static readonly platform = {
     all: () => ["platform"] as const,
     status: () => ["platform", "status"] as const,
+    retention: () => ["platform", "retention"] as const,
   };
 
   public static readonly rbac = {

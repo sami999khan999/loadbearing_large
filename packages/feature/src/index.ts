@@ -89,7 +89,7 @@ export {
   OrganizationSwitcher,
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
-export { PlatformStatusPanel } from "./platform/index.js";
+export { PlatformStatusPanel, RetentionPolicyForm } from "./platform/index.js";
 export {
   CreateRoleForm,
   EffectivePermissionsInspector,

@@ -14,4 +14,14 @@ export class PlatformQueries {
       staleTime: 10_000,
     });
   }
+
+  // A minute, like every other settings read: the rows change when somebody saves, and
+  // the mutation invalidates this key. The backstop is for a second tab.
+  public static retention(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.retention(),
+      queryFn: () => client.platform.listRetention(),
+      staleTime: 60_000,
+    });
+  }
 }

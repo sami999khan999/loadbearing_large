@@ -25,6 +25,7 @@ export {
   type ApiKeyDto,
   ApiKeyEntity,
   type CapabilitiesDto,
+  type ColdModeDto,
   type ConversationDto,
   type DocumentHitDto,
   type InvitationDto,
@@ -33,6 +34,7 @@ export {
   type NotificationDto,
   type NotificationPreferenceDto,
   Password,
+  type RetentionEntryDto,
   type RoleDto,
 } from "@loadbearing/contracts";
 
@@ -67,6 +69,7 @@ export {
   NotificationMutations,
   NotificationQueries,
   OrganizationMutations,
+  PlatformMutations,
   PlatformQueries,
   RoleMutations,
   RoleQueries,

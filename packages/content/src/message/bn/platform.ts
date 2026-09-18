@@ -16,4 +16,22 @@ export const platform = {
   "platform.state.up": "চালু",
   "platform.state.down": "বন্ধ",
   "platform.state.absent": "কনফিগার করা নেই",
+
+  "platform.retention.title": "সংরক্ষণকাল",
+  "platform.retention.description":
+    "প্রতিটি টেবিল পোস্টগ্রেসে কত দিন তথ্য রাখে, এবং তার পরে সংরক্ষিত মাসগুলি অবজেক্ট স্টোরেজে কত দিন থাকে। এখানে সারি না থাকলে বিল্ট-ইন ডিফল্ট প্রযোজ্য।",
+  "platform.retention.table": "টেবিল",
+  "platform.retention.hotMonths": "পোস্টগ্রেসে মাস",
+  "platform.retention.coldMonths": "কোল্ড স্টোরেজে মাস",
+  "platform.retention.coldMonths.hint": "ফাঁকা রাখলে কখনও মেয়াদ শেষ হয় না।",
+  "platform.retention.mode": "মাস পুরোনো হলে",
+  "platform.retention.mode.archive": "সংরক্ষণ করে তারপর বাদ",
+  "platform.retention.mode.drop": "বাদ",
+  "platform.retention.save": "সংরক্ষণ",
+  "platform.retention.default": "ডিফল্ট",
+  "platform.retention.mode.warning": "এভাবে বাদ দেওয়া মাস কোল্ড স্টোরেজে থাকে না এবং ফিরিয়ে আনা যায় না।",
+  "platform.retention.neverDropped": "কখনও বাদ দেওয়া হয় না — ডোমেইন তথ্য।",
+  "platform.retention.clickhouse": "ক্লিকহাউস",
+  "platform.retention.clickhouse.months": "বিশ্লেষণ ইতিহাসের মাস",
+  "platform.retention.drift": "স্টোরে অন্য কিছু আছে। রাতের কাজ এটি ঠিক করবে; এখন সেখানে আছে {actual}।",
 } as const;
