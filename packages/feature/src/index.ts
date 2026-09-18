@@ -90,6 +90,7 @@ export {
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
 export {
+  DeleteTenantPanel,
   PlatformStatusPanel,
   RestorePartitionPanel,
   type RestorePartitionPanelProps,

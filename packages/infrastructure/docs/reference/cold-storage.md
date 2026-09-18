@@ -159,14 +159,24 @@ mechanism, so this mechanism closes it.
 **then** removes the rows — in that order, so a crash leaves a row pointing at a deleted object,
 which is re-runnable, rather than an object nothing points at, which is invisible forever.
 
-Nothing in `packages/` deletes an organization yet. Until a delete use-case exists and enqueues
-this, an operator runs it:
+`DeleteOrganizationUseCase` is the trigger this section was written without. It does **not** call
+`sweep`, and the difference is the point: the objects stay for thirty days after the tenant is
+gone, because a delete that also destroyed the archive would be unrecoverable at the moment it is
+most likely to have been a mistake.
+
+`sweepDeleted(before)` is what ends that window. It runs nightly inside the `retention` job and
+takes every `partition_archive` row whose `organization_id` matches no `organizations` row and
+whose `archived_at` is older than the cutoff — `not exists`, not a left join, because this reads a
+table that only grows. Per row: delete the object, then delete the row, so a crash re-runs
+cleanly. One `cold.objects.swept` line per run, carrying `reason: "tenant_deleted"` and both
+counts; nothing at all when there was nothing to sweep.
+
+`sweep(organizationId)` remains the immediate version, and an operator still reaches it by hand
+when thirty days is not the answer:
 
 ```bash
 pnpm db:partitions --sweep <organization_id>
 ```
-
-**A future delete use-case must enqueue this sweep.** The cascade will not do it.
 
 ## A failure between detach and drop re-attaches
 

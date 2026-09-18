@@ -2302,7 +2302,7 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   does not yet take an optional `organizationId` — the screen previews the table's own numbers,
   not a tenant's override.
 
-- [ ] `19.20` **Delete a tenant** — the first tenant deletion in the repository, which is the
+- [x] `19.20` **Delete a tenant** — the first tenant deletion in the repository, which is the
   trigger `17.6` was written without. `delete-organization.use-case.ts` under a new
   `platform.tenant.manage` key (registered in `18.2`; the seed grants it to `platform_admin`):
   refuses the platform organization itself; archives every tenant-month first (the `17.5` path
@@ -2322,6 +2322,23 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `tenants.delete`, a confirmation that requires typing the slug, on the shard map's tenant row.
   Decision 20. **Docs:** `platform.md`, `cold-storage.md` (`17.6`'s section gains its trigger),
   `sharding.md`.
+  `done: 2026-09-19` — `unfinished:` `shards.invalidate(key)` is Phase 22's and does not exist, so
+  nothing calls it; the delete panel sits on `/platform/storage` rather than the shard map (`25.4`),
+  which is the one screen that lists tenants today. Both move when the map arrives.
+  `corrected:` the archive cutoff is the first of **next** month, not now: every other caller of
+  `partitionsBefore` asks "what has aged out", and this one asks "what exists", because the
+  partitions are about to be dropped. `corrected:` the thirty-day window needed a second method —
+  `sweep(organizationId)` destroys a tenant's objects immediately, so `sweepDeleted(before)` takes
+  every row whose organization is gone and whose `archived_at` is older than the cutoff. The
+  `retention` job calls it nightly and logs `cold.objects.swept` only when it removed something.
+  `done:` a new `TenantRepository` slice port rather than an entry in `port/` — one caller.
+  `concern:` the archive runs inside the request, as the item specifies. For a large tenant that is
+  minutes of streaming on a pooled connection; if that bites, this becomes a `tenant-delete` job
+  the way `19.18` and `19.21` are.
+  `verified:` against live Postgres, MinIO and ClickHouse — a probe tenant created, 16 partitions
+  ensured, 7 dropped, the row deleted with its catalog cascade, an orphaned archive row left alone
+  at a 90-day cutoff and swept at a 0-day one with the object gone from MinIO, and the ClickHouse
+  lightweight delete accepted.
 
 - [ ] `19.21` **Export a tenant** — the design was sold partly on "hand a customer every byte they
   own", and nothing built it. `export-organization.use-case.ts` (`platform.tenant.manage`; records

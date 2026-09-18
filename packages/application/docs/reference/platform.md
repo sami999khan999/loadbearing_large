@@ -97,6 +97,31 @@ The tenant comes off the input here, not off the principal. Every other list in 
 reads `actor.organizationId`; a platform admin is signed into the tier and asking about somebody
 else's tenant, which is what the `platform` scope is for.
 
+## `DeleteOrganizationUseCase` — the order is the behaviour
+
+Archive every month, drop the seven tenant partitions, delete the row, then flush. Each step is
+where it is because of what the step before it makes impossible.
+
+The archive cutoff is the first of **next** month, not now. Every other caller of
+`partitionsBefore` is asking "what has aged out"; this one is asking "what exists", because the
+partitions are about to be dropped and a month left unarchived is rows nothing can hand back.
+
+`dropTenantPartitions` runs **outside** the transaction and before it. Dropping a partition is a
+catalog edit, and a transaction holding seven of them blocks every other DDL in the system for as
+long as it is open.
+
+The cache flush and the analytics delete run **after** the commit. Flushed before it, the cache
+would refill from rows the transaction had not removed yet — which is the stale entry the flush
+exists to prevent.
+
+Two refusals, and the first is not a formality: the tier holds the platform roles every admin's
+capability comes from, this one included, so deleting it locks the deployment out of its own
+platform screens. The second is the typed slug, compared here as well as in the browser — a
+confirmation only the client checks is a confirmation the API does not have.
+
+What it does **not** do is delete the cold objects. Those stay thirty days; see
+`packages/infrastructure/docs/reference/cold-storage.md`.
+
 ## What lands here next
 
 | Phase | Files |

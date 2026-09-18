@@ -25,6 +25,7 @@ import {
   Database,
   type DatabaseStats,
   DeleteMessageUseCase,
+  DeleteOrganizationUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
   type DomainEventPublisher,
@@ -96,6 +97,7 @@ import {
   PgPlatformReader,
   PgRetentionPolicyRepository,
   PgRoleRepository,
+  PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
   PgUnitOfWork,
@@ -338,6 +340,7 @@ export class Container {
   // Named `platformAdmin` rather than `platform`, which is the reader beside it: one is
   // "which organization is the tier" and the other is what an admin may do to it.
   public readonly platformAdmin: {
+    readonly deleteOrganization: DeleteOrganizationUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly listStorage: ListTenantStorageUseCase;
@@ -746,6 +749,20 @@ export class Container {
     );
 
     this.platformAdmin = {
+      // The projector is optional here for the reason it is on `listRetention`: with no
+      // analytics store there is no derived copy of the tenant to forget.
+      deleteOrganization: new DeleteOrganizationUseCase(
+        this.authorizer,
+        new PgTenantRepository(this.database, this.transactions),
+        this.partitionArchive,
+        this.maintenance,
+        this.capabilities,
+        this.platform,
+        this.activity,
+        this.unitOfWork,
+        this.clock,
+        this.analyticsProjector ?? null,
+      ),
       inspectStatus: new InspectPlatformStatusUseCase(
         this.authorizer,
         this.platform,

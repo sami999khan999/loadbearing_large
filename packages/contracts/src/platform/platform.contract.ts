@@ -116,6 +116,19 @@ export class PlatformContract {
     bytes: z.number().int(),
   });
 
+  // The slug travels with the id and the server compares them. A confirmation only
+  // the browser checks is a confirmation the API does not have.
+  public static readonly tenantDelete = z.object({
+    organizationId: Identifiers.organizationId,
+    slug: z.string().min(1).max(64),
+  });
+
+  public static readonly tenantDeleted = z.object({
+    // What it cost, so the screen can say what happened rather than "done".
+    archived: z.number().int(),
+    partitions: z.number().int(),
+  });
+
   // Cold storage only, and the screen says so: a partition holds one tenant's rows,
   // but Postgres reports size per table, so hot bytes cannot be attributed here.
   public static readonly tenantStorageRow = z.object({
@@ -172,6 +185,8 @@ export type TenantRetentionUpdateInput = z.infer<typeof PlatformContract.tenantR
 export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequested>;
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
+export type TenantDeleteInput = z.infer<typeof PlatformContract.tenantDelete>;
+export type TenantDeletedDto = z.infer<typeof PlatformContract.tenantDeleted>;
 export type TenantStorageDto = z.infer<typeof PlatformContract.tenantStorage>;
 export type TenantStorageRowDto = z.infer<typeof PlatformContract.tenantStorageRow>;
 export type TenantStorageMonthDto = z.infer<typeof PlatformContract.tenantStorageMonth>;

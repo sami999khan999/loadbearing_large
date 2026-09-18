@@ -57,6 +57,16 @@ export const platform = {
   "platform.tenantRetention.coldNote":
     "Cold months shorter than the table's are enforced by the nightly run rather than by the bucket.",
   "platform.tenantRetention.saved": "Saved.",
+  "platform.tenantDelete.title": "Delete a tenant",
+  // Said before the fields: every month is archived first, so this is recoverable for
+  // thirty days and then the nightly sweep removes the objects too.
+  "platform.tenantDelete.warning":
+    "Every month is archived to cold storage first, then the tenant's partitions and catalog rows are removed. The archived objects are deleted thirty days later.",
+  "platform.tenantDelete.slug": "Type the slug to confirm",
+  "platform.tenantDelete.slug.hint": "The server compares this too.",
+  "platform.tenantDelete.action": "Delete tenant",
+  "platform.tenantDelete.done":
+    "Deleted. {archived} objects archived, {partitions} partitions dropped.",
   "platform.storage.title": "Cold storage by tenant",
   // Said on the screen, not only in a doc: a partition holds one tenant's rows, but
   // the catalog reports size per table, so hot bytes have no tenant to belong to.

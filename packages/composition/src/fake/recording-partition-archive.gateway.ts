@@ -1,6 +1,7 @@
 import {
   type ArchivedObject,
   type ArchivedPartition,
+  type DeletedTenantSweep,
   type OrganizationId,
   type PartitionArchiveEntry,
   PartitionArchiveGateway,
@@ -29,6 +30,8 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private entries: readonly PartitionArchiveEntry[] = [];
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
+  private readonly deletedSweeps: Date[] = [];
+  private deleted: DeletedTenantSweep = { organizations: 0, objects: 0 };
 
   // What every `archive` call reports it wrote. Empty by default, so a spec that is not
   // about the objects does not have to invent any.
@@ -111,6 +114,21 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   public override sweep(organizationId: OrganizationId): Promise<number> {
     this.sweeps.push(organizationId);
     return Promise.resolve(0);
+  }
+
+  // Staged, because the count is what the consumer logs: a fake returning zero would
+  // let a line claiming it swept nothing pass whatever the sweep did.
+  public stageDeleted(sweep: DeletedTenantSweep): void {
+    this.deleted = sweep;
+  }
+
+  public override sweepDeleted(before: Date): Promise<DeletedTenantSweep> {
+    this.deletedSweeps.push(before);
+    return Promise.resolve(this.deleted);
+  }
+
+  public deletedSwept(): readonly Date[] {
+    return this.deletedSweeps;
   }
 
   public archived(): readonly ArchiveRequest[] {

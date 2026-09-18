@@ -20,6 +20,10 @@ export abstract class AnalyticsProjector {
     to: Date,
   ): Promise<readonly DailyCount[]>;
 
+  // One lightweight delete, so the derived copy forgets a deleted tenant rather than
+  // holding it until the table's own TTL expires it years later.
+  public abstract deleteTenant(organizationId: OrganizationId): Promise<void>;
+
   // The TTL the store currently holds, normalised. It exists so the caller can compare
   // before it writes: `MODIFY TTL` materialises on existing parts, which is a rewrite.
   public abstract retention(): Promise<string>;

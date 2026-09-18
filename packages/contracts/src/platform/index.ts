@@ -9,6 +9,8 @@ export {
   type RetentionEntryDto,
   type RetentionPreviewDto,
   type RetentionUpdateInput,
+  type TenantDeletedDto,
+  type TenantDeleteInput,
   type TenantRetentionUpdateInput,
   type TenantStorageDto,
   type TenantStorageMonthDto,

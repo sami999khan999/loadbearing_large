@@ -36,6 +36,13 @@ export class PlatformProcedures {
     .input(PlatformContract.restore)
     .output(PlatformContract.restoreRequested);
 
+  // `DELETE` on the tenant, and the body carries the slug: the id is what is being
+  // removed and the slug is the operator saying they know which one.
+  public static readonly deleteTenant = oc
+    .route({ method: "DELETE", path: "/platform/tenants" })
+    .input(PlatformContract.tenantDelete)
+    .output(PlatformContract.tenantDeleted);
+
   public static readonly listStorage = oc
     .route({ method: "GET", path: "/platform/storage" })
     .input(PlatformContract.tenantStorageQuery)
@@ -57,6 +64,7 @@ export class PlatformProcedures {
     restorePartition: PlatformProcedures.restorePartition,
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
     listStorage: PlatformProcedures.listStorage,
+    deleteTenant: PlatformProcedures.deleteTenant,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

@@ -36,6 +36,13 @@ export interface RestoredMonth {
   readonly rowCount: number;
 }
 
+// Counted two ways, because they answer different questions: how many customers this
+// finally forgot, and how many objects the bucket stopped being billed for.
+export interface DeletedTenantSweep {
+  readonly organizations: number;
+  readonly objects: number;
+}
+
 // Cold storage for every partitioned table. Without it, retention means deletion: a
 // month older than the window is gone rather than somewhere cheaper.
 export abstract class PartitionArchiveGateway {
@@ -70,6 +77,10 @@ export abstract class PartitionArchiveGateway {
   // Objects first, rows second: a crash leaves a row pointing at a deleted object, which
   // is re-runnable, rather than an object nothing points at, which is invisible forever.
   public abstract sweep(organizationId: OrganizationId): Promise<number>;
+
+  // Every tenant whose `organizations` row is gone and whose objects were archived
+  // before `before`. The delay is deliberate: a deletion is recoverable for that long.
+  public abstract sweepDeleted(before: Date): Promise<DeletedTenantSweep>;
 
   // Rows only. The bucket's lifecycle rule deletes the object, and a row still pointing
   // at one it already expired is a `NotFoundError` on a read that should be empty.

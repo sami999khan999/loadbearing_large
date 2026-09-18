@@ -28,6 +28,7 @@ export { OutboxGateway } from "./outbox.gateway.js";
 export {
   type ArchivedObject,
   type ArchivedPartition,
+  type DeletedTenantSweep,
   PartitionArchiveGateway,
   type RestoredMonth,
 } from "./partition-archive.gateway.js";

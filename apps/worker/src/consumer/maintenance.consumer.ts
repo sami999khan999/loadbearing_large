@@ -37,6 +37,10 @@ export class MaintenanceConsumer {
   // is tenants x three tables of DDL a month — paced, never held in one transaction.
   private static readonly TENANT_PAGE = 200;
 
+  // Days a deleted tenant's objects stay. The delete is recoverable for that long and
+  // not a minute more, which is the whole reason cold storage is not cascaded.
+  private static readonly DELETED_TENANT_DAYS = 30;
+
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
@@ -184,6 +188,7 @@ export class MaintenanceConsumer {
     await this.convergeLifecycle(rows);
     await this.convergeClickHouse(rows);
     await this.expireArchiveRows(rows);
+    await this.sweepDeletedTenants();
   }
 
   private async convergeLifecycle(rows: readonly RetentionPolicyRecord[]): Promise<void> {
@@ -239,6 +244,20 @@ export class MaintenanceConsumer {
         rows: expired,
       });
     }
+  }
+
+  // Postgres forgot these tenants when their row was deleted; the bucket has not. The
+  // thirty days are the recovery window, and this is what ends it.
+  private async sweepDeletedTenants(): Promise<void> {
+    const now = this.container.clock.now();
+    const before = new Date(
+      now.getTime() - MaintenanceConsumer.DELETED_TENANT_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    const swept = await this.container.partitionArchive.sweepDeleted(before);
+    if (swept.objects === 0) return;
+
+    this.container.logger.emit("cold.objects.swept", { reason: "tenant_deleted", ...swept });
   }
 
   // The closed union, checked rather than cast: a row naming a table the allowlist no

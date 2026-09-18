@@ -45,6 +45,13 @@ export const platform = {
   "platform.tenantRetention.organization": "প্রতিষ্ঠানের আইডি",
   "platform.tenantRetention.coldNote": "টেবিলের চেয়ে কম কোল্ড মাস বাকেট নয়, রাতের কাজ কার্যকর করে।",
   "platform.tenantRetention.saved": "সংরক্ষিত।",
+  "platform.tenantDelete.title": "একটি টেন্যান্ট মুছুন",
+  "platform.tenantDelete.warning":
+    "প্রতিটি মাস আগে কোল্ড স্টোরেজে আর্কাইভ হয়, তারপর টেন্যান্টের পার্টিশন ও ক্যাটালগ সারি সরানো হয়। আর্কাইভ করা অবজেক্ট ত্রিশ দিন পর মুছে যায়।",
+  "platform.tenantDelete.slug": "নিশ্চিত করতে স্লাগ লিখুন",
+  "platform.tenantDelete.slug.hint": "সার্ভারও এটি মিলিয়ে দেখে।",
+  "platform.tenantDelete.action": "টেন্যান্ট মুছুন",
+  "platform.tenantDelete.done": "মোছা হয়েছে। {archived}টি অবজেক্ট আর্কাইভ, {partitions}টি পার্টিশন বাদ।",
   "platform.storage.title": "টেন্যান্ট অনুযায়ী কোল্ড স্টোরেজ",
   "platform.storage.description":
     "শুধু আর্কাইভ করা মাস। হট পোস্টগ্রেস আকার কোনো টেন্যান্টের নামে লেখা যায় না; টেবিলভিত্তিক হট আকার সংরক্ষণকাল স্ক্রিনে আছে।",

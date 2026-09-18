@@ -54,6 +54,8 @@ export type {
   SearchDocumentsContractInput,
   SendMessageInput,
   SetMemberActiveInput,
+  TenantDeletedDto,
+  TenantDeleteInput,
   TenantRetentionUpdateInput,
   TenantStorageQuery,
   TypingInput,

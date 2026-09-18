@@ -4,6 +4,7 @@ import {
   Buffer,
   createGunzip,
   createGzip,
+  type DeletedTenantSweep,
   InternalError,
   NotFoundError,
   type OrganizationId,
@@ -299,6 +300,32 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     );
 
     return rows.rows.length;
+  }
+
+  // Tenants Postgres has forgotten and the bucket has not. `not exists` rather than a
+  // left join: this runs nightly over a table that only grows.
+  public async sweepDeleted(before: Date): Promise<DeletedTenantSweep> {
+    const rows = await this.db.execute<{ organization_id: string; object_key: string }>(
+      sql`select pa.organization_id, pa.object_key
+          from partition_archive pa
+          where pa.archived_at < ${before.toISOString()}::timestamptz
+            and not exists (select 1 from organizations o where o.id = pa.organization_id)`,
+    );
+
+    const organizations = new Set<string>();
+    for (const row of rows.rows) {
+      await this.storage.delete(row.object_key);
+      organizations.add(row.organization_id);
+      // One row at a time, after its object: a crash leaves a row pointing at a
+      // deleted object, which re-runs cleanly, rather than an orphan nothing names.
+      await this.db.execute(
+        sql`delete from partition_archive
+            where organization_id = ${row.organization_id}::uuid
+              and object_key = ${row.object_key}`,
+      );
+    }
+
+    return { organizations: organizations.size, objects: rows.rows.length };
   }
 
   // No `storage.delete()`, and that is the whole difference from `sweep`: the bucket

@@ -40,6 +40,16 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     await this.connection.command(`ALTER TABLE ${table} MODIFY TTL ${expression}`);
   }
 
+  // A lightweight delete: ClickHouse marks the rows and merges them out, which for one
+  // tenant under `ORDER BY (organization_id, …)` touches the parts holding that prefix.
+  public async deleteTenant(organizationId: OrganizationId): Promise<void> {
+    const table = this.connection.qualified(ClickHouseAnalyticsProjector.TABLE);
+    await this.connection.command(
+      `DELETE FROM ${table} WHERE organization_id = {organizationId:UUID}`,
+      { organizationId },
+    );
+  }
+
   // Read from the destination, never a cursor beside it. Per tenant, and cheap under
   // `ORDER BY (organization_id, occurred_at, id)` — ClickHouse is not per node.
   public async checkpoint(organizationId: OrganizationId): Promise<ProjectionCheckpoint> {

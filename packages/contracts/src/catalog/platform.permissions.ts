@@ -16,4 +16,5 @@ export const platformProcedurePermissions = {
   "platform.restorePartition": "platform.retention.manage",
   "platform.updateTenantRetention": "platform.retention.manage",
   "platform.listStorage": "platform.storage.read",
+  "platform.deleteTenant": "platform.tenant.manage",
 } as const satisfies Record<string, PermissionKey>;

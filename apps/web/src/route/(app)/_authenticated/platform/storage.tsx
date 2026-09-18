@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { type ClientNamespace, TenantStorageList, useMessages } from "~/import.js";
+import {
+  Can,
+  type ClientNamespace,
+  DeleteTenantPanel,
+  TenantStorageList,
+  useCapabilities,
+  useMessages,
+} from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
 const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
@@ -15,11 +22,19 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/storage")({
 
 function PlatformStorage() {
   const { t } = useMessages("platform");
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("platform.storage.title")}</h1>
       <TenantStorageList />
+      {
+        // Here rather than on a shard map, which does not exist yet: this is the one
+        // screen that lists tenants, and a delete belongs beside what it removes.
+        <Can permission="platform.tenant.manage" capabilities={capabilities}>
+          <DeleteTenantPanel />
+        </Can>
+      }
     </main>
   );
 }

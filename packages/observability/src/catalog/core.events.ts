@@ -54,6 +54,9 @@ export const coreEvents = {
   // One per tenant-month restored. Into a scratch table unless the month is inside
   // the hot window, which the line says so a reader knows where to look.
   "cold.partition.restored": { level: "info" },
+  // Cold storage outliving a deleted tenant is the hole this mechanism created, so
+  // this is the line that says it closed. One per run, not one per object.
+  "cold.objects.swept": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.

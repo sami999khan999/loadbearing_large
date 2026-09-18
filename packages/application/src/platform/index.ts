@@ -1,4 +1,9 @@
 export {
+  type DeletedOrganization,
+  type DeleteOrganizationInput,
+  DeleteOrganizationUseCase,
+} from "./delete-organization.use-case.js";
+export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
@@ -33,6 +38,7 @@ export {
   RetentionPolicyRepository,
   type RetentionStore,
 } from "./retention-policy.repository.js";
+export { type TenantRecord, TenantRepository } from "./tenant.repository.js";
 export {
   type TenantRetentionPolicyRecord,
   TenantRetentionPolicyRepository,

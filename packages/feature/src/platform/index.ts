@@ -1,3 +1,4 @@
+export { DeleteTenantPanel } from "./delete-tenant.panel.js";
 export { PlatformStatusPanel } from "./platform-status.panel.js";
 export {
   RestorePartitionPanel,

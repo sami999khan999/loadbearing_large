@@ -396,6 +396,30 @@ describe("MaintenanceConsumer — the retention job", () => {
     ]);
   });
 
+  // Thirty days, and the line says why they went: a sweep for a deleted tenant reads
+  // differently from the bucket expiring a month on its own.
+  it("sweeps a deleted tenant's objects thirty days after they were archived", async () => {
+    const { container, partitionArchive, logger } = harness();
+    partitionArchive.stageDeleted({ organizations: 2, objects: 7 });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(partitionArchive.deletedSwept()).toEqual([new Date("2026-07-16T00:00:00Z")]);
+    expect(emitted(logger, "cold.objects.swept")).toEqual([
+      { reason: "tenant_deleted", organizations: 2, objects: 7 },
+    ]);
+  });
+
+  // No line on the common run. A nightly job emitting "swept nothing" every night is a
+  // line nobody reads, which is how the one that matters gets missed.
+  it("says nothing when no deleted tenant has objects left", async () => {
+    const { container, logger } = harness();
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(emitted(logger, "cold.objects.swept")).toEqual([]);
+  });
+
   it("forgets nothing for a table whose objects never expire", async () => {
     const { container, partitionArchive } = harness({ policies: [cold("activity_log", null)] });
 

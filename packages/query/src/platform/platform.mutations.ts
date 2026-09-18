@@ -3,6 +3,8 @@ import type {
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
+  TenantDeletedDto,
+  TenantDeleteInput,
   TenantRetentionUpdateInput,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
@@ -26,6 +28,15 @@ export class PlatformMutations {
     return useAppMutation<{ ok: true }, TenantRetentionUpdateInput>({
       mutationFn: (input) => client.platform.updateTenantRetention(input),
       invalidates: [QueryKeys.platform.retention()],
+    });
+  }
+
+  // `all()`, not the storage key alone: a deleted tenant leaves the storage table and
+  // takes its retention overrides with it, so every platform read has changed.
+  public static useDeleteTenant(client: ApiClient) {
+    return useAppMutation<TenantDeletedDto, TenantDeleteInput>({
+      mutationFn: (input) => client.platform.deleteTenant(input),
+      invalidates: [QueryKeys.platform.all()],
     });
   }
 

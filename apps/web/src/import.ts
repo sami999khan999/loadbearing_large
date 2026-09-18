@@ -41,6 +41,7 @@ export {
   CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
+  DeleteTenantPanel,
   DocumentSearch,
   EffectivePermissionsInspector,
   ForgotPasswordForm,

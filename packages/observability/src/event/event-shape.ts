@@ -102,6 +102,13 @@ export interface EventShape {
   readonly "analytics.retention.applied": {
     readonly expression: string;
   };
+  readonly "cold.objects.swept": {
+    // Why they went, so a sweep for a deleted tenant is distinguishable from the
+    // bucket expiring a month on its own.
+    readonly reason: string;
+    readonly organizations: number;
+    readonly objects: number;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

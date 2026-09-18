@@ -67,6 +67,15 @@ export class InMemoryAnalyticsProjector extends AnalyticsProjector {
     return [...this.rows.values()].filter((row) => row.organizationId === organizationId);
   }
 
+  // Rows, not a flag: the real one is a `DELETE`, so a fake that only recorded the
+  // call would let a consumer that deleted the wrong tenant's rows pass.
+  public override deleteTenant(organizationId: OrganizationId): Promise<void> {
+    for (const [id, row] of this.rows) {
+      if (row.organizationId === organizationId) this.rows.delete(id);
+    }
+    return Promise.resolve();
+  }
+
   // A string, held. The real one reads it back off `system.tables`, so a fake that
   // returned a constant would let a caller that never applied anything pass.
   public override retention(): Promise<string> {

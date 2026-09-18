@@ -62,6 +62,15 @@ housekeeping: `invitations_email_uq` is on `(organization_id, email)`, so a laps
 address un-invitable until something removes it. Nobody would connect "re-invite says the address
 already has an invitation" to a row that expired last month.
 
+**The `retention` job converges four things, and only the fourth destroys anything it was not
+already told to.** The bucket's lifecycle rules, the ClickHouse TTL and the expired
+`partition_archive` rows all follow from a policy row. `sweepDeletedTenants` does not: it deletes
+the objects of tenants whose `organizations` row is gone and whose archive is older than
+`DELETED_TENANT_DAYS`, which is the thirty-day recovery window `DeleteOrganizationUseCase`
+deliberately leaves open. It emits `cold.objects.swept` with `reason: "tenant_deleted"` only when
+it removed something — a nightly line saying "swept nothing" is a line nobody reads, which is how
+the one that matters gets missed.
+
 ## `EmbeddingConsumer` catches nothing, on purpose
 
 ```ts
