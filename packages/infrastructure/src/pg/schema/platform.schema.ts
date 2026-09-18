@@ -1,4 +1,14 @@
-import { check, integer, pgTable, primaryKey, sql, text, timestamp } from "../../import.js";
+import {
+  check,
+  integer,
+  type OrganizationId,
+  pgTable,
+  primaryKey,
+  sql,
+  text,
+  timestamp,
+  uuid,
+} from "../../import.js";
 
 // **Global, and deliberately so.** A partition spans every tenant, so a per-tenant row
 // here would describe something the storage engine cannot do.
@@ -33,5 +43,28 @@ export const retentionPolicy = pgTable(
     // reads; this is what holds when a row is written by hand at 3am.
     check("retention_policy_hot_months_ck", sql`${t.hotMonths} >= 1`),
     check("retention_policy_cold_months_ck", sql`${t.coldMonths} is null or ${t.coldMonths} >= 0`),
+  ],
+);
+
+// Per tenant, and it **leads with the tenant** — so no §9 exemption, unlike the global
+// table above. Expressible only because a tenant's month is its own partition.
+export const tenantRetentionPolicy = pgTable(
+  "tenant_retention_policy",
+  {
+    // No foreign key to `organizations`, for the reason the archive index gives: this
+    // is swept by the delete path rather than cascaded, so the two stay in one order.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    tableName: text("table_name").notNull(),
+    hotMonths: integer("hot_months").notNull(),
+    coldMonths: integer("cold_months"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.organizationId, t.tableName] }),
+    check("tenant_retention_policy_hot_months_ck", sql`${t.hotMonths} >= 1`),
+    check(
+      "tenant_retention_policy_cold_months_ck",
+      sql`${t.coldMonths} is null or ${t.coldMonths} >= 0`,
+    ),
   ],
 );

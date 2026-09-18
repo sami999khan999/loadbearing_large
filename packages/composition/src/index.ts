@@ -27,6 +27,7 @@ export {
   InMemoryRetentionPolicyRepository,
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
+  InMemoryTenantRetentionPolicyRepository,
   InMemoryVectorStore,
   type PublishedEvent,
   type PublishedFrame,

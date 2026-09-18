@@ -115,6 +115,8 @@ export {
   StoragePolicyGateway,
   type StoredObject,
   type SweepOutcome,
+  type TenantRetentionPolicyRecord,
+  type TenantRetentionPolicyRepository,
   UnitOfWork,
   type UnreadCount,
   type UnreadQuery,

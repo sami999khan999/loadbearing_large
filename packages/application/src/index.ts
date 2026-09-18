@@ -132,8 +132,12 @@ export {
   type RetentionPreview,
   RetentionRules,
   type RetentionStore,
+  type TenantRetentionPolicyRecord,
+  TenantRetentionPolicyRepository,
   type UpdateRetentionPolicyInput,
   UpdateRetentionPolicyUseCase,
+  type UpdateTenantRetentionInput,
+  UpdateTenantRetentionUseCase,
 } from "./platform/index.js";
 export {
   ActivityLogger,

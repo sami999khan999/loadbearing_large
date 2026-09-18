@@ -2,6 +2,7 @@ import type {
   ArchivedObject,
   PartitionEstimate,
   RetentionPolicyRecord,
+  TenantRetentionPolicyRecord,
 } from "@loadbearing/application";
 import { PartitionedTable } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
@@ -12,6 +13,7 @@ import {
   InMemoryOutboxGateway,
   InMemoryRetentionPolicyRepository,
   InMemoryStoragePolicyGateway,
+  InMemoryTenantRetentionPolicyRepository,
   RecordingMaintenanceGateway,
   RecordingPartitionArchiveGateway,
   TestContainer,
@@ -76,6 +78,9 @@ function harness(
     // Empty by default, which is the state that matters: an absent row is the code
     // default, so most of these cases assert the allowlist's own numbers.
     policies?: readonly RetentionPolicyRecord[];
+    // An override is what makes the prune pass walk tenants rather than months, so
+    // most cases here stage none and assert the table-month path.
+    tenantPolicies?: readonly TenantRetentionPolicyRecord[];
     lifecycle?: InMemoryStoragePolicyGateway;
   } = {},
 ) {
@@ -88,6 +93,9 @@ function harness(
   const projector = new InMemoryAnalyticsProjector();
   const outbox = new InMemoryOutboxGateway();
   const retentionPolicies = new InMemoryRetentionPolicyRepository(options.policies);
+  const tenantRetentionPolicies = new InMemoryTenantRetentionPolicyRepository(
+    options.tenantPolicies,
+  );
   const storagePolicy = options.lifecycle ?? new InMemoryStoragePolicyGateway();
   const logger = { emit: vi.fn(), failure: vi.fn() };
 
@@ -101,6 +109,7 @@ function harness(
     // The harness fixes its own epoch; this spec asserts against a later month.
     clock: new FixedClock(NOW),
     retentionPolicies,
+    tenantRetentionPolicies,
     storagePolicy,
     // The **instance** with one method shadowed, never a spread: spreading a class
     // instance into a literal copies own properties and drops every method it has.
@@ -118,6 +127,7 @@ function harness(
     partitionArchive,
     outbox,
     retentionPolicies,
+    tenantRetentionPolicies,
     storagePolicy,
     logger,
   };
@@ -238,10 +248,10 @@ describe("MaintenanceConsumer", () => {
 
     await consumerFor(container).handle(job("partitions"));
 
-    // Two tenants held that month and the estimate lists both, but a table-month is one
-    // call and one line — five thousand tenants must not be five thousand lines.
+    // One call and one line per table-month, `organizationId: null` meaning every
+    // tenant — five thousand tenants must not be five thousand lines.
     expect(partitionArchive.archived()).toEqual(
-      RETAINED.map((entry) => ({ table: entry.name, period })),
+      RETAINED.map((entry) => ({ table: entry.name, period, organizationId: null })),
     );
     expect(emitted(logger, "maintenance.partition.archived")).toHaveLength(RETAINED.length);
   });
@@ -483,5 +493,66 @@ describe("MaintenanceConsumer — prune reads the row", () => {
 
     expect(partitionArchive.archived().map(({ table }) => table)).not.toContain("notifications");
     expect(maintenance.partitionsDropped().map(({ table }) => table)).toContain("notifications");
+  });
+});
+
+// `19.19`: `override ?? retention_policy row ?? allowlist`, per tenant. The pass walks
+// tenants only when an override exists, which keeps the common case one call.
+describe("MaintenanceConsumer — a per-tenant retention override", () => {
+  const period = new Date(Date.UTC(2024, 0, 1));
+
+  const override = (
+    organizationId: OrganizationId,
+    hotMonths: number,
+  ): TenantRetentionPolicyRecord => ({
+    organizationId,
+    tableName: "activity_log",
+    hotMonths,
+    coldMonths: null,
+  });
+
+  it("archives per tenant once an override exists", async () => {
+    const { container, partitionArchive } = harness({
+      estimates: [estimate(period)],
+      tenantPolicies: [override(FIRST, 3)],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    // Both tenants, named: the override made the pass walk them, and `SECOND` takes the
+    // table default rather than being skipped.
+    const activityLog = partitionArchive.archived().filter(({ table }) => table === "activity_log");
+
+    expect(activityLog.map(({ organizationId }) => organizationId)).toEqual([FIRST, SECOND]);
+  });
+
+  // The table the override does not name keeps the cheap path. Otherwise one override
+  // anywhere would turn every table's pass into a tenant walk.
+  it("leaves the other tables on the table-month path", async () => {
+    const { container, partitionArchive } = harness({
+      estimates: [estimate(period)],
+      tenantPolicies: [override(FIRST, 3)],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    const notifications = partitionArchive
+      .archived()
+      .filter(({ table }) => table === "notifications");
+
+    expect(notifications.map(({ organizationId }) => organizationId)).toEqual([null]);
+  });
+
+  // Why `update-tenant-retention` refuses one: `prune` returns before it reads an
+  // override on a table whose default is null, so the setting would do nothing.
+  it("does not retire a table whose default is never, even with a row", async () => {
+    const { container, partitionArchive } = harness({
+      estimates: [estimate(period)],
+      tenantPolicies: [{ ...override(FIRST, 3), tableName: "messages" }],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    expect(partitionArchive.archived().map(({ table }) => table)).not.toContain("messages");
   });
 });

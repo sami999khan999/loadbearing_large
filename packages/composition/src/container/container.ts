@@ -95,6 +95,7 @@ import {
   PgPlatformReader,
   PgRetentionPolicyRepository,
   PgRoleRepository,
+  PgTenantRetentionPolicyRepository,
   PgUnitOfWork,
   PgVectorStore,
   type PlatformReader,
@@ -132,11 +133,13 @@ import {
   type StoragePolicyGateway,
   SubscriberRegistry,
   SystemClock,
+  type TenantRetentionPolicyRepository,
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
+  UpdateTenantRetentionUseCase,
   type VectorStore,
 } from "../import.js";
 import {
@@ -337,6 +340,7 @@ export class Container {
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly restorePartition: RestorePartitionUseCase;
+    readonly updateTenantRetention: UpdateTenantRetentionUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
@@ -348,6 +352,9 @@ export class Container {
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
+  // Read once per table by the prune pass, and usually empty: an override is what
+  // makes that pass walk tenants rather than months.
+  public readonly tenantRetentionPolicies: TenantRetentionPolicyRepository;
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
@@ -730,6 +737,10 @@ export class Container {
     // `this` is fully assigned by here, and `report()` is only ever called on a
     // request — the reader holds the container, it does not read it during the build.
     this.retentionPolicies = new PgRetentionPolicyRepository(this.database, this.transactions);
+    this.tenantRetentionPolicies = new PgTenantRetentionPolicyRepository(
+      this.database,
+      this.transactions,
+    );
 
     this.platformAdmin = {
       inspectStatus: new InspectPlatformStatusUseCase(
@@ -754,6 +765,13 @@ export class Container {
         this.queuePublisher,
         this.platform,
         this.activity,
+      ),
+      updateTenantRetention: new UpdateTenantRetentionUseCase(
+        this.authorizer,
+        this.tenantRetentionPolicies,
+        this.platform,
+        this.activity,
+        this.unitOfWork,
       ),
       updateRetention: new UpdateRetentionPolicyUseCase(
         this.authorizer,

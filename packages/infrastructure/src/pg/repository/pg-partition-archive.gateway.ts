@@ -92,12 +92,20 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
 
   // One table-month, one tenant-month child at a time. Each child runs the whole
   // sequence, so a tenant whose upload fails leaves every other tenant archived.
-  public async archive(table: PartitionedTableName, period: Date): Promise<ArchivedPartition> {
+  public async archive(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId?: OrganizationId,
+  ): Promise<ArchivedPartition> {
     const entry = PgPartitionArchiveGateway.monthly(table);
     const objects: ArchivedObject[] = [];
     const dropped: string[] = [];
 
-    for (const child of await this.childrenOf(entry, period)) {
+    const children = (await this.childrenOf(entry, period)).filter(
+      (child) => !organizationId || child.organizationId === organizationId,
+    );
+
+    for (const child of children) {
       const object = await this.archiveChild(table, entry, period, child);
       if (object) objects.push(object);
       dropped.push(child.name);

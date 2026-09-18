@@ -43,9 +43,13 @@ export abstract class PartitionArchiveGateway {
   // names no row, which is what makes it readable as "this object spans every tenant".
   public static readonly NO_TENANT = "00000000-0000-0000-0000-000000000000" as OrganizationId;
 
-  // Detach, upload, record, verify, drop — in that order, once per tenant-month child of
-  // the month. Dropping before verifying is unrecoverable loss.
-  public abstract archive(table: PartitionedTableName, period: Date): Promise<ArchivedPartition>;
+  // Detach, upload, record, verify, drop — once per tenant-month child; dropping before
+  // verifying is unrecoverable. `organizationId` narrows it, which an override needs.
+  public abstract archive(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId?: OrganizationId,
+  ): Promise<ArchivedPartition>;
 
   // Back out of cold storage into a scratch table. An archive nobody has restored is a
   // deletion with extra steps, which is why this is a method rather than a runbook.

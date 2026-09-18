@@ -11,6 +11,7 @@ export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";
 export { InMemoryRetentionPolicyRepository } from "./in-memory-retention-policy.repository.js";
 export { InMemoryStorageGateway } from "./in-memory-storage.gateway.js";
 export { InMemoryStoragePolicyGateway } from "./in-memory-storage-policy.gateway.js";
+export { InMemoryTenantRetentionPolicyRepository } from "./in-memory-tenant-retention-policy.repository.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";
 export { RecordingCapabilityInvalidator } from "./recording-capability.invalidator.js";

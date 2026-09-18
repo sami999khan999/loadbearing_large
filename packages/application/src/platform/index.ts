@@ -29,7 +29,15 @@ export {
   type RetentionStore,
 } from "./retention-policy.repository.js";
 export {
+  type TenantRetentionPolicyRecord,
+  TenantRetentionPolicyRepository,
+} from "./tenant-retention-policy.repository.js";
+export {
   ANALYTICS_TABLE,
   type UpdateRetentionPolicyInput,
   UpdateRetentionPolicyUseCase,
 } from "./update-retention-policy.use-case.js";
+export {
+  type UpdateTenantRetentionInput,
+  UpdateTenantRetentionUseCase,
+} from "./update-tenant-retention.use-case.js";

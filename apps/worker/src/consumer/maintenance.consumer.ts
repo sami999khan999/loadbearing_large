@@ -10,6 +10,7 @@ import {
   type Redis,
   type RetentionPolicyRecord,
   RetentionRules,
+  type TenantRetentionPolicyRecord,
   Worker,
 } from "../import.js";
 
@@ -350,15 +351,59 @@ export class MaintenanceConsumer {
       return;
     }
 
+    // Overrides make a table's cutoff differ per tenant, so the pass walks them. Usually
+    // there are none, and the common case stays one call per table-month.
+    const overrides = await this.container.tenantRetentionPolicies.forTable(table);
+    if (overrides.size > 0) {
+      await this.pruneByTenant(table, months, overrides);
+      return;
+    }
+
     for (const period of await this.periodsBefore(table, cutoff)) {
       await this.archivePeriod(table, period);
     }
   }
 
+  // `override ?? retention_policy row ?? allowlist`, resolved per tenant. The default
+  // months are already resolved by the caller, which is the middle two of the three.
+  private async pruneByTenant(
+    table: PartitionedTableName,
+    defaultMonths: number,
+    overrides: ReadonlyMap<OrganizationId, TenantRetentionPolicyRecord>,
+  ): Promise<void> {
+    const now = this.container.clock.now();
+    let after: OrganizationId | null = null;
+
+    for (;;) {
+      const page = await this.container.organizations.page(after, MaintenanceConsumer.TENANT_PAGE);
+      if (page.length === 0) break;
+
+      for (const organizationId of page) {
+        const months = overrides.get(organizationId)?.hotMonths ?? defaultMonths;
+        const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));
+
+        for (const period of await this.periodsBefore(table, cutoff, organizationId)) {
+          await this.archivePeriod(table, period, organizationId);
+        }
+      }
+
+      after = page[page.length - 1] ?? null;
+      if (page.length < MaintenanceConsumer.TENANT_PAGE) break;
+    }
+  }
+
   // Distinct months, oldest first, across every tenant. The read is the same one the
   // retention preview makes, so the screen and the job cannot disagree about what exists.
-  private async periodsBefore(table: PartitionedTableName, cutoff: Date): Promise<readonly Date[]> {
-    const estimates = await this.container.maintenance.partitionsBefore(table, cutoff);
+  private async periodsBefore(
+    table: PartitionedTableName,
+    cutoff: Date,
+    organizationId?: OrganizationId,
+  ): Promise<readonly Date[]> {
+    const estimates = await this.container.maintenance.partitionsBefore(
+      table,
+      cutoff,
+      organizationId,
+    );
     const periods = new Map<number, Date>();
 
     for (const estimate of estimates) periods.set(estimate.period.getTime(), estimate.period);
@@ -368,9 +413,13 @@ export class MaintenanceConsumer {
 
   // One table-month. A failure here is logged and the loop continues: one month whose
   // upload failed must not stop the months after it, and nothing was dropped.
-  private async archivePeriod(table: PartitionedTableName, period: Date): Promise<void> {
+  private async archivePeriod(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId?: OrganizationId,
+  ): Promise<void> {
     try {
-      const archived = await this.container.partitionArchive.archive(table, period);
+      const archived = await this.container.partitionArchive.archive(table, period, organizationId);
       const rows = archived.objects.reduce((total, object) => total + object.rowCount, 0);
 
       // One line per table-month, not one per tenant object: a month with five thousand

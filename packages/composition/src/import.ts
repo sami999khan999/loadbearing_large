@@ -116,10 +116,13 @@ export {
   type StoredObject,
   SubscriberRegistry,
   type SweepOutcome,
+  type TenantRetentionPolicyRecord,
+  TenantRetentionPolicyRepository,
   UnitOfWork,
   UpdateNotificationPreferenceUseCase,
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
+  UpdateTenantRetentionUseCase,
   VectorStore,
 } from "@loadbearing/application";
 
@@ -207,6 +210,7 @@ export {
   PgPlatformReader,
   PgRetentionPolicyRepository,
   PgRoleRepository,
+  PgTenantRetentionPolicyRepository,
   PgUnitOfWork,
   PgVectorStore,
   RedisCacheStore,

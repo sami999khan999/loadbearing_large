@@ -11,6 +11,9 @@ import {
 export interface ArchiveRequest {
   readonly table: PartitionedTableName;
   readonly period: Date;
+  // Null is "every tenant", which is the shape the prune pass uses unless an override
+  // makes it walk them one at a time.
+  readonly organizationId?: OrganizationId | null;
 }
 
 export interface RestoreRequest extends ArchiveRequest {
@@ -33,8 +36,12 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
     super();
   }
 
-  public override archive(table: PartitionedTableName, period: Date): Promise<ArchivedPartition> {
-    this.requests.push({ table, period });
+  public override archive(
+    table: PartitionedTableName,
+    period: Date,
+    organizationId?: OrganizationId,
+  ): Promise<ArchivedPartition> {
+    this.requests.push({ table, period, organizationId: organizationId ?? null });
 
     // `dropped` is derived from the objects rather than given: the real gateway drops
     // exactly what it archived, and a fake that could disagree would hide a bug there.

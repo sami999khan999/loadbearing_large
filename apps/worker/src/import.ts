@@ -14,6 +14,7 @@ export {
   QueueName,
   type RetentionPolicyRecord,
   RetentionRules,
+  type TenantRetentionPolicyRecord,
 } from "@loadbearing/application";
 
 // ── @loadbearing/composition ─────────────────────────────────────────────────
