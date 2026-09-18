@@ -133,6 +133,7 @@
         "apps/*/*.config.js",
         "apps/*/*.config.mjs",
         "packages/auth/tables.ts",
+        "packages/infrastructure/clickhouse-migrate.ts",
         "packages/infrastructure/migrate.ts",
         "packages/infrastructure/partitions.ts",
         "packages/infrastructure/platform-grant.ts",
@@ -172,6 +173,7 @@
       "includes": [
         "**/*.mjs",
         "packages/auth/tables.ts",
+        "packages/infrastructure/clickhouse-migrate.ts",
         "packages/infrastructure/migrate.ts",
         "packages/infrastructure/partition-ddl.ts",
         "packages/infrastructure/partitions.ts",

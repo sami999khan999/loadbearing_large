@@ -160,7 +160,6 @@ services:
     ports: ["${CLICKHOUSE_HTTP_PORT:-8123}:8123", "${CLICKHOUSE_NATIVE_PORT:-9002}:9000"]
     volumes:
       - clickhousedata:/var/lib/clickhouse
-      - ./clickhouse.init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:
@@ -514,7 +513,7 @@ rather than decorative.
 Only read when you start the `analytics` profile. It exists so the profile is runnable rather than a
 stub.
 
-**`infra/clickhouse.init.sql`**
+**`packages/infrastructure/clickhouse-migrations/0000_activity_events.sql`**, applied by `pnpm ch:migrate`
 
 ```sql
 -- Derived, and rebuildable by replaying the activity log. Nothing here is a

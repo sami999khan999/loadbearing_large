@@ -28,7 +28,6 @@ fakes. A filesystem stand-in for S3 means the S3 code path is first executed on 
 infra/
 ├── docker-compose.yml      → nine services, three profiles, one bridge network
 ├── postgres.init.sql       → vector, pg_trgm, uuid-ossp — run on first boot only
-├── clickhouse.init.sql     → the analytics tables, run on first boot only
 ├── loki.config.yml         → single-binary Loki, chunks and index into MinIO
 ├── alloy.config.alloy      → docker stdout + infra/logs/ → Loki, four labels
 ├── logs/                   → what Alloy tails; .gitkeep only

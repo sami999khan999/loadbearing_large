@@ -49,7 +49,7 @@ interpolation into SQL would be a security bug rather than a style one.
 
 **Table names are qualified against the configured database on the way out.** ClickHouse resolves an
 unqualified name against the session default, which is `default` unless every request says otherwise.
-That is the same trap `clickhouse.init.sql` documents at the top, and the reason a table can look
+That is the same trap the `0000` migration documents at the top, and the reason a table can look
 missing while it exists.
 
 **`DateTime64(3)` is `YYYY-MM-DD HH:MM:SS.mmm`.** An ISO string's `T` and `Z` are rejected. That

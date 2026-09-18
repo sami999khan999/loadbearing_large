@@ -206,8 +206,10 @@ services:
         "${CLICKHOUSE_NATIVE_PORT:-9002}:9000",
       ]
     volumes:
+      # No init script. The entrypoint runs one only on an empty volume and never on a
+      # managed instance, so the schema was frozen at first boot. `pnpm ch:migrate` is
+      # the path now — see packages/infrastructure/docs/reference/clickhouse-migrations.md.
       - clickhousedata:/var/lib/clickhouse
-      - ./clickhouse.init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:

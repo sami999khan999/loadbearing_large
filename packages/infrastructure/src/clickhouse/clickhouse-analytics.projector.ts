@@ -12,7 +12,33 @@ import type { ClickHouseConnection } from "./clickhouse.connection.js";
 export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
   private static readonly TABLE = "activity_events";
 
+  // Everything between `TTL` and the clause that follows it. `SETTINGS` is the one that
+  // always follows on a MergeTree family engine; `ORDER BY` and `PARTITION BY` precede.
+  private static readonly TTL = /\bTTL\s+(.+?)(?:\s+SETTINGS\b|$)/s;
+
   public constructor(private readonly connection: ClickHouseConnection) {}
+
+  // Read off `system.tables.engine_full`, because ClickHouse has no "show me the TTL"
+  // and the clause is part of the engine definition. Empty string when there is none.
+  public async retention(): Promise<string> {
+    const rows = await this.connection.query<{ readonly engine_full: string }>(
+      `
+      SELECT engine_full
+      FROM system.tables
+      WHERE database = currentDatabase() AND name = {table:String}
+    `,
+      { table: ClickHouseAnalyticsProjector.TABLE },
+    );
+
+    return ClickHouseAnalyticsProjector.ttlOf(rows[0]?.engine_full ?? "");
+  }
+
+  // `MODIFY TTL` materialises on every existing part, which on a years-deep table is a
+  // rewrite. The caller compares against `retention()` first, which is why that exists.
+  public async applyRetention(expression: string): Promise<void> {
+    const table = this.connection.qualified(ClickHouseAnalyticsProjector.TABLE);
+    await this.connection.command(`ALTER TABLE ${table} MODIFY TTL ${expression}`);
+  }
 
   // Read from the destination, never a cursor beside it. Per tenant, and cheap under
   // `ORDER BY (organization_id, occurred_at, id)` — ClickHouse is not per node.
@@ -87,6 +113,13 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     `,
       { organizationId, from, to },
     );
+  }
+
+  // Whitespace only. ClickHouse rewrites `INTERVAL 5 YEAR` as `toIntervalYear(5)`, so
+  // the *writer* emits that form — see `RetentionRules.clickhouseTtlFor`.
+  private static ttlOf(engineFull: string): string {
+    const match = ClickHouseAnalyticsProjector.TTL.exec(engineFull);
+    return match?.[1] ? match[1].replaceAll(/\s+/g, " ").trim() : "";
   }
 
   public async healthy(): Promise<boolean> {

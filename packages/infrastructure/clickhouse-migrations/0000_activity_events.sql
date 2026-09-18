@@ -1,9 +1,10 @@
 -- Derived, and rebuildable by replaying the activity log. Nothing here is a
 -- source of truth, which is what keeps the swap a performance decision.
 --
--- The name is database-qualified on purpose: ClickHouse's entrypoint runs the
--- scripts in this directory against `default`, not against CLICKHOUSE_DB, so an
--- unqualified CREATE succeeds in the wrong place and the table looks missing.
+-- Unqualified now. `clickhouse-migrate.ts` sends every statement with `database=` on
+-- the query string, so the session default is already CLICKHOUSE_DATABASE — and a
+-- hard-coded `ratchet.` here would put the table in the wrong place on a deployment
+-- that named its database anything else.
 
 -- ── the projected audit trail ────────────────────────────────────────────────
 --
@@ -15,7 +16,7 @@
 -- `ReplacingMergeTree`, not `MergeTree`. BullMQ redelivers, so the projection has
 -- to be idempotent, and the sorting key ends in `id` so a redelivered batch
 -- collapses onto the rows it already wrote rather than doubling them.
-CREATE TABLE IF NOT EXISTS ratchet.activity_events
+CREATE TABLE IF NOT EXISTS activity_events
 (
   -- The `activity_log` primary key, carried across. It is what makes the insert
   -- idempotent and what the projection checkpoint reads back.

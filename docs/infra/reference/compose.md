@@ -127,7 +127,6 @@ Every config file is mounted individually, read-only:
 ```yaml
 - ./loki.config.yml:/etc/loki/config.yml:ro
 - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
-- ./clickhouse.init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 ```
 
 Docker creates the target's parent directories if they do not exist, so a single file can be placed

@@ -10,6 +10,10 @@ import {
 // make a redelivered batch look like new work, and BullMQ redelivers.
 export class InMemoryAnalyticsProjector extends AnalyticsProjector {
   private readonly rows = new Map<string, ActivityRecord>();
+  private readonly applied: string[] = [];
+  // The shipped `0000` migration's clause, so a fresh fake reads as a store that has
+  // been migrated rather than as one with no TTL at all.
+  private ttl = "toDateTime(occurred_at) + toIntervalYear(5)";
 
   public projected(): readonly ActivityRecord[] {
     return [...this.rows.values()];
@@ -61,6 +65,22 @@ export class InMemoryAnalyticsProjector extends AnalyticsProjector {
   // across tenants would let a consumer that lost its tenant predicate pass.
   private of(organizationId: OrganizationId): readonly ActivityRecord[] {
     return [...this.rows.values()].filter((row) => row.organizationId === organizationId);
+  }
+
+  // A string, held. The real one reads it back off `system.tables`, so a fake that
+  // returned a constant would let a caller that never applied anything pass.
+  public override retention(): Promise<string> {
+    return Promise.resolve(this.ttl);
+  }
+
+  public override applyRetention(expression: string): Promise<void> {
+    this.ttl = expression;
+    this.applied.push(expression);
+    return Promise.resolve();
+  }
+
+  public retentionApplied(): readonly string[] {
+    return this.applied;
   }
 
   public override healthy(): Promise<boolean> {

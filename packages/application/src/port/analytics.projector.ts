@@ -20,6 +20,14 @@ export abstract class AnalyticsProjector {
     to: Date,
   ): Promise<readonly DailyCount[]>;
 
+  // The TTL the store currently holds, normalised. It exists so the caller can compare
+  // before it writes: `MODIFY TTL` materialises on existing parts, which is a rewrite.
+  public abstract retention(): Promise<string>;
+
+  // One `ALTER TABLE … MODIFY TTL`. The expression is composed by `RetentionRules`, so
+  // this method decides nothing about what the policy is.
+  public abstract applyRetention(expression: string): Promise<void>;
+
   public abstract healthy(): Promise<boolean>;
 
   public abstract close(): Promise<void>;

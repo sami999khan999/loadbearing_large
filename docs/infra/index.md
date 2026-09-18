@@ -32,7 +32,6 @@ on a VPS, and the order to move them to managed services in when one box stops f
 | *(no file)* | pgBouncer, from compose env | [pgbouncer](reference/pgbouncer.md) |
 | `loki.config.yml` | Loki, at startup | [loki](reference/loki.md) |
 | `alloy.config.alloy` | Alloy, at startup | [alloy](reference/alloy.md) |
-| `clickhouse.init.sql` | ClickHouse, on first boot only | [clickhouse](reference/clickhouse.md) |
 | `logs/` | Alloy, tailed continuously | [alloy](reference/alloy.md) |
 | `.env` | `docker compose` | [compose](reference/compose.md#host-ports) |
 
@@ -47,7 +46,7 @@ This is the opposite answer from the one `packages/infrastructure/src/` gives, a
 what each directory holds. There, ClickHouse and Loki each got a folder, because each is several
 TypeScript modules and the folder is the unit of "what does this package depend on". Here, each is
 one mounted file — and a `clickhouse/` folder holding that one file would state nothing
-`infra/clickhouse.init.sql` does not. **Structure is earned by contents, not by symmetry with another
+the ClickHouse schema does not. **Structure is earned by contents, not by symmetry with another
 directory.**
 
 ---
