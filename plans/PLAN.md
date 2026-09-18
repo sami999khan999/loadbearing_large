@@ -2458,10 +2458,13 @@ reads the exclusion list once per run and passes it to all three queries.
   the rest of the fragment is. `verified:` narrowing `record` to `ActivityAction` produced **zero**
   compile errors, which is the assertion that every literal in the tree is now in the catalog.
 
-- [ ] `20.2` **Schema, port, adapter** — `projection_policy` in `platform.schema.ts`, `TENANT_EXEMPT`
+- [x] `20.2` **Schema, port, adapter** — `projection_policy` in `platform.schema.ts`, `TENANT_EXEMPT`
   line with the comment (the projection is cross-tenant by construction),
   `projection-policy.repository.ts` (`all()`, `save(row)`), `pg-projection-policy.repository.ts`.
   **Docs:** `docs/setup/13` §13.3, `docs/setup/26` §9.
+  `done: 2026-09-19` — migration `0029_projection_policy`, `TENANT_EXEMPT` gains its third
+  argued-for entry. `verified:` applied against live Postgres — the check constraint and the
+  `projected` default are both on the table.
 
 - [ ] `20.3` **Three queries, one list** — `ActivityReplayReader.since(checkpoint, limit, excluding)`
   and `dailyCounts(from, to, excluding)`; `AnalyticsProjector.dailyCounts(from, to, excluding)`.

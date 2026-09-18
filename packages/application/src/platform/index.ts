@@ -37,6 +37,10 @@ export {
   type RetentionPreview,
 } from "./preview-retention-change.use-case.js";
 export {
+  type ProjectionPolicyRecord,
+  ProjectionPolicyRepository,
+} from "./projection-policy.repository.js";
+export {
   type RestorePartitionInput,
   RestorePartitionUseCase,
   type RestoreRequested,

@@ -430,6 +430,10 @@ const TENANT_EXEMPT = new Set([
   // a per-tenant retention row would describe something the storage engine cannot do.
   // Per-tenant retention is `tenant_retention_policy`, which leads with the tenant.
   "retention_policy",
+  // Whether an action reaches the analytics store is one deployment-wide decision, and
+  // the consumer that reads it projects across every tenant in one pass. A per-tenant
+  // row here would describe something nothing does.
+  "projection_policy",
   "__drizzle_migrations",
 ]);
 

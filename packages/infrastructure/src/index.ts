@@ -41,6 +41,7 @@ export {
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgPlatformReader,
+  PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRepository,

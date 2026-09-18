@@ -132,6 +132,8 @@ export {
   type PreviewedPartition,
   type PreviewRetentionChangeInput,
   PreviewRetentionChangeUseCase,
+  type ProjectionPolicyRecord,
+  ProjectionPolicyRepository,
   type RestorePartitionInput,
   RestorePartitionUseCase,
   type RestoreRequested,

@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   integer,
   type OrganizationId,
@@ -43,6 +44,25 @@ export const retentionPolicy = pgTable(
     // reads; this is what holds when a row is written by hand at 3am.
     check("retention_policy_hot_months_ck", sql`${t.hotMonths} >= 1`),
     check("retention_policy_cold_months_ck", sql`${t.coldMonths} is null or ${t.coldMonths} >= 0`),
+  ],
+);
+
+// One row per activity action, and an absent row is "projected, with the default TTL".
+// Cross-tenant by construction: the projection is one deployment-wide decision.
+export const projectionPolicy = pgTable(
+  "projection_policy",
+  {
+    // Never from data: validated against `ActivityActions.isKnown` in the use-case, and
+    // the same closed union the TTL expression interpolates.
+    action: text("action").primaryKey(),
+    projected: boolean("projected").notNull().default(true),
+    // Null is "the default clause covers it". A number here is a `DELETE WHERE action =`
+    // clause of its own, which is what lets one action be kept longer than the rest.
+    ttlMonths: integer("ttl_months"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("projection_policy_ttl_months_ck", sql`${t.ttlMonths} is null or ${t.ttlMonths} >= 1`),
   ],
 );
 

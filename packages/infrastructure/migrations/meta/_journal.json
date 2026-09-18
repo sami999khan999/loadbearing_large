@@ -204,6 +204,13 @@
       "when": 1789769119622,
       "tag": "0028_tenant_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789775629199,
+      "tag": "0029_projection_policy",
+      "breakpoints": true
     }
   ]
 }

@@ -565,6 +565,7 @@ const TENANT_EXEMPT = new Set([
   // distinction that keeps `users` off this list despite `last_active_organization_id`.
   "sessions",
   "retention_policy",                                // global: a partition spans every tenant
+  "projection_policy",                               // global: one deployment-wide decision per action
   "__drizzle_migrations",
 ]);
 ```
