@@ -8,8 +8,9 @@ import type { StorageGateway, StoredObject } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
+import { PgOutboxPublisher } from "../../src/pg/repository/pg-outbox.publisher.js";
 import { PgPartitionArchiveGateway } from "../../src/pg/repository/pg-partition-archive.gateway.js";
-import { organizations, partitionArchive } from "../../src/pg/schema/index.js";
+import { notifications, organizations, partitionArchive } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
 import { dropTenant, openDatabase, seedTenant } from "../support/database.js";
@@ -347,6 +348,86 @@ describe("PgPartitionArchiveGateway.sweep", () => {
       .where(eq(partitionArchive.period, ISO));
 
     expect(rows.map((row) => row.organizationId)).toEqual([second]);
+  });
+});
+
+// The whole point of the rename: one gateway, every partitioned table. These two take
+// the paths `activity_log` never exercises — a different time column, and no tenant level.
+describe("PgPartitionArchiveGateway across the allowlist", () => {
+  const notificationMonth = (organizationId: OrganizationId) =>
+    `${TenantPartitionSeed.partitionName(PartitionedTable.NOTIFICATIONS, organizationId)}_2032_05`;
+
+  const outboxMonth = `${PartitionedTable.OUTBOX_EVENT}_2032_05`;
+
+  afterEach(async () => {
+    for (const name of [notificationMonth(first), outboxMonth]) {
+      await database.client.execute(sql`drop table if exists ${sql.identifier(name)}`);
+    }
+  });
+
+  // `created_at`, not `occurred_at`. The keyset comes off the allowlist entry, which is
+  // what lets one loop serve a table this gateway was never written against.
+  it("archives a table ranged by a different column", async () => {
+    const maintenance = new PgMaintenanceGateway(
+      database,
+      scope,
+      new PgUnitOfWork(database, scope),
+    );
+    await database.client.execute(
+      sql`drop table if exists ${sql.identifier(notificationMonth(first))}`,
+    );
+    await maintenance.ensureMonthlyPartitions(PartitionedTable.NOTIFICATIONS, first, PERIOD, 1);
+
+    const [user] = await database.client
+      .execute<{ id: string }>(sql`select id from users limit 1`)
+      .then((result) => result.rows);
+    if (!user) throw new Error("run `pnpm db:seed` first, and sign one user up");
+
+    await database.client.insert(notifications).values({
+      id: Uuid.v7(),
+      organizationId: first,
+      userId: user.id as never,
+      eventId: Uuid.v7(),
+      kind: "task.assigned",
+      category: "task",
+      createdAt: PERIOD,
+    });
+
+    const storage = new FakeStorage();
+    const result = await gateway(storage).archive(PartitionedTable.NOTIFICATIONS, PERIOD);
+
+    expect(result.objects).toHaveLength(1);
+    expect(result.objects[0]?.key).toBe(`cold/notifications/2032/05/${first}.ndjson.gz`);
+    // No `action` column, so the breakdown stays empty rather than guessing at one.
+    expect(result.objects[0]?.actionCounts).toEqual({});
+    expect(await exists(notificationMonth(first))).toBe(false);
+  });
+
+  // The one table with no tenant level, because the drain polls it every second. Its
+  // month is one object under the nil uuid, which names no row on purpose.
+  it("archives the table with no tenant level under the nil uuid", async () => {
+    const maintenance = new PgMaintenanceGateway(
+      database,
+      scope,
+      new PgUnitOfWork(database, scope),
+    );
+    await database.client.execute(sql`drop table if exists ${sql.identifier(outboxMonth)}`);
+    await maintenance.ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, null, PERIOD, 1);
+
+    await new PgOutboxPublisher(database, scope, { now: () => PERIOD }).publish(
+      { organizationId: first, userId: Uuid.v7(), kind: "user" } as never,
+      { name: "task.created", payload: { taskId: Uuid.v7() } } as never,
+    );
+
+    const storage = new FakeStorage();
+    const result = await gateway(storage).archive(PartitionedTable.OUTBOX_EVENT, PERIOD);
+
+    expect(result.objects).toHaveLength(1);
+    expect(result.objects[0]?.organizationId).toBe(PartitionArchiveGateway.NO_TENANT);
+    expect(result.objects[0]?.key).toBe(
+      `cold/outbox_event/2032/05/${PartitionArchiveGateway.NO_TENANT}.ndjson.gz`,
+    );
+    expect(await exists(outboxMonth)).toBe(false);
   });
 });
 

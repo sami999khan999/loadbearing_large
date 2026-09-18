@@ -31,21 +31,23 @@ source: rewritten 2026-09-17 from plans/PLAN.md and plans/archive/* at 1a302f8; 
 
 ## Where we are
 
-**State, 2026-09-17.** Fifteen phases are built: the implementation audit (1–8, 5–6 September),
+**State, 2026-09-19.** Seventeen phases are built: the implementation audit (1–8, 5–6 September),
 the communication stack (9–13, 12–13 September), connection pooling and the partition allowlist
-(14–15, 13 and 17 September). Eleven are open. Of the 131 open items, 23 are filed by decision rather
-than queued — Phases 24, 25 and 26 — so the build queue proper is 108 items across Phases 16–23.
+(14–15, 13 and 17 September), the tenant layout (16, 18 September) and cold storage (17,
+19 September). Nine are open. Of the open items, 23 are filed by decision rather than queued —
+Phases 24, 25 and 26 — so the build queue proper is Phases 18–23.
 
 **The first thing to do is not an item.** `pnpm infra:up` has to be running before any spec that
 needs a database does — and on a clean clone, `pnpm install` then `pnpm build:packages` before
 `pnpm typecheck`, because `route-tree.gen.ts` is generated and gitignored.
 `corrected: 2026-09-18` — the port clash this line described is gone; 5432 and 6432 were both free.
 
-**`16.1` and the merge unit after it are built** (2026-09-18): the pruning spec, the two-level
-tenant layout, its seed, the two-level maintenance gateway and the per-tenant projection, plus
-**Phase 16 is done** (2026-09-18). **Start at Phase 17** — cold storage — then 19 on top of it. Phase 18 touches permissions, auth
-and composition only and can run beside all of that. Phase 23 is independent small work for any
-spare hour.
+**Phase 16 is done** (2026-09-18) and **Phase 17 is done** (2026-09-19): retention is
+archive-then-drop for every partitioned table, objects are per tenant under `cold/`,
+`partition_archive` is the index a read starts from, and a restore is proven against MinIO rather
+than asserted. **Start at Phase 18** — the platform tier, which has no gate — then 19 on top of 17
+and 18. Phase 21 and Phase 22 are both unblocked by 17 as well. Phase 23 is independent small work
+for any spare hour.
 
 ### Timeline
 
@@ -67,7 +69,7 @@ spare hour.
 | 14 | Connection pooling: the pool you can see, and the pooler in front of it | Scaling | ✅ done | 2026-09-13 | `DB-SCALING-PLAN.md` Phase 1 |
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
 | 16 | Pruning proven, and the tenant layout | Scaling | ✅ done | 2026-09-18 | `DB-SCALING-PLAN.md` 2.B |
-| 17 | Cold storage: retention stops meaning deletion | Scaling | ⬜ open | after 16 | `DB-SCALING-PLAN.md` 2.C |
+| 17 | Cold storage: retention stops meaning deletion | Scaling | ✅ done | 2026-09-19 | `DB-SCALING-PLAN.md` 2.C |
 | 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
 | 20 | Projection policy: which actions reach ClickHouse, and for how long each | Admin | ⬜ open | after 19 | `PLATFORM-ADMIN-PLAN.md` Phase 3 |
@@ -1420,7 +1422,7 @@ one tenant's rows out of a shared partition — precisely the bloat-and-vacuum p
 exists to avoid. The policy is therefore per table, global to every tenant, and it lives on the
 allowlist entry (decision D23).
 
-- [ ] `17.1` **One archive gateway for every partitioned table** —
+- [x] `17.1` **One archive gateway for every partitioned table** —
   `ActivityArchiveGateway.archive(period)` becomes
   `PartitionArchiveGateway.archive(table, period): Promise<ArchivedPartition>`; the table comes from
   `PartitionedTableName` and the partition column from `PartitionedTable.byName(table).column`, so
@@ -1443,8 +1445,15 @@ allowlist entry (decision D23).
   (decision D29): detach it, stream it as the one object `17.2` already keys per tenant, record,
   verify, drop. The `directDatabase` handle does N detaches per month instead of one, still one at
   a time.
+  `done: 2026-09-19` — `ArchivedPartition` carries a fourth field the item did not name,
+  `dropped: readonly string[]`, because an **empty** tenant-month is dropped and writes no object:
+  without it the consumer could not emit `maintenance.partition.dropped` for the partitions that
+  actually went. The port also gained `restore` (`17.4`), `sweep` (`17.6`) and `markProjected`
+  (`17.5`'s stamp, which is a write to `partition_archive` and therefore the gateway's). The port
+  tripwire stayed at twenty-five names: this is a rename, not an addition — `activityArchive`
+  becomes `partitionArchive` in `TestPorts`, the sorted list and `Container`.
 
-- [ ] `17.2` **Per-tenant objects, and an index that can be read back** — the key becomes
+- [x] `17.2` **Per-tenant objects, and an index that can be read back** — the key becomes
   `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`. `cold/` rather than `activity-archive/`
   because one S3 lifecycle rule on that prefix tiers every table to Glacier without naming a
   single object, which is the reason `storage.gateway.ts` fixes a prefix layout at all.
@@ -1473,8 +1482,19 @@ allowlist entry (decision D23).
   received this tenant-month, stamped by `17.5` and read by Phase 20's re-project
   action. Partial index `partition_archive_unprojected_idx (table_name, period) where projected_at
   is null`, so "what has a hole" is an index read rather than a scan (decision D27).
+  `done: 2026-09-19` — migration `0025_cold_storage.sql`, and the table lives in
+  `pg/schema/archive.schema.ts`, which is `analytics.schema.ts` renamed: it held only
+  `activity_archive`, and a file called `analytics` holding the index for every partitioned table
+  would have been the wrong name from the first read. The copy keeps each row's existing
+  `object_key` — the object is where it is, and rewriting the key would point the index at nothing
+  — with `bytes` 0, `action_counts` empty and **`projected_at` null**, because nothing recorded any
+  of the three before this migration and null is the honest answer for the last one. `activity_log`
+  is the only table with an `action` column, so the breakdown is empty for the other two.
+  A table with no tenant level records its month under `PartitionArchiveGateway.NO_TENANT`, the nil
+  uuid, which is the sentinel `0024` already used and the thing that makes such an object readable
+  as "this one spans every tenant".
 
-- [ ] `17.3` **The export, cut on the tenant boundary** — `rows()` takes an organization:
+- [x] `17.3` **The export, cut on the tenant boundary** — `rows()` takes an organization:
   `select distinct organization_id from <partition>` first (cheap — `activity_log`, `outbox_event`
   and `notifications` each carry an index leading with it), then the existing keyset stream per
   org, one `putStream` per object. The detach and the drop stay **once per partition**; only the
@@ -1485,8 +1505,14 @@ allowlist entry (decision D23).
   `revised: 2026-09-16` — "detach once per month, stream per tenant" collapses into one loop over
   the tenant-month children of that month (decision D29); an empty child is detached and dropped
   with no object and no row.
+  `done: 2026-09-19` — the children come from one `pg_inherits` join rather than from
+  `organizations`, so a partition whose tenant row is already gone is still found and still
+  archived; the tenant is parsed back out of the `<table>_<32hex>` partition name. The keyset is
+  `(entry.column, id)` rather than `(occurred_at, id)`, which is what makes the same loop serve
+  `notifications` and `messages`. The per-action counts accumulate inside the paging generator, so
+  they cost nothing beyond one column in a select that was already running.
 
-- [ ] `17.4` **Restore, proven by a round trip** —
+- [x] `17.4` **Restore, proven by a round trip** —
   `restore(table, period, organizationId): Promise<RestoredMonth>` reads the object through
   `storage.get()`, gunzips, and inserts into a **scratch** table named for the month — never
   straight back into the live parent. A restore that re-attaches silently puts archived rows back
@@ -1500,8 +1526,21 @@ allowlist entry (decision D23).
   `revised: 2026-09-16` — `restore(table, period, organizationId)` restores one tenant-month child
   into the scratch table; the admin plan's `19.18` attach step attaches it under the tenant's
   LIST partition.
+  `done: 2026-09-19` — the scratch table is `<child>_restore`, dropped and recreated per run: a
+  previous restore of the same month is evidence of that restore, and two merged are evidence of
+  neither. The longest name is 62 of Postgres's 63 characters
+  (`notifications_<32hex>_<yyyy>_<mm>_restore`), and the adapter refuses past that rather than
+  letting a truncated identifier collide with the next tenant's. Rows go back through
+  `json_populate_recordset(null::<scratch>, …)` in batches of 5,000, so the lines never become
+  objects in the process. `cold.partition.restored` is **not** emitted: the gateway does not log,
+  and the caller that would is `19.18`'s consumer method, which does not exist yet — the code joins
+  `core.events.ts` and `event-shape.ts` there.
+  `verified: 2026-09-19` — against MinIO, not a fake: five rows archived to
+  `cold/activity_log/2032/07/<org>.ndjson.gz` (341 bytes, sha-256 recorded), the object read back,
+  the scratch table holding five rows, and the spec's md5 over the sorted ids matching what went
+  out.
 
-- [ ] `17.5` **`prune()` becomes archive-then-drop, for every table** —
+- [x] `17.5` **`prune()` becomes archive-then-drop, for every table** —
   `MaintenanceConsumer.prune()` archives the month first and drops **only** what was written and
   verified. `RETAIN_MONTHS = 13` disappears into `activity_log`'s `retentionMonths`, which goes
   from `null` to `13` in the same commit — the `null` meant "the archive job owns this", and after
@@ -1537,8 +1576,20 @@ allowlist entry (decision D23).
   `retention = tenantOverride ?? retention_policy row ?? allowlist` (`19.19`);
   `outbox_event` keeps the month-only path. The `projected_at` stamp is per tenant-month, which the
   row already is.
+  `done: 2026-09-19` — `prune(table)` lost its `organizationId` parameter and moved out of
+  `partitionsFor`, which is `19.10`'s shape arriving early and is forced by the log line: one call
+  and one line per table-month, never one per tenant. It reads the months to retire from
+  `maintenance.partitionsBefore(table, cutoff)` — the read `16.8` built for the preview, so the
+  screen and the job cannot disagree about what exists — and distinct-and-sorts them.
+  The stamp is per tenant-month, from `projector.checkpoint(organizationId)` against the end of the
+  month; `analytics.projection.gap` is emitted once per table-month, `reason: "disabled"` when
+  `hasProjector` is false and `"behind"` when any tenant lagged, because five thousand tenants must
+  not be five thousand warnings. `platformPolicy.get().projectionEnabled` is **not** read — that
+  table is `20.8`'s, and the switch joins this branch there.
+  `MaintenanceGateway.dropMonthlyPartitionsBefore` is left in place with no caller: it is the
+  `cold_mode: "drop"` path `19.10` lands three items later, and it keeps its spec.
 
-- [ ] `17.6` **Deleting a tenant reaches cold storage** — the moment `17.2` lands, deleting an
+- [x] `17.6` **Deleting a tenant reaches cold storage** — the moment `17.2` lands, deleting an
   organization cascades cleanly through Postgres and leaves every one of its S3 objects behind.
   That is a GDPR-shaped hole and it is created by this phase, so this phase closes it: a
   `MAINTENANCE` job sweeps `partition_archive` for the tenant, `storage.delete()`s each object,
@@ -1555,8 +1606,14 @@ allowlist entry (decision D23).
   `revised: 2026-09-16` — the trigger exists: `19.20` deletes a tenant,
   and the `retention` job sweeps `partition_archive` rows whose organization no longer exists
   once `archived_at` is thirty days old. The `--sweep` flag stays for the operator.
+  `done: 2026-09-19` — `sweep(organizationId)` on the port, `--sweep <id>` on `partitions.ts`, and
+  one sentence in `cold-storage.md` saying a future delete use-case must enqueue it. No
+  `MAINTENANCE` job and no `cold.objects.swept` line yet: nothing enqueues one, and a job name with
+  no publisher is the shape that left `cleanup-daily` accumulating. Both arrive with `19.20`.
+  `verified: 2026-09-19` — `pnpm db:partitions --sweep <org>` after the `17.4` round trip left the
+  `cold/` prefix in MinIO empty and `partition_archive` at zero rows.
 
-- [ ] `17.7` **Docs** — new `packages/infrastructure/docs/reference/cold-storage.md`: the
+- [x] `17.7` **Docs** — new `packages/infrastructure/docs/reference/cold-storage.md`: the
   sequenced invariant and why the order is the job, the per-tenant key and the lifecycle rule,
   `partition_archive` as the index a read starts from, restore, and the two findings above.
   Registered in `reference/meta.json` and named from `docs/index.md`.
@@ -1566,6 +1623,12 @@ allowlist entry (decision D23).
   `docs/opinions/data-and-scale.md` §4.2 and the "dropped after twelve months" paragraph,
   `docs/ai/rules/data.md`, `docs/setup/13` §13.6, and
   `packages/infrastructure/docs/reference/clickhouse.md` (the replay source key changes shape).
+  `done: 2026-09-19` — plus four the item did not list and §15 found: `docs/data-flow.md`,
+  `docs/infra/reference/postgres.md`, `docs/setup/28` and `packages/application/docs/` (the port
+  tree and the adapter table) all named the renamed file. `partitions.md` loses "the archive owns
+  its lifecycle" for `13`. `docs/setup/26` §9's copy of `TENANT_EXEMPT` was stale in two ways
+  unrelated to this phase and is fixed with it: it listed `activity_archive`, which has carried
+  `organization_id` since `0024` and is not exempt, and it omitted `sessions`, which is.
 
 - [-] `17.8` **Retention as data, not as a deploy** `dropped: 2026-09-14` — decision D23 — reopened the same day as `19.3`–`19.7`, where the row gets an editor.
 
@@ -1584,6 +1647,22 @@ with the Postgres error, never silently; `EXPLAIN` on every tenant-owned read sh
 partition; the projection and the reconcile report per tenant (`16.3`–`16.7`). A signup running
 while another connection reads `notifications` never makes that read wait on the signup's lock
 (`16.4`); `TENANT_CEILING=500 pnpm smoke` prints the three timings (`16.12`).
+
+`verified: 2026-09-19` — `pnpm check:architecture` 21/21 with no skip, `pnpm typecheck`, `pnpm lint`
+and `pnpm test` green, `pnpm smoke` 23/23 against live containers. `pnpm db:partitions` prints four
+rows, not three: `messages` joined the month level with decision D26 after this clause was written.
+Two clauses are read differently from how they are written, and both are recorded rather than
+quietly passed:
+
+- **"archive a seeded month per table"** is proven per table in `tests/cold/`, against a fake
+  storage that keeps the bytes — including the two paths `activity_log` does not exercise, a
+  different range column (`notifications`) and no tenant level (`outbox_event`, whose month lands
+  under the nil uuid). The **MinIO** leg was run once, by hand, for `activity_log`: object present
+  at `cold/activity_log/2032/07/<org>.ndjson.gz`, 341 bytes, sha-256 in `partition_archive`,
+  restored to a scratch table with the row count and the id checksum matching.
+- **"on a deleted seeded organization"** — nothing in `packages/` deletes an organization yet, so
+  the sweep was run against a live tenant that had objects. It left the `cold/` prefix empty and
+  `partition_archive` at zero rows. The deleted-tenant case arrives with `19.20`.
 
 ---
 
@@ -3194,6 +3273,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |
 | 2026-09-17 | @sami | `P2.20` (now `2.20`) closed as moot: its dependency `P5.15` had deleted the component. 120 open |
 | 2026-09-17 | @sami | Consolidated the open items of four plans into one file — 121 items, IDs unchanged. The five plan files moved to `archive/` verbatim |

@@ -561,8 +561,10 @@ const TENANT_EXEMPT = new Set([
   // to several organizations, so the tenant lives on `memberships`. These are the
   // `modelName` values doc 16 chose — Better Auth's own defaults are singular.
   "users", "accounts", "verifications", "two_factors",
+  // Which tenant the session is pointed at, rather than which owns the row — the same
+  // distinction that keeps `users` off this list despite `last_active_organization_id`.
+  "sessions",
   "__drizzle_migrations",
-  "activity_archive",                                // partitioned by time, not tenant
 ]);
 ```
 
@@ -573,7 +575,9 @@ const TENANT_EXEMPT = new Set([
 > [!WARNING]
 > **Names on this list are the `modelName` values, not Better Auth's defaults.** [16](16-auth-package.md) renames all five to this repository's plural convention, and a list still reading `user`/`session`/`account` exempts *nothing* — the assertion silently passes on tables it was never checking. Verify the list the way every assertion here is verified: add a table with no `organization_id`, watch it fail, remove it.
 >
-> `sessions` is deliberately absent, because it genuinely carries the tenant — `activeOrganizationId`, pinned at sign-in ([16](16-auth-package.md)).
+> `sessions` is on the list and `users` is not, and the two look alike. A session carries `active_organization_id` — which tenant it is *pointed at* — and a user carries `last_active_organization_id`. Neither is the tenant that owns the row, and neither table has one; the difference is only that §9 stopped matching the column as a substring, which is what surfaced `sessions` as never having been checked.
+>
+> **`activity_archive` and `partition_archive` are not on it.** Both lead with `organization_id`, which the cold-storage index does because one tenant's months have to be readable, sweepable and countable without touching another's ([cold storage](../../packages/infrastructure/docs/reference/cold-storage.md)).
 
 Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTable` returns the same type whichever columns you pass, and there is no compile error available — which is precisely the category of rule this file exists for.
 
