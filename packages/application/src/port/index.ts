@@ -1,5 +1,4 @@
 export { ActivityLogger } from "./activity.logger.js";
-export { ActivityArchiveGateway, type ArchivedPartition } from "./activity-archive.gateway.js";
 export {
   type ActivityRecord,
   ActivityReplayReader,
@@ -22,6 +21,12 @@ export {
 } from "./maintenance.gateway.js";
 export { OrganizationReader } from "./organization.reader.js";
 export { OutboxGateway } from "./outbox.gateway.js";
+export {
+  type ArchivedObject,
+  type ArchivedPartition,
+  PartitionArchiveGateway,
+  type RestoredMonth,
+} from "./partition-archive.gateway.js";
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber } from "./realtime.subscriber.js";

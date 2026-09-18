@@ -109,11 +109,11 @@ export {
   UpdateNotificationPreferenceUseCase,
 } from "./notification/index.js";
 export {
-  ActivityArchiveGateway,
   ActivityLogger,
   type ActivityRecord,
   ActivityReplayReader,
   AnalyticsProjector,
+  type ArchivedObject,
   type ArchivedPartition,
   CacheStore,
   CapabilityInvalidator,
@@ -134,6 +134,7 @@ export {
   MaintenanceGateway,
   OrganizationReader,
   OutboxGateway,
+  PartitionArchiveGateway,
   type PartitionEstimate,
   type ProjectionCheckpoint,
   QueuePublisher,
@@ -142,6 +143,7 @@ export {
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
+  type RestoredMonth,
   type SearchHit,
   SessionResolver,
   StorageGateway,

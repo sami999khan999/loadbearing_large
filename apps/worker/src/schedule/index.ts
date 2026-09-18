@@ -1,4 +1,3 @@
-export { ArchiveSchedule } from "./archive.schedule.js";
 export { CleanupSchedule } from "./cleanup.schedule.js";
 export { DigestSchedule } from "./digest.schedule.js";
 export { OutboxDrainSchedule } from "./outbox-drain.schedule.js";

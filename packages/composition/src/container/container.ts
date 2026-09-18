@@ -1,5 +1,4 @@
 import {
-  type ActivityArchiveGateway,
   type ActivityLogger,
   type ActivityReplayReader,
   AddConversationMemberUseCase,
@@ -68,7 +67,7 @@ import {
   type OrganizationFounder,
   type OrganizationReader,
   type OutboxGateway,
-  PgActivityArchiveGateway,
+  type PartitionArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
@@ -88,6 +87,7 @@ import {
   PgOrganizationReader,
   PgOutboxGateway,
   PgOutboxPublisher,
+  PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgUnitOfWork,
@@ -247,7 +247,7 @@ export class Container {
   // The one read in this system that is cross-tenant by definition: every per-tenant
   // loop the worker runs starts from it.
   public readonly organizations: OrganizationReader;
-  public readonly activityArchive: ActivityArchiveGateway;
+  public readonly partitionArchive: PartitionArchiveGateway;
   // Always built: replaying the audit trail is useful with or without a derived store
   // behind it, and a reconciliation against nothing is simply a count.
   public readonly activityReplay: ActivityReplayReader;
@@ -681,7 +681,7 @@ export class Container {
 
     // The *direct* pool, not the shared one: a month-sized detach and stream needs a
     // budget the 30 s role floor will not give it. See docs/infra/reference/pgbouncer.md.
-    this.activityArchive = new PgActivityArchiveGateway(
+    this.partitionArchive = new PgPartitionArchiveGateway(
       this.directDatabase,
       this.transactions,
       this.storage,

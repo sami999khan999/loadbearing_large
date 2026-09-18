@@ -7,7 +7,8 @@ export { Buffer } from "node:buffer";
 export { createHash } from "node:crypto";
 export { once } from "node:events";
 export { Readable } from "node:stream";
-export { createGzip } from "node:zlib";
+export { pipeline } from "node:stream/promises";
+export { createGunzip, createGzip } from "node:zlib";
 
 // ── @aws-sdk/client-s3 ───────────────────────────────────────────────────────
 export {
@@ -26,7 +27,6 @@ export { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 export {
-  ActivityArchiveGateway,
   type ActivityLogger,
   type ActivityRecord,
   type ActivityReplayReader,
@@ -35,6 +35,7 @@ export {
   type ApiKeyRecord,
   type ApiKeyRepository,
   type ApiKeySummary,
+  type ArchivedObject,
   type ArchivedPartition,
   CacheStore,
   type CancellationSignal,
@@ -77,6 +78,7 @@ export {
   type NotificationRepository,
   type OrganizationReader,
   type OutboxGateway,
+  PartitionArchiveGateway,
   type PartitionEstimate,
   // A value, not a type: the seed and the maintenance gateway both walk the allowlist.
   PartitionedTable,
@@ -93,6 +95,7 @@ export {
   type RealtimePublisher,
   RealtimeSubscriber,
   type Recipient,
+  type RestoredMonth,
   type RolePage,
   type RoleRecord,
   type RoleRepository,
@@ -187,6 +190,7 @@ export {
 export { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 export { migrate } from "drizzle-orm/node-postgres/migrator";
 export {
+  bigint,
   boolean,
   date,
   foreignKey,

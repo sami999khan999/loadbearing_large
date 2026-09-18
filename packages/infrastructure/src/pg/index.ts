@@ -9,7 +9,6 @@ export {
   KeysetCursor,
 } from "./primitive/index.js";
 export {
-  PgActivityArchiveGateway,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
@@ -29,6 +28,7 @@ export {
   PgOrganizationReader,
   PgOutboxGateway,
   PgOutboxPublisher,
+  PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgRoleRepository,
   PgVectorStore,

@@ -10,7 +10,6 @@ export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";
 export { InMemoryStorageGateway } from "./in-memory-storage.gateway.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";
-export { RecordingActivityArchiveGateway } from "./recording-activity-archive.gateway.js";
 export { RecordingCapabilityInvalidator } from "./recording-capability.invalidator.js";
 export {
   type PublishedEvent,
@@ -23,6 +22,7 @@ export {
   type EnsuredPartitions,
   RecordingMaintenanceGateway,
 } from "./recording-maintenance.gateway.js";
+export { RecordingPartitionArchiveGateway } from "./recording-partition-archive.gateway.js";
 export { type PublishedJob, RecordingQueuePublisher } from "./recording-queue.publisher.js";
 export {
   type PublishedFrame,

@@ -31,9 +31,11 @@ export const coreEvents = {
   // is already three months deep. `partition.runway.low` is the signal.
   "maintenance.sweep.completed": { level: "info" },
   "maintenance.partitions.ensured": { level: "info" },
+  // One line per table-month, never one per tenant object: a month with five thousand
+  // tenants would otherwise be five thousand lines.
   "maintenance.partition.archived": { level: "info" },
-  // Distinct from `archived`, which means detached, uploaded, verified and *then*
-  // dropped. This one is a partition whose rows were never worth keeping.
+  // Only ever behind a verified object since retention became archive-then-drop. A
+  // partition named here is one cold storage already holds.
   "maintenance.partition.dropped": { level: "info" },
   // Counts what exists, never what the last run created: a run that creates zero is the
   // healthy case and the starved case alike.
@@ -75,6 +77,9 @@ export const coreEvents = {
   "analytics.projection.completed": { level: "debug" },
   "analytics.projection.failed": { level: "error" },
   "analytics.projection.lagged": { level: "warn" },
+  // A tenant-month that left Postgres without reaching ClickHouse. Recorded rather than
+  // blocking the drop: a forgotten switch costs a known hole, never an unbounded table.
+  "analytics.projection.gap": { level: "warn" },
   "analytics.reconciliation.completed": { level: "info" },
   "analytics.reconciliation.drifted": { level: "error" },
 } as const satisfies Record<string, EventMeta>;

@@ -10,13 +10,13 @@ import {
   InMemoryRealtimeSubscriber,
   InMemoryStorageGateway,
   InMemoryVectorStore,
-  RecordingActivityArchiveGateway,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
   RecordingDomainEventPublisher,
   RecordingEmailSender,
   RecordingMailPublisher,
   RecordingMaintenanceGateway,
+  RecordingPartitionArchiveGateway,
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
   StubEmbeddingProvider,
@@ -24,7 +24,6 @@ import {
   StubSessionResolver,
 } from "../fake/index.js";
 import {
-  type ActivityArchiveGateway,
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
@@ -43,6 +42,7 @@ import {
   type MaintenanceGateway,
   type OrganizationReader,
   type OutboxGateway,
+  type PartitionArchiveGateway,
   type QueuePublisher,
   type RealtimePublisher,
   type RealtimeSubscriber,
@@ -59,7 +59,6 @@ import {
 // a compile error here until it is written.
 export interface TestPorts {
   readonly activity: ActivityLogger;
-  readonly activityArchive: ActivityArchiveGateway;
   readonly activityReplay: ActivityReplayReader;
   // Present even though the real container leaves them absent: a test has no opinion
   // about the deployment, and a consumer spec needs both sides.
@@ -76,6 +75,7 @@ export interface TestPorts {
   readonly maintenance: MaintenanceGateway;
   readonly organizations: OrganizationReader;
   readonly outbox: OutboxGateway;
+  readonly partitionArchive: PartitionArchiveGateway;
   readonly realtime: RealtimePublisher;
   readonly realtimeSubscriber: RealtimeSubscriber;
   readonly queue: QueuePublisher;
@@ -109,7 +109,6 @@ export class TestContainer {
       authorizer: new Authorizer(),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
-      activityArchive: overrides.activityArchive ?? new RecordingActivityArchiveGateway(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
@@ -126,6 +125,7 @@ export class TestContainer {
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       organizations: overrides.organizations ?? new InMemoryOrganizationReader(),
       outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
+      partitionArchive: overrides.partitionArchive ?? new RecordingPartitionArchiveGateway(),
       // Deliberately not connected to each other. A spec that wants a published frame to
       // arrive builds one `InMemoryRealtimeHub` and passes both fakes over it.
       realtime: overrides.realtime ?? new RecordingRealtimePublisher(),

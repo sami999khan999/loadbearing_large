@@ -30,13 +30,13 @@ export interface PartitionedTableEntry {
 // Frozen at module load for the reason `QueueName` gives: `static readonly` freezes the
 // binding and not the array.
 const ALL = Object.freeze([
-  // Never pruned here. `archive` detaches it, verifies the upload and *then* drops it;
-  // a calendar drop beside that would race the verification.
+  // Thirteen months keeps a full year queryable in Postgres and archives the month that
+  // has just fallen out of it. Every month leaves behind a verified object first.
   Object.freeze({
     name: ACTIVITY_LOG,
     tenantKey: "organization_id",
     column: "occurred_at",
-    retentionMonths: null,
+    retentionMonths: 13,
   }),
   // The one table with no tenant level. The drain polls it once a second and must not
   // touch a partition per tenant to do it.

@@ -9,7 +9,6 @@ import {
 import { Env } from "../env.js";
 import type { Container, RedisConnection, Worker } from "../import.js";
 import {
-  ArchiveSchedule,
   CleanupSchedule,
   DigestSchedule,
   OutboxDrainSchedule,
@@ -91,7 +90,6 @@ export class WorkerBootstrap {
     await new DigestSchedule(this.container, this.redis.queueClient()).register();
     await new PartitionsSchedule(this.container, this.redis.queueClient()).register();
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
-    await new ArchiveSchedule(this.container, this.redis.queueClient()).register();
 
     if (this.container.hasProjector) {
       await new ProjectionSchedule(this.container, this.redis.queueClient()).register();

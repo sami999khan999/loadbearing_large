@@ -148,7 +148,7 @@ describe("Container — the derived stores", () => {
     const container = build();
 
     expect(container.activityReplay).toBeDefined();
-    expect(container.activityArchive).toBeDefined();
+    expect(container.partitionArchive).toBeDefined();
   });
 });
 

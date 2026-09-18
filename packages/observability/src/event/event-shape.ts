@@ -68,12 +68,12 @@ export interface EventShape {
     readonly months: number;
   };
   readonly "maintenance.partition.archived": {
-    // Whose month it was. A partition is per tenant per month since `0023`, so there is
-    // no global month left to archive.
-    readonly organizationId: string;
+    readonly table: string;
     readonly period: string;
-    readonly key: string;
-    readonly rowCount: number;
+    // Objects written, which is tenants with rows in that month — not tenants, and not
+    // partitions: an empty tenant-month is dropped and writes none.
+    readonly objects: number;
+    readonly rows: number;
   };
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
   readonly "partition.runway.low": {
@@ -149,6 +149,12 @@ export interface EventShape {
     // The threshold that fired, so the line explains itself without the reader having
     // to find the constant.
     readonly thresholdSeconds: number;
+  };
+  readonly "analytics.projection.gap": {
+    readonly period: string;
+    // `disabled` is no projector at all; `behind` is one that has not caught up to the
+    // end of the month. The first is a decision, the second is a backlog.
+    readonly reason: string;
   };
   readonly "analytics.reconciliation.completed": {
     readonly days: number;
