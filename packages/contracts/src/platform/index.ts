@@ -3,6 +3,8 @@ export {
   PlatformContract,
   type PlatformHealthDto,
   type PlatformStatusDto,
+  type RestoreInput,
+  type RestoreRequestedDto,
   type RetentionDto,
   type RetentionEntryDto,
   type RetentionPreviewDto,

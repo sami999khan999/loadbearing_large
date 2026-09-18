@@ -34,6 +34,7 @@ export {
   type NotificationDto,
   type NotificationPreferenceDto,
   Password,
+  type RestoreRequestedDto,
   type RetentionEntryDto,
   type RetentionPreviewDto,
   type RoleDto,

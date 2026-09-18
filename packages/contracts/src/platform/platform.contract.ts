@@ -67,6 +67,21 @@ export class PlatformContract {
     }),
   });
 
+  public static readonly restore = z.object({
+    tableName: z.string().min(1).max(64),
+    // The first of a month, which is what `partition_archive` stores and what a replay
+    // is asked for. A mid-month date names no partition.
+    period: z.string().regex(/^\d{4}-\d{2}-01$/),
+    // Absent restores every tenant that has a row for the month, which is what an
+    // operator means by "restore March".
+    organizationId: Identifiers.organizationId.optional(),
+  });
+
+  public static readonly restoreRequested = z.object({
+    jobId: z.string().min(1),
+    objects: z.number().int(),
+  });
+
   public static readonly previewQuery = z.object({
     tableName: z.string().min(1).max(64),
     hotMonths: z.coerce.number().int().min(1).max(600),
@@ -107,6 +122,8 @@ export type ColdModeDto = z.infer<typeof PlatformContract.coldMode>;
 export type PlatformHealthDto = z.infer<typeof PlatformContract.health>;
 export type RetentionDto = z.infer<typeof PlatformContract.retention>;
 export type RetentionEntryDto = z.infer<typeof PlatformContract.retentionEntry>;
+export type RestoreInput = z.infer<typeof PlatformContract.restore>;
+export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequested>;
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type PlatformStatusDto = z.infer<typeof PlatformContract.status>;

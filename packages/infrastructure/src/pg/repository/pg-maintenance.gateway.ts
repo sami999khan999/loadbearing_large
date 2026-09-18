@@ -194,6 +194,32 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     return dropped;
   }
 
+  // One `attach`, and the bounds are derived from a `Date` rather than passed: a caller
+  // that could name its own range could attach a month over another month's rows.
+  public async attachMonthlyPartition(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    period: Date,
+    scratchTable: string,
+  ): Promise<void> {
+    const parent = this.monthParent(table, organizationId);
+    const from = PgMaintenanceGateway.iso(PgMaintenanceGateway.monthStart(period, 0));
+    const to = PgMaintenanceGateway.iso(PgMaintenanceGateway.monthStart(period, 1));
+
+    // Validated before it reaches `sql.raw`: the name comes from the archive gateway
+    // and is derived, but this is the boundary and derivation is not a guarantee.
+    if (!/^[a-z0-9_]+$/.test(scratchTable)) {
+      throw new InternalError(new Error(`Not a table name: ${scratchTable}`));
+    }
+
+    await this.db.execute(
+      sql.raw(
+        `alter table ${parent} attach partition ${scratchTable} ` +
+          `for values from ('${from}') to ('${to}')`,
+      ),
+    );
+  }
+
   // Across every tenant when `organizationId` is null, and the same parse the drop uses
   // off the same read — so the two cannot disagree about what a child is.
   public async partitionsBefore(

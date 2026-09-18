@@ -42,6 +42,7 @@ describe("TestContainer", () => {
       "cache",
       "capabilities",
       "clock",
+      "coldArchive",
       "content",
       "email",
       "embeddings",

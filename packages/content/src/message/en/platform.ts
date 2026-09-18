@@ -48,6 +48,15 @@ export const platform = {
   // the honest word and not a hedge.
   "platform.retention.preview.summary":
     "The next run drops {partitions} partitions, about {rows} rows, {bytes} bytes.",
+  "platform.restore.title": "Restore a month",
+  // Both outcomes, because which applies is not the operator's to choose: inside the
+  // hot window it goes live, outside it stays where retention will not fight it.
+  "platform.restore.description":
+    "Reads a month back out of cold storage. Inside the table's hot window it is attached and live again; outside it, it lands in a scratch table and stays there — raise the hot months first if you need it live.",
+  "platform.restore.table": "Table",
+  "platform.restore.period": "Month",
+  "platform.restore.submit": "Restore",
+  "platform.restore.queued": "Queued as {jobId}. {objects} objects to read back.",
   "platform.retention.drift":
     "The store holds something else. The nightly run will put this right; it now holds {actual}.",
 } as const;

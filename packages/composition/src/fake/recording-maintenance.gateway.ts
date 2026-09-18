@@ -19,6 +19,13 @@ export interface DroppedPartitions {
   readonly cutoff: Date;
 }
 
+export interface Attachment {
+  readonly table: PartitionedTableName;
+  readonly organizationId: OrganizationId | null;
+  readonly period: Date;
+  readonly scratchTable: string;
+}
+
 export interface RunwayCheck {
   readonly table: PartitionedTableName;
   readonly organizationId: OrganizationId | null;
@@ -34,6 +41,7 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   private readonly runwayChecks: RunwayCheck[] = [];
   private readonly tenantRuns: OrganizationId[] = [];
   private readonly tenantDrops: OrganizationId[] = [];
+  private readonly attachments: Attachment[] = [];
 
   public constructor(
     private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
@@ -90,6 +98,20 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   ): Promise<readonly string[]> {
     this.dropRuns.push({ table, organizationId, cutoff });
     return Promise.resolve([]);
+  }
+
+  public override attachMonthlyPartition(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    period: Date,
+    scratchTable: string,
+  ): Promise<void> {
+    this.attachments.push({ table, organizationId, period, scratchTable });
+    return Promise.resolve();
+  }
+
+  public attached(): readonly Attachment[] {
+    return this.attachments;
   }
 
   public override partitionsBefore(): Promise<readonly PartitionEstimate[]> {

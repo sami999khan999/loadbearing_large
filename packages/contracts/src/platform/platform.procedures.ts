@@ -22,6 +22,13 @@ export class PlatformProcedures {
     .input(PlatformContract.previewQuery)
     .output(PlatformContract.retentionPreview);
 
+  // `POST` and a job id back: the work is a stream out of S3 and an insert per batch,
+  // and a request that waited for it would hold a connection open for minutes.
+  public static readonly restorePartition = oc
+    .route({ method: "POST", path: "/platform/retention/restore" })
+    .input(PlatformContract.restore)
+    .output(PlatformContract.restoreRequested);
+
   // `PUT` rather than `PATCH`: the body carries every field of one row, and a partial
   // retention change is not a thing an operator means.
   public static readonly updateRetention = oc
@@ -35,6 +42,7 @@ export class PlatformProcedures {
     status: PlatformProcedures.status,
     listRetention: PlatformProcedures.listRetention,
     previewRetention: PlatformProcedures.previewRetention,
+    restorePartition: PlatformProcedures.restorePartition,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

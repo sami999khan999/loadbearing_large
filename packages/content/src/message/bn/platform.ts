@@ -39,5 +39,12 @@ export const platform = {
   "platform.retention.preview.none": "পরবর্তী চালনায় কিছুই বাদ যাবে না।",
   "platform.retention.preview.summary":
     "পরবর্তী চালনা {partitions}টি পার্টিশন, আনুমানিক {rows}টি সারি, {bytes} বাইট বাদ দেবে।",
+  "platform.restore.title": "একটি মাস ফিরিয়ে আনুন",
+  "platform.restore.description":
+    "কোল্ড স্টোরেজ থেকে একটি মাস পড়ে আনে। টেবিলের হট উইন্ডোর ভিতরে হলে এটি সংযুক্ত হয়ে আবার সক্রিয় হয়; বাইরে হলে একটি স্ক্র্যাচ টেবিলে থাকে — সক্রিয় করতে হলে আগে হট মাস বাড়ান।",
+  "platform.restore.table": "টেবিল",
+  "platform.restore.period": "মাস",
+  "platform.restore.submit": "ফিরিয়ে আনুন",
+  "platform.restore.queued": "{jobId} হিসেবে সারিবদ্ধ। {objects}টি অবজেক্ট পড়া হবে।",
   "platform.retention.drift": "স্টোরে অন্য কিছু আছে। রাতের কাজ এটি ঠিক করবে; এখন সেখানে আছে {actual}।",
 } as const;

@@ -8,6 +8,7 @@ import {
   NotFoundError,
   type OrganizationId,
   once,
+  type PartitionArchiveEntry,
   PartitionArchiveGateway,
   PartitionedTable,
   type PartitionedTableEntry,
@@ -51,6 +52,20 @@ type ArchiveRow = {
 type ChildRow = {
   parent: string;
   name: string;
+};
+
+// `bytes` comes back as text because it is a `bigint`: the driver would hand back a
+// string anyway, and asking for one is what makes that explicit.
+type EntryRow = {
+  organization_id: string;
+  table_name: string;
+  period: string;
+  object_key: string;
+  row_count: number;
+  bytes: string;
+  checksum: string;
+  action_counts: Record<string, number>;
+  projected_at: string | null;
 };
 
 interface Cursor {
@@ -288,6 +303,37 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     );
 
     return result.rowCount ?? 0;
+  }
+
+  // Ordered by tenant, so a restore of a whole month walks them in a stable order and
+  // two runs log the same sequence.
+  public async entriesFor(
+    table: PartitionedTableName,
+    period: string,
+    organizationId?: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]> {
+    const tenant = organizationId ? sql`and organization_id = ${organizationId}::uuid` : sql``;
+
+    const rows = await this.db.execute<EntryRow>(
+      sql`select organization_id::text as organization_id, table_name, period::text as period,
+                 object_key, row_count, bytes::bigint::text as bytes, checksum,
+                 action_counts, projected_at
+          from partition_archive
+          where table_name = ${table} and period = ${period}::date ${tenant}
+          order by organization_id`,
+    );
+
+    return rows.rows.map((row) => ({
+      organizationId: row.organization_id as OrganizationId,
+      tableName: table,
+      period: row.period,
+      objectKey: row.object_key,
+      rowCount: Number(row.row_count),
+      bytes: Number(row.bytes),
+      checksum: row.checksum,
+      actionCounts: row.action_counts,
+      projectedAt: row.projected_at === null ? null : new Date(row.projected_at),
+    }));
   }
 
   private async objectKeyOf(

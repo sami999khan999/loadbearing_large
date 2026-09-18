@@ -3,6 +3,7 @@ import {
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
+  InMemoryColdArchiveReader,
   InMemoryLogReader,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
@@ -31,6 +32,7 @@ import {
   Authorizer,
   type CacheStore,
   type CapabilityInvalidator,
+  type ColdArchiveReader,
   type ContentSource,
   type DomainEventPublisher,
   type EmailSender,
@@ -67,6 +69,7 @@ export interface TestPorts {
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
   readonly capabilities: CapabilityInvalidator;
+  readonly coldArchive: ColdArchiveReader;
   readonly content: ContentSource;
   readonly events: DomainEventPublisher;
   readonly email: EmailSender;
@@ -116,6 +119,7 @@ export class TestContainer {
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),
+      coldArchive: overrides.coldArchive ?? new InMemoryColdArchiveReader(),
       // The one port whose real implementation is the test double, and `SERVER_CATALOG`
       // like `Container`: the client default carries no `email` namespace.
       content: overrides.content ?? new StaticContentSource(SERVER_CATALOG),

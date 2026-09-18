@@ -2,6 +2,7 @@ export { DirectUnitOfWork } from "./direct.unit-of-work.js";
 export { InMemoryActivityReplayReader } from "./in-memory-activity-replay.reader.js";
 export { InMemoryAnalyticsProjector } from "./in-memory-analytics.projector.js";
 export { InMemoryCacheStore } from "./in-memory-cache.store.js";
+export { InMemoryColdArchiveReader } from "./in-memory-cold-archive.reader.js";
 export { InMemoryLogReader } from "./in-memory-log.reader.js";
 export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
@@ -20,6 +21,7 @@ export {
 export { RecordingEmailSender } from "./recording-email.sender.js";
 export { type PublishedMail, RecordingMailPublisher } from "./recording-mail.publisher.js";
 export {
+  type Attachment,
   type DroppedPartitions,
   type EnsuredPartitions,
   RecordingMaintenanceGateway,

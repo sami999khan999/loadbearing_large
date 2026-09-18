@@ -45,6 +45,8 @@ export type {
   QueuedDocumentDto,
   RealtimeEventName,
   RealtimeMessage,
+  RestoreInput,
+  RestoreRequestedDto,
   RetentionUpdateInput,
   RevokeApiKeyInput,
   RevokeInvitationInput,

@@ -1,5 +1,6 @@
 import type { OrganizationId } from "../import.js";
 import type { PartitionedTableName } from "../primitive/index.js";
+import type { PartitionArchiveEntry } from "./cold-archive.reader.js";
 
 // One tenant's month, as it landed in cold storage. `bytes` is the stored size, which is
 // the only place this system records what an object costs.
@@ -69,4 +70,12 @@ export abstract class PartitionArchiveGateway {
   // Rows only. The bucket's lifecycle rule deletes the object, and a row still pointing
   // at one it already expired is a `NotFoundError` on a read that should be empty.
   public abstract forget(table: PartitionedTableName, before: Date): Promise<number>;
+
+  // The index, read back. Every tenant that has a row for the month when no
+  // organization is named, which is what an operator means by "restore March".
+  public abstract entriesFor(
+    table: PartitionedTableName,
+    period: string,
+    organizationId?: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]>;
 }

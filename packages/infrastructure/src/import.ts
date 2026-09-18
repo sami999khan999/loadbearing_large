@@ -32,6 +32,7 @@ export {
   type ActivityLogger,
   type ActivityRecord,
   type ActivityReplayReader,
+  ActivitySubject,
   type AnalyticsProjector,
   type ApiKeyPage,
   type ApiKeyRecord,
@@ -42,6 +43,7 @@ export {
   CacheStore,
   type CancellationSignal,
   type CapabilityRepository,
+  ColdArchiveReader,
   type ConversationMemberRecord,
   type ConversationPage,
   type ConversationRecord,
@@ -81,6 +83,7 @@ export {
   type NotificationRepository,
   type OrganizationReader,
   type OutboxGateway,
+  type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionEstimate,
   // A value, not a type: the seed and the maintenance gateway both walk the allowlist.

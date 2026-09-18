@@ -2,6 +2,7 @@ import {
   type ArchivedObject,
   type ArchivedPartition,
   type OrganizationId,
+  type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionedTableName,
   type RestoredMonth,
@@ -22,6 +23,7 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly requests: ArchiveRequest[] = [];
   private readonly restores: RestoreRequest[] = [];
   private readonly stamps: RestoreRequest[] = [];
+  private entries: readonly PartitionArchiveEntry[] = [];
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
 
@@ -67,6 +69,27 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   ): Promise<void> {
     this.stamps.push({ table, period, organizationId });
     return Promise.resolve();
+  }
+
+  // Staged rather than derived: a spec that wants a restore to find something says so,
+  // and one that does not gets the empty answer a month nobody archived would give.
+  public stage(entries: readonly PartitionArchiveEntry[]): void {
+    this.entries = entries;
+  }
+
+  public override entriesFor(
+    table: PartitionedTableName,
+    period: string,
+    organizationId?: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]> {
+    return Promise.resolve(
+      this.entries.filter(
+        (entry) =>
+          entry.tableName === table &&
+          entry.period === period &&
+          (!organizationId || entry.organizationId === organizationId),
+      ),
+    );
   }
 
   public override forget(table: PartitionedTableName, before: Date): Promise<number> {

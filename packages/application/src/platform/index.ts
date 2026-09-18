@@ -16,6 +16,11 @@ export {
   PreviewRetentionChangeUseCase,
   type RetentionPreview,
 } from "./preview-retention-change.use-case.js";
+export {
+  type RestorePartitionInput,
+  RestorePartitionUseCase,
+  type RestoreRequested,
+} from "./restore-partition.use-case.js";
 export { RetentionRules } from "./retention.rules.js";
 export {
   type ColdMode,

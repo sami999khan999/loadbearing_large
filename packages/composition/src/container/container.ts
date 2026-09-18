@@ -15,6 +15,7 @@ import {
   ClickHouseAnalyticsProjector,
   ClickHouseConnection,
   type Clock,
+  type ColdArchiveReader,
   type ContentSource,
   ConversationAccess,
   CountUnreadNotificationsUseCase,
@@ -109,10 +110,12 @@ import {
   RedisRealtimeSubscriber,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
+  RestorePartitionUseCase,
   type RetentionPolicyRepository,
   RevokeApiKeyUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
+  S3ColdArchiveReader,
   S3StorageGateway,
   S3StoragePolicyGateway,
   SERVER_CATALOG,
@@ -333,11 +336,15 @@ export class Container {
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
+    readonly restorePartition: RestorePartitionUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
   // the worker's daily reconcile are its only two readers.
   public readonly storagePolicy: StoragePolicyGateway;
+  // Cold storage read back. Whole-object and verified, which is what makes a restore
+  // and a re-projection read the same bytes the archive wrote.
+  public readonly coldArchive: ColdArchiveReader;
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -401,6 +408,7 @@ export class Container {
     this.cache = new RedisCacheStore(this.redis.client(), this.logger);
     this.storage = new S3StorageGateway(config.storage);
     this.storagePolicy = new S3StoragePolicyGateway(config.storage);
+    this.coldArchive = new S3ColdArchiveReader(this.storage);
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
@@ -739,6 +747,13 @@ export class Container {
         this.authorizer,
         this.maintenance,
         this.clock,
+      ),
+      restorePartition: new RestorePartitionUseCase(
+        this.authorizer,
+        this.partitionArchive,
+        this.queuePublisher,
+        this.platform,
+        this.activity,
       ),
       updateRetention: new UpdateRetentionPolicyUseCase(
         this.authorizer,

@@ -62,6 +62,7 @@ export {
   PlatformStatusPanel,
   ProfileForm,
   ResetPasswordForm,
+  RestorePartitionPanel,
   RetentionPolicyForm,
   RoleList,
   RoleMatrix,
@@ -102,6 +103,7 @@ export {
   RealtimeProvider,
   RoleQueries,
   useApiClient,
+  useAppQuery,
   useConversationStream,
 } from "@loadbearing/query";
 

@@ -3,7 +3,10 @@ import {
   Can,
   type ClientNamespace,
   PlatformQueries,
+  RestorePartitionPanel,
   RetentionPolicyForm,
+  useApiClient,
+  useAppQuery,
   useCapabilities,
   useMessages,
 } from "~/import.js";
@@ -34,6 +37,23 @@ function PlatformRetention() {
       <Can permission="platform.retention.manage" capabilities={capabilities}>
         <RetentionPolicyForm />
       </Can>
+      {
+        // Beside the editor rather than on its own page: restoring a month is the thing
+        // an operator reaches for right after reading how long months are kept.
+        <Can permission="platform.retention.manage" capabilities={capabilities}>
+          <RestoreSection />
+        </Can>
+      }
     </main>
   );
+}
+
+// The table list the panel offers comes from the same query the form reads, so the
+// loader has already filled it and this adds no round trip.
+function RestoreSection() {
+  const client = useApiClient();
+  const retention = useAppQuery(PlatformQueries.retention(client));
+
+  if (!retention.isSuccess) return null;
+  return <RestorePartitionPanel tables={retention.data.postgres} />;
 }

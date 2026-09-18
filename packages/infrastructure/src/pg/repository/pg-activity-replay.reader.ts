@@ -1,6 +1,7 @@
 import {
   type ActivityRecord,
   type ActivityReplayReader,
+  ActivitySubject,
   and,
   asc,
   type DailyCount,
@@ -59,7 +60,7 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
       action: row.action,
       // Lifted out of the bag because the derived store indexes on it, and JSON
       // extraction in a column-store ORDER BY is what makes a query slow.
-      subjectId: PgActivityReplayReader.subjectOf(row.payload),
+      subjectId: ActivitySubject.of(row.payload),
       payload: row.payload,
     }));
   }
@@ -90,15 +91,5 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
       .orderBy(sql`1`);
 
     return rows;
-  }
-
-  // A convention over the payload, not a column. Reading it here keeps the guess in one
-  // place, and a payload that names no subject projects a null.
-  private static subjectOf(payload: Readonly<Record<string, unknown>>): string | null {
-    for (const key of ["subjectId", "taskId", "goalId", "documentId", "userId"]) {
-      const value = payload[key];
-      if (typeof value === "string" && value.length > 0) return value;
-    }
-    return null;
   }
 }

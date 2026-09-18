@@ -102,6 +102,15 @@ export interface EventShape {
   readonly "analytics.retention.applied": {
     readonly expression: string;
   };
+  readonly "cold.partition.restored": {
+    readonly table: string;
+    readonly period: string;
+    readonly organizationId: string;
+    readonly rows: number;
+    // Where it landed. `false` is the scratch table, which is every restore outside the
+    // table's hot window — and the screen says to raise hot months first.
+    readonly attached: boolean;
+  };
   readonly "dependency.request.failed": {
     readonly dependency: string;
     readonly status: number;

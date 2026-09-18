@@ -8,6 +8,10 @@ export {
 export { AnalyticsProjector } from "./analytics.projector.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
+export {
+  ColdArchiveReader,
+  type PartitionArchiveEntry,
+} from "./cold-archive.reader.js";
 export { DomainEventPublisher } from "./domain-event.publisher.js";
 export { type EmailMessage, type EmailReceipt, EmailSender } from "./email.sender.js";
 export { EmbeddingProvider } from "./embedding.provider.js";

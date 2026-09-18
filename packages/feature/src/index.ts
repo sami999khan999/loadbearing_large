@@ -91,6 +91,8 @@ export {
 } from "./organization/index.js";
 export {
   PlatformStatusPanel,
+  RestorePartitionPanel,
+  type RestorePartitionPanelProps,
   RetentionPolicyForm,
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,

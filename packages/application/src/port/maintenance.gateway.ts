@@ -60,6 +60,15 @@ export abstract class MaintenanceGateway {
     cutoff: Date,
   ): Promise<readonly string[]>;
 
+  // The one case where re-attaching a restored month is right: inside the hot window,
+  // so the retention pass will not argue with it. Elsewhere a restore stays scratch.
+  public abstract attachMonthlyPartition(
+    table: PartitionedTableName,
+    organizationId: OrganizationId | null,
+    period: Date,
+    scratchTable: string,
+  ): Promise<void>;
+
   // The read behind the retention preview: every month partition older than the cutoff,
   // with its size. Across every tenant when `organizationId` is null.
   public abstract partitionsBefore(

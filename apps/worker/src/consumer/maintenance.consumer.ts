@@ -13,6 +13,14 @@ import {
   Worker,
 } from "../import.js";
 
+// What `cold-restore` carries. A closed shape rather than the job's `unknown`, checked
+// at the one place the payload crosses from the queue into typed code.
+interface RestoreJob {
+  readonly table: PartitionedTableName;
+  readonly period: string;
+  readonly organizationId: OrganizationId | null;
+}
+
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
 // accumulating silently. See docs/reference/consumers.md.
 export class MaintenanceConsumer {
@@ -86,8 +94,61 @@ export class MaintenanceConsumer {
         return this.partitions();
       case "retention":
         return this.retention();
+      case "cold-restore":
+        return this.restore(job.data as RestoreJob);
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
+    }
+  }
+
+  // One tenant-month per object, into a scratch table — `17.4`'s rule, and the one
+  // case where attaching is right is below.
+  private async restore(data: RestoreJob): Promise<void> {
+    const table = data.table;
+    const period = new Date(`${data.period}T00:00:00.000Z`);
+    const entries = await this.container.partitionArchive.entriesFor(
+      table,
+      data.period,
+      data.organizationId ?? undefined,
+    );
+
+    // The hot window, from the row if there is one and the allowlist if not — the same
+    // resolution `prune()` does, because the two have to agree about what "hot" means.
+    const policy = await this.container.retentionPolicies.findBy("postgres", table);
+    const months = policy?.hotMonths ?? PartitionedTable.byName(table).retentionMonths;
+    const now = this.container.clock.now();
+    const cutoff =
+      months === null
+        ? null
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));
+
+    // Inside the window, the retention pass will not argue with it. Outside, the
+    // scratch table stays as evidence — nothing sweeps it, on purpose.
+    const inWindow = cutoff === null || period.getTime() >= cutoff.getTime();
+
+    for (const entry of entries) {
+      const restored = await this.container.partitionArchive.restore(
+        table,
+        period,
+        entry.organizationId,
+      );
+
+      if (inWindow) {
+        await this.container.maintenance.attachMonthlyPartition(
+          table,
+          PartitionedTable.byName(table).tenantKey ? entry.organizationId : null,
+          period,
+          restored.scratchTable,
+        );
+      }
+
+      this.container.logger.emit("cold.partition.restored", {
+        table,
+        period: restored.period,
+        organizationId: entry.organizationId,
+        rows: restored.rowCount,
+        attached: inWindow,
+      });
     }
   }
 

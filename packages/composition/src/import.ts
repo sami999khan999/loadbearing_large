@@ -15,6 +15,7 @@ export {
   type CancellationSignal,
   CapabilityInvalidator,
   ChangeMemberRoleUseCase,
+  ColdArchiveReader,
   ConversationAccess,
   CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
@@ -68,6 +69,7 @@ export {
   NotificationSubscriber,
   OrganizationReader,
   OutboxGateway,
+  type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionEstimate,
   type PartitionedTableName,
@@ -91,6 +93,7 @@ export {
   type RequestHeaders,
   type ResolvedSession,
   type RestoredMonth,
+  RestorePartitionUseCase,
   type RetentionPolicyRecord,
   RetentionPolicyRepository,
   RetentionRules,
@@ -167,7 +170,7 @@ export type {
 export { type Clock, FixedClock, ServerOnly, SystemClock, Uuid } from "@loadbearing/core";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
-export { NotFoundError } from "@loadbearing/errors";
+export { ConflictError, NotFoundError } from "@loadbearing/errors";
 
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 // Every concrete adapter, Postgres included — one block, because one package holds the
@@ -210,6 +213,7 @@ export {
   RedisConnection,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  S3ColdArchiveReader,
   S3StorageGateway,
   S3StoragePolicyGateway,
   SmtpEmailSender,

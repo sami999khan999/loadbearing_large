@@ -122,6 +122,9 @@ export {
   type PreviewedPartition,
   type PreviewRetentionChangeInput,
   PreviewRetentionChangeUseCase,
+  type RestorePartitionInput,
+  RestorePartitionUseCase,
+  type RestoreRequested,
   type RetentionEntry,
   type RetentionPolicies,
   type RetentionPolicyRecord,
@@ -141,6 +144,7 @@ export {
   type ArchivedPartition,
   CacheStore,
   CapabilityInvalidator,
+  ColdArchiveReader,
   type DailyCount,
   type DocumentChunk,
   DomainEventPublisher,
@@ -159,6 +163,7 @@ export {
   MaintenanceGateway,
   OrganizationReader,
   OutboxGateway,
+  type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionEstimate,
   type ProjectionCheckpoint,
@@ -179,6 +184,7 @@ export {
   VectorStore,
 } from "./port/index.js";
 export {
+  ActivitySubject,
   Authorizer,
   type CancellationSignal,
   type PartitionColumn,

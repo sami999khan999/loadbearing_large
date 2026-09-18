@@ -13,12 +13,14 @@ export {
 // The fakes ship beside the harness, because `TestContainer.build()` hands back abstract
 // types: a spec constructs the fake it wants to assert on and passes it in.
 export {
+  type Attachment,
   DirectUnitOfWork,
   type DroppedPartitions,
   type EnsuredPartitions,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
   InMemoryCacheStore,
+  InMemoryColdArchiveReader,
   InMemoryLogReader,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,

@@ -18,6 +18,11 @@ export class PlatformRouter {
       context.container.platformAdmin.previewRetention.execute(context.principal, input),
   );
 
+  public static readonly restorePartition = authed.platform.restorePartition.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.restorePartition.execute(context.principal, input),
+  );
+
   // `acknowledged` rather than the row: the screen refetches the list, which also
   // carries what the bucket and ClickHouse now hold, and one of those may have drifted.
   public static readonly updateRetention = authed.platform.updateRetention.handler(
@@ -33,6 +38,7 @@ export class PlatformRouter {
     status: PlatformRouter.status,
     listRetention: PlatformRouter.listRetention,
     previewRetention: PlatformRouter.previewRetention,
+    restorePartition: PlatformRouter.restorePartition,
     updateRetention: PlatformRouter.updateRetention,
   } as const;
 }

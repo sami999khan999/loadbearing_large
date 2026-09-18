@@ -57,5 +57,11 @@ export {
   RedisRealtimeSubscriber,
   type RedisRole,
 } from "./redis/index.js";
-export { type S3Config, S3StorageGateway, S3StoragePolicyGateway, StorageKey } from "./s3/index.js";
+export {
+  S3ColdArchiveReader,
+  type S3Config,
+  S3StorageGateway,
+  S3StoragePolicyGateway,
+  StorageKey,
+} from "./s3/index.js";
 export { type SmtpConfig, SmtpEmailSender } from "./smtp/index.js";

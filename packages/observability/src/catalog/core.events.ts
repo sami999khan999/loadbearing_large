@@ -51,6 +51,9 @@ export const coreEvents = {
   // The ClickHouse TTL, same shape. Separate from the two above because it is a
   // different store with a different failure — `MODIFY TTL` rewrites every part.
   "analytics.retention.applied": { level: "info" },
+  // One per tenant-month restored. Into a scratch table unless the month is inside
+  // the hot window, which the line says so a reader knows where to look.
+  "cold.partition.restored": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.
