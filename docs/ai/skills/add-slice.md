@@ -142,6 +142,11 @@ src/<subject>/<verb>-<subject>.use-case.ts    -> <Verb><Subject>UseCase
   enforces an outcome. Mixing them is how a UI check silently becomes the only check.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate belongs in the
   analytics store, read through a port of its own rather than from a use-case.
+- **Declare the action before you record it.** `ActivityLogger.record` takes `ActivityAction`, the
+  key union over `ACTIVITY_ACTIONS`, so a new audit action is a line in
+  `packages/contracts/src/catalog/<slice>.actions.ts` first — past tense, with a label for the
+  projection screen — and the call site compiles second. One call site emitting two actions
+  (deactivate / reactivate) declares both.
 
 ### 8 — Client data (`packages/api-client`, `packages/query`)
 

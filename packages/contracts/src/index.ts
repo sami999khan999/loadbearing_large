@@ -118,6 +118,9 @@ export {
   type RealtimeMessage,
 } from "./realtime/index.js";
 export {
+  type ActivityAction,
+  type ActivityActionMeta,
+  ActivityActions,
   type DomainEvent,
   type DomainEventInput,
   type DomainEventName,

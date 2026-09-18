@@ -38,11 +38,13 @@ packages/contracts/
 │   ├── procedure/
 │   │   └── index.ts                 → contract, AppContract   ← merges every slice's procedures
 │   ├── catalog/
-│   │   ├── index.ts                 → PROCEDURE_PERMISSIONS, DOMAIN_EVENTS
+│   │   ├── index.ts                 → PROCEDURE_PERMISSIONS, DOMAIN_EVENTS, ACTIVITY_ACTIONS
 │   │   ├── <subject>.permissions.ts ← one fragment per slice, procedure path → key
-│   │   └── <subject>.events.ts      ← one fragment per slice, event name → payload schema
+│   │   ├── <subject>.events.ts      ← one fragment per slice, event name → payload schema
+│   │   └── <subject>.actions.ts     ← one fragment per slice, audit action → label
 │   ├── registry/
 │   │   ├── index.ts
+│   │   ├── activity-actions.ts      → ActivityActions, ActivityAction
 │   │   ├── domain-events.ts         → DomainEvents
 │   │   └── procedure-permissions.ts → ProcedurePermissions
 │   ├── mail/                        ← a manifest, not a slice: no contract, no procedures
@@ -159,6 +161,20 @@ in two packages. It is `DOMAIN_EVENTS` and not `EVENT_CATALOG`: that name belong
 fact with a schema and a `published_at`; a log event code is a diagnostic that may be lost.
 [Vocabulary](../../../docs/opinions/vocabulary.md) keeps them apart, and a spec asserts every event
 name here is past tense.
+
+## `ActivityActions` is the third of them, and the reason is a row
+
+Same shape again: fragments in `catalog/`, merged, read through a registry class. What makes it
+worth a third catalog rather than a widened second is that `projection_policy` holds **one row per
+action** — whether it reaches ClickHouse and for how long — so an action with no entry is an action
+with no policy, and `ActivityLogger.record` taking `ActivityAction` is what makes that impossible.
+
+A fragment entry carries a `label` and not a schema, which is the whole difference from
+`.events.ts`. A subscriber parses an event payload; nothing parses an audit payload, because the
+audit trail is read by people. The label is what the projection screen renders beside the toggle.
+
+One call site may emit two actions — `set-member-active.use-case.ts` picks between
+`member.deactivated` and `member.reactivated` on the value it is writing — and both are entries.
 
 **`envelope` is a discriminated union built once at module load.** One `parse` turns a job's JSON
 back into a typed event, which is what keeps the consumer from reading `name` first and picking a

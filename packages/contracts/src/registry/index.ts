@@ -1,4 +1,9 @@
 export {
+  type ActivityAction,
+  type ActivityActionMeta,
+  ActivityActions,
+} from "./activity-actions.js";
+export {
   type DomainEvent,
   type DomainEventInput,
   type DomainEventName,

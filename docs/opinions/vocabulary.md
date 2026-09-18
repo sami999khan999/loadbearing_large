@@ -50,6 +50,18 @@ diagnostic in Postgres is a retention bill.
 
 The sinks are the reason: activities go to a partitioned Postgres table inside the transaction and
 are kept for one to two years; log events go to stdout, on to Loki, and are kept for thirty days.
+
+**An activity name is a catalog entry, not a string.** `ACTIVITY_ACTIONS` is merged from
+per-slice fragments in `packages/contracts/src/catalog/`, exactly as `DOMAIN_EVENTS` is, and
+`ActivityLogger.record` takes its key union. That is not tidiness: the projection policy holds one
+row per action deciding whether it reaches the analytics store and for how long, so an action with
+no entry is an action with no policy. Declaring it is the first step, and the compile error at the
+call site is the reminder.
+
+The two catalogs stay separate for the reason above. A domain event carries a payload schema
+because a subscriber parses it; an activity carries a label because a screen renders it. Merging
+them would give every audit row a subscriber and every event a retention policy, and neither is
+what either one is for.
 [Data and scale](data-and-scale.md) has the full four-stream taxonomy.
 
 **A label is not a field.** The four labels above are the *only* ones a log line may be indexed by.

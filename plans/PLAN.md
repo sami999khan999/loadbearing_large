@@ -2358,6 +2358,19 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   the first caller of `presignDownload`. Objects under `export/` expire by a lifecycle rule after
   seven days, the one prefix rule the app adds beside `cold/` (`19.5`). Added 2026-09-17.
   **Docs:** `platform.md`, `cold-storage.md`, `storage-policy.md` (the second prefix), `consumers.md`.
+  `done: 2026-09-19` — `corrected:` the export needed `StorageGateway.list(prefix)`. Nothing
+  records an export in Postgres and a table that could disagree with the bucket would be worse, so
+  the screen lists the prefix and presigns each key for fifteen minutes. `corrected:` fourteen
+  objects, not eight — the seven tenant-owned tables plus seven catalog tables, each its own
+  object, because one combined catalog object would make a manifest entry meaningless. A table the
+  tenant has no rows in writes none. `corrected:` the keyset is `id` for every table but
+  `role_permissions`, whose primary key carries no `id`. `corrected:` the `export/` lifecycle rule
+  is unconditional, so an empty `retention_policy` now writes exactly one rule on a deployment's
+  first `retention` run — two worker specs and the phase Exit clause's "behaves exactly as before"
+  change by that one rule, and both specs now say so.
+  `verified:` against live Postgres and MinIO — six objects for the seeded tenant, every row count
+  matching the manifest, empty tables writing nothing, and `token_hash` null in both
+  `api_keys.ndjson.gz` and `invitations.ndjson.gz`.
 
 **Exit.** With `retention_policy` empty, `pnpm test` and the worker behave exactly as before this
 phase. Set `notifications` hot months to 6 on the screen: the audit row lands under the platform
@@ -2427,21 +2440,8 @@ passed `ActivityActions.isKnown`. `RetentionRules.clickhouseTtlFor` composes one
 clause per row with a TTL and a default clause carrying `WHERE action NOT IN (…)` over those same
 actions (decision D35). The `retention` job applies it exactly as Phase 19 does. `AnalyticsConsumer`
 reads the exclusion list once per run and passes it to all three queries.
-  `done: 2026-09-19` — `corrected:` the export needed `StorageGateway.list(prefix)`. Nothing
-  records an export in Postgres and a table that could disagree with the bucket would be worse, so
-  the screen lists the prefix and presigns each key for fifteen minutes. `corrected:` fourteen
-  objects, not eight — the seven tenant-owned tables plus seven catalog tables, each its own
-  object, because one combined catalog object would make a manifest entry meaningless. A table the
-  tenant has no rows in writes none. `corrected:` the keyset is `id` for every table but
-  `role_permissions`, whose primary key carries no `id`. `corrected:` the `export/` lifecycle rule
-  is unconditional, so an empty `retention_policy` now writes exactly one rule on a deployment's
-  first `retention` run — two worker specs and the phase Exit clause's "behaves exactly as before"
-  change by that one rule, and both specs now say so.
-  `verified:` against live Postgres and MinIO — six objects for the seeded tenant, every row count
-  matching the manifest, empty tables writing nothing, and `token_hash` null in both
-  `api_keys.ndjson.gz` and `invitations.ndjson.gz`.
 
-- [ ] `20.1` **The action catalog** — `contracts/src/catalog/<slice>.actions.ts` for `rbac`, `member`,
+- [x] `20.1` **The action catalog** — `contracts/src/catalog/<slice>.actions.ts` for `rbac`, `member`,
   `apikey`, `ai`, `platform` (the fourteen existing literals plus `platform.policy.changed`), each
   `{ label }` for the screen, merged into `ACTIVITY_ACTIONS` in `catalog/index.ts`;
   `registry/activity-actions.ts` with `ActivityAction`, `ActivityActions.isKnown`, `.all()`.
@@ -2450,6 +2450,13 @@ reads the exclusion list once per run and passes it to all three queries.
   both are entries. `docs/ai/skills/add-slice.md` step 7 gains "declare the action". **Docs:**
   `docs/opinions/vocabulary.md` (activity names are now a catalog, like domain events, and the two
   are still different vocabularies), `packages/contracts/docs/index.md`.
+  `done: 2026-09-19` — twenty-one actions, not fifteen: Phase 19 added six (`tenant.deleted`,
+  `tenant.export_requested`, `tenant.retention.changed`, `platform.restore.requested`,
+  `member.deactivated`, `member.reactivated`) after this item was written, and
+  `organization.created` was never counted. That last one lives in `platform.actions.ts` with a
+  comment: enrolment writes it rather than an admin, but it is the tenant lifecycle, which is what
+  the rest of the fragment is. `verified:` narrowing `record` to `ActivityAction` produced **zero**
+  compile errors, which is the assertion that every literal in the tree is now in the catalog.
 
 - [ ] `20.2` **Schema, port, adapter** — `projection_policy` in `platform.schema.ts`, `TENANT_EXEMPT`
   line with the comment (the projection is cross-tenant by construction),

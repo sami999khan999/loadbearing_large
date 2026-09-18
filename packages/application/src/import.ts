@@ -8,6 +8,8 @@ export type { Locale } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
+  type ActivityAction,
+  ActivityActions,
   type ApiKeyId,
   type ConversationId,
   type ConversationKind,

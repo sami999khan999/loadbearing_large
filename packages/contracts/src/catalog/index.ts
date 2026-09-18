@@ -21,4 +21,5 @@ export const PROCEDURE_PERMISSIONS: Readonly<Record<string, PermissionKey>> = {
   ...platformProcedurePermissions,
 };
 
+export { ACTIVITY_ACTIONS } from "./activity-actions.js";
 export { DOMAIN_EVENTS } from "./domain-events.js";
