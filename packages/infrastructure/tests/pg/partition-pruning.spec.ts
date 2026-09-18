@@ -14,10 +14,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { KeysetCursor } from "../../src/pg/primitive/index.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
+import { PgConversationRepository } from "../../src/pg/repository/pg-conversation.repository.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { PgMessageRepository } from "../../src/pg/repository/pg-message.repository.js";
 import { PgNotificationRepository } from "../../src/pg/repository/pg-notification.repository.js";
+import { PgNotificationPreferenceRepository } from "../../src/pg/repository/pg-notification-preference.repository.js";
 import { PgOutboxGateway } from "../../src/pg/repository/pg-outbox.gateway.js";
+import { PgVectorStore } from "../../src/pg/repository/pg-vector.store.js";
 import {
   activityLog,
   conversations,
@@ -29,13 +32,7 @@ import {
 } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
-import {
-  DATABASE_URL,
-  dropTenant,
-  openDatabase,
-  seedOrganizationId,
-  seedTenant,
-} from "../support/database.js";
+import { DATABASE_URL, dropTenant, openDatabase, seedTenant } from "../support/database.js";
 
 // The ruler every retention change after this one is measured with: a predicate that
 // stops naming a partition key is a plan nobody reads until production is slow.
@@ -64,6 +61,9 @@ let database: Database;
 let explain: Pool;
 let inbox: PgNotificationRepository;
 let chat: PgMessageRepository;
+let rooms: PgConversationRepository;
+let preferences: PgNotificationPreferenceRepository;
+let corpus: PgVectorStore;
 let replay: PgActivityReplayReader;
 let outbox: PgOutboxGateway;
 let organizationId: OrganizationId;
@@ -71,6 +71,12 @@ let neighbour: OrganizationId;
 let reader: UserId;
 let conversationId: ConversationId;
 let written: { id: NotificationId; createdAt: Date };
+let sent: { id: MessageId; createdAt: Date };
+
+// A unit vector, the shape `pg-vector.store.spec.ts` uses. The values do not matter
+// here: this file asserts on plans, not on what came back.
+const axis = (index: number): number[] =>
+  Array.from({ length: 1536 }, (_, i) => (i === index ? 1 : 0));
 
 // Two months far enough out that no migration and no other spec owns them, so this file
 // creates every partition it reads and drops every one it created.
@@ -126,6 +132,32 @@ const writeRows = async (organization: OrganizationId, conversation: Conversatio
       body: "hello",
     });
   }
+
+  // The four tables with a tenant level and no month level. One row each is enough:
+  // what these cases assert is which subtree the planner reads, not what it found.
+  await rooms.saveMember(organization, conversation, reader, "owner");
+  await preferences.save(organization, reader, {
+    category: "messaging",
+    channel: "email",
+    mode: "digest",
+  });
+  await corpus.upsert(organization, [
+    {
+      id: Uuid.v7(),
+      sourceId: Uuid.v7(),
+      goalId: null,
+      content: "pruning",
+      embedding: axis(0),
+      metadata: { chunkIndex: 0, sourceType: "note" },
+    },
+  ]);
+};
+
+const founded = async (name: string): Promise<OrganizationId> => {
+  const id = Identifiers.organizationId.parse(Uuid.v7());
+  await database.client.insert(organizations).values({ id, slug: `pruning-${id}`, name });
+  await seedTenant(database, id);
+  return id;
 };
 
 const conversationFor = async (organization: OrganizationId): Promise<ConversationId> => {
@@ -149,20 +181,20 @@ beforeAll(async () => {
   const unitOfWork = new PgUnitOfWork(database, scope);
   inbox = new PgNotificationRepository(database, scope);
   chat = new PgMessageRepository(database, scope);
+  rooms = new PgConversationRepository(database, scope);
+  preferences = new PgNotificationPreferenceRepository(database, scope);
+  corpus = new PgVectorStore(database, scope);
   replay = new PgActivityReplayReader(database, scope);
   outbox = new PgOutboxGateway(database, scope, unitOfWork);
 
-  organizationId = await seedOrganizationId(database);
   reader = Identifiers.userId.parse(Uuid.v7());
   await database.client
     .insert(users)
     .values({ id: reader, name: "Pruning", email: `${reader}@example.test` });
 
-  neighbour = Identifiers.organizationId.parse(Uuid.v7());
-  await database.client
-    .insert(organizations)
-    .values({ id: neighbour, slug: `pruning-${neighbour}`, name: "Neighbour" });
-  await seedTenant(database, neighbour);
+  // Both tenants are this file's own, never the seeded one: a tenant of its own is one
+  // `dropTenantPartitions` to clean up, and leaves nothing for the next spec to find.
+  [organizationId, neighbour] = [await founded("Mine"), await founded("Neighbour")];
 
   const maintenance = new PgMaintenanceGateway(database, scope, unitOfWork);
   for (const entry of PartitionedTable.MONTH_PARTITIONED) {
@@ -184,25 +216,35 @@ beforeAll(async () => {
 
   if (!row) throw new Error("expected the two notifications above to have been written");
   written = { id: row.id as NotificationId, createdAt: row.createdAt };
+
+  const [first] = await database.client
+    .select({ id: messages.id, createdAt: messages.createdAt })
+    .from(messages)
+    .where(eq(messages.conversationId, conversationId))
+    .orderBy(asc(messages.createdAt))
+    .limit(1);
+
+  if (!first) throw new Error("expected the two messages above to have been written");
+  sent = { id: first.id, createdAt: first.createdAt };
 });
 
 afterAll(async () => {
-  // The neighbour goes whole — seven partitions and their months — and the seeded
-  // tenant keeps its own, so only the two months this file created are dropped there.
-  await dropTenant(database, neighbour);
-  await database.client.delete(organizations).where(eq(organizations.id, neighbour));
+  // Both tenants go whole — seven partitions and their months each — which takes every
+  // row this file wrote to a tenant-owned table with them.
+  for (const organization of [organizationId, neighbour]) {
+    await dropTenant(database, organization);
+    await database.client.delete(organizations).where(eq(organizations.id, organization));
+  }
 
+  // `outbox_event` is the one table with no tenant level, so its two months are the only
+  // partitions left holding this file's rows.
   for (const entry of PartitionedTable.MONTH_PARTITIONED) {
-    const parent = entry.tenantKey
-      ? TenantPartitionSeed.partitionName(entry.name, organizationId)
-      : entry.name;
-
+    if (entry.tenantKey) continue;
     for (const month of ["2032_05", "2032_06"]) {
-      await database.client.execute(sql.raw(`drop table if exists ${parent}_${month}`));
+      await database.client.execute(sql.raw(`drop table if exists ${entry.name}_${month}`));
     }
   }
 
-  await database.client.delete(conversations).where(eq(conversations.id, conversationId));
   await database.client.delete(users).where(eq(users.id, reader));
   await explain.end();
   await database.close();
@@ -343,6 +385,102 @@ describe("one tenant partition, for every read there is", () => {
     );
 
     oneTenant(await scanned(statement, PartitionedTable.MESSAGES), "messages");
+  });
+
+  // The four tables with a tenant level and no month level under it, so "one tenant
+  // partition" is the whole assertion: there is nothing narrower to prune to.
+  const tenantOnly: readonly [string, PartitionedTableName, RegExp, () => Promise<unknown>][] = [
+    [
+      "the conversation list",
+      PartitionedTable.CONVERSATIONS,
+      /from "conversations"/i,
+      () => rooms.listByMember(organizationId, reader, { limit: 20 }),
+    ],
+    [
+      "a conversation by id",
+      PartitionedTable.CONVERSATIONS,
+      /from "conversations"/i,
+      () => rooms.findById(organizationId, conversationId),
+    ],
+    [
+      "the direct-key lookup",
+      PartitionedTable.CONVERSATIONS,
+      /from "conversations"/i,
+      () => rooms.findByDirectKey(organizationId, `${reader}_${reader}`),
+    ],
+    [
+      "the membership check",
+      PartitionedTable.CONVERSATION_MEMBERS,
+      /from "conversation_members"/i,
+      () => rooms.isMember(organizationId, conversationId, reader),
+    ],
+    [
+      "the member list",
+      PartitionedTable.CONVERSATION_MEMBERS,
+      /from "conversation_members"/i,
+      () => rooms.memberIds(organizationId, conversationId),
+    ],
+    [
+      "the preference lookup",
+      PartitionedTable.NOTIFICATION_PREFERENCES,
+      /from "notification_preferences"/i,
+      () => preferences.findFor(organizationId, [reader], "messaging"),
+    ],
+    [
+      "the preference list",
+      PartitionedTable.NOTIFICATION_PREFERENCES,
+      /from "notification_preferences"/i,
+      () => preferences.listFor(organizationId, reader),
+    ],
+    [
+      "the vector search",
+      PartitionedTable.DOCUMENT_CHUNKS,
+      /from "document_chunks"/i,
+      () => corpus.search(organizationId, axis(0), [], 10),
+    ],
+    [
+      "the source delete",
+      PartitionedTable.DOCUMENT_CHUNKS,
+      /delete from "document_chunks"/i,
+      // Planned, never executed: `EXPLAIN` without `ANALYZE` runs nothing, which is what
+      // makes a delete safe to measure against the rows the other cases read.
+      () => corpus.deleteBySource(organizationId, Uuid.v7()),
+    ],
+  ];
+
+  for (const [what, table, match, run] of tenantOnly) {
+    it(`prunes the neighbour's subtree out of ${what}`, async () => {
+      oneTenant(await scanned(await capture(run, match), table), table);
+    });
+  }
+});
+
+// The month level under one tenant, for the reads `16.1` did not already carry.
+describe("one tenant partition and one month, for the message reads that carry both", () => {
+  const oneMonth = async (
+    run: () => Promise<unknown>,
+    match: RegExp,
+    month: Date,
+  ): Promise<void> => {
+    const leaves = await scanned(await capture(run, match), PartitionedTable.MESSAGES);
+    oneTenant(leaves, PartitionedTable.MESSAGES);
+    expect(leaves.map((leaf) => leaf.month)).toEqual([monthIndex(month)]);
+  };
+
+  it("edit plans against the one month its createdAt names", async () => {
+    await oneMonth(
+      () => chat.edit(organizationId, sent.id, sent.createdAt, "edited", new Date()),
+      /update "messages"/i,
+      FIRST,
+    );
+  });
+
+  it("softDelete plans against the one month its createdAt names", async () => {
+    await oneMonth(
+      () => chat.softDelete(organizationId, sent.id, sent.createdAt, new Date()),
+      /update "messages"/i,
+      FIRST,
+    );
   });
 });
 

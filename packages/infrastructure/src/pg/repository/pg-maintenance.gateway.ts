@@ -67,22 +67,34 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     return this.tenantPartitions.run(organizationId);
   }
 
-  // One transaction for all seven, months and all: a tenant half-dropped is a tenant
-  // whose reads succeed and whose writes fail.
+  // **Detach, then drop, never `CASCADE`:** a key referencing a partitioned table is a
+  // constraint on the parent, and cascading takes it from every tenant at once.
   public async dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
     const dropped: string[] = [];
 
     await this.unitOfWork.run(async () => {
-      for (const entry of PartitionedTable.TENANT_PARTITIONED) {
+      // Backwards, because the allowlist lists a table ahead of the tables that
+      // reference it and Postgres refuses to detach a partition still referenced.
+      for (const entry of [...PartitionedTable.TENANT_PARTITIONED].reverse()) {
         const name = TenantPartitionSeed.partitionName(entry.name, organizationId);
-        // `CASCADE`, because the month children hang off it. Dropping the tenant
-        // partition detaches nothing first — the whole subtree goes at once.
-        await this.db.execute(sql.raw(`drop table if exists ${name} cascade`));
+        if (!(await this.exists(name))) continue;
+
+        await this.db.execute(sql.raw(`alter table ${entry.name} detach partition ${name}`));
+        await this.db.execute(sql.raw(`drop table ${name}`));
         dropped.push(name);
       }
     });
 
     return dropped;
+  }
+
+  // `to_regclass` returns null rather than throwing, so a tenant whose partitions are
+  // already gone is a no-op rather than an error the caller has to distinguish.
+  private async exists(name: string): Promise<boolean> {
+    const probe = await this.db.execute<{ present: string | null }>(
+      sql`select to_regclass(${`public.${name}`})::text as present`,
+    );
+    return Boolean(probe.rows[0]?.present);
   }
 
   public async ensureMonthlyPartitions(

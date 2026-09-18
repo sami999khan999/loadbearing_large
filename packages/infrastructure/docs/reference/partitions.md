@@ -80,6 +80,34 @@ Partition names are `<table>_<32hex>` and `<table>_<32hex>_<yyyy>_<mm>` — the 
 hyphens stripped, validated against `^[0-9a-f]{32}$` before it reaches `sql.raw`. The longest is
 `notification_preferences_<32>` at 57 of Postgres's 63 characters.
 
+## Dropping a tenant: detach, then drop, and never `CASCADE`
+
+`dropTenantPartitions` takes a tenant's whole subtree, and two things about it are not obvious.
+
+**`DROP TABLE … CASCADE` on a partition of a *referenced* table destroys the foreign key.** A key
+that references a partitioned table is a constraint on the **parent**, so cascading from one
+partition takes it with it — for every tenant, permanently, with nothing but a `NOTICE` to say so.
+Measured: after one `DROP … CASCADE` of one tenant's `conversations` partition, both
+`conversation_members_conversation_fk` and `messages_conversation_fk` were gone from
+`pg_constraint`, and every later write to either table was unchecked.
+
+`ALTER TABLE <parent> DETACH PARTITION <child>` then a plain `DROP TABLE <child>` leaves the
+constraint alone, and dropping a tenant partition takes its month children with it — so `CASCADE`
+buys nothing and costs that.
+
+**The order is the reverse of the allowlist, and that is why the allowlist is ordered.** Postgres
+refuses to detach a referenced partition while rows still point into it:
+
+```
+ERROR: removing partition "conversations_<32hex>" violates foreign key constraint
+DETAIL: Key (conversation_id, organization_id)=(…) is still referenced from table "conversation_members".
+```
+
+So `PartitionedTable.ALL` lists a table **ahead of** the tables that reference it, and the drop walks
+it backwards. `conversations` sits above `conversation_members` and `messages` for exactly that
+reason, and `tests/maintenance/tenant-partition.spec.ts` drops a populated tenant and reads
+`pg_constraint` back, which is what catches the order being broken.
+
 ## Two mechanics that are not optional
 
 **Every partition key is in the primary key.** Postgres requires every unique constraint on a
