@@ -62,6 +62,12 @@ src/gate/index.ts                        register the fragment
 Often empty — reuse an existing key when the slice fits an existing module, as `role` reuses
 `rbac.role.read`.
 
+**Scope is `org` unless the slice is platform-wide, and then it is `platform`.** A `platform`-scoped
+key is held only through a role in the organization marked `is_platform`: it never reaches a tenant
+role, `owner: "all"` excludes it at seed time, and the tenant role editor does not offer it. Pick it
+for a setting that is one number for the whole deployment, never for one a tenant owns. See
+[platform-scope](../../../packages/permissions/docs/reference/platform-scope.md).
+
 ### 2 — Error codes (`packages/errors`) — usually empty
 
 Only if a caller would genuinely **branch** on the failure differently. Most slices fail the ways

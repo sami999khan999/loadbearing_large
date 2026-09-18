@@ -262,6 +262,31 @@ first access. It saves microseconds at boot and costs you the property that a co
 constructs successfully is a container where every dependency resolved. Eager construction means a
 wiring mistake is a **startup crash** rather than a request-time surprise at 3am.
 
+## `ContainerHealthReader` is the one place the container implements a port
+
+`Container` builds adapters; it does not usually *be* one. `PlatformHealthReader` is the exception,
+and the reason is the layering rather than a design preference: the platform status use-case
+reports what `health()` already answers, `health()` lives here, and `application` may not name this
+package. The seam is forced.
+
+```ts
+this.platformAdmin = {
+  inspectStatus: new InspectPlatformStatusUseCase(
+    this.authorizer,
+    this.platform,
+    new ContainerHealthReader(this),
+  ),
+};
+```
+
+Two things about that `this`. It is the **last** block the constructor runs, so every field it
+could reach is assigned; and `report()` is called on a request, never during the build — the reader
+holds the container, it does not read it. Both are why this is not the lazy instantiation the
+section above bans: nothing here is deferred, only the *call*.
+
+`PlatformHealth` narrows `HealthReport` by dropping `pool`. A screen showing a pool gauge would be
+showing one process's, which is not the deployment's.
+
 ## The mail block is outside the `auth` branch, and that was a bug
 
 `ContentAuthMailer` and `ContentInvitationMailer` used to be constructed inline inside

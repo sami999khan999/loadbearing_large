@@ -67,6 +67,10 @@ packages/application/
 │   │   ├── list-members.use-case.ts    → ListMembersUseCase
 │   │   ├── list-invitations.use-case.ts → ListInvitationsUseCase
 │   │   └── revoke-invitation.use-case.ts → RevokeInvitationUseCase
+│   ├── platform/                 ← above every tenant; its seams live with it too
+│   │   ├── platform.reader.ts          → PlatformReader, PlatformOrganization
+│   │   ├── platform-health.reader.ts   → PlatformHealthReader, PlatformHealth
+│   │   └── inspect-platform-status.use-case.ts → InspectPlatformStatusUseCase
 │   └── rbac/
 │       ├── role.repository.ts          → RoleRepository, RoleRecord, RolePage
 │       ├── capability.repository.ts    → CapabilityRepository
@@ -167,6 +171,10 @@ from Qdrant, so a scope that is not in the argument list does not exist.
 - [Authorizer](reference/authorizer.md) — the gate, the load-assert-work shape, and the one leak it accepts
 - [The ports](reference/ports.md) — one section per port whose reasoning outgrew a two-line comment:
   the three that carry no `Principal`, the analytics split, and what each method refuses to offer
+
+- [The platform slice](reference/platform.md) — what a use-case above the tenant may assume, why
+  its health seam is a slice port, and the audit rebase that keeps a global change out of a
+  customer's trail
 
 - [Messaging](reference/messaging.md) — the direct key, unread computed rather than
   counted, and where the send dedupe went when `messages` took a month level.

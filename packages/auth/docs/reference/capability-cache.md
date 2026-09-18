@@ -32,6 +32,7 @@ write:
 | Membership's role changed | `invalidate(organizationId, userId)` |
 | Membership added or removed | `invalidate(organizationId, userId)` |
 | Per-user override written | `invalidate(organizationId, userId)` |
+| Any of the above **in the platform tier** | the same call, plus `invalidatePlatform()` |
 
 The domain does not name this class. `CreateRoleUseCase` and its four siblings take a
 `CapabilityInvalidator` port from `application/src/port/`, and `Container` is the one line that binds
@@ -44,6 +45,21 @@ same bug the flush exists to prevent, now with a race attached.
 Getting this wrong in the stale direction means a revoked permission keeps working, which is a
 security bug wearing a caching bug's clothes. The TTL exists so that a forgotten call site costs a
 minute rather than a session lifetime.
+
+## The third axis has its own prefix, and the adapter decides when to flush it
+
+`platformFor(userId)` caches under `capability:platform:<userId>` — no organization in the key,
+because the answer does not change with whichever tenant the session is pointed at. A platform
+admin switched into a customer tenant is still a platform admin.
+
+That makes flushing a question the use-cases cannot answer: `invalidateOrganization(id)` knows a
+tenant changed, and only this class knows whether that tenant *is* the tier. So both invalidation
+methods read `PlatformReader.organizationId()` and, on a match, also `deletePrefix` the platform
+namespace. The rule lands in one place instead of in four use-cases that each have to remember it,
+and a role edit in a customer tenant provably cannot change a platform grant.
+
+The flush is every user at once, which is right and is cheap: the tier has a handful of members,
+and the entries for everyone else are empty sets that cost one query to rebuild.
 
 ## The key carries the organization, and its position matters
 

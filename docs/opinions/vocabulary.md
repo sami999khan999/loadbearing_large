@@ -26,6 +26,13 @@ tense because they record something that happened.** `task.reactivate` is a righ
 **The qualifier vocabulary is closed**: `.self`, `.goal`, `.global`, `.org`. Do not invent `.own` or
 `.mine` alongside `.self`.
 
+**The *scope* vocabulary is closed too, and it is a different axis**: `org`, `goal`, `platform`. A
+qualifier narrows what a key covers inside a tenant; a scope says which set holds it. `platform` is
+the one above the tenant, held only through a role in the organization marked `is_platform`, and
+`CapabilitySet.can()` reaches it through a branch that consults neither the wildcard nor the `core`
+exception — see
+[`permissions/docs/reference/platform-scope.md`](../../packages/permissions/docs/reference/platform-scope.md).
+
 **Procedure paths mirror their permission where the mapping is 1:1**, and the `ProcedurePermissions`
 map stays explicit regardless. An identity-looking map is still the thing that fails closed when
 someone adds a procedure and forgets the entry
@@ -114,6 +121,7 @@ There are exactly three kinds of exception, and each has a reason a reader can c
 | Index | Why it cannot lead with the tenant |
 |---|---|
 | `organizations_slug_uq` | This *is* the tenant table |
+| `organizations_platform_uq` | The same table, and partial: at most one row may be the platform tier, and any number may not |
 | `invitations_token_uq` | The landing page and the accept endpoint arrive holding a token and no tenant — resolving it is the point |
 | `api_keys_hash_uq` | Same: a key arrives as a bare header, and the lookup is what establishes the organization |
 | the Better Auth tables | Generated against that library's own schema |

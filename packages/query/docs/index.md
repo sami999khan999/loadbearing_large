@@ -63,6 +63,9 @@ packages/query/src/
 ├── organization/
 │   ├── index.ts
 │   └── organization.mutations.ts   → OrganizationMutations
+├── platform/
+│   ├── index.ts
+│   └── platform.queries.ts        → PlatformQueries
 └── rbac/
     ├── index.ts
     ├── role.queries.ts             → RoleQueries

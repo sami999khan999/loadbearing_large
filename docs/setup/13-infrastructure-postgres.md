@@ -52,7 +52,7 @@ packages/infrastructure/
     │   ├── pg-maintenance.gateway.ts      → PgMaintenanceGateway
     │   ├── pg-membership.reader.ts        → PgMembershipReader
     │   └── pg-vector.store.ts             → PgVectorStore — see 14
-    ├── seed/                      → SystemRoleSeed
+    ├── seed/                      → SystemRoleSeed, PlatformRoleSeed, TenantPartitionSeed
     └── migrate/                   ← the migration runner
 ```
 
@@ -855,6 +855,25 @@ console.log("seed complete");
 ```bash
 pnpm db:seed
 ```
+
+### `owner: "all"` stops at the tenant, and a second seed runs for the tier
+
+`"all"` used to mean the whole catalog. Since the platform tier it means **the catalog minus the
+platform scope**: a tenant owner holds every key their tenant has and is not a platform admin. The
+seed's `reconcile()` is what makes that retroactive — a platform key an earlier deploy's `all`
+handed out is taken back on the next run rather than left granted forever.
+
+`PlatformRoleSeed` runs after it, and only for the organization marked `is_platform`. One role,
+`platform_admin`, holding `PermissionRegistry.instance.byScope("platform")` resolved at seed time —
+so a platform key a later phase adds reaches every admin on the next deploy rather than on a grant
+somebody has to remember. `pnpm db:seed` marks the organization immediately before, every run, not
+only on create: a database seeded before the tier existed has the organization and not the flag.
+
+**The first admin cannot come through the API.** `GrantPermissionUseCase` refuses a key the granter
+does not hold, which is the right rule and means nobody holds the first `platform.*` key to grant
+it. `pnpm platform:grant <email>` puts one user into the platform organization as `platform_admin`;
+every later one is invited through the members screen with that organization active. The long form
+is [`permissions/docs/reference/platform-scope.md`](../../packages/permissions/docs/reference/platform-scope.md).
 
 ### Seeding versus migrating permissions
 

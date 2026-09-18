@@ -72,6 +72,13 @@ one thing a generic log console cannot know. Grafana was in this stack and was r
 that reason: two consoles for one operator, and the query that matters — *these logs, for this
 tenant, joined to that tenant's audit rows* — was the one it could not express.
 
+**And the dashboard has a tier now.** `platform` is a third `PermissionScope`, held through a role
+in the one organization marked `is_platform` and nothing else — no env list of admin emails, no
+flag on `users`, no second permission system. A tenant owner's wildcard does not reach it, which is
+what lets a global setting be edited from a screen that every tenant's owner can also open the URL
+of. [platform-scope](../../packages/permissions/docs/reference/platform-scope.md) is the argument;
+`/platform/status` is where it starts.
+
 **The seam for that dashboard exists: `LogReader`, implemented by `LokiLogReader`.** It is `fetch`
 against `query_range`, built only when `LOKI_URL` is set, and it changes nothing about the write path
 — `JsonLogger` still goes to stdout and still has never heard of Loki. That asymmetry is the design:

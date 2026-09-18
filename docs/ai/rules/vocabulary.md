@@ -16,6 +16,9 @@ failure — a permission is a right you hold, an activity is a fact that happene
 | Log event code | `<subject>.<thing>.<state>`, **past tense** | `queue.job.failed` |
 
 - **The qualifier vocabulary is closed:** `.self`, `.goal`, `.global`, `.org`. Never `.own`/`.mine`.
+- **The scope vocabulary is closed and is a different axis:** `org`, `goal`, `platform`. A
+  qualifier narrows a key inside a tenant; a scope says which set holds it. `platform` is held
+  only through a role in the organization marked `is_platform`, and no tenant wildcard reaches it.
 - **An activity name is not a log event code.** A business fact in stdout is lost on restart; a
   diagnostic in Postgres is a retention bill.
 - **Log labels are a fixed set of four:** `app`, `env`, `level`, `event_code`. Everything else —

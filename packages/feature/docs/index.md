@@ -57,6 +57,8 @@ packages/feature/src/
 │   ├── member-list.tsx                     → MemberList
 │   ├── invite-member.form.tsx              → InviteMemberForm
 │   └── invitation-list.tsx                 → InvitationList
+├── platform/
+│   └── platform-status.panel.tsx           → PlatformStatusPanel
 └── rbac/
     ├── permission-matrix.tsx               → PermissionMatrix, MatrixSubject
     ├── role-matrix.tsx                     → RoleMatrix

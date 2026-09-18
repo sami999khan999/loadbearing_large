@@ -82,6 +82,21 @@ Hiding a button is a courtesy. The check is `Authorizer.assert()` in the use-cas
 or not the button was ever rendered — which is what makes a link that is hidden here still answer
 `FORBIDDEN` when typed by hand.
 
+## The DTO has three axes now, and the surface count did not grow
+
+`CapabilitySetDto` carries `org`, `goals` and `platform`. All four surfaces above call the same
+`can()`, so a `platform.*` key is enforced by the same four and needs no fifth.
+
+The one thing worth knowing is where the merge happens. `PrincipalBuilder` reads the tenant set and
+the platform set in parallel and merges them, and **`session.fn.ts` runs the same merge** — the SSR
+snapshot is the only other place a `CapabilitySet` is built. If it did not, surfaces 3 and 4 would
+hide a platform page the server would happily have served, which is the failure mode this note
+exists to prevent.
+
+The snapshot also carries `isPlatformOrganization`: whether the *active* tenant is the tier, which
+is not whether the user is a platform admin. Only the role editor reads it, to decide whether to
+offer the platform module at all.
+
 ## No loading state grants access
 
 The session store is seeded **signed out**, denying everything, and resolution only ever widens it.
