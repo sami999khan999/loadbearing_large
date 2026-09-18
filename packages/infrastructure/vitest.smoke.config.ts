@@ -12,6 +12,13 @@ const required = (name: string): string => {
 
 const optional = (name: string): string | undefined => process.env[name] || undefined;
 
+// A comma-separated list of tenant counts, read here for the reason every other value is:
+// `noProcessEnv` and assertion 3 both walk `tests/`.
+const tenantCeiling = optional("TENANT_CEILING")
+  ?.split(",")
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isInteger(value) && value > 0);
+
 const lokiUrl = optional("LOKI_URL");
 const clickhouseUrl = optional("CLICKHOUSE_URL");
 
@@ -46,6 +53,7 @@ export default defineConfig({
           secretKey: required("S3_SECRET_KEY"),
           forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
         },
+        ...(tenantCeiling?.length ? { tenantCeiling } : {}),
         ...(lokiUrl ? { loki: { url: lokiUrl, tenantId: optional("LOKI_TENANT_ID") } } : {}),
         ...(clickhouseUrl
           ? {

@@ -13,6 +13,9 @@ export interface Stack {
     readonly secretKey: string;
     readonly forcePathStyle: boolean;
   };
+  // Tenant counts the ceiling measurement runs at, from `TENANT_CEILING=100,500`. Absent
+  // is the normal case: it creates tens of thousands of partitions and takes minutes.
+  readonly tenantCeiling?: readonly number[];
   // Absent when the stack is not running one, which is the case the two `skipIf` blocks
   // are about — not a missing variable, a service nobody started.
   readonly loki?: { readonly url: string; readonly tenantId?: string };

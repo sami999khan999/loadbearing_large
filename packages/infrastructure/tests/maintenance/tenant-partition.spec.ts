@@ -1,5 +1,6 @@
 import { PartitionedTable } from "@loadbearing/application";
 import {
+  type ConversationId,
   Identifiers,
   type MessageId,
   type OrganizationId,
@@ -122,6 +123,38 @@ describe("TenantPartitionSeed", () => {
       expect(await seed.run(organizationId)).toEqual([]);
     } finally {
       await gateway.dropTenantPartitions(organizationId);
+      await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+    }
+  });
+});
+
+// The exit criterion Phase 16 states in so many words: a row for a tenant with no
+// partition fails with the Postgres error, never silently.
+describe("a tenant with no partitions", () => {
+  it("refuses the write rather than losing it", async () => {
+    const organizationId = Identifiers.organizationId.parse(Uuid.v7());
+    await database.client
+      .insert(organizations)
+      .values({ id: organizationId, slug: `bare-${organizationId}`, name: "Bare" });
+
+    try {
+      const write = database.client.insert(conversations).values({
+        id: Uuid.v7() as ConversationId,
+        organizationId,
+        kind: "channel",
+        createdBy: author,
+      });
+
+      // The cause, not the message: drizzle wraps every failure as "Failed query", and
+      // asserting on that would pass for a typo as readily as for the missing partition.
+      const error = await write.then(
+        () => null,
+        (thrown: unknown) => thrown as { cause?: { message?: string; code?: string } },
+      );
+
+      expect(error?.cause?.code).toBe("23514");
+      expect(error?.cause?.message).toMatch(/no partition of relation "conversations" found/i);
+    } finally {
       await database.client.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });

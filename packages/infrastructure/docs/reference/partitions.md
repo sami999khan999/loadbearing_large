@@ -166,13 +166,49 @@ outage. It reads the runway *before* ensuring and emits `partition.runway.low` w
 months lie ahead; read after, it could never fire, because the run that just fixed the runway has
 nothing to report.
 
-**The DDL per month is tenants × three tables**, one statement each, and that product is what bounds
-how many tenants a node carries. The loop pages tenants from the catalog and takes them a page at a
-time, so a month's worth of tenant DDL is a slow background trickle rather than one lock storm on
-the first.
+**The DDL per month is tenants × three tables**, one statement each. The loop pages tenants from the
+catalog and takes them a page at a time, so a month's worth of tenant DDL is a slow background
+trickle rather than one lock storm on the first.
 
 `ensureMonthlyPartitions` holds one advisory lock per table for the whole probe-and-create, because
 that is two statements: two replicas booting together both probe absent and one gets `42P07`.
+
+## What a node carrying tenants actually costs
+
+Measured by `tests/smoke/tenant-ceiling.smoke.spec.ts`, which creates synthetic tenants through
+`TenantPartitionSeed` and times three things. **Postgres 17, 2026-09-18**, on a developer machine
+(Docker Desktop on Windows), against an otherwise idle database:
+
+| tenants | partitions | create | plan | exec | runway | migrate no-op |
+| --- | --- | --- | --- | --- | --- | --- |
+| 100 | 1,622 | 142 s | 0.60 ms | 0.08 ms | 1.5 s | 14 ms |
+| 500 | 8,022 | 709 s | 0.21 ms | 0.03 ms | 6.5 s | 11 ms |
+
+Sixteen partitions per tenant: seven at the tenant level, plus three months under each of the three
+tables that carry a month level.
+
+**Planning time does not grow with the tenant count, and that is the whole point of the tenant
+level.** The predicate prunes to one list partition before the planner considers a month, so a read
+costs what one tenant's subtree costs however many neighbours there are. The two readings differ by
+less than half a millisecond and the larger one is the *smaller* count — that is measurement noise
+on a sub-millisecond number, not a trend.
+
+**The runway is linear and cheap**: ~13 ms per tenant per run, so 6.5 s at 500 and about half a
+minute at 2,000. Ten minutes — the point `24.7` says to reopen at — is somewhere near fifty thousand
+tenants on this hardware, which no single node will reach first for other reasons.
+
+**The cost that actually binds is signup.** Creating one tenant's sixteen partitions took 1.4–1.8 s,
+and that is paid inside the transaction that creates the organization. It is per tenant rather than
+per node — it does not get worse as a node fills — but it is a second of DDL on the signup path, and
+a deployment where signups are frequent should measure it against its own hardware before assuming
+the number above.
+
+**Two thousand was not run.** At the rate above it is about fifty minutes of creation and half an
+hour of cleanup, and nothing in the two readings suggests the shape changes. Run it with
+`TENANT_CEILING=2000 pnpm smoke` before trusting a node with that many.
+
+**Reopen [`24.7`] when** a pruned read's planning time passes 5 ms, or a runway run passes ten
+minutes, at a tenant count a deployment could plausibly reach.
 
 **`pnpm db:partitions` is the same routine from a shell**, for the operator whose worker was down on
 the first of the month. It prints a row per table per tenant:

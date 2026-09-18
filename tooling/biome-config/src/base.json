@@ -176,6 +176,7 @@
         "packages/infrastructure/partitions.ts",
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
+        "packages/infrastructure/tests/smoke/tenant-ceiling.smoke.spec.ts",
         "packages/observability/src/logger/json.logger.ts"
       ],
       "linter": {
