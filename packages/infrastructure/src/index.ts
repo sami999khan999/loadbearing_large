@@ -44,6 +44,7 @@ export {
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRetentionPolicyRepository,
+  PgTenantStorageReader,
   PgUnitOfWork,
   type PgUnitOfWorkConfig,
   PgVectorStore,

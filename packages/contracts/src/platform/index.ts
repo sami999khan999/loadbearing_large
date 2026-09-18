@@ -10,5 +10,9 @@ export {
   type RetentionPreviewDto,
   type RetentionUpdateInput,
   type TenantRetentionUpdateInput,
+  type TenantStorageDto,
+  type TenantStorageMonthDto,
+  type TenantStorageQuery,
+  type TenantStorageRowDto,
 } from "./platform.contract.js";
 export { PlatformProcedures } from "./platform.procedures.js";

@@ -99,6 +99,24 @@ Three columns beyond what `activity_archive` carried, and each has one reader:
   index on `(table_name, period) where projected_at is null` makes "what has a hole" an index read
   rather than a scan over every month ever archived.
 
+## What the totals on `/platform/storage` are, and are not
+
+`PgTenantStorageReader` groups `partition_archive` by `(organization_id, table_name)` and sums
+`bytes` and `row_count`, so the screen's number is the sum of object sizes S3 reported on the put
+— not a `ListObjectsV2` over the bucket, which would be a call per page per tenant and would
+disagree with the index the moment a put failed after the upload.
+
+The screen is **cold storage only**, and says so. Hot Postgres bytes cannot be attributed to a
+tenant from the catalog: a tenant-month child holds exactly one tenant's rows, but
+`pg_total_relation_size` is per relation and a partition parent's size is the sum over children
+of every tenant. Hot size per *table* is a different question and lives on the retention screen,
+where `partitionsBefore` already returns it.
+
+The join to `organizations` is a **left** join. A deleted tenant's objects outlive its row by
+thirty days — the sweep below is what removes them — and an inner join would hide exactly the
+rows an operator opened this screen to find. The name column is null for those, and the screen
+renders the id instead.
+
 ## A gap is recorded, never silent, and never blocks a drop
 
 After a month is archived, `MaintenanceConsumer` asks the projector where each tenant's checkpoint

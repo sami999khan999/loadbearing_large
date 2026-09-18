@@ -1,4 +1,4 @@
-import type { ApiClient } from "../import.js";
+import type { ApiClient, TenantStorageQuery } from "../import.js";
 import { queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
@@ -22,6 +22,16 @@ export class PlatformQueries {
       queryKey: QueryKeys.platform.retentionPreview(tableName, hotMonths),
       queryFn: () => client.platform.previewRetention({ tableName, hotMonths }),
       staleTime: 0,
+    });
+  }
+
+  // A minute: what this shows changes when the nightly run archives a month, so a
+  // fresh read on every focus would be a query for a number that moved once.
+  public static storage(client: ApiClient, params: TenantStorageQuery) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.storage(params),
+      queryFn: () => client.platform.listStorage(params),
+      staleTime: 60_000,
     });
   }
 

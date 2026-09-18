@@ -51,6 +51,7 @@ import {
   ListNotificationsUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
+  ListTenantStorageUseCase,
   type Logger,
   type LogReader,
   LokiLogReader,
@@ -96,6 +97,7 @@ import {
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRetentionPolicyRepository,
+  PgTenantStorageReader,
   PgUnitOfWork,
   PgVectorStore,
   type PlatformReader,
@@ -338,6 +340,7 @@ export class Container {
   public readonly platformAdmin: {
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
+    readonly listStorage: ListTenantStorageUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly restorePartition: RestorePartitionUseCase;
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
@@ -753,6 +756,12 @@ export class Container {
         this.retentionPolicies,
         this.storagePolicy,
         this.analyticsProjector ?? null,
+      ),
+      // Local rather than a field: nothing outside this use-case reads it, and a
+      // public port is a thing the worker has to be told not to use.
+      listStorage: new ListTenantStorageUseCase(
+        this.authorizer,
+        new PgTenantStorageReader(this.database, this.transactions),
       ),
       previewRetention: new PreviewRetentionChangeUseCase(
         this.authorizer,

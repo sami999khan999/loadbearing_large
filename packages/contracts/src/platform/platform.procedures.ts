@@ -36,6 +36,11 @@ export class PlatformProcedures {
     .input(PlatformContract.restore)
     .output(PlatformContract.restoreRequested);
 
+  public static readonly listStorage = oc
+    .route({ method: "GET", path: "/platform/storage" })
+    .input(PlatformContract.tenantStorageQuery)
+    .output(PlatformContract.tenantStorage);
+
   // `PUT` rather than `PATCH`: the body carries every field of one row, and a partial
   // retention change is not a thing an operator means.
   public static readonly updateRetention = oc
@@ -51,6 +56,7 @@ export class PlatformProcedures {
     previewRetention: PlatformProcedures.previewRetention,
     restorePartition: PlatformProcedures.restorePartition,
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
+    listStorage: PlatformProcedures.listStorage,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

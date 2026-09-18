@@ -8,6 +8,11 @@ export {
   type RetentionEntry,
   type RetentionPolicies,
 } from "./list-retention-policies.use-case.js";
+export {
+  type ListTenantStorageInput,
+  ListTenantStorageUseCase,
+  type TenantStorageList,
+} from "./list-tenant-storage.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
 export {
@@ -32,6 +37,12 @@ export {
   type TenantRetentionPolicyRecord,
   TenantRetentionPolicyRepository,
 } from "./tenant-retention-policy.repository.js";
+export {
+  type TenantStorageMonth,
+  type TenantStoragePage,
+  TenantStorageReader,
+  type TenantStorageRow,
+} from "./tenant-storage.reader.js";
 export {
   ANALYTICS_TABLE,
   type UpdateRetentionPolicyInput,

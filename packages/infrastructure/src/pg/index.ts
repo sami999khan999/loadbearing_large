@@ -34,6 +34,7 @@ export {
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRetentionPolicyRepository,
+  PgTenantStorageReader,
   PgVectorStore,
 } from "./repository/index.js";
 export {

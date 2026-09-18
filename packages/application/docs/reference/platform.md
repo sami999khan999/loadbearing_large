@@ -82,6 +82,21 @@ files beside it, every one.
 `PlatformHealth` narrows `HealthReport`: it drops `pool`, because a screen showing a pool gauge
 would be showing one process's, which is not the deployment's.
 
+## `TenantStorageReader` — a slice port, and why cold only
+
+Beside `PlatformHealthReader`, and a slice port for the same reason: one caller, one screen, and
+a second feature would add a file beside it rather than a method to it.
+
+`byTenant(page, organizationId)` takes the tenant as an argument rather than filtering a page
+already cut to a limit — the difference is a page of twenty-five that returns three rows.
+`monthsFor` is unpaginated because months × retired tables is bounded by the retention policy,
+but it runs **only** when a tenant is named: across every tenant at once it is not bounded, and
+the league table does not need it.
+
+The tenant comes off the input here, not off the principal. Every other list in this repository
+reads `actor.organizationId`; a platform admin is signed into the tier and asking about somebody
+else's tenant, which is what the `platform` scope is for.
+
 ## What lands here next
 
 | Phase | Files |

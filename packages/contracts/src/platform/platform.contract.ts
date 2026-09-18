@@ -1,5 +1,5 @@
 import { z } from "../import.js";
-import { Identifiers } from "../primitive/index.js";
+import { Identifiers, Pagination } from "../primitive/index.js";
 
 export class PlatformContract {
   private constructor() {}
@@ -116,6 +116,42 @@ export class PlatformContract {
     bytes: z.number().int(),
   });
 
+  // Cold storage only, and the screen says so: a partition holds one tenant's rows,
+  // but Postgres reports size per table, so hot bytes cannot be attributed here.
+  public static readonly tenantStorageRow = z.object({
+    organizationId: Identifiers.organizationId,
+    // Null once the tenant is deleted: the archive outlives it by thirty days, and a
+    // row whose name resolves to nothing is what an operator came here to find.
+    organizationName: z.string().nullable(),
+    tableName: z.string().min(1),
+    bytes: z.number().int(),
+    rows: z.number().int(),
+    months: z.number().int(),
+  });
+
+  public static readonly tenantStorageMonth = z.object({
+    tableName: z.string().min(1),
+    period: z.string().min(1),
+    bytes: z.number().int(),
+    rows: z.number().int(),
+    actionCounts: z.record(z.string(), z.number().int()),
+    projectedAt: z.date().nullable(),
+  });
+
+  public static readonly tenantStorageQuery = Pagination.query.extend({
+    // Narrows the page to one tenant and fills `months`. Absent is the league table,
+    // which is the question this screen usually answers.
+    organizationId: Identifiers.organizationId.optional(),
+  });
+
+  public static readonly tenantStorage = z.object({
+    items: z.array(PlatformContract.tenantStorageRow).readonly(),
+    total: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+    months: z.array(PlatformContract.tenantStorageMonth).readonly(),
+  });
+
   // `tableName` stays a string and is validated against `PartitionedTable.NAMES` in the
   // use-case: a table name never comes from data, and the closed union is one layer in.
   public static readonly retentionUpdate = z.object({
@@ -136,4 +172,8 @@ export type TenantRetentionUpdateInput = z.infer<typeof PlatformContract.tenantR
 export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequested>;
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
+export type TenantStorageDto = z.infer<typeof PlatformContract.tenantStorage>;
+export type TenantStorageRowDto = z.infer<typeof PlatformContract.tenantStorageRow>;
+export type TenantStorageMonthDto = z.infer<typeof PlatformContract.tenantStorageMonth>;
+export type TenantStorageQuery = z.infer<typeof PlatformContract.tenantStorageQuery>;
 export type PlatformStatusDto = z.infer<typeof PlatformContract.status>;

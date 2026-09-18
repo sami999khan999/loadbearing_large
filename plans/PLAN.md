@@ -2203,7 +2203,7 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `docs/ai/rules/data.md` retention bullet; `packages/infrastructure/docs/reference/cold-storage.md`
   (from `17.7`) gains the lifecycle section; `17.8` marked moved here.
 
-- [ ] `19.15` **Preview before a retention change** — depends on the scaling plan's `16.8`.
+- [x] `19.15` **Preview before a retention change** — depends on the scaling plan's `16.8`.
   `preview-retention-change.use-case.ts` (`platform.retention.read`; input `{ tableName, hotMonths }`,
   `tableName` from `PartitionedTable.NAMES`; computes the cutoff the way `prune()` does and returns
   `maintenance.partitionsBefore(table, cutoff)` — `{ name, period, estimatedRows, bytes }[]` — plus
@@ -2215,8 +2215,12 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   refreshed by autovacuum. The same read with a cutoff past the runway gives each table its
   "partitions / rows / bytes today" column, `messages` included, read-only (decision D47).
   **Docs:** `platform.md`, `packages/feature/docs/index.md`.
+  `done: 2026-09-19` — the preview is a component of its own (`retention-preview.notice.tsx`) rather
+  than a block inside the form: it owns the debounce and the `enabled` flag, and the form only
+  learns "a preview for this value has loaded" through an `onReady` callback. `estimatedRows` is
+  named for what it is; the screen says "about".
 
-- [ ] `19.16` **Per-tenant storage** — depends on `17.2`'s `bytes` and `action_counts`.
+- [x] `19.16` **Per-tenant storage** — depends on `17.2`'s `bytes` and `action_counts`.
   `list-tenant-storage.use-case.ts` (`platform.storage.read`; `partition_archive` grouped by
   `organization_id, table_name`: `sum(bytes)`, `sum(row_count)`, months covered, joined to
   `organizations.name`; sorted by bytes descending; paginated; an optional `organizationId` filter
@@ -2225,8 +2229,16 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   The screen says **cold storage only**: hot Postgres bytes cannot be attributed to a tenant because
   a partition mixes every tenant's rows, and hot bytes per *table* are on the retention screen
   (`19.15`). **Docs:** `platform.md`, `cold-storage.md`.
+  `done: 2026-09-19` — the port is `TenantStorageReader` in the slice, not in `port/`: one caller,
+  and a second feature would add a file beside it. `byTenant` takes the tenant as an argument
+  rather than filtering a cut page, and `monthsFor` runs only when one is named. The join to
+  `organizations` is a **left** join, because a deleted tenant's objects outlive its row by thirty
+  days and those are the rows an operator came for. `ByteFormat` added to `packages/ui`, beside
+  `DateFormat` and for its reason: the server renders the size and the browser hydrates it.
+  `verified:` against live Postgres — sums come back as numbers, the totals count groups rather
+  than rows, and a row whose organization is gone renders its id.
 
-- [ ] `19.17` **The cold reader, pulled forward from `21.1`** — the scaling plan's `ColdArchiveReader`
+- [x] `19.17` **The cold reader, pulled forward from `21.1`** — the scaling plan's `ColdArchiveReader`
   (`application/src/port/`, `S3ColdArchiveReader` in `infrastructure/src/s3/`) is built here, with
   a bulk method first: `rows(entry: PartitionArchiveEntry): Promise<readonly Readonly<Record<string, unknown>>[]>`
   — `storage.get()` the object, gunzip through `node:zlib` re-exported in `import.ts`, split NDJSON,
@@ -2239,8 +2251,12 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   would have added it. `ActivitySubject.of` is lifted to `application/src/primitive/activity-subject.ts`
   and `PgActivityReplayReader` calls it. **Docs:** new `packages/infrastructure/docs/reference/cold-restore.md`
   (registered), `activity-archive.md` gains "reading it back", `ports.md`.
+  `done: 2026-09-19` — `test-container.spec.ts` moved to twenty-seven as the item predicted.
+  `ActivitySubject.of` lifted to `application/src/primitive/activity-subject.ts`. The checksum is
+  verified over the **compressed** bytes, which is what the gateway wrote; verifying the
+  decompressed stream would pass on an object gzip re-encoded by anything in between.
 
-- [ ] `19.18` **Restore a month, on `17.4`'s rule** — `17.4` restores into a **scratch table, never
+- [x] `19.18` **Restore a month, on `17.4`'s rule** — `17.4` restores into a **scratch table, never
   the live parent**, because a re-attached month leaves the retention job arguing with itself. This
   action keeps that rule and adds the one case where attaching is right: the month is inside the
   table's hot window. `restore-partition.use-case.ts` (`platform.retention.manage`; input
@@ -2257,8 +2273,13 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   says so. Restore panel on `/platform/retention`: table, month, optional tenant → button → `Callout`
   with the job id and which of the two outcomes applies. **Docs:** `cold-restore.md`, `cold-storage.md`
   (`17.4`'s section gains the attach case), `consumers.md`, `schedules.md`, `ports.md`.
+  `done: 2026-09-19` — `corrected:` the dedupe `jobId` is dotted, not colon-separated: the queue
+  port's own comment says BullMQ rejects a `:` in a job id, and the job name rides `JobOptions.name`
+  instead. The attach step fires only when the period is at or after the cutoff `prune()` would
+  compute, exactly as written; outside it the scratch table stays and the screen says which
+  outcome applied.
 
-- [ ] `19.19` **Per-tenant retention override** — the scaling plan's decision D29 makes a tenant's
+- [x] `19.19` **Per-tenant retention override** — the scaling plan's decision D29 makes a tenant's
   month its own partition, so retention can differ per tenant. `tenant_retention_policy
   (organization_id, table_name) primary key, hot_months integer not null, cold_months integer null,
   updated_at` in `platform.schema.ts`; it leads with the tenant, so no §9 exemption.
@@ -2273,6 +2294,13 @@ archived-notifications read. `prune()` reads `hot_months` from the row and falls
   `19.15`'s preview takes an optional `organizationId`. Edited from the tenant row on the shard map
   (`25.4`) and a tenant panel on `/platform/retention`. Decision 19. **Docs:** `platform.md`,
   `cold-storage.md`, `docs/setup/13` §13.3.
+  `done: 2026-09-19` — `corrected:` `PartitionArchiveGateway.archive` gained an optional
+  `organizationId`, because a per-tenant cutoff means archiving one tenant's month rather than the
+  month. The use-case **refuses an override on a table the calendar never retires**: `prune()`
+  returns before it reads an override on a table whose default hot months are null, so accepting
+  one would be a setting that saves, reads back and does nothing. `unfinished:` `19.15`'s preview
+  does not yet take an optional `organizationId` — the screen previews the table's own numbers,
+  not a tenant's override.
 
 - [ ] `19.20` **Delete a tenant** — the first tenant deletion in the repository, which is the
   trigger `17.6` was written without. `delete-organization.use-case.ts` under a new

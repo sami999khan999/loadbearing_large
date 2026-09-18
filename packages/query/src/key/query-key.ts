@@ -56,6 +56,7 @@ export class QueryKeys {
     // previews of two different numbers are two answers, not one refetched.
     retentionPreview: (table: string, months: number) =>
       ["platform", "retention", "preview", table, months] as const,
+    storage: (params: unknown) => ["platform", "storage", params] as const,
   };
 
   public static readonly rbac = {

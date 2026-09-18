@@ -82,6 +82,10 @@ export {
   type RetentionPreviewDto,
   type RetentionUpdateInput,
   type TenantRetentionUpdateInput,
+  type TenantStorageDto,
+  type TenantStorageMonthDto,
+  type TenantStorageQuery,
+  type TenantStorageRowDto,
 } from "./platform/index.js";
 export {
   type ApiKeyId,

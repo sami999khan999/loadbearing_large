@@ -25,4 +25,5 @@ export { PgPlatformReader } from "./pg-platform.reader.js";
 export { PgRetentionPolicyRepository } from "./pg-retention-policy.repository.js";
 export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgTenantRetentionPolicyRepository } from "./pg-tenant-retention-policy.repository.js";
+export { PgTenantStorageReader } from "./pg-tenant-storage.reader.js";
 export { PgVectorStore } from "./pg-vector.store.js";

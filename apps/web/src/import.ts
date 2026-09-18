@@ -73,6 +73,7 @@ export {
   SignUpForm,
   SocialSignIn,
   TenantRetentionForm,
+  TenantStorageList,
   TwoFactorForm,
   TwoFactorPanel,
   TwoFactorSetup,

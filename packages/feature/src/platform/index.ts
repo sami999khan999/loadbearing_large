@@ -12,3 +12,7 @@ export {
   TenantRetentionForm,
   type TenantRetentionFormProps,
 } from "./tenant-retention.form.js";
+export {
+  TenantStorageList,
+  type TenantStorageListProps,
+} from "./tenant-storage.list.js";

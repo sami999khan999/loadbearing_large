@@ -58,7 +58,12 @@ packages/feature/src/
 │   ├── invite-member.form.tsx              → InviteMemberForm
 │   └── invitation-list.tsx                 → InvitationList
 ├── platform/
-│   └── platform-status.panel.tsx           → PlatformStatusPanel
+│   ├── platform-status.panel.tsx           → PlatformStatusPanel
+│   ├── retention-policy.form.tsx           → RetentionPolicyForm
+│   ├── retention-preview.notice.tsx        → RetentionPreviewNotice
+│   ├── restore-partition.panel.tsx         → RestorePartitionPanel
+│   ├── tenant-retention.form.tsx           → TenantRetentionForm
+│   └── tenant-storage.list.tsx             → TenantStorageList
 └── rbac/
     ├── permission-matrix.tsx               → PermissionMatrix, MatrixSubject
     ├── role-matrix.tsx                     → RoleMatrix

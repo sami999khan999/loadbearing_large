@@ -39,6 +39,8 @@ export {
   type RetentionEntryDto,
   type RetentionPreviewDto,
   type RoleDto,
+  type TenantStorageMonthDto,
+  type TenantStorageRowDto,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ export {
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
 export {
   Button,
+  ByteFormat,
   Callout,
   Can,
   CodeList,

@@ -57,6 +57,25 @@ export const platform = {
   "platform.tenantRetention.coldNote":
     "Cold months shorter than the table's are enforced by the nightly run rather than by the bucket.",
   "platform.tenantRetention.saved": "Saved.",
+  "platform.storage.title": "Cold storage by tenant",
+  // Said on the screen, not only in a doc: a partition holds one tenant's rows, but
+  // the catalog reports size per table, so hot bytes have no tenant to belong to.
+  "platform.storage.description":
+    "Archived months only. Hot Postgres size cannot be attributed to a tenant; per-table hot size is on the retention screen.",
+  "platform.storage.filter": "Organization id",
+  "platform.storage.empty": "Nothing has been archived yet.",
+  "platform.storage.column.organization": "Organization",
+  "platform.storage.column.table": "Table",
+  "platform.storage.column.bytes": "Size",
+  "platform.storage.column.rows": "Rows",
+  "platform.storage.column.months": "Months",
+  "platform.storage.column.period": "Month",
+  "platform.storage.column.actionCounts": "Actions",
+  "platform.storage.column.projected": "Projected",
+  // Null means ClickHouse never received this tenant-month — a recorded gap rather
+  // than a blocked drop, which is why it has to be readable here.
+  "platform.storage.notProjected": "Never",
+  "platform.storage.months.title": "Archived months",
   "platform.restore.title": "Restore a month",
   // Both outcomes, because which applies is not the operator's to choose: inside the
   // hot window it goes live, outside it stays where retention will not fight it.
