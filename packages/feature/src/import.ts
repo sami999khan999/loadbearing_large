@@ -33,6 +33,7 @@ export {
   type MessageDto,
   type NotificationDto,
   type NotificationPreferenceDto,
+  type OrganizationId,
   Password,
   type RestoreRequestedDto,
   type RetentionEntryDto,

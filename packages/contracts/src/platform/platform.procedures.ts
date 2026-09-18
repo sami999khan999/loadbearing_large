@@ -22,6 +22,13 @@ export class PlatformProcedures {
     .input(PlatformContract.previewQuery)
     .output(PlatformContract.retentionPreview);
 
+  // `PUT` on a sub-resource of the tenant, because that is what the row is: one
+  // tenant's override of one table, replaced whole.
+  public static readonly updateTenantRetention = oc
+    .route({ method: "PUT", path: "/platform/retention/tenant" })
+    .input(PlatformContract.tenantRetentionUpdate)
+    .output(Envelope.acknowledged);
+
   // `POST` and a job id back: the work is a stream out of S3 and an insert per batch,
   // and a request that waited for it would hold a connection open for minutes.
   public static readonly restorePartition = oc
@@ -43,6 +50,7 @@ export class PlatformProcedures {
     listRetention: PlatformProcedures.listRetention,
     previewRetention: PlatformProcedures.previewRetention,
     restorePartition: PlatformProcedures.restorePartition,
+    updateTenantRetention: PlatformProcedures.updateTenantRetention,
     updateRetention: PlatformProcedures.updateRetention,
   } as const;
 }

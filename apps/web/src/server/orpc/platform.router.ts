@@ -23,6 +23,13 @@ export class PlatformRouter {
       context.container.platformAdmin.restorePartition.execute(context.principal, input),
   );
 
+  public static readonly updateTenantRetention = authed.platform.updateTenantRetention.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.updateTenantRetention.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   // `acknowledged` rather than the row: the screen refetches the list, which also
   // carries what the bucket and ClickHouse now hold, and one of those may have drifted.
   public static readonly updateRetention = authed.platform.updateRetention.handler(
@@ -39,6 +46,7 @@ export class PlatformRouter {
     listRetention: PlatformRouter.listRetention,
     previewRetention: PlatformRouter.previewRetention,
     restorePartition: PlatformRouter.restorePartition,
+    updateTenantRetention: PlatformRouter.updateTenantRetention,
     updateRetention: PlatformRouter.updateRetention,
   } as const;
 }

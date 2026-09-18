@@ -5,6 +5,7 @@ import {
   PlatformQueries,
   RestorePartitionPanel,
   RetentionPolicyForm,
+  TenantRetentionForm,
   useApiClient,
   useAppQuery,
   useCapabilities,
@@ -55,5 +56,15 @@ function RestoreSection() {
   const retention = useAppQuery(PlatformQueries.retention(client));
 
   if (!retention.isSuccess) return null;
-  return <RestorePartitionPanel tables={retention.data.postgres} />;
+
+  // Only the tables an override can name: the use-case refuses one on a table the
+  // calendar never retires, so offering it would be a form whose save is an error.
+  const overridable = retention.data.postgres.filter((table) => !table.neverDropped);
+
+  return (
+    <>
+      <RestorePartitionPanel tables={retention.data.postgres} />
+      <TenantRetentionForm tables={overridable} />
+    </>
+  );
 }

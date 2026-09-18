@@ -39,6 +39,12 @@ export const platform = {
   "platform.retention.preview.none": "পরবর্তী চালনায় কিছুই বাদ যাবে না।",
   "platform.retention.preview.summary":
     "পরবর্তী চালনা {partitions}টি পার্টিশন, আনুমানিক {rows}টি সারি, {bytes} বাইট বাদ দেবে।",
+  "platform.tenantRetention.title": "একটি টেন্যান্টের সংরক্ষণকাল",
+  "platform.tenantRetention.description":
+    "একটি প্রতিষ্ঠানের জন্য টেবিলের নিজস্ব সংখ্যা অগ্রাহ্য করে। ক্যালেন্ডার ইতিমধ্যেই যে টেবিলগুলি অবসর দেয়, কেবল সেগুলিই অগ্রাহ্য করা যায়।",
+  "platform.tenantRetention.organization": "প্রতিষ্ঠানের আইডি",
+  "platform.tenantRetention.coldNote": "টেবিলের চেয়ে কম কোল্ড মাস বাকেট নয়, রাতের কাজ কার্যকর করে।",
+  "platform.tenantRetention.saved": "সংরক্ষিত।",
   "platform.restore.title": "একটি মাস ফিরিয়ে আনুন",
   "platform.restore.description":
     "কোল্ড স্টোরেজ থেকে একটি মাস পড়ে আনে। টেবিলের হট উইন্ডোর ভিতরে হলে এটি সংযুক্ত হয়ে আবার সক্রিয় হয়; বাইরে হলে একটি স্ক্র্যাচ টেবিলে থাকে — সক্রিয় করতে হলে আগে হট মাস বাড়ান।",

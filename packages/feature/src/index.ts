@@ -96,6 +96,8 @@ export {
   RetentionPolicyForm,
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,
+  TenantRetentionForm,
+  type TenantRetentionFormProps,
 } from "./platform/index.js";
 export {
   CreateRoleForm,

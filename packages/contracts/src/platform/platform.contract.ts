@@ -67,6 +67,15 @@ export class PlatformContract {
     }),
   });
 
+  // The tenant leads, as the row does. `tableName` is still a string and still
+  // validated one layer in, for the reason every other table name here is.
+  public static readonly tenantRetentionUpdate = z.object({
+    organizationId: Identifiers.organizationId,
+    tableName: z.string().min(1).max(64),
+    hotMonths: z.number().int().min(1).max(600),
+    coldMonths: z.number().int().min(0).max(600).nullable(),
+  });
+
   public static readonly restore = z.object({
     tableName: z.string().min(1).max(64),
     // The first of a month, which is what `partition_archive` stores and what a replay
@@ -123,6 +132,7 @@ export type PlatformHealthDto = z.infer<typeof PlatformContract.health>;
 export type RetentionDto = z.infer<typeof PlatformContract.retention>;
 export type RetentionEntryDto = z.infer<typeof PlatformContract.retentionEntry>;
 export type RestoreInput = z.infer<typeof PlatformContract.restore>;
+export type TenantRetentionUpdateInput = z.infer<typeof PlatformContract.tenantRetentionUpdate>;
 export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequested>;
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;

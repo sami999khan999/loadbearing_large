@@ -81,6 +81,7 @@ export {
   type RetentionEntryDto,
   type RetentionPreviewDto,
   type RetentionUpdateInput,
+  type TenantRetentionUpdateInput,
 } from "./platform/index.js";
 export {
   type ApiKeyId,

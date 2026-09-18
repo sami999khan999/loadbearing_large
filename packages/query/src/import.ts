@@ -54,6 +54,7 @@ export type {
   SearchDocumentsContractInput,
   SendMessageInput,
   SetMemberActiveInput,
+  TenantRetentionUpdateInput,
   TypingInput,
   UpdateNotificationPreferenceInput,
   UpdateRoleInput,

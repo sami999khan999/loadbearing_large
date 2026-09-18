@@ -14,4 +14,5 @@ export const platformProcedurePermissions = {
   // Manage, not read: a restore writes a table and, inside the hot window, attaches
   // it — which is a change to what the live database holds.
   "platform.restorePartition": "platform.retention.manage",
+  "platform.updateTenantRetention": "platform.retention.manage",
 } as const satisfies Record<string, PermissionKey>;

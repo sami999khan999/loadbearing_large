@@ -3,6 +3,7 @@ import type {
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
+  TenantRetentionUpdateInput,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 import { useAppMutation } from "../runtime/index.js";
@@ -15,6 +16,15 @@ export class PlatformMutations {
   public static useUpdateRetention(client: ApiClient) {
     return useAppMutation<{ ok: true }, RetentionUpdateInput>({
       mutationFn: (input) => client.platform.updateRetention(input),
+      invalidates: [QueryKeys.platform.retention()],
+    });
+  }
+
+  // Invalidates the list, which does not carry overrides — but a second tab showing
+  // stale table defaults beside a changed override is the confusion worth avoiding.
+  public static useUpdateTenantRetention(client: ApiClient) {
+    return useAppMutation<{ ok: true }, TenantRetentionUpdateInput>({
+      mutationFn: (input) => client.platform.updateTenantRetention(input),
       invalidates: [QueryKeys.platform.retention()],
     });
   }

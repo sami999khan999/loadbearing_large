@@ -72,6 +72,7 @@ export {
   SignOutButton,
   SignUpForm,
   SocialSignIn,
+  TenantRetentionForm,
   TwoFactorForm,
   TwoFactorPanel,
   TwoFactorSetup,

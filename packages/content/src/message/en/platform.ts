@@ -48,6 +48,15 @@ export const platform = {
   // the honest word and not a hedge.
   "platform.retention.preview.summary":
     "The next run drops {partitions} partitions, about {rows} rows, {bytes} bytes.",
+  "platform.tenantRetention.title": "One tenant's retention",
+  "platform.tenantRetention.description":
+    "Overrides the table's own numbers for one organization. Only tables the calendar already retires can be overridden.",
+  "platform.tenantRetention.organization": "Organization id",
+  // The asymmetry: hot months are exact because the tenant's month is its own
+  // partition, and cold months are the worker's because a prefix rule cannot be.
+  "platform.tenantRetention.coldNote":
+    "Cold months shorter than the table's are enforced by the nightly run rather than by the bucket.",
+  "platform.tenantRetention.saved": "Saved.",
   "platform.restore.title": "Restore a month",
   // Both outcomes, because which applies is not the operator's to choose: inside the
   // hot window it goes live, outside it stays where retention will not fight it.
