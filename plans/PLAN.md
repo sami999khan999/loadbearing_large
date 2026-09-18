@@ -43,8 +43,8 @@ needs a database does — and on a clean clone, `pnpm install` then `pnpm build:
 
 **`16.1` and the merge unit after it are built** (2026-09-18): the pruning spec, the two-level
 tenant layout, its seed, the two-level maintenance gateway and the per-tenant projection, plus
-`16.8` which came with the gateway. **Start at `16.7`** — the four tenant-only tables it still has
-to cover — then `16.9`–`16.13`, then 17, then 19 on top of it. Phase 18 touches permissions, auth
+`16.7` and `16.8`. **Start at `16.9`** — `pnpm db:partitions` — then `16.10`–`16.13`, then 17, then
+19 on top of it. Phase 18 touches permissions, auth
 and composition only and can run beside all of that. Phase 23 is independent small work for any
 spare hour.
 
@@ -67,7 +67,7 @@ spare hour.
 | 13 | Messaging: conversations and messages | Communication | ✅ done | 2026-09-13 | `COMMUNICATION-PLAN.md` Phase 5 |
 | 14 | Connection pooling: the pool you can see, and the pooler in front of it | Scaling | ✅ done | 2026-09-13 | `DB-SCALING-PLAN.md` Phase 1 |
 | 15 | Partition policy on the allowlist | Scaling | ✅ done | 2026-09-13 → 17 | `DB-SCALING-PLAN.md` 2.A and `S2.4` |
-| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.6, 16.8 done | `DB-SCALING-PLAN.md` 2.B |
+| 16 | Pruning proven, and the tenant layout | Scaling | 🟨 part | in progress — 16.1–16.8 done | `DB-SCALING-PLAN.md` 2.B |
 | 17 | Cold storage: retention stops meaning deletion | Scaling | ⬜ open | after 16 | `DB-SCALING-PLAN.md` 2.C |
 | 18 | The platform tier, on RBAC | Admin | ⬜ open | any time — no gate | `PLATFORM-ADMIN-PLAN.md` Phase 1 |
 | 19 | Retention: hot months, cold months, cold mode, and the ClickHouse TTL | Admin | ⬜ open | after 17 and 18 | `PLATFORM-ADMIN-PLAN.md` Phase 2 |
@@ -1207,7 +1207,7 @@ against twenty-two migrations, not twenty-one.
 
 #### The trailing items
 
-- [ ] `16.7` **Pruning per tenant, asserted** — `16.1`'s `EXPLAIN` spec extends to the seven
+- [x] `16.7` **Pruning per tenant, asserted** `done: 2026-09-18` — `16.1`'s `EXPLAIN` spec extends to the seven
   tables with a first assertion that is now true of every read: exactly one tenant partition is
   scanned. Per table: `notifications` `list`, `countUnread`, `existsUnread`, `markRead`,
   `markAllRead` (one tenant; `markRead` one month); `messages` `findById`, `edit`, `softDelete` (one
@@ -1218,6 +1218,27 @@ against twenty-two migrations, not twenty-one.
   `upsert` (one tenant each); `activity_log` `since(organizationId, …)` (one tenant, the months
   after the checkpoint). The assertion form is the ceiling `16.1` already uses: partitions scanned
   ≤ partitions that exist for that tenant, and never another tenant's. **Docs:** `partitions.md`.
+  `built: 2026-09-18` — twenty-four cases. The tenant assertion is proven against a *second* tenant
+  holding rows in the same months, because on a database with one tenant in it a read that lost its
+  predicate passes anyway. `edit` and `softDelete` join the one-month set; `unreadCounts` is left
+  out, and deliberately: its floor is `last_read_at`, so the shape it would assert is the tail
+  already pinned by `listUnreadSince`, against a correlated subquery whose plan is a different
+  argument. Reopen it with `17.6` if the read changes.
+
+  **This item found the bug the phase would otherwise have shipped.** The spec's own cleanup
+  exposed that `dropTenantPartitions` used `DROP TABLE … CASCADE`, and a foreign key referencing a
+  partitioned table is a constraint on the *parent* — so dropping one tenant took
+  `conversation_members_conversation_fk` and `messages_conversation_fk` off the parents for **every**
+  tenant, permanently, with nothing but a `NOTICE`. Every later write to either table was unchecked.
+  Fixed by detaching and then dropping, and by ordering `PartitionedTable.ALL` so a table is listed
+  ahead of the tables that reference it — Postgres refuses to detach a referenced partition while
+  rows point into it, so the reverse of that list is the drop order.
+  `tests/maintenance/tenant-partition.spec.ts` drops a populated tenant and reads `pg_constraint`
+  back; it fails on the old form, which is how it was proved.
+
+  The plan named no spec for `TenantPartitionSeed` or `dropTenantPartitions` at all — `16.4` and
+  `16.5` list the code and the docs and no test. That file is now the one, and the gap is worth
+  noticing for `17.1`, which replaces the port these methods sit on.
 
 - [x] `16.8` **`MaintenanceGateway.partitionsBefore`, the read behind the retention preview** `done: 2026-09-18` —
   `partitionsBefore(table: PartitionedTableName, cutoff: Date): Promise<readonly PartitionEstimate[]>`,
