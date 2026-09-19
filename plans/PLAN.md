@@ -3764,6 +3764,40 @@ bug that has since been fixed. Take one when a build is waiting on CI.
 Filed, not built. Every item is the decision or the mechanism a second physical node needs, written
 down so the seam in Phase 22 is judged against a real target rather than a feeling.
 
+- [ ] `23.20` **The shipped configuration warns about itself on every worker boot**
+  `found: 2026-09-20` — in the boot smoke's own output, which is what `23.16` is for.
+  - **The line.** `worker.pool.oversubscribed {concurrency: 20, poolMax: 10}`, at `warn`, once per
+    boot. It is not this machine's `.env`: it is `.env.example`'s own numbers.
+    `DATABASE_POOL_MAX=10` against six consumers summing to twenty — embedding 4, mail 4,
+    event 8, notification 2, maintenance 1, analytics 1.
+  - **The mechanism is right and the defaults are what is in question.**
+    `WorkerBootstrap.warnIfOversubscribed` counts every started consumer's concurrency against the
+    pool and warns rather than throwing, because "a job that holds no connection is legitimate".
+    That is correct — and a `warn` the shipped configuration produces every time is a `warn`
+    people learn to ignore, which is the failure this repository names about red builds.
+  - **The real tension underneath.** `DATABASE_POOL_MAX` is **one variable read by two processes**
+    whose concurrency profiles are nothing alike: the web app serves requests that each hold a
+    connection briefly, and the worker runs twenty long jobs of which several hold none at all.
+    One number cannot be right for both.
+
+  **Recommended 2026-09-20, and not implemented — this is a defaults decision.** Three shapes:
+
+  - **(a) Raise the shipped `DATABASE_POOL_MAX` to 20**, in `.env.example` and both schema
+    defaults. One line each, and it makes the default configuration stop warning about itself.
+    Application-side connections sit behind pgBouncer in transaction mode, which is the whole
+    reason they are cheap — so twenty is not twenty backend connections. **This is the
+    recommendation**, on the grounds that the cheapest correct answer to "a warning nobody can act
+    on" is to make the thing it warns about not be true.
+  - **(b) Count only the consumers that touch the database.** Sharper, and it is the honest
+    version of the warning: `mail` holds no Postgres connection at all, so the count overstates by
+    four before anything else. It costs each consumer a declaration of whether it needs one, which
+    is real structure for a line that fires once a boot.
+  - **(c) A separate `WORKER_DATABASE_POOL_MAX`.** Names the tension instead of splitting the
+    difference, and adds an env key and a second code path for a number two processes disagree
+    about. Worth it only once somebody has tuned them apart in anger.
+
+  Whichever lands, the number in `.env.example` and the number the warning compares against have
+  to be chosen together — today they were not, which is why the line fires.
 - [ ] `24.1` **The foreign-key decision.** Two shapes, decided when a second shard is actually
   provisioned: **(a)** drop every FK from a routed table to a catalog table, replace tenant
   delete with a maintenance job that sweeps routed rows by `organization_id` per shard, and add a

@@ -543,10 +543,11 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-two boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.2`, `26.8` and
-`26.9` closed. `23.17`, `23.18`, `23.19` and `26.12` were added and closed in the same night, so none of them
-ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not paraphrased here,
-and the numbers drift as `PLAN.md` is edited above them.
+Thirty-three boxes, all in Phases 23–26: thirty-two left after `23.4`, `23.13`, `23.16`, `25.4`,
+`26.2`, `26.8` and `26.9` closed, plus `23.20`, which was found that night and filed rather than
+fixed. `23.17`, `23.18`, `23.19` and `26.12` were added and closed in the same night, so none of
+them ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not
+paraphrased here, and the numbers drift as `PLAN.md` is edited above them.
 
 ### Phase 23 — Loose ends (no gate, any spare hour)
 
@@ -574,6 +575,10 @@ From `TODO.md`
 - `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h` `#api` `#db` — line 3470
 - `23.15` **The English fallback layer is now dead payload** `P3` `~3h` `#ui` — **recommendation filed 2026-09-20: drop the base layer**, with the measurement (3 471 characters of unreachable English on every `bn` page) and the two reasons the entry gave for keeping it, neither of which holds as built
 - ~~`23.16` **The web boot smoke is still switched off for a bug that is fixed**~~ — closed 2026-09-20: `boot-smoke.mjs web` probes `/` and runs in CI
+
+Found on the way, 2026-09-20
+
+- `23.20` **The shipped configuration warns about itself on every worker boot** — filed with a recommendation and **not** implemented: which of three shapes is right is a defaults decision
 
 ### Phase 24 — The physical split (gated on a second shard being provisioned)
 
@@ -735,3 +740,9 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   `tsconfig` include, so `tsc` had never compiled it — and adding it turned up a second thing
   nobody had compiled. **Assertion §26** is the durable half: every `*.ts` at a package root is
   named in that package's `tsconfig.json`.
+- `23.20` **The shipped configuration warns about itself on every worker boot** — **filed, not
+  fixed**, because which of three shapes is right is a defaults decision. `.env.example`'s own
+  numbers give `worker.pool.oversubscribed {concurrency: 20, poolMax: 10}` at `warn`, once per
+  boot, on a clean install. The mechanism is correct; the numbers were chosen apart from it. The
+  tension underneath is that `DATABASE_POOL_MAX` is **one variable read by two processes** whose
+  concurrency profiles are nothing alike. The recommendation is under the entry.
