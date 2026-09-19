@@ -6,6 +6,7 @@
     "enrollers",
     "pgvector",
     "partitions",
+    "sharding",
     "cold-storage",
     "storage-policy",
     "clickhouse",

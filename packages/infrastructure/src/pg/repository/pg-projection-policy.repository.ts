@@ -1,4 +1,8 @@
-import type { ProjectionPolicyRecord, ProjectionPolicyRepository } from "../../import.js";
+import type {
+  Placement,
+  ProjectionPolicyRecord,
+  ProjectionPolicyRepository,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { projectionPolicy } from "../schema/index.js";
 
@@ -6,6 +10,9 @@ export class PgProjectionPolicyRepository
   extends BaseRepository
   implements ProjectionPolicyRepository
 {
+  // Deployment-wide policy.
+  protected override readonly placement: Placement = "catalog";
+
   public async all(): Promise<readonly ProjectionPolicyRecord[]> {
     return this.db
       .select({

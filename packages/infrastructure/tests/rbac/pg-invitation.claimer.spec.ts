@@ -3,6 +3,7 @@ import { SystemClock, Token, Uuid } from "@loadbearing/core";
 import { and, eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgInvitationClaimer } from "../../src/pg/repository/pg-invitation.claimer.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
@@ -15,8 +16,11 @@ import {
   roles,
   users,
 } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 // Captures the SQL the claimer actually issued, so the predicate assertion below is
 // against the query under test rather than a copy of it that can drift.
@@ -76,13 +80,29 @@ const invite = async (
 
 const withScope = () => {
   const scope = new TransactionScope();
-  const activity = new PgActivityLogger(database, scope, new SystemClock());
+  const activity = new PgActivityLogger(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new SystemClock(),
+  );
   // The real publisher, not a double: a claim writes its event in the same transaction as
   // the membership row, and that is the property this spec is here to hold.
-  const events = new PgOutboxPublisher(database, scope, new SystemClock());
+  const events = new PgOutboxPublisher(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new SystemClock(),
+  );
   return {
-    claimer: new PgInvitationClaimer(database, scope, activity, events),
-    founder: new PgOrganizationFounder(database, scope, activity),
+    claimer: new PgInvitationClaimer(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      activity,
+      events,
+    ),
+    founder: new PgOrganizationFounder(DatabaseCluster.single(database), scope, shards, activity),
   };
 };
 

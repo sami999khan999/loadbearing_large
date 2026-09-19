@@ -1,10 +1,19 @@
-import { asc, gt, type OrganizationId, type OrganizationReader } from "../../import.js";
+import {
+  asc,
+  gt,
+  type OrganizationId,
+  type OrganizationReader,
+  type Placement,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { organizations } from "../schema/index.js";
 
 // The catalog read every per-tenant loop starts from, and the one read in this system
 // that is cross-tenant by definition rather than by accident.
 export class PgOrganizationReader extends BaseRepository implements OrganizationReader {
+  // `organizations` is the catalog's own table.
+  protected override readonly placement: Placement = "catalog";
+
   public async page(
     after: OrganizationId | null,
     limit: number,

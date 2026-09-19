@@ -3,12 +3,16 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgMembershipReader } from "../../src/pg/repository/pg-membership.reader.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 const created: UserId[] = [];
@@ -33,9 +37,10 @@ const makeUser = async (name: string) => {
 const found = async (userId: UserId, name: string) => {
   const scope = new TransactionScope();
   const founder = new PgOrganizationFounder(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgActivityLogger(database, scope, new SystemClock()),
+    shards,
+    new PgActivityLogger(DatabaseCluster.single(database), scope, shards, new SystemClock()),
   );
   const id = await founder.found(userId, name);
   founded.push(id);
@@ -48,7 +53,8 @@ const setLastActive = (userId: UserId, organizationId: OrganizationId | null) =>
     .set({ lastActiveOrganizationId: organizationId })
     .where(eq(users.id, userId));
 
-const reader = () => new PgMembershipReader(database, new TransactionScope());
+const reader = () =>
+  new PgMembershipReader(DatabaseCluster.single(database), new TransactionScope(), shards);
 
 // Joins a user to an existing tenant at a named system role, which `found` cannot do —
 // its founder is always the owner.

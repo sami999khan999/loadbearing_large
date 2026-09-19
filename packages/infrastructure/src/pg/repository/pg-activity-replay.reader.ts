@@ -14,6 +14,7 @@ import {
   not,
   type OrganizationId,
   or,
+  type Placement,
   type ProjectionCheckpoint,
   type SQL,
   sql,
@@ -24,6 +25,9 @@ import { activityLog } from "../schema/index.js";
 // The read side of the audit trail. It exists for the projection pipeline: a derived
 // store that cannot be rebuilt has quietly become a source of truth.
 export class PgActivityReplayReader extends BaseRepository implements ActivityReplayReader {
+  // Reads `activity_log`, which is on every node.
+  protected override readonly placement: Placement = "local";
+
   // Keyset on `(occurred_at, id)` within one tenant: `>` drops a row sharing a microsecond,
   // `>=` replays one forever, and no tenant predicate appends every tenant's months.
   public async since(

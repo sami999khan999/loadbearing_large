@@ -15,6 +15,7 @@ import {
   PartitionedTable,
   type PartitionedTableEntry,
   type PartitionedTableName,
+  type Placement,
   type ProjectionGap,
   pipeline,
   Readable,
@@ -24,10 +25,9 @@ import {
   sql,
   type TenantExport,
 } from "../../import.js";
-import type { Database } from "../primitive/index.js";
-import { BaseRepository } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { partitionArchive } from "../schema/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 // Rows per round trip out of the detached partition. Large enough that the cursor
 // overhead disappears, small enough that one batch is a few megabytes of JSON.
@@ -115,12 +115,16 @@ interface Child {
 }
 
 export class PgPartitionArchiveGateway extends BaseRepository implements PartitionArchiveGateway {
+  // Detaches local and routed partitions; its index row is catalog and written outside any routed transaction.
+  protected override readonly placement: Placement = "local";
+
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly storage: StorageGateway,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // One table-month, one tenant-month child at a time. Each child runs the whole

@@ -10,9 +10,9 @@ import {
 import { Uuid } from "@loadbearing/core";
 import { and, asc, eq, type Logger, sql } from "drizzle-orm";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
-import { KeysetCursor } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster, KeysetCursor } from "../../src/pg/primitive/index.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
 import { PgConversationRepository } from "../../src/pg/repository/pg-conversation.repository.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
@@ -31,8 +31,20 @@ import {
   users,
 } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, dropTenant, openDatabase, seedTenant } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
+
+// Routed repositories refuse to pick a pool with no shard in scope, which is the
+// tripwire working. One node here, so entering it is the whole placement.
+const placeOnTheOneNode = () => shards.enter({ key: "spec" as never, node: 0 });
+
+// Both hooks, and registered first: vitest runs every `beforeAll` before any
+// `beforeEach`, and a fixture built in one of those makes routed queries too.
+beforeAll(placeOnTheOneNode);
+beforeEach(placeOnTheOneNode);
 
 // The ruler every retention change after this one is measured with: a predicate that
 // stops naming a partition key is a plan nobody reads until production is slow.
@@ -178,14 +190,18 @@ beforeAll(async () => {
   explain = new Pool({ connectionString: DATABASE_URL });
 
   const scope = new TransactionScope();
-  const unitOfWork = new PgUnitOfWork(database, scope);
-  inbox = new PgNotificationRepository(database, scope);
-  chat = new PgMessageRepository(database, scope);
-  rooms = new PgConversationRepository(database, scope);
-  preferences = new PgNotificationPreferenceRepository(database, scope);
-  corpus = new PgVectorStore(database, scope);
-  replay = new PgActivityReplayReader(database, scope);
-  outbox = new PgOutboxGateway(database, scope, unitOfWork);
+  const unitOfWork = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
+  inbox = new PgNotificationRepository(DatabaseCluster.single(database), scope, shards);
+  chat = new PgMessageRepository(DatabaseCluster.single(database), scope, shards);
+  rooms = new PgConversationRepository(DatabaseCluster.single(database), scope, shards);
+  preferences = new PgNotificationPreferenceRepository(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+  );
+  corpus = new PgVectorStore(DatabaseCluster.single(database), scope, shards);
+  replay = new PgActivityReplayReader(DatabaseCluster.single(database), scope, shards);
+  outbox = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards, unitOfWork);
 
   reader = Identifiers.userId.parse(Uuid.v7());
   await database.client
@@ -196,7 +212,12 @@ beforeAll(async () => {
   // `dropTenantPartitions` to clean up, and leaves nothing for the next spec to find.
   [organizationId, neighbour] = [await founded("Mine"), await founded("Neighbour")];
 
-  const maintenance = new PgMaintenanceGateway(database, scope, unitOfWork);
+  const maintenance = new PgMaintenanceGateway(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    unitOfWork,
+  );
   for (const entry of PartitionedTable.MONTH_PARTITIONED) {
     for (const tenant of entry.tenantKey ? [organizationId, neighbour] : [null]) {
       await maintenance.ensureMonthlyPartitions(entry.name, tenant, FIRST, 2);

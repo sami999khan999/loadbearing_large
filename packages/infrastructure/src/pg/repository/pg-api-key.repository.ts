@@ -14,6 +14,7 @@ import {
   type OrganizationId,
   or,
   type PaginationQuery,
+  type Placement,
   type UserId,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -34,6 +35,9 @@ const SUMMARY = {
 };
 
 export class PgApiKeyRepository extends BaseRepository implements ApiKeyRepository {
+  // `api_keys` is one of the two lookups that arrive holding no tenant.
+  protected override readonly placement: Placement = "catalog";
+
   // Not tenant-scoped, and it cannot be: the organization is what this lookup
   // *establishes*, from a bare header with no principal behind it yet.
   public async findByPrefix(prefix: string): Promise<readonly ApiKeyRecord[]> {

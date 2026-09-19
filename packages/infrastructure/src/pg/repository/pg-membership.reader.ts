@@ -1,4 +1,13 @@
-import { and, asc, eq, isNull, type OrganizationId, sql, type UserId } from "../../import.js";
+import {
+  and,
+  asc,
+  eq,
+  isNull,
+  type OrganizationId,
+  type Placement,
+  sql,
+  type UserId,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { memberships, organizations, roles, users } from "../schema/index.js";
 
@@ -18,6 +27,9 @@ const OWNER_ROLE_KEY = "owner";
 // Satisfies `MembershipReader` structurally, because `auth` already depends on this
 // package. See docs/reference/enrollers.md.
 export class PgMembershipReader extends BaseRepository {
+  // `memberships` is RBAC, read before a key is known.
+  protected override readonly placement: Placement = "catalog";
+
   // The switcher renders every row `organizationsFor` returns, so an unbounded read is a
   // list that grows without limit. Past this a user needs search, not a longer list.
   private static readonly MAX_ORGANIZATIONS = 100;

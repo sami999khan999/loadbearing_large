@@ -13,6 +13,7 @@ import {
   type NewMessage,
   NotFoundError,
   type OrganizationId,
+  type Placement,
   sql,
   type UnreadCount,
   type UserId,
@@ -36,6 +37,9 @@ interface MessageRow {
 }
 
 export class PgMessageRepository extends BaseRepository implements MessageRepository {
+  // `messages` is tenant-produced.
+  protected override readonly placement: Placement = "routed";
+
   // One statement. Backwards from the newest, which is the direction a conversation is
   // read, and the cursor is named for that direction all the way to the client.
   public async list(

@@ -6,11 +6,14 @@
 
 import "dotenv/config";
 import { asc, gt, type OrganizationId, PartitionedTable } from "./src/import.js";
-import { Database } from "./src/pg/primitive/index.js";
+import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
 import { PgMaintenanceGateway, PgPartitionArchiveGateway } from "./src/pg/repository/index.js";
 import { organizations } from "./src/pg/schema/index.js";
-import { PgUnitOfWork, TransactionScope } from "./src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "./src/pg/transaction/index.js";
 import { S3StorageGateway } from "./src/s3/index.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 // The same three the schedule keeps ahead — the current month and the next two — so
 // running this by hand cannot leave a different runway from running it on the clock.
@@ -25,7 +28,12 @@ if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
 
 const database = new Database({ url });
 const scope = new TransactionScope();
-const maintenance = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
+const maintenance = new PgMaintenanceGateway(
+  DatabaseCluster.single(database),
+  scope,
+  shards,
+  new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
+);
 const now = new Date();
 
 const sweepAt = process.argv.indexOf("--sweep");
@@ -47,7 +55,12 @@ if (sweepAt !== -1) {
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
   });
 
-  const archive = new PgPartitionArchiveGateway(database, scope, storage);
+  const archive = new PgPartitionArchiveGateway(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    storage,
+  );
   const objects = await archive.sweep(organizationId as OrganizationId);
 
   await database.close();

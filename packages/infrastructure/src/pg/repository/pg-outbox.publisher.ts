@@ -3,20 +3,25 @@ import {
   type DomainEventInput,
   type DomainEventName,
   type DomainEventPublisher,
+  type Placement,
   type Principal,
   Uuid,
 } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { outboxEvent } from "../schema/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 export class PgOutboxPublisher extends BaseRepository implements DomainEventPublisher {
+  // Writes `outbox_event` inside whichever transaction is open.
+  protected override readonly placement: Placement = "local";
+
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly clock: Clock,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // Writes through `this.db`, so it joins whatever transaction is open. That is what

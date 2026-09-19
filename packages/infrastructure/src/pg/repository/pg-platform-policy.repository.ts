@@ -1,4 +1,4 @@
-import type { PlatformPolicyRecord, PlatformPolicyRepository } from "../../import.js";
+import type { Placement, PlatformPolicyRecord, PlatformPolicyRepository } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { platformPolicy } from "../schema/index.js";
 
@@ -9,6 +9,9 @@ const ROW = 1;
 const DEFAULTS: PlatformPolicyRecord = { projectionEnabled: true, replicaReadsEnabled: false };
 
 export class PgPlatformPolicyRepository extends BaseRepository implements PlatformPolicyRepository {
+  // Deployment-wide policy.
+  protected override readonly placement: Placement = "catalog";
+
   public async get(): Promise<PlatformPolicyRecord> {
     const rows = await this.db
       .select({

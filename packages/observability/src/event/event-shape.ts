@@ -109,6 +109,13 @@ export interface EventShape {
     readonly organizations: number;
     readonly objects: number;
   };
+  readonly "shard.resolution.failed": {
+    readonly key: string;
+  };
+  readonly "shard.assignment.created": {
+    readonly key: string;
+    readonly node: number;
+  };
   readonly "cold.partition.reprojected": {
     readonly period: string;
     readonly organizationId: string;

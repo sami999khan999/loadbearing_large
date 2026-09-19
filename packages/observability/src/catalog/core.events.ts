@@ -63,6 +63,10 @@ export const coreEvents = {
   // One per tenant-month refilled from cold storage. Idempotent through the
   // `ReplacingMergeTree`, so a second run over the same month is a no-op.
   "cold.partition.reprojected": { level: "info" },
+  // The directory has no row for a key. Today every node is zero and guessing would
+  // work; after a split it would place a tenant somewhere else entirely.
+  "shard.resolution.failed": { level: "error" },
+  "shard.assignment.created": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.

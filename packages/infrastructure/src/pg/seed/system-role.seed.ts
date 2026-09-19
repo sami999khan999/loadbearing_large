@@ -5,6 +5,7 @@ import {
   type OrganizationId,
   type PermissionKey,
   PermissionRegistry,
+  type Placement,
   sql,
   Uuid,
 } from "../../import.js";
@@ -78,6 +79,9 @@ const TENANT_KEYS: readonly PermissionKey[] = Object.freeze(
 );
 
 export class SystemRoleSeed extends BaseRepository {
+  // RBAC.
+  protected override readonly placement: Placement = "catalog";
+
   // Idempotent: safe to run on every deploy. Per organization, because system roles
   // are rows in a tenant's table rather than global constants.
   public async run(organizationId: OrganizationId): Promise<void> {

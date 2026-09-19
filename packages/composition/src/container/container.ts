@@ -22,7 +22,8 @@ import {
   CreateApiKeyUseCase,
   CreateConversationUseCase,
   CreateRoleUseCase,
-  Database,
+  type Database,
+  DatabaseCluster,
   type DatabaseStats,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
@@ -105,6 +106,8 @@ import {
   PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
+  PgShardAssignmentRepository,
+  PgShardResolver,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
@@ -141,6 +144,10 @@ import {
   SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
+  type ShardAssignmentRepository,
+  type ShardingStrategy,
+  type ShardResolver,
+  ShardScope,
   SignalTypingUseCase,
   SmtpEmailSender,
   StaticContentSource,
@@ -165,6 +172,7 @@ import {
   QueuedInvitationMailer,
   QueuedMailPublisher,
 } from "../mail/index.js";
+import { OrganizationShardingStrategy } from "../shard/index.js";
 import type { ContainerConfig } from "./container.config.js";
 import { ContainerHealthReader } from "./container-health.reader.js";
 
@@ -241,6 +249,12 @@ export class Container {
   // and `EmailSender` is a port that says nothing about a transport's lifetime.
   private readonly emailSender: SmtpEmailSender;
   private readonly transactions: TransactionScope;
+  // Established once per request by the middleware and once per job by a consumer.
+  private readonly shards: ShardScope;
+  private readonly cluster: DatabaseCluster;
+  private readonly shardResolver: ShardResolver;
+  public readonly shardAssignments: ShardAssignmentRepository;
+  public readonly sharding: ShardingStrategy;
   // Held so `health()` can ping it and `dispose()` can close it, without handing the
   // connection out.
   private readonly clickhouse: ClickHouseConnection | undefined;
@@ -411,26 +425,58 @@ export class Container {
       bound: { app: config.logging.app, env: config.logging.env },
     });
 
-    this.database = new Database({
-      url: config.database.url,
-      maxConnections: config.database.poolMax,
-      statementTimeoutMs: config.database.statementTimeoutMs,
-      idleTimeoutMs: config.database.poolIdleTimeoutMs,
-      connectionTimeoutMs: config.database.poolConnectTimeoutMs,
-      // The log label, so `pg_stat_activity` names the process holding a connection.
-      applicationName: config.logging.app,
-      onError: (error) => this.logger.emit("database.pool.error", { message: error.message }),
-    });
+    this.shards = new ShardScope();
+    this.transactions = new TransactionScope();
+    // Built before the cluster, because the cluster reads through it — and it reads
+    // through the cache, which is why neither can be a field initialiser.
+    this.shardResolver = new PgShardResolver(
+      () => this.cluster.catalog(),
+      () => this.cache,
+      () => this.logger,
+    );
 
-    // One connection, and a budget the role floor does not cap: this handle exists for a
-    // detach-and-stream that runs monthly and legitimately takes minutes.
-    this.directDatabase = new Database({
-      url: config.database.directUrl ?? config.database.url,
-      maxConnections: 1,
-      statementTimeoutMs: Container.DIRECT_STATEMENT_TIMEOUT_MS,
-      applicationName: `${config.logging.app}-direct`,
-      onError: (error) => this.logger.emit("database.pool.error", { message: error.message }),
-    });
+    // **One node unless `DATABASE_SHARD_<n>_URL` says otherwise.** The cluster is the
+    // only place in `src/` that opens a pool; everything else asks it for one.
+    this.cluster = DatabaseCluster.from(
+      [
+        {
+          pooled: {
+            url: config.database.url,
+            maxConnections: config.database.poolMax,
+            statementTimeoutMs: config.database.statementTimeoutMs,
+            idleTimeoutMs: config.database.poolIdleTimeoutMs,
+            connectionTimeoutMs: config.database.poolConnectTimeoutMs,
+            // The log label, so `pg_stat_activity` names the process holding one.
+            applicationName: config.logging.app,
+            onError: (error: Error) =>
+              this.logger.emit("database.pool.error", { message: error.message }),
+          },
+          // One connection, and a budget the role floor does not cap: this handle
+          // exists for a detach-and-stream that legitimately takes minutes.
+          direct: {
+            url: config.database.directUrl ?? config.database.url,
+            maxConnections: 1,
+            statementTimeoutMs: Container.DIRECT_STATEMENT_TIMEOUT_MS,
+            applicationName: `${config.logging.app}-direct`,
+            onError: (error: Error) =>
+              this.logger.emit("database.pool.error", { message: error.message }),
+          },
+        },
+        ...(config.database.shards ?? []),
+      ],
+      this.shardResolver,
+    );
+    this.shardAssignments = new PgShardAssignmentRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.shardResolver,
+    );
+    // One line, and the fork's swap point: the organization is the shard.
+    this.sharding = new OrganizationShardingStrategy();
+
+    this.database = this.cluster.catalog();
+    this.directDatabase = this.cluster.directCatalog();
 
     // Unreferenced, so a script that builds a container and finishes is not held open by
     // a timer nobody is reading.
@@ -441,7 +487,6 @@ export class Container {
       cacheUrl: config.redis.cacheUrl,
       queueUrl: config.redis.queueUrl,
     });
-    this.transactions = new TransactionScope();
 
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
@@ -454,23 +499,29 @@ export class Container {
     // The *direct* pool, not the shared one: a month-sized detach and stream needs a
     // budget the 30 s role floor will not give it. See docs/infra/reference/pgbouncer.md.
     this.partitionArchive = new PgPartitionArchiveGateway(
-      this.directDatabase,
+      this.cluster,
       this.transactions,
+      this.shards,
       this.storage,
     );
 
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
-    this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
+    this.unitOfWork = new PgUnitOfWork(this.cluster, this.transactions, this.shards, "catalog", {
       statementTimeoutMs: config.database.statementTimeoutMs,
     });
-    this.maintenance = new PgMaintenanceGateway(this.database, this.transactions, this.unitOfWork);
-    this.organizations = new PgOrganizationReader(this.database, this.transactions);
+    this.maintenance = new PgMaintenanceGateway(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.unitOfWork,
+    );
+    this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
 
     // ── the swap points ──
     // Each reads a `driver` rather than naming a class: the alternative is named in a
     // switch a compiler checks, not in a document.
-    this.vectors = Container.buildVectorStore(config, this.database, this.transactions);
+    this.vectors = Container.buildVectorStore(config, this.cluster, this.transactions, this.shards);
     this.embeddings = new OpenAiEmbeddingProvider(config.embedding, this.logger);
 
     // Opt-in and stopped by default. Building the connection only when configured is
@@ -498,15 +549,29 @@ export class Container {
     this.mailRenderer = new ContentMailRenderer(this.content);
     this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
-    const capabilityRepository = new PgCapabilityRepository(this.database, this.transactions);
-    this.platform = new PgPlatformReader(this.database, this.transactions);
+    const capabilityRepository = new PgCapabilityRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.platform = new PgPlatformReader(this.cluster, this.transactions, this.shards);
     this.capabilities = new CapabilityCache(capabilityRepository, this.cache, this.platform);
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
-    this.activity = new PgActivityLogger(this.database, this.transactions, this.clock);
-    this.eventPublisher = new PgOutboxPublisher(this.database, this.transactions, this.clock);
-    this.outbox = new PgOutboxGateway(this.database, this.transactions, this.unitOfWork);
+    this.activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    this.eventPublisher = new PgOutboxPublisher(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.clock,
+    );
+    this.outbox = new PgOutboxGateway(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.unitOfWork,
+    );
     this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
     // one — which is what makes `health().realtime` honestly `null`.
@@ -516,14 +581,20 @@ export class Container {
       queueSize: Container.REALTIME_QUEUE_SIZE,
     });
 
-    const notifications = new PgNotificationRepository(this.database, this.transactions);
-    const notificationPreferences = new PgNotificationPreferenceRepository(
-      this.database,
+    const notifications = new PgNotificationRepository(
+      this.cluster,
       this.transactions,
+      this.shards,
+    );
+    const notificationPreferences = new PgNotificationPreferenceRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
     );
     const notificationRecipients = new PgNotificationRecipientReader(
-      this.database,
+      this.cluster,
       this.transactions,
+      this.shards,
     );
 
     this.notification = {
@@ -568,8 +639,12 @@ export class Container {
       digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
     };
 
-    const conversations = new PgConversationRepository(this.database, this.transactions);
-    const messages = new PgMessageRepository(this.database, this.transactions);
+    const conversations = new PgConversationRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const messages = new PgMessageRepository(this.cluster, this.transactions, this.shards);
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.
     const conversationAccess = new ConversationAccess(conversations);
@@ -657,24 +732,26 @@ export class Container {
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
-    this.memberships = new PgMembershipReader(this.database, this.transactions);
+    this.memberships = new PgMembershipReader(this.cluster, this.transactions, this.shards);
     this.organizationFounder = new PgOrganizationFounder(
-      this.database,
+      this.cluster,
       this.transactions,
+      this.shards,
       this.activity,
     );
     this.invitationClaimer = new PgInvitationClaimer(
-      this.database,
+      this.cluster,
       this.transactions,
+      this.shards,
       this.activity,
       this.eventPublisher,
     );
 
     // One instance each: they hold no state beyond the pool and the scope, so a second
     // copy would be a second name.
-    const roles = new PgRoleRepository(this.database, this.transactions);
-    const members = new PgMemberRepository(this.database, this.transactions);
-    const invitations = new PgInvitationRepository(this.database, this.transactions);
+    const roles = new PgRoleRepository(this.cluster, this.transactions, this.shards);
+    const members = new PgMemberRepository(this.cluster, this.transactions, this.shards);
+    const invitations = new PgInvitationRepository(this.cluster, this.transactions, this.shards);
 
     // Skipped when `config.auth` is absent: `apps/worker` builds a `SystemPrincipal`
     // from a named grant list and never resolves a credential.
@@ -684,8 +761,9 @@ export class Container {
       const membershipEnroller: MembershipEnroller = Container.enroller(
         config.auth.enrolmentMode,
         config.auth.bootstrapOrganizationSlug,
-        this.database,
+        this.cluster,
         this.transactions,
+        this.shards,
         this.organizationFounder,
         this.invitationClaimer,
       );
@@ -704,7 +782,7 @@ export class Container {
       );
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
-      const apiKeyRepository = new PgApiKeyRepository(this.database, this.transactions);
+      const apiKeyRepository = new PgApiKeyRepository(this.cluster, this.transactions, this.shards);
       const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
 
       this.apiKeyUseCases = {
@@ -772,16 +850,29 @@ export class Container {
       };
     }
 
-    this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
+    this.activityReplay = new PgActivityReplayReader(this.cluster, this.transactions, this.shards);
 
     // `this` is fully assigned by here, and `report()` is only ever called on a
     // request — the reader holds the container, it does not read it during the build.
-    this.projectionPolicies = new PgProjectionPolicyRepository(this.database, this.transactions);
-    this.platformPolicy = new PgPlatformPolicyRepository(this.database, this.transactions);
-    this.retentionPolicies = new PgRetentionPolicyRepository(this.database, this.transactions);
-    this.tenantRetentionPolicies = new PgTenantRetentionPolicyRepository(
-      this.database,
+    this.projectionPolicies = new PgProjectionPolicyRepository(
+      this.cluster,
       this.transactions,
+      this.shards,
+    );
+    this.platformPolicy = new PgPlatformPolicyRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.retentionPolicies = new PgRetentionPolicyRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.tenantRetentionPolicies = new PgTenantRetentionPolicyRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
     );
 
     this.platformAdmin = {
@@ -789,7 +880,7 @@ export class Container {
       // analytics store there is no derived copy of the tenant to forget.
       deleteOrganization: new DeleteOrganizationUseCase(
         this.authorizer,
-        new PgTenantRepository(this.database, this.transactions),
+        new PgTenantRepository(this.cluster, this.transactions, this.shards),
         this.partitionArchive,
         this.maintenance,
         this.capabilities,
@@ -801,7 +892,7 @@ export class Container {
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,
-        new PgTenantRepository(this.database, this.transactions),
+        new PgTenantRepository(this.cluster, this.transactions, this.shards),
         this.queuePublisher,
         this.platform,
         this.activity,
@@ -861,7 +952,7 @@ export class Container {
       // public port is a thing the worker has to be told not to use.
       listStorage: new ListTenantStorageUseCase(
         this.authorizer,
-        new PgTenantStorageReader(this.database, this.transactions),
+        new PgTenantStorageReader(this.cluster, this.transactions, this.shards),
       ),
       previewRetention: new PreviewRetentionChangeUseCase(
         this.authorizer,
@@ -950,8 +1041,9 @@ export class Container {
   private static enroller(
     mode: "personal" | "bootstrap" | "invite",
     bootstrapOrganizationSlug: string | undefined,
-    database: Database,
+    cluster: DatabaseCluster,
     transactions: TransactionScope,
+    shards: ShardScope,
     // The port, not `PgOrganizationFounder`: the personal enroller declares the same
     // shape structurally, which is what lets this stay the one place a class is named.
     founder: OrganizationFounder,
@@ -960,11 +1052,12 @@ export class Container {
     const inner = ((): MembershipEnroller => {
       switch (mode) {
         case "personal":
-          return new PgPersonalOrganizationEnroller(database, transactions, founder);
+          return new PgPersonalOrganizationEnroller(cluster, transactions, shards, founder);
         case "bootstrap":
           return new PgBootstrapMembershipEnroller(
-            database,
+            cluster,
             transactions,
+            shards,
             bootstrapOrganizationSlug,
           );
         case "invite":
@@ -1111,12 +1204,13 @@ export class Container {
   // swap is cheap because `search()` takes the resolved goal scope as a parameter.
   private static buildVectorStore(
     config: ContainerConfig,
-    database: Database,
+    cluster: DatabaseCluster,
     transactions: TransactionScope,
+    shards: ShardScope,
   ): VectorStore {
     switch (config.vector.driver) {
       case "pgvector":
-        return new PgVectorStore(database, transactions);
+        return new PgVectorStore(cluster, transactions, shards);
       default: {
         // Exhaustiveness at build time: a driver added to the union and not here is a
         // compile error rather than a runtime surprise.

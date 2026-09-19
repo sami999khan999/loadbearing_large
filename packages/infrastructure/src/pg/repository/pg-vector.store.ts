@@ -9,6 +9,7 @@ import {
   lt,
   type OrganizationId,
   or,
+  type Placement,
   type SearchHit,
   sql,
   type VectorStore,
@@ -25,6 +26,9 @@ const asInt = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : fallback;
 
 export class PgVectorStore extends BaseRepository implements VectorStore {
+  // `document_chunks` is tenant-produced.
+  protected override readonly placement: Placement = "routed";
+
   // Vector search always returns `limit` rows however bad. Without a floor an
   // unrelated question retrieves the least-unrelated documents in the corpus.
   private static readonly MIN_SCORE = 0.3;

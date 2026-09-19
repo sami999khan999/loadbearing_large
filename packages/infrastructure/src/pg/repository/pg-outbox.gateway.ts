@@ -2,11 +2,12 @@ import {
   type DomainEvent,
   type DomainEventName,
   type OutboxGateway,
+  type Placement,
   sql,
   type UnitOfWork,
 } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 // `occurred_at` is a string, and the `::text` casts below are what make that true rather
 // than accidental: `execute` returns driver rows, which drizzle's date mapping never sees.
@@ -20,12 +21,16 @@ interface PendingRow extends Record<string, unknown> {
 }
 
 export class PgOutboxGateway extends BaseRepository implements OutboxGateway {
+  // `outbox_event` is on every node, drained per node.
+  protected override readonly placement: Placement = "local";
+
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly unitOfWork: UnitOfWork,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // Claim, relay, mark — in one transaction. `relay` is awaited *inside* it, so a throw

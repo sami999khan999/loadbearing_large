@@ -7,6 +7,7 @@ import {
   type NotificationCategory,
   type NotificationPreferenceRepository,
   type OrganizationId,
+  type Placement,
   type PreferenceRecord,
   sql,
   type UserId,
@@ -19,6 +20,9 @@ export class PgNotificationPreferenceRepository
   extends BaseRepository
   implements NotificationPreferenceRepository
 {
+  // `notification_preferences` is tenant-produced.
+  protected override readonly placement: Placement = "routed";
+
   // One statement for N users. A delivery fanning out to a hundred recipients would
   // otherwise be a hundred round trips before it writes anything.
   public async findFor(

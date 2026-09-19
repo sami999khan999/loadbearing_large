@@ -3,6 +3,7 @@ import {
   eq,
   type OrganizationId,
   type PaginationQuery,
+  type Placement,
   sql,
   type TenantStorageMonth,
   type TenantStoragePage,
@@ -17,6 +18,9 @@ import { organizations, partitionArchive } from "../schema/index.js";
 const numberOf = (value: unknown): number => Number(value ?? 0);
 
 export class PgTenantStorageReader extends BaseRepository implements TenantStorageReader {
+  // `partition_archive` joined to `organizations`, both catalog.
+  protected override readonly placement: Placement = "catalog";
+
   public async byTenant(
     page: PaginationQuery,
     organizationId: OrganizationId | null,

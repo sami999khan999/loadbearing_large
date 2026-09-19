@@ -3,6 +3,7 @@ import {
   eq,
   type OrganizationId,
   type PartitionedTableName,
+  type Placement,
   type TenantRetentionPolicyRecord,
   type TenantRetentionPolicyRepository,
 } from "../../import.js";
@@ -13,6 +14,9 @@ export class PgTenantRetentionPolicyRepository
   extends BaseRepository
   implements TenantRetentionPolicyRepository
 {
+  // Policy, read by the prune pass before it knows a tenant.
+  protected override readonly placement: Placement = "catalog";
+
   public async findBy(
     organizationId: OrganizationId,
     tableName: string,

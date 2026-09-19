@@ -1,5 +1,4 @@
-import type { ShardKey, ShardResolver } from "../../import.js";
-import { InternalError } from "../../import.js";
+import { InternalError, type ShardKey, type ShardResolver } from "../../import.js";
 import { Database, type DatabaseConfig } from "./database.js";
 
 // One physical Postgres, pooled twice: through the pooler for everything, and directly
@@ -9,22 +8,37 @@ export interface ShardConfig {
   readonly direct: DatabaseConfig;
 }
 
+// Node 0 for every key, which is what one node means.
+const NODE_ZERO = {
+  resolve: () => Promise.resolve(0),
+  invalidate: () => Promise.resolve(),
+} as ShardResolver;
+
 // Every physical node, indexed. Node 0 is the catalog and it always exists; a
 // deployment that has never sharded has exactly one entry and behaves as it always did.
 export class DatabaseCluster {
-  private readonly nodes: readonly Database[];
-  private readonly directNodes: readonly Database[];
+  private constructor(
+    private readonly nodes: readonly Database[],
+    private readonly directNodes: readonly Database[],
+    private readonly resolver: ShardResolver,
+  ) {}
 
   // **The only place in `src/` that writes `new Database(`** — §23 asserts it. A second
   // one is a pool nothing closes and nothing counts.
-  public constructor(
-    shards: readonly ShardConfig[],
-    private readonly resolver: ShardResolver,
-  ) {
+  public static from(shards: readonly ShardConfig[], resolver: ShardResolver): DatabaseCluster {
     if (shards.length === 0) throw new InternalError(new Error("A cluster needs one shard."));
 
-    this.nodes = shards.map((shard) => new Database(shard.pooled));
-    this.directNodes = shards.map((shard) => new Database(shard.direct));
+    return new DatabaseCluster(
+      shards.map((shard) => new Database(shard.pooled)),
+      shards.map((shard) => new Database(shard.direct)),
+      resolver,
+    );
+  }
+
+  // One node from an already-open `Database`, for a spec and for a script. It shares
+  // the pool rather than opening a second, which is what keeps `close()` honest.
+  public static single(database: Database, direct?: Database): DatabaseCluster {
+    return new DatabaseCluster([database], [direct ?? database], NODE_ZERO);
   }
 
   // Node 0, always. The catalog is the last single primary and §4 files what to do
@@ -37,8 +51,6 @@ export class DatabaseCluster {
     return this.directAt(0);
   }
 
-  // An out-of-range node is an error rather than a fall back to zero: the directory
-  // naming a node nobody deployed is a misconfiguration, and the wrong shard is worse.
   public async forKey(key: ShardKey): Promise<Database> {
     return this.at(await this.resolver.resolve(key));
   }
@@ -69,16 +81,19 @@ export class DatabaseCluster {
   }
 
   public async close(): Promise<void> {
-    await Promise.all([...this.nodes, ...this.directNodes].map((node) => node.close()));
+    const pools = new Set([...this.nodes, ...this.directNodes]);
+    await Promise.all([...pools].map((node) => node.close()));
   }
 
-  private at(node: number): Database {
+  // An out-of-range node is an error rather than a fall back to zero: the directory
+  // naming a node nobody deployed is a misconfiguration, and the wrong shard is worse.
+  public at(node: number): Database {
     const database = this.nodes[node];
     if (!database) throw DatabaseCluster.unknown(node);
     return database;
   }
 
-  private directAt(node: number): Database {
+  public directAt(node: number): Database {
     const database = this.directNodes[node];
     if (!database) throw DatabaseCluster.unknown(node);
     return database;

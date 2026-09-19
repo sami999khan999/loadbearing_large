@@ -6,14 +6,15 @@ import {
   type PartitionEstimate,
   PartitionedTable,
   type PartitionedTableName,
+  type Placement,
   type SweepOutcome,
   sql,
   type UnitOfWork,
 } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { invitations, sessions, verifications } from "../schema/index.js";
 import { TenantPartitionSeed } from "../seed/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 // One child of the parent, with what the retention preview wants to know about it.
 interface ChildRow extends Record<string, unknown> {
@@ -23,18 +24,26 @@ interface ChildRow extends Record<string, unknown> {
 }
 
 export class PgMaintenanceGateway extends BaseRepository implements MaintenanceGateway {
+  // Partition DDL on local and routed tables alike; `22.17` loops it per node.
+  protected override readonly placement: Placement = "local";
+
   // A fixed namespace for `pg_advisory_xact_lock`'s two-argument form, so this lock
   // cannot collide with one taken for another reason.
   private static readonly LOCK_NAMESPACE = 0x6c62_0002 | 0;
 
-  private readonly tenantPartitions = new TenantPartitionSeed(this.database, this.scope);
+  private readonly tenantPartitions = new TenantPartitionSeed(
+    this.cluster,
+    this.scope,
+    this.shards,
+  );
 
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly unitOfWork: UnitOfWork,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   public async sweepExpired(now: Date): Promise<SweepOutcome> {

@@ -8,6 +8,7 @@ import {
   type MemberRepository,
   type OrganizationId,
   type PaginationQuery,
+  type Placement,
   type RoleId,
   sql,
   type UserId,
@@ -16,6 +17,9 @@ import { BaseRepository } from "../primitive/index.js";
 import { memberships, roles, users } from "../schema/index.js";
 
 export class PgMemberRepository extends BaseRepository implements MemberRepository {
+  // `memberships` is RBAC.
+  protected override readonly placement: Placement = "catalog";
+
   // Two queries, fixed: the page and the total. A per-member join lookup is an N+1 that
   // is invisible at four members and the whole request at four hundred.
   public async list(organizationId: OrganizationId, page: PaginationQuery): Promise<MemberPage> {

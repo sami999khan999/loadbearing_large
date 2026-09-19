@@ -3,6 +3,7 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import {
@@ -12,8 +13,11 @@ import {
   roles,
   users,
 } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 const created: UserId[] = [];
@@ -34,9 +38,10 @@ const makeUser = async (name = "Ada") => {
 // row inside the founding transaction, and the last test depends on it.
 const founder = (scope = new TransactionScope()) =>
   new PgOrganizationFounder(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgActivityLogger(database, scope, new SystemClock()),
+    shards,
+    new PgActivityLogger(DatabaseCluster.single(database), scope, shards, new SystemClock()),
   );
 
 beforeAll(() => {
@@ -137,7 +142,7 @@ describe("PgOrganizationFounder", () => {
 
     await expect(
       database.client.transaction(async (tx) =>
-        scope.within(tx, async () => {
+        scope.within(tx, "catalog", async () => {
           organizationId = await subject.found(userId, "Doomed");
           throw new Error("abort");
         }),

@@ -1,16 +1,20 @@
-import type { ActivityLogger, Clock, Principal } from "../../import.js";
+import type { ActivityLogger, Clock, Placement, Principal } from "../../import.js";
 import { Uuid } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { activityLog } from "../schema/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 export class PgActivityLogger extends BaseRepository implements ActivityLogger {
+  // `activity_log` is on every node, written in whichever transaction is open.
+  protected override readonly placement: Placement = "local";
+
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly clock: Clock,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // Writes through `this.db`, so it joins whatever transaction is open. That is what

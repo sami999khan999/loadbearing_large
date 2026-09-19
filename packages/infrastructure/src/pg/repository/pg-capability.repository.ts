@@ -8,6 +8,7 @@ import {
   type OrganizationId,
   type PermissionKey,
   PermissionRegistry,
+  type Placement,
   type ScopedSetDto,
   type UserId,
 } from "../../import.js";
@@ -26,6 +27,9 @@ interface MutableScoped {
 }
 
 export class PgCapabilityRepository extends BaseRepository implements CapabilityRepository {
+  // RBAC — read on every request, before a key is known.
+  protected override readonly placement: Placement = "catalog";
+
   // Org grants + goal grants + per-user overrides, deny winning. Three targeted
   // queries, not one join: the join is a cartesian product needing dedup in code.
   public async resolveFor(organizationId: OrganizationId, userId: UserId): Promise<CapabilitySet> {

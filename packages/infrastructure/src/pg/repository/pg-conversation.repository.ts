@@ -13,6 +13,7 @@ import {
   type MessageId,
   type NewConversation,
   type OrganizationId,
+  type Placement,
   sql,
   type UserId,
   Uuid,
@@ -31,6 +32,9 @@ interface ConversationRow {
 }
 
 export class PgConversationRepository extends BaseRepository implements ConversationRepository {
+  // `conversations` is tenant-produced.
+  protected override readonly placement: Placement = "routed";
+
   // Two statements for a page regardless of its size: the conversations, then every
   // member row for the ids on it. One query per row would be N+1 by construction.
   public async listByMember(

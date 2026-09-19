@@ -10,6 +10,7 @@ import {
   type NewInvitation,
   type OrganizationId,
   type PaginationQuery,
+  type Placement,
   type RoleId,
   sql,
 } from "../../import.js";
@@ -19,6 +20,9 @@ import { invitations, organizations, roles, users } from "../schema/index.js";
 // The administrator's side of `invitations`: this one never selects `token`, and the
 // claimer beside it never lists.
 export class PgInvitationRepository extends BaseRepository implements InvitationRepository {
+  // `invitations` arrives holding no tenant.
+  protected override readonly placement: Placement = "catalog";
+
   public async list(
     organizationId: OrganizationId,
     page: PaginationQuery,

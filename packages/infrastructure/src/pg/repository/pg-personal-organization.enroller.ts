@@ -1,7 +1,7 @@
-import { eq, type OrganizationId, sql, type UserId } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { eq, type OrganizationId, type Placement, sql, type UserId } from "../../import.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { memberships, users } from "../schema/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 import type { OrganizationFounder } from "./pg-organization.founder.js";
 
 // The same fixed namespace the bootstrap enroller and the claimer use, so a claim and an
@@ -17,21 +17,25 @@ function lockKey(userId: string): number {
 // The `personal` mode: a new user owns an organization of their own, so a fresh clone
 // needs no seed and no invitation. See docs/reference/enrollers.md.
 export class PgPersonalOrganizationEnroller extends BaseRepository {
+  // `organizations` and `memberships`, in one transaction.
+  protected override readonly placement: Placement = "catalog";
+
   // Must share this repository's `TransactionScope`, or the founder's savepoint opens
   // on the pool instead of inside the locked transaction below.
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly founder: OrganizationFounder,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // Runs once per user, on the first session they ever open — `activeOrganizationFor`
   // answers on every one after that, so none of this is on the sign-in path.
   public async enrol(userId: UserId): Promise<OrganizationId | null> {
-    return this.database.client.transaction(async (tx) =>
-      this.scope.within(tx, async () => {
+    return this.cluster.catalog().client.transaction(async (tx) =>
+      this.scope.within(tx, "catalog", async () => {
         await this.db.execute(
           sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${lockKey(userId)})`,
         );

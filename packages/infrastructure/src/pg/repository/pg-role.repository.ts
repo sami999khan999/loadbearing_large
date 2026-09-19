@@ -8,6 +8,7 @@ import {
   not,
   type OrganizationId,
   type PaginationQuery,
+  type Placement,
   type RoleId,
   type RolePage,
   type RoleRecord,
@@ -18,6 +19,9 @@ import { BaseRepository } from "../primitive/index.js";
 import { goalMembers, memberships, rolePermissions, roles } from "../schema/index.js";
 
 export class PgRoleRepository extends BaseRepository implements RoleRepository {
+  // RBAC.
+  protected override readonly placement: Placement = "catalog";
+
   // Three queries, fixed — never one per role: the grants come for the whole page with a
   // single `IN`, because an N+1 here is invisible at four roles.
   public async list(organizationId: OrganizationId, page: PaginationQuery): Promise<RolePage> {

@@ -10,6 +10,7 @@ import {
   type NotificationRecipientReader,
   type OrganizationId,
   type PermissionKey,
+  type Placement,
   type Recipient,
   type UserId,
 } from "../../import.js";
@@ -22,6 +23,9 @@ export class PgNotificationRecipientReader
   extends BaseRepository
   implements NotificationRecipientReader
 {
+  // Resolves an audience out of RBAC; `22.10` splits the routed read out.
+  protected override readonly placement: Placement = "catalog";
+
   // Keyset on the user id, and tenant-scoped: a recipient list that cannot be narrowed
   // by organization is a cross-tenant leak with an email address attached.
   public async organizationMembers(

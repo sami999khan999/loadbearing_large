@@ -4,6 +4,7 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { PgRoleRepository } from "../../src/pg/repository/pg-role.repository.js";
@@ -14,8 +15,11 @@ import {
   roles,
   users,
 } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 let repository: PgRoleRepository;
@@ -39,9 +43,10 @@ const makeUser = async () => {
 const makeOrganization = async (slug: string) => {
   const scope = new TransactionScope();
   const founder = new PgOrganizationFounder(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgActivityLogger(database, scope, new SystemClock()),
+    shards,
+    new PgActivityLogger(DatabaseCluster.single(database), scope, shards, new SystemClock()),
   );
   const id = await founder.found(await makeUser(), "Role repository target", slug);
   createdOrgs.push(id);
@@ -61,7 +66,11 @@ const draft = (overrides: Partial<RoleRecord> = {}): RoleRecord => ({
 
 beforeAll(async () => {
   database = openDatabase();
-  repository = new PgRoleRepository(database, new TransactionScope());
+  repository = new PgRoleRepository(
+    DatabaseCluster.single(database),
+    new TransactionScope(),
+    shards,
+  );
   here = await makeOrganization(`role-repo-here-${Uuid.v7()}`);
   elsewhere = await makeOrganization(`role-repo-there-${Uuid.v7()}`);
 });

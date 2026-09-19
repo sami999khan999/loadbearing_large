@@ -11,6 +11,7 @@ import {
   type NotificationRecord,
   type NotificationRepository,
   type OrganizationId,
+  type Placement,
   sql,
   type UnreadQuery,
   type UserId,
@@ -24,6 +25,9 @@ import { notifications } from "../schema/index.js";
 const CHUNK = 1_000;
 
 export class PgNotificationRepository extends BaseRepository implements NotificationRepository {
+  // `notifications` is tenant-produced.
+  protected override readonly placement: Placement = "routed";
+
   public async list(
     organizationId: OrganizationId,
     userId: UserId,

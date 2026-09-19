@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OrganizationId, UserId } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgCapabilityRepository } from "../../src/pg/repository/pg-capability.repository.js";
 import { PgPlatformReader } from "../../src/pg/repository/pg-platform.reader.js";
 import {
@@ -13,8 +14,11 @@ import {
   users,
 } from "../../src/pg/schema/index.js";
 import { PlatformRoleSeed, SystemRoleSeed } from "../../src/pg/seed/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 let scope: TransactionScope;
@@ -55,8 +59,10 @@ beforeAll(async () => {
 
   // The seeds are idempotent and `pnpm db:seed` has already run them; running them here
   // means this spec passes against a database seeded before the tier existed too.
-  await new SystemRoleSeed(database, scope).run(platformOrganization);
-  await new PlatformRoleSeed(database, scope).run();
+  await new SystemRoleSeed(DatabaseCluster.single(database), scope, shards).run(
+    platformOrganization,
+  );
+  await new PlatformRoleSeed(DatabaseCluster.single(database), scope, shards).run();
 
   admin = await userNamed(`platform-admin-${crypto.randomUUID()}@test.local`);
   outsider = await userNamed(`tenant-owner-${crypto.randomUUID()}@test.local`);
@@ -76,7 +82,7 @@ afterAll(async () => {
 
 describe("PgPlatformReader", () => {
   it("resolves the one organization marked is_platform", async () => {
-    const reader = new PgPlatformReader(database, scope);
+    const reader = new PgPlatformReader(DatabaseCluster.single(database), scope, shards);
     expect(await reader.organizationId()).toBe(platformOrganization);
   });
 
@@ -99,7 +105,11 @@ describe("PgPlatformReader", () => {
 
 describe("PgCapabilityRepository.resolvePlatformFor", () => {
   it("holds every platform key through the seeded role", async () => {
-    const resolved = await new PgCapabilityRepository(database, scope).resolvePlatformFor(admin);
+    const resolved = await new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+    ).resolvePlatformFor(admin);
 
     for (const key of PLATFORM_KEYS) expect(resolved.can(key), key).toBe(true);
     expect(PLATFORM_KEYS.length).toBeGreaterThan(0);
@@ -108,7 +118,11 @@ describe("PgCapabilityRepository.resolvePlatformFor", () => {
   // The whole point of decision D31 from the database side: a tenant `owner` holds the
   // wildcard over every tenant key and is not a platform admin.
   it("holds nothing for a member of the tier under an ordinary role", async () => {
-    const resolved = await new PgCapabilityRepository(database, scope).resolvePlatformFor(outsider);
+    const resolved = await new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+    ).resolvePlatformFor(outsider);
 
     for (const key of PLATFORM_KEYS) expect(resolved.can(key), key).toBe(false);
   });
@@ -116,7 +130,11 @@ describe("PgCapabilityRepository.resolvePlatformFor", () => {
   // The axis is the platform one alone. A tenant key resolved here would be a grant the
   // merge in `PrincipalBuilder` silently widened.
   it("carries only the platform axis", async () => {
-    const resolved = await new PgCapabilityRepository(database, scope).resolvePlatformFor(admin);
+    const resolved = await new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+    ).resolvePlatformFor(admin);
 
     expect(resolved.can("rbac.role.read")).toBe(false);
     expect(resolved.toJSON().org).toEqual({ grants: [], denies: [] });
@@ -133,7 +151,11 @@ describe("PgCapabilityRepository.resolvePlatformFor", () => {
       goalId: null,
     });
 
-    const resolved = await new PgCapabilityRepository(database, scope).resolvePlatformFor(admin);
+    const resolved = await new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+    ).resolvePlatformFor(admin);
 
     expect(resolved.can("platform.retention.manage")).toBe(false);
     expect(resolved.can("platform.status.read")).toBe(true);
@@ -158,7 +180,11 @@ describe("PgCapabilityRepository.resolvePlatformFor", () => {
         and(eq(memberships.organizationId, platformOrganization), eq(memberships.userId, admin)),
       );
 
-    const resolved = await new PgCapabilityRepository(database, scope).resolvePlatformFor(admin);
+    const resolved = await new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+    ).resolvePlatformFor(admin);
     expect(resolved.can("platform.status.read")).toBe(false);
 
     await database.client

@@ -4,11 +4,14 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { CapabilitySet } from "@loadbearing/permissions";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Database, type DrizzleClient } from "../../src/pg/primitive/index.js";
+import { Database, DatabaseCluster, type DrizzleClient } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { activityLog } from "../../src/pg/schema/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 let scope: TransactionScope;
@@ -38,8 +41,13 @@ const findByAction = (action: string) =>
 describe("PgUnitOfWork", () => {
   it("rolls back every write in the callback", async () => {
     const actor = await actorFor();
-    const uow = new PgUnitOfWork(database, scope);
-    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const uow = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
+    const logger = new PgActivityLogger(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      new SystemClock(),
+    );
     const action = `test.rollback.${Uuid.v7()}`;
 
     await expect(
@@ -56,8 +64,13 @@ describe("PgUnitOfWork", () => {
   // committed on a connection the outer one could not roll back.
   it("joins the outer transaction rather than opening a second one", async () => {
     const actor = await actorFor();
-    const uow = new PgUnitOfWork(database, scope);
-    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const uow = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
+    const logger = new PgActivityLogger(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      new SystemClock(),
+    );
     const outer = `test.outer.${Uuid.v7()}`;
     const inner = `test.inner.${Uuid.v7()}`;
 
@@ -82,8 +95,13 @@ describe("PgUnitOfWork", () => {
   // the outer callback rolls back only the inner work.
   it("rolls the inner work back to a savepoint without losing the outer", async () => {
     const actor = await actorFor();
-    const uow = new PgUnitOfWork(database, scope);
-    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const uow = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
+    const logger = new PgActivityLogger(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      new SystemClock(),
+    );
     const outer = `test.kept.${Uuid.v7()}`;
     const inner = `test.dropped.${Uuid.v7()}`;
 
@@ -106,8 +124,13 @@ describe("PgUnitOfWork", () => {
   // perfectly, which is why both directions are asserted.
   it("commits when the callback returns", async () => {
     const actor = await actorFor();
-    const uow = new PgUnitOfWork(database, scope);
-    const logger = new PgActivityLogger(database, scope, new SystemClock());
+    const uow = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
+    const logger = new PgActivityLogger(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      new SystemClock(),
+    );
     const action = `test.commit.${Uuid.v7()}`;
 
     await uow.run(async () => {
@@ -122,7 +145,9 @@ describe("PgUnitOfWork", () => {
   it("applies the configured statement timeout inside run and nowhere else", async () => {
     const pooled = new Database({ url: DATABASE_URL, statementTimeoutMs: 25_000 });
     const timeoutScope = new TransactionScope();
-    const uow = new PgUnitOfWork(pooled, timeoutScope, { statementTimeoutMs: 90_000 });
+    const uow = new PgUnitOfWork(DatabaseCluster.single(pooled), timeoutScope, shards, "catalog", {
+      statementTimeoutMs: 90_000,
+    });
 
     const show = async (client: DrizzleClient) =>
       (await client.execute<{ statement_timeout: string }>(sql`show statement_timeout`)).rows[0]
@@ -132,9 +157,9 @@ describe("PgUnitOfWork", () => {
       expect(await show(pooled.client)).toBe("25s");
 
       await uow.run(async () => {
-        const tx = timeoutScope.current();
-        if (!tx) throw new Error("no transaction in scope");
-        expect(await show(tx)).toBe("90s");
+        const open = timeoutScope.current();
+        if (!open) throw new Error("no transaction in scope");
+        expect(await show(open.client)).toBe("90s");
       });
 
       // The connection went back to the pool with the transaction; a plain `SET` here
@@ -150,16 +175,18 @@ describe("PgUnitOfWork", () => {
   it("leaves a nested run to the transaction already open", async () => {
     const pooled = new Database({ url: DATABASE_URL, statementTimeoutMs: 25_000 });
     const timeoutScope = new TransactionScope();
-    const uow = new PgUnitOfWork(pooled, timeoutScope, { statementTimeoutMs: 90_000 });
+    const uow = new PgUnitOfWork(DatabaseCluster.single(pooled), timeoutScope, shards, "catalog", {
+      statementTimeoutMs: 90_000,
+    });
 
     try {
       await uow.run(async () => {
         await uow.run(async () => {
-          const tx = timeoutScope.current();
-          if (!tx) throw new Error("no transaction in scope");
+          const open = timeoutScope.current();
+          if (!open) throw new Error("no transaction in scope");
           expect(
-            (await tx.execute<{ statement_timeout: string }>(sql`show statement_timeout`)).rows[0]
-              ?.statement_timeout,
+            (await open.client.execute<{ statement_timeout: string }>(sql`show statement_timeout`))
+              .rows[0]?.statement_timeout,
           ).toBe("90s");
         });
       });

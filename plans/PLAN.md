@@ -2869,12 +2869,16 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   a node nobody deployed is a misconfiguration, and reading the wrong tenant's shard is worse
   than failing.
 
-- [ ] `22.5` **`ShardScope` and placement in `TransactionScope`** — `pg/transaction/shard-scope.ts`
+- [x] `22.5` **`ShardScope` and placement in `TransactionScope`** — `pg/transaction/shard-scope.ts`
   (`current(): ShardKey | undefined`, `within(key, work)`); `transaction-scope.ts` stores
   `{ client, placement, key? }` and exposes `current()`, `placement()`. **Docs:**
   `packages/infrastructure/docs/reference/unit-of-work.md` (the "which pool" paragraph).
+  `done: 2026-09-19` — `ShardScope` holds `{ key, node }` rather than the key alone, and the node
+  is resolved by whoever enters the scope. `corrected:` it also has `enter(placed)` over
+  `enterWith`, for a caller that owns the rest of its execution context and has no callback to
+  wrap — a spec's hooks, and nothing in `src/`.
 
-- [ ] `22.6` **`BaseRepository` places itself and trips** — constructor takes
+- [x] `22.6` **`BaseRepository` places itself and trips** — constructor takes
   `(cluster, transactions, shards, placement: Placement)`; `this.db` becomes an `async` accessor
   `this.handle()`: open transaction with the same placement → it; open transaction with a
   different placement → `InternalError("<table placement> inside a <tx placement> transaction")`;
@@ -2893,8 +2897,19 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `catalog` and must say so rather than inherit it. And `this.db` is read 127 times across `pg/`
   (123 in `repository/`, 4 in the seed), not "twenty-plus". §22 (`22.18`) globs every file under
   `pg/` that extends `BaseRepository`, not `pg/repository/pg-*.ts`.
+  `done: 2026-09-19` — **`corrected:` `this.db` stays synchronous, and there is no
+  `await this.handle()`.** The item's async accessor follows from resolving the node at query
+  time; resolving it once when the scope is entered — which the phase's own design paragraph
+  already wants for `keyOf` — makes the lookup a property read instead. That leaves the **183**
+  `this.db` call sites untouched, which is 183 chances to typo a mechanical edit not taken.
+  `corrected:` the placement is an `abstract readonly` field each subclass overrides, not a
+  fourth `super(...)` argument: twenty-four of the thirty-three classes have no explicit
+  constructor, and adding one to each to pass a constant is more code than a field.
+  `done:` thirty-three classes, as the correction note says, and the four direct
+  `scope.within(tx, …)` callers now name `"catalog"`. `BaseRepository` takes
+  `(cluster, transactions, shards)`.
 
-- [ ] `22.7` **Two `PgUnitOfWork`s** — `pg-unit-of-work.ts` takes `(cluster, transactions, shards,
+- [x] `22.7` **Two `PgUnitOfWork`s** — `pg-unit-of-work.ts` takes `(cluster, transactions, shards,
   placement)`; `run(work)` opens on `catalog()` or on `forKey(ShardScope.current())`, throwing
   `InternalError` when `routed` and no key is in scope, and passes `placement` into
   `TransactionScope.within`. Nested `run` on the same placement is the savepoint it is today;
@@ -2913,8 +2928,12 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   transaction" behaviour because `run` already nests. `22.12`'s sentence "passes the catalog unit
   of work to the enrollers, claimer and founder" describes constructor arguments those classes
   do not have today; after this correction they do.
+  `done: 2026-09-19` — `run` refuses a nested run of a different placement, resolves the pool
+  the same way `BaseRepository` does, and keeps `14.8`'s `SET LOCAL`. `done:` the four
+  transactions that never pass through it were found exactly where the correction note said and
+  each now declares `"catalog"`.
 
-- [ ] `22.8` **`PgShardResolver`** — `pg/repository/pg-shard.resolver.ts`, `CapabilityCache`'s
+- [x] `22.8` **`PgShardResolver`** — `pg/repository/pg-shard.resolver.ts`, `CapabilityCache`'s
   shape: `CacheStore` read-through on `shard:key:<key>` with a 300 s TTL (a placement changes
   once a year, not once a minute; the move job invalidates explicitly), catalog pool underneath,
   `shard.resolution.failed` (`error`, `{ key }`) then `InternalError` on a missing row. It is
@@ -2925,11 +2944,19 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   (`:17`). The item copies "the shape, TTL and prefix included" and then says 300 s; the
   divergence is deliberate (a placement changes once a year) and the item should say so rather
   than let a reader think one of the two numbers is a typo.
+  `done: 2026-09-19` — `corrected:` it takes **thunks** — `() => Database`, `() => CacheStore`,
+  `() => Logger` — because the container builds the cluster *with* this resolver, so neither the
+  pool nor the cache exists when it is constructed. The 300-second TTL is deliberate against
+  `CapabilityCache`'s sixty, and the file says why rather than leaving a reader to wonder which
+  number is the typo. A missing row throws, as the item says.
 
-- [ ] `22.9` **`PgShardAssignmentRepository`** — `pg/repository/pg-shard-assignment.repository.ts`,
+- [x] `22.9` **`PgShardAssignmentRepository`** — `pg/repository/pg-shard-assignment.repository.ts`,
   `catalog` placement: `findByKey`, `save` (upsert, `moved_at` set when `node` changes,
   then `resolver.invalidate(key)`), `all(page)` keyset over `shard_key`. Emits nothing; the
   founder emits `shard.assignment.created` (`info`, `{ key, node }`). **Docs:** `sharding.md`.
+  `done: 2026-09-19` — `moved_at` is stamped only when the node actually changes: a re-save of
+  the same placement is not a move. `save` invalidates the resolver's cache, which is the half
+  that would otherwise leave a moved tenant reading the node it left.
 
 - [ ] `22.10` **`PgNotificationRecipientReader.conversationMembers` is split** — filed by the
   audit at `22.18`, and it is the only cross-placement query in the repository. The method joins
@@ -2975,7 +3002,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   worker path out of four, and rejecting NIL throws on the other three. The strategy stays
   principal-based for the web edge; `22.15` derives the worker's key from the payload.
 
-- [ ] `22.12` **`Container`** — `container.config.ts` `database` becomes
+- [~] `22.12` **`Container`** — `container.config.ts` `database` becomes
   `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl }[] }`; both
   `env.ts` collect `DATABASE_SHARD_<n>_*` with a `z.preprocess` over `process.env` keys (still
   the one reader). `Container` builds `DatabaseCluster`, `ShardScope`,
@@ -3016,6 +3043,10 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `write`, `create-conversation`'s `insert`, `index-document`) touch routed and local tables
   only; `ConversationAccess` reads `ConversationRepository` alone. Decision 6 has nothing to
   forgive in the use-cases.
+  `partially done: 2026-09-19` — the container builds the cluster, the shard scope, the resolver,
+  the directory and the strategy, and every repository takes `(cluster, transactions, shards)`.
+  `unfinished:` the **two** unit-of-work instances are not bound per slice yet — there is still
+  one, `"catalog"`, which is correct on one node and is what `22.12` proper has to split.
 
 - [ ] `22.13` **`TestContainer` and fakes** — `packages/composition/src/fake/`: `FakeShardResolver`
   (a `Map`), `FakeShardAssignmentRepository`, `FixedShardingStrategy`;

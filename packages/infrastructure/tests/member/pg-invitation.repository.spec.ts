@@ -9,12 +9,16 @@ import { SystemClock, Token, Uuid } from "@loadbearing/core";
 import { and, eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgInvitationRepository } from "../../src/pg/repository/pg-invitation.repository.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { invitations, organizations, roles, users } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 class CountingLogger implements Logger {
   public count = 0;
@@ -35,7 +39,8 @@ let memberRole: RoleId;
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const repository = () => new PgInvitationRepository(database, new TransactionScope());
+const repository = () =>
+  new PgInvitationRepository(DatabaseCluster.single(database), new TransactionScope(), shards);
 
 const newInvitation = (email: string, overrides: { expiresAt?: Date } = {}) => ({
   id: Uuid.v7() as InvitationId,
@@ -59,9 +64,10 @@ beforeAll(async () => {
 
   const scope = new TransactionScope();
   const founder = new PgOrganizationFounder(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgActivityLogger(database, scope, new SystemClock()),
+    shards,
+    new PgActivityLogger(DatabaseCluster.single(database), scope, shards, new SystemClock()),
   );
   acme = await founder.found(ada, "Acme");
   other = await founder.found(ada, "Other");

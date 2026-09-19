@@ -8,6 +8,7 @@ import {
   gt,
   Identifiers,
   type OrganizationId,
+  type Placement,
   Principal,
   type SQL,
   sql,
@@ -15,9 +16,9 @@ import {
   type UserId,
   Uuid,
 } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { invitations, memberships, organizations, users } from "../schema/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 // The same user-keyed lock the personal enroller takes, so a claim and an enrolment for
 // one new user cannot both succeed.
@@ -38,13 +39,17 @@ export interface InvitationPreview {
 // Deliberately not tenant-scoped — the tenant is the *answer*. What scopes a claim is the
 // verified-address check below. See docs/reference/enrollers.md.
 export class PgInvitationClaimer extends BaseRepository {
+  // `invitations` and `memberships`, both catalog, in one transaction.
+  protected override readonly placement: Placement = "catalog";
+
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly activity: ActivityLogger,
     private readonly events: DomainEventPublisher,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // Hashed on the way in, always: the column holds a digest, so a raw token matches
@@ -76,8 +81,8 @@ export class PgInvitationClaimer extends BaseRepository {
   }
 
   private async claim(userId: UserId, match?: SQL): Promise<OrganizationId | null> {
-    return this.database.client.transaction(async (tx) =>
-      this.scope.within(tx, async () => {
+    return this.cluster.catalog().client.transaction(async (tx) =>
+      this.scope.within(tx, "catalog", async () => {
         await this.db.execute(
           sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${lockKey(userId)})`,
         );

@@ -3,10 +3,14 @@ import { Uuid } from "@loadbearing/core";
 import { eq, inArray, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgCapabilityRepository } from "../../src/pg/repository/pg-capability.repository.js";
 import { permissionOverrides, users } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 class CountingLogger implements Logger {
   public count = 0;
@@ -45,7 +49,11 @@ describe("PgCapabilityRepository", () => {
   // becomes 3 + N, invisible at ten users and fatal at five thousand.
   it("resolves capabilities in exactly three queries", async () => {
     const organizationId = await seedOrganizationId(database);
-    const repository = new PgCapabilityRepository(database, new TransactionScope());
+    const repository = new PgCapabilityRepository(
+      DatabaseCluster.single(database),
+      new TransactionScope(),
+      shards,
+    );
 
     // A well-formed uuid that was never seeded: the columns are `uuid`, so
     // "no-such-user" is a 22P02 rather than the empty result being asserted on.

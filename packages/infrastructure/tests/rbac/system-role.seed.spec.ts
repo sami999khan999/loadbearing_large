@@ -4,10 +4,14 @@ import { PermissionRegistry } from "@loadbearing/permissions";
 import { and, eq, type Logger } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { organizations, rolePermissions, roles } from "../../src/pg/schema/index.js";
 import { SystemRoleSeed } from "../../src/pg/seed/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 class CountingLogger implements Logger {
   public count = 0;
@@ -23,7 +27,7 @@ let organizationId: ReturnType<typeof Identifiers.organizationId.parse>;
 
 beforeAll(async () => {
   database = openDatabase(counter);
-  seed = new SystemRoleSeed(database, new TransactionScope());
+  seed = new SystemRoleSeed(DatabaseCluster.single(database), new TransactionScope(), shards);
 
   // Its own tenant, never the seeded one: this spec counts statements, and a tenant
   // another spec is also seeding would make the count depend on the run order.

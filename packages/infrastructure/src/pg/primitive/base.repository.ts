@@ -1,17 +1,68 @@
-import type { OrganizationId, Principal } from "../../import.js";
-import type { TransactionScope } from "../transaction/index.js";
+import {
+  InternalError,
+  type OrganizationId,
+  type Placement,
+  type Principal,
+} from "../../import.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 import type { Database, DrizzleClient } from "./database.js";
+import type { DatabaseCluster } from "./database-cluster.js";
+
+// `local` tables live on every node and are written in whichever transaction is open,
+// so they are the one placement compatible with both of the others.
+const compatible = (mine: Placement, open: Placement): boolean =>
+  mine === open || mine === "local" || open === "local";
 
 export abstract class BaseRepository {
+  // Declared by every subclass, never inferred: a table's placement is decision D14's,
+  // and a repository that guessed would guess wrong exactly once.
+  protected abstract readonly placement: Placement;
+
   public constructor(
-    protected readonly database: Database,
+    protected readonly cluster: DatabaseCluster,
     protected readonly scope: TransactionScope,
+    protected readonly shards: ShardScope,
   ) {}
 
-  // The transaction handle when one is open, the pool otherwise. Every query in
-  // every subclass goes through this, which is what makes UnitOfWork real.
+  // The transaction handle when one is open, the right pool otherwise. **Synchronous**,
+  // because the node was resolved once when the scope was entered — see shard-scope.ts.
   protected get db(): DrizzleClient {
-    return this.scope.current() ?? this.database.client;
+    const open = this.scope.current();
+    if (!open) return this.pool().client;
+
+    // The tripwire. On one node this throws where a split would silently read the
+    // wrong database, which is why it exists before the split rather than after.
+    if (!compatible(this.placement, open.placement)) {
+      throw new InternalError(
+        new Error(`A ${this.placement} table inside a ${open.placement} transaction.`),
+      );
+    }
+
+    return open.client;
+  }
+
+  // The direct pool, for the DDL a transaction pooler cannot carry. Never inside a
+  // transaction, which is what makes it direct.
+  protected get direct(): Database {
+    return this.placement === "routed"
+      ? this.cluster.directAt(this.node())
+      : this.cluster.directCatalog();
+  }
+
+  private pool(): Database {
+    // `local` off the catalog pool when nothing is open. A local write outside any
+    // transaction already breaks the outbox rules, so this is the honest default.
+    if (this.placement !== "routed") return this.cluster.catalog();
+
+    return this.cluster.at(this.node());
+  }
+
+  private node(): number {
+    const placed = this.shards.current();
+    if (!placed) {
+      throw new InternalError(new Error("A routed query with no shard in scope."));
+    }
+    return placed.node;
   }
 
   // Every tenant-scoped query starts here. A method that cannot narrow by this is

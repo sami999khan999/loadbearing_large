@@ -1,4 +1,12 @@
-import { and, eq, type OrganizationId, PermissionRegistry, sql, Uuid } from "../../import.js";
+import {
+  and,
+  eq,
+  type OrganizationId,
+  PermissionRegistry,
+  type Placement,
+  sql,
+  Uuid,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { organizations, rolePermissions, roles } from "../schema/index.js";
 
@@ -10,6 +18,9 @@ const NAME = "Platform administrator";
 // Idempotent, the same shape as `SystemRoleSeed`, and scoped to the organization marked
 // `is_platform`. A deployment that has not marked one seeds nothing and says so.
 export class PlatformRoleSeed extends BaseRepository {
+  // RBAC.
+  protected override readonly placement: Placement = "catalog";
+
   // Returns the organization it seeded, or null when none is marked — `pnpm db:seed`
   // marks one immediately before calling this, so null is a deployment that has not.
   public async run(): Promise<OrganizationId | null> {

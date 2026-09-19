@@ -3,6 +3,7 @@ import {
   type OrganizationId,
   PartitionedTable,
   type PartitionedTableEntry,
+  type Placement,
   sql,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -14,6 +15,9 @@ const MONTHS = 3;
 // Every tenant-owned table is partitioned by `organization_id`, so a row for a tenant
 // with no partition is an insert error. This runs wherever an organization is created.
 export class TenantPartitionSeed extends BaseRepository {
+  // Partition DDL; `22.17` loops it per node.
+  protected override readonly placement: Placement = "local";
+
   // Returns the partitions it created, empty on a tenant that already has them — the
   // idempotence every caller below depends on, since three of them can run twice.
   public async run(organizationId: OrganizationId): Promise<readonly string[]> {

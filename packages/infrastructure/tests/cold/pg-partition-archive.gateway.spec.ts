@@ -6,14 +6,18 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { StorageGateway, StoredObject } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { PgOutboxPublisher } from "../../src/pg/repository/pg-outbox.publisher.js";
 import { PgPartitionArchiveGateway } from "../../src/pg/repository/pg-partition-archive.gateway.js";
 import { notifications, organizations, partitionArchive } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { dropTenant, openDatabase, seedTenant } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 // Its own month, so the partition this spec detaches and drops is never one another
 // spec is reading. Two tenants, because one cannot tell a loop from a single call.
@@ -73,7 +77,12 @@ class FakeStorage implements Partial<StorageGateway> {
 }
 
 const gateway = (storage: FakeStorage) =>
-  new PgPartitionArchiveGateway(database, scope, storage as unknown as StorageGateway);
+  new PgPartitionArchiveGateway(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    storage as unknown as StorageGateway,
+  );
 
 const monthPartition = (organizationId: OrganizationId) =>
   `${TenantPartitionSeed.partitionName(TABLE, organizationId)}_2032_05`;
@@ -97,13 +106,20 @@ const isAttached = async (organizationId: OrganizationId) => {
 };
 
 const write = async (organizationId: OrganizationId, action: string, count: number) => {
-  const logger = new PgActivityLogger(database, scope, { now: () => PERIOD });
+  const logger = new PgActivityLogger(DatabaseCluster.single(database), scope, shards, {
+    now: () => PERIOD,
+  });
   const actor = { userId: Uuid.v7(), organizationId, kind: "user" as const };
   for (let i = 0; i < count; i += 1) await logger.record(actor as never, action, { at: i });
 };
 
 const freshPartitions = async () => {
-  const maintenance = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
+  const maintenance = new PgMaintenanceGateway(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
+  );
   for (const organizationId of [first, second]) {
     await database.client.execute(
       sql`drop table if exists ${sql.identifier(monthPartition(organizationId))}`,
@@ -369,9 +385,10 @@ describe("PgPartitionArchiveGateway across the allowlist", () => {
   // what lets one loop serve a table this gateway was never written against.
   it("archives a table ranged by a different column", async () => {
     const maintenance = new PgMaintenanceGateway(
-      database,
+      DatabaseCluster.single(database),
       scope,
-      new PgUnitOfWork(database, scope),
+      shards,
+      new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
     );
     await database.client.execute(
       sql`drop table if exists ${sql.identifier(notificationMonth(first))}`,
@@ -407,14 +424,17 @@ describe("PgPartitionArchiveGateway across the allowlist", () => {
   // month is one object under the nil uuid, which names no row on purpose.
   it("archives the table with no tenant level under the nil uuid", async () => {
     const maintenance = new PgMaintenanceGateway(
-      database,
+      DatabaseCluster.single(database),
       scope,
-      new PgUnitOfWork(database, scope),
+      shards,
+      new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
     );
     await database.client.execute(sql`drop table if exists ${sql.identifier(outboxMonth)}`);
     await maintenance.ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, null, PERIOD, 1);
 
-    await new PgOutboxPublisher(database, scope, { now: () => PERIOD }).publish(
+    await new PgOutboxPublisher(DatabaseCluster.single(database), scope, shards, {
+      now: () => PERIOD,
+    }).publish(
       { organizationId: first, userId: Uuid.v7(), kind: "user" } as never,
       { name: "task.created", payload: { taskId: Uuid.v7() } } as never,
     );

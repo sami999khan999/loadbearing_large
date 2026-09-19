@@ -1,5 +1,6 @@
-import { sql, UnitOfWork } from "../../import.js";
-import type { Database, DrizzleClient } from "../primitive/index.js";
+import { InternalError, type Placement, sql, UnitOfWork } from "../../import.js";
+import type { DatabaseCluster, DrizzleClient } from "../primitive/index.js";
+import type { ShardScope } from "./shard-scope.js";
 import type { TransactionScope } from "./transaction-scope.js";
 
 export interface PgUnitOfWorkConfig {
@@ -8,21 +9,35 @@ export interface PgUnitOfWorkConfig {
   readonly statementTimeoutMs?: number;
 }
 
+// Two instances, bound per slice at the DI root — decision D16. The port stays
+// `run(work)`, so no use-case knows which one it was handed.
 export class PgUnitOfWork extends UnitOfWork {
   public constructor(
-    private readonly database: Database,
+    private readonly cluster: DatabaseCluster,
     private readonly scope: TransactionScope,
+    private readonly shards: ShardScope,
+    private readonly placement: Placement,
     private readonly config: PgUnitOfWorkConfig = {},
   ) {
     super();
   }
 
-  // `this.db`, never `database.client`: inside an open transaction this is a savepoint on
-  // the same connection. Off the pool it is a second one, which cannot roll back with it.
+  // Inside an open transaction of the same placement this is a savepoint on the same
+  // connection. Off the pool it is a second one, which cannot roll back with it.
   public override async run<T>(work: () => Promise<T>): Promise<T> {
-    return this.db.transaction(async (tx) => {
+    const open = this.scope.current();
+
+    // A catalog use-case calling a routed one inside its transaction is precisely the
+    // coupling a physical split cannot honour, so it fails here on one node.
+    if (open && open.placement !== this.placement) {
+      throw new InternalError(
+        new Error(`A ${this.placement} transaction inside a ${open.placement} one.`),
+      );
+    }
+
+    return this.handle().transaction(async (tx) => {
       await this.applyStatementTimeout(tx);
-      return this.scope.within(tx, work);
+      return this.scope.within(tx, this.placement, work);
     });
   }
 
@@ -41,9 +56,19 @@ export class PgUnitOfWork extends UnitOfWork {
     await tx.execute(sql.raw(`set local statement_timeout = ${Math.trunc(ms)}`));
   }
 
-  // The open handle when there is one, the pool otherwise — the same accessor
-  // `BaseRepository` exposes, so a nested run sees what the repositories see.
-  private get db(): DrizzleClient {
-    return this.scope.current() ?? this.database.client;
+  // The open handle when there is one, the placed pool otherwise — the same resolution
+  // `BaseRepository` does, so a nested run sees what the repositories see.
+  private handle(): DrizzleClient {
+    const open = this.scope.current();
+    if (open) return open.client;
+
+    if (this.placement !== "routed") return this.cluster.catalog().client;
+
+    const placed = this.shards.current();
+    if (!placed) {
+      throw new InternalError(new Error("A routed transaction with no shard in scope."));
+    }
+
+    return this.cluster.at(placed.node).client;
   }
 }

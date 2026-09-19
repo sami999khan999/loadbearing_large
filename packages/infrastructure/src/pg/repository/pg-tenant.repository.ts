@@ -1,8 +1,17 @@
-import { eq, type OrganizationId, type TenantRecord, type TenantRepository } from "../../import.js";
+import {
+  eq,
+  type OrganizationId,
+  type Placement,
+  type TenantRecord,
+  type TenantRepository,
+} from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import { organizations } from "../schema/index.js";
 
 export class PgTenantRepository extends BaseRepository implements TenantRepository {
+  // `organizations` is the catalog's own table.
+  protected override readonly placement: Placement = "catalog";
+
   public async findBy(organizationId: OrganizationId): Promise<TenantRecord | null> {
     const rows = await this.db
       .select({

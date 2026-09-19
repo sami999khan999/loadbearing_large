@@ -3,12 +3,16 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { PgPersonalOrganizationEnroller } from "../../src/pg/repository/pg-personal-organization.enroller.js";
 import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 
@@ -59,11 +63,17 @@ describe("PgPersonalOrganizationEnroller", () => {
   // savepoint has to open inside the enroller's locked transaction, not on the pool.
   const enroller = () => {
     const scope = new TransactionScope();
-    const activity = new PgActivityLogger(database, scope, new SystemClock());
-    return new PgPersonalOrganizationEnroller(
-      database,
+    const activity = new PgActivityLogger(
+      DatabaseCluster.single(database),
       scope,
-      new PgOrganizationFounder(database, scope, activity),
+      shards,
+      new SystemClock(),
+    );
+    return new PgPersonalOrganizationEnroller(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      new PgOrganizationFounder(DatabaseCluster.single(database), scope, shards, activity),
     );
   };
 

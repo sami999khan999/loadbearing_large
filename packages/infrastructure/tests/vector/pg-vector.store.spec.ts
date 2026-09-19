@@ -2,12 +2,25 @@ import { Identifiers } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
 import { and, eq, type Logger } from "drizzle-orm";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgVectorStore } from "../../src/pg/repository/pg-vector.store.js";
 import { documentChunks, organizations } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, openDatabase, seedOrganizationId, seedTenant } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
+
+// Routed repositories refuse to pick a pool with no shard in scope, which is the
+// tripwire working. One node here, so entering it is the whole placement.
+const placeOnTheOneNode = () => shards.enter({ key: "spec" as never, node: 0 });
+
+// Both hooks, and registered first: vitest runs every `beforeAll` before any
+// `beforeEach`, and a fixture built in one of those makes routed queries too.
+beforeAll(placeOnTheOneNode);
+beforeEach(placeOnTheOneNode);
 
 // Captures the SQL the store actually issued, so the EXPLAIN below runs the query under
 // test rather than a copy of it that can drift.
@@ -33,7 +46,7 @@ const blend = (a: number, b: number): number[] =>
 
 beforeAll(() => {
   database = openDatabase(recorder);
-  store = new PgVectorStore(database, new TransactionScope());
+  store = new PgVectorStore(DatabaseCluster.single(database), new TransactionScope(), shards);
 });
 
 afterAll(async () => {

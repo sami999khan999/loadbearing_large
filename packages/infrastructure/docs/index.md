@@ -266,6 +266,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   the `ORDER BY` that stops the index being used.
 - [Partitions](reference/partitions.md) — the allowlist as the whole policy, the two mechanics that
   are not optional, and which reads prune to one month and which read every one.
+- [Sharding](reference/sharding.md) — one key, one node, three placements; why `this.db` stays
+  synchronous, and the tripwire that makes one Postgres reveal what a split would break.
 - [Cold storage](reference/cold-storage.md) — the tenant-month as the unit, the `cold/` prefix,
   `partition_archive` as the index a read starts from, and the restore that proves the difference.
 - [The bucket's lifecycle policy](reference/storage-policy.md) — why a second gateway, why "no

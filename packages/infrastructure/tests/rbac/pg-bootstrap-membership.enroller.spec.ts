@@ -3,12 +3,16 @@ import { SystemClock, Uuid } from "@loadbearing/core";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgBootstrapMembershipEnroller } from "../../src/pg/repository/pg-bootstrap-membership.enroller.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
 import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
-import { TransactionScope } from "../../src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 
@@ -28,8 +32,16 @@ const makeUser = async () => {
 
 const scoped = () => {
   const scope = new TransactionScope();
-  const activity = new PgActivityLogger(database, scope, new SystemClock());
-  return { scope, founder: new PgOrganizationFounder(database, scope, activity) };
+  const activity = new PgActivityLogger(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new SystemClock(),
+  );
+  return {
+    scope,
+    founder: new PgOrganizationFounder(DatabaseCluster.single(database), scope, shards, activity),
+  };
 };
 
 // A tenant with the seeded role set, founded the same way a first sign-in founds one, so
@@ -60,7 +72,7 @@ afterAll(async () => {
 
 const enrollerFor = (slug: string | undefined) => {
   const { scope } = scoped();
-  return new PgBootstrapMembershipEnroller(database, scope, slug);
+  return new PgBootstrapMembershipEnroller(DatabaseCluster.single(database), scope, shards, slug);
 };
 
 const membershipsOf = (userId: UserId) =>

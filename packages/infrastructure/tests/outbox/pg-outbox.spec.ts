@@ -5,11 +5,15 @@ import { CapabilitySet } from "@loadbearing/permissions";
 import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { PgOutboxGateway } from "../../src/pg/repository/pg-outbox.gateway.js";
 import { PgOutboxPublisher } from "../../src/pg/repository/pg-outbox.publisher.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 let scope: TransactionScope;
@@ -21,10 +25,15 @@ let actor: Principal;
 beforeAll(async () => {
   database = openDatabase();
   scope = new TransactionScope();
-  const unitOfWork = new PgUnitOfWork(database, scope);
+  const unitOfWork = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
 
-  publisher = new PgOutboxPublisher(database, scope, new SystemClock());
-  gateway = new PgOutboxGateway(database, scope, unitOfWork);
+  publisher = new PgOutboxPublisher(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new SystemClock(),
+  );
+  gateway = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards, unitOfWork);
 
   organizationId = await seedOrganizationId(database);
   actor = Principal.system(
@@ -35,9 +44,10 @@ beforeAll(async () => {
 
   // The month this spec writes into has to exist: no DEFAULT partition, on purpose.
   await new PgMaintenanceGateway(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgUnitOfWork(database, scope),
+    shards,
+    new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
   ).ensureMonthlyPartitions(PartitionedTable.OUTBOX_EVENT, null, new Date(), 1);
 });
 
@@ -115,7 +125,7 @@ describe("PgOutboxPublisher", () => {
   // The property the whole design exists for: the row and the state change that caused
   // it commit together or not at all.
   it("rolls the event back with the transaction that wrote it", async () => {
-    const unitOfWork = new PgUnitOfWork(database, scope);
+    const unitOfWork = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
 
     await expect(
       unitOfWork.run(async () => {

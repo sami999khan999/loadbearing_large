@@ -6,12 +6,16 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OrganizationId } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgActivityReplayReader } from "../../src/pg/repository/pg-activity-replay.reader.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, openDatabase, seedOrganizationId } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 // Captures the statement the reader issued, so the EXPLAIN below runs the query under
 // test rather than a copy of it.
@@ -44,16 +48,19 @@ const BEFORE = {
 beforeAll(async () => {
   database = openDatabase(recorder);
   const scope = new TransactionScope();
-  reader = new PgActivityReplayReader(database, scope);
-  logger = new PgActivityLogger(database, scope, { now: () => INSTANT });
+  reader = new PgActivityReplayReader(DatabaseCluster.single(database), scope, shards);
+  logger = new PgActivityLogger(DatabaseCluster.single(database), scope, shards, {
+    now: () => INSTANT,
+  });
 
   // A partitioned table with no partition for a row's date rejects the insert, so a spec
   // that writes to a future month creates it first — under the tenant it writes as.
   organization = await seedOrganizationId(database);
   await new PgMaintenanceGateway(
-    database,
+    DatabaseCluster.single(database),
     scope,
-    new PgUnitOfWork(database, scope),
+    shards,
+    new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
   ).ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, organization, INSTANT, 1);
 
   partition = `${TenantPartitionSeed.partitionName(

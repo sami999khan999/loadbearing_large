@@ -3,10 +3,12 @@
 export {
   BaseRepository,
   Database,
+  DatabaseCluster,
   type DatabaseConfig,
   type DatabaseStats,
   type DrizzleClient,
   KeysetCursor,
+  type ShardConfig,
 } from "./primitive/index.js";
 export {
   PgActivityLogger,
@@ -35,13 +37,18 @@ export {
   PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
+  PgShardAssignmentRepository,
+  PgShardResolver,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
   PgVectorStore,
 } from "./repository/index.js";
 export {
+  type OpenTransaction,
   PgUnitOfWork,
   type PgUnitOfWorkConfig,
+  type PlacedShard,
+  ShardScope,
   TransactionScope,
 } from "./transaction/index.js";

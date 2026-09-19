@@ -10,6 +10,7 @@ import { Uuid } from "@loadbearing/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
+import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/pg-maintenance.gateway.js";
 import {
   conversationMembers,
@@ -19,8 +20,11 @@ import {
   users,
 } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 let database: Database;
 let gateway: PgMaintenanceGateway;
@@ -96,8 +100,13 @@ const partitionsOf = async (organizationId: OrganizationId): Promise<readonly st
 beforeAll(async () => {
   database = openDatabase();
   const scope = new TransactionScope();
-  gateway = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
-  seed = new TenantPartitionSeed(database, scope);
+  gateway = new PgMaintenanceGateway(
+    DatabaseCluster.single(database),
+    scope,
+    shards,
+    new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
+  );
+  seed = new TenantPartitionSeed(DatabaseCluster.single(database), scope, shards);
 
   author = Identifiers.userId.parse(Uuid.v7());
   await database.client

@@ -5,14 +5,15 @@ import {
   eq,
   InternalError,
   type OrganizationId,
+  type Placement,
   Principal,
   type UserId,
   Uuid,
 } from "../../import.js";
-import { BaseRepository, type Database } from "../primitive/index.js";
+import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
 import { memberships, organizations, roles } from "../schema/index.js";
 import { SystemRoleSeed, TenantPartitionSeed } from "../seed/index.js";
-import type { TransactionScope } from "../transaction/index.js";
+import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
 // The role the person who founds a tenant gets. There is no second branch: a founded
 // organization has exactly one member.
@@ -27,22 +28,26 @@ export interface OrganizationFounder {
 // One implementation of "create a tenant and own it", called from the personal enroller
 // and from the create endpoint. See docs/reference/enrollers.md.
 export class PgOrganizationFounder extends BaseRepository {
-  private readonly systemRoles = new SystemRoleSeed(this.database, this.scope);
-  private readonly partitions = new TenantPartitionSeed(this.database, this.scope);
+  // `organizations` and the RBAC it seeds, in one transaction.
+  protected override readonly placement: Placement = "catalog";
+
+  private readonly systemRoles = new SystemRoleSeed(this.cluster, this.scope, this.shards);
+  private readonly partitions = new TenantPartitionSeed(this.cluster, this.scope, this.shards);
 
   public constructor(
-    database: Database,
+    cluster: DatabaseCluster,
     scope: TransactionScope,
+    shards: ShardScope,
     private readonly activity: ActivityLogger,
   ) {
-    super(database, scope);
+    super(cluster, scope, shards);
   }
 
   // `this.db`, not `this.database.client`: inside the enroller's transaction this is a
   // savepoint, standalone it is a transaction of its own.
   public async found(userId: UserId, name: string, slug?: string): Promise<OrganizationId> {
     return this.db.transaction(async (tx) =>
-      this.scope.within(tx, async () => {
+      this.scope.within(tx, "catalog", async () => {
         const organizationId = Uuid.v7() as OrganizationId;
 
         await this.db.insert(organizations).values({

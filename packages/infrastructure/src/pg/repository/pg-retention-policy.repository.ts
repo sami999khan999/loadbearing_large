@@ -3,6 +3,7 @@ import {
   eq,
   PartitionedTable,
   type PartitionedTableName,
+  type Placement,
   type RetentionPolicyRecord,
   type RetentionPolicyRepository,
   type RetentionStore,
@@ -14,6 +15,9 @@ export class PgRetentionPolicyRepository
   extends BaseRepository
   implements RetentionPolicyRepository
 {
+  // Deployment-wide policy.
+  protected override readonly placement: Placement = "catalog";
+
   public async all(): Promise<readonly RetentionPolicyRecord[]> {
     return this.db.select().from(retentionPolicy).orderBy(retentionPolicy.tableName);
   }

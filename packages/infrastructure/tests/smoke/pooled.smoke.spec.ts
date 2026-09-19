@@ -1,9 +1,12 @@
 import { afterAll, describe, expect, inject, it } from "vitest";
 import { sql } from "../../src/import.js";
-import { Database } from "../../src/pg/primitive/index.js";
+import { Database, DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgOutboxGateway } from "../../src/pg/repository/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import type {} from "./support/stack.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 const stack = inject("stack");
 
@@ -23,7 +26,13 @@ const open = (url: string, statementTimeoutMs?: number) => {
   return {
     database,
     scope,
-    unitOfWork: new PgUnitOfWork(database, scope, statementTimeoutMs ? { statementTimeoutMs } : {}),
+    unitOfWork: new PgUnitOfWork(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      "catalog",
+      statementTimeoutMs ? { statementTimeoutMs } : {},
+    ),
   };
 };
 
@@ -61,8 +70,9 @@ describe("the pooled connection path", () => {
       );
 
       await worker.unitOfWork.run(async () => {
-        const tx = worker.scope.current();
-        if (!tx) throw new Error("no transaction in scope");
+        const inScope = worker.scope.current();
+        if (!inScope) throw new Error("no transaction in scope");
+        const tx = inScope.client;
         const inside = await tx.execute<{ statement_timeout: string }>(sql`show statement_timeout`);
         expect(inside.rows[0]?.statement_timeout).toBe("25s");
       });
@@ -84,13 +94,16 @@ describe("the pooled connection path", () => {
 
     try {
       await pooled.unitOfWork.run(async () => {
-        const tx = pooled.scope.current();
-        if (!tx) throw new Error("no transaction in scope");
+        const inScope = pooled.scope.current();
+        if (!inScope) throw new Error("no transaction in scope");
+        const tx = inScope.client;
         await tx.execute(sql.raw(`insert into ${table} values (1)`));
 
         await expect(
           pooled.unitOfWork.run(async () => {
-            await pooled.scope.current()?.execute(sql.raw(`insert into ${table} values (2)`));
+            await pooled.scope
+              .current()
+              ?.client.execute(sql.raw(`insert into ${table} values (2)`));
             throw new Error("inner");
           }),
         ).rejects.toThrow("inner");
@@ -115,7 +128,7 @@ describe("the pooled connection path", () => {
     const first = pooled.unitOfWork.run(async () => {
       await pooled.scope
         .current()
-        ?.execute(sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_KEY})`);
+        ?.client.execute(sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_KEY})`);
       order.push("first-acquired");
       await new Promise((resolve) => setTimeout(resolve, HOLD_MS));
       order.push("first-released");
@@ -127,7 +140,7 @@ describe("the pooled connection path", () => {
     const waiting = second.unitOfWork.run(async () => {
       await second.scope
         .current()
-        ?.execute(sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_KEY})`);
+        ?.client.execute(sql`select pg_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_KEY})`);
       order.push("second-acquired");
     });
 
@@ -169,11 +182,21 @@ describe("the pooled connection path", () => {
 
       await Promise.all([
         drain(
-          new PgOutboxGateway(pooled.database, pooled.scope, pooled.unitOfWork),
+          new PgOutboxGateway(
+            DatabaseCluster.single(pooled.database),
+            pooled.scope,
+            shards,
+            pooled.unitOfWork,
+          ),
           claimed[0] as string[],
         ),
         drain(
-          new PgOutboxGateway(second.database, second.scope, second.unitOfWork),
+          new PgOutboxGateway(
+            DatabaseCluster.single(second.database),
+            second.scope,
+            shards,
+            second.unitOfWork,
+          ),
           claimed[1] as string[],
         ),
       ]);
@@ -221,7 +244,9 @@ describe("DETACH PARTITION CONCURRENTLY", () => {
         .run(async () => {
           await direct.scope
             .current()
-            ?.execute(sql.raw(`alter table ${table} detach partition ${table}_a concurrently`));
+            ?.client.execute(
+              sql.raw(`alter table ${table} detach partition ${table}_a concurrently`),
+            );
         })
         .then(
           () => null,

@@ -1,9 +1,12 @@
 import "dotenv/config";
 import { asc, gt, migrate, type OrganizationId } from "./src/import.js";
-import { Database } from "./src/pg/primitive/index.js";
+import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
 import { organizations } from "./src/pg/schema/index.js";
 import { TenantPartitionSeed } from "./src/pg/seed/index.js";
-import { TransactionScope } from "./src/pg/transaction/index.js";
+import { ShardScope, TransactionScope } from "./src/pg/transaction/index.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 // Paged rather than read whole: this runs before the web app can take a request, and a
 // deployment with ten thousand tenants should not hold them all in memory to do it.
@@ -21,7 +24,7 @@ await migrate(database.client, { migrationsFolder: "./migrations" });
 // every tenant-owned table rejects every insert. One implementation creates partitions;
 // a SQL copy of it in the migration would be a second one that drifts.
 const scope = new TransactionScope();
-const partitions = new TenantPartitionSeed(database, scope);
+const partitions = new TenantPartitionSeed(DatabaseCluster.single(database), scope, shards);
 
 let after: OrganizationId | null = null;
 let tenants = 0;
@@ -41,7 +44,7 @@ for (;;) {
   // useful on their own, and a long DDL transaction holds locks the whole time.
   for (const { id } of page) {
     await database.client.transaction(async (tx) =>
-      scope.within(tx, async () => {
+      scope.within(tx, "catalog", async () => {
         created += (await partitions.run(id)).length;
       }),
     );

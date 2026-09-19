@@ -9,12 +9,15 @@ import {
   sql,
   Uuid,
 } from "../../src/import.js";
-import { Database } from "../../src/pg/primitive/index.js";
+import { Database, DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgMaintenanceGateway } from "../../src/pg/repository/index.js";
 import { organizations } from "../../src/pg/schema/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { PgUnitOfWork, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import type {} from "./support/stack.js";
+
+// One node, so nothing is ever placed: every repository here resolves to it.
+const shards = new ShardScope();
 
 const stack = inject("stack");
 
@@ -24,8 +27,13 @@ const stack = inject("stack");
 // Direct, never pooled: every statement here is DDL.
 const database = new Database({ url: stack.database.directUrl });
 const scope = new TransactionScope();
-const seed = new TenantPartitionSeed(database, scope);
-const maintenance = new PgMaintenanceGateway(database, scope, new PgUnitOfWork(database, scope));
+const seed = new TenantPartitionSeed(DatabaseCluster.single(database), scope, shards);
+const maintenance = new PgMaintenanceGateway(
+  DatabaseCluster.single(database),
+  scope,
+  shards,
+  new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
+);
 
 // The slug every synthetic tenant carries, so cleanup can find them without holding a
 // list — a run killed half way through leaves them findable.
