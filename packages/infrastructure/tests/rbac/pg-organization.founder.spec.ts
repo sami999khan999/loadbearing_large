@@ -15,6 +15,7 @@ import {
 } from "../../src/pg/schema/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+import { RecordingLogger } from "../support/recording.logger.js";
 
 // One node, so nothing is ever placed: every repository here resolves to it.
 const shards = new ShardScope();
@@ -42,6 +43,7 @@ const founder = (scope = new TransactionScope()) =>
     scope,
     shards,
     new PgActivityLogger(DatabaseCluster.single(database), scope, shards, new SystemClock()),
+    new RecordingLogger(),
   );
 
 beforeAll(() => {

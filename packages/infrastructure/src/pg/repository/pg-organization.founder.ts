@@ -4,6 +4,7 @@ import {
   CapabilitySet,
   eq,
   InternalError,
+  type Logger,
   type OrganizationId,
   type Placement,
   Principal,
@@ -39,6 +40,7 @@ export class PgOrganizationFounder extends BaseRepository {
     scope: TransactionScope,
     shards: ShardScope,
     private readonly activity: ActivityLogger,
+    private readonly logger: Logger,
   ) {
     super(cluster, scope, shards);
   }
@@ -46,7 +48,7 @@ export class PgOrganizationFounder extends BaseRepository {
   // `this.db`, not `this.database.client`: inside the enroller's transaction this is a
   // savepoint, standalone it is a transaction of its own.
   public async found(userId: UserId, name: string, slug?: string): Promise<OrganizationId> {
-    return this.db.transaction(async (tx) =>
+    const founded = await this.db.transaction(async (tx) =>
       this.scope.within(tx, "catalog", async () => {
         const organizationId = Uuid.v7() as OrganizationId;
 
@@ -98,5 +100,10 @@ export class PgOrganizationFounder extends BaseRepository {
         return organizationId;
       }),
     );
+
+    // After the commit, never inside it: a rolled-back transaction would otherwise leave
+    // a line saying a tenant was placed on a node it never reached.
+    this.logger.emit("shard.assignment.created", { key: founded, node: 0 });
+    return founded;
   }
 }

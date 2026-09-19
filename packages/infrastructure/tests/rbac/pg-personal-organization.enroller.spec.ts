@@ -10,6 +10,7 @@ import { PgPersonalOrganizationEnroller } from "../../src/pg/repository/pg-perso
 import { memberships, organizations, roles, users } from "../../src/pg/schema/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+import { RecordingLogger } from "../support/recording.logger.js";
 
 // One node, so nothing is ever placed: every repository here resolves to it.
 const shards = new ShardScope();
@@ -73,7 +74,13 @@ describe("PgPersonalOrganizationEnroller", () => {
       DatabaseCluster.single(database),
       scope,
       shards,
-      new PgOrganizationFounder(DatabaseCluster.single(database), scope, shards, activity),
+      new PgOrganizationFounder(
+        DatabaseCluster.single(database),
+        scope,
+        shards,
+        activity,
+        new RecordingLogger(),
+      ),
     );
   };
 

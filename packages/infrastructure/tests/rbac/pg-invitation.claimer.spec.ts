@@ -18,13 +18,14 @@ import {
 } from "../../src/pg/schema/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
+import { RecordingLogger } from "../support/recording.logger.js";
 
 // One node, so nothing is ever placed: every repository here resolves to it.
 const shards = new ShardScope();
 
 // Captures the SQL the claimer actually issued, so the predicate assertion below is
 // against the query under test rather than a copy of it that can drift.
-class RecordingLogger implements Logger {
+class RecordingQueryLogger implements Logger {
   public readonly queries: string[] = [];
 
   public logQuery(query: string): void {
@@ -32,7 +33,7 @@ class RecordingLogger implements Logger {
   }
 }
 
-const recorder = new RecordingLogger();
+const recorder = new RecordingQueryLogger();
 let database: Database;
 const created: UserId[] = [];
 const founded: OrganizationId[] = [];
@@ -102,7 +103,13 @@ const withScope = () => {
       activity,
       events,
     ),
-    founder: new PgOrganizationFounder(DatabaseCluster.single(database), scope, shards, activity),
+    founder: new PgOrganizationFounder(
+      DatabaseCluster.single(database),
+      scope,
+      shards,
+      activity,
+      new RecordingLogger(),
+    ),
   };
 };
 

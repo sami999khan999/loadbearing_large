@@ -783,6 +783,7 @@ export class Container {
       this.transactions,
       this.shards,
       this.activity,
+      this.logger,
     );
     this.invitationClaimer = new PgInvitationClaimer(
       this.cluster,
