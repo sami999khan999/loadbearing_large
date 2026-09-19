@@ -59,6 +59,7 @@ packages/feature/src/
 │   └── invitation-list.tsx                 → InvitationList
 ├── platform/
 │   ├── platform-status.panel.tsx           → PlatformStatusPanel
+│   ├── projection-policy.form.tsx          → ProjectionPolicyForm
 │   ├── retention-policy.form.tsx           → RetentionPolicyForm
 │   ├── retention-preview.notice.tsx        → RetentionPreviewNotice
 │   ├── restore-partition.panel.tsx         → RestorePartitionPanel

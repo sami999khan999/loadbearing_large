@@ -2512,11 +2512,17 @@ reads the exclusion list once per run and passes it to all three queries.
   `UpdateRetentionPolicyUseCase` already had. `done:` an **excluded** action gets no TTL clause:
   nothing writes it, so a window over it is a rule on rows that do not arrive.
 
-- [ ] `20.6` **The screen** — `projection-policy.form.tsx`: one row per action, grouped by the
+- [x] `20.6` **The screen** — `projection-policy.form.tsx`: one row per action, grouped by the
   action's slice, a projected toggle and a months field; a `Callout tone="danger"` when a toggle goes
   off: rows already in ClickHouse stay, new rows stop, and after the Postgres retention window the
   gap cannot be replayed except from cold storage. Route `platform/analytics.tsx`, copy in both
   locales. **Docs:** `packages/feature/docs/index.md`.
+  `done: 2026-09-19` — `corrected:` each row is its own component. One `useState` per action in
+  the parent would be twenty-one pieces of state and a re-render of every row per keystroke.
+  `done:` the toggle is two buttons rather than a checkbox, because the destructive direction
+  deserves its own label; the deadline `Callout` renders under an excluded row rather than beside
+  the button, so it reads after the click as well as before. `done:` the screen also shows drift
+  between the rows and what the store holds, which is what a screen reading only the rows hides.
 
 - [ ] `20.7` **Docs** — `clickhouse.md` §"What is not wired" rewritten: the policy is wired, the
   read driver still is not; `docs/opinions/data-and-scale.md` "On ClickHouse specifically" gains one

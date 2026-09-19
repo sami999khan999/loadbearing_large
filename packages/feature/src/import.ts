@@ -35,6 +35,7 @@ export {
   type NotificationPreferenceDto,
   type OrganizationId,
   Password,
+  type ProjectionEntryDto,
   type RestoreRequestedDto,
   type RetentionEntryDto,
   type RetentionPreviewDto,

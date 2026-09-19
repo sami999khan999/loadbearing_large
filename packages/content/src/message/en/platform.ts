@@ -78,6 +78,23 @@ export const platform = {
   "platform.tenantDelete.action": "Delete tenant",
   "platform.tenantDelete.done":
     "Deleted. {archived} objects archived, {partitions} partitions dropped.",
+  "platform.projection.title": "Analytics projection",
+  "platform.projection.description":
+    "Which actions reach the analytics store, and for how long. Blank keeps an action for the default {months} months.",
+  "platform.projection.loading": "Loading…",
+  "platform.projection.notConfigured":
+    "No analytics store is configured. The rows are saved and take effect when one is.",
+  // Drift is what a screen reading only the rows would hide: a save that failed after
+  // the commit would still read back as success.
+  "platform.projection.drifted":
+    "The store holds a different expression from these rows. The nightly run repairs it.",
+  "platform.projection.saveTtl": "Save months",
+  "platform.projection.stop": "Stop projecting",
+  "platform.projection.resume": "Resume projecting",
+  // The deadline, not just the consequence: past the Postgres window the gap can only
+  // be filled from cold storage, and a screen that omits that reads as reversible.
+  "platform.projection.excluded.warning":
+    "Rows already in the store stay; new ones stop arriving. Past the audit table's retention window this gap can only be filled from cold storage.",
   "platform.storage.title": "Cold storage by tenant",
   // Said on the screen, not only in a doc: a partition holds one tenant's rows, but
   // the catalog reports size per table, so hot bytes have no tenant to belong to.

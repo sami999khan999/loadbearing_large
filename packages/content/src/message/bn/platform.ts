@@ -59,6 +59,18 @@ export const platform = {
   "platform.tenantDelete.slug.hint": "সার্ভারও এটি মিলিয়ে দেখে।",
   "platform.tenantDelete.action": "টেন্যান্ট মুছুন",
   "platform.tenantDelete.done": "মোছা হয়েছে। {archived}টি অবজেক্ট আর্কাইভ, {partitions}টি পার্টিশন বাদ।",
+  "platform.projection.title": "অ্যানালিটিক্স প্রজেকশন",
+  "platform.projection.description":
+    "কোন কাজগুলি অ্যানালিটিক্স স্টোরে পৌঁছায়, এবং কতদিন। ফাঁকা রাখলে ডিফল্ট {months} মাস।",
+  "platform.projection.loading": "লোড হচ্ছে…",
+  "platform.projection.notConfigured":
+    "কোনো অ্যানালিটিক্স স্টোর কনফিগার করা নেই। সারিগুলি সংরক্ষিত হয় এবং স্টোর চালু হলে কার্যকর হয়।",
+  "platform.projection.drifted": "স্টোরে এই সারিগুলির চেয়ে ভিন্ন এক্সপ্রেশন আছে। রাতের কাজ সেটি ঠিক করে।",
+  "platform.projection.saveTtl": "মাস সংরক্ষণ",
+  "platform.projection.stop": "প্রজেকশন বন্ধ",
+  "platform.projection.resume": "প্রজেকশন চালু",
+  "platform.projection.excluded.warning":
+    "স্টোরে থাকা সারিগুলি থেকে যায়; নতুন সারি আর আসে না। অডিট টেবিলের সংরক্ষণকাল পার হলে এই ফাঁক কেবল কোল্ড স্টোরেজ থেকে পূরণ করা যায়।",
   "platform.storage.title": "টেন্যান্ট অনুযায়ী কোল্ড স্টোরেজ",
   "platform.storage.description":
     "শুধু আর্কাইভ করা মাস। হট পোস্টগ্রেস আকার কোনো টেন্যান্টের নামে লেখা যায় না; টেবিলভিত্তিক হট আকার সংরক্ষণকাল স্ক্রিনে আছে।",
