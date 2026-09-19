@@ -13,7 +13,7 @@ export interface InvitationSnapshot {
 // No principal, because the person holding the link may have no account yet — the claim
 // happens through the auth endpoint. See docs/reference/server-functions.md.
 export const fetchInvitation = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ token: z.string().min(1).max(128) }))
+  .validator(z.object({ token: z.string().min(1).max(128) }))
   .handler(async ({ data }): Promise<InvitationSnapshot | null> => {
     return container.invitationClaimer.preview(data.token);
   });
