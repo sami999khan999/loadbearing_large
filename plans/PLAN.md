@@ -3794,7 +3794,46 @@ button's procedure; `24.3` for the replica handle and `cluster.reader(key)`.
   once someone pays for Glacier; MinIO needs a configured tier to honour it, which is why it is not
   in Phase 19.
 
-- [ ] `25.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): one row per
+- [x] `25.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): one row per
+  - **Shipped 2026-09-20**, all twelve steps. Permission and route already existed (`22.19`), so
+    the slice starts at the contract: `PlatformContract.{shardNode,shardTenant,shardMoves,shardMapQuery,shardMap,tenantLookup,tenantLocation}`,
+    `ShardMapReader` + `InspectShardMapUseCase` + `LocateTenantUseCase` in
+    `application/src/platform/`, `PgShardMapReader`, `Container.hasShardMoves`,
+    `PlatformQueries.{shardMap,tenantLocation}`, twenty-eight copy keys in both locales,
+    `shard-map.panel.tsx`, two router handlers, and
+    `route/(app)/_authenticated/platform/shards.tsx`. `platform.shards.read` came off
+    `AWAITING_A_PROCEDURE` in the same commit. **No migration**: the key was registered ahead of
+    the screen, which is what that list is for.
+  - **Two procedures, not one.** `platform.shardMap` and `platform.locateTenant`. The entry said
+    "procedure `shards.map`"; every platform procedure in the contract mounts under `platform.*`
+    and a one-procedure `shards` namespace beside it would be the only module in the merged
+    contract that is not a package-level subject. And the lookup is separate rather than a field
+    on the map because an operator typing a slug must not re-read the node list per keystroke —
+    different cache key, different `staleTime`.
+  - **The node list does not join `organizations`, and that is the decision in it.** It counts
+    `shard_assignments` grouped by `node`. Asking the *cluster* how many nodes exist reports what
+    `DATABASE_SHARD_<n>_URL` was set to, which is a statement about the process rather than about
+    where tenants are; joining `organizations` hides the row an operator most wants — a directory
+    row whose tenant is gone.
+  - **The tenant row links to `/platform/storage` rather than carrying a second delete form.**
+    `19.20`'s panel asks for the slug to be typed back, and two places to get that confirmation
+    wrong is one too many. The move button *is* rendered, disabled, with its reason as text —
+    `25.5` flips it by flipping `hasShardMoves`.
+  - **Found while building it:** `max(assigned_at)` comes back as a **string**, not a `Date`.
+    Drizzle replaces node-postgres' timestamp parsers and converts per column, so an aggregate
+    over a timestamp column is raw text unless it carries `.mapWith(column)`. The integration
+    spec caught it on its first run.
+  - **Verified.** `tests/platform/shard-map.spec.ts` (8) against live Postgres, including a
+    statement-count assertion that the page costs two queries whatever it holds;
+    `application/tests/platform/shard-map.use-case.spec.ts` (8); `feature/tests/platform/shard-map.panel.spec.tsx`
+    (5) — node row, tenants on expand, the move button disabled *with* its reason, the lookup by
+    slug and a miss. Whole workspace green, `check:architecture` 24/24, and the built server
+    answers `/platform/shards` with a 307 to `/sign-in?redirect=%2Fplatform%2Fshards`, exactly as
+    its siblings do.
+  - **What is still unproven**, and it is the Exit line's own words: the *rendered* page against a
+    signed-in platform admin. That needs a browser, which this session did not have — see
+    [`STUCK.md`](STUCK.md) S.1. The panel spec covers the same four assertions against a fake
+    client, which is the closest thing short of the walk.
   physical node — tenant count from `shard_assignments` grouped by `node`, most recent `assigned_at`
   — with the tenants of a node on expand, paginated, each tenant row carrying its retention override
   (`19.19`), the move button (`25.5`) and the delete action (`19.20`); plus a tenant lookup

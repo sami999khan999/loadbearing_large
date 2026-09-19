@@ -543,7 +543,7 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-six boxes, all in Phases 23–26, after `23.4`, `23.13` and `23.16` closed. Phases 1–22 have none. The line
+Thirty-five boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16` and `25.4` closed. Phases 1–22 have none. The line
 number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
 edited above them.
 
@@ -589,7 +589,7 @@ From `TODO.md`
 - `25.1` **Status** — `InspectPlatformStatusUseCase` grows a `replica` block — line 3602
 - `25.2` **The switch** — `platform_policy.replica_reads_enabled`, `toggle-replica-reads.use-case.ts` — line 3606
 - `25.3` **Colder storage class** — `transitionAfterDays` on `LifecycleRule` — line 3612
-- `25.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`) — line 3616
+- ~~`25.4` **The shard map**~~ — closed 2026-09-20: `/platform/shards`, two procedures, twenty-one new tests. The rendered page against a signed-in admin is the one clause still unproven — `STUCK.md` S.1
 - `25.5` **The move button** — disabled until Phase 24 — line 3626
 
 ### Phase 26 — Communication follow-ups
@@ -643,3 +643,11 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   worker. **The entry's own "Done when" named `/api/health` and that is the wrong probe** — it
   renders no JSX, so it answers 200 straight through the `T-032` bug the gate exists for, and it
   reports dependencies, so it answers 503 for a ClickHouse nobody started. Both measured.
+- `25.4` **The shard map** — `/platform/shards` behind `platform.shards.read`, all twelve steps of
+  the slice. Two procedures rather than the entry's one, because a lookup that re-read the node
+  list per keystroke is not a lookup. The node list counts the **directory**, not the cluster and
+  not `organizations`: asking the cluster reports what `DATABASE_SHARD_<n>_URL` was set to, and
+  joining `organizations` hides the row an operator most wants. Twenty-one new tests, including a
+  statement-count assertion that a page costs two queries whatever it holds. **Found building it:**
+  an aggregate over a timestamp column comes back as a string unless it carries `.mapWith`, because
+  drizzle replaces node-postgres' parsers and converts per column.
