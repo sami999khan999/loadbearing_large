@@ -5,6 +5,7 @@ import type {
   InviteMemberInput,
   MemberDto,
   PaginationQuery,
+  ResendInvitationInput,
   RevokeInvitationInput,
   SetMemberActiveInput,
 } from "../import.js";
@@ -45,6 +46,15 @@ export class MemberMutations {
           total: Math.max(0, page.total - 1),
         }),
       },
+    });
+  }
+
+  // Invalidates rather than edits optimistically: what changes is the expiry, and a row
+  // showing a new date before the server agreed is a date nobody can act on.
+  public static useResendInvitation(client: ApiClient) {
+    return useAppMutation<InvitationDto, ResendInvitationInput>({
+      mutationFn: (input) => client.member.resendInvitation(input),
+      invalidates: [QueryKeys.member.all()],
     });
   }
 

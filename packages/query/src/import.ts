@@ -52,6 +52,7 @@ export type {
   RealtimeMessage,
   ReprojectInput,
   ReprojectRequestedDto,
+  ResendInvitationInput,
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
