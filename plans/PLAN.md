@@ -3174,7 +3174,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
 
 #### Migrations, seed, scripts (`infrastructure`)
 
-- [ ] `22.17` **Every script loops the physical shards** — `migrate.ts` migrates each
+- [x] `22.17` **Every script loops the physical shards** — `migrate.ts` migrates each
   `directUrl` in index order (catalog first, so a backfill that reads it runs against a migrated
   catalog); `seed.ts` seeds the bootstrap organization on the catalog and its assignment;
   `partitions.ts` (`16.9`) loops; `drizzle.config.ts` and `db:studio` stay on the catalog with the

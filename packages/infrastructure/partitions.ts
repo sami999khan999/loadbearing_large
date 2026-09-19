@@ -5,14 +5,15 @@
 // until a delete use-case enqueues the job, this is what reaches it.
 
 import "dotenv/config";
-import { asc, gt, type OrganizationId, PartitionedTable } from "./src/import.js";
+import { shardUrls } from "./shard-env.js";
+import { type OrganizationId, PartitionedTable, sql } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
 import { PgMaintenanceGateway, PgPartitionArchiveGateway } from "./src/pg/repository/index.js";
-import { organizations } from "./src/pg/schema/index.js";
 import { PgUnitOfWork, ShardScope, TransactionScope } from "./src/pg/transaction/index.js";
 import { S3StorageGateway } from "./src/s3/index.js";
 
-// One node, so nothing is ever placed: every repository here resolves to it.
+// Nothing here is ever placed by a resolver: the loop names the node, and each
+// gateway is a one-node cluster over that node's connection.
 const shards = new ShardScope();
 
 // The same three the schedule keeps ahead — the current month and the next two — so
@@ -23,17 +24,20 @@ const MONTHS = 3;
 const PAGE = 200;
 
 // Direct, never pooled: this is DDL, and a transaction pooler is the wrong place for it.
-const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
+const nodes = shardUrls().map((shard) => new Database({ url: shard.directUrl }));
+const catalog = nodes[0];
+if (!catalog) throw new Error("DATABASE_URL is required.");
 
-const database = new Database({ url });
 const scope = new TransactionScope();
-const maintenance = new PgMaintenanceGateway(
-  DatabaseCluster.single(database),
-  scope,
-  shards,
-  new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog"),
-);
+const gatewayFor = (node: Database) => {
+  const cluster = DatabaseCluster.single(node);
+  return new PgMaintenanceGateway(
+    cluster,
+    scope,
+    shards,
+    new PgUnitOfWork(cluster, scope, shards, "catalog"),
+  );
+};
 const now = new Date();
 
 const sweepAt = process.argv.indexOf("--sweep");
@@ -55,20 +59,23 @@ if (sweepAt !== -1) {
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
   });
 
+  // The catalog's, and only the catalog's: `partition_archive` is one index for the
+  // deployment, so a sweep that looped nodes would delete the same objects N times.
   const archive = new PgPartitionArchiveGateway(
-    DatabaseCluster.single(database),
+    DatabaseCluster.single(catalog),
     scope,
     shards,
     storage,
   );
   const objects = await archive.sweep(organizationId as OrganizationId);
 
-  await database.close();
+  for (const node of nodes) await node.close();
   console.log(`swept ${objects} cold objects for ${organizationId}`);
   process.exit(0);
 }
 
 interface Row {
+  readonly node: number;
   readonly table: string;
   readonly tenant: string;
   readonly created: number;
@@ -80,40 +87,51 @@ const rows: Row[] = [];
 // Read *before* ensuring, for the reason the consumer gives: afterwards there is nothing
 // to report, because the run has just fixed whatever it found.
 const cover = async (
+  node: number,
+  maintenance: PgMaintenanceGateway,
   table: (typeof PartitionedTable.NAMES)[number],
   tenant: OrganizationId | null,
 ) => {
   const ahead = await maintenance.monthlyPartitionsAfter(table, tenant, now);
   const created = await maintenance.ensureMonthlyPartitions(table, tenant, now, MONTHS);
 
-  rows.push({ table, tenant: tenant ?? "—", created: created.length, ahead });
+  rows.push({ node, table, tenant: tenant ?? "—", created: created.length, ahead });
 };
 
-for (const entry of PartitionedTable.MONTH_PARTITIONED) {
-  if (!entry.tenantKey) {
-    await cover(entry.name, null);
-    continue;
-  }
+// A partition is physical, so the runway is per node — and the tenants are read from
+// the catalog's directory rather than ensured everywhere.
+for (const [index, node] of nodes.entries()) {
+  const maintenance = gatewayFor(node);
 
-  let after: OrganizationId | null = null;
+  for (const entry of PartitionedTable.MONTH_PARTITIONED) {
+    if (!entry.tenantKey) {
+      await cover(index, maintenance, entry.name, null);
+      continue;
+    }
 
-  for (;;) {
-    const page = await database.client
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(after ? gt(organizations.id, after) : undefined)
-      .orderBy(asc(organizations.id))
-      .limit(PAGE);
+    let after: OrganizationId | null = null;
 
-    if (page.length === 0) break;
-    for (const { id } of page) await cover(entry.name, id);
+    for (;;) {
+      const page = await catalog.client.execute<{ id: OrganizationId }>(sql`
+        select o.id::text as id
+        from organizations o
+        left join shard_assignments sa on sa.shard_key = o.id::text
+        where coalesce(sa.node, 0) = ${index}
+          ${after ? sql`and o.id > ${after}::uuid` : sql``}
+        order by o.id
+        limit ${PAGE}
+      `);
 
-    after = page[page.length - 1]?.id ?? null;
-    if (page.length < PAGE) break;
+      if (page.rows.length === 0) break;
+      for (const { id } of page.rows) await cover(index, maintenance, entry.name, id);
+
+      after = page.rows[page.rows.length - 1]?.id ?? null;
+      if (page.rows.length < PAGE) break;
+    }
   }
 }
 
-await database.close();
+for (const node of nodes) await node.close();
 
 // `ahead` is what existed before this run, so a zero there is the reading that matters:
 // it says the next insert past month end would have failed.

@@ -6,6 +6,9 @@ import { defineConfig } from "drizzle-kit";
 //
 // Direct, never pooled: drizzle-kit introspects and writes DDL, and `db:studio` holds a
 // session open. `DATABASE_URL` is the fallback for a deployment running no pooler.
+//
+// The **catalog**, never a shard, and it does not loop: every node runs the same schema,
+// so generating against one and applying to all is what `migrate.ts` is for.
 const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
 

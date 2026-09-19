@@ -6,11 +6,12 @@
 import "dotenv/config";
 import { eq, Identifiers, Uuid } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
-import { organizations } from "./src/pg/schema/index.js";
+import { organizations, shardAssignments } from "./src/pg/schema/index.js";
 import { PlatformRoleSeed, SystemRoleSeed, TenantPartitionSeed } from "./src/pg/seed/index.js";
 import { ShardScope, TransactionScope } from "./src/pg/transaction/index.js";
 
-// One node, so nothing is ever placed: every repository here resolves to it.
+// The catalog's alone: the bootstrap tenant is node 0's, and a seed that looped nodes
+// would create the same organization on every one of them.
 const shards = new ShardScope();
 
 // The same variable `apps/web/src/env.ts` reads. Naming it in both places is what
@@ -55,6 +56,10 @@ const organizationId = await database.client.transaction(async (tx) =>
     // has the organization and not the flag, and `organizations_platform_uq` makes
     // marking a second one an error rather than a silent second tier.
     await tx.update(organizations).set({ isPlatform: true }).where(eq(organizations.id, id));
+
+    // In the same transaction as the organization, which is what lets `PgShardResolver`
+    // throw on a missing row rather than guess node 0.
+    await tx.insert(shardAssignments).values({ shardKey: id, node: 0 }).onConflictDoNothing();
 
     // Idempotent, and first: every tenant-owned table is partitioned by this id, so a
     // tenant with no partitions is a tenant the first write to it fails against.

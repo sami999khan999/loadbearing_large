@@ -397,6 +397,13 @@ export default defineConfig({
 > `0022` sets a role default. None of that belongs on a transaction pooler, and the fallback is
 > what keeps a single-URL deployment working unchanged.
 
+> **The catalog, and it does not loop.** Every node runs the same schema, so `drizzle-kit` and
+> `db:studio` stay pointed at node 0 — generating against one database and applying to all is
+> what `migrate.ts` is for. `DATABASE_SHARD_<n>_URL` is read by `shard-env.ts`, which sits above
+> `src/` beside the scripts that use it; a script is the one category allowed to read the
+> environment directly, and importing an app's `Env` here would make `pnpm db:migrate` parse the
+> web app's whole schema.
+
 Add to **`packages/infrastructure/package.json`**:
 
 ```json
@@ -464,6 +471,14 @@ pnpm db:generate
 **`pnpm db:generate` does that edit for you, and refuses rather than guessing.** It is two halves — `drizzle-kit generate && tsx partition-ddl.ts` — and the second opens only the migration just written. A primary key that omits a partition key stops the run with *"declare the composite primary key in the schema; the generator does not synthesize keys"*, because drizzle emits the composite form only when the schema declares `primaryKey({ columns })`. A table an earlier migration already created unpartitioned stops it too: converting a live table is a copy-and-swap, written by hand. See [partitions](../../packages/infrastructure/docs/reference/partitions.md).
 
 **A hand edit is the one change no linter reads, so an assertion does.** `check-architecture` §21 parses the `PARTITION BY` clause out of every file in `migrations/`, requires the table to be in `PartitionedTable.ALL` with the same level and key, requires the statement's primary key to carry every partition key, and fails on a `DEFAULT` partition — the edit you forget to make and the edit you make wrongly, from the same read. It also runs the other way: an allowlist entry no migration partitions fails too. See [26](26-hygiene-and-ci.md) and [partitions](../../packages/infrastructure/docs/reference/partitions.md).
+
+**Every script that writes DDL walks every node, in index order, catalog first.** `migrate.ts`
+applies the migrations to each `directUrl` and then seeds each node's own tenants — read from the
+catalog's `shard_assignments`, with `coalesce(node, 0)` so a tenant the backfill has not reached
+yet is node 0's. `partitions.ts` does the same for the runway and prints the node in its table.
+`seed.ts` is the exception and stays on the catalog: the bootstrap organization is node 0's, and
+it writes its own directory row in the same transaction. Order matters — the catalog is migrated
+first, because a later node's backfill reads a directory that has to exist.
 
 **Every tenant-owned table takes a tenant level first, and a migration creates parents only.** The shape is `PARTITION BY LIST ("organization_id")`, with `PARTITION BY RANGE` again under each tenant for the tables that grow with activity. Children — each tenant's partition and its runway months — are created by `TenantPartitionSeed` in the same transaction as the `organizations` insert, and by `migrate.ts` for every organization that already exists. One implementation creates partitions; a SQL copy of it in a migration is a second one that drifts.
 

@@ -1,11 +1,12 @@
 import "dotenv/config";
-import { asc, gt, migrate, type OrganizationId } from "./src/import.js";
+import { shardUrls } from "./shard-env.js";
+import { migrate, type OrganizationId, sql } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
-import { organizations } from "./src/pg/schema/index.js";
 import { TenantPartitionSeed } from "./src/pg/seed/index.js";
 import { ShardScope, TransactionScope } from "./src/pg/transaction/index.js";
 
-// One node, so nothing is ever placed: every repository here resolves to it.
+// Nothing here is ever placed by a resolver: the loop names the node, and every
+// repository it builds is a one-node cluster over that node's connection.
 const shards = new ShardScope();
 
 // Paged rather than read whole: this runs before the web app can take a request, and a
@@ -14,47 +15,62 @@ const PAGE = 500;
 
 // Direct, never pooled. Migrations run DDL and `0022` sets a role default, and a
 // transaction pooler is the wrong place for either.
-const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_DIRECT_URL or DATABASE_URL is required.");
+const nodes = shardUrls().map((shard) => new Database({ url: shard.directUrl }));
+const catalog = nodes[0];
+if (!catalog) throw new Error("DATABASE_URL is required.");
 
-const database = new Database({ url });
-await migrate(database.client, { migrationsFolder: "./migrations" });
+// Catalog first, and in index order, so a later node's backfill reads a directory that
+// has already been migrated.
+for (const [index, node] of nodes.entries()) {
+  await migrate(node.client, { migrationsFolder: "./migrations" });
+  console.log(`migrations applied on node ${index}`);
+}
 
 // `0023` creates the partitioned parents and no children, so until this loop has run
 // every tenant-owned table rejects every insert. One implementation creates partitions;
 // a SQL copy of it in the migration would be a second one that drifts.
 const scope = new TransactionScope();
-const partitions = new TenantPartitionSeed(DatabaseCluster.single(database), scope, shards);
 
-let after: OrganizationId | null = null;
 let tenants = 0;
 let created = 0;
 
-for (;;) {
-  const page = await database.client
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(after ? gt(organizations.id, after) : undefined)
-    .orderBy(asc(organizations.id))
-    .limit(PAGE);
+for (const [index, node] of nodes.entries()) {
+  const partitions = new TenantPartitionSeed(DatabaseCluster.single(node), scope, shards);
+  let after: OrganizationId | null = null;
 
-  if (page.length === 0) break;
+  for (;;) {
+    // `coalesce(node, 0)`, so a tenant whose directory row `0031` has not reached yet
+    // is node 0's — the same answer an unsharded deployment gives for every tenant.
+    const page: { rows: { id: OrganizationId }[] } = await catalog.client.execute(sql`
+      select o.id::text as id
+      from organizations o
+      left join shard_assignments sa on sa.shard_key = o.id::text
+      where coalesce(sa.node, 0) = ${index}
+        ${after ? sql`and o.id > ${after}::uuid` : sql``}
+      order by o.id
+      limit ${PAGE}
+    `);
 
-  // One transaction per tenant, not one for the page: a tenant's seven partitions are
-  // useful on their own, and a long DDL transaction holds locks the whole time.
-  for (const { id } of page) {
-    await database.client.transaction(async (tx) =>
-      scope.within(tx, "catalog", async () => {
-        created += (await partitions.run(id)).length;
-      }),
-    );
-    tenants += 1;
+    if (page.rows.length === 0) break;
+
+    // One transaction per tenant, not one for the page: a tenant's seven partitions are
+    // useful on their own, and a long DDL transaction holds locks the whole time.
+    for (const { id } of page.rows) {
+      await node.client.transaction(async (tx) =>
+        scope.within(tx, "catalog", async () => {
+          created += (await partitions.run(id)).length;
+        }),
+      );
+      tenants += 1;
+    }
+
+    after = page.rows[page.rows.length - 1]?.id ?? null;
+    if (page.rows.length < PAGE) break;
   }
-
-  after = page[page.length - 1]?.id ?? null;
-  if (page.length < PAGE) break;
 }
 
-await database.close();
+for (const node of nodes) await node.close();
 
-console.log(`migrations applied; ${created} partitions ensured across ${tenants} tenants`);
+console.log(
+  `migrations applied; ${created} partitions ensured across ${tenants} tenants on ${nodes.length} node(s)`,
+);

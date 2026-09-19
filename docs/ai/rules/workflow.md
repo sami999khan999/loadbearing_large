@@ -27,6 +27,10 @@ pnpm ch:migrate           # the ClickHouse schema; a printed no-op without CLICK
 pnpm auth:tables          # print Better Auth's own schema; run by hand
 ```
 
+**`db:migrate` and `db:partitions` walk every node**, catalog first, from `shard-env.ts`'s
+reading of `DATABASE_SHARD_<n>_URL`. `db:generate`, `db:studio` and `db:seed` stay on the
+catalog: every node runs the same schema, and the bootstrap tenant is node 0's.
+
 Mail goes to **Mailpit** in development, never out — inbox on `:8025`. A flow that sends
 (verification, reset, an invitation) is checked there, not in a real inbox — and **only while the
 worker is running**, because every message in this system is a job on `QueueName.MAIL`.

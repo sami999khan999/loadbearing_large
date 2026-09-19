@@ -138,6 +138,7 @@
         "packages/infrastructure/partitions.ts",
         "packages/infrastructure/platform-grant.ts",
         "packages/infrastructure/seed.ts",
+        "packages/infrastructure/shard-env.ts",
         "packages/infrastructure/smoke.ts",
         "tooling/scripts/check-architecture.mjs"
       ],
