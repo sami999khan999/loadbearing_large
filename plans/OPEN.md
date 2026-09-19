@@ -543,9 +543,10 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-three boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.8` and `26.9` closed. Phases 1–22 have none. The line
-number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
-edited above them.
+Thirty-three boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.8` and `26.9`
+closed. `26.12` was added and closed in the same night, so it never had a box here. Phases 1–22
+have none. The line number is the pointer; the body is not paraphrased here, and the numbers drift
+as `PLAN.md` is edited above them.
 
 ### Phase 23 — Loose ends (no gate, any spare hour)
 
@@ -667,3 +668,9 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   from the teardown:** deleting a `users` row costs a `conversation_members` scan per tenant
   partition, which is A.10 with a number on it — three hundred users exceeded a 30-second
   `statement_timeout` at 82 tenants.
+- `26.12` **The realtime fan-out goes out in chunks** — new, found by `26.8` and fixed in the same
+  night, which is what a load test is for. `MessagingRealtimeSubscriber` awaited one publish per
+  member; `DeliverNotificationUseCase` awaited two round trips per recipient. Both now issue their
+  frames in bounded chunks: **769 ms instead of 17 944** for 25 000 members. The measurement times
+  both shapes, so the difference cannot quietly disappear, and a new subscriber spec runs a room of
+  1 201 members across three chunks to prove nobody is dropped or served twice.

@@ -3896,28 +3896,27 @@ one worth promoting without a trigger.
     [`packages/infrastructure/docs/reference/fan-out.md`](../packages/infrastructure/docs/reference/fan-out.md).
   - **Measured on the compose stack**, one tenant, 82 tenants on the node:
 
-    | Recipients | Write | Statements | Replay | Digest | Pages | Publish | Per publish |
+    | Recipients | Write | Statements | Replay | Digest | Pages | Publish, serial | Publish, chunked |
     |---|---|---|---|---|---|---|---|
-    | 1 000 | 267 ms | 1 | 160 ms | 20 ms | 6 | 813 ms | 812 µs |
-    | 10 000 | 2 157 ms | 10 | 1 103 ms | 123 ms | 51 | 7 741 ms | 774 µs |
-    | 25 000 | 5 022 ms | 25 | 2 819 ms | 327 ms | 126 | 18 660 ms | 746 µs |
+    | 1 000 | 209 ms | 1 | 146 ms | 18 ms | 6 | 806 ms | **42 ms** |
+    | 10 000 | 1 826 ms | 10 | 1 123 ms | 144 ms | 51 | 8 053 ms | **289 ms** |
+    | 25 000 | 5 026 ms | 25 | 2 825 ms | 696 ms | 126 | 17 944 ms | **769 ms** |
 
-  - **The answer is message fan-out, and it is not the database.** One message to 25 000 members
-    costs about 24 seconds: 4.6 seconds of notification rows and **19.5 seconds of publishes**, dead
-    linear at ~0.78 ms each because each is a serialised Redis round trip. The two paths §6 warns
-    about loudest — the notification write and the digest scan — are 0.18 ms a row and 11 µs a
-    recipient, both flat.
+  - **The answer was message fan-out, and it was not the database.** One message to 25 000 members
+    cost about 23 seconds, eighteen of them publishes — dead linear at ~0.8 ms each, because each
+    was a serialised Redis round trip. The two paths §6 warns about loudest, the notification write
+    and the digest scan, are 0.2 ms a row and tens of microseconds a recipient, both flat.
+  - **It is fixed, and the fix was four lines**, filed and done as `26.12`. The same frames in
+    chunks of 500 take 769 ms rather than 17 944 — twenty-three times faster, because ioredis
+    multiplexes one socket and a chunk leaves as one write. One message to 25 000 is now ~5.8
+    seconds, and the remaining cost is the notification rows, which is where §6 said it would be.
   - **Three things worth keeping.** The write costs one statement per chunk of a thousand, and the
     spec asserts the *count* rather than the time, because that is the property that stops holding
     silently. The **replay** — the same event redelivered, which at-least-once makes the normal
     case — costs half the write and writes nothing. And the digest is one query per page of 200,
     which is `SendNotificationDigestUseCase`'s claim confirmed rather than restated.
-  - **What to do about the nineteen seconds**, cheapest first: pipeline the publishes, which are
-    independent and already best-effort; or stop fanning out per user past some room size, since
-    the body already rides the conversation channel and the per-user frames only reorder a list;
-    or `26.5`, Redis Streams, where a member reads rather than being written to.
   - **10× of the largest §3 column is 250 000**, which is not run here: it writes a `users` row per
-    recipient on a developer machine. All three curves are linear across the three scales measured,
+    recipient on a developer machine. All the curves are linear across the three scales measured,
     so the extrapolation is honest — and `FAN_OUT_SCALE=250000` is there for a machine that can
     afford it.
   - **The fourth finding came from the teardown**, and it is the one nobody was looking for:
@@ -3969,6 +3968,26 @@ one worth promoting without a trigger.
   this plan deliberately does not keep. It is one adapter behind the existing `EmailSender` port,
   which is exactly the swap that port exists for; `docs/ai/rules/dependencies.md` would move the
   entry from Tier 0 (a protocol) to Tier 2 (an SDK behind a port).
+
+- [x] `26.12` **The realtime fan-out goes out in chunks** `found: 2026-09-20` — by `26.8`, which is
+  what a load test is for.
+  - **What was wrong.** `MessagingRealtimeSubscriber` published one member frame at a time and
+    awaited each, so a conversation of N members cost N serialised Redis round trips — eighteen
+    seconds at 25 000. `DeliverNotificationUseCase.notifyInApp` did the same with *two* round trips
+    a recipient, a cache delete and a publish, bounded only by its 500 cap.
+  - **The fix.** `Promise.all` over chunks — 500 frames in the subscriber, 100 recipients in the
+    use-case. ioredis multiplexes one socket, so a chunk leaves as one write rather than as 500
+    round trips: **769 ms instead of 17 944** at 25 000 members, measured by `26.8`'s own spec,
+    which now times both shapes so the difference cannot quietly disappear.
+  - **Chunked and not `Promise.all` over the whole list**, which is the only judgement in it: a room
+    of a hundred thousand is not a write buffer to build, and the cap is what keeps the memory
+    bounded while still collapsing the round trips.
+  - **Nothing moved to the port.** A `publishMany` with a real Redis pipeline behind it would be
+    faster still, and 31 µs a frame is not the bottleneck any more — the notification rows are.
+    It earns its place when that stops being true.
+  - `messaging-realtime.subscriber.spec.ts` is new, and its room of 1 201 members crosses the chunk
+    boundary twice: every member gets exactly one frame, every frame its own id, and the member
+    list is read once rather than once a chunk.
 
 ---
 
