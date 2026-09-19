@@ -1,4 +1,4 @@
-import type { OrganizationId, UserId } from "../import.js";
+import type { ActivityAction, OrganizationId, UserId } from "../import.js";
 
 // One audit row, flattened — deliberately not the domain event, because a replay reads
 // rows written long before the current definitions existed.
@@ -31,18 +31,21 @@ export interface DailyCount {
 // The read side of the audit trail. A separate port from `ActivityLogger`, because
 // merging them puts a cross-tenant scan on the port every use-case holds.
 export abstract class ActivityReplayReader {
-  // Keyset on `(occurredAt, id)` within one tenant — a walk with no tenant predicate
-  // appends every tenant's months into every batch. A short page means caught up.
+  // Keyset on `(occurredAt, id)` within one tenant. `excluding` is applied in the
+  // query: filtered after it, a full page of excluded rows reads as caught up.
   public abstract since(
     organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
+    excluding: readonly ActivityAction[],
   ): Promise<readonly ActivityRecord[]>;
 
-  // The authoritative half of the daily reconciliation. `[from, to)`, one tenant.
+  // The authoritative half of the daily reconciliation, `[from, to)`, one tenant. Both
+  // sides subtract the same list, or every excluded row reads as drift.
   public abstract dailyCounts(
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[],
   ): Promise<readonly DailyCount[]>;
 }

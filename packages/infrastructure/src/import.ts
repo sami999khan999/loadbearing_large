@@ -143,6 +143,7 @@ export type { Locale } from "@loadbearing/content";
 
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 export {
+  type ActivityAction,
   type ApiKeyId,
   type ConversationId,
   type ConversationKind,

@@ -24,6 +24,7 @@ export {
   InMemoryLogReader,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,

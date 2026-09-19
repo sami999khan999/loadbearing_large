@@ -97,6 +97,7 @@ import {
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgPlatformReader,
+  PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRepository,
@@ -107,6 +108,7 @@ import {
   type PlatformReader,
   PreviewRetentionChangeUseCase,
   PrincipalBuilder,
+  type ProjectionPolicyRepository,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
   type RealtimePublisher,
@@ -359,6 +361,9 @@ export class Container {
   // Cold storage read back. Whole-object and verified, which is what makes a restore
   // and a re-projection read the same bytes the archive wrote.
   public readonly coldArchive: ColdArchiveReader;
+  // Read once per analytics run and once per retention run. Usually empty: an absent
+  // row is "projected, with the default TTL".
+  public readonly projectionPolicies: ProjectionPolicyRepository;
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -746,6 +751,7 @@ export class Container {
 
     // `this` is fully assigned by here, and `report()` is only ever called on a
     // request — the reader holds the container, it does not read it during the build.
+    this.projectionPolicies = new PgProjectionPolicyRepository(this.database, this.transactions);
     this.retentionPolicies = new PgRetentionPolicyRepository(this.database, this.transactions);
     this.tenantRetentionPolicies = new PgTenantRetentionPolicyRepository(
       this.database,

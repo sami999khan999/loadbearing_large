@@ -1,4 +1,4 @@
-import type { OrganizationId } from "../import.js";
+import type { ActivityAction, OrganizationId } from "../import.js";
 import type { ActivityRecord, DailyCount, ProjectionCheckpoint } from "./activity-replay.reader.js";
 
 // The only thing allowed to write to the derived store — anything else makes it a source
@@ -18,6 +18,7 @@ export abstract class AnalyticsProjector {
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[],
   ): Promise<readonly DailyCount[]>;
 
   // One lightweight delete, so the derived copy forgets a deleted tenant rather than

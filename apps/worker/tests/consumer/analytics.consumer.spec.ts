@@ -5,9 +5,10 @@ import {
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
   InMemoryOrganizationReader,
+  InMemoryProjectionPolicyRepository,
   TestContainer,
 } from "@loadbearing/composition";
-import { Identifiers } from "@loadbearing/contracts";
+import { type ActivityAction, Identifiers } from "@loadbearing/contracts";
 import type { Job } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
 import { AnalyticsConsumer } from "../../src/consumer/analytics.consumer.js";
@@ -22,17 +23,17 @@ const TENANTS = [Identifiers.organizationId.parse(ORG)];
 
 const minutesBefore = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
 
-const record = (id: string, occurredAt: Date): ActivityRecord => ({
+const record = (id: string, occurredAt: Date, action = "task.created"): ActivityRecord => ({
   id,
   organizationId: ORG as ActivityRecord["organizationId"],
   occurredAt,
   actorId: ACTOR as ActivityRecord["actorId"],
-  action: "task.created",
+  action,
   subjectId: null,
   payload: {},
 });
 
-function harness(records: readonly ActivityRecord[]) {
+function harness(records: readonly ActivityRecord[], excluded: readonly ActivityAction[] = []) {
   const activityReplay = new InMemoryActivityReplayReader(records);
   const analyticsProjector = new InMemoryAnalyticsProjector();
   const logger = { emit: vi.fn(), failure: vi.fn() };
@@ -46,11 +47,18 @@ function harness(records: readonly ActivityRecord[]) {
     // The consumer reads `container.projector`; the harness names the port after the
     // abstract class. Mapping it here is what keeps both names honest.
     projector: analyticsProjector,
+    projectionPolicies: new InMemoryProjectionPolicyRepository(
+      excluded.map((action) => ({ action, projected: false, ttlMonths: null })),
+    ),
     clock: new FixedClock(NOW),
     logger,
   } as unknown as Container;
 
-  return { consumer: new AnalyticsConsumer(container, undefined as never, 1), logger };
+  return {
+    consumer: new AnalyticsConsumer(container, undefined as never, 1),
+    logger,
+    projected: analyticsProjector,
+  };
 }
 
 const job = (name: string): Job => ({ name }) as Job;
@@ -93,6 +101,45 @@ describe("AnalyticsConsumer project", () => {
       events: 0,
       lagSeconds: 0,
     });
+  });
+});
+
+// `20.3`: one exclusion list, read once per run and passed to all three queries. What
+// makes it worth a spec is that both sides of the reconciliation have to subtract it.
+describe("AnalyticsConsumer with an excluded action", () => {
+  const rows = [
+    record("a", minutesBefore(60 * 24), "ai.document.searched"),
+    record("b", minutesBefore(60 * 24), "role.created"),
+  ];
+
+  it("projects the kept action and not the excluded one", async () => {
+    const { consumer, projected } = harness(rows, ["ai.document.searched"]);
+
+    await consumer.handle(job("project"));
+
+    expect(projected.projected().map((row) => row.id)).toEqual(["b"]);
+  });
+
+  // The one that matters: subtracted from the source only, every excluded row reads as
+  // drift on the run after it was excluded — a reconciliation that cries wolf forever.
+  it("reconciles to zero drift, because both sides subtract the same list", async () => {
+    const { consumer, logger } = harness(rows, ["ai.document.searched"]);
+
+    await consumer.handle(job("project"));
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.reconciliation.drifted")).toHaveLength(0);
+    expect(emitted(logger, "analytics.reconciliation.completed")[0]).toMatchObject({ drifted: 0 });
+  });
+
+  // An absent row is "projected", so a table with nothing in it must behave exactly as
+  // the deploy before the table existed.
+  it("projects everything when nothing is excluded", async () => {
+    const { consumer, projected } = harness(rows);
+
+    await consumer.handle(job("project"));
+
+    expect(projected.projected()).toHaveLength(2);
   });
 });
 

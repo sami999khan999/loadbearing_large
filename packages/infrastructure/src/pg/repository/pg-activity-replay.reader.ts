@@ -1,4 +1,5 @@
 import {
+  type ActivityAction,
   type ActivityRecord,
   type ActivityReplayReader,
   ActivitySubject,
@@ -8,10 +9,13 @@ import {
   eq,
   gt,
   gte,
+  inArray,
   lt,
+  not,
   type OrganizationId,
   or,
   type ProjectionCheckpoint,
+  type SQL,
   sql,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
@@ -26,6 +30,7 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly ActivityRecord[]> {
     const after =
       checkpoint.lastOccurredAt && checkpoint.lastId
@@ -48,7 +53,13 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
         payload: activityLog.payload,
       })
       .from(activityLog)
-      .where(and(eq(activityLog.organizationId, organizationId), after))
+      .where(
+        and(
+          eq(activityLog.organizationId, organizationId),
+          after,
+          PgActivityReplayReader.without(excluding),
+        ),
+      )
       .orderBy(asc(activityLog.occurredAt), asc(activityLog.id))
       .limit(limit);
 
@@ -71,6 +82,7 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
     const rows = await this.db
       .select({
@@ -85,11 +97,18 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
           eq(activityLog.organizationId, organizationId),
           gte(activityLog.occurredAt, from),
           lt(activityLog.occurredAt, to),
+          PgActivityReplayReader.without(excluding),
         ),
       )
       .groupBy(sql`1`)
       .orderBy(sql`1`);
 
     return rows;
+  }
+
+  // `undefined` for the empty case rather than `not inArray(…, [])`, which drizzle
+  // renders as a predicate Postgres evaluates to false for every row.
+  private static without(excluding: readonly ActivityAction[]): SQL | undefined {
+    return excluding.length === 0 ? undefined : not(inArray(activityLog.action, [...excluding]));
   }
 }

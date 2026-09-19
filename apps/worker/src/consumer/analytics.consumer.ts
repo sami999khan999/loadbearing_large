@@ -1,4 +1,5 @@
 import {
+  type ActivityAction,
   type Container,
   type Job,
   type OrganizationId,
@@ -90,6 +91,9 @@ export class AnalyticsConsumer {
   // tenant's months into every batch.
   private async project(): Promise<void> {
     const startedAt = this.container.clock.now();
+    // Once per run, not per tenant: it is one small table and every tenant's walk
+    // subtracts the same list.
+    const excluding = await this.excluded();
 
     let projected = 0;
     let batches = 0;
@@ -108,6 +112,7 @@ export class AnalyticsConsumer {
         const outcome = await this.projectTenantOrReport(
           organizationId,
           AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
+          excluding,
         );
         projected += outcome.projected;
         batches += outcome.batches;
@@ -143,14 +148,22 @@ export class AnalyticsConsumer {
     }
   }
 
+  // The actions no longer projected. An absent row is "projected", so this is the
+  // rows that say otherwise and usually none.
+  private async excluded(): Promise<readonly ActivityAction[]> {
+    const rows = await this.container.projectionPolicies.all();
+    return rows.filter((row) => !row.projected).map((row) => row.action);
+  }
+
   // Rethrows: BullMQ's retry is driven by rejection. Per tenant, because the checkpoint
   // is — there is no global "where the replay resumes" left to report.
   private async projectTenantOrReport(
     organizationId: OrganizationId,
     budget: number,
+    excluding: readonly ActivityAction[],
   ): Promise<{ projected: number; batches: number; lagMs: number }> {
     try {
-      return await this.projectTenant(organizationId, budget);
+      return await this.projectTenant(organizationId, budget, excluding);
     } catch (error: unknown) {
       // Read after the throw rather than before it, so the failure line names where the
       // destination actually stands rather than where this run hoped to start.
@@ -169,6 +182,7 @@ export class AnalyticsConsumer {
   private async projectTenant(
     organizationId: OrganizationId,
     budget: number,
+    excluding: readonly ActivityAction[],
   ): Promise<{ projected: number; batches: number; lagMs: number }> {
     const projector = this.container.projector;
     let checkpoint = await projector.checkpoint(organizationId);
@@ -181,6 +195,7 @@ export class AnalyticsConsumer {
         organizationId,
         checkpoint,
         AnalyticsConsumer.BATCH_SIZE,
+        excluding,
       );
       if (records.length === 0) {
         caughtUp = true;
@@ -202,7 +217,7 @@ export class AnalyticsConsumer {
       }
     }
 
-    const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp);
+    const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp, excluding);
     return { projected, batches, lagMs };
   }
 
@@ -212,10 +227,18 @@ export class AnalyticsConsumer {
     organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     caughtUp: boolean,
+    excluding: readonly ActivityAction[],
   ): Promise<number> {
     if (caughtUp) return 0;
 
-    const [oldest] = await this.container.activityReplay.since(organizationId, checkpoint, 1);
+    // The same exclusion: lag measured over rows that will never be projected is a
+    // backlog that never shrinks and an alert that never clears.
+    const [oldest] = await this.container.activityReplay.since(
+      organizationId,
+      checkpoint,
+      1,
+      excluding,
+    );
     if (!oldest) return 0;
     return this.container.clock.now().getTime() - oldest.occurredAt.getTime();
   }
@@ -224,6 +247,7 @@ export class AnalyticsConsumer {
   // it is timing rather than drift. See docs/reference/consumers.md.
   private async reconcile(): Promise<void> {
     const now = this.container.clock.now();
+    const excluding = await this.excluded();
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const from = new Date(to.getTime() - AnalyticsConsumer.RECONCILE_DAYS * 24 * 60 * 60 * 1_000);
 
@@ -236,7 +260,7 @@ export class AnalyticsConsumer {
       if (page.length === 0) break;
 
       for (const organizationId of page) {
-        const outcome = await this.reconcileTenant(organizationId, from, to);
+        const outcome = await this.reconcileTenant(organizationId, from, to, excluding);
         days += outcome.days;
         drifted += outcome.drifted;
       }
@@ -254,16 +278,17 @@ export class AnalyticsConsumer {
     });
   }
 
-  // One tenant's diff. Both stores answer per tenant, so the comparison stays a diff
-  // rather than a query that has to group by tenant on either side.
+  // One tenant's diff, and `excluding` goes to **both** sides: subtracted from one
+  // only, every excluded row reads as drift on the run after it was excluded.
   private async reconcileTenant(
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[],
   ): Promise<{ days: number; drifted: number }> {
     const [source, derived] = await Promise.all([
-      this.container.activityReplay.dailyCounts(organizationId, from, to),
-      this.container.projector.dailyCounts(organizationId, from, to),
+      this.container.activityReplay.dailyCounts(organizationId, from, to, excluding),
+      this.container.projector.dailyCounts(organizationId, from, to, excluding),
     ]);
 
     const derivedByDay = new Map(derived.map((count) => [count.day, count.rows]));

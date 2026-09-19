@@ -128,6 +128,18 @@ shape and the consumer compares the answers, which is what keeps both adapters s
 **Today is excluded from the window.** It is still being written to, so a difference in it is timing
 rather than drift, and a check that cries wolf daily is a check nobody reads.
 
+**So are the actions `projection_policy` excludes, on both sides.** `AnalyticsConsumer` reads that
+list once per run and passes it to all three queries — `since`, and both `dailyCounts`. Subtracted
+from the source only, every excluded row would read as drift on the run after it was excluded, and
+on every run after that: a reconciliation that cries wolf forever, which is the same failure the
+paragraph above avoids for a different reason.
+
+`since` applies it **in the query**, not after. Filtered in the caller, a page of excluded rows
+still costs a round trip and comes back short of `limit`, which the walk reads as caught up. The
+ClickHouse side binds it as `{excluding:Array(String)}` — `NOT IN` an empty array is true for
+every row, so the empty case needs no branch — and the Postgres side omits the predicate entirely,
+because drizzle renders `not inArray(column, [])` as a clause that matches nothing.
+
 Drift emits `analytics.reconciliation.drifted` at **error**, one line per day rather than one line
 listing them — a log field is something you filter and alert on, never a structure you read, and the
 day is the grain an operator picks a replay window from. It is `error` and not `warn` because every

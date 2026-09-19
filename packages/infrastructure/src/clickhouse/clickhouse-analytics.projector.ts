@@ -1,4 +1,5 @@
 import type {
+  ActivityAction,
   ActivityRecord,
   AnalyticsProjector,
   DailyCount,
@@ -103,12 +104,13 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
     return records.length;
   }
 
-  // `FINAL`, so an unmerged duplicate is not counted twice: a false alarm on this check
-  // is how a real one stops being read.
+  // `FINAL`, so an unmerged duplicate is not counted twice. `NOT IN` an empty array is
+  // true for every row, so the exclusion needs no branch around it.
   public async dailyCounts(
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
     return this.connection.query<DailyCount>(
       `
@@ -118,10 +120,11 @@ export class ClickHouseAnalyticsProjector implements AnalyticsProjector {
       FROM ${this.connection.qualified(ClickHouseAnalyticsProjector.TABLE)} FINAL
       WHERE organization_id = {organizationId:UUID}
         AND occurred_at >= {from:DateTime64(3)} AND occurred_at < {to:DateTime64(3)}
+        AND action NOT IN {excluding:Array(String)}
       GROUP BY day
       ORDER BY day
     `,
-      { organizationId, from, to },
+      { organizationId, from, to, excluding: [...excluding] },
     );
   }
 

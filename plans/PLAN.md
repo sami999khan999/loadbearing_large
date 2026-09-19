@@ -2466,12 +2466,22 @@ reads the exclusion list once per run and passes it to all three queries.
   argued-for entry. `verified:` applied against live Postgres — the check constraint and the
   `projected` default are both on the table.
 
-- [ ] `20.3` **Three queries, one list** — `ActivityReplayReader.since(checkpoint, limit, excluding)`
+- [x] `20.3` **Three queries, one list** — `ActivityReplayReader.since(checkpoint, limit, excluding)`
   and `dailyCounts(from, to, excluding)`; `AnalyticsProjector.dailyCounts(from, to, excluding)`.
   `AnalyticsConsumer.project()` and `reconcile()` read `projectionPolicies.all()` once and pass the
   excluded actions to every call. Integration spec: exclude one action, insert rows of two actions,
   project, reconcile — zero drift, and the excluded action's rows are absent from ClickHouse.
   **Docs:** `clickhouse.md` reconciliation section, `consumers.md`.
+  `done: 2026-09-19` — `corrected:` adding a parameter to an abstract method breaks **nothing** in
+  TypeScript, because an implementation may take fewer than it declares. The build was green with
+  all four adapters silently ignoring `excluding`, which is the opposite of what a port change is
+  supposed to buy; each one had to be edited by hand. `corrected:` the lag query takes the list
+  too — lag measured over rows that will never be projected is a backlog that never shrinks.
+  `corrected:` the Postgres side omits the predicate entirely when the list is empty, because
+  drizzle renders `not inArray(column, [])` as a clause that matches nothing; the ClickHouse side
+  needs no branch, because `NOT IN []` is true for every row.
+  `verified:` against live Postgres and ClickHouse — both stores answered 40 with an empty list
+  and 39 with one action excluded, and `since` returned no row carrying it.
 
 - [ ] `20.4` **Per-action TTL composition** — `RetentionRules.clickhouseTtlFor(defaultMonths, perAction)`
   produces `toDateTime(occurred_at) + INTERVAL a MONTH DELETE WHERE action = 'x', …, toDateTime(occurred_at) + INTERVAL d MONTH DELETE WHERE action NOT IN ('x', …)`;

@@ -25,7 +25,12 @@ export { Container } from "@loadbearing/composition";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The envelope, because a `deliver` job crosses Redis as JSON and has to be parsed back
 // into a typed event rather than trusted.
-export { DomainEvents, type OrganizationId, type UserId } from "@loadbearing/contracts";
+export {
+  type ActivityAction,
+  DomainEvents,
+  type OrganizationId,
+  type UserId,
+} from "@loadbearing/contracts";
 
 // ── @loadbearing/infrastructure ──────────────────────────────────────────────
 // `RedisConnection` is what applies `maxRetriesPerRequest: null`: a bare connection gets

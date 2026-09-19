@@ -125,6 +125,11 @@ Caught up means zero, and the run already knows it is caught up — a short or e
 stopped the loop. Only a capped run pays for the answer, with one keyset query for the next row after
 the checkpoint, which is the run where knowing the true backlog age is worth a query.
 
+**Both jobs read `projection_policy` once per run.** Once, not per tenant: it is one small table
+and every tenant's walk subtracts the same list. The list also goes to the lag query — lag measured
+over rows that will never be projected is a backlog that never shrinks and an alert that never
+clears.
+
 ### `reconcile`
 
 Counts per day on both sides and a diff. **Neither store reaches into the other** — each answers the

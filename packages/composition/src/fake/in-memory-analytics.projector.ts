@@ -1,4 +1,5 @@
 import {
+  type ActivityAction,
   type ActivityRecord,
   AnalyticsProjector,
   type DailyCount,
@@ -45,11 +46,15 @@ export class InMemoryAnalyticsProjector extends AnalyticsProjector {
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
     const counts = new Map<string, number>();
 
     for (const record of this.of(organizationId)) {
       if (record.occurredAt < from || record.occurredAt >= to) continue;
+      // Both sides subtract the same list, or every excluded row reads as drift on
+      // the run after it was excluded.
+      if (excluding.includes(record.action as ActivityAction)) continue;
       const day = record.occurredAt.toISOString().slice(0, 10);
       counts.set(day, (counts.get(day) ?? 0) + 1);
     }

@@ -86,6 +86,8 @@ export {
   PreviewRetentionChangeUseCase,
   type Principal,
   type ProjectionCheckpoint,
+  type ProjectionPolicyRecord,
+  ProjectionPolicyRepository,
   QueueDocumentIndexUseCase,
   QueueName,
   QueuePublisher,
@@ -165,6 +167,7 @@ export {
 // Only the branded ids two port signatures name, without which `test-container.ts`
 // cannot override them.
 export type {
+  ActivityAction,
   DomainEvent,
   DomainEventInput,
   DomainEventName,
@@ -215,6 +218,7 @@ export {
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
   PgPlatformReader,
+  PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgTenantRepository,

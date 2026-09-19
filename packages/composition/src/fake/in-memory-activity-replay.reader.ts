@@ -1,4 +1,5 @@
 import {
+  type ActivityAction,
   type ActivityRecord,
   ActivityReplayReader,
   type DailyCount,
@@ -16,12 +17,16 @@ export class InMemoryActivityReplayReader extends ActivityReplayReader {
     this.records = [...records].sort((a, b) => InMemoryActivityReplayReader.byKeyset(a, b));
   }
 
+  // Excluded **before** the slice, like the real one's `WHERE`: filtered after it, a
+  // page of excluded rows comes back short and the caller reads that as caught up.
   public override since(
     organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly ActivityRecord[]> {
     const after = this.of(organizationId).filter((record) => {
+      if (excluding.includes(record.action as ActivityAction)) return false;
       if (!checkpoint.lastOccurredAt || !checkpoint.lastId) return true;
       const delta = record.occurredAt.getTime() - checkpoint.lastOccurredAt.getTime();
       return delta > 0 || (delta === 0 && record.id > checkpoint.lastId);
@@ -34,11 +39,13 @@ export class InMemoryActivityReplayReader extends ActivityReplayReader {
     organizationId: OrganizationId,
     from: Date,
     to: Date,
+    excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
     const counts = new Map<string, number>();
 
     for (const record of this.of(organizationId)) {
       if (record.occurredAt < from || record.occurredAt >= to) continue;
+      if (excluding.includes(record.action as ActivityAction)) continue;
       const day = record.occurredAt.toISOString().slice(0, 10);
       counts.set(day, (counts.get(day) ?? 0) + 1);
     }
