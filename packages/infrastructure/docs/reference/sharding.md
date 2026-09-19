@@ -180,12 +180,15 @@ things:
   table — matched against `TablePlacement.CATALOG` rather than one constraint's name.
 
 **That last one is the point.** It is not a bug to fix now; it is the split's first real cost,
-made visible before anyone pays it. Nine routed tables carry a foreign key to a catalog one, every
-one `ON DELETE CASCADE`: `notifications` → `organizations`, `users`; `notification_preferences` →
-`organizations`, `users`; `conversations` → `organizations`; `conversation_members` →
-`organizations`, `users`; `messages` → `organizations`; `document_chunks` → `organizations`.
+made visible before anyone pays it. Ten foreign keys cross from a shard to the catalog, every one
+`ON DELETE CASCADE`. Nine are on routed tables: `notifications` → `organizations`, `users`;
+`notification_preferences` → `organizations`, `users`; `conversations` → `organizations`;
+`conversation_members` → `organizations`, `users`; `messages` → `organizations`; `document_chunks`
+→ `organizations`. The tenth is on a **local** table — `outbox_event` → `organizations` — and it
+matters more, not less: a local table exists on every node, so every node's outbox carries it, and
+the first routed transaction on node 1 that publishes a domain event is what trips it.
 Which of them trips first depends on insert order, which is why the expectation names the class.
-Phase 24 decides what happens to all nine.
+Phase 24 decides what happens to all ten.
 
 Asserted by SQLSTATE and constraint rather than by message: the message is localised and reworded
 between server versions, and drizzle wraps the driver error so the constraint is one `cause` down.
