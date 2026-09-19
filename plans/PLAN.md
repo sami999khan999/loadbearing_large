@@ -3723,6 +3723,21 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     boot smoke is what catches that, by name, the moment a process starts.
 ---
 
+- [x] `23.18` **`pnpm db:generate` could not run from a clean shell** `found: 2026-09-20` — by
+  running it, which is how the other three went.
+  - **What was wrong.** `"db:generate": "drizzle-kit generate && tsx partition-ddl.ts"`. Every
+    other `db:*` script is `tsx --env-file-if-exists=../../.env …`; drizzle-kit is a **bin**
+    rather than a `tsx` entrypoint, so it cannot be handed that flag and never loaded `.env`.
+    `drizzle.config.ts` then threw `DATABASE_DIRECT_URL or DATABASE_URL is required` on a machine
+    whose `.env` holds both. The command is in `workflow.md`'s list and in the `add-slice` run
+    book, so anyone following either hit it.
+  - **The fix is two lines in `drizzle.config.ts`**: `process.loadEnvFile("../../.env")` behind an
+    `existsSync`. Node's own loader, no dependency, and **it does not overwrite a variable already
+    set** — checked rather than assumed — so CI's job env still wins. It fixes `db:studio` and
+    `db:push` at the same time, for the same reason.
+  - **And it answered a question worth having asked.** With the config loading, `drizzle-kit
+    generate` reports **"No schema changes, nothing to migrate"** — the migrations are in step
+    with `src/pg/schema/`, which nothing else in the repository checks.
 ## Phase 24 — The physical split 📁
 
 Filed, not built. Every item is the decision or the mechanism a second physical node needs, written
@@ -4209,7 +4224,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
-| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
+| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
 | 2026-09-19 | @sami | Phase 18 done. `platform` is a third `PermissionScope` held through a role in the one organization marked `is_platform`; `can()` gained the branch that closes D31's four leak paths, `owner: "all"` stops at the tenant, `pnpm platform:grant` seeds the first admin, and `/platform/status` proves the tier end to end |
 | 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |

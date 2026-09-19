@@ -544,7 +544,7 @@ complete on its own.
 ## B. Not done — every unchecked item in `PLAN.md`
 
 Thirty-two boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.2`, `26.8` and
-`26.9` closed. `23.17` and `26.12` were added and closed in the same night, so neither ever had a
+`26.9` closed. `23.17`, `23.18` and `26.12` were added and closed in the same night, so none of them ever had a
 box here. Phases 1–22 have none. The line number is the pointer; the body is not paraphrased here,
 and the numbers drift as `PLAN.md` is edited above them.
 
@@ -721,3 +721,9 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   inverts it** — with no foreign key, a tenant delete is `where organization_id = $1` per table,
   which prunes to one partition. The recommendation is filed under the entry; the decision stays
   gated on a real second node.
+- `23.18` **`pnpm db:generate` could not run from a clean shell** — new, found by running it.
+  drizzle-kit is a bin rather than a `tsx` entrypoint, so the `--env-file-if-exists` every sibling
+  `db:*` script carries could not be handed to it, and the config threw on a missing `DATABASE_URL`
+  that `.env` had all along. Two lines in `drizzle.config.ts`, Node's own `loadEnvFile`, which does
+  not overwrite a variable already set — so CI's job env still wins. It answered a question nobody
+  had asked, too: **the migrations are in step with the schema**, which nothing else checks.

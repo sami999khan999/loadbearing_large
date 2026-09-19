@@ -1,4 +1,14 @@
+import { existsSync } from "node:fs";
 import { defineConfig } from "drizzle-kit";
+
+// drizzle-kit is a bin rather than a `tsx` entrypoint, so the `--env-file-if-exists` every
+// other `db:*` script carries cannot be handed to it. Without this, `pnpm db:generate`
+// throws below on a machine whose `.env` holds both URLs.
+//
+// The same `../../.env` the sibling scripts pass, from the package directory a pnpm filter
+// runs in. It never overwrites a variable already set, so CI's job env still wins.
+const ENV_FILE = "../../.env";
+if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 
 // A build-time tool config, not package runtime code — the one category allowed to
 // read the environment directly. An explicit throw, not `!`: an undefined URL here
