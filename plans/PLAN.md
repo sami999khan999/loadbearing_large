@@ -3721,7 +3721,6 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   - **What it still cannot see**, and it is the thing that cost the afternoon: a developer's own
     `.env` falling behind. `.env` is gitignored, so nothing in the repository can read it. The
     boot smoke is what catches that, by name, the moment a process starts.
----
 
 - [x] `23.18` **`pnpm db:generate` could not run from a clean shell** `found: 2026-09-20` — by
   running it, which is how the other three went.
@@ -3738,7 +3737,6 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   - **And it answered a question worth having asked.** With the config loading, `drizzle-kit
     generate` reports **"No schema changes, nothing to migrate"** — the migrations are in step
     with `src/pg/schema/`, which nothing else in the repository checks.
-## Phase 24 — The physical split 📁
 
 - [x] `23.19` **`pnpm platform:grant` crashed, and nothing typechecked it** `found: 2026-09-20` —
   by running it, like `23.18`.
@@ -3761,8 +3759,6 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   - **Verified by running it**, which is the point: `pnpm platform:grant nobody@…` now answers
     *"No user with email …. They have to sign up first."*, and against a real row it answers
     `granted:` and then `already:` on a second run.
-Filed, not built. Every item is the decision or the mechanism a second physical node needs, written
-down so the seam in Phase 22 is judged against a real target rather than a feeling.
 
 - [ ] `23.20` **The shipped configuration warns about itself on every worker boot**
   `found: 2026-09-20` — in the boot smoke's own output, which is what `23.16` is for.
@@ -3798,6 +3794,55 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
 
   Whichever lands, the number in `.env.example` and the number the warning compares against have
   to be chosen together — today they were not, which is why the line fires.
+
+- [ ] `23.21` **The worker's first boot against a real stack is not clean** `found: 2026-09-20` —
+  by starting it and reading 238 lines of its own output for forty-five seconds, which nothing in
+  the pipeline does. `23.20` is the third thing that came out of the same run.
+
+  **One — `partitions-boot` stalls.** On this stack (78 tenants, two nodes) the job was picked up
+  at `+0.0 s`, logged nothing until `+29.9 s`, and BullMQ emitted
+  `queue.job.stalled {queue: "maintenance", jobId: "partitions-boot"}` at exactly the default
+  30-second `lockDuration`. The first `maintenance.partitions.ensured` line follows 26 ms later,
+  so the work was in flight the whole time — the lock simply expired before it produced anything.
+  **A stalled job is re-delivered**, and `maxStalledCount` is 1, so the boot run executes a second
+  time and then fails. `ensureMonthlyPartitions` is idempotent, so this is waste rather than
+  damage — and it arrives at 78 tenants, well under decision D29's "a few hundred per node".
+  - **Recommended: give the maintenance worker a `lockDuration` that matches its work.** BullMQ's
+    30 seconds is a default for short jobs; these take table-level locks and run at
+    `concurrency: 1` by design. Five minutes is one option on one `new Worker`.
+  - The alternatives are worse for what they cost: renewing the lock by hand needs the job to
+    reach into BullMQ's `extendLock` from inside the gateway, and splitting the boot run into a
+    job per page of tenants turns one idempotent pass into a fan-out with its own ordering.
+  - **Not implemented**: it is a tuning number, and the same number wants choosing beside `23.20`.
+
+  **Two — one unplaceable tenant fails the whole projection, and reports through the wrong line.**
+  `AnalyticsConsumer.project` places each tenant with `withShard(...)` **outside**
+  `projectTenantOrReport`'s `try`. So a `PgShardResolver` throw — a tenant in `organizations` with
+  no `shard_assignments` row — escapes the per-tenant guard: the run aborts, and the line a
+  projection dashboard filters on, `analytics.projection.failed`, is never emitted. What is
+  emitted is `shard.resolution.failed` and a generic `queue.job.failed`.
+  - **Recommended, and it is one line**: move the `withShard` call inside the `try`, so a
+    placement failure is reported exactly like every other per-tenant failure. No behaviour
+    changes — the run still fails and still retries — but the failure names itself in the
+    projection's own vocabulary.
+  - **The larger question is deliberately left open:** whether an unplaceable tenant should be
+    *skipped* rather than fail the run. Skipping keeps a derived, rebuildable store working for
+    everyone else; failing is what forces somebody to fix a directory row that should not exist.
+    The current behaviour is the second, and it is defensible — it is just not reported.
+  - **On this machine it is test residue, not a defect in the founder.** Four organizations with
+    slugs `other-`, `drop-` and `pruning-` were left by specs that insert an organization
+    directly and never write a directory row. `PgOrganizationFounder` writes both in one
+    transaction. They are removable with
+    `delete from organizations where slug like 'other-%' or slug like 'drop-%' or slug like 'pruning-%';`
+    — left in place, because they are not this session's rows to delete.
+
+---
+
+## Phase 24 — The physical split 📁
+
+Filed, not built. Every item is the decision or the mechanism a second physical node needs, written
+down so the seam in Phase 22 is judged against a real target rather than a feeling.
+
 - [ ] `24.1` **The foreign-key decision.** Two shapes, decided when a second shard is actually
   provisioned: **(a)** drop every FK from a routed table to a catalog table, replace tenant
   delete with a maintenance job that sweeps routed rows by `organization_id` per shard, and add a
@@ -4279,7 +4324,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
-| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. `23.19`, new — `pnpm platform:grant` crashed on a two-argument call to a three-argument method, because the file sat outside its own `tsconfig` include; assertion §26 closes that hole. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
+| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. `23.19`, new — `pnpm platform:grant` crashed on a two-argument call to a three-argument method, because the file sat outside its own `tsconfig` include; assertion §26 closes that hole. `23.20` and `23.21`, new and filed rather than fixed — the shipped configuration warns about itself on every worker boot, `partitions-boot` stalls at 78 tenants, and one unplaceable tenant fails the whole analytics run through the wrong log line. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
 | 2026-09-19 | @sami | Phase 18 done. `platform` is a third `PermissionScope` held through a role in the one organization marked `is_platform`; `can()` gained the branch that closes D31's four leak paths, `owner: "all"` stops at the tenant, `pnpm platform:grant` seeds the first admin, and `/platform/status` proves the tier end to end |
 | 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |
