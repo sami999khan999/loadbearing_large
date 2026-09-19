@@ -3753,6 +3753,45 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
   `outbox_event_organization_id_organizations_id_fk` — which is the rehearsal's assertion, on a
   table the rehearsal does not reach.
 
+  **Recommended 2026-09-20 — option (a), and there is now a measurement behind it.** Not
+  implemented, and the decision stays gated on a real second node: what follows is the argument,
+  not the act.
+
+  - **The inventory re-read, because the line numbers above have drifted.** Ten `cascade` foreign
+    keys, referencing exactly **two** catalog tables: `organizations` seven times
+    (`notification.schema.ts:26,86`, `messaging.schema.ts:28,63,106`, `vector.schema.ts:27`,
+    `outbox.schema.ts:24`) and `users` three (`notification.schema.ts:32,90`,
+    `messaging.schema.ts:71`). Nine are on routed tables and the tenth is on local `outbox_event`,
+    as the 2026-09-19 correction says.
+  - **The new fact, and it decides it.** A delete of a `users` row already costs a
+    `conversation_members` scan **per tenant partition on the node**, because the cascade is a
+    referential-integrity trigger whose predicate is `WHERE user_id = $1` with no partition key in
+    it — so the planner touches every partition whether or not a row is there. Measured on the
+    compose stack at 82 tenants: three hundred synthetic users exceeded a 30-second
+    `statement_timeout`, and ~9 ms a user warm. Three routed tables cascade from `users`, so it is
+    three such scans per row.
+    [`fan-out.md`](../packages/infrastructure/docs/reference/fan-out.md) has the numbers.
+  - **Option (b) multiplies that by the node count.** Replicating `users` and `organizations` to
+    every shard means the cascade fires on *every* node, each scanning its own partitions. The
+    thing (b) is bought for — keeping `ON DELETE CASCADE` meaning something — is the thing that is
+    already the ceiling, and (b) buys more of it.
+  - **Option (a) inverts the complexity.** With no foreign key, a tenant delete becomes
+    `delete from <table> where organization_id = $1` per routed table per node — and that
+    **prunes to one partition**, because `organization_id` is the `LIST` key. Ten statements each
+    touching one partition, rather than a scan per partition per row.
+  - **It is also the shape two columns are already in.** `messages.author_id` and
+    `notifications.event_id` are deliberate non-FKs today, so (a) makes the schema consistent
+    rather than introducing a new idea into it.
+  - **What (b) still has, stated fairly.** It needs no application change at all for the delete
+    path, and integrity stays the database's job — an orphan under (a) is possible the first time
+    a sweep is missed, which is exactly why (a) carries a nightly reconciliation that counts them.
+  - **Two costs of (b) the entry does not name.** Logical replication does not carry DDL, so every
+    catalog migration becomes a per-node act ordered against the subscription. And the cascade
+    against a replicated copy is applied on the subscriber's own clock, so the integrity it
+    preserves is eventually consistent — which is the guarantee (b) was chosen for.
+  - **One thing to carry into whichever lands:** a *user* delete is not a maintenance job today
+    and, at a few thousand tenants on a node, becomes one. That is true under both options.
+
 - [ ] `24.2` **Tenant move** as a `MaintenanceConsumer` job: `shard_assignments.moving_to` (a node),
   create the tenant's partitions on the target (`ensureTenantPartitions`, `16.4`), copy each tenant
   partition's rows in keyset batches, verify counts per table, flip `node`, `resolver.invalidate`,

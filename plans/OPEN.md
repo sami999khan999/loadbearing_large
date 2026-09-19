@@ -577,7 +577,7 @@ From `TODO.md`
 
 ### Phase 24 — The physical split (gated on a second shard being provisioned)
 
-- `24.1` **The foreign-key decision** — drop the FKs and sweep, or logically replicate the catalog — line 3542 (**count `outbox_event`; see A.1**)
+- `24.1` **The foreign-key decision** — **recommendation filed 2026-09-20: option (a), drop the FKs and sweep**, with the measurement behind it. A `users` delete already costs a `conversation_members` scan per tenant partition; (b) would make that fire on every node, and (a) turns it into a delete that prunes to one partition
 - `24.2` **Tenant move** as a `MaintenanceConsumer` job — line 3559
 - `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)` — line 3567
 - `24.4` **The catalog is the last single primary** — measure first — line 3571
@@ -713,3 +713,11 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   it should have been copied from had drifted too, and `WORKER_NOTIFICATION_CONCURRENCY` had never
   been documented. `check:architecture` §25 now checks both directions. **It still cannot see a
   developer's own `.env`** — that file is gitignored, and the boot smoke is what catches it.
+- `24.1` **The foreign-key decision** — not closed and not closeable here, but it now has an
+  argument with a number in it. A `users` delete already costs a `conversation_members` scan **per
+  tenant partition**, because the cascade's predicate carries no partition key: three hundred
+  synthetic users exceeded a 30-second `statement_timeout` at 82 tenants. **Option (b) makes that
+  fire on every node**, since replicating the catalog replicates the cascade with it. **Option (a)
+  inverts it** — with no foreign key, a tenant delete is `where organization_id = $1` per table,
+  which prunes to one partition. The recommendation is filed under the entry; the decision stays
+  gated on a real second node.
