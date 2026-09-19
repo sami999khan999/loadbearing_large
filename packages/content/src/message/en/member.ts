@@ -13,6 +13,10 @@ export const member = {
   "member.invitation.empty": "No pending invitations.",
   "member.invitation.invitedBy": "Invited by {name}",
   "member.invitation.expires": "Expires {date}",
+  "member.invitation.resend": "Resend",
+  // Said out loud, because it is not what "resend" implies: the old link stops working,
+  // and somebody forwarding the first mail needs to know that.
+  "member.invitation.resent": "Sent again. The previous link no longer works.",
   "member.invitation.revoke": "Revoke",
 
   "member.invite.title": "Invite someone",

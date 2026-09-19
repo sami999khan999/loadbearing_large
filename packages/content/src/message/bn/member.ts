@@ -17,6 +17,8 @@ export const member: NamespaceBundle<"member"> = {
   "member.invitation.empty": "কোনো অপেক্ষমাণ আমন্ত্রণ নেই।",
   "member.invitation.invitedBy": "{name} আমন্ত্রণ জানিয়েছেন",
   "member.invitation.expires": "মেয়াদ শেষ {date}",
+  "member.invitation.resend": "আবার পাঠান",
+  "member.invitation.resent": "আবার পাঠানো হয়েছে। আগের লিংকটি আর কাজ করবে না।",
   "member.invitation.revoke": "প্রত্যাহার",
 
   "member.invite.title": "কাউকে আমন্ত্রণ জানান",
