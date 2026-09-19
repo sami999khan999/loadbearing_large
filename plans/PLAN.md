@@ -3344,9 +3344,10 @@ constraint `24.1` names.
 
 ## Phase 23 — Loose ends — no gate, any spare hour
 
-Nothing here waits on anything and nothing waits on it. Four are fixes found while walking
-earlier Exit lines, eight are Exit clauses that can only be proven in a browser, and three are
-standalone tasks that used to live in `TODO.md`. Take one when a build is waiting on CI.
+Nothing here waits on anything and nothing waits on it. Three are fixes found while walking
+earlier Exit lines, eight are Exit clauses that can only be proven in a browser, three are
+standalone tasks that used to live in `TODO.md`, and one — `23.16` — is a gate switched off for a
+bug that has since been fixed. Take one when a build is waiting on CI.
 
 #### Fixes found on the way
 
@@ -3392,27 +3393,22 @@ standalone tasks that used to live in `TODO.md`. Take one when a build is waitin
   A branch attempting (a)-without-the-package was written and reverted; the type error is
   recorded above so nobody re-derives it.
 
-- [ ] `23.4` **worker requires SMTP for a digest it never sends** `P2` `~4h`
-  - **Goal:** `env.ts` requires `SMTP_URL`/`EMAIL_FROM` "for the scheduled digest";
-    `DigestComposer` is constructed only in its spec; `QueueName.NOTIFICATION` and
-    `QueueName.DOCUMENT` have no consumer or producer.
-  - **Done when (recommended: ship):** `NotificationConsumer` on `QueueName.NOTIFICATION`
-    sends the digest through `container.email`; `digest.schedule.ts` enqueues daily;
-    `QueueName.DOCUMENT` is deleted (or claimed by `5.5`). Alternative: delete composer,
-    queue names and the two env keys from the worker schema.
-  - **Docs:** `docs/setup/25`, `apps/worker/docs/reference/consumers.md`.
-  - **Deferred by decision on 2026-09-06, not by oversight.** The facts, so this is not re-derived:
-    nothing in the worker sends mail — both mailers are constructed inside `Container`'s
-    `config.auth` branch, which the worker has no auth block for — so `SmtpEmailSender` is built and
-    disposed without ever being called. `DigestComposer` is 31 lines constructed only by its own
-    spec, `NOTIFICATION` and `DOCUMENT` have no consumer or producer (`5.5` indexed documents
-    through `EMBEDDING`, so `DOCUMENT` stayed unclaimed), and `email.digest.*` is 24 keys in two
-    locales.
-  - **The entry's recommendation to ship is the half worth arguing with.** A digest needs a
-    recipient list — there is no port for "members to notify" — a definition of what `count` counts,
-    since nothing in the schema models unread, and an opt-out. That is product work, not a fix, and
-    `docs/ai/rules/simplicity.md` is explicit about not building it in advance. Deletion is the
-    other half of the entry and remains available.
+- [x] `23.4` **worker requires SMTP for a digest it never sends** `P2` `~4h`
+  - **Shipped**, in two steps. `6e31052` (2026-09-12) took the recommendation: `NotificationConsumer`
+    on `QueueName.NOTIFICATION` sends the digest through `container.email`, `digest.schedule.ts`
+    enqueues it daily, and `DigestComposer` — 31 lines constructed only by its own spec — is
+    deleted. `QueueName.DOCUMENT` is deleted 2026-09-19: `5.5` indexed documents through
+    `EMBEDDING`, so nothing ever published to it and nothing ever read it, and a name in a closed
+    union is a promise that something uses it.
+  - **The recipient list, the count and the opt-out** — the three the entry said were product
+    work rather than a fix — are `26.7`, which is where a per-tenant digest hour and notification
+    grouping already sit. The digest that ships is the one the schema can answer today.
+  - `corrected: 2026-09-19` — this stayed unticked for a week with a Goal that had stopped being
+    true, which is how a closed item becomes a spare-hour task that undoes working code. Its two
+    **Docs** were the half that did not land: `apps/worker/docs/reference/consumers.md` still said
+    the queue has no consumer twenty lines above documenting `NotificationConsumer.fanOut`, and
+    `docs/setup/15-infrastructure-package.md`'s `QueueName` block lost `DOCUMENT` without gaining
+    `EVENT`. Both are `OPEN.md` A.4 and A.5.
 
 #### Exit clauses that still need a browser
 
@@ -3508,6 +3504,29 @@ standalone tasks that used to live in `TODO.md`. Take one when a build is waitin
     that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
     `check-architecture` assertion counting the gap instead. Do not ship both.
 
+- [ ] `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling`
+  - **Goal:** `tooling/scripts/boot-smoke.mjs` knows one app, `worker`, and `ci.yml:135` runs only
+    that one. The comment at line 19 says why: the web server bundle throws
+    `jsxDEV is not a function`. That was `T-032`, and it was **fixed on 2026-09-13** — the built
+    `apps/web/.output/server/` contains no `jsxDEV` at all.
+  - **So nothing proves the built web bundle can serve a request.** Every gate passes on an
+    artefact that is never started, which is the exact shape of the failure `T-032` was: `pnpm dev`
+    worked, every check was green, and `node .output/server/index.mjs` answered 500 on every page.
+    `24-web-app.md` calls that out as the thing the build cannot catch, and the one script that
+    could catch it is the one still opted out.
+  - **Done when:** `APPS` gains a `web` entry (`apps/web/.output/server/index.mjs`, built by
+    `pnpm --filter @loadbearing/web build`) with a readiness signal a server process actually
+    emits — the worker's `process.started` line is a worker's, so this is either a log line the
+    web entrypoint prints or an HTTP probe of `/api/health`, and the second is the honest one
+    because it proves a request completes rather than that a module loaded; `ci.yml` runs
+    `boot-smoke.mjs web` beside the worker; the stale comment is deleted.
+  - **Three errors in one comment, all worth not re-deriving.** It cites `tasks/TODO.md`, a path
+    that does not exist — the file is `plans/TODO.md`. It cites `T-034`, which is the *dropped*
+    analytics-reader item and has nothing to do with booting; the boot bug was `T-032`. And the
+    defect itself is closed. `found: 2026-09-19` while checking whether `PLAN.md` holds every
+    open thread — it was the only TODO marker in the whole source tree, and the only work not
+    already in this file.
+
 ---
 
 ## Phase 24 — The physical split 📁
@@ -3529,8 +3548,16 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
   `conversation_members.conversation_id` and `messages.conversation_id` (`messaging.schema.ts:64,100`)
   — unaffected by the split, they stay on one shard. Two deliberate non-FKs already in the shape
   option (a) produces: `messages.author_id` (`messaging.schema.ts:101-103`) and
-  `notifications.event_id` (`notification.schema.ts:33-35`). Option (a) drops nine constraints
-  and has to replace nine cascades with one sweep.
+  `notifications.event_id` (`notification.schema.ts:33-35`). Option (a) drops ten constraints
+  and has to replace ten cascades with one sweep.
+  `corrected: 2026-09-19` — the inventory above missed one, and it is not routed:
+  `outbox_event.organization_id → organizations` (`outbox.schema.ts:24`, `cascade`) sits on a
+  **local** table, which exists on every node rather than on the tenant's. It is in scope for
+  this decision like the other nine: (a) drops it and the sweep covers it; (b) covers it for
+  free, because the catalog tables are replicated to every shard. Left out, the first routed
+  transaction on node 1 that publishes a domain event fails `23503` on
+  `outbox_event_organization_id_organizations_id_fk` — which is the rehearsal's assertion, on a
+  table the rehearsal does not reach.
 
 - [ ] `24.2` **Tenant move** as a `MaintenanceConsumer` job: `shard_assignments.moving_to` (a node),
   create the tenant's partitions on the target (`ensureTenantPartitions`, `16.4`), copy each tenant
@@ -3548,8 +3575,11 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
   resolution are both cached; the catalog's write rate is sign-ups and role edits. If it hurts,
   a replica for its reads before anything else.
 
-- [ ] `24.5` **Two-node proof** — `sharded.spec.ts` green is this phase's Exit, plus a tenant
-  move under load with no lost writes.
+- [ ] `24.5` **Two-node proof** — `packages/infrastructure/tests/smoke/sharded.smoke.spec.ts`
+  green is this phase's Exit, plus a tenant move under load with no lost writes. It is **skipped,
+  not green**, unless the cluster is actually there: `pnpm infra:up:sharded`, then the two
+  `DATABASE_SHARD_1_URL` / `DATABASE_SHARD_1_DIRECT_URL` lines uncommented in `.env` — `Stack.shard1`
+  is the only door, and its absence is what the suite skips on.
 
 - [ ] `24.6` **Load test** the routed paths at 10× against the sharded compose profile before any
   of this is called production-ready.
