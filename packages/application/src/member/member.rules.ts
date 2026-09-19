@@ -16,4 +16,14 @@ export class MemberRules {
   public static isOwner(member: MemberRecord): boolean {
     return MemberRules.isOwnerKey(member.roleKey);
   }
+
+  // Seven days. Long enough to survive a weekend, short enough that a link forwarded
+  // months later opens nothing.
+  private static readonly INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  // Here rather than in the two use-cases that need it: a resend that extended the
+  // window by a different number would be a second policy nobody decided on.
+  public static invitationExpiry(now: Date): Date {
+    return new Date(now.getTime() + MemberRules.INVITATION_TTL_MS);
+  }
 }

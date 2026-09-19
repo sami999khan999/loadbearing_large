@@ -16,6 +16,10 @@ export { type MemberPage, type MemberRecord, MemberRepository } from "./member.r
 export { MemberRules } from "./member.rules.js";
 export { MemberRealtimeSubscriber } from "./member-realtime.subscriber.js";
 export {
+  type ResendInvitationInput,
+  ResendInvitationUseCase,
+} from "./resend-invitation.use-case.js";
+export {
   type RevokeInvitationInput,
   RevokeInvitationUseCase,
 } from "./revoke-invitation.use-case.js";

@@ -13,15 +13,12 @@ import type { RoleRepository } from "../rbac/role.repository.js";
 import type { InvitationMailer } from "./invitation.mailer.js";
 import type { InvitationRecord, InvitationRepository } from "./invitation.repository.js";
 import type { MemberRepository } from "./member.repository.js";
+import { MemberRules } from "./member.rules.js";
 
 export interface InviteMemberInput {
   readonly email: string;
   readonly roleId: RoleId;
 }
-
-// Seven days. Long enough to survive a weekend, short enough that a link forwarded
-// months later opens nothing.
-const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // LOAD → AUTHORIZE → WORK → PERSIST, then the mail — after the commit, because an
 // invitation message about a row that rolled back is a link to nothing.
@@ -69,7 +66,7 @@ export class InviteMemberUseCase {
         roleId: input.roleId,
         tokenHash,
         invitedBy: actor.userId,
-        expiresAt: new Date(now.getTime() + INVITATION_TTL_MS),
+        expiresAt: MemberRules.invitationExpiry(now),
         createdAt: now,
       });
       await this.activity.record(actor, "member.invited", { email, roleId: input.roleId });
@@ -96,8 +93,8 @@ export class InviteMemberUseCase {
         token,
       });
     } catch {
-      // The operator action for a crash in that window is to invite again, which replaces
-      // the row and issues a new token. Filed as `C6.9`, a resend button.
+      // The operator action for a crash in that window is `ResendInvitationUseCase`, which
+      // reissues the token on this row rather than replacing it.
     }
 
     return saved;

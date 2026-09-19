@@ -48,6 +48,8 @@ export {
   MemberRepository,
   MemberRules,
   type NewInvitation,
+  type ResendInvitationInput,
+  ResendInvitationUseCase,
   type RevokeInvitationInput,
   RevokeInvitationUseCase,
   SetMemberActiveUseCase,
