@@ -756,3 +756,29 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   *outside* the per-tenant `try`, so a resolver throw never reaches
   `analytics.projection.failed` — which is the line a projection dashboard filters on. Both have
   a recommendation under the entry; the second is one line.
+
+---
+
+## D. What changed on this machine, 2026-09-20
+
+Not the repository — the developer environment the session ran against. Listed so none of it is a
+surprise, and so every piece is reversible.
+
+| Thing | State it was left in | How to undo it |
+|---|---|---|
+| Docker Desktop | started | quit it |
+| The compose stack | up with **three** profiles: `observability`, `sharded`, `analytics` | `pnpm infra:down` |
+| `.env` | fourteen keys copied in from `.env.example`, which it was behind, plus the two `DATABASE_SHARD_1_*` lines | the original is at `.env.backup-2026-09-20`; comment out the two shard lines to go back to one node |
+| Postgres | migrated on both nodes and seeded | `pnpm infra:reset` drops the volumes |
+| ClickHouse | schema applied by `pnpm ch:migrate` | it goes with the analytics profile |
+| Git | 45 commits on `main`, **nothing pushed** | `git log origin/main..main` is the whole of it |
+
+**Two things left in the database on purpose, both named where they matter.**
+
+- The fan-out measurement's people — up to 25 000 rows whose emails are `<n>@fan-out.test` — are
+  **deterministic and reused** rather than deleted, because deleting a `users` row costs a
+  `conversation_members` scan per tenant partition. `fan-out.md` explains it; one slow
+  `delete from users where email like '%@fan-out.test'` clears them.
+- Four organizations with **no directory row**, slugs `other-`, `drop-` and `pruning-`, left by
+  specs that insert an organization directly. They are not this session's rows, so they were left
+  alone — but they are what makes the analytics projection fail on this machine, which is `23.21`.
