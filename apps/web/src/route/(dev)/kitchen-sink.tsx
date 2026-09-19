@@ -15,6 +15,7 @@ import {
   Icon,
   Input,
   type ModePreference,
+  Popover,
   QrCode,
   type ReactNode,
   StatusBadge,
@@ -288,6 +289,14 @@ function KitchenSink() {
           <CodeList values={CODES} label="Sample backup codes" />
           <QrCode value={OTPAUTH} label="Sample authenticator QR" />
         </div>
+        <div style={gap} />
+        {
+          // Open it to see the panel against the theme. It is the one component here whose
+          // appearance is behind a click, which is why it sits at the end of a section.
+        }
+        <Popover label="A sample popover" trigger={<Icon name="bell" />} align="start">
+          <p style={{ margin: 0 }}>A panel anchored to the control that opened it.</p>
+        </Popover>
       </Section>
 
       <Section title="Composites">

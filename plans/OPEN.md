@@ -543,8 +543,8 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-three boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.8` and `26.9`
-closed. `26.12` was added and closed in the same night, so it never had a box here. Phases 1–22
+Thirty-two boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.2`, `26.8` and
+`26.9` closed. `26.12` was added and closed in the same night, so it never had a box here. Phases 1–22
 have none. The line number is the pointer; the body is not paraphrased here, and the numbers drift
 as `PLAN.md` is edited above them.
 
@@ -596,7 +596,7 @@ From `TODO.md`
 ### Phase 26 — Communication follow-ups
 
 - `26.1` **Threads, reactions, attachments** — line 3645
-- `26.2` **`Popover` in `ui`** so the bell opens an inline list — line 3649
+- ~~`26.2` **`Popover` in `ui`**~~ — closed 2026-09-20: the bell opens a peek, and the panel is unmounted rather than hidden so no page pays for a list nobody opened
 - `26.3` **Web push** — a `PushPublisher` port beside `MailPublisher` — line 3651
 - `26.4` **Message archive** — old partitions streamed to S3 — line 3654
 - `26.5` **Redis Streams behind `RealtimeSubscriber`** — line 3657
@@ -680,3 +680,10 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   minutes; and the cross-tenant walk is serial by construction. **A routed write on node 1 is a
   `23503` before it is a measurement**, because every routed table carries a foreign key to a
   catalog one — so there is no routed throughput number until `24.1` is decided.
+- `26.2` **`Popover` in `ui`** — the bell opens a peek of the newest unread rather than navigating.
+  The panel is **unmounted, not hidden**, which is the property that makes it worth doing: the bell
+  is on every authenticated page, and a hidden panel would read the notification list on every
+  navigation. **Not the native Popover API**, and the reason is anchoring rather than support — a
+  top-layer element is positioned against the viewport, so keeping the panel beside its trigger
+  needs `anchor-name`, and the fallback is a panel centred on the screen. It is still not a
+  `Dialog`: a popover is non-modal, so there is no focus trap to get wrong.

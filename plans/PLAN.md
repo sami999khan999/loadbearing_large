@@ -3885,7 +3885,27 @@ one worth promoting without a trigger.
   `message_reactions`, uploads through the existing `StorageGateway.presignUpload` with a
   `message_attachments` table; each its own slice increment.
 
-- [ ] `26.2` **`Popover` in `ui`** so the bell opens an inline list rather than a page.
+- [x] `26.2` **`Popover` in `ui`** so the bell opens an inline list rather than a page.
+  - **Shipped 2026-09-20.** `Popover` in `ui` with its own stylesheet, its own reference page and
+    eight specs; `NotificationPeek` in `feature`; and `NotificationBell` is a popover trigger
+    rather than a link. The kitchen-sink route renders one, which is this repository's Storybook.
+  - **The panel is unmounted, not hidden**, which is the property that makes this worth doing at
+    all: the bell is on every authenticated page, and a hidden panel would read the notification
+    list on every navigation. A spec asserts the list is not read until the bell is clicked.
+  - **Not the native Popover API**, and the reason is anchoring rather than support. A top-layer
+    element is positioned against the viewport, so keeping the panel beside its trigger needs
+    `anchor-name`, which is not everywhere yet — and the fallback, a panel centred on the screen,
+    is the wrong shape for a list hanging off a bell. It also cannot be driven in these specs,
+    because `showPopover` is not implemented in the DOM they run against. The swap is small when
+    anchor positioning is universal: the state goes and the panel keeps its classes.
+  - **It is not a `Dialog`, and the package still has none.** A popover is non-modal — the page
+    behind it stays live, Tab moves out of it, nothing is inerted — so there is no focus trap to
+    get wrong, which is precisely why this one could be written and a dialog could not.
+  - **The peek reads unread only**, which is what makes it a peek rather than a second inbox in a
+    smaller box, and it always offers the way to the inbox — including when it is empty, because
+    the inbox holds the read ones too.
+  - `pointerdown` and not `click` for outside dismissal: a click fires after the element under the
+    press may already have gone, and closing on the way up would swallow the first press.
 
 - [ ] `26.3` **Web push** — a `PushPublisher` port beside `MailPublisher`; lands with its first
   adapter and `Container` line or not at all (`5.11`'s rule).

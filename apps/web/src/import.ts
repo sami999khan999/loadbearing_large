@@ -135,6 +135,7 @@ export {
   type ModeKey,
   type ModePreference,
   ModeRegistry,
+  Popover,
   QrCode,
   StatusBadge,
   type ThemeKey,
