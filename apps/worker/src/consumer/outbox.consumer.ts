@@ -1,3 +1,4 @@
+import { withShard } from "../bootstrap/index.js";
 import {
   type Container,
   DomainEvents,
@@ -129,9 +130,13 @@ export class OutboxConsumer {
     // what turns it back into a typed event with a payload matching its name.
     const event = DomainEvents.parse(data.event);
 
-    // Let it throw. That is this delivery's retry and no other subscriber's, which is
-    // the whole reason one event becomes one job per subscriber.
-    await this.container.subscribers.get(data.subscriber).handle(event);
+    // Placed on the event's own tenant: a subscriber that writes notifications is
+    // writing a routed table, and the drain that queued this job placed nothing.
+    await withShard(this.container, event.organizationId, () =>
+      // Let it throw. That is this delivery's retry and no other subscriber's, which
+      // is the whole reason one event becomes one job per subscriber.
+      this.container.subscribers.get(data.subscriber).handle(event),
+    );
   }
 
   // Without this, a drain that has stopped running is silent: "no events published" and

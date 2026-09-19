@@ -1,6 +1,11 @@
 // **The second of this app's two outside surfaces**, and the only place under
 // `apps/web/src` allowed to name the server graph. See docs/reference/import-surfaces.md.
 
+// ── node ─────────────────────────────────────────────────────────────────────
+// For the streaming wrap in `orpc/base.ts`: a snapshot taken inside the shard scope,
+// called through on every frame. See packages/infrastructure/docs/reference/sharding.md.
+export { AsyncLocalStorage } from "node:async_hooks";
+
 // ── @loadbearing/application ─────────────────────────────────────────────────
 // Type-only. The principal is resolved by the container, never constructed here.
 export type { Principal } from "@loadbearing/application";

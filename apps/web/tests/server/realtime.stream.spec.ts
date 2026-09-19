@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Principal, RealtimeChannels } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import type { OrganizationId, RealtimeMessage, UserId } from "@loadbearing/contracts";
@@ -12,11 +13,19 @@ const ORG = "00000000-0000-7000-8000-000000000001" as OrganizationId;
 const USER = "00000000-0000-7000-8000-000000000002" as UserId;
 const CHANNEL = RealtimeChannels.user(ORG, USER);
 
+// `ShardScope` is an `AsyncLocalStorage`, and `apps/web` does not depend on
+// infrastructure — this is the same mechanism, which is what the wrap has to survive.
+const shards = new AsyncLocalStorage<string>();
+const PLACED = "node-0";
+
 // The stream's whole surface of the container: a principal, a logger, and the port. A
 // real one would need Postgres and both Redis instances to be constructed at all.
 function containerWith(frames: readonly RealtimeMessage[], seen: string[]) {
   return {
     logger: new SilentLogger(),
+    // What `shardMiddleware` calls. One node here, so placing is running the work —
+    // the spec below asserts the *scope* survives, which is the part that can break.
+    placed: <T>(_principal: Principal, work: () => Promise<T>) => shards.run(PLACED, work),
     principals: {
       fromHeaders: () => Promise.resolve(new Principal(ORG, USER, CapabilitySet.empty())),
     },
@@ -71,6 +80,31 @@ describe("the realtime stream over RPCHandler", () => {
     // The id oRPC writes from `withEventMeta`, which is what the client sends back as
     // `Last-Event-ID` and what makes a reconnect a resume rather than a fresh open.
     expect(body).toContain("id: 00000000-0000-7000-8000-00000000000a");
+  });
+
+  // **The one that catches the broken shape**, and it needs three frames: a middleware
+  // that only wrapped `next()` leaves every frame unplaced, frame zero included.
+  it("holds the shard scope on every frame, not just the first", async () => {
+    const perFrame: (string | undefined)[] = [];
+    const container = containerWith([], []);
+
+    // Reading the scope where the handler reads it: inside the generator, once per
+    // frame, including before the first yield — `message.stream` reads there too.
+    (container as { realtimeSubscriber: unknown }).realtimeSubscriber = {
+      // eslint-disable-next-line @typescript-eslint/require-await
+      subscribe: async function* () {
+        perFrame.push(shards.getStore());
+        yield frame("00000000-0000-7000-8000-00000000000a");
+        perFrame.push(shards.getStore());
+        yield frame("00000000-0000-7000-8000-00000000000b");
+        perFrame.push(shards.getStore());
+      },
+    };
+
+    await (await call(container)).text();
+
+    expect(perFrame).toHaveLength(3);
+    expect(perFrame).toEqual([PLACED, PLACED, PLACED]);
   });
 
   // The channel comes from the principal and from nothing else. An input that could

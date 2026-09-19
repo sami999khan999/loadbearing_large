@@ -1,4 +1,5 @@
 import {
+  AsyncLocalStorage,
   type Container,
   Correlation,
   contract,
@@ -43,6 +44,43 @@ export const principalMiddleware = base.middleware(async ({ context, next, path 
   return next({ context: { principal } });
 });
 
+// After `principalMiddleware`, because the key comes off the principal. One resolve per
+// request, which is what lets every repository read its pool synchronously.
+export const shardMiddleware = os
+  .$context<{ container: Container; principal: Principal }>()
+  .middleware(({ context, next }) =>
+    context.container.placed(context.principal, async () => {
+      const result = await next();
+      // Taken **inside** the scope, so calling through it later restores this one.
+      const restore = AsyncLocalStorage.snapshot();
+
+      // A streaming handler outlives the scope: `next()` resolves once the generator
+      // is created, and every frame after runs in the caller's context with no key.
+      return isAsyncIterable(result.output)
+        ? { ...result, output: withScope(result.output, restore) }
+        : result;
+    }),
+  );
+
+const isAsyncIterable = (value: unknown): value is AsyncIterableIterator<unknown> =>
+  typeof value === "object" && value !== null && Symbol.asyncIterator in value;
+
+// One frame at a time, `return` and `throw` included: an iterator abandoned mid-stream
+// runs its `finally` in whatever context the caller had.
+function withScope<T>(
+  source: AsyncIterableIterator<T>,
+  run: <R>(fn: () => R) => R,
+): AsyncIterableIterator<T> {
+  return {
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+    next: (...args) => run(() => source.next(...args)),
+    return: source.return ? (value?: never) => run(() => source.return?.(value)) : undefined,
+    throw: source.throw ? (error?: unknown) => run(() => source.throw?.(error)) : undefined,
+  } as AsyncIterableIterator<T>;
+}
+
 // Inside the chain rather than at the adapter, because an adapter-level interceptor has
 // no `traceId` and no request-scoped logger. See docs/reference/enforcement-surfaces.md.
 export const errorMiddleware = os
@@ -84,4 +122,5 @@ export const authed = implement(contract)
   .$context<{ container: Container; headers: Headers }>()
   .use(correlationMiddleware)
   .use(errorMiddleware)
-  .use(principalMiddleware);
+  .use(principalMiddleware)
+  .use(shardMiddleware);

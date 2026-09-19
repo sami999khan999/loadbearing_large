@@ -48,6 +48,7 @@ import {
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
+  type Principal,
   type QueuePublisher,
   type RealtimePublisher,
   type RealtimeSubscriber,
@@ -106,6 +107,9 @@ export interface TestHarness extends TestPorts {
   readonly clock: FixedClock;
   readonly logger: Logger;
   readonly authorizer: Authorizer;
+  // What a consumer calls to place a job. Every fake here is in memory and consults
+  // no shard, so this runs the work — a spec asserting placement uses a real scope.
+  readonly placed: <T>(principal: Principal, work: () => Promise<T>) => Promise<T>;
 }
 
 export class TestContainer {
@@ -122,6 +126,7 @@ export class TestContainer {
       clock: new FixedClock(new Date(TestContainer.EPOCH)),
       logger: new SilentLogger(),
       authorizer: new Authorizer(),
+      placed: (_principal, work) => work(),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),

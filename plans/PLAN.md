@@ -2980,7 +2980,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
 
 #### The strategy and the policy the kit ships (`composition`)
 
-- [ ] `22.11` **`packages/composition/src/shard/`** — new folder, one row in
+- [x] `22.11` **`packages/composition/src/shard/`** — new folder, one row in
   `docs/opinions/folders.md` ("the routing policy the DI root binds; a fork replaces this folder")
   and `docs/ai/rules/folders.md`. `organization-sharding.strategy.ts` →
   `OrganizationShardingStrategy.keyOf(principal) = ShardKey.of(principal.organizationId)`, with
@@ -3001,6 +3001,9 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `embedding.consumer.ts:66` builds `forOrganization`. `keyOf(principal)` therefore routes one
   worker path out of four, and rejecting NIL throws on the other three. The strategy stays
   principal-based for the web edge; `22.15` derives the worker's key from the payload.
+  `done: 2026-09-19` — `OrganizationShardingStrategy`, one line, in
+  `packages/composition/src/shard/`. It is the fork's swap point rather than a computation, which
+  is the whole point of it being a port at all.
 
 - [~] `22.12` **`Container`** — `container.config.ts` `database` becomes
   `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl }[] }`; both
@@ -3048,7 +3051,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `unfinished:` the **two** unit-of-work instances are not bound per slice yet — there is still
   one, `"catalog"`, which is correct on one node and is what `22.12` proper has to split.
 
-- [ ] `22.13` **`TestContainer` and fakes** — `packages/composition/src/fake/`: `FakeShardResolver`
+- [x] `22.13` **`TestContainer` and fakes** — `packages/composition/src/fake/`: `FakeShardResolver`
   (a `Map`), `FakeShardAssignmentRepository`, `FixedShardingStrategy`;
   `TestPorts` gains the three (`revised: 2026-09-16` — no placement policy); `test-container.spec.ts`
   pinned list updated. **Docs:**
@@ -3063,8 +3066,12 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   allowlist or onto the catalog unit of work.
 
 #### The key enters scope at the edges (`web`, `worker`)
+  `done: 2026-09-19` — the three ports and their fakes, and the pinned list updated in the same
+  commit the tripwire fired in. `corrected:` the harness also gains `placed`, which is not a port
+  — every fake in it is in memory and consults no shard, so it runs the work. It is on
+  `NOT_PORTS` for that reason.
 
-- [ ] `22.14` **Web** — `apps/web/src/server/orpc/base.ts`: `shardMiddleware` after
+- [x] `22.14` **Web** — `apps/web/src/server/orpc/base.ts`: `shardMiddleware` after
   `principalMiddleware`, `container.shards.within(container.sharding.keyOf(principal), next)`;
   `authed` chains it. The three `server/*.fn.ts` and the realtime/message async-generator routers
   (which outlive `next()` — the scope must wrap the generator's iteration, not its creation) get
@@ -3098,8 +3105,15 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `invitation.fn.ts` has no principal by design and reads catalog `invitations` and
   `organizations`, `appearance.fn.ts` touches no database. `withShard` is unnecessary for all
   three and impossible for two. Drop the clause; the two generator routers are the whole of it.
+  `done: 2026-09-19` — **shape (a)**, exactly as the item's research says: the snapshot is taken
+  inside the scope and the returned iterator's `next`/`return`/`throw` each call through it.
+  `verified:` the spec iterates **three** frames and was run against a deliberately broken
+  middleware first — it reported `undefined` on frame zero and every frame after, which is the
+  failure the second-pass note describes and the reason a single-frame spec would be worthless.
+  `done:` the corrected clause is honoured: the three `server/*.fn.ts` need no wrap and two of
+  them could not have one.
 
-- [ ] `22.15` **Worker** — every consumer that builds `SystemPrincipal.forOrganization(orgId)`
+- [x] `22.15` **Worker** — every consumer that builds `SystemPrincipal.forOrganization(orgId)`
   wraps its use-case call in `container.shards.within(container.sharding.keyOf(principal), …)`;
   a `withShard` in `apps/worker/src/bootstrap/` mirrors the web one. Platform consumers
   (`MaintenanceConsumer`, `OutboxConsumer`, `AnalyticsConsumer`'s replay, the archive) never set
@@ -3112,6 +3126,10 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   the use-case**, and `OutboxConsumer.deliver` does the same per event with
   `event.organizationId` before dispatching to subscribers. `withShard(container, key, fn)` takes
   a key, not a principal. Platform consumers stay as written.
+  `done: 2026-09-19` — `withShard` in `apps/worker/src/bootstrap/`, and **two** routed paths, not
+  one: `EmbeddingConsumer` (which the item names) and `OutboxConsumer.deliver`, which the item
+  does not. A subscriber that writes notifications is writing a routed table, and the drain that
+  queued its job placed nothing — so the delivery places itself on the event's own tenant.
 
 - [ ] `22.16` **The five cross-tenant paths loop the cluster** — `OutboxConsumer.drain` runs
   `container.outbox.drain` once per physical shard (`PgOutboxGateway` takes the `Database` it

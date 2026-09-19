@@ -1,4 +1,4 @@
-import { SystemPrincipal } from "../bootstrap/index.js";
+import { SystemPrincipal, withShard } from "../bootstrap/index.js";
 import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
 
 interface EmbeddingJobData {
@@ -65,11 +65,14 @@ export class EmbeddingConsumer {
   public async handle(job: Job<EmbeddingJobData>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
 
-    await this.container.ai.indexDocument.execute(principal, {
-      documentId: job.data.documentId,
-      text: job.data.text,
-      goalId: job.data.goalId ?? null,
-      sourceType: job.data.sourceType ?? "document",
-    });
+    // `document_chunks` is routed, so the job is placed before the use-case runs.
+    await withShard(this.container, job.data.organizationId, () =>
+      this.container.ai.indexDocument.execute(principal, {
+        documentId: job.data.documentId,
+        text: job.data.text,
+        goalId: job.data.goalId ?? null,
+        sourceType: job.data.sourceType ?? "document",
+      }),
+    );
   }
 }

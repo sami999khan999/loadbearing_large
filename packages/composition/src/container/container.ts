@@ -116,6 +116,7 @@ import {
   type PlatformPolicyRepository,
   type PlatformReader,
   PreviewRetentionChangeUseCase,
+  type Principal,
   PrincipalBuilder,
   type ProjectionPolicyRepository,
   QueueDocumentIndexUseCase,
@@ -1125,6 +1126,13 @@ export class Container {
 
   public get hasLogs(): boolean {
     return this.logReader !== undefined;
+  }
+
+  // **The one place a request or a job is placed.** Both run once, here, so
+  // `BaseRepository.db` stays a property read — see the sharding reference.
+  public async placed<T>(principal: Principal, work: () => Promise<T>): Promise<T> {
+    const key = this.sharding.keyOf(principal);
+    return this.shards.within({ key, node: await this.shardResolver.resolve(key) }, work);
   }
 
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
