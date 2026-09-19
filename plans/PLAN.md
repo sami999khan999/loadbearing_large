@@ -3845,6 +3845,26 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     deprecation. A warning that appears on every boot is one people stop reading, which is the
     same argument `23.20` makes about `worker.pool.oversubscribed`.
 
+- [x] `23.23` **The directory outlived four hundred tenants** `found: 2026-09-20` — by
+  `25.4`'s own screen, reading live data for the first time.
+  - **What it showed.** `platform.shardMap` reported **486 tenants on node 0** against 79 rows in
+    `organizations`. 411 of them were `shard_assignments` rows whose organization was gone. The
+    screen was right: it counts the directory and joins nothing, which is what makes a row like
+    that visible instead of invisible — see `sharding.md`.
+  - **Where they came from.** `PgTenantRepository.delete` sweeps the directory row in the same
+    call as the organization, and `sharding.md` explains why it has to: `shard_key` is opaque text
+    with no foreign key, so nothing cascades. Specs that tear a tenant down by deleting the
+    organization row directly skip that path — the mirror image of the four organizations with no
+    directory row that `23.21` names.
+  - **Fixed where the same leak is already handled.** `tests/support/orphan-sweep.ts` is a global
+    teardown that drops the partitions of deleted tenants; it now sweeps their directory rows too,
+    in one statement with no partitions involved. Measured: **411 swept on the first run**, and
+    the directory then reads 75 against 79 organizations — which is exactly the four `23.21`
+    names, from the other side.
+  - **It is a test-teardown leak rather than a product defect**, and the distinction matters: the
+    delete path is correct, and the mechanism that keeps a dev database honest is the same one
+    `A.10` built for partitions. Nothing needed to change in `src/`.
+
 ---
 
 ## Phase 24 — The physical split 📁
@@ -4035,6 +4055,21 @@ button's procedure; `24.3` for the replica handle and `cluster.reader(key)`.
     signed-in platform admin. That needs a browser, which this session did not have — see
     [`STUCK.md`](STUCK.md) S.1. The panel spec covers the same four assertions against a fake
     client, which is the closest thing short of the walk.
+  - **The Exit line, proved as far as it goes without a browser — 2026-09-20.** Against the built
+    server on `:3000` with a real signed-in platform admin (signed up over `/api/auth`, verified
+    through the link Mailpit received, granted with `pnpm platform:grant`):
+    - `GET /platform/shards` answers **200**, not the `307` a visitor gets, and renders the panel's
+      shell — `<h1>Shard map</h1>`, the description, the skeleton and the lookup field. The rows
+      are **not** in that HTML, and that is by design: the route takes no loader, so the node list
+      is the client's first query.
+    - `platform.shardMap` answers `nodes: [{ node: 0, tenants: 75, lastAssignedAt, lastMovedAt: null }]`
+      with `moves: "unavailable"`, and with `node: 0` it returns that node's tenants, each with its
+      placement date and its retention-override count.
+    - `platform.locateTenant("loadbearing")` finds the seeded organization on node 0.
+    What is still browser-only is the *rendered* expanded panel, which `shard-map.panel.spec.tsx`
+    covers against the same shapes.
+  - **And the screen found something on its first live read**, which is the best argument for
+    having built it: it reported 486 tenants on node 0 against 79 organizations. That is `23.23`.
   physical node — tenant count from `shard_assignments` grouped by `node`, most recent `assigned_at`
   — with the tenants of a node on expand, paginated, each tenant row carrying its retention override
   (`19.19`), the move button (`25.5`) and the delete action (`19.20`); plus a tenant lookup
@@ -4333,7 +4368,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
-| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. `23.19`, new — `pnpm platform:grant` crashed on a two-argument call to a three-argument method, because the file sat outside its own `tsconfig` include; assertion §26 closes that hole. `23.20` and `23.21`, new and filed rather than fixed — the shipped configuration warns about itself on every worker boot, `partitions-boot` stalls at 78 tenants, and one unplaceable tenant fails the whole analytics run through the wrong log line. `23.22`, new — a deprecated `createServerFn().inputValidator()` that warned on every dev start. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
+| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. `23.19`, new — `pnpm platform:grant` crashed on a two-argument call to a three-argument method, because the file sat outside its own `tsconfig` include; assertion §26 closes that hole. `23.20` and `23.21`, new and filed rather than fixed — the shipped configuration warns about itself on every worker boot, `partitions-boot` stalls at 78 tenants, and one unplaceable tenant fails the whole analytics run through the wrong log line. `23.22`, new — a deprecated `createServerFn().inputValidator()` that warned on every dev start. `23.23`, new — the shard map's first live read found 411 directory rows that had outlived their tenants, and the global orphan sweep now takes them. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
 | 2026-09-19 | @sami | Phase 18 done. `platform` is a third `PermissionScope` held through a role in the one organization marked `is_platform`; `can()` gained the branch that closes D31's four leak paths, `owner: "all"` stops at the tenant, `pnpm platform:grant` seeds the first admin, and `/platform/status` proves the tier end to end |
 | 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |

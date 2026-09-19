@@ -76,6 +76,15 @@ export const teardown = async (): Promise<void> => {
     }
 
     if (dropped > 0) console.log(`[orphan-sweep] dropped ${dropped} partitions of deleted tenants`);
+
+    // The other half of the same leak: a directory row outlives a tenant whenever a spec
+    // deletes the organization rather than going through `PgTenantRepository.delete`.
+    const swept = await database.client.execute(sql`
+      delete from shard_assignments s
+      where not exists (select 1 from organizations o where o.id::text = s.shard_key)
+    `);
+
+    if (swept.rowCount) console.log(`[orphan-sweep] swept ${swept.rowCount} directory rows`);
   } catch (error) {
     // Housekeeping must not fail a green run, but it must not fail quietly either:
     // the cost of it silently stopping is the lock ceiling coming back months later.

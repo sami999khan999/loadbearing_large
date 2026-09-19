@@ -545,8 +545,8 @@ complete on its own.
 
 Thirty-four boxes, all in Phases 23–26: thirty-two left after `23.4`, `23.13`, `23.16`, `25.4`,
 `26.2`, `26.8` and `26.9` closed, plus `23.20` and `23.21`, both found that night and filed rather
-than fixed. `23.17`, `23.18`, `23.19`, `23.22` and `26.12` were added and closed in the same night, so none of
-them ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not
+than fixed. `23.17`, `23.18`, `23.19`, `23.22`, `23.23` and `26.12` were added and closed in the same night, so
+none of them ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not
 paraphrased here, and the numbers drift as `PLAN.md` is edited above them.
 
 ### Phase 23 — Loose ends (no gate, any spare hour)
@@ -786,3 +786,16 @@ surprise, and so every piece is reversible.
   warned on every `pnpm dev` start. Swapped for `.validator()`; typecheck, build and the web suite
   unchanged, and the warning is gone. Found by running the dev server and reading what it printed,
   which is the fourth thing that turned up.
+- `23.23` **The directory outlived four hundred tenants** — found by `25.4`'s own screen on its
+  first live read: `platform.shardMap` reported **486 tenants on node 0 against 79 organizations**,
+  because 411 `shard_assignments` rows had outlived the tenants they named. The screen was right —
+  it counts the directory and joins nothing, which is exactly what makes such a row visible. It is
+  a **test-teardown leak, not a product defect**: `PgTenantRepository.delete` sweeps the directory
+  row, and specs that delete the organization row directly skip that path. The global orphan sweep
+  now takes directory rows as well as partitions; 411 went on the first run, and the directory then
+  read 75 against 79, which is exactly the four unplaced organizations `23.21` names.
+- **`25.4`'s Exit clause is now proved as far as it goes without a browser.** A real platform admin
+  — signed up over `/api/auth`, verified through the link Mailpit received, granted with
+  `pnpm platform:grant` — gets **200** from `/platform/shards`, and the two procedures answer with
+  node 0's row, its tenants on expand, `moves: "unavailable"`, and the seeded organization by slug.
+  What is left is the rendered expanded panel, which the component spec covers.
