@@ -97,6 +97,44 @@ The tenant comes off the input here, not off the principal. Every other list in 
 reads `actor.organizationId`; a platform admin is signed into the tier and asking about somebody
 else's tenant, which is what the `platform` scope is for.
 
+## `ShardMapReader` — the directory as an operator reads it
+
+A third slice port, beside the two above, and every method on it is a **catalog** read. The
+directory is what says where a tenant is, so it cannot be routed by one — see
+[sharding](../../../infrastructure/docs/reference/sharding.md).
+
+`nodes()` counts `shard_assignments` grouped by node. It does **not** join `organizations`,
+which is deliberate: this answers "what does the directory say", and a directory row whose
+tenant is gone is exactly the thing an operator came here to find. It also means a node the
+deployment has just added has no row at all rather than a row of zeroes, which is the honest
+shape — nothing has been placed there.
+
+`tenantsOn(node, page)` is the expensive one, and it does not run until a node is named.
+`InspectShardMapUseCase` reads the node list on every call and the tenant page only when
+`input.node` is present; every node's tenants at once is the whole directory, which is the one
+read this screen must never make. The page carries each tenant's **count** of retention
+overrides rather than the numbers — the numbers are the retention screen's, and the count is
+what says whether to go there. It is a scalar subquery per row inside one statement, so the
+statement count is two whatever the page holds, which
+`tests/platform/shard-map.spec.ts` asserts.
+
+`findByTerm(term)` takes an organization id **or** a slug, because an operator pasting one of
+the two should not have to say which. The comparison is `organizations.id::text = $1`, never
+`$1::uuid`: a slug cast to a uuid is a `22P02` from the database rather than the empty answer a
+typed search should get. A miss is `null` and not a `NOT_FOUND` — a miss is what typing usually
+produces, and an error screen for normal typing is worse than no answer.
+
+## `moves` is two words, and it comes from the container
+
+`InspectShardMapUseCase` and `LocateTenantUseCase` both return
+`moves: "unavailable" | "available"`, from `Container.hasShardMoves` — a getter that is a
+constant `false` until `24.2` registers the move job.
+
+Two words rather than a boolean, because `movesEnabled: false` reads as a switch somebody turned
+off and this is a mechanism that has not been built. The seam is in the use-case rather than on
+the screen because the retrofit otherwise touches the contract, the use-case **and** the panel;
+here it is one line in the container.
+
 ## `DeleteOrganizationUseCase` — the order is the behaviour
 
 Archive every month, drop the seven tenant partitions, delete the row, then flush. Each step is
@@ -188,6 +226,7 @@ disagree about how long a pause stays recoverable.
 |---|---|
 | 19 | `retention-policy.repository.ts`, `retention.rules.ts`, `list-retention-policies`, `update-retention-policy`, `preview-retention-change`, `restore-partition`, `list-tenant-storage`, `tenant-retention-policy.repository.ts`, `update-tenant-retention`, `delete-organization`, `export-organization` |
 | 20 | `projection-policy.repository.ts`, `platform-policy.repository.ts`, `list-projection-policies`, `update-projection-policy`, `toggle-projection`, `reproject-partition` |
-| 22 · 24 | `inspect-shard-map`, `move-tenant` |
+| 25 | `shard-map.reader.ts`, `inspect-shard-map`, `locate-tenant` |
+| 24 | `move-tenant` |
 
 Every one asserts a `platform.*` key, and every write rebases its audit row.

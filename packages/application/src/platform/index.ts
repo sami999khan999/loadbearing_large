@@ -16,6 +16,12 @@ export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
+export {
+  type InspectShardMapInput,
+  InspectShardMapUseCase,
+  type ShardMap,
+  type ShardMoves,
+} from "./inspect-shard-map.use-case.js";
 export { ListProjectionGapsUseCase } from "./list-projection-gaps.use-case.js";
 export {
   ListProjectionPoliciesUseCase,
@@ -38,6 +44,11 @@ export {
   ListTenantStorageUseCase,
   type TenantStorageList,
 } from "./list-tenant-storage.use-case.js";
+export {
+  type LocateTenantInput,
+  LocateTenantUseCase,
+  type TenantLocation,
+} from "./locate-tenant.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
 export {
@@ -71,6 +82,12 @@ export {
   RetentionPolicyRepository,
   type RetentionStore,
 } from "./retention-policy.repository.js";
+export {
+  ShardMapReader,
+  type ShardNode,
+  type ShardTenant,
+  type ShardTenantPage,
+} from "./shard-map.reader.js";
 export { type TenantRecord, TenantRepository } from "./tenant.repository.js";
 export {
   type TenantRetentionPolicyRecord,
