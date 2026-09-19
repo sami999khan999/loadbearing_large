@@ -17,8 +17,8 @@ import type {
 } from "./notification-preference.repository.js";
 import type { NotificationRecipientReader, Recipient } from "./notification-recipient.reader.js";
 
-// One page of recipients, and §6's fan-out is now measured rather than trusted: at this cap
-// the in-app notify is ~60 ms — see `packages/infrastructure/docs/reference/fan-out.md`.
+// One page of recipients, and §6's fan-out is measured rather than trusted now — see
+// `packages/infrastructure/docs/reference/fan-out.md`.
 const RECIPIENT_LIMIT = 500;
 
 // How many recipients are notified together. The cap above is the ceiling on the whole
@@ -138,8 +138,8 @@ export class DeliverNotificationUseCase {
     modes: readonly PreferenceRecord[],
     row: PolicyRow,
   ): Promise<void> {
-    // Two Redis round trips a recipient, issued together rather than one at a time. At
-    // the 500 cap that is 60 ms instead of 800 — see infrastructure fan-out.md.
+    // Two Redis round trips a recipient, issued together rather than one at a time. One
+    // at a time measured 0.78 ms each at 25 000 — infrastructure fan-out.md.
     for (let index = 0; index < recipients.length; index += NOTIFY_CHUNK) {
       await Promise.all(
         recipients.slice(index, index + NOTIFY_CHUNK).map(async (recipient) => {

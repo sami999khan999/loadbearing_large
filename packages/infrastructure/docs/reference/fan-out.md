@@ -84,6 +84,10 @@ time, and `DeliverNotificationUseCase` notifies 100 recipients at a time — its
 capped at 500, so that is usually one chunk. Bounded rather than `Promise.all` over the whole list:
 a room of a hundred thousand is not a write buffer to build.
 
+The table above measures the subscriber's shape. The use-case's is the same frames through the same
+publisher, twice per recipient, so its saving is this one extrapolated rather than separately
+measured — worth saying, because a number nobody took is a number somebody will quote.
+
 Two further shapes, neither needed yet, in the order they cost least:
 
 - **Do not fan out at all for the big rooms.** The body already rides the conversation channel and

@@ -4032,7 +4032,9 @@ one worth promoting without a trigger.
   - **The fix.** `Promise.all` over chunks — 500 frames in the subscriber, 100 recipients in the
     use-case. ioredis multiplexes one socket, so a chunk leaves as one write rather than as 500
     round trips: **769 ms instead of 17 944** at 25 000 members, measured by `26.8`'s own spec,
-    which now times both shapes so the difference cannot quietly disappear.
+    which now times both shapes so the difference cannot quietly disappear. The use-case's own
+    path is not separately measured — its audience is capped at 500 and the frames are the same
+    publisher, so the saving there is the same saving extrapolated, and the comment says so.
   - **Chunked and not `Promise.all` over the whole list**, which is the only judgement in it: a room
     of a hundred thousand is not a write buffer to build, and the cap is what keeps the memory
     bounded while still collapsing the round trips.
