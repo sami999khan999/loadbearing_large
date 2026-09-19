@@ -534,9 +534,9 @@ partition and its two month children.
 These were found while walking earlier Exit lines and are open there; listed so this file is
 complete on its own.
 
-- `23.1` — the `jobId` duplicate-suppression window is ~5 s, not `removeOnCompleteAgeSeconds`. Not a correctness bug; needs one of three shapes chosen. `PLAN.md` line 3354.
-- `23.2` — `pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue; a running worker logs `queue.job.failed`. `PLAN.md` line 3370.
-- `23.3` — the QueryClient is not dehydrated, so every loader prefetch is thrown away. Needs decision (a) or (b); (c) is wrong. `PLAN.md` line 3376.
+- `23.1` — the `jobId` duplicate-suppression window is ~5 s, not `removeOnCompleteAgeSeconds`. Not a correctness bug. **A recommendation is filed under the entry, 2026-09-20: take the seconds-long window and correct the note.** Unimplemented; the call is the owner's.
+- `23.2` — `pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue; a running worker logs `queue.job.failed`. **Recommendation filed: publish to a queue name no consumer listens on**, which costs no `QueueName` member because the port takes a `string`.
+- `23.3` — the QueryClient is not dehydrated, so every loader prefetch is thrown away. **Recommendation filed, and it is a fourth option: name `DehydratedState` in the router's `SerializableExtensions`.** No dependency, no cast, no version bump — written, typechecked, built, served, then reverted.
 - ~~`23.16`~~ — closed 2026-09-20. The built bundle now serves `/` under `boot-smoke.mjs web`, in CI.
 
 ---
@@ -571,7 +571,7 @@ From `TODO.md`
 
 - ~~`23.13` **Assert that every event code has an emitter**~~ — closed 2026-09-20: `check:architecture` §24, and `shard.assignment.created` gained the emitter it never had
 - `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h` `#api` `#db` — line 3470
-- `23.15` **The English fallback layer is now dead payload** `P3` `~3h` `#ui` — line 3494
+- `23.15` **The English fallback layer is now dead payload** `P3` `~3h` `#ui` — **recommendation filed 2026-09-20: drop the base layer**, with the measurement (3 471 characters of unreachable English on every `bn` page) and the two reasons the entry gave for keeping it, neither of which holds as built
 - ~~`23.16` **The web boot smoke is still switched off for a bug that is fixed**~~ — closed 2026-09-20: `boot-smoke.mjs web` probes `/` and runs in CI
 
 ### Phase 24 — The physical split (gated on a second shard being provisioned)

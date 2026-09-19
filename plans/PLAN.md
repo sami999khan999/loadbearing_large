@@ -3367,11 +3367,64 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   seconds-long window, which covers the race the design actually targets — a drain that claimed
   rows and died before marking them — and correct the note.
 
+  **Recommended 2026-09-20 — option three, and correct the note.** Not implemented: the call is
+  the owner's. Every fact below was re-read out of the tree rather than recalled.
+
+  - **The shape, confirmed.** `OutboxDrainSchedule` adds one repeat job to `QueueName.EVENT` every
+    1 000 ms with `removeOnComplete: 10`. `OutboxConsumer.fanOut` publishes each delivery to the
+    **same** queue with `removeOnCompleteAgeSeconds: 86 400`. BullMQ trims a queue's completed set
+    on every completion using *that job's* own options, so a drain completing once a second trims
+    the shared set to ten entries — deliveries included. The 86 400 never applies to anything.
+  - **Why the seconds-long window is enough.** The race the `jobId` guards is a drain that claimed
+    rows and died before marking them published; the next tick re-claims and re-publishes, one
+    second later. Nothing in this design re-publishes an event a day after the first attempt. On
+    top of that the subscriber contract is idempotent on `event.id`, the notification dedupe index
+    holds, and the client dedupes messages by id — so a duplicate costs one cache-invalidation
+    frame.
+  - **Why not a queue of its own.** It is the expensive option, not the clean one. The drain and
+    its deliveries are one `OutboxConsumer` switching on `job.name`; splitting the queue splits the
+    consumer, and the worker already logs `worker.pool.oversubscribed` at concurrency 20 against a
+    pool of 10. A second `Worker` makes that worse to fix a duplicate frame.
+  - **Why not a larger `removeOnComplete`.** To hold a day of deliveries the count has to be a
+    day's delivery volume, which is unbounded and unknowable at the line where it is written. It
+    moves the number without fixing the shape, which is what the entry already says.
+  - **The edit, if this is taken.** Two comments and no behaviour change. `10.8`'s note stops
+    claiming the age *is* the suppression window. `JobOptions.removeOnCompleteAgeSeconds` in
+    `packages/application/src/port/queue.publisher.ts` says what it actually buys — how long a
+    completed job stays readable for inspection — and says that on a queue another producer trims,
+    the real window is that producer's `removeOnComplete`.
+
 - [ ] `23.2` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue.** With a
   worker running, that worker picks it up and logs
   `queue.job.failed {jobId: "smoke-unnamed"}` — the consumer rejects a job name it does not know,
   correctly. Harmless, and confusing the first time. Either the smoke suite should use a queue
   name no consumer listens on, or `docs/setup` should say to run it with the worker stopped.
+
+  **Recommended 2026-09-20 — option one, and it is cheaper than the entry implies.** Not
+  implemented.
+
+  - **`QueuePublisher.publish` takes `queue: string`, not the `QueueName` union.** So "a queue name
+    no consumer listens on" needs **no new member in `QueueName`** — which matters, because `23.4`
+    deleted `DOCUMENT` on the principle that a name in a closed union is a promise something uses
+    it, and adding `SMOKE` would re-make exactly that promise.
+  - **The edit.** In `packages/infrastructure/tests/smoke/redis.smoke.spec.ts`, one local constant
+    — `const SMOKE_QUEUE = "smoke";` — replaces the seven `QueueName.MAINTENANCE` references in the
+    `QueuePublisher` describe, including the `toBe(QueueName.MAINTENANCE)` in the default-job-name
+    test, which then asserts `toBe(SMOKE_QUEUE)` and proves the same thing. The `QueueName` import
+    stays for the realtime block above it.
+  - **What it still proves.** Everything it proves today: that a job lands on a real BullMQ queue
+    under the id it was given, that a second publish under a live id is dropped, that name and
+    priority survive, and that the port's `attempts` and `removeOnComplete` defaults are on the
+    job. None of that is a property of *which* queue.
+  - **Why not the documentation route.** "Run the smoke with the worker stopped" is a caveat that
+    has to be remembered by everyone forever to prevent a log line nobody should worry about. The
+    constant is remembered by the file.
+  - **A second option exists and is worse:** `JobOptions.delayMs` would park the probe in the
+    delayed set where no worker takes it. It works, and it makes every assertion in the block read
+    as though the delay were part of what is under test.
+  - **The residue.** BullMQ leaves a `bull:smoke:*` meta key in the queue Redis. The jobs are
+    removed in each `finally`; the meta key is two fields on an instance that already holds six
+    queues.
 
 - [ ] `23.3` **The QueryClient is not dehydrated, so every loader prefetch is thrown away.**
   `getRouter`'s `dehydrate` carries messages, session and appearance — not the query cache. SSR
@@ -3392,6 +3445,53 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   that is the shape of two defects already fixed this week (`d1ccb5b`, `e644ed0`).
   A branch attempting (a)-without-the-package was written and reverted; the type error is
   recorded above so nobody re-derives it.
+
+  **Recommended 2026-09-20 — option (d), which is none of the three above.** Not implemented, but
+  **written, typechecked, built and served** before being reverted, so what follows is measured.
+
+  - **The type error is exactly as recorded.** Adding `queries: dehydrate(queryClient)` to
+    `RouterDehydrated` fails with `TS2322` on `queries.mutations` → `mutationKey` →
+    `readonly unknown[]` is not `readonly SerializationError<"Type may not be serializable">[]`.
+    Re-confirmed on this tree.
+  - **The router has an extension point for this, and it is the answer.** `Serializable` is
+    `SerializableExtensions[keyof SerializableExtensions]`, and `SerializableExtensions` is an
+    empty interface re-exported from `@tanstack/react-router` for declaration merging.
+    `ValidateSerializable<T, S>` short-circuits on `T extends S`, so naming `DehydratedState` there
+    ends the walk before it reaches `unknown`.
+  - **The whole diff, in `apps/web/src/router.tsx`:**
+
+    ```ts
+    import { type DehydratedState, dehydrate, hydrate } from "@tanstack/react-query";
+
+    export interface RouterDehydrated {
+      readonly queries: DehydratedState;
+    }
+
+    declare module "@tanstack/react-router" {
+      interface SerializableExtensions {
+        DehydratedState: DehydratedState;
+      }
+    }
+    ```
+
+    plus `queries: dehydrate(queryClient)` in `dehydrate` and
+    `hydrate(queryClient, payload.queries)` in `hydrate`. The `declare module` block sits beside
+    the `Register` one already in that file.
+  - **Proved, not argued.** `pnpm --filter @loadbearing/web typecheck` clean;
+    `pnpm --filter @loadbearing/web build` clean; `boot-smoke.mjs web` 200; and the served HTML
+    carries `queries:$R[38]={mutations:$R[39]=[],queries:$R[40]=[]}` — empty on `/`, which has no
+    loader query, and 55 bytes wider than the same page without the change.
+  - **What the other options cost.** **(a)** `@tanstack/react-router-ssr-query@1.167.3` peers on
+    `@tanstack/react-query >= 5.102.0` and `@tanstack/react-router >= 1.170.33`; the catalog is on
+    `5.101.4` and `1.170.32`, so it is a Tier 3 dependency **and** two framework bumps.
+    **(b)** a cast cannot be local — the failure is the whole `RouterDehydrated` against
+    `ValidateSerializableMapped`, so the cast lands on the `dehydrate` function itself.
+    **(c)** stays wrong for the reason given.
+  - **The one judgement left**, and it is why this is filed rather than landed: the augmentation is
+    global. After it, `DehydratedState` is serializable in *any* dehydrate payload in this app.
+    That is narrow and true, and it is still an application widening a library type.
+  - **`23.6` is behind this**, and the browser walk cannot tick it until this lands — see
+    [`STUCK.md`](STUCK.md) S.1.
 
 - [x] `23.4` **worker requires SMTP for a digest it never sends** `P2` `~4h`
   - **Shipped**, in two steps. `6e31052` (2026-09-12) took the recommendation: `NotificationConsumer`
@@ -3520,6 +3620,39 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     for a locale whose bundles are statically known total (and `StaticContentSource` gains the test
     that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
     `check-architecture` assertion counting the gap instead. Do not ship both.
+  - **Recommended 2026-09-20 — drop the base layer, the first of the two.** Not implemented. The
+    entry's two reasons for keeping it were checked against the tree and neither holds as built.
+  - **Measured, on the built server**, `GET /sign-in` with `Accept-Language`:
+
+    | locale | characters | bytes | `base` (English) | `overrides` |
+    |---|---|---|---|---|
+    | `en` | 8 049 | 8 067 | 3 471 | 2 |
+    | `bn` | 11 622 | 15 210 | 3 471 | 3 571 |
+
+    A Bengali page carries 3 471 characters of English it can never read — about 30 % of that
+    page's characters, and very nearly the size of the Bengali bundle beside it. The entry's
+    "roughly doubling the message bytes" is right about the message half.
+  - **"It makes a partially loaded set of namespaces work" is not true as built.**
+    `StaticContentSource.messages` loads `base` and `overrides` over the *same* resolved namespace
+    set, so `base` covers nothing `overrides` does not also cover. A key from an unloaded namespace
+    misses both and `Translator.t` returns the key verbatim — the designed behaviour, unchanged by
+    dropping the layer.
+  - **The layer is already unreachable, at both levels.** `CLIENT_CATALOG` is typed
+    `Record<Locale, Record<ClientNamespace, BundleLoader>>` — total, so no locale can be missing a
+    namespace — and `SERVER_CATALOG` spreads it and adds `email` for both locales. `NamespaceBundle`
+    is a total `Record` since `5.9`, so no bundle can be missing a key. There is no input today for
+    which `base` supplies a string.
+  - **The CMS argument survives, and does not argue for this code.** A CMS behind `ContentSource`
+    is a *different implementation*, free to layer English under whatever it fetched — that is what
+    the port is for. A dead layer inside the static adapter does not make the remote one safer.
+  - **The edit.** `StaticContentSource.messages` loads one bundle and returns
+    `{ locale, namespaces, base: {}, overrides }`. `MessageSnapshot` keeps both fields —
+    `Translator.t`, `has`, `with` and `merge` all read them, and a CMS source will want `base`
+    back. Two specs: one that a `bn` snapshot's `base` is empty and its keys all resolve, one that
+    a key absent from both still comes back verbatim.
+  - **What this gives up, stated plainly.** Adding a third language becomes all-or-nothing at
+    runtime as well as at compile time. It already is at compile time, and a contributor landing a
+    partial locale hits `tsc` long before they hit a page.
 
 - [x] `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling`
   - **Shipped 2026-09-20.** `APPS` has a `web` entry, `ci.yml` runs `boot-smoke.mjs web` beside the
