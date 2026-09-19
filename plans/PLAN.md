@@ -2800,7 +2800,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
 
 #### Primitives and ports (`application`)
 
-- [ ] `22.1` **Primitives** — `packages/application/src/primitive/shard.ts`: `ShardKey` (branded
+- [x] `22.1` **Primitives** — `packages/application/src/primitive/shard.ts`: `ShardKey` (branded
   string, `ShardKey.of(raw)` rejects empty), `Placement` (`"catalog" | "local" | "routed"`), and
   `CatalogTable` — a frozen closed list of the catalog table names decision D14 lists (a list, not a
   number: it is sixteen while `activity_archive` exists and fifteen after its drop) plus
@@ -2808,8 +2808,17 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `revised: 2026-09-16` — no `VirtualShard`: the shard is the organization (decision D28).
   **Docs:** `packages/application/docs/index.md` tree,
   `docs/opinions/vocabulary.md` (a "Shard vocabulary" row set).
+  `done: 2026-09-19` — `corrected:` the catalog list is **nineteen**, not sixteen. Decision D14
+  predates Phases 19 and 20, which added `retention_policy`, `tenant_retention_policy`,
+  `projection_policy` and `platform_policy` — all four are deployment-wide policy the worker
+  reads before it knows a tenant, so all four are catalog. `corrected:` `routed` is the default
+  rather than a third list: a new slice's table needs no edit here, and an unplaced table routes
+  rather than reading the catalog. `done:` a spec walks `pg/schema/` and asserts the claim
+  decision D14 makes — the lists cover every table in the folder, and no catalog name is a table
+  the schema does not declare. Named `Shard.keyOf` and `TablePlacement.of` rather than
+  `placementOf`: a bare function is not this repository's shape.
 
-- [ ] `22.2` **Ports** — `packages/application/src/port/sharding.strategy.ts`
+- [x] `22.2` **Ports** — `packages/application/src/port/sharding.strategy.ts`
   (`keyOf(principal: Principal): ShardKey`), `shard.resolver.ts`
   (`resolve(key): Promise<number>` — the physical node — and `invalidate(key)`),
   `shard-assignment.repository.ts` (`findByKey`, `save({ key, node })`, `all(page)` for the move
@@ -2825,6 +2834,10 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   commit, as the item says.
 
 #### Schema (`infrastructure`)
+  `done: 2026-09-19` — three ports, and the tripwire fired exactly as predicted: adding three
+  files to `src/port/` broke `test-container.spec.ts` on both the count and the pinned list, in
+  the same commit that fixed it. `OrganizationShardingStrategy` in `composition/src/shard/` is
+  one line, which is the point — it is the fork's swap point, not a computation.
 
 - [ ] `22.3` **`shard_assignments`** — `packages/infrastructure/src/pg/schema/shard.schema.ts`:
   `shard_key text primary key`, `node smallint not null default 0`, `assigned_at`,

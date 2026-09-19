@@ -41,6 +41,13 @@ someone adds a procedure and forgets the entry
 **REST paths** on `.route({ path })` are kebab-case, plural resources, braced params matching the
 contract field name: `/tasks/{taskId}/reactivate`.
 
+**Shard vocabulary, four words that are easy to conflate.** A **shard key** is what a request is
+placed by — here the organization id, because the organization *is* the shard. A **node** is a
+physical Postgres; `shard_assignments.node` is one. A **placement** is where a *table* lives —
+`catalog`, `local` or `routed` — and every table has exactly one. The **directory** is
+`shard_assignments`, the table mapping keys to nodes. There is deliberately no "virtual shard":
+a number between the key and the node is a level nobody needed.
+
 **A log event code is not an activity name.** An activity is a business fact a user may read
 (`task.reactivated`); a log event is a diagnostic an operator reads (`queue.job.failed`). Both are
 past tense because both record something that already happened, and they live in different catalogs

@@ -9,6 +9,8 @@ import {
   InMemoryOutboxGateway,
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
+  InMemoryShardAssignmentRepository,
+  InMemoryShardResolver,
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
   InMemoryVectorStore,
@@ -51,6 +53,9 @@ import {
   type RealtimeSubscriber,
   SERVER_CATALOG,
   type SessionResolver,
+  type ShardAssignmentRepository,
+  type ShardingStrategy,
+  type ShardResolver,
   SilentLogger,
   StaticContentSource,
   type StorageGateway,
@@ -58,6 +63,7 @@ import {
   type UnitOfWork,
   type VectorStore,
 } from "../import.js";
+import { OrganizationShardingStrategy } from "../shard/index.js";
 
 // One entry per port. In `src/` rather than a spec so `tsc` checks it: adding a port is
 // a compile error here until it is written.
@@ -85,6 +91,9 @@ export interface TestPorts {
   readonly realtimeSubscriber: RealtimeSubscriber;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
+  readonly shardAssignments: ShardAssignmentRepository;
+  readonly shardResolver: ShardResolver;
+  readonly sharding: ShardingStrategy;
   readonly storage: StorageGateway;
   readonly storagePolicy: StoragePolicyGateway;
   readonly unitOfWork: UnitOfWork;
@@ -140,6 +149,9 @@ export class TestContainer {
         overrides.realtimeSubscriber ?? new InMemoryRealtimeSubscriber(new InMemoryRealtimeHub()),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
+      shardAssignments: overrides.shardAssignments ?? new InMemoryShardAssignmentRepository(),
+      shardResolver: overrides.shardResolver ?? new InMemoryShardResolver(),
+      sharding: overrides.sharding ?? new OrganizationShardingStrategy(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
       storagePolicy: overrides.storagePolicy ?? new InMemoryStoragePolicyGateway(),
       unitOfWork: overrides.unitOfWork ?? new DirectUnitOfWork(),

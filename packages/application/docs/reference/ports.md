@@ -145,6 +145,28 @@ tenant-month to serve one user's slice. At the ~8 MB a four-thousand-user month 
 fine; the plan names p95 over 500 ms as the trigger to give `notifications` a per-user object
 layout under the same prefix.
 
+## The three shard ports, and why there is no fourth
+
+`ShardingStrategy.keyOf(principal)` decides **what** a request is placed by, `ShardResolver`
+decides **where** that key lives, and `ShardAssignmentRepository` is the directory both read from.
+Three responsibilities, three ports, and the split is not ceremony: the first is the fork's swap
+point, the second is on the path of every routed query and therefore cached, and the third is a
+platform seam with no principal — like `MaintenanceGateway`, and for the same reason.
+
+There is no `ShardPlacementPolicy`. Choosing which node a *new* tenant lands on is a decision
+nobody has to make while there is one node, and an interface with one implementation and no
+prospect of a second is the thing `docs/opinions/simplicity.md` names. It earns its place at the
+split, not before.
+
+`keyOf` runs **once per request** in the middleware and once per job in a consumer, never per
+query. A strategy called per query is one that has to be fast; called once, it can read whatever
+it needs.
+
+`resolve` returns a physical node index, not a virtual shard: decision D28 removed the level
+between the organization and the node, so the organization *is* the shard. A key with no
+directory row resolves to node 0, which is exactly what an unsharded deployment is — so the
+directory being empty is a working state rather than a broken one.
+
 ## `LogReader` and the four labels
 
 `LogFilter` is closed on purpose. **The four labels are the only fields the log platform indexes**;

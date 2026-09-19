@@ -27,6 +27,8 @@ export {
   InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
+  InMemoryShardAssignmentRepository,
+  InMemoryShardResolver,
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
   InMemoryTenantRetentionPolicyRepository,
@@ -51,3 +53,4 @@ export {
 // `TestHarness.clock` is one, so a consumer naming that type needs it — and a spec that
 // wants a different instant replaces it rather than reaching for `@loadbearing/core`.
 export { FixedClock } from "./import.js";
+export { OrganizationShardingStrategy } from "./shard/index.js";
