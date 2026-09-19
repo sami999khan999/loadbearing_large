@@ -3515,6 +3515,10 @@ bug that has since been fixed. Take one when a build is waiting on CI.
 - [ ] `23.5` **The inviter's second tab refetches the member list without a reload**
   Phase 10's Exit line, the one clause that needs a browser. Invite from tab A with tab B on
   `/settings/members`; B shows the pending invitation without a reload.
+  - **The server half is proved, 2026-09-20.** An SSE stream opened with `curl` against the built
+    server received `member.changed` after an invite made over `/api/rpc` — so the frame that
+    makes tab B refetch demonstrably reaches a second connection. What is left is the browser
+    reacting to it. See `OPEN.md`, “Proved end to end over HTTP”.
 
 - [ ] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser**
   Phase 11, `11.14` — the procedures are exercised, the loader is not. Open the inbox cold and
@@ -3844,6 +3848,9 @@ bug that has since been fixed. Take one when a build is waiting on CI.
   - Swapped. Typecheck, build and the web suite are unchanged, and the build prints no
     deprecation. A warning that appears on every boot is one people stop reading, which is the
     same argument `23.20` makes about `worker.pool.oversubscribed`.
+  - **Checked in SSR, not just in a build.** `GET /invitation/<token>` against the running
+    server renders “Probe has invited …”, so the loader’s call through the swapped validator
+    resolves a real preview.
 
 - [x] `23.23` **The directory outlived four hundred tenants** `found: 2026-09-20` — by
   `25.4`'s own screen, reading live data for the first time.
@@ -4016,6 +4023,14 @@ button's procedure; `24.3` for the replica handle and `cluster.reader(key)`.
   in Phase 19.
 
 - [x] `25.4` **The shard map** — `inspect-shard-map.use-case.ts` (`platform.shards.read`): one row per
+  physical node — tenant count from `shard_assignments` grouped by `node`, most recent `assigned_at`
+  — with the tenants of a node on expand, paginated, each tenant row carrying its retention override
+  (`19.19`), the move button (`25.5`) and the delete action (`19.20`); plus a tenant lookup
+  (organization id or slug → its node). `revised: 2026-09-16` — the shard is the organization. The output
+  carries `moves: "unavailable" | "available"` from `container.hasShardMoves`, a getter that is a
+  constant `false` with the comment until `24.2` registers the move job; the seam earns its place
+  because the retrofit touches contract, screen and use-case (decision D46). Procedure `shards.map`,
+  route `/platform/shards`, `shard-map.panel.tsx`. **Docs:** `platform.md`, `sharding.md` (from `22.21`).
   - **Shipped 2026-09-20**, all twelve steps. Permission and route already existed (`22.19`), so
     the slice starts at the contract: `PlatformContract.{shardNode,shardTenant,shardMoves,shardMapQuery,shardMap,tenantLookup,tenantLocation}`,
     `ShardMapReader` + `InspectShardMapUseCase` + `LocateTenantUseCase` in
@@ -4070,14 +4085,6 @@ button's procedure; `24.3` for the replica handle and `cluster.reader(key)`.
     covers against the same shapes.
   - **And the screen found something on its first live read**, which is the best argument for
     having built it: it reported 486 tenants on node 0 against 79 organizations. That is `23.23`.
-  physical node — tenant count from `shard_assignments` grouped by `node`, most recent `assigned_at`
-  — with the tenants of a node on expand, paginated, each tenant row carrying its retention override
-  (`19.19`), the move button (`25.5`) and the delete action (`19.20`); plus a tenant lookup
-  (organization id or slug → its node). `revised: 2026-09-16` — the shard is the organization. The output
-  carries `moves: "unavailable" | "available"` from `container.hasShardMoves`, a getter that is a
-  constant `false` with the comment until `24.2` registers the move job; the seam earns its place
-  because the retrofit touches contract, screen and use-case (decision D46). Procedure `shards.map`,
-  route `/platform/shards`, `shard-map.panel.tsx`. **Docs:** `platform.md`, `sharding.md` (from `22.21`).
 
 - [ ] `25.5` **The move button** — rendered on every tenant row; disabled with the copy "tenant moves
   need the physical split; Phase 24" while `moves === "unavailable"`.
@@ -4180,6 +4187,8 @@ one worth promoting without a trigger.
     profile, and it is gated on Phase 24 rather than on this.
 
 - [x] `26.9` **Resend actions** — "resend invitation" and "resend verification". These are what
+  cover the window between a commit and its enqueue, which decision D8 takes instead of a table.
+  Small, and worth having before the first support question rather than after.
   - **Half of it already shipped**, which the entry did not know. "Resend verification" is
     `VerifyEmailNotice`'s button, `SessionMutations.useResendVerification`,
     `AuthClient.sendVerificationEmail`, and a `/send-verification-email` rule in the auth
@@ -4206,8 +4215,10 @@ one worth promoting without a trigger.
   - **Verified.** Seven use-case specs, one integration spec, and the contract spec's procedure
     list. Whole workspace green, `check:architecture` 24/24. The button itself is unproven in a
     browser — see [`STUCK.md`](STUCK.md) S.1.
-  cover the window between a commit and its enqueue, which decision D8 takes instead of a table.
-  Small, and worth having before the first support question rather than after.
+  - **And proved against the running server, 2026-09-20.** `member.resendInvitation` over
+    `/api/rpc` returned the **same** `id` and `createdAt` with a later `expiresAt`; the row’s
+    `token_hash` changed; and Mailpit received a second invitation. Every claim above, in one
+    call — see `OPEN.md`, “Proved end to end over HTTP”.
 
 - [ ] `26.10` **A delivery log, if the question actually arrives.** The trigger is stated so it
   is not built on a feeling: somebody needs to answer "was this sent" and neither

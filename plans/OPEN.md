@@ -805,3 +805,27 @@ emptying it is a button.
   `pnpm platform:grant` — gets **200** from `/platform/shards`, and the two procedures answer with
   node 0's row, its tenants on expand, `moves: "unavailable"`, and the seeded organization by slug.
   What is left is the rendered expanded panel, which the component spec covers.
+
+### Proved end to end over HTTP, against the built server
+
+Not a spec — one session of `curl` against `node .output/server/index.mjs` on `:3000` with the
+worker beside it, because several things in this repository have never been exercised as a running
+system rather than as a unit. Every line below happened.
+
+| Step | What it proves |
+|---|---|
+| `POST /api/auth/sign-up/email` → Mailpit holds *Confirm your email address* | the mail pipeline: outbox, `QueueName.MAIL`, the worker, SMTP |
+| the link in it → `users.email_verified = true` | verification round-trips |
+| `POST /api/auth/sign-in/email` → `app.session_token` | sign-in issues the cookie the app reads |
+| `pnpm platform:grant` then `GET /platform/shards` → **200** | the platform tier resolves through a role in another organization, on the next request |
+| `platform.shardMap` → node 0, its tenants, `moves: "unavailable"` | `25.4` answers with live data |
+| `platform.locateTenant("loadbearing")` → the seeded organization | `25.4`'s lookup clause |
+| `member.invite` → an invitation row **and** *Probe invited you to Probe* in Mailpit | the invitation path, end to end |
+| an open SSE stream received `member.changed` | **`23.5`'s server half**: the frame that makes a second tab refetch demonstrably reaches a second connection |
+| `member.resendInvitation` → same `id`, same `createdAt`, later `expiresAt`, **new** token hash, a second mail | every claim `26.9` makes |
+| `GET /invitation/<token>` renders *Probe has invited …* | `23.22`'s swapped server-function validator, in SSR |
+
+**What this is not.** It is not a suite — nothing re-runs it, and it took a `.env`, two processes
+and a Mailpit API to do once. **Worth considering:** `apps/web` has no smoke config, and
+`packages/infrastructure`'s is the pattern for one. That would turn the table above into something
+CI could keep true.
