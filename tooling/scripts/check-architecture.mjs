@@ -1365,6 +1365,78 @@ assert("every event code in the catalog is emitted", (failures) => {
   }
 });
 
+// ── 25 — `.env.example` and the app schemas say the same thing ────────────────
+//
+// `.env` is gitignored, so nothing can check it. What can be checked is the file
+// somebody copies it from, and the failure this closes is the slow one: a key added
+// to a schema, never documented, and absent from every `.env` copied before it.
+
+// Read once and used both ways. Commented lines count: `.env.example` documents the
+// optional keys by showing them commented out, which is still documenting them.
+function exampleKeys() {
+  const file = join(ROOT, ".env.example");
+  if (!existsSync(file)) return null;
+
+  const found = new Set();
+
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const name = /^\s*#?\s*([A-Z][A-Z0-9_]*)\s*=/.exec(line);
+    if (name?.[1]) found.add(name[1]);
+  }
+
+  return found;
+}
+
+// Every key an app's `Env` schema names. Four spaces, because that is the indent of a
+// field inside the one `z.object({ … })` each schema declares.
+function schemaKeys() {
+  const apps = join(ROOT, "apps");
+  if (!existsSync(apps)) return [];
+
+  const found = [];
+
+  for (const name of readdirSync(apps)) {
+    const file = join(apps, name, "src/env.ts");
+    if (!existsSync(file)) continue;
+
+    for (const key of readFileSync(file, "utf8").matchAll(/^\s{4}([A-Z][A-Z0-9_]*):\s/gm)) {
+      found.push({ app: name, key: key[1] ?? "" });
+    }
+  }
+
+  return found;
+}
+
+// `APP` is deliberately absent: each process defaults it to its own name, and pinning it
+// in a shared file makes every worker line claim to have come from the web app.
+const UNDOCUMENTED = new Set(["APP"]);
+
+// A numbered family — `DATABASE_SHARD_1_URL`, `_2_`, and so on — read by `shard-env.ts`
+// rather than by a schema, so no literal key can appear in one.
+const NOT_A_SCHEMA_KEY = /^DATABASE_SHARD_\d+_/;
+
+assert("`.env.example` documents every key an app requires", (failures) => {
+  const example = exampleKeys();
+  if (!example) return "no .env.example at the root";
+
+  const schemas = schemaKeys();
+  if (schemas.length === 0) return "no apps/*/src/env.ts to read";
+
+  for (const { app, key } of schemas) {
+    if (example.has(key) || UNDOCUMENTED.has(key)) continue;
+    failures.push(`${key}: apps/${app}/src/env.ts requires it, .env.example does not mention it`);
+  }
+
+  // The other direction, and the reason it is here rather than in a second assertion:
+  // a documented key nothing reads sends somebody to set a variable that does nothing.
+  const declared = new Set(schemas.map((entry) => entry.key));
+
+  for (const key of example) {
+    if (declared.has(key) || NOT_A_SCHEMA_KEY.test(key)) continue;
+    failures.push(`${key}: .env.example documents it, no app's env.ts reads it`);
+  }
+});
+
 let failed = 0;
 let skippedCount = 0;
 

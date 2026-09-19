@@ -369,9 +369,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-four architectural assertions
+## Step 26.4 — The twenty-five architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Twenty-four greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-five greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -889,6 +889,39 @@ named by at least one `PROCEDURE_PERMISSIONS` entry, which is Phase 5's own exit
 
 ---
 
+### 25 — `.env.example` documents every key an app requires
+
+`.env` is gitignored, so nothing can check it. What **can** be checked is the file somebody copies
+it from, and the failure this closes is the slow one: a key added to a schema, never documented,
+and therefore absent from every `.env` that was copied before it. Nothing fails at that point —
+the schema has a default, or the process is not started — and the day it is missed is the day
+something starts and parses its environment.
+
+**It found one on its first run.** `WORKER_NOTIFICATION_CONCURRENCY` shipped with the digest
+consumer and was never added to `.env.example`. It has a default, so nothing broke; it is also a
+knob nobody knew they had.
+
+Both directions, in one assertion:
+
+- **Schema → example.** Every key an `apps/*/src/env.ts` names appears in `.env.example`.
+- **Example → schema.** Every key in `.env.example` is read by one of those schemas, because a
+  documented key nothing reads sends somebody to set a variable that does nothing.
+
+A commented line counts as documentation: that is how the example carries an optional key, and
+`# CLICKHOUSE_URL=` is the whole mechanism by which the analytics store is opt-in.
+
+**Two exemptions, each named in the script with why.** `APP` is deliberately absent — each process
+defaults it to its own name, and pinning it in a shared file makes every worker line claim to have
+come from the web app, which is the label an operator filters on. And `DATABASE_SHARD_<n>_*` is a
+numbered family read by `shard-env.ts` rather than by a schema, so no literal key for it can appear
+in one.
+
+**What this still cannot see** is the gap that actually costs an afternoon: a developer's own `.env`
+falling behind the example. Nothing in the repository can read that file. The thing that catches it
+is §26.4d's boot smoke — start the process and the schema says which key is missing, by name.
+
+---
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -950,10 +983,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-four
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-five
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-three of the
-twenty-four are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-four of the
+twenty-five are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 

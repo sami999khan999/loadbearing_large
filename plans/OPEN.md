@@ -641,7 +641,7 @@ profile:
 
 | Check | Result |
 |---|---|
-| `CI=true pnpm check:architecture` | 24 of 24, no skip |
+| `CI=true pnpm check:architecture` | 25 of 25, no skip |
 | `pnpm typecheck` | clean |
 | `pnpm lint` | clean |
 | `pnpm test` | 18 packages, every file green |
@@ -707,3 +707,9 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   top-layer element is positioned against the viewport, so keeping the panel beside its trigger
   needs `anchor-name`, and the fallback is a panel centred on the screen. It is still not a
   `Dialog`: a popover is non-modal, so there is no focus trap to get wrong.
+- `23.17` **`.env.example` had fallen behind the schemas** — new, and found the hard way: a `.env`
+  fourteen keys behind the example made the built web server answer 500 on every request, which is
+  how `23.16`'s boot smoke earned itself in an hour. The stale `.env` was this machine's; the file
+  it should have been copied from had drifted too, and `WORKER_NOTIFICATION_CONCURRENCY` had never
+  been documented. `check:architecture` §25 now checks both directions. **It still cannot see a
+  developer's own `.env`** — that file is gitignored, and the boot smoke is what catches it.

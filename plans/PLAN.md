@@ -3702,6 +3702,25 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     open thread — it was the only TODO marker in the whole source tree, and the only work not
     already in this file.
 
+
+- [x] `23.17` **`.env.example` had fallen behind the schemas, and nothing could tell**
+  `found: 2026-09-20` — the hard way, by a `.env` fourteen keys behind the example.
+  - **What it cost.** The built web server answered 500 on every request with a `ZodError` naming
+    `APP_BASE_URL`, and `23.16`'s boot smoke is what surfaced it. That was a stale local `.env`
+    rather than a repository defect — but the file it should have been copied from had drifted too:
+    `WORKER_NOTIFICATION_CONCURRENCY` shipped with the digest consumer and was never documented.
+  - **Shipped** as assertion **§25**, both directions in one: every key an `apps/*/src/env.ts`
+    names appears in `.env.example`, and every key in `.env.example` is read by one of those
+    schemas — a documented key nothing reads sends somebody to set a variable that does nothing.
+    A commented line counts as documentation, which is how `# CLICKHOUSE_URL=` makes the analytics
+    store opt-in. Seven fixtures.
+  - **Two exemptions, each named with why.** `APP` is deliberately absent, because each process
+    defaults it to its own name and pinning it in a shared file makes every worker line claim to
+    have come from the web app. `DATABASE_SHARD_<n>_*` is a numbered family read by `shard-env.ts`
+    rather than by a schema.
+  - **What it still cannot see**, and it is the thing that cost the afternoon: a developer's own
+    `.env` falling behind. `.env` is gitignored, so nothing in the repository can read it. The
+    boot smoke is what catches that, by name, the moment a process starts.
 ---
 
 ## Phase 24 — The physical split 📁

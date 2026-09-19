@@ -1,7 +1,7 @@
 // Each assertion run against a tree that violates it, and against one that does not.
 //
 // The script derives ROOT from its own location, so a fixture is a temporary tree with a
-// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-four
+// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-five
 // assertions, and the thing under test is the file the repository actually runs.
 
 // @ts-check
@@ -136,7 +136,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(24);
+    expect(results).toHaveLength(25);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -954,5 +954,55 @@ describe("24 — every event code in the catalog is emitted", () => {
   it("skips a tree with no catalog barrel", () => {
     const found = entry(run(), NAME);
     expect(found.status).toBe("○");
+  });
+});
+
+describe("25 — .env.example documents every key an app requires", () => {
+  const NAME = "`.env.example` documents every key an app requires";
+
+  // One schema key and one documented key, which is the smallest tree that can drift in
+  // either direction.
+  function tree(example, schema) {
+    return {
+      ".env.example": example,
+      "apps/web/src/env.ts": `const Env = z.object({\n${schema}\n});\n`,
+    };
+  }
+
+  const ONE_KEY = "    DATABASE_URL: z.url(),";
+
+  it("accepts a schema and an example that say the same thing", () => {
+    passes(run(tree("DATABASE_URL=postgres://localhost/x\n", ONE_KEY)), NAME);
+  });
+
+  it("catches a key the schema requires and the example never mentions", () => {
+    fails(run(tree("# nothing here\n", ONE_KEY)), NAME, "DATABASE_URL");
+  });
+
+  // The other direction, and the reason it is one assertion: a documented key nothing
+  // reads sends somebody to set a variable that does nothing.
+  it("catches a documented key no schema reads", () => {
+    fails(run(tree("DATABASE_URL=x\nLONG_GONE=1\n", ONE_KEY)), NAME, "LONG_GONE");
+  });
+
+  // Commented out is still documented: that is how the example carries an optional key.
+  it("counts a commented line as documentation", () => {
+    passes(run(tree("# DATABASE_URL=postgres://localhost/x\n", ONE_KEY)), NAME);
+  });
+
+  // Each process defaults `APP` to its own name. Pinning it in a shared file makes every
+  // worker line claim to have come from the web app.
+  it("allows `APP` to be undocumented on purpose", () => {
+    passes(run(tree("DATABASE_URL=x\n", `${ONE_KEY}\n    APP: z.string(),`)), NAME);
+  });
+
+  // A numbered family, read by `shard-env.ts` rather than by a schema, so no literal key
+  // can appear in one.
+  it("allows the numbered shard family in the example", () => {
+    passes(run(tree("DATABASE_URL=x\n# DATABASE_SHARD_1_URL=y\n", ONE_KEY)), NAME);
+  });
+
+  it("skips a tree with no example to compare against", () => {
+    expect(entry(run(), NAME).status).toBe("○");
   });
 });
