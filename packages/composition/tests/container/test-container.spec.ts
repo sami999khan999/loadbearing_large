@@ -8,9 +8,9 @@ import { RecordingActivityLogger, RecordingQueuePublisher } from "../../src/fake
 // vitest is run from the package or from the workspace root.
 const PORT_DIR = fileURLToPath(new URL("../../../application/src/port/", import.meta.url));
 
-// The harness entries that are not ports: three shared primitives, plus the content
-// source, whose abstract class lives in `@loadbearing/content`.
-const NOT_PORTS = ["authorizer", "clock", "content", "logger", "placed"] as const;
+// The harness entries that are not ports: three shared primitives, the two placement
+// helpers, and the content source, whose abstract class lives in `@loadbearing/content`.
+const NOT_PORTS = ["authorizer", "clock", "content", "eachShard", "logger", "placed"] as const;
 
 describe("TestContainer", () => {
   it("builds every port without touching infrastructure", () => {
@@ -44,6 +44,7 @@ describe("TestContainer", () => {
       "clock",
       "coldArchive",
       "content",
+      "eachShard",
       "email",
       "embeddings",
       "events",

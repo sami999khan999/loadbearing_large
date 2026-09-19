@@ -276,3 +276,16 @@ streamed to S3 and missing from `row_count`, and that drift is permanent and sil
 the object key it already names — the object is where it is, and rewriting the key would point the
 index at nothing. The table itself stays until no deployment can still hold objects under the old
 `activity-archive/` prefix; a later migration drops it and its `TENANT_EXEMPT` line together.
+
+## The key does not carry the shard, and the index does not grow a column
+
+A tenant lives on one node, so `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz` is already
+unique across the cluster and `partition_archive` already identifies a row by
+`(organization_id, table_name, period)`. Putting the shard index in either would record where the
+rows were the day they left — and the day that tenant moves, every key and every row would name a
+node it is no longer on, with nothing to rewrite them.
+
+What *is* per shard is the loop. The retention pass walks each node, detaching and archiving the
+partitions it finds there; the index rows it writes go to the catalog through
+`BaseRepository.catalogDb`. See [sharding](sharding.md).
+

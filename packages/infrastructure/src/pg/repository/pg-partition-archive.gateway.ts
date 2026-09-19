@@ -115,7 +115,8 @@ interface Child {
 }
 
 export class PgPartitionArchiveGateway extends BaseRepository implements PartitionArchiveGateway {
-  // Detaches local and routed partitions; its index row is catalog and written outside any routed transaction.
+  // Detaches partitions on whichever node the sweep is walking. Its index rows are
+  // the catalog's and go through `catalogDb` — see docs/reference/sharding.md.
   protected override readonly placement: Placement = "local";
 
   public constructor(
@@ -239,7 +240,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     period: Date,
     object: ArchivedObject,
   ): Promise<void> {
-    await this.db
+    await this.catalogDb
       .insert(partitionArchive)
       .values({
         organizationId: object.organizationId,
@@ -313,7 +314,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     period: Date,
     organizationId: OrganizationId,
   ): Promise<void> {
-    await this.db.execute(
+    await this.catalogDb.execute(
       sql`update partition_archive set projected_at = now()
           where organization_id = ${organizationId}::uuid
             and table_name = ${table}
@@ -325,13 +326,13 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   // Objects first, rows second. A crash between the two leaves a row pointing at a
   // deleted object, which re-runs cleanly; the other order leaves an orphan forever.
   public async sweep(organizationId: OrganizationId): Promise<number> {
-    const rows = await this.db.execute<{ object_key: string }>(
+    const rows = await this.catalogDb.execute<{ object_key: string }>(
       sql`select object_key from partition_archive where organization_id = ${organizationId}::uuid`,
     );
 
     for (const row of rows.rows) await this.storage.delete(row.object_key);
 
-    await this.db.execute(
+    await this.catalogDb.execute(
       sql`delete from partition_archive where organization_id = ${organizationId}::uuid`,
     );
 
@@ -473,7 +474,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     table: PartitionedTableName,
     organizationId: OrganizationId,
   ): Promise<readonly PartitionArchiveEntry[]> {
-    const rows = await this.db.execute<EntryRow>(
+    const rows = await this.catalogDb.execute<EntryRow>(
       sql`select organization_id::text as organization_id, table_name, period::text as period,
                  object_key,
                  row_count, bytes::bigint::text as bytes, checksum, action_counts, projected_at
@@ -488,7 +489,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   // Reads the partial index on `(table_name, period) where projected_at is null`, which
   // is what keeps this off a scan over every tenant-month ever archived.
   public async gaps(table: PartitionedTableName): Promise<readonly ProjectionGap[]> {
-    const rows = await this.db.execute<{ period: string; tenants: string; rows: string }>(
+    const rows = await this.catalogDb.execute<{ period: string; tenants: string; rows: string }>(
       sql`select period::text as period,
                  count(*)::text as tenants,
                  coalesce(sum(row_count), 0)::text as rows
@@ -509,7 +510,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   // Tenants Postgres has forgotten and the bucket has not. `not exists` rather than a
   // left join: this runs nightly over a table that only grows.
   public async sweepDeleted(before: Date): Promise<DeletedTenantSweep> {
-    const rows = await this.db.execute<{ organization_id: string; object_key: string }>(
+    const rows = await this.catalogDb.execute<{ organization_id: string; object_key: string }>(
       sql`select pa.organization_id, pa.object_key
           from partition_archive pa
           where pa.archived_at < ${before.toISOString()}::timestamptz
@@ -522,7 +523,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       organizations.add(row.organization_id);
       // One row at a time, after its object: a crash leaves a row pointing at a
       // deleted object, which re-runs cleanly, rather than an orphan nothing names.
-      await this.db.execute(
+      await this.catalogDb.execute(
         sql`delete from partition_archive
             where organization_id = ${row.organization_id}::uuid
               and object_key = ${row.object_key}`,
@@ -535,7 +536,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   // No `storage.delete()`, and that is the whole difference from `sweep`: the bucket
   // expired these objects itself, so deleting them again is a round trip per row.
   public async forget(table: PartitionedTableName, before: Date): Promise<number> {
-    const result = await this.db.execute(
+    const result = await this.catalogDb.execute(
       sql`delete from partition_archive
           where table_name = ${table}
             and period < ${PgPartitionArchiveGateway.iso(before)}::date`,
@@ -553,7 +554,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   ): Promise<readonly PartitionArchiveEntry[]> {
     const tenant = organizationId ? sql`and organization_id = ${organizationId}::uuid` : sql``;
 
-    const rows = await this.db.execute<EntryRow>(
+    const rows = await this.catalogDb.execute<EntryRow>(
       sql`select organization_id::text as organization_id, table_name, period::text as period,
                  object_key, row_count, bytes::bigint::text as bytes, checksum,
                  action_counts, projected_at
@@ -585,7 +586,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     period: string,
     organizationId: OrganizationId,
   ): Promise<string> {
-    const rows = await this.db.execute<{ object_key: string }>(
+    const rows = await this.catalogDb.execute<{ object_key: string }>(
       sql`select object_key from partition_archive
           where organization_id = ${organizationId}::uuid
             and table_name = ${table}

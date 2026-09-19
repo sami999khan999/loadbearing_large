@@ -8,5 +8,8 @@ export abstract class OrganizationReader {
   public abstract page(
     after: OrganizationId | null,
     limit: number,
+    // The tenants placed on one physical node, for a per-shard sweep. Absent is every
+    // tenant, which is what a loop that resolves each tenant's node itself wants.
+    onNode?: number,
   ): Promise<readonly OrganizationId[]>;
 }

@@ -3028,7 +3028,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   `packages/composition/src/shard/`. It is the fork's swap point rather than a computation, which
   is the whole point of it being a port at all.
 
-- [ ] `22.12` **`Container`** — `container.config.ts` `database` becomes
+- [x] `22.12` **`Container`** — `container.config.ts` `database` becomes
   `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl }[] }`; both
   `env.ts` collect `DATABASE_SHARD_<n>_*` with a `z.preprocess` over `process.env` keys (still
   the one reader). `Container` builds `DatabaseCluster`, `ShardScope`,
@@ -3154,7 +3154,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   does not. A subscriber that writes notifications is writing a routed table, and the drain that
   queued its job placed nothing — so the delivery places itself on the event's own tenant.
 
-- [ ] `22.16` **The five cross-tenant paths loop the cluster** — `OutboxConsumer.drain` runs
+- [x] `22.16` **The five cross-tenant paths loop the cluster** — `OutboxConsumer.drain` runs
   `container.outbox.drain` once per physical shard (`PgOutboxGateway` takes the `Database` it
   drains; `SKIP LOCKED` is per shard and two replicas still share each); `MaintenanceConsumer`
   ensures and prunes partitions on every shard (`PgMaintenanceGateway` likewise);

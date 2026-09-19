@@ -41,20 +41,36 @@ export abstract class BaseRepository {
     return open.client;
   }
 
+  // **The one sanctioned crossing**, and only from `local`: a sweep that detaches a
+  // partition on a node and records what it did in a catalog index. See sharding.md.
+  protected get catalogDb(): DrizzleClient {
+    if (this.placement !== "local") {
+      throw new InternalError(
+        new Error(`A ${this.placement} repository reaching past its own placement.`),
+      );
+    }
+
+    // Never the open transaction's client. That transaction is on whichever node the
+    // sweep is walking, and the index row does not live there.
+    return this.cluster.catalog().client;
+  }
+
   // The direct pool, for the DDL a transaction pooler cannot carry. Never inside a
   // transaction, which is what makes it direct.
   protected get direct(): Database {
-    return this.placement === "routed"
-      ? this.cluster.directAt(this.node())
-      : this.cluster.directCatalog();
+    if (this.placement === "catalog") return this.cluster.directCatalog();
+    if (this.placement === "routed") return this.cluster.directAt(this.node());
+
+    return this.cluster.directAt(this.shards.current()?.node ?? 0);
   }
 
   private pool(): Database {
-    // `local` off the catalog pool when nothing is open. A local write outside any
-    // transaction already breaks the outbox rules, so this is the honest default.
-    if (this.placement !== "routed") return this.cluster.catalog();
+    if (this.placement === "catalog") return this.cluster.catalog();
+    if (this.placement === "routed") return this.cluster.at(this.node());
 
-    return this.cluster.at(this.node());
+    // `local` follows the node a sweep placed itself on, and falls back to the catalog
+    // pool outside one — node 0 is the only node an unsharded deployment has.
+    return this.cluster.at(this.shards.current()?.node ?? 0);
   }
 
   private node(): number {

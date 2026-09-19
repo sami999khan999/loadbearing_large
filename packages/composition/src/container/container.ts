@@ -238,9 +238,6 @@ export class Container {
 
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
-  // The same server with no pooler in front, and a pool of one: it exists for DDL the
-  // archive runs on a schedule, not for request traffic.
-  private readonly directDatabase: Database;
   private readonly poolProbe: ReturnType<typeof setInterval>;
   private readonly poolProbeMs: number;
   // Consecutive ticks with somebody waiting. Reset the moment the queue clears, so the
@@ -505,7 +502,6 @@ export class Container {
     this.sharding = new OrganizationShardingStrategy();
 
     this.database = this.cluster.catalog();
-    this.directDatabase = this.cluster.directCatalog();
 
     // Unreferenced, so a script that builds a container and finishes is not held open by
     // a timer nobody is reading.
@@ -1196,6 +1192,16 @@ export class Container {
   public async placed<T>(principal: Principal, work: () => Promise<T>): Promise<T> {
     const key = this.sharding.keyOf(principal);
     return this.shards.within({ key, node: await this.shardResolver.resolve(key) }, work);
+  }
+
+  // **The one place a cross-tenant sweep is placed**, and it is per node rather than
+  // per tenant: the outbox, the partition runway and the digest fan-out are per node.
+  public async eachShard(work: (node: number) => Promise<void>): Promise<void> {
+    // Serial, not `Promise.all`. These are the DDL and drain passes, and running them
+    // against every node at once multiplies this process's pool by the shard count.
+    for (let node = 0; node < this.cluster.size; node += 1) {
+      await this.shards.atNode(node, () => work(node));
+    }
   }
 
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body

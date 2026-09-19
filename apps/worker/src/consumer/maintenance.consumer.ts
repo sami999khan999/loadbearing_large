@@ -194,17 +194,19 @@ export class MaintenanceConsumer {
     });
   }
 
-  // Every month-partitioned table from the allowlist: the runway first, per tenant where
-  // it has a tenant level, then the retention pass once for the table.
+  // Every month-partitioned table from the allowlist, on every node: a partition is
+  // physical, so the runway is per node and so is the month that leaves for cold storage.
   private async partitions(): Promise<void> {
-    // One query for the whole run rather than one per table. An absent row is the code
-    // default, so this map is usually empty and the allowlist answers everything.
+    // One query for the whole run rather than one per table or per node. An absent row
+    // is the code default, so this map is usually empty and the allowlist answers all.
     const rows = await this.container.retentionPolicies.forPostgres();
 
-    for (const entry of PartitionedTable.MONTH_PARTITIONED) {
-      await this.ensure(entry);
-      await this.prune(entry.name, rows.get(entry.name));
-    }
+    await this.container.eachShard(async (node) => {
+      for (const entry of PartitionedTable.MONTH_PARTITIONED) {
+        await this.ensure(entry, node);
+        await this.prune(entry.name, rows.get(entry.name), node);
+      }
+    });
   }
 
   // The daily converger. Neither store is written by a save alone: the call after the
@@ -304,7 +306,10 @@ export class MaintenanceConsumer {
 
   // The runway, walked per tenant. That product is what bounds how many tenants a node
   // carries.
-  private async ensure(entry: PartitionedTableEntry & { name: PartitionedTableName }) {
+  private async ensure(
+    entry: PartitionedTableEntry & { name: PartitionedTableName },
+    node: number,
+  ) {
     if (!entry.tenantKey) {
       await this.partitionsFor(entry.name, null);
       return;
@@ -313,7 +318,13 @@ export class MaintenanceConsumer {
     let after: OrganizationId | null = null;
 
     for (;;) {
-      const page = await this.container.organizations.page(after, MaintenanceConsumer.TENANT_PAGE);
+      // This node's tenants, not every tenant: a tenant's partition exists on the one
+      // node holding its rows, and ensuring it everywhere is the shard count in DDL.
+      const page = await this.container.organizations.page(
+        after,
+        MaintenanceConsumer.TENANT_PAGE,
+        node,
+      );
       if (page.length === 0) break;
 
       for (const organizationId of page) await this.partitionsFor(entry.name, organizationId);
@@ -373,6 +384,7 @@ export class MaintenanceConsumer {
   private async prune(
     table: PartitionedTableName,
     policy: RetentionPolicyRecord | undefined,
+    node: number,
   ): Promise<void> {
     // The row, then the allowlist. An absent row **is** the code default, which is what
     // makes an empty `retention_policy` behave exactly as the deploy before it did.
@@ -403,7 +415,7 @@ export class MaintenanceConsumer {
     // there are none, and the common case stays one call per table-month.
     const overrides = await this.container.tenantRetentionPolicies.forTable(table);
     if (overrides.size > 0) {
-      await this.pruneByTenant(table, months, overrides);
+      await this.pruneByTenant(table, months, overrides, node);
       return;
     }
 
@@ -418,12 +430,17 @@ export class MaintenanceConsumer {
     table: PartitionedTableName,
     defaultMonths: number,
     overrides: ReadonlyMap<OrganizationId, TenantRetentionPolicyRecord>,
+    node: number,
   ): Promise<void> {
     const now = this.container.clock.now();
     let after: OrganizationId | null = null;
 
     for (;;) {
-      const page = await this.container.organizations.page(after, MaintenanceConsumer.TENANT_PAGE);
+      const page = await this.container.organizations.page(
+        after,
+        MaintenanceConsumer.TENANT_PAGE,
+        node,
+      );
       if (page.length === 0) break;
 
       for (const organizationId of page) {

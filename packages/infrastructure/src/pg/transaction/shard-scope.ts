@@ -4,7 +4,9 @@ import { AsyncLocalStorage } from "../../import.js";
 // A key and the node it resolved to. **Both**, because the node is what a pool lookup
 // needs and the key is what a log line and a nested resolve need.
 export interface PlacedShard {
-  readonly key: ShardKey;
+  // `null` in a cross-tenant sweep, which is placed on a node without being placed on
+  // a tenant — the outbox drain and the partition runway are every tenant on that node.
+  readonly key: ShardKey | null;
   readonly node: number;
 }
 
@@ -23,6 +25,12 @@ export class ShardScope {
   // `BaseRepository.db` can stay synchronous: the one await happens once, out here.
   public async within<T>(placed: PlacedShard, work: () => Promise<T>): Promise<T> {
     return this.storage.run(placed, work);
+  }
+
+  // A node with no tenant: what a per-shard sweep runs inside. It places `local` work
+  // and a routed read of *every* tenant on the node, which is what a sweep is.
+  public async atNode<T>(node: number, work: () => Promise<T>): Promise<T> {
+    return this.storage.run({ key: null, node }, work);
   }
 
   // For a caller that owns the rest of its context and has no callback to wrap — a

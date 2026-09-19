@@ -225,3 +225,43 @@ one-second schedule, means the drain is not running rather than that it is busy.
 > `QueueName.NOTIFICATION` still has no consumer. It gains one in Phase 3 of
 > [`plans/archive/COMMUNICATION-PLAN.md`](../../../../plans/archive/COMMUNICATION-PLAN.md), with the digest
 > schedule. `DigestComposer`, which nothing but its own spec ever constructed, is deleted.
+
+## Every cross-tenant pass loops the cluster, and the loop is over nodes
+
+Five passes in this worker read or write without a tenant in hand, and each one is now wrapped in
+`container.eachShard`, which enters a **node-only** shard scope: `{ key: null, node }`. Inside it,
+`BaseRepository` resolves a `local` table to that node's pool and a routed read to that node's
+tenants, and `PgUnitOfWork` opens its transaction there. Outside it, both fall back to node 0 —
+which is the only node an unsharded deployment has, so today the loop runs once and nothing
+changes.
+
+| Pass | What loops | What does not |
+|---|---|---|
+| `OutboxConsumer.drain` | the claim and the mark, per node | the fan-out: one Redis for the deployment |
+| `OutboxConsumer.reportLag` | `oldestPendingAt`, per node | the line — one a run, from the **worst** node |
+| `MaintenanceConsumer.partitions` | the runway and the prune, per node | `retentionPolicies`, read once for the run |
+| `AnalyticsConsumer` project / reconcile | **per tenant**, not per node | the checkpoint: one ClickHouse, keyed by tenant |
+| `NotificationConsumer.fanOut` | `digestOrganizations`, per node | the queue, and the per-tenant `digest` job |
+
+**The projection is the one that loops tenants rather than nodes**, and that is not an
+inconsistency. The other four are physical — a partition, an outbox row and a `SKIP LOCKED` claim
+all belong to one database. A projection is one tenant's activity going to one ClickHouse, so it
+places each tenant through the resolver and needs no per-node checkpoint and no `shard` column in
+the analytics store. A tenant that moves resumes exactly where it was.
+
+**The tenant page is narrowed by node, not filtered after the fact.**
+`OrganizationReader.page(after, limit, onNode)` adds a correlated `EXISTS` over
+`shard_assignments` — both catalog tables, so it stays one query. Without it, ensuring a runway
+would read every tenant once per node and issue the DDL for tenants that are not there.
+
+**`MaintenanceConsumer.cleanup` deliberately does not loop.** `sessions`, `verifications` and
+`invitations` are catalog tables; sweeping them once per node would sweep the catalog N times.
+
+**`PgPartitionArchiveGateway` is the one class that spans two placements on purpose.** It detaches
+a partition on whichever node the sweep is walking and records what it did in `partition_archive`,
+which is catalog — one index, read before any shard is known. Those statements go through
+`BaseRepository.catalogDb`, which throws for any placement but `local` and never uses the open
+transaction's client. The object key is unchanged by sharding: a tenant lives on one node, so
+`cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz` is already unique, and a shard index in the
+key or the row would name the shard the tenant *had* the day it moves.
+

@@ -62,9 +62,13 @@ export class PgUnitOfWork extends UnitOfWork {
     const open = this.scope.current();
     if (open) return open.client;
 
-    if (this.placement !== "routed") return this.cluster.catalog().client;
+    if (this.placement === "catalog") return this.cluster.catalog().client;
 
     const placed = this.shards.current();
+    // `local` on the node a sweep placed itself on, node 0 outside one — the same
+    // resolution `BaseRepository.pool` does, so a nested run sees what it sees.
+    if (this.placement === "local") return this.cluster.at(placed?.node ?? 0).client;
+
     if (!placed) {
       throw new InternalError(new Error("A routed transaction with no shard in scope."));
     }

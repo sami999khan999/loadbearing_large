@@ -78,6 +78,29 @@ That was the only crossing in the repository, so `CROSS_PLACEMENT_KNOWN` in
 `check-architecture` §22 is **empty**. An assertion with an exception set that is never emptied
 records a rule rather than guarding one.
 
+## A sweep is placed on a node, not on a tenant
+
+`ShardScope` holds `{ key, node }`, and `key` is `null` in a cross-tenant pass:
+`ShardScope.atNode` is what the outbox drain, the partition runway and the digest fan-out run
+inside, through `Container.eachShard`. Serial, not `Promise.all` — these are DDL and drain passes,
+and running them against every node at once multiplies this process's pool by the shard count.
+
+Inside a node-only scope a `local` table resolves to that node's pool rather than the catalog's,
+which is the whole point: `outbox_event` and `activity_log` exist on every node and the row you
+want is on the one you are walking. Outside any scope both fall back to node 0. Which passes loop
+and which deliberately do not is [the consumers](../../../../apps/worker/docs/reference/consumers.md).
+
+### `catalogDb` is the one sanctioned crossing
+
+`PgPartitionArchiveGateway` detaches a partition on the node it is walking and records the object
+in `partition_archive`, which is catalog. That is a genuine span, not an accident, and
+`BaseRepository.catalogDb` is where it goes: it throws for any placement but `local`, and it
+returns the catalog pool's client rather than the open transaction's — that transaction is on the
+node being swept, and the index row does not live there.
+
+It is deliberately the only one. A routed repository reaching the catalog is what `22.10` split a
+reader to avoid, and the guard makes that call a throw rather than a review comment.
+
 ## `PgShardResolver` is not a `BaseRepository`, and takes thunks
 
 It is what `DatabaseCluster.forKey` calls. A resolver that routed would ask itself where it

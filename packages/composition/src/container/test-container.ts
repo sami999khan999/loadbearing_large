@@ -110,6 +110,9 @@ export interface TestHarness extends TestPorts {
   // What a consumer calls to place a job. Every fake here is in memory and consults
   // no shard, so this runs the work — a spec asserting placement uses a real scope.
   readonly placed: <T>(principal: Principal, work: () => Promise<T>) => Promise<T>;
+  // The cross-tenant sweep's loop. One node here, which is what an in-memory fake is:
+  // a spec asserting the loop runs per node builds a real cluster.
+  readonly eachShard: (work: (node: number) => Promise<void>) => Promise<void>;
 }
 
 export class TestContainer {
@@ -127,6 +130,7 @@ export class TestContainer {
       logger: new SilentLogger(),
       authorizer: new Authorizer(),
       placed: (_principal, work) => work(),
+      eachShard: (work) => work(0),
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),

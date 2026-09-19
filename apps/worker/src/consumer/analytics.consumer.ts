@@ -1,3 +1,4 @@
+import { withShard } from "../bootstrap/index.js";
 import {
   type ActivityAction,
   type ActivityRecord,
@@ -184,10 +185,14 @@ export class AnalyticsConsumer {
         tenants += 1;
         if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) continue;
 
-        const outcome = await this.projectTenantOrReport(
-          organizationId,
-          AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
-          excluding,
+        // Placed per tenant rather than per node: the read side is routed
+        // `activity_log` and the write side is one ClickHouse for the deployment.
+        const outcome = await withShard(this.container, organizationId, () =>
+          this.projectTenantOrReport(
+            organizationId,
+            AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
+            excluding,
+          ),
         );
         projected += outcome.projected;
         batches += outcome.batches;
@@ -339,7 +344,9 @@ export class AnalyticsConsumer {
       if (page.length === 0) break;
 
       for (const organizationId of page) {
-        const outcome = await this.reconcileTenant(organizationId, from, to, excluding);
+        const outcome = await withShard(this.container, organizationId, () =>
+          this.reconcileTenant(organizationId, from, to, excluding),
+        );
         days += outcome.days;
         drifted += outcome.drifted;
       }

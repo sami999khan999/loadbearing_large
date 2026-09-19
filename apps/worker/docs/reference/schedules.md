@@ -97,3 +97,16 @@ each tenant is before it stamps `partition_archive.projected_at`. A tenant the p
 caught up with keeps a null stamp and gets an `analytics.projection.gap` line. The month is
 archived and dropped either way — a forgotten switch costs a known hole, never an unbounded table.
 See [`cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
+
+## A schedule fires once; the job it enqueues walks every node
+
+None of these registrations grew a shard dimension, and none should. A repeatable entry per node
+would be N entries to keep idempotent, N to deregister when a node is retired, and a fan-out that
+disagrees with the cluster the moment they drift. The schedule stays one entry, and the consumer
+loops — see [the consumers](consumers.md).
+
+`partitions-monthly` is the one where that matters most: the deadline is physical. A node with no
+partition for next month rejects inserts on the first, and `runOnce()` at boot recovers the runway
+on **every** node because the job it enqueues does, not because the schedule knows how many there
+are.
+

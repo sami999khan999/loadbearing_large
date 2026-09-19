@@ -1,4 +1,4 @@
-import { SystemPrincipal } from "../bootstrap/index.js";
+import { SystemPrincipal, withShard } from "../bootstrap/index.js";
 import {
   type Container,
   type Job,
@@ -66,9 +66,17 @@ export class NotificationConsumer {
   // one organization must not stop the other four thousand.
   private async fanOut(): Promise<void> {
     const day = NotificationConsumer.dayOf(this.container.clock.now());
-    const organizations = await this.container.notification.digestOrganizations.execute(
-      SystemPrincipal.platform(),
-    );
+    const organizations: OrganizationId[] = [];
+
+    // `notification_preferences` is routed, so "which tenants have anyone to write to"
+    // is a question each node answers about the tenants it holds.
+    await this.container.eachShard(async () => {
+      organizations.push(
+        ...(await this.container.notification.digestOrganizations.execute(
+          SystemPrincipal.platform(),
+        )),
+      );
+    });
 
     for (const organizationId of organizations.slice(0, MAX_ORGANIZATIONS)) {
       await this.container.queue.publish(
@@ -91,10 +99,14 @@ export class NotificationConsumer {
   }
 
   private async digest(data: DigestJobData): Promise<void> {
-    await this.container.notification.sendDigest.execute(SystemPrincipal.platform(), {
-      organizationId: data.organizationId as OrganizationId,
-      day: data.day,
-    });
+    // The fan-out placed nothing on this job beyond the tenant id, and the digest reads
+    // routed tables: it is placed here, once, the same shape every per-tenant job takes.
+    await withShard(this.container, data.organizationId, () =>
+      this.container.notification.sendDigest.execute(SystemPrincipal.platform(), {
+        organizationId: data.organizationId as OrganizationId,
+        day: data.day,
+      }),
+    );
   }
 
   // UTC, and from the clock rather than the payload for the fan-out: a redelivered job

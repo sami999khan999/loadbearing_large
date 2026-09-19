@@ -194,6 +194,18 @@ against a live store rather than in a unit test.
 
 ---
 
+## One ClickHouse for the deployment, and no `shard` column
+
+The projection loop places **each tenant** on the node that holds its `activity_log`, rather than
+walking nodes and projecting whatever is on each. That is the difference between a checkpoint per
+tenant and a checkpoint per tenant *per node*, and only the first one survives a tenant moving:
+`projection_checkpoint` is keyed by organization, so a tenant that lands on another node resumes
+exactly where it was.
+
+A `shard` column here would record where a row happened to be read from, which is a fact about
+last Tuesday's topology and not about the tenant. Nothing would query it and the first rebalance
+would make every existing value wrong. See [sharding](sharding.md).
+
 ## Adopting it, in the supported order
 
 ```bash

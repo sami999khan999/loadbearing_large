@@ -81,19 +81,25 @@ export class OutboxConsumer {
     }
   }
 
+  // `outbox_event` is on every node and the relay is not, so the drain is per node.
+  // `SKIP LOCKED` still shares each node between replicas; the loop adds no coordinator.
   private async drain(): Promise<void> {
     let events = 0;
     let jobs = 0;
 
-    for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
-      const drained = await this.container.outbox.drain(BATCH_SIZE, async (claimed) => {
-        jobs += await this.fanOut(claimed);
-      });
+    await this.container.eachShard(async () => {
+      // The batch budget is per node, not per run: a busy node must not spend the
+      // budget the node after it needs, and a run is a second long either way.
+      for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
+        const drained = await this.container.outbox.drain(BATCH_SIZE, async (claimed) => {
+          jobs += await this.fanOut(claimed);
+        });
 
-      events += drained;
-      // A short batch means the outbox is empty; the next tick is a second away.
-      if (drained < BATCH_SIZE) break;
-    }
+        events += drained;
+        // A short batch means this node's outbox is empty; the next tick is a second away.
+        if (drained < BATCH_SIZE) break;
+      }
+    });
 
     this.container.logger.emit("outbox.drain.completed", { events, jobs });
     await this.reportLag();
@@ -142,7 +148,19 @@ export class OutboxConsumer {
   // Without this, a drain that has stopped running is silent: "no events published" and
   // "no events to publish" produce the same line.
   private async reportLag(): Promise<void> {
-    const oldest = await this.container.outbox.oldestPendingAt();
+    const pending: Date[] = [];
+
+    // The worst node, not the first: one line a run stays one line, and a lag reported
+    // as the healthiest node's is a lag nobody sees.
+    await this.container.eachShard(async () => {
+      const at = await this.container.outbox.oldestPendingAt();
+      if (at) pending.push(at);
+    });
+
+    const oldest = pending.reduce<Date | null>(
+      (worst, at) => (worst === null || at < worst ? at : worst),
+      null,
+    );
     if (!oldest) return;
 
     const ageMs = this.container.clock.now().getTime() - oldest.getTime();
