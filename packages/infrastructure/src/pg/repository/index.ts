@@ -28,6 +28,7 @@ export { PgRetentionPolicyRepository } from "./pg-retention-policy.repository.js
 export { PgRoleRepository } from "./pg-role.repository.js";
 export { PgShardResolver } from "./pg-shard.resolver.js";
 export { PgShardAssignmentRepository } from "./pg-shard-assignment.repository.js";
+export { PgShardMapReader } from "./pg-shard-map.reader.js";
 export { PgTenantRepository } from "./pg-tenant.repository.js";
 export { PgTenantRetentionPolicyRepository } from "./pg-tenant-retention-policy.repository.js";
 export { PgTenantStorageReader } from "./pg-tenant-storage.reader.js";

@@ -48,6 +48,7 @@ export {
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,
+  PgShardMapReader,
   PgShardResolver,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
