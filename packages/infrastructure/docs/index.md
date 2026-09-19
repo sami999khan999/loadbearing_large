@@ -268,6 +268,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   are not optional, and which reads prune to one month and which read every one.
 - [Sharding](reference/sharding.md) — one key, one node, three placements; why `this.db` stays
   synchronous, and the tripwire that makes one Postgres reveal what a split would break.
+- [Notification recipients](reference/notification-recipients.md) — four audiences, the
+  correlated `EXISTS` that keeps one a single statement, and the one read that is two on purpose.
 - [Cold storage](reference/cold-storage.md) — the tenant-month as the unit, the `cold/` prefix,
   `partition_archive` as the index a read starts from, and the restore that proves the difference.
 - [The bucket's lifecycle policy](reference/storage-policy.md) — why a second gateway, why "no

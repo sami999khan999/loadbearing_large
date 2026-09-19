@@ -69,9 +69,12 @@ export abstract class ConversationRepository {
     userId: UserId,
   ): Promise<boolean>;
 
+  // Ordered by user id, and `limit` caps a fan-out rather than paging one: the
+  // recipient read takes the routed half here and resolves it on the catalog.
   public abstract memberIds(
     organizationId: OrganizationId,
     conversationId: ConversationId,
+    limit?: number,
   ): Promise<readonly UserId[]>;
 
   public abstract saveMember(

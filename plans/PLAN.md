@@ -2971,7 +2971,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   the same placement is not a move. `save` invalidates the resolver's cache, which is the half
   that would otherwise leave a moved tenant reading the node it left.
 
-- [ ] `22.10` **`PgNotificationRecipientReader.conversationMembers` is split** — filed by the
+- [x] `22.10` **`PgNotificationRecipientReader.conversationMembers` is split** — filed by the
   audit at `22.18`, and it is the only cross-placement query in the repository. The method joins
   `conversation_members` (routed) to `users` and `memberships` (both catalog) in one statement, so
   it has no plan at all once the two sit on different physical databases — unlike everything else
@@ -2990,6 +2990,16 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   `reference/meta.json` and named from `packages/infrastructure/docs/index.md`. Also
   `packages/application/docs/reference/notification-policy.md`, `sharding.md`.
   **Depends on:** `22.6`.
+  `done: 2026-09-19` — split as prescribed: `memberIds` on the routed shard, then the existing
+  `users(organizationId, userIds)` on the catalog. `corrected:` `ConversationRepository.memberIds`
+  had no `limit` and no ordering, so it gained both — ordered, because a capped read without one
+  hands back a different slice each call. `corrected:` the cap moved with the split: it used to
+  apply after the join, so `limit` meant "up to N *active* recipients" and now means "up to N
+  members, minus any deactivated". `RECIPIENT_LIMIT` is 500 and is a fan-out ceiling rather than a
+  page size, so the difference is not one a caller can observe usefully — the doc says so.
+  `done:` `CROSS_PLACEMENT_KNOWN` is **empty**, before Phase 22 ends rather than at `24.1`, so §22
+  guards a rule instead of recording an exception. `done:` `notification-recipients.md` written
+  and registered — the reader's own comment had deferred to it for the whole of its life.
 
 #### The strategy and the policy the kit ships (`composition`)
 

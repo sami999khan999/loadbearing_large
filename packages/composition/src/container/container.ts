@@ -592,10 +592,18 @@ export class Container {
       this.transactions,
       this.shards,
     );
+    // Built here rather than with the messaging slice below, because the recipient
+    // reader takes it: `conversationMembers` is a routed read and a catalog resolve.
+    const conversations = new PgConversationRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
     const notificationRecipients = new PgNotificationRecipientReader(
       this.cluster,
       this.transactions,
       this.shards,
+      conversations,
     );
 
     this.notification = {
@@ -640,11 +648,6 @@ export class Container {
       digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
     };
 
-    const conversations = new PgConversationRepository(
-      this.cluster,
-      this.transactions,
-      this.shards,
-    );
     const messages = new PgMessageRepository(this.cluster, this.transactions, this.shards);
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.

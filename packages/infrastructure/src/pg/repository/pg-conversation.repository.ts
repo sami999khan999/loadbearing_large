@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   type ConversationId,
   type ConversationMemberRecord,
   type ConversationMemberRole,
@@ -181,11 +182,14 @@ export class PgConversationRepository extends BaseRepository implements Conversa
     return row !== undefined;
   }
 
+  // Ordered, so two calls over the same conversation return the same page — without
+  // it a capped read would hand back a different slice each time.
   public async memberIds(
     organizationId: OrganizationId,
     conversationId: ConversationId,
+    limit?: number,
   ): Promise<readonly UserId[]> {
-    const rows = await this.db
+    const query = this.db
       .select({ userId: conversationMembers.userId })
       .from(conversationMembers)
       .where(
@@ -193,7 +197,10 @@ export class PgConversationRepository extends BaseRepository implements Conversa
           eq(conversationMembers.organizationId, organizationId),
           eq(conversationMembers.conversationId, conversationId),
         ),
-      );
+      )
+      .orderBy(asc(conversationMembers.userId));
+
+    const rows = await (limit === undefined ? query : query.limit(limit));
 
     return rows.map((row) => row.userId);
   }

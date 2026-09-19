@@ -7,6 +7,7 @@
     "pgvector",
     "partitions",
     "sharding",
+    "notification-recipients",
     "cold-storage",
     "storage-policy",
     "clickhouse",

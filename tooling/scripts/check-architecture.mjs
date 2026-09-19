@@ -1226,9 +1226,10 @@ assert("every partitioned table is on the allowlist, with the same keys", (failu
 // catches the file-level case before anything runs. See
 // packages/infrastructure/docs/reference/sharding.md.
 
-// `24.1` empties this. One file today, audited: it resolves an audience out of RBAC on
-// the catalog and reads `notification_preferences`, which is routed.
-const CROSS_PLACEMENT_KNOWN = new Set(["pg-notification-recipient.reader.ts"]);
+// **Empty, and that is the point.** `22.10` split the one file that was in it, so this
+// assertion guards a rule rather than recording an exception to one.
+/** @type {ReadonlySet<string>} */
+const CROSS_PLACEMENT_KNOWN = new Set();
 
 assert("every repository reads tables of one placement", (failures) => {
   const dir = join(ROOT, "packages/infrastructure/src/pg");
@@ -1253,7 +1254,7 @@ assert("every repository reads tables of one placement", (failures) => {
     // Every identifier imported from a schema module, mapped back to its table name
     // through the schema files themselves — the import name is camelCase.
     const imported = [...source.matchAll(/import \{([^}]*)\} from "[^"]*schema\/[a-z.-]+\.js";/g)]
-      .flatMap((match) => match[1].split(","))
+      .flatMap((match) => (match[1] ?? "").split(","))
       .map((name) => name.trim())
       .filter((name) => name.length > 0 && !name.startsWith("type "));
 

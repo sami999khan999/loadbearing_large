@@ -25,6 +25,18 @@ tenant would otherwise write a hundred rows per joiner, which is the write ampli
 **`member.role.changed` emails immediately.** What somebody may do just changed, and it is the one
 thing they cannot discover by looking.
 
+## `conversationMembers` costs two queries, and the other audiences cost one
+
+The audience a row names is resolved by `NotificationRecipientReader`, and three of the four are
+a single statement. `conversationMembers` is two, because `conversation_members` is routed and
+`users` and `memberships` are catalog — see
+[the recipient reader](../../../infrastructure/docs/reference/notification-recipients.md).
+
+That matters when writing a new policy row: an audience is resolved once per event, so the
+difference is one extra round trip per delivery rather than per recipient. What would not be
+acceptable is an audience whose resolution is one query *per* recipient, and no row here asks
+for one.
+
 ## The subscriber's `events` list *is* this table's keys
 
 `NotificationSubscriber.events` is `NotificationPolicy.events()`. A row added here is delivered

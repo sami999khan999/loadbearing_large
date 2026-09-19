@@ -67,6 +67,17 @@ call sites in a test run and finding them in production.
 throws rather than becoming a savepoint. A catalog use-case calling a routed one inside its
 transaction is precisely the coupling a split cannot honour.
 
+## The one read that crossed, and how it was split
+
+`PgNotificationRecipientReader.conversationMembers` joined routed `conversation_members` to
+catalog `users` and `memberships` in one statement. It is now two: the routed ids first, then the
+catalog resolve — see
+[notification recipients](notification-recipients.md).
+
+That was the only crossing in the repository, so `CROSS_PLACEMENT_KNOWN` in
+`check-architecture` §22 is **empty**. An assertion with an exception set that is never emptied
+records a rule rather than guarding one.
+
 ## `PgShardResolver` is not a `BaseRepository`, and takes thunks
 
 It is what `DatabaseCluster.forKey` calls. A resolver that routed would ask itself where it
