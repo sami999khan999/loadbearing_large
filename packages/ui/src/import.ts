@@ -19,7 +19,16 @@ export type {
   Ref,
   TextareaHTMLAttributes,
 } from "react";
-export { Children, cloneElement, isValidElement, useMemo } from "react";
+export {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 // ── uqr ──────────────────────────────────────────────────────────────────────
 // The only runtime dependency other than the sprite. It computes a module matrix rather

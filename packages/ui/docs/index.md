@@ -181,11 +181,18 @@ consumer and therefore a decision, not a file. One catalog line in the React-sco
 wrapper here when that is made. A dialog that traps focus incorrectly is worse than one that does not
 exist, because the first ships.
 
+**`Popover` is not the exception to that**, and the distinction is worth stating because the two
+look alike. A popover is non-modal: the page behind it stays live, Tab moves out of it, and
+nothing is inerted. There is no trap to get wrong, which is exactly why one could be written here
+and a dialog could not. See [Popover](reference/popover.md) for what it deliberately is not, and
+for why it is React state rather than the native `popover` attribute.
+
 **No Storybook, and no `*.stories.tsx`.** Doc 22 offers Storybook or a `/kitchen-sink` route in
 `apps/web` and says to pick one deliberately. The route is what was picked —
-`apps/web/src/route/(dev)/kitchen-sink.tsx` renders ten of the eleven components against every theme
-and every mode, with no second build, no second dependency tree and no story files to keep in step
-with the components. `Can` is the eleventh and has nothing to show: it renders no element of its own.
+`apps/web/src/route/(dev)/kitchen-sink.tsx` renders eleven of the twelve components against every
+theme and every mode, with no second build, no second dependency tree and no story files to keep in
+step with the components. `Can` is the twelfth and has nothing to show: it renders no element of
+its own.
 The component tests under `tests/`, on `jsdom` and `@testing-library/react`, are the other half: they
 assert *behaviour* where the route shows *appearance*.
 
@@ -202,8 +209,8 @@ assert *behaviour* where the route shows *appearance*.
 
 **No third-party design system.** Every component carries a `ui-*` class, and those class names are
 the contract: `theme/class/*.css` is what they resolve to, exported separately from `theme.css` so a
-consumer can take the tokens and write its own look. Ten of the eleven components have a stylesheet
-there; `Can` renders no element of its own. Keeping the hooks and the styling in two files is what
+consumer can take the tokens and write its own look. Eleven of the twelve components have a
+stylesheet there; `Can` renders no element of its own. Keeping the hooks and the styling in two files is what
 makes a design pass a rewrite of one directory rather than of every component.
 
 ## Testing

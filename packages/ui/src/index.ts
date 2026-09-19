@@ -16,6 +16,7 @@ export { Field, type FieldProps } from "./field/index.js";
 export { ByteFormat, DateFormat } from "./format/index.js";
 export { Icon, type IconName, type IconProps, IconRegistry } from "./icon/index.js";
 export { Input, type InputProps } from "./input/index.js";
+export { Popover, type PopoverAlign, type PopoverProps } from "./popover/index.js";
 export { QrCode, type QrCodeProps } from "./qr-code/index.js";
 export { type BadgeTone, StatusBadge, type StatusBadgeProps } from "./status-badge/index.js";
 export { Textarea, type TextareaProps } from "./textarea/index.js";
