@@ -2751,6 +2751,22 @@ rows; a user in another organization reading the same month gets nothing, proven
 than by the absence of a bug report; `notification.archived` with the permission revoked is a 403;
 a month that was never archived is an empty page.
 
+**Exit met 2026-09-19.** Verified:
+
+- **The whole path, against live Postgres and MinIO.** Seeded a 2024-05 `notifications` partition
+  with rows for two users, archived it through `PgPartitionArchiveGateway`, then read it back
+  through `S3ColdArchiveReader.page` — real gzip, real sha-256 verification, real ordinal paging:
+  page one and page two each returned one row with a next cursor, the second user's page returned
+  only theirs, and the two sets did not overlap. Swept afterwards; the database is as it was.
+- A user in another organization gets nothing for the same month, and the permission being absent
+  is a `ForbiddenError` — both specs, in
+  `packages/application/tests/notification/list-archived-notifications.use-case.spec.ts`, which is
+  where the item asks for them.
+- A month nobody archived is an empty page, also a spec.
+- `pnpm check:architecture` 21/21, typecheck, lint and every test package green.
+- **Not verified through a browser**, as in Phases 19 and 20: the archived section on
+  `/notifications` is wired and typechecked, and no clause below the API was clicked.
+
 ---
 
 ---
