@@ -133,6 +133,7 @@ import {
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
   ReprojectPartitionUseCase,
+  ResendInvitationUseCase,
   RestorePartitionUseCase,
   type RetentionPolicyRepository,
   RevokeApiKeyUseCase,
@@ -195,6 +196,9 @@ export interface MemberUseCases {
   readonly listInvitations: ListInvitationsUseCase;
   readonly inviteMember: InviteMemberUseCase;
   readonly revokeInvitation: RevokeInvitationUseCase;
+  // Beside `inviteMember` and not folded into it: a resend issues a new token for a
+  // row that exists, and an invite that silently reissued would hide a duplicate.
+  readonly resendInvitation: ResendInvitationUseCase;
   readonly changeMemberRole: ChangeMemberRoleUseCase;
   // One use-case behind two procedures: the direction is an argument, because the
   // column is one value and two classes would let them disagree about "active".
@@ -881,6 +885,14 @@ export class Container {
           invitations,
           this.activity,
           this.catalogUnitOfWork,
+        ),
+        resendInvitation: new ResendInvitationUseCase(
+          this.authorizer,
+          invitations,
+          new QueuedInvitationMailer(this.mailPublisher, config.email.baseUrl),
+          this.activity,
+          this.catalogUnitOfWork,
+          this.clock,
         ),
         changeMemberRole: new ChangeMemberRoleUseCase(
           this.authorizer,

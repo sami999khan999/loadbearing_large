@@ -110,6 +110,7 @@ export {
   type RenderedMail,
   ReprojectPartitionUseCase,
   type RequestHeaders,
+  ResendInvitationUseCase,
   type ResolvedSession,
   type RestoredMonth,
   RestorePartitionUseCase,
