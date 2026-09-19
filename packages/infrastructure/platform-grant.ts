@@ -23,7 +23,9 @@ const database = new Database({ url });
 const scope = new TransactionScope();
 
 const outcome = await database.client.transaction(async (tx) =>
-  scope.within(tx, async () => {
+  // `catalog`: every table this touches is one — `users`, `organizations`, `roles`,
+  // `memberships`. See `application/src/primitive/shard.ts`.
+  scope.within(tx, "catalog", async () => {
     const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (!user) throw new Error(`No user with email ${email}. They have to sign up first.`);
 

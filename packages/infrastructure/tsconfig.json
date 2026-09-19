@@ -5,7 +5,12 @@
     "src/**/*.tsx",
     "tests/**/*.ts",
     "tests/**/*.tsx",
+    "clickhouse-migrate.ts",
     "migrate.ts",
-    "seed.ts"
+    "partition-ddl.ts",
+    "partitions.ts",
+    "platform-grant.ts",
+    "seed.ts",
+    "shard-env.ts"
   ]
 }

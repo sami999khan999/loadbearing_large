@@ -112,7 +112,10 @@ for (const [index, node] of nodes.entries()) {
     let after: OrganizationId | null = null;
 
     for (;;) {
-      const page = await catalog.client.execute<{ id: OrganizationId }>(sql`
+      // Annotated, because `after` is read inside the query that produces `page` and
+      // written from it below — inferred, that is a circular initializer (TS7022).
+      const page: { readonly rows: readonly { id: OrganizationId }[] } =
+        await catalog.client.execute<{ id: OrganizationId }>(sql`
         select o.id::text as id
         from organizations o
         left join shard_assignments sa on sa.shard_key = o.id::text

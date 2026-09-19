@@ -544,8 +544,8 @@ complete on its own.
 ## B. Not done — every unchecked item in `PLAN.md`
 
 Thirty-two boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.2`, `26.8` and
-`26.9` closed. `23.17`, `23.18` and `26.12` were added and closed in the same night, so none of them ever had a
-box here. Phases 1–22 have none. The line number is the pointer; the body is not paraphrased here,
+`26.9` closed. `23.17`, `23.18`, `23.19` and `26.12` were added and closed in the same night, so none of them
+ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not paraphrased here,
 and the numbers drift as `PLAN.md` is edited above them.
 
 ### Phase 23 — Loose ends (no gate, any spare hour)
@@ -641,7 +641,7 @@ profile:
 
 | Check | Result |
 |---|---|
-| `CI=true pnpm check:architecture` | 25 of 25, no skip |
+| `CI=true pnpm check:architecture` | 26 of 26, no skip |
 | `pnpm typecheck` | clean |
 | `pnpm lint` | clean |
 | `pnpm test` | 18 packages, every file green |
@@ -727,3 +727,11 @@ Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is
   that `.env` had all along. Two lines in `drizzle.config.ts`, Node's own `loadEnvFile`, which does
   not overwrite a variable already set — so CI's job env still wins. It answered a question nobody
   had asked, too: **the migrations are in step with the schema**, which nothing else checks.
+- `23.19` **`pnpm platform:grant` crashed, and nothing typechecked it** — new, and the worst of the
+  four found by running things. It called a two-argument `TransactionScope.within` that had taken
+  three since Phase 22, and failed with a `TypeError` from inside `AsyncLocalStorage` that names
+  nothing. It is the documented way to make the **first platform admin** and there is no other, so
+  it would have failed at the one moment somebody needed it. The file sat outside its package's
+  `tsconfig` include, so `tsc` had never compiled it — and adding it turned up a second thing
+  nobody had compiled. **Assertion §26** is the durable half: every `*.ts` at a package root is
+  named in that package's `tsconfig.json`.

@@ -1437,6 +1437,36 @@ assert("`.env.example` documents every key an app requires", (failures) => {
   }
 });
 
+// ── 26 — every script above `src/` is typechecked ────────────────────────────
+//
+// A runnable script at a package root is code nothing imports, so nothing but `tsc`
+// can notice when a signature under it moves. `platform-grant.ts` sat outside its own
+// `include` and called a two-argument `TransactionScope.within` that had taken three
+// for a phase — a `TypeError` at the moment somebody needed the first platform admin.
+
+// `*.config.ts` is the exemption, and it is a category rather than a list: a tool config
+// is consumed by its own tool, which supplies types this `tsconfig` does not name.
+const TOOL_CONFIG = /\.config\.ts$/;
+
+assert("every script above `src/` is in its package's tsconfig", (failures) => {
+  const dirs = sourceDirs();
+  if (dirs.length === 0) return "no packages or apps to read";
+
+  for (const dir of dirs) {
+    const config = join(dir, "tsconfig.json");
+    if (!existsSync(config)) continue;
+
+    const include = readFileSync(config, "utf8");
+
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".ts") || file.endsWith(".d.ts") || TOOL_CONFIG.test(file)) continue;
+      if (include.includes(`"${file}"`)) continue;
+
+      failures.push(`${rel(join(dir, file))}: not in ${rel(config)}, so nothing typechecks it`);
+    }
+  }
+});
+
 let failed = 0;
 let skippedCount = 0;
 

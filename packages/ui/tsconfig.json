@@ -1,4 +1,11 @@
 {
   "extends": "@loadbearing/tsconfig/react.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "ui.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "vitest.setup.ts",
+    "ui.d.ts"
+  ]
 }

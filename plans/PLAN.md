@@ -3740,6 +3740,27 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     with `src/pg/schema/`, which nothing else in the repository checks.
 ## Phase 24 — The physical split 📁
 
+- [x] `23.19` **`pnpm platform:grant` crashed, and nothing typechecked it** `found: 2026-09-20` —
+  by running it, like `23.18`.
+  - **What was wrong, and it is the worse kind.** `platform-grant.ts` called
+    `TransactionScope.within(tx, work)` — two arguments, when the method has taken **three** since
+    the placement landed in `22.x`. The failure is
+    `Function.prototype.apply was called on undefined` from inside `AsyncLocalStorage`, which names
+    nothing about the call site. It is the documented way to make the **first platform admin** and
+    there is no other, so the failure waits for the one moment somebody needs it.
+  - **Why nothing caught it.** The file sits above `src/`, so nothing imports it, and it was not in
+    `packages/infrastructure/tsconfig.json`'s `include` — which named `migrate.ts` and `seed.ts`
+    and stopped there. `tsc` had never compiled it.
+  - **Fixed, and the hole with it.** The call takes `"catalog"`; every root script in that package
+    is now in the include, which immediately turned up a second thing nobody had compiled — a
+    `TS7022` circular initializer in `partitions.ts`. Three `vitest.setup.ts` files joined their
+    packages' includes for the same reason.
+  - **Assertion §26** is the durable half: every `*.ts` at a package root is named in that
+    package's `tsconfig.json`. One exemption, a category rather than a list — `*.config.ts`, which
+    its own tool supplies types for; `*.d.ts` is skipped as types rather than code. Five fixtures.
+  - **Verified by running it**, which is the point: `pnpm platform:grant nobody@…` now answers
+    *"No user with email …. They have to sign up first."*, and against a real row it answers
+    `granted:` and then `already:` on a second run.
 Filed, not built. Every item is the decision or the mechanism a second physical node needs, written
 down so the seam in Phase 22 is judged against a real target rather than a feeling.
 
@@ -4224,7 +4245,7 @@ Every ID the archive and the doc pages use, and the number it has here. Decision
 
 | Date | Who | Change |
 |---|---|---|
-| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
+| 2026-09-20 | @sami | Six of section B closed, two more filed and closed the same night. `23.13` — assertion §24, every event code has an emitter, which found `shard.assignment.created` had none. `23.16` — the web boot smoke, probing `/` rather than `/api/health`, because health renders no JSX and would have passed straight through the bug it exists for. `25.4` — the shard map, `/platform/shards`, two procedures rather than one. `26.9` — resend invitation, which is a reissue; resend verification already shipped. `26.2` — `Popover` in `ui`, and the bell opens a peek. `26.8` — the three §6 fan-out paths measured, which found the fourth: one message to 25 000 members cost 23 seconds and nineteen of them were serialised Redis publishes. `26.12`, new — chunking those publishes: 769 ms instead of 17 944. `23.17`, new — assertion §25, `.env.example` against the app schemas, found the hard way. `23.18`, new — `pnpm db:generate` could not run from a clean shell, because drizzle-kit is a bin and never loaded `.env`. `23.19`, new — `pnpm platform:grant` crashed on a two-argument call to a three-argument method, because the file sat outside its own `tsconfig` include; assertion §26 closes that hole. Half of `24.5` (the two-node smoke is green) and half of `24.6` (a warm placement resolve is 679 µs; the write half is blocked by `24.1`, with the evidence). Recommendations filed under `23.1`, `23.2`, `23.3` and `23.15` without implementing them, and `plans/STUCK.md` records what could not be done and why |
 | 2026-09-19 | @sami | Phase 18 done. `platform` is a third `PermissionScope` held through a role in the one organization marked `is_platform`; `can()` gained the branch that closes D31's four leak paths, `owner: "all"` stops at the tenant, `pnpm platform:grant` seeds the first admin, and `/platform/status` proves the tier end to end |
 | 2026-09-19 | @sami | Phase 17 done. Retention is archive-then-drop for every partitioned table: `PartitionArchiveGateway` replaces `ActivityArchiveGateway`, objects are per tenant under `cold/<table>/<yyyy>/<mm>/<organization_id>.ndjson.gz`, `partition_archive` is the index, restore and sweep are on the port, and the `archive` job and `ArchiveSchedule` are gone |
 | 2026-09-17 | @sami | Rewritten as one chronological file: 26 phases numbered in build order, every item `<phase>.<item>`, decisions `D1`–`D50`. Built phases carry one dated line per item; open items keep their text verbatim from the 2026-09-17 consolidation. `T-033`–`T-035` moved in from `TODO.md` as `23.13`–`23.15`; the eight unmet client-side Exit clauses became `23.5`–`23.12`. `archive/` is untouched and still holds the old IDs, so the nine doc and code comments and eleven links that cite them still resolve and are left as they are |

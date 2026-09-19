@@ -1,7 +1,7 @@
 // Each assertion run against a tree that violates it, and against one that does not.
 //
 // The script derives ROOT from its own location, so a fixture is a temporary tree with a
-// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-five
+// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-six
 // assertions, and the thing under test is the file the repository actually runs.
 
 // @ts-check
@@ -136,7 +136,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(25);
+    expect(results).toHaveLength(26);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -1004,5 +1004,68 @@ describe("25 — .env.example documents every key an app requires", () => {
 
   it("skips a tree with no example to compare against", () => {
     expect(entry(run(), NAME).status).toBe("○");
+  });
+});
+
+describe("26 — every script above src/ is typechecked", () => {
+  const NAME = "every script above `src/` is in its package's tsconfig";
+
+  const CONFIG = (include) =>
+    JSON.stringify({ extends: "@loadbearing/tsconfig/library.json", include });
+
+  it("accepts a root script the tsconfig names", () => {
+    passes(
+      run({
+        "packages/application/tsconfig.json": CONFIG(["src/**/*.ts", "seed.ts"]),
+        "packages/application/seed.ts": "export const seeded = true;\n",
+      }),
+      NAME,
+    );
+  });
+
+  // The failure this exists for: a script nothing imports, so nothing but `tsc` can
+  // notice when a signature under it moves.
+  it("catches a root script the tsconfig leaves out", () => {
+    fails(
+      run({
+        "packages/application/tsconfig.json": CONFIG(["src/**/*.ts"]),
+        "packages/application/seed.ts": "export const seeded = true;\n",
+      }),
+      NAME,
+      "seed.ts",
+    );
+  });
+
+  // A category, not a list: a tool config is consumed by its own tool, which supplies
+  // types the package's `tsconfig` does not name.
+  it("exempts a tool config", () => {
+    passes(
+      run({
+        "packages/application/tsconfig.json": CONFIG(["src/**/*.ts"]),
+        "packages/application/drizzle.config.ts": "export default {};\n",
+        "packages/application/vitest.config.ts": "export default {};\n",
+      }),
+      NAME,
+    );
+  });
+
+  it("ignores a declaration file, which is types rather than code", () => {
+    passes(
+      run({
+        "packages/application/tsconfig.json": CONFIG(["src/**/*.ts"]),
+        "packages/application/web.d.ts": "declare const x: number;\n",
+      }),
+      NAME,
+    );
+  });
+
+  it("says nothing about a package with no tsconfig of its own", () => {
+    passes(
+      run({
+        "packages/application/seed.ts": "export const seeded = true;\n",
+        "packages/application/tsconfig.json": null,
+      }),
+      NAME,
+    );
   });
 });

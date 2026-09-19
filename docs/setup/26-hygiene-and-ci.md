@@ -369,9 +369,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-five architectural assertions
+## Step 26.4 — The twenty-six architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Twenty-five greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-six greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -922,6 +922,32 @@ is §26.4d's boot smoke — start the process and the schema says which key is m
 
 ---
 
+### 26 — Every script above `src/` is typechecked
+
+A runnable script at a package root is code nothing imports, so nothing but `tsc` can notice when a
+signature under it moves. If it is outside its own package's `tsconfig.json` `include`, not even
+that does.
+
+**It found the bug it was written for.** `packages/infrastructure/platform-grant.ts` was not in the
+include, and it called `TransactionScope.within(tx, work)` — two arguments, when the method had
+taken three since the placement landed in Phase 22. `pnpm platform:grant <email>` crashed with
+`Function.prototype.apply was called on undefined`, which is a `TypeError` inside `AsyncLocalStorage`
+and says nothing about the call site. It is the documented way to make the **first platform admin**,
+and there is no other, so the failure waits until the one moment somebody needs it. Adding the file
+to the include and running `tsc` also turned up a `TS7022` in `partitions.ts`, in a loop nobody had
+compiled.
+
+The assertion is a string match on the config rather than a resolution of its globs. That is
+deliberate: a `"src/**/*.ts"` glob cannot reach a root file, so a root file is either named or it is
+not checked, and naming it is what the assertion asks for.
+
+**One exemption, and it is a category rather than a list:** `*.config.ts`. A tool config is consumed
+by its own tool, which supplies types the package's `tsconfig` does not name — including it would
+fail on the tool's own globals rather than on anything a reader wrote. `*.d.ts` is skipped for the
+matching reason: it is types rather than code.
+
+---
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -983,10 +1009,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-five
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-six
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-four of the
-twenty-five are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-five of the
+twenty-six are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 
