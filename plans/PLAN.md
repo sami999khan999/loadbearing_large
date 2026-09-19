@@ -3447,7 +3447,24 @@ bug that has since been fixed. Take one when a build is waiting on CI.
 
 #### From `TODO.md`
 
-- [ ] `23.13` **Assert that every event code has an emitter** `P3` `~1h` `#tooling`
+- [x] `23.13` **Assert that every event code has an emitter** `P3` `~1h` `#tooling`
+  - **Shipped 2026-09-20** as assertion **§24**, "every event code in the catalog is emitted".
+    The grep is `.emit("<code>"` under a first-party `src/` rather than the bare `"<code>"` the
+    entry proposed: the narrower one needs no exclusion list, because `core.events.ts` and
+    `event-shape.ts` contain no call and `tests/` is not walked. Fragments are resolved through
+    `catalog/index.ts`'s own import lines, so a `...billingEvents` added later is covered with no
+    edit here. The reverse direction needs nothing: `Logger.emit` is typed on `EventCode`.
+  - **The catalog was not clean, which is the finding.** `shard.assignment.created` was declared
+    in `22.x` and never emitted — the assertion failed on its first run. `PgOrganizationFounder`
+    now emits it, **after the commit rather than inside the transaction**, so a rolled-back
+    founding cannot leave a line saying a tenant was placed on a node it never reached. That cost
+    the founder a fifth constructor argument and eight specs a `RecordingLogger`.
+  - **The renumbering this entry priced in** landed with it: `AGENTS.md`, `docs/ai/rules/workflow.md`
+    (twice, and the enumeration gained a clause), and `docs/setup/26-hygiene-and-ci.md` — heading,
+    the "greps can" line, and a new `### 24` section. `plans/TODO.md`'s state table is dated
+    2026-09-06 and left as history.
+  - **The permissions counterpart is still not built**, and is still the same shape: every key in
+    `CATALOG` named by at least one `PROCEDURE_PERMISSIONS` entry.
   - **Goal:** `5.14` found eight of twenty-four declared codes with no production call site. A
     declared code that nothing emits is a dashboard panel that stays empty forever, and an empty
     panel is indistinguishable from a healthy system. The catalog is clean today and nothing stops

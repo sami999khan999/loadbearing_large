@@ -1300,6 +1300,71 @@ assert("only `DatabaseCluster` opens a pool inside `src/`", (failures) => {
   }
 });
 
+// ── 24 — every declared event code has an emitter ────────────────────────────
+//
+// A code in the catalog that nothing emits is a dashboard panel which stays empty
+// forever, and an empty panel reads exactly like a healthy system. Eight of
+// twenty-four were in that state once; this is what keeps the drift from returning.
+
+assert("every event code in the catalog is emitted", (failures) => {
+  const catalogDir = join(ROOT, "packages/observability/src/catalog");
+  const barrel = join(catalogDir, "index.ts");
+  if (!existsSync(barrel)) return "packages/observability has no catalog barrel yet";
+
+  const barrelSource = readFileSync(barrel, "utf8");
+
+  // Every fragment `EVENT_CATALOG` spreads, resolved through the barrel's own imports, so
+  // a `...billingEvents` added tomorrow is covered without anyone editing this.
+  const sources = new Map();
+
+  for (const line of barrelSource.split("\n")) {
+    const imported = /^import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+"([^"]+)"/.exec(line);
+    if (!imported) continue;
+
+    for (const name of (imported[1] ?? "").split(",")) {
+      const bare = name.replace("type ", "").trim();
+      if (bare) sources.set(bare, imported[2] ?? "");
+    }
+  }
+
+  const fragments = [];
+
+  for (const spread of barrelSource.matchAll(/\.\.\.(\w+)/g)) {
+    const from = sources.get(spread[1]);
+    if (from) fragments.push(resolve(catalogDir, from.replace(/\.js$/, ".ts")));
+  }
+
+  if (fragments.length === 0) return "the catalog barrel spreads no fragment";
+
+  const codes = new Set();
+
+  for (const fragment of fragments) {
+    if (!existsSync(fragment)) {
+      failures.push(`${rel(barrel)}: spreads a fragment that is not on disk`);
+      continue;
+    }
+
+    const source = withoutComments(readFileSync(fragment, "utf8"));
+    for (const entry of source.matchAll(/^\s*"([a-z0-9._]+)":\s*\{/gm)) codes.add(entry[1]);
+  }
+
+  // `src/` only, so a spec emitting a code to assert the wire shape does not count as
+  // the thing that ships it.
+  const emitted = new Set();
+
+  for (const dir of sourceDirs()) {
+    for (const file of walk(join(dir, "src"), [".ts", ".tsx"])) {
+      const source = readFileSync(file, "utf8");
+      for (const call of source.matchAll(/\.emit\(\s*"([a-z0-9._]+)"/g)) emitted.add(call[1]);
+    }
+  }
+
+  for (const code of [...codes].sort()) {
+    if (emitted.has(code)) continue;
+    failures.push(`${code}: declared in the catalog, emitted nowhere in any src/`);
+  }
+});
+
 let failed = 0;
 let skippedCount = 0;
 

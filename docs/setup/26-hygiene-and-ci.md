@@ -366,9 +366,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-three architectural assertions
+## Step 26.4 — The twenty-four architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Twenty-one greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-four greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -859,6 +859,30 @@ one, and has to be — so the assertion is what closes the gap the generator lea
 **No `DEFAULT` partition, on purpose.** A catch-all absorbs the rows of a month whose partition is
 missing, which turns a loud insert failure into a silent one, and attaching the real partition
 afterwards means moving those rows back out of it.
+
+---
+
+### 24 — Every event code in the catalog is emitted
+
+A code declared in `EVENT_CATALOG` that nothing emits is a dashboard panel which stays empty
+forever — and an empty panel reads exactly like a healthy system. That is the failure this closes:
+not a build that breaks, but an operator who watches the wrong thing and concludes nothing is
+wrong.
+
+**It has happened.** Eight of twenty-four declared codes had no production call site at the point
+`5.14` went looking, and every one of them had been added in good faith beside a mechanism that
+was later renamed, moved or never finished.
+
+The assertion resolves the fragments `EVENT_CATALOG` spreads through the barrel's own import
+lines, so a `...billingEvents` added tomorrow is covered without editing the script. It then
+collects every `.emit("<code>"` under a first-party `src/` — **`src/` only**, because a spec
+emitting a code to assert its wire shape is not the thing that ships it.
+
+The other direction needs no assertion: `Logger.emit` is typed on `EventCode`, so a code emitted
+without being declared does not compile.
+
+**The counterpart, not built.** The same shape would serve `permissions` — every key in `CATALOG`
+named by at least one `PROCEDURE_PERMISSIONS` entry, which is Phase 5's own exit criterion.
 
 ---
 

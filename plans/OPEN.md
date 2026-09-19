@@ -543,7 +543,7 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-eight boxes, all in Phases 23–26, after `23.4` closed. Phases 1–22 have none. The line
+Thirty-seven boxes, all in Phases 23–26, after `23.4` and `23.13` closed. Phases 1–22 have none. The line
 number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
 edited above them.
 
@@ -569,7 +569,7 @@ Exit clauses that still need a browser
 
 From `TODO.md`
 
-- `23.13` **Assert that every event code has an emitter** `P3` `~1h` `#tooling` — line 3455
+- ~~`23.13` **Assert that every event code has an emitter**~~ — closed 2026-09-20: `check:architecture` §24, and `shard.assignment.created` gained the emitter it never had
 - `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h` `#api` `#db` — line 3470
 - `23.15` **The English fallback layer is now dead payload** `P3` `~3h` `#ui` — line 3494
 - `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling` — line 3512

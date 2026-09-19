@@ -136,7 +136,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(23);
+    expect(results).toHaveLength(24);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -865,5 +865,94 @@ describe("23 — only DatabaseCluster opens a pool inside src/", () => {
       }),
       NAME,
     );
+  });
+});
+
+describe("24 — every event code in the catalog is emitted", () => {
+  const NAME = "every event code in the catalog is emitted";
+
+  const BARREL = [
+    'import { coreEvents } from "./core.events.js";',
+    "",
+    "export const EVENT_CATALOG = {",
+    "  ...coreEvents,",
+    "} as const;",
+    "",
+  ].join("\n");
+
+  // The barrel plus one fragment, which is the shape the assertion resolves through.
+  function catalog(fragment, extra = {}) {
+    return {
+      "packages/observability/package.json": PKG("observability"),
+      "packages/observability/src/catalog/index.ts": BARREL,
+      "packages/observability/src/catalog/core.events.ts": fragment,
+      ...extra,
+    };
+  }
+
+  const ONE_CODE = 'export const coreEvents = {\n  "queue.job.failed": { level: "error" },\n};\n';
+
+  it("catches a code the catalog declares and nothing emits", () => {
+    fails(run(catalog(ONE_CODE)), NAME, "queue.job.failed");
+  });
+
+  it("accepts a code emitted from another package's src/", () => {
+    passes(
+      run(
+        catalog(ONE_CODE, {
+          "packages/infrastructure/package.json": PKG("infrastructure"),
+          "packages/infrastructure/src/queue/consumer.ts":
+            'logger.emit("queue.job.failed", { queue, jobId, attempt });\n',
+        }),
+      ),
+      NAME,
+    );
+  });
+
+  // A spec emitting a code to assert its wire shape is not the thing that ships it.
+  it("does not count a spec as the emitter", () => {
+    fails(
+      run(
+        catalog(ONE_CODE, {
+          "packages/infrastructure/package.json": PKG("infrastructure"),
+          "packages/infrastructure/tests/queue/consumer.spec.ts":
+            'logger.emit("queue.job.failed", { queue, jobId, attempt });\n',
+        }),
+      ),
+      NAME,
+      "queue.job.failed",
+    );
+  });
+
+  // The fragment list comes from the barrel's imports, so a second one is covered with
+  // no edit to the script.
+  it("reads a second fragment the barrel spreads", () => {
+    fails(
+      run(
+        catalog(ONE_CODE, {
+          "packages/observability/src/catalog/index.ts": BARREL.replace(
+            "...coreEvents,",
+            "...coreEvents,\n  ...billingEvents,",
+          ).replace(
+            'import { coreEvents } from "./core.events.js";',
+            'import { billingEvents } from "./billing.events.js";\nimport { coreEvents } from "./core.events.js";',
+          ),
+          "packages/observability/src/catalog/billing.events.ts":
+            'export const billingEvents = {\n  "billing.invoice.issued": { level: "info" },\n};\n',
+          "packages/infrastructure/package.json": PKG("infrastructure"),
+          "packages/infrastructure/src/queue/consumer.ts":
+            'logger.emit("queue.job.failed", { queue, jobId, attempt });\n',
+        }),
+      ),
+      NAME,
+      "billing.invoice.issued",
+    );
+  });
+
+  // Nothing to check is not the same as nothing wrong: without a catalog the assertion
+  // says so rather than passing.
+  it("skips a tree with no catalog barrel", () => {
+    const found = entry(run(), NAME);
+    expect(found.status).toBe("○");
   });
 });
