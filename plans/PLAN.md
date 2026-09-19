@@ -3762,6 +3762,21 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
 
 - [ ] `24.6` **Load test** the routed paths at 10× against the sharded compose profile before any
   of this is called production-ready.
+  - **Half of it ran, 2026-09-20, and the other half cannot** — `tests/smoke/routed.smoke.spec.ts`,
+    `ROUTED_SCALE=1 pnpm smoke` with the `sharded` profile up. The numbers are in
+    [`sharding.md`](../packages/infrastructure/docs/reference/sharding.md).
+  - **What a routed request pays, averaged over a thousand resolutions:** a warm placement is
+    **679 µs** — one cache read, never a query — and a miss is **2 568 µs**, three round trips, once
+    per key per five minutes. A bare cache invalidate costs 667 µs on the same stack, which is what
+    says the warm number is one round trip and nothing else. `resolve` runs once per *request*, so
+    that is the whole of what routing adds.
+  - **The walk is serial, and the reading says so**: two `count(*)`s across two nodes, 135 ms, one
+    after the other. That is `Container.eachShard`.
+  - **The write half is blocked by `24.1`, and this is the evidence.** A routed insert on node 1 is
+    a `23503` before it can be timed, because every routed table carries a foreign key to a catalog
+    one. The spec asserts that rather than pretending to measure through it. **There is no routed
+    throughput number until the foreign-key decision is made**, and the entry should not read as
+    though there could be.
 
 - [ ] `24.7` **A pooled partition for the long tail** — filed 2026-09-17 with `16.12`. Every tenant
   costs about fifty relations whether it holds ten rows or ten million, and the `personal`

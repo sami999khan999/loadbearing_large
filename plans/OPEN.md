@@ -582,7 +582,7 @@ From `TODO.md`
 - `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)` — line 3567
 - `24.4` **The catalog is the last single primary** — measure first — line 3571
 - `24.5` **Two-node proof** — the sharded smoke green, plus a tenant move under load — line 3575 (**stale filename; see A.8**)
-- `24.6` **Load test** the routed paths at 10× against the sharded compose profile — line 3578
+- `24.6` **Load test** the routed paths at 10× — **half ran 2026-09-20; the other half cannot.** A warm placement resolve is 679 µs, one cache read; a routed *write* on node 1 is a `23503` before it can be timed, which is `24.1`
 - `24.7` **A pooled partition for the long tail** — line 3581
 
 ### Phase 25 — Replica panel and shard map
@@ -674,3 +674,9 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   frames in bounded chunks: **769 ms instead of 17 944** for 25 000 members. The measurement times
   both shapes, so the difference cannot quietly disappear, and a new subscriber spec runs a room of
   1 201 members across three chunks to prove nobody is dropped or served twice.
+- `24.6` **Load test the routed paths** — half of it ran and the other half **cannot**, which is
+  worth knowing before somebody schedules it. A warm placement resolve is **679 µs on this stack,
+  one cache read and never a query**; a miss is 2 568 µs, three round trips, once per key per five
+  minutes; and the cross-tenant walk is serial by construction. **A routed write on node 1 is a
+  `23503` before it is a measurement**, because every routed table carries a foreign key to a
+  catalog one — so there is no routed throughput number until `24.1` is decided.

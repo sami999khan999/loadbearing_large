@@ -49,9 +49,9 @@ written **after** `CLICKHOUSE_URL` is set and the projection has filled and reco
 against a store with real data and a dashboard with a real query. Writing it tonight would be the
 thing `5.12` deleted — a shape guessed at with no consumer to check it against.
 
-`CLICKHOUSE_URL` is set in this machine's `.env`, but the analytics compose profile was not
-started, which is also why `/api/health` reports `analytics: false`. Starting it is step one;
-waiting is step two, and no session can do step two.
+**Step one is done, 2026-09-20.** The analytics profile is up, `pnpm ch:migrate` reports the schema
+applied, and the four ClickHouse cases in the smoke suite pass rather than fail. What is left is
+waiting: run the worker for a few days and the projection fills. No session can do step two.
 
 ---
 
@@ -62,7 +62,7 @@ was up for this session, which is enough to *run* `sharded.smoke.spec.ts` and no
 **decide** `24.1` — that decision is about what a production catalog and a production shard do to
 each other under a tenant delete, and it is deliberately filed until the node exists.
 
-**Done 2026-09-20, and it closes half of `24.5`.** The two `DATABASE_SHARD_1_URL` /
+**Done 2026-09-20, and it closes half of `24.5` and half of `24.6`.** The two `DATABASE_SHARD_1_URL` /
 `DATABASE_SHARD_1_DIRECT_URL` lines are now in this machine's `.env` with the `sharded` profile up.
 `pnpm db:migrate` reports "migrations applied on node 0 / node 1 … across 78 tenants on 2 node(s)",
 and `sharded.smoke.spec.ts` is **4 passed** rather than skipped. Comment both lines out to go back
@@ -70,3 +70,8 @@ to one node.
 
 What is still missing from `24.5` is its second clause — a tenant move under load with no lost
 writes — and that needs `24.2`'s move job, which does not exist.
+
+**`24.6` is blocked, and not on a tool.** Its read half ran: a warm placement resolve is 679 µs,
+one cache read. Its write half cannot, because a routed insert on node 1 is a `23503` before it can
+be timed — every routed table carries a foreign key to a catalog one, and that is `24.1`. There is
+no routed throughput number until that decision is made.

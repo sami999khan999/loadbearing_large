@@ -165,6 +165,42 @@ The tenant lookup takes an organization id **or** a slug and compares
 `organizations.id::text = $1`. Never `$1::uuid`: a slug cast to a uuid is a `22P02` from the
 database rather than the empty answer a typed search should get.
 
+## What routing costs a request, measured
+
+```bash
+pnpm infra:up:sharded          # plus the two DATABASE_SHARD_1_* lines in .env
+ROUTED_SCALE=1 pnpm smoke
+```
+
+`tests/smoke/routed.smoke.spec.ts`, averaged over a thousand resolutions against the two-node
+compose profile on one developer machine:
+
+| Path | Per call |
+|---|---|
+| **warm** — one cache read | 679 µs |
+| **cold** — cache read, catalog query, cache write | 2 568 µs |
+| a cache invalidate, for reference | 667 µs |
+
+The absolute numbers are this machine's: Redis in Docker on Windows, where **one round trip is
+about 0.67 ms**. The invalidate row is there to say so — it is one `DEL` and nothing else, and it
+costs the same as the warm resolve. On a deployment where Redis answers in 100 µs, both rows move
+together.
+
+**The shape is the finding, and it is the right one.** A routed request pays *one cache read* to
+learn where it lives, never a query; a miss costs three round trips rather than one, and happens
+once per key per five minutes. `resolve` runs once per request, not once per query — see above —
+so this is the whole of what routing adds.
+
+**The walk is serial and the reading says so**: two `count(*)`s across two nodes, 135 ms, one node
+after the other. That is `Container.eachShard`, and a pass that fanned out would hold a connection
+open on every node at once.
+
+> [!IMPORTANT]
+> **The write half of `24.6` cannot run, and that is `24.1`.** A routed insert on node 1 is a
+> `23503` before it is a measurement, because every routed table carries a foreign key to a
+> catalog one. The spec asserts that rather than pretending, and `sharded.smoke.spec.ts` names the
+> constraint class. There is no routed throughput number until the foreign-key decision is made.
+
 ## Sharding by something else: four edits, and nothing else
 
 A fork that shards by region, by plan, or by anything other than the organization changes four

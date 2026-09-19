@@ -22,6 +22,7 @@ const numbers = (name: string): number[] | undefined =>
 
 const tenantCeiling = numbers("TENANT_CEILING");
 const fanOut = numbers("FAN_OUT_SCALE");
+const routed = numbers("ROUTED_SCALE");
 
 const shard1Url = optional("DATABASE_SHARD_1_URL");
 const lokiUrl = optional("LOKI_URL");
@@ -71,6 +72,7 @@ export default defineConfig({
         },
         ...(tenantCeiling?.length ? { tenantCeiling } : {}),
         ...(fanOut?.length ? { fanOut } : {}),
+        ...(routed?.length ? { routed } : {}),
         ...(lokiUrl ? { loki: { url: lokiUrl, tenantId: optional("LOKI_TENANT_ID") } } : {}),
         ...(clickhouseUrl
           ? {
