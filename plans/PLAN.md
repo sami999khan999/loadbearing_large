@@ -3872,6 +3872,31 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     delete path is correct, and the mechanism that keeps a dev database honest is the same one
     `A.10` built for partitions. Nothing needed to change in `src/`.
 
+- [ ] `23.24` **`apps/web` has no smoke suite, and one session of `curl` showed what it would catch**
+  `found: 2026-09-20`. Filed rather than built: where a new suite lives and whether CI runs it is
+  not a decision to take unattended.
+  - **What is missing.** `packages/infrastructure` has `vitest.smoke.config.ts` and eight files
+    that run against live containers. `apps/web` has ten unit specs and nothing that starts the
+    server. So the whole of *the system behaving as a system* — sign-up to a mail, a link to a
+    verified row, a cookie to a capability, a procedure to a frame on an open stream — is checked
+    by nobody, and was checked by hand for the first time on 2026-09-20. The table in
+    [`OPEN.md`](OPEN.md) is what it found.
+  - **The shape it would take**, and the pieces already exist:
+    - `apps/web/vitest.smoke.config.ts`, the same `provide`-a-`stack` pattern, plus a `baseUrl`.
+    - A `globalSetup` that spawns `.output/server/index.mjs` on a kernel-assigned port and waits
+      for its `Listening on:` line — which is **exactly what `tooling/scripts/boot-smoke.mjs`
+      already does**, and the reason to extract that rather than write it twice.
+    - Mailpit's HTTP API as the verification channel: `GET /api/v1/search?query=to:<address>` and
+      then the message body. It is already in the `compose` job, and `26.4d`'s note about the
+      worker applies — every message is a job, so the worker has to be up too.
+  - **Two things to decide before building it.** Whether it runs in the `compose` job, which is
+    the only one with Mailpit, or becomes a third job; and whether it creates accounts in the same
+    database `pnpm test` uses, which on a developer's machine it would. The infrastructure suite's
+    answer to the second is the global orphan sweep, and this one would want the same.
+  - **The cheapest useful subset**, if the whole is too much: the SSE stream. Nothing anywhere
+    proves a frame reaches an HTTP client — `redis.smoke.spec.ts` proves publisher to subscriber,
+    and the browser clauses `23.5`–`23.11` prove the rest by eye. One case closes that gap.
+
 ---
 
 ## Phase 24 — The physical split 📁

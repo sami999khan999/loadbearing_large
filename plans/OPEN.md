@@ -543,9 +543,9 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-four boxes, all in Phases 23–26: thirty-two left after `23.4`, `23.13`, `23.16`, `25.4`,
-`26.2`, `26.8` and `26.9` closed, plus `23.20` and `23.21`, both found that night and filed rather
-than fixed. `23.17`, `23.18`, `23.19`, `23.22`, `23.23` and `26.12` were added and closed in the same night, so
+Thirty-five boxes, all in Phases 23–26: thirty-two left after `23.4`, `23.13`, `23.16`, `25.4`,
+`26.2`, `26.8` and `26.9` closed, plus `23.20`, `23.21` and `23.24`, all found that night and filed
+rather than fixed. `23.17`, `23.18`, `23.19`, `23.22`, `23.23` and `26.12` were added and closed in the same night, so
 none of them ever had a box here. Phases 1–22 have none. The line number is the pointer; the body is not
 paraphrased here, and the numbers drift as `PLAN.md` is edited above them.
 
@@ -580,6 +580,7 @@ Found on the way, 2026-09-20
 
 - `23.20` **The shipped configuration warns about itself on every worker boot** — filed with a recommendation and **not** implemented: which of three shapes is right is a defaults decision
 - `23.21` **The worker's first boot against a real stack is not clean** — two more from the same forty-five seconds: `partitions-boot` stalls at 78 tenants, and one unplaceable tenant fails the whole analytics run through the wrong log line. Both filed with a recommendation, neither implemented
+- `23.24` **`apps/web` has no smoke suite** — filed with its shape and the two things to decide first. Nothing anywhere proves a frame reaches an HTTP client; one session of `curl` did it by hand
 
 ### Phase 24 — The physical split (gated on a second shard being provisioned)
 
@@ -829,3 +830,9 @@ system rather than as a unit. Every line below happened.
 and a Mailpit API to do once. **Worth considering:** `apps/web` has no smoke config, and
 `packages/infrastructure`'s is the pattern for one. That would turn the table above into something
 CI could keep true.
+- `23.24` **`apps/web` has no smoke suite** — **filed, not built**: where a new suite lives and
+  whether CI runs it is not a decision to take unattended. The table above is what one would catch.
+  The pieces exist — `packages/infrastructure`'s smoke config is the pattern, `boot-smoke.mjs`
+  already spawns the built server and waits for its listening line, and Mailpit's HTTP API is the
+  verification channel and is already in the `compose` job. **The cheapest useful subset is the SSE
+  stream**: nothing anywhere proves a frame reaches an HTTP client.
