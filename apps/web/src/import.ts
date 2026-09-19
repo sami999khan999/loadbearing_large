@@ -35,6 +35,7 @@ export type { OrganizationId, UserId } from "@loadbearing/contracts";
 export {
   ActiveSessionList,
   ApiKeyList,
+  ArchivedNotificationList,
   ChangeEmailForm,
   ChangePasswordForm,
   ConversationList,

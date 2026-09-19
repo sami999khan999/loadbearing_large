@@ -2597,6 +2597,13 @@ reads the exclusion list once per run and passes it to all three queries.
   `analytics.reconciliation.drifted` with `source: "cold"`. A period with any `projected_at is null`
   row is skipped: a known gap is not drift. Closes the promise at `analytics.schema.ts:8-9`, which
   names a check nothing ever ran. **Docs:** `clickhouse.md` reconciliation section.
+  `done: 2026-09-19` — `corrected:` one `dailyCounts` per tenant over the **whole** archived
+  range, bucketed by month here, rather than one per month: the second shape is a round trip per
+  month per tenant on a nightly job. `done:` the drift line gains `source: "hot" | "cold"`, on
+  both halves — the two have different replay sources and different deadlines, so a dashboard has
+  to be able to tell them apart. `done:` a month with a null `projected_at` is skipped, and the
+  spec for that is the one that matters: a known gap is already on the Gaps panel, and a second
+  alert would repeat it with a deadline attached.
 
 **Exit.** Toggle `ai.document.searched` off: the next projection writes none, the next reconcile
 reports zero drift, and the screen shows the warning. Give `member.invited` a 12-month TTL with
@@ -2669,15 +2676,8 @@ method: `17.2`'s per-tenant objects are small enough to `get()` whole (roughly 8
 four-thousand-user organization-month), and a streaming read is the escape hatch if one ever
 exceeds ~50 MB, not day-one work. Every other hop copies `notification.list` exactly — contract,
 procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, list component.
-  `done: 2026-09-19` — `corrected:` one `dailyCounts` per tenant over the **whole** archived
-  range, bucketed by month here, rather than one per month: the second shape is a round trip per
-  month per tenant on a nightly job. `done:` the drift line gains `source: "hot" | "cold"`, on
-  both halves — the two have different replay sources and different deadlines, so a dashboard has
-  to be able to tell them apart. `done:` a month with a null `projected_at` is skipped, and the
-  spec for that is the one that matters: a known gap is already on the Gaps panel, and a second
-  alert would repeat it with a deadline attached.
 
-- [ ] `21.1` **`ColdArchiveReader`** — port in `application/src/port/`, `S3ColdArchiveReader` in
+- [x] `21.1` **`ColdArchiveReader`** — port in `application/src/port/`, `S3ColdArchiveReader` in
   `infrastructure/src/s3/`. `list(organizationId, userId, table, period, cursor, limit)`: look up
   the object key in `partition_archive`, `storage.get()`, gunzip, parse NDJSON, filter to the user,
   page. The cursor is a **line ordinal within a named object**, not a `(timestamp, id)` keyset —
@@ -2692,8 +2692,16 @@ procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, 
   p95 on the archived view passes 500 ms — then `notifications`, the one archived table with a
   `user_id`, gets a per-user object layout under the same `cold/` prefix and this becomes a small
   read. That is a different escape hatch from the streaming one above.
+  `done: 2026-09-19` — the port itself landed early in `19.17`, as that item said it would; this
+  adds the paged, user-filtered `page()` beside `rows()`. `corrected:` the cursor is **opaque in
+  the port** and an ordinal inside the adapter. `KeysetCursor` lives in `infrastructure`, so
+  cursor encoding is an adapter concern in this repository, and putting a `Buffer` in
+  `application` to encode one would have made the domain node-only. `OrdinalCursor` sits beside
+  `KeysetCursor`'s pattern and the composition fake imports the real one — a fake with its own
+  format would let a round trip through the wire pass here and fail in production.
+  `done:` the stated cost stands: every page turn reads and gunzips the whole tenant-month.
 
-- [ ] `21.2` **Contract, procedure, permission** — `notification.archived` returning the existing
+- [x] `21.2` **Contract, procedure, permission** — `notification.archived` returning the existing
   `Keyset.page(NotificationContract.entity)`, so the client renders it with the component it
   already has. New permission key `notification.archive.read` in
   `packages/permissions/src/catalog/notification.permissions.ts`, and the matching
@@ -2703,21 +2711,38 @@ procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, 
   around. A second procedure, `notification.archivedMonths`, lists the months that actually exist
   from `partition_archive`, so the UI offers real months instead of a date picker that mostly
   returns nothing.
+  `done: 2026-09-19` — both entries written together, which is the point the item makes about
+  the second: `principalMiddleware` denies any path with no mapping, so forgetting it is a hard
+  403 rather than an open door. `notification.archivedMonths` lists the months that exist.
 
-- [ ] `21.3` **The use-case** — `ListArchivedNotificationsUseCase.execute(actor, input)`:
+- [x] `21.3` **The use-case** — `ListArchivedNotificationsUseCase.execute(actor, input)`:
   `authorizer.assert(actor, "notification.archive.read")`, then the tenant **and the user** off
   `actor`, never off `input`. `ListNotificationsUseCase` already carries the rule in a comment —
   "there is no 'list someone else's': the permission grants you *your* notifications, and a userId
   input would be the hole" — and an archive read is exactly where that hole would be easiest to
   open, because the object on disk holds the whole tenant.
+  `done: 2026-09-19` — the tenant **and** the user off the principal, and the spec that matters
+  asserts exactly that: `archive.asked` carries the principal's organization and `cold.asked`
+  carries the principal's user id. A second spec gives a user in another organization nothing for
+  the same month. `done:` an absent `partition_archive` row is an empty page, never an error.
 
-- [ ] `21.4` **Router, route, UI** — a three-line handler beside the others; an "Older than a year"
+- [x] `21.4` **Router, route, UI** — a three-line handler beside the others; an "Older than a year"
   view on the existing notifications page, gated with `RouteGuard.requirePermission` the way
   `settings/roles.tsx` is. Query keys join `QueryKeys.notification`.
+  `done: 2026-09-19` — the archived view is a section on the existing notifications page rather
+  than a route of its own, gated with `<Can>` on its own key. `corrected:` the month select is
+  filled from `archivedMonths` and defaults to the first month that exists — defaulting to today
+  would ask for an object nobody wrote and render an empty page as if it were an answer.
+  `done:` five minutes of `staleTime`, not thirty seconds: an archived month does not change, and
+  each page turn reads an object.
 
-- [ ] `21.5` **Docs** — the notification reference gains the archived read;
+- [x] `21.5` **Docs** — the notification reference gains the archived read;
   `apps/web/docs/reference/enforcement-surfaces.md` gains nothing new (this is an ordinary
   procedure), which is itself worth one sentence — the surface count does not grow.
+  `done: 2026-09-19` — `ports.md` gains the two-methods-for-two-callers section and says plainly
+  that the object on disk holds the whole tenant. `enforcement-surfaces.md` gains the sentence the
+  item asks for: the count does not grow, and a feature that *did* need a fifth surface would be
+  one reaching the data by a path none of the four sit on.
 
 - [-] `21.6` **The platform tier and the retention dashboard** `dropped: 2026-09-14` — decision D23 — reopened the same day as Phase 18. **Moved to Phases 18–20** and delivered there: the tier in `18.1`–`18.8`, the retention dashboard in `19.13`–`19.16`, the projection dashboard in `20.5`–`20.6`; recorded here by `20.7`.
 

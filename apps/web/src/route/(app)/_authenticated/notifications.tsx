@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { type ClientNamespace, NotificationList, useMessages } from "~/import.js";
+import {
+  ArchivedNotificationList,
+  Can,
+  type ClientNamespace,
+  NotificationList,
+  useCapabilities,
+  useMessages,
+} from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
 const MESSAGES = ["notification"] as const satisfies readonly ClientNamespace[];
@@ -15,11 +22,19 @@ export const Route = createFileRoute("/(app)/_authenticated/notifications")({
 
 function Notifications() {
   const { t } = useMessages("notification");
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("notification.inbox.title")}</h1>
       <NotificationList />
+      {
+        // Its own key, because its cost is its own: an archived page pulls a whole
+        // tenant-month out of S3, and an organization may grant one and not the other.
+        <Can permission="notification.archive.read" capabilities={capabilities}>
+          <ArchivedNotificationList />
+        </Can>
+      }
     </main>
   );
 }

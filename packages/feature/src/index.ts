@@ -74,6 +74,8 @@ export {
 } from "./messaging/index.js";
 export { ModuleNav, type ModuleNavProps } from "./nav/index.js";
 export {
+  ArchivedNotificationList,
+  type ArchivedNotificationListProps,
   NotificationBell,
   type NotificationBellProps,
   NotificationList,

@@ -1,4 +1,11 @@
-import { ColdArchiveReader, ConflictError, type PartitionArchiveEntry } from "../import.js";
+import {
+  ColdArchiveReader,
+  type ColdPage,
+  ConflictError,
+  OrdinalCursor,
+  type PartitionArchiveEntry,
+  type UserId,
+} from "../import.js";
 
 // Rows staged by object key, checking the **row count** and not the checksum: the
 // in-memory gateway's checksum is `fake-<key>`, so verifying it would test the fake.
@@ -19,5 +26,24 @@ export class InMemoryColdArchiveReader extends ColdArchiveReader {
     }
 
     return Promise.resolve(rows);
+  }
+
+  // The same filter and slice the real one does, over the staged rows: a fake that
+  // paged without filtering would let a use-case reading another user's rows pass.
+  public override async page(
+    entry: PartitionArchiveEntry,
+    userId: UserId,
+    cursor: string | null,
+    limit: number,
+  ): Promise<ColdPage> {
+    // The real encoder, not a second one: a fake with its own cursor format would let
+    // a round trip through the wire pass here and fail in production.
+    const from = OrdinalCursor.decode(cursor) ?? 0;
+    const mine = (await this.rows(entry)).filter((row) => row.user_id === userId);
+
+    const items = mine.slice(from, from + limit);
+    const next = from + items.length;
+
+    return { items, nextCursor: next < mine.length ? OrdinalCursor.encode(next) : null };
   }
 }

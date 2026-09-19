@@ -122,6 +122,29 @@ future reader: it stays read-only by construction, since a write method makes a 
 authoritative; and any permitted scope arrives as a resolved parameter, because an analytics store
 has no `CapabilitySet` and no join back to goal membership, least of all a remote one.
 
+## `ColdArchiveReader` has two methods for two callers, and one of them is a hole waiting
+
+`rows(entry)` reads a whole tenant-month, verified against the recorded checksum and count. Its
+callers are the re-projection and the restore — machinery, reading everything.
+
+`page(entry, userId, cursor, limit)` is the user-facing one, and the `userId` is why it is
+separate. **The object on disk holds the whole tenant.** There is no per-user object and no
+server-side filter; the filter is a line in the adapter. So the rule
+`ListNotificationsUseCase` already states — "there is no 'list someone else's': the permission
+grants you *your* notifications, and a userId input would be the hole" — is not a convention here,
+it is the only thing between one person and their colleagues' notifications. The use-case takes
+the tenant and the user off the principal, and a spec asserts both.
+
+The cursor is **opaque in the port** and a line ordinal inside the adapter, exactly as
+`KeysetCursor` is opaque and a `(timestamp, id)` pair inside `PgNotificationRepository`. Two
+cursor shapes, two encoders, neither known to the domain — widening one to cover both would make
+both harder to read for no caller's benefit.
+
+**The cost is stated rather than hidden:** every page turn reads and gunzips the whole
+tenant-month to serve one user's slice. At the ~8 MB a four-thousand-user month sits at that is
+fine; the plan names p95 over 500 ms as the trigger to give `notifications` a per-user object
+layout under the same prefix.
+
 ## `LogReader` and the four labels
 
 `LogFilter` is closed on purpose. **The four labels are the only fields the log platform indexes**;

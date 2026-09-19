@@ -1,6 +1,7 @@
 import {
   Buffer,
   ColdArchiveReader,
+  type ColdPage,
   ConflictError,
   createGunzip,
   createHash,
@@ -8,7 +9,9 @@ import {
   pipeline,
   Readable,
   type StorageGateway,
+  type UserId,
 } from "../import.js";
+import { OrdinalCursor } from "./ordinal-cursor.js";
 
 // The bound `21.1` states, with headroom. Past it the object is refused rather than
 // read into memory: "it was slow" is a worse failure than "it said no".
@@ -47,6 +50,23 @@ export class S3ColdArchiveReader extends ColdArchiveReader {
     if (lines.length !== entry.rowCount) throw new ConflictError("cold", "row-count");
 
     return lines.map((line) => JSON.parse(line) as Readonly<Record<string, unknown>>);
+  }
+
+  // Reads and gunzips the **whole** tenant-month to serve one user's slice, because the
+  // cursor is an ordinal inside it. The cost is stated in the plan's `21.1`.
+  public async page(
+    entry: PartitionArchiveEntry,
+    userId: UserId,
+    cursor: string | null,
+    limit: number,
+  ): Promise<ColdPage> {
+    const from = OrdinalCursor.decode(cursor) ?? 0;
+    const mine = (await this.rows(entry)).filter((row) => row.user_id === userId);
+
+    const items = mine.slice(from, from + limit);
+    const next = from + items.length;
+
+    return { items, nextCursor: next < mine.length ? OrdinalCursor.encode(next) : null };
   }
 
   private static async gunzip(body: Uint8Array): Promise<Buffer> {

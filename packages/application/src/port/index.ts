@@ -10,6 +10,7 @@ export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
 export {
   ColdArchiveReader,
+  type ColdPage,
   type PartitionArchiveEntry,
 } from "./cold-archive.reader.js";
 export { DomainEventPublisher } from "./domain-event.publisher.js";

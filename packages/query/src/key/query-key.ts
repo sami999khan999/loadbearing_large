@@ -27,6 +27,8 @@ export class QueryKeys {
     // The cursor is *not* in the key. It lives in the page data, and a key that carried
     // it would make every page a separate cache entry nothing could invalidate together.
     list: (params: unknown) => ["notification", "list", params] as const,
+    archived: (params: unknown) => ["notification", "archived", params] as const,
+    archivedMonths: () => ["notification", "archived", "month"] as const,
     unreadCount: () => ["notification", "unreadCount"] as const,
     preferences: () => ["notification", "preferences"] as const,
   };

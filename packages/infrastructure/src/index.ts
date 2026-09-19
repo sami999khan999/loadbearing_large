@@ -63,6 +63,7 @@ export {
   type RedisRole,
 } from "./redis/index.js";
 export {
+  OrdinalCursor,
   S3ColdArchiveReader,
   type S3Config,
   S3StorageGateway,

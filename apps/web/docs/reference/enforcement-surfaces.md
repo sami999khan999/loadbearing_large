@@ -19,6 +19,13 @@ error.
 Only the first is authoritative. The worker bypasses 2, 3 and 4 entirely, and so does any SSR call
 that skipped the adapter — which is exactly why the assertion lives in the use-case.
 
+**The count does not grow with features, and that is worth saying once.** The archived
+notification read added a permission key, a procedure, a use-case, a route guard and a `<Can>` —
+and no fifth surface. It is an ordinary procedure: the assertion is in the use-case, the mapping
+is in `PROCEDURE_PERMISSIONS`, and the two client-side checks are affordances. A feature that
+*did* need a fifth surface would be one reaching the data by a path none of these four sit on,
+which is the thing to notice rather than the surface to add.
+
 ## 1. `Authorizer.assert()`
 
 The only one that runs on every path. See

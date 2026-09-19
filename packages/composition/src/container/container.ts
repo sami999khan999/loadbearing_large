@@ -46,6 +46,7 @@ import {
   JsonLogger,
   LeaveConversationUseCase,
   ListApiKeysUseCase,
+  ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
   ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
@@ -322,6 +323,7 @@ export class Container {
   // half needs an auth config, which is why this sits outside that branch too.
   public readonly notification: {
     readonly list: ListNotificationsUseCase;
+    readonly archived: ListArchivedNotificationsUseCase;
     readonly countUnread: CountUnreadNotificationsUseCase;
     readonly markRead: MarkNotificationReadUseCase;
     readonly markAllRead: MarkAllNotificationsReadUseCase;
@@ -448,6 +450,15 @@ export class Container {
     this.storage = new S3StorageGateway(config.storage);
     this.storagePolicy = new S3StoragePolicyGateway(config.storage);
     this.coldArchive = new S3ColdArchiveReader(this.storage);
+
+    // The *direct* pool, not the shared one: a month-sized detach and stream needs a
+    // budget the 30 s role floor will not give it. See docs/infra/reference/pgbouncer.md.
+    this.partitionArchive = new PgPartitionArchiveGateway(
+      this.directDatabase,
+      this.transactions,
+      this.storage,
+    );
+
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
     this.unitOfWork = new PgUnitOfWork(this.database, this.transactions, {
@@ -517,6 +528,11 @@ export class Container {
 
     this.notification = {
       list: new ListNotificationsUseCase(this.authorizer, notifications),
+      archived: new ListArchivedNotificationsUseCase(
+        this.authorizer,
+        this.partitionArchive,
+        this.coldArchive,
+      ),
       countUnread: new CountUnreadNotificationsUseCase(this.authorizer, notifications, this.cache),
       markRead: new MarkNotificationReadUseCase(
         this.authorizer,
@@ -755,14 +771,6 @@ export class Container {
         ),
       };
     }
-
-    // The *direct* pool, not the shared one: a month-sized detach and stream needs a
-    // budget the 30 s role floor will not give it. See docs/infra/reference/pgbouncer.md.
-    this.partitionArchive = new PgPartitionArchiveGateway(
-      this.directDatabase,
-      this.transactions,
-      this.storage,
-    );
 
     this.activityReplay = new PgActivityReplayReader(this.database, this.transactions);
 

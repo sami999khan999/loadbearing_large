@@ -46,6 +46,7 @@ export {
   type CancellationSignal,
   type CapabilityRepository,
   ColdArchiveReader,
+  type ColdPage,
   type ConversationMemberRecord,
   type ConversationPage,
   type ConversationRecord,

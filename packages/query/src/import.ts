@@ -17,6 +17,7 @@ export type {
 // Types only: this package caches what the contract describes, with no opinion about it.
 export type {
   ApiKeyDto,
+  ArchivedNotificationQuery,
   ChangeMemberRoleInput,
   ChangeRolePermissionInput,
   ConversationDto,

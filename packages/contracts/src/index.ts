@@ -57,6 +57,8 @@ export {
   type TypingInput,
 } from "./messaging/index.js";
 export {
+  type ArchivedMonthDto,
+  type ArchivedNotificationQuery,
   type ListNotificationsInput,
   type MarkNotificationReadInput,
   type NotificationCategory,

@@ -84,9 +84,12 @@ export {
   type UnreadCount,
 } from "./messaging/index.js";
 export {
+  type ArchivedMonth,
   CountUnreadNotificationsUseCase,
   DeliverNotificationUseCase,
   GetNotificationPreferencesUseCase,
+  type ListArchivedNotificationsInput,
+  ListArchivedNotificationsUseCase,
   ListDigestOrganizationsUseCase,
   ListNotificationsUseCase,
   MarkAllNotificationsReadUseCase,
@@ -185,6 +188,7 @@ export {
   CacheStore,
   CapabilityInvalidator,
   ColdArchiveReader,
+  type ColdPage,
   type DailyCount,
   type DeletedTenantSweep,
   type DocumentChunk,
