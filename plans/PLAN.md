@@ -3755,6 +3755,10 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
   not green**, unless the cluster is actually there: `pnpm infra:up:sharded`, then the two
   `DATABASE_SHARD_1_URL` / `DATABASE_SHARD_1_DIRECT_URL` lines uncommented in `.env` — `Stack.shard1`
   is the only door, and its absence is what the suite skips on.
+  - **The first clause is proved, 2026-09-20.** With the `sharded` profile up and both lines set:
+    `pnpm db:migrate` reports "migrations applied on node 0 / node 1 … across 78 tenants on 2
+    node(s)", and `sharded.smoke.spec.ts` is **4 passed**, not skipped. What is left is the second
+    clause — a tenant move under load — and that waits on `24.2`.
 
 - [ ] `24.6` **Load test** the routed paths at 10× against the sharded compose profile before any
   of this is called production-ready.

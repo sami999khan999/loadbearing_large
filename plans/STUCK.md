@@ -62,7 +62,11 @@ was up for this session, which is enough to *run* `sharded.smoke.spec.ts` and no
 **decide** `24.1` — that decision is about what a production catalog and a production shard do to
 each other under a tenant delete, and it is deliberately filed until the node exists.
 
-One thing that is cheap and was not done, because it edits a gitignored file the owner may have
-deliberately left alone: the two `DATABASE_SHARD_1_URL` / `DATABASE_SHARD_1_DIRECT_URL` lines in
-`.env` are still commented out, so `sharded.smoke.spec.ts` skips rather than runs. Uncomment them
-with the `sharded` profile up and the suite is four passing tests.
+**Done 2026-09-20, and it closes half of `24.5`.** The two `DATABASE_SHARD_1_URL` /
+`DATABASE_SHARD_1_DIRECT_URL` lines are now in this machine's `.env` with the `sharded` profile up.
+`pnpm db:migrate` reports "migrations applied on node 0 / node 1 … across 78 tenants on 2 node(s)",
+and `sharded.smoke.spec.ts` is **4 passed** rather than skipped. Comment both lines out to go back
+to one node.
+
+What is still missing from `24.5` is its second clause — a tenant move under load with no lost
+writes — and that needs `24.2`'s move job, which does not exist.
