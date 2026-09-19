@@ -536,6 +536,14 @@ predictive analytics and ad-hoc KPI exploration are exactly what they cannot cov
 Because the write path is a replay of `activity_log` from step 4.3, adopting it changes where rows
 land and nothing else. **The pipeline is built; filling the store is a config change.**
 
+**And what reaches it is a row, not a constant.** `projection_policy` holds one entry per activity
+action — whether it is projected at all, and optionally its own TTL — with an absent row meaning
+"projected, for the default window". That matters before the store is running rather than after:
+the highest-volume actions are usually the least interesting ones, and the decision to stop
+carrying them is cheap to make on day one and expensive on the day the bill arrives. Excluding one
+later is not retroactive: rows already there stay, new ones stop, and past the audit table's own
+window the gap can only be filled from cold storage.
+
 Move #5 says "one env var, then a day" because `ClickHouseAnalyticsProjector`, the projection
 consumer and the nightly reconciliation are written, and the container is in the compose file
 behind a profile:

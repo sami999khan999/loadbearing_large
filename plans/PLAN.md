@@ -2524,9 +2524,14 @@ reads the exclusion list once per run and passes it to all three queries.
   the button, so it reads after the click as well as before. `done:` the screen also shows drift
   between the rows and what the store holds, which is what a screen reading only the rows hides.
 
-- [ ] `20.7` **Docs** — `clickhouse.md` §"What is not wired" rewritten: the policy is wired, the
+- [x] `20.7` **Docs** — `clickhouse.md` §"What is not wired" rewritten: the policy is wired, the
   read driver still is not; `docs/opinions/data-and-scale.md` "On ClickHouse specifically" gains one
   sentence on the policy rows; `21.6` marked moved here.
+  `done: 2026-09-19` — `clickhouse.md`'s §"What is not wired" now says why the ordering is
+  deliberate rather than accidental: the policy is the part whose consequence accumulates, because
+  an action excluded today is a gap that cannot be filled from Postgres once the audit window
+  passes, and a read driver has no such deadline. `data-and-scale.md` gains the paragraph.
+  `21.6` marked moved.
 
 - [ ] `20.8` **`platform_policy` and the switch** — `platform.schema.ts`: `platform_policy (id smallint
   primary key check (id = 1), projection_enabled boolean not null default true,
@@ -2645,7 +2650,7 @@ procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, 
   `apps/web/docs/reference/enforcement-surfaces.md` gains nothing new (this is an ordinary
   procedure), which is itself worth one sentence — the surface count does not grow.
 
-- [-] `21.6` **The platform tier and the retention dashboard** `dropped: 2026-09-14` — decision D23 — reopened the same day as Phase 18.
+- [-] `21.6` **The platform tier and the retention dashboard** `dropped: 2026-09-14` — decision D23 — reopened the same day as Phase 18. **Moved to Phases 18–20** and delivered there: the tier in `18.1`–`18.8`, the retention dashboard in `19.13`–`19.16`, the projection dashboard in `20.5`–`20.6`; recorded here by `20.7`.
 
 **Exit.** A seeded user with a month in cold storage opens the archived view and reads their own
 rows; a user in another organization reading the same month gets nothing, proven by a spec rather

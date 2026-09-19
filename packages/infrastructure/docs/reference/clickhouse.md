@@ -207,8 +207,16 @@ made.
 
 ## What is not wired, and is not meant to be
 
-**Nothing reads ClickHouse.** The projection fills `activity_events` and the reconciliation checks
-it, and that is the whole of it.
+**The policy is wired; the read driver is not.** `projection_policy` decides which actions reach
+this store and for how long, the screen edits it, the consumer honours it on both sides of the
+reconciliation, and the nightly job converges the TTL to it. What is still absent is a reader:
+the projection fills `activity_events` and the reconciliation checks it, and nothing queries it.
+
+That ordering is deliberate rather than an accident of what got built first. The policy is the
+part with a consequence that accumulates — an action excluded today is a gap that cannot be
+filled from Postgres once the audit table's window passes — so it is the part worth having
+before anyone reads a row. A read driver has no such deadline: it can be added the day someone
+has a question.
 
 Two rollup tables used to sit beside `activity_events` here and in Postgres, with the same columns
 and the same grain, answering an `AnalyticsReader` port from both stores. Neither was ever written
