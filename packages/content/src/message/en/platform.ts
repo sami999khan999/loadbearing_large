@@ -148,4 +148,40 @@ export const platform = {
   "platform.restore.queued": "Queued as {jobId}. {objects} objects to read back.",
   "platform.retention.drift":
     "The store holds something else. The nightly run will put this right; it now holds {actual}.",
+  "platform.shards.title": "Shard map",
+  // Counted out of the directory rather than out of the cluster: a node the deployment
+  // has just added holds nothing, and so has no row here at all.
+  "platform.shards.description":
+    "One row per physical node, counted out of the directory. A tenant is placed once, when it is founded, and changes node only when a move job puts it somewhere else.",
+  "platform.shards.empty": "The directory is empty — no tenant has been founded yet.",
+  "platform.shards.column.node": "Node",
+  "platform.shards.column.tenants": "Tenants",
+  "platform.shards.column.lastAssigned": "Last placed",
+  "platform.shards.column.lastMoved": "Last moved",
+  // Null rather than a zero date: a node nothing has ever moved to has no such date,
+  // and a made-up one reads as a move that happened.
+  "platform.shards.never": "Never",
+  "platform.shards.expand": "Show tenants",
+  "platform.shards.collapse": "Hide tenants",
+  "platform.shards.tenants.title": "Tenants on node {node}",
+  "platform.shards.tenants.empty": "No tenant on this node.",
+  "platform.shards.column.organization": "Organization",
+  "platform.shards.column.assigned": "Placed",
+  "platform.shards.column.overrides": "Retention",
+  "platform.shards.column.actions": "Actions",
+  "platform.shards.overrides.default": "Defaults",
+  "platform.shards.overrides.count": "{count} overridden",
+  "platform.shards.move": "Move",
+  // Spelled out rather than hidden in a tooltip. The button is here so the screen is
+  // honest about what is missing, and a reason nobody can read is not honest.
+  "platform.shards.move.unavailable": "Tenant moves need the physical split — Phase 24.",
+  "platform.shards.manage": "Storage and delete",
+  "platform.shards.page": "{from}–{to} of {total}",
+  "platform.shards.page.previous": "Previous",
+  "platform.shards.page.next": "Next",
+  "platform.shards.lookup.title": "Find a tenant",
+  "platform.shards.lookup.label": "Organization id or slug",
+  // A miss is what a typed search usually is, so this is a sentence rather than an error.
+  "platform.shards.lookup.empty": "No tenant answers to that.",
+  "platform.shards.lookup.found": "{name} ({slug}) is on node {node}.",
 } as const;
