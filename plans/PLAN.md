@@ -2612,6 +2612,47 @@ panel: the rows land, `projected_at` is stamped, and the next reconcile reports 
 
 ---
 
+**Exit met 2026-09-19**, with one clause corrected on the way. Verified:
+
+- `pnpm check:architecture` 21/21 with **three** `TENANT_EXEMPT` lines from this plan
+  (`retention_policy`, `projection_policy`, `platform_policy`); `pnpm typecheck`, `pnpm lint` and
+  every test package green; `pnpm smoke` 25 tests.
+- **An unregistered action fails typecheck.** Added one `activity.record` call naming
+  `"platform.invented.action"` and `tsc` reported it against the key union; reverted.
+- **Both TTL clauses and the `NOT IN` reach the store.** `member.invited` at 12 months with the
+  default at 60, applied to the live container: `system.tables.engine_full` carries
+  `toIntervalMonth(12)`, `toIntervalMonth(60)` and `NOT IN ('member.invited')`, and the
+  expression round-trips byte for byte.
+- **The `NOT IN` is load-bearing**, proved by merge against the live container in
+  `tests/smoke/analytics.smoke.spec.ts` — see `20.4`'s note.
+- **Corrected:** a *paused* projection reported `reason: "behind"` rather than `"disabled"`,
+  because `hasProjector` was still true. `stampProjected` now treats paused as disabled and
+  skips the checkpoint query entirely — asking for a checkpoint while paused is a query whose
+  answer cannot have moved.
+- Exclusion, pause, resume, re-projection and the cold reconciliation are covered by specs
+  against the fakes; the exclusion was additionally verified against live Postgres and ClickHouse
+  (`20.3`'s note).
+- **Not verified through a browser**, as in Phase 19. `/platform/analytics` is wired and
+  typechecked and each use-case is unit-tested, but no clause below the API was clicked.
+
+**One thing the Exit run found that is not Phase 20's, recorded here because nobody else will
+notice it.** The integration suites create tenants against the live database and **do not remove
+them**. On a long-lived dev database they accumulate — this one had reached forty organizations
+and roughly 4,500 tenant partitions — and past a few hundred, `DELETE FROM users` exceeds
+`max_locks_per_transaction` because its cascade has to lock every partition of
+`conversation_members`. Seven infrastructure spec files then fail to load, and the failure names
+locks rather than leakage, so it reads as an environment problem rather than a test one.
+
+Cleaned by hand for this run, the way `dropTenantPartitions` does it — **detach, then drop,
+referencing tables first, never `CASCADE`**. `CASCADE` on a `conversations` partition takes
+`messages_conversation_fk` and `conversation_members_conversation_fk` off the *parent* tables with
+it, which is a schema change disguised as a cleanup; that happened once during this session and
+had to be repaired by re-adding both constraints.
+
+**Not fixed**, because the fix is a teardown in every integration spec that creates a tenant and
+that is a decision about the test suite rather than about this phase. Worth doing before the next
+long session against a dev database.
+
 ## Phase 21 — Archived data, where the person it belongs to can read it
 
 **Goal.** A user who asks for their old notifications gets them, straight out of S3, with the same

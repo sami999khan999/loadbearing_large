@@ -498,7 +498,12 @@ export class MaintenanceConsumer {
   ): Promise<void> {
     if (table !== PartitionedTable.ACTIVITY_LOG || archived.objects.length === 0) return;
 
-    if (!this.container.hasProjector) {
+    // Paused counts as disabled here, and asking for a checkpoint while paused is a
+    // query whose answer cannot have moved since the pause.
+    const paused =
+      this.container.hasProjector && !(await this.container.platformPolicy.get()).projectionEnabled;
+
+    if (!this.container.hasProjector || paused) {
       this.container.logger.emit("analytics.projection.gap", {
         period: archived.period,
         reason: "disabled",

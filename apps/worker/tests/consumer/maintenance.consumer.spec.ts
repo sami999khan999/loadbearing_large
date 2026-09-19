@@ -12,6 +12,7 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
   InMemoryStoragePolicyGateway,
@@ -86,6 +87,9 @@ function harness(
     // Empty for every case but the per-action TTL: an absent row is "projected, with
     // the default", so staging nothing asserts the behaviour before the table existed.
     projections?: readonly ProjectionPolicyRecord[];
+    // Paused counts as disabled for the gap: a stamp needs a projection that is
+    // running, and asking for a checkpoint while paused answers nothing.
+    projectionEnabled?: boolean;
     lifecycle?: InMemoryStoragePolicyGateway;
   } = {},
 ) {
@@ -99,6 +103,9 @@ function harness(
   const outbox = new InMemoryOutboxGateway();
   const retentionPolicies = new InMemoryRetentionPolicyRepository(options.policies);
   const projectionPolicies = new InMemoryProjectionPolicyRepository(options.projections);
+  const platformPolicy = new InMemoryPlatformPolicyRepository({
+    projectionEnabled: options.projectionEnabled ?? true,
+  });
   const tenantRetentionPolicies = new InMemoryTenantRetentionPolicyRepository(
     options.tenantPolicies,
   );
@@ -116,6 +123,7 @@ function harness(
     clock: new FixedClock(NOW),
     retentionPolicies,
     projectionPolicies,
+    platformPolicy,
     tenantRetentionPolicies,
     storagePolicy,
     // The **instance** with one method shadowed, never a spread: spreading a class
@@ -315,6 +323,28 @@ describe("MaintenanceConsumer", () => {
 
     expect(emitted(logger, "analytics.projection.gap")).toEqual([
       { period: "2024-01-01", reason: "behind" },
+    ]);
+    expect(partitionArchive.projected()).toEqual([]);
+  });
+
+  // A paused projection is a gap with a known reason, not a checkpoint to chase: the
+  // month is archived and dropped either way, so a forgotten switch costs a known hole.
+  it("records the gap as disabled when the projection is paused", async () => {
+    const period = new Date(Date.UTC(2024, 0, 1));
+    const { container, partitionArchive, logger } = harness({
+      estimates: [estimate(period)],
+      objects: [archived(FIRST)],
+      hasProjector: true,
+      projectionEnabled: false,
+      // Past the month, so a running projection would stamp: the pause is the only
+      // thing between this and a stamp.
+      projectedTo: new Date(Date.UTC(2024, 2, 1)),
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    expect(emitted(logger, "analytics.projection.gap")).toEqual([
+      { period: "2024-01-01", reason: "disabled" },
     ]);
     expect(partitionArchive.projected()).toEqual([]);
   });
