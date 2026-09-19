@@ -1,3 +1,4 @@
+import type { ActivityAction } from "../import.js";
 import type { LifecycleRule } from "../port/index.js";
 import type { RetentionPolicyRecord } from "./retention-policy.repository.js";
 
@@ -17,6 +18,12 @@ const EXPORT_DAYS = 7;
 // ClickHouse's own spelling: it rewrites `INTERVAL 5 MONTH` as `toIntervalMonth(5)`, so
 // emitting the readable form would make the daily comparison rewrite the table forever.
 const TTL_COLUMN = "toDateTime(occurred_at)";
+
+// One action kept for a different number of months than the rest.
+export interface ActionTtl {
+  readonly action: ActivityAction;
+  readonly months: number;
+}
 
 // Pure. Every number the screen shows and every expression either store receives is
 // composed here, so the screen and the worker cannot drift.
@@ -42,14 +49,25 @@ export class RetentionRules {
     );
   }
 
-  // In the form ClickHouse reads back. `perAction` is Phase 20's: the default clause has
-  // to carry the exclusions, because an unconditioned TTL deletes every row it matches.
-  public static clickhouseTtlFor(months: number, perAction: readonly string[] = []): string {
+  // In the form ClickHouse reads back: `toIntervalMonth(n)` rather than `INTERVAL n
+  // MONTH`, and **no `DELETE`** — the store accepts both and echoes neither.
+  public static clickhouseTtlFor(months: number, perAction: readonly ActionTtl[] = []): string {
     const base = `${TTL_COLUMN} + toIntervalMonth(${months})`;
     if (perAction.length === 0) return base;
 
-    const excluded = perAction.map((action) => `'${action}'`).join(", ");
-    return `${base} WHERE action NOT IN (${excluded})`;
+    // Sorted, so two runs over the same rows compose the same string: an unstable
+    // order would make the daily comparison rewrite a years-deep table every night.
+    const sorted = [...perAction].sort((left, right) => left.action.localeCompare(right.action));
+    const clauses = sorted.map(
+      (row) => `${TTL_COLUMN} + toIntervalMonth(${row.months}) WHERE action = '${row.action}'`,
+    );
+
+    // The `NOT IN` is load-bearing: an unconditioned clause matches every row and
+    // deletes the ones a longer per-action clause was keeping. See clickhouse.md.
+    const excluded = sorted.map((row) => `'${row.action}'`).join(", ");
+    clauses.push(`${base} WHERE action NOT IN (${excluded})`);
+
+    return clauses.join(", ");
   }
 
   // Rounded up, never down: rounding down expires an object inside the window an

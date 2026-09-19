@@ -156,6 +156,30 @@ a scan.
 
 ---
 
+## The TTL is one expression, and two things about it are not obvious
+
+`RetentionRules.clickhouseTtlFor(defaultMonths, perAction)` composes the whole clause: one
+`toDateTime(occurred_at) + toIntervalMonth(n) WHERE action = '…'` per action with its own window,
+then the default with `WHERE action NOT IN (…)` over exactly those actions. Sorted by action, so
+two runs over the same rows compose the same string — an unstable order would make the nightly
+comparison rewrite a years-deep table every night.
+
+**The `NOT IN` is load-bearing, not tidiness.** A TTL clause with no `WHERE` matches every row,
+including the ones a longer per-action clause was keeping, and ClickHouse applies whichever
+expires first. Without the guard, `TTL … toIntervalMonth(120) WHERE action = 'role.created',
+… toIntervalMonth(12)` deletes the four-year-old `role.created` row on the next merge. The
+per-action rule reads as honoured and is not.
+`tests/smoke/analytics.smoke.spec.ts` proves it against the running container in the only way it
+can be proved: insert the row, force a merge, count what survives, three times.
+
+**And there is no `DELETE` keyword.** ClickHouse accepts `… DELETE WHERE …` and echoes it back
+stripped, so a composer that emitted one would differ from `system.tables` on every read — and
+the daily reconcile would re-apply the TTL every run, which on a years-deep table materialises
+every part. This is the same failure the `toIntervalMonth` spelling avoids, found the same way,
+against a live store rather than in a unit test.
+
+---
+
 ## Adopting it, in the supported order
 
 ```bash

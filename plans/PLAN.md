@@ -2483,12 +2483,22 @@ reads the exclusion list once per run and passes it to all three queries.
   `verified:` against live Postgres and ClickHouse — both stores answered 40 with an empty list
   and 39 with one action excluded, and `since` returned no row carrying it.
 
-- [ ] `20.4` **Per-action TTL composition** — `RetentionRules.clickhouseTtlFor(defaultMonths, perAction)`
+- [x] `20.4` **Per-action TTL composition** — `RetentionRules.clickhouseTtlFor(defaultMonths, perAction)`
   produces `toDateTime(occurred_at) + INTERVAL a MONTH DELETE WHERE action = 'x', …, toDateTime(occurred_at) + INTERVAL d MONTH DELETE WHERE action NOT IN ('x', …)`;
   unit spec pins the expression for zero, one and three per-action rows, and a case proving that
   without the `NOT IN` a longer per-action TTL is deleted by the default clause (run against the
   live container under `pnpm smoke`, because only ClickHouse can prove it). `retention()` normalises
   whitespace and quoting before comparing. **Docs:** `clickhouse.md`.
+  `done: 2026-09-19` — `corrected:` **no `DELETE` keyword.** The item's format carries one;
+  ClickHouse accepts it and echoes it back stripped, so emitting one makes the nightly compare
+  differ every run and re-apply the TTL — the same failure the `toIntervalMonth` spelling avoids,
+  found the same way. `corrected:` `perAction` is `{ action, months }[]`, not a name list, because
+  each row carries its own window. Sorted by action, for the comparison's sake.
+  `verified:` against the live container — the composed three-clause expression round-trips byte
+  for byte, and the `NOT IN` guard is proved load-bearing by inserting a four-year-old row,
+  forcing a merge and counting: 1 with the per-action clause alone, **0** with a naked default
+  beside it, 1 with the guard. Both are `tests/smoke/analytics.smoke.spec.ts`, and `pnpm smoke`
+  is green at 25 tests.
 
 - [ ] `20.5` **Use-cases, contract, router, container** — `list-projection-policies` (`platform.analytics.read`;
   every catalog action joined to its row or the default) and `update-projection-policy`

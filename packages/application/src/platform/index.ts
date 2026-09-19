@@ -45,7 +45,7 @@ export {
   RestorePartitionUseCase,
   type RestoreRequested,
 } from "./restore-partition.use-case.js";
-export { RetentionRules } from "./retention.rules.js";
+export { type ActionTtl, RetentionRules } from "./retention.rules.js";
 export {
   type ColdMode,
   type RetentionPolicyRecord,

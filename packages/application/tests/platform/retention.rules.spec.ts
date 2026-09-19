@@ -65,6 +65,67 @@ describe("RetentionRules.lifecycleFor", () => {
   });
 });
 
+describe("RetentionRules.clickhouseTtlFor — per-action clauses", () => {
+  const COLUMN = "toDateTime(occurred_at)";
+
+  // **No `DELETE`**, and it is not a style choice: ClickHouse accepts the keyword and
+  // echoes it back stripped, so emitting it makes the daily comparison differ forever.
+  it("emits no DELETE keyword, because the store does not echo one", () => {
+    expect(
+      RetentionRules.clickhouseTtlFor(60, [{ action: "role.created", months: 120 }]),
+    ).not.toContain("DELETE");
+  });
+
+  it("composes one clause per row plus a guarded default", () => {
+    expect(RetentionRules.clickhouseTtlFor(12, [{ action: "role.created", months: 120 }])).toBe(
+      [
+        `${COLUMN} + toIntervalMonth(120) WHERE action = 'role.created'`,
+        `${COLUMN} + toIntervalMonth(12) WHERE action NOT IN ('role.created')`,
+      ].join(", "),
+    );
+  });
+
+  it("names every per-action row in the default clause", () => {
+    const expression = RetentionRules.clickhouseTtlFor(12, [
+      { action: "role.created", months: 120 },
+      { action: "ai.document.searched", months: 3 },
+      { action: "member.joined", months: 24 },
+    ]);
+
+    expect(expression).toContain(
+      "WHERE action NOT IN ('ai.document.searched', 'member.joined', 'role.created')",
+    );
+    expect(expression.split(", toDateTime")).toHaveLength(4);
+  });
+
+  // Sorted, and it is not cosmetic: the daily job compares the composed string against
+  // what the store holds, and an unstable order rewrites a years-deep table every night.
+  it("sorts by action, so two runs over the same rows compose the same string", () => {
+    const one = RetentionRules.clickhouseTtlFor(12, [
+      { action: "role.created", months: 120 },
+      { action: "member.joined", months: 24 },
+    ]);
+    const other = RetentionRules.clickhouseTtlFor(12, [
+      { action: "member.joined", months: 24 },
+      { action: "role.created", months: 120 },
+    ]);
+
+    expect(one).toBe(other);
+  });
+
+  // The whole reason the default clause is guarded. Proved against a live ClickHouse in
+  // `tests/smoke/analytics.smoke.spec.ts`; here it is the shape that carries the proof.
+  it("guards the default clause, so a longer per-action TTL is not deleted by it", () => {
+    const expression = RetentionRules.clickhouseTtlFor(12, [
+      { action: "role.created", months: 120 },
+    ]);
+    const clauses = expression.split(", ");
+
+    expect(clauses.at(-1)).toContain("NOT IN ('role.created')");
+    expect(clauses.every((clause) => clause.includes("WHERE"))).toBe(true);
+  });
+});
+
 describe("RetentionRules.daysFor", () => {
   // Rounded up. Rounding down expires an object inside the window an operator asked
   // for, which is the direction that loses data.
@@ -87,14 +148,6 @@ describe("RetentionRules.clickhouseTtlFor", () => {
       "toDateTime(occurred_at) + toIntervalMonth(60)",
     );
     expect(RetentionRules.clickhouseTtlFor(60)).not.toContain("INTERVAL");
-  });
-
-  // Phase 20's half. An unconditioned TTL clause deletes every row it matches, so a
-  // per-action window longer than the default is expressible only as an exclusion here.
-  it("carries the excluded actions on the default clause", () => {
-    expect(RetentionRules.clickhouseTtlFor(12, ["task.viewed", "task.listed"])).toBe(
-      "toDateTime(occurred_at) + toIntervalMonth(12) WHERE action NOT IN ('task.viewed', 'task.listed')",
-    );
   });
 });
 
