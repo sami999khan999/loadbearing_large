@@ -144,6 +144,33 @@ describe("PgInvitationRepository", () => {
     expect(await repository().findById(acme, first.id)).toBeNull();
   });
 
+  // What a resend does: the same row, a new digest, a later expiry. The `id` is unchanged,
+  // so this conflicts on the primary key as well as on the email index it names.
+  it("reissues the same invitation under its own id", async () => {
+    const first = newInvitation("reissue@example.test");
+    const later = new Date(Date.now() + 7 * DAY);
+    const again = { ...first, tokenHash: Token.random(), expiresAt: later };
+
+    await repository().save(first);
+    await repository().save(again);
+
+    const rows = await database.client
+      .select({
+        id: invitations.id,
+        tokenHash: invitations.tokenHash,
+        expiresAt: invitations.expiresAt,
+      })
+      .from(invitations)
+      .where(
+        and(eq(invitations.organizationId, acme), eq(invitations.email, "reissue@example.test")),
+      );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(first.id);
+    expect(rows[0]?.tokenHash).toBe(again.tokenHash);
+    expect(rows[0]?.expiresAt?.getTime()).toBe(later.getTime());
+  });
+
   it("hides an expired invitation from the list but still finds it by id", async () => {
     const stale = newInvitation("stale@example.test", { expiresAt: new Date(Date.now() - DAY) });
 
