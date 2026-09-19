@@ -3256,7 +3256,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
 
 #### The rehearsal kit (`infra`, `infrastructure`)
 
-- [ ] `22.19` **Compose profile `sharded`** — `infra/docker-compose.yml`: `postgres-shard-1` (same
+- [x] `22.19` **Compose profile `sharded`** — `infra/docker-compose.yml`: `postgres-shard-1` (same
   image, same `init.sql`, port `${POSTGRES_SHARD_1_PORT:-5433}`, own volume) and
   `pgbouncer-shard-1` on `:6433`; root script `infra:up:sharded`; `.env.example` gains a commented
   block `DATABASE_SHARD_1_URL=postgres://…:6433/ratchet`, `DATABASE_SHARD_1_DIRECT_URL`,

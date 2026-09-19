@@ -79,6 +79,17 @@ during the incident where the app is down.
 
 `clickhouse`, deliberately not started. See [clickhouse](clickhouse.md).
 
+### The second node, profile `sharded`
+
+`postgres-shard-1` and `pgbouncer-shard-1`, also deliberately not started. Same image, same
+`postgres.init.sql`, its own volume — a shard sharing the catalog's data directory would rehearse
+nothing. `pnpm infra:up:sharded` starts them, and the two commented lines in `.env.example` point
+`DATABASE_SHARD_1_URL` at `:6433` and its direct counterpart at `:5433`.
+
+There is no range or key configuration beside them. `shard_assignments` on the catalog names the
+node, one row per tenant, so a second node is two URLs and nothing else — see
+[sharding](../../../packages/infrastructure/docs/reference/sharding.md).
+
 ---
 
 ## Profiles
@@ -90,6 +101,7 @@ selected.
 docker compose ... up -d                                  # 5 services
 docker compose ... --profile observability up -d          # 8
 docker compose ... --profile observability --profile analytics up -d   # 9
+docker compose ... --profile observability --profile sharded up -d     # 10
 ```
 
 The `pnpm infra:*` scripts wrap those, with `observability` on by default.
@@ -102,11 +114,12 @@ The `pnpm infra:*` scripts wrap those, with `observability` on by default.
 
 ## Volumes
 
-Six named volumes, and which are disposable is the whole point.
+Seven named volumes, and which are disposable is the whole point.
 
 | Volume | Service | Rebuildable from |
 |---|---|---|
 | `pgdata` | postgres | migrations + seeds |
+| `pgshard1data` | postgres-shard-1 | migrations + the tenants the directory places there |
 | `redisqueuedata` | redis-queue | **nothing** |
 | `miniodata` | minio | uploads are a second source of truth; Loki chunks are not |
 | `lokidata` | loki | index only — chunks live in MinIO |
@@ -115,7 +128,7 @@ Six named volumes, and which are disposable is the whole point.
 **`redis-cache` has no volume, on purpose.** A named volume for something explicitly disposable
 invites the next person to treat it as durable.
 
-`pnpm infra:reset` destroys all six. Locally that is fine — it is a scratch database. The habit is
+`pnpm infra:reset` destroys all seven. Locally that is fine — it is a scratch database. The habit is
 what matters: in any environment with real pending work, clearing the cache and clearing the queue
 are different operations, and the two-instance split is what makes it possible to do one without the
 other.

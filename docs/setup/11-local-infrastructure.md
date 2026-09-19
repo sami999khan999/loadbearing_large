@@ -224,13 +224,15 @@ console meant two places to look, and the one query an operator actually needs �
 this tenant, joined to that tenant's audit rows* — is one Grafana cannot express, because it has no
 idea what an organization is.
 
-**Two profiles, and the split is a decision rather than a convenience.**
+**Three profiles, and each split is a decision rather than a convenience.**
 
 `observability` is on by default because the diagnostic stream is not hypothetical — `JsonLogger` exists, `EVENT_CATALOG` exists, and every adapter written from [13](13-infrastructure-postgres.md) onward emits into it. A stream with no sink is a stream nobody checks.
 
 `analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. Postgres answers every question this kit will ask for years, and nothing in the kit reads an analytics store at all. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics`, `CLICKHOUSE_URL`, and then the reader the dashboard needs, rather than an infrastructure project.
 
-> **A running ClickHouse with nothing writing to it is worse than no ClickHouse**, because it looks like a decision that was made. Leave it stopped until a projection consumer exists.
+`sharded` is **off** for the same kind of reason, and it arrives later — Phase 22 of `plans/PLAN.md` builds the routing seam without running a second Postgres. `postgres-shard-1` and `pgbouncer-shard-1` are the same image and the same `postgres.init.sql` on their own volume, so a rehearsal applies the identical schema to both. Starting them is `pnpm infra:up:sharded` plus the two commented lines in `.env.example`; nothing else configures a shard, because `shard_assignments` on the catalog names the node one row per tenant.
+
+> **A running ClickHouse with nothing writing to it is worse than no ClickHouse**, because it looks like a decision that was made. Leave it stopped until a projection consumer exists. The same applies to the second node: an empty shard nothing routes to is a machine to pay for and a schema to keep migrated.
 
 ---
 
@@ -568,6 +570,14 @@ To start the analytics profile as well, when there is finally something to put i
 ```bash
 pnpm infra:up:analytics
 ```
+
+And the second Postgres, to rehearse the split:
+
+```bash
+pnpm infra:up:sharded
+```
+> Then uncomment `DATABASE_SHARD_1_URL` and `DATABASE_SHARD_1_DIRECT_URL`. `pnpm db:migrate`
+> applies the schema to both nodes, and `curl /api/health` reports `database: { "0": true, "1": true }`.
 
 If your Postgres volume predates the init script:
 

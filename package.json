@@ -36,6 +36,7 @@
     "check:contrast": "node tooling/scripts/check-contrast.mjs",
     "infra:up": "docker compose -f infra/docker-compose.yml --profile observability up -d",
     "infra:up:analytics": "docker compose -f infra/docker-compose.yml --profile observability --profile analytics up -d",
+    "infra:up:sharded": "docker compose -f infra/docker-compose.yml --profile observability --profile sharded up -d",
     "infra:core": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml --profile \"*\" down",
     "infra:reset": "docker compose -f infra/docker-compose.yml --profile \"*\" down -v",
