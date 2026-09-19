@@ -4,6 +4,7 @@ export {
   type InviteMemberInput,
   MemberContract,
   type MemberDto,
+  type ResendInvitationInput,
   type RevokeInvitationInput,
   type SetMemberActiveInput,
 } from "./member.contract.js";

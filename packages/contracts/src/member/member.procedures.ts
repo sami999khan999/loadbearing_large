@@ -25,6 +25,13 @@ export class MemberProcedures {
     .input(MemberContract.revoke)
     .output(Envelope.acknowledged);
 
+  // `POST` on a sub-resource, not `PUT` on the invitation: the row is not replaced by
+  // the caller — a new token is issued, and only the server can know it.
+  public static readonly resendInvitation = oc
+    .route({ method: "POST", path: "/members/invitations/{invitationId}/resend" })
+    .input(MemberContract.resend)
+    .output(MemberContract.invitation);
+
   // `PATCH`, not `PUT`: the body carries the one field that changes, and the rest of
   // the membership is not the caller's to restate.
   public static readonly changeRole = oc
@@ -51,6 +58,7 @@ export class MemberProcedures {
     listInvitations: MemberProcedures.listInvitations,
     invite: MemberProcedures.invite,
     revokeInvitation: MemberProcedures.revokeInvitation,
+    resendInvitation: MemberProcedures.resendInvitation,
     changeRole: MemberProcedures.changeRole,
     deactivate: MemberProcedures.deactivate,
     reactivate: MemberProcedures.reactivate,

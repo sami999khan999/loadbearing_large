@@ -28,6 +28,7 @@ export {
   type MemberDto,
   MemberEntity,
   MemberProcedures,
+  type ResendInvitationInput,
   type RevokeInvitationInput,
   type SetMemberActiveInput,
 } from "./member/index.js";

@@ -44,6 +44,12 @@ export class MemberContract {
     invitationId: Identifiers.invitationId,
   });
 
+  // Its own shape rather than `revoke` reused: the two carry the same field today and
+  // have no reason to move together tomorrow.
+  public static readonly resend = z.object({
+    invitationId: Identifiers.invitationId,
+  });
+
   // The member is addressed by `userId`, not by a membership id: the caller holds a
   // row from `list`, and `(organizationId, userId)` is what the unique index is on.
   public static readonly changeRole = z.object({
@@ -62,5 +68,6 @@ export type MemberDto = z.infer<typeof MemberContract.entity>;
 export type InvitationDto = z.infer<typeof MemberContract.invitation>;
 export type InviteMemberInput = z.infer<typeof MemberContract.invite>;
 export type RevokeInvitationInput = z.infer<typeof MemberContract.revoke>;
+export type ResendInvitationInput = z.infer<typeof MemberContract.resend>;
 export type ChangeMemberRoleInput = z.infer<typeof MemberContract.changeRole>;
 export type SetMemberActiveInput = z.infer<typeof MemberContract.setActive>;

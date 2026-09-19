@@ -53,6 +53,7 @@ describe("MemberContract", () => {
       "list",
       "listInvitations",
       "reactivate",
+      "resendInvitation",
       "revokeInvitation",
     ]);
   });
