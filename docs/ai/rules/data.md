@@ -61,7 +61,24 @@ by its own check. The audit trail is the one table that names no actor by foreig
   reset query never runs, so one `SET` is inherited by every later client on that connection. DDL a
   transaction cannot carry goes to `DATABASE_DIRECT_URL`.
 
-**Do not build in advance:** starting ClickHouse, a dedicated vector DB, sharding, a broker. *"The
+- **Every table is `catalog`, `local` or `routed`, and the repository declares which.**
+  `application/src/primitive/shard.ts` is the only list; `routed` is the default, so a new slice's
+  table needs no edit there. A repository reads tables of one placement — a CI assertion — and
+  `BaseRepository.db` throws when a catalog repository is used inside a routed transaction. **That
+  throws on one node, today**, which is the difference between finding the call site in a test run
+  and finding it the week of a split. The one sanctioned crossing is `catalogDb`, from `local`
+  only.
+- **A read that crosses placements runs *before* the transaction, never inside it.** Two statements
+  — the routed ids, then the catalog resolve — not one join: a join has no plan across two
+  databases, and doing the catalog half inside a routed transaction is the coupling the split
+  cannot honour. `PgNotificationRecipientReader.conversationMembers` is the worked example.
+- **A cross-tenant pass loops nodes, not tenants** — `Container.eachShard`, serially. The
+  exception is the projection, which loops tenants and places each: one ClickHouse for the
+  deployment means one checkpoint per tenant, so a tenant that moves resumes where it was.
+
+**Do not build in advance:** starting ClickHouse, a dedicated vector DB, a **second Postgres**, a
+broker. The routing seam is built — that is the exception `simplicity.md` names, because the swap
+is certain and the retrofit would be spread over 183 call sites rather than one adapter. *"The
 seam is implemented"* and *"the store is running"* are two decisions, and only the second costs
 anything to be wrong about.
 

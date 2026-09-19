@@ -514,6 +514,19 @@ export const authed = implement(contract)
 
 **The `ProcedurePermissions` check fails closed.** A procedure with no mapping is denied, not allowed. Paired with the coverage test in [10](10-contracts-package.md), forgetting to map a new procedure is caught at test time and, failing that, at request time — never by shipping an ungated endpoint.
 
+**`authed` chains a second middleware after the principal one, and the order is the point.**
+`shardMiddleware` calls `container.placed(principal, next)` — one `keyOf`, one `resolve`, into an
+`AsyncLocalStorage` scope for the rest of the request. It cannot run before the principal exists,
+and a routed repository reached without it throws rather than guessing a node. Because `authed`
+chains it, a protected procedure cannot forget to be placed; a procedure built on `base` is
+unauthenticated *and* unplaced, which is the same "obvious in review" property.
+
+**A streaming procedure needs `AsyncLocalStorage.snapshot()` and this is the one place it shows.**
+An async generator's frames resume outside the scope that created them, so without the snapshot
+every frame after the first — and in practice the first too — resolves no shard. The middleware
+wraps the iterable's `next`, `return` and `throw` in the restored scope. See
+[sharding](../../packages/infrastructure/docs/reference/sharding.md).
+
 **This is not the real gate.** `Authorizer.assert()` inside the use-case is. The worker bypasses this middleware entirely, and so does any SSR direct call that skipped the adapter. Two checks, and only one of them is on every path.
 
 ---

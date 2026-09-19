@@ -493,6 +493,38 @@ can tell which one exists for a query and which one exists for a delete.
 **Add query-count assertions to integration tests now.** N+1 queries hit at 50 users, not 5,000, and
 no database choice fixes them. It is the cheapest performance guardrail that exists.
 
+### 4.5 Route by key from the first line
+
+Every query already resolves a database through a `DatabaseCluster` and a key, and every table is
+declared `catalog`, `local` or `routed`. There is one physical Postgres behind it, and there is
+meant to be for a long time.
+
+That is a seam built before the thing it abstracts, which [Simplicity](simplicity.md) normally
+calls ceremony — and it names the exception this is:
+
+> an abstraction earns its place early when the swap is certain and the retrofit is **spread**
+> rather than local.
+
+Both halves hold here. A single primary ends at some volume, so the swap is certain rather than
+speculative. And retrofitting it is spread across every repository, every use-case that opens a
+transaction, every cross-tenant loop in the worker, and every script that writes DDL — 183 call
+sites that read `this.db`, thirty-three repositories that would each need a placement decided
+under deadline, and five sweeps that would each have to be found. Compare #6 in the table below:
+adopting a dedicated vector store touches one adapter, so the seam there earns nothing the day
+before it is needed.
+
+**What it bought, concretely.** `BaseRepository.db` throws when a catalog repository is used
+inside a routed transaction — on one node, today, in every environment. That is not a
+future-proofing gesture; it is the difference between finding those call sites in a test run and
+finding them in production the week of a migration. Two were found this way, and both are fixed:
+`PgNotificationRecipientReader.conversationMembers` joined routed to catalog in one statement, and
+`PgPartitionArchiveGateway` wrote a catalog index row from a routed transaction.
+
+**What it did not buy, deliberately.** No placement policy, no second node in the default stack,
+no rebalancer. *"The seam is implemented"* and *"the store is running"* are two decisions, and
+only the second costs anything to be wrong about. See
+[sharding](../../packages/infrastructure/docs/reference/sharding.md).
+
 ---
 
 ## 5. Build when it hurts
@@ -507,7 +539,8 @@ Each of these is days, not months, because the seam already exists. **Do not bui
 | 4 | pgBouncer, transaction mode | Past ~100 connections | **Built** — always on, since `plans/archive/DB-SCALING-PLAN.md` Phase 1 |
 | 5 | ClickHouse reads, behind a new `AnalyticsReader` | Snapshots stop covering ad-hoc queries | **One env var, then a day** |
 | 6 | A dedicated vector DB behind `VectorStore` | pgvector recall or latency degrades | Days |
-| 7 | Shard Postgres by `organization_id` | Writes past a single primary | Weeks — needs 4.1 |
+| 7a | The routing seam — cluster, directory, placements | — | **Built**, at one node ([4.5](#45-route-by-key-from-the-first-line)) |
+| 7b | The physical split: a second Postgres, tenants moved | Writes past a single primary | Weeks → **days**; `plans/PLAN.md` Phase 24 |
 | 8 | Broker-backed event bus | In-process dispatch saturates | Days — needs §6 |
 
 Most products never get past #2. Each step is ordered by cost, so exhaust the cheap ones first —
@@ -654,7 +687,9 @@ message and nothing to drift. The swap at 100k is that method behind a Redis cou
 
 Worth naming, because it is most of the system. At every scale on this page:
 
-- **`packages/application`** — sharding is a repository concern; use-cases never learn about it.
+- **`packages/application`** — sharding is a repository and DI-root concern; use-cases never learn
+  about it. They declare a `UnitOfWork` and call `findBy…`; which pool answers is decided by the
+  placement on the repository and the key the container put in scope before the call.
 - **`packages/permissions`** — pure computation, no I/O, identical answer in every runtime.
 - **`packages/contracts`** — unchanged apart from one more branded identifier.
 - **The web tier** — stateless by construction: no request state in `Container`, no module-scope
@@ -696,8 +731,9 @@ there is nowhere in `apps/web` that can reach one.
 ### Up to ~5k employees
 
 ```
-Postgres (primary)      domain · audit · history · sessions · vectors
-Redis (cache)           capability cache · session cache      ← allkeys-lru
+Postgres (primary)      catalog + node 0, one machine — domain · audit · history
+  └─ shard_assignments    the directory: one row per tenant, naming node 0
+Redis (cache)           capability cache · session cache · shard map  ← allkeys-lru
 Redis (queue)           BullMQ                                ← noeviction, AOF
 S3 / MinIO              uploads · Loki chunks
 stdout → Alloy → Loki   diagnostics, 30 days
@@ -709,13 +745,21 @@ already there. Partitioning and `organization_id` are in place from day one, unu
 
 **ClickHouse is in that compose file too, behind an opt-in profile, and stopped.** The seam exists,
 the container exists, and nothing writes to it. That is the intended state until §5's trigger fires —
-a running analytics store with no consumer looks like a decision somebody made.
+a running analytics store with no consumer looks like a decision somebody made. `postgres-shard-1`
+is there on the same terms, behind the `sharded` profile, for rehearsing the split rather than
+running one.
+
+**One machine is catalog and node 0 at once, and that is not a temporary simplification.** The
+catalog is node 0 at every scale below — it holds `users`, `organizations`, RBAC and the
+directory, and a routed node holds what a tenant produces. At this size they are the same
+Postgres, and nothing in the code knows that.
 
 ### ~25k employees
 
 ```
-Postgres (primary + read replica)   domain · audit · history · sessions
+Postgres (primary + read replica)   still catalog + node 0 — domain · audit · history
   ├─ partitioned monthly
+  ├─ shard_assignments, every row still naming node 0
   └─ pgBouncer, transaction mode
 Redis (cache / queue, separate)     capability cache · sessions | BullMQ
 ClickHouse                          analytics aggregates, fed by domain events
@@ -727,9 +771,12 @@ stdout → Alloy → Loki               diagnostics, 30-day retention
 ### ~100k DAU
 
 ```
-Postgres, sharded by organization_id
-  ├─ read replica per shard
-  └─ pgBouncer per shard
+Postgres catalog                    users · organizations · RBAC · shard_assignments
+  └─ pgBouncer, read replica
+Postgres node 1..N                  routed: everything a tenant produces
+  ├─ read replica per node
+  ├─ pgBouncer per node
+  └─ activity_log and outbox_event on every one of them
 Redis Cluster                       already split by concern before clustering
 ClickHouse                          analytics · audit search
 Qdrant                              embeddings
@@ -756,6 +803,7 @@ stdout → Alloy → Loki               diagnostics
 | Audit trail | Postgres, partitioned monthly, **in-transaction** |
 | Domain events | Postgres outbox, partitioned monthly, **in-transaction**, drained into BullMQ |
 | Auth sessions | Postgres + Redis cache |
+| Which database answers | `shard_assignments` on the catalog, one row per tenant, read through `ShardResolver` |
 | Vectors | pgvector, behind `VectorStore` — `VECTOR_DRIVER` |
 | Analytics aggregates | Postgres snapshots → ClickHouse, written by `AnalyticsProjector` — `CLICKHOUSE_URL`. No reader yet; see §4.3 |
 | System logs | stdout → **Loki**, 30-day retention, low-cardinality labels only; read back through `LogReader` |
@@ -774,8 +822,10 @@ stdout → Alloy → Loki               diagnostics
 index every FK · query-count assertions in integration tests · separate the Redis cache instance
 from the queue instance.
 
-**Do not do this week:** *starting* ClickHouse, a dedicated vector database, sharding, a broker —
-nor an `AnalyticsReader` before a dashboard asks one a question. Each is a swap behind a seam that
+**Do not do this week:** *starting* ClickHouse, a dedicated vector database, a **second Postgres**,
+a broker — nor an `AnalyticsReader` before a dashboard asks one a question. Note which word moved:
+the routing seam is built ([4.5](#45-route-by-key-from-the-first-line)) and running a node to route
+to is the part that stays on this list. Each is a swap behind a seam that
 already exists or is a day's work when it is needed, and building any of them before a real query is
 slow means building the wrong schema for a load pattern nobody has measured.
 

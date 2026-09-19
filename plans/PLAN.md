@@ -3286,7 +3286,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
 
 #### Docs and verify
 
-- [ ] `22.21` **Docs** — new `packages/infrastructure/docs/reference/sharding.md` (the key, the
+- [x] `22.21` **Docs** — new `packages/infrastructure/docs/reference/sharding.md` (the key, the
   directory, the three placements and the tripwire, the two unit-of-works, the edges,
   the loops, how a fork shards by something else — the four edits and nothing else: (1) `TenantKey`
   on the allowlist and the column it names on every tenant-owned table; (2) one strategy class in

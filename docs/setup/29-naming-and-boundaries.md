@@ -192,13 +192,15 @@ Walked top to bottom, in the order the tree in [28](28-folder-structure.md) list
 The Postgres side gets its own section because it is the largest folder in the package and the only one with sub-structure. It is a peer of `redis/` and `s3/`, not a package — see [13](13-infrastructure-postgres.md) for why the two were merged.
 
 - **`drizzle.config.ts` and `migrations/`** sit at the **package** root, above `src/`, because they are build-time artefacts rather than shipped code. Migrations are generated and committed; `db:push` is never used.
-- **`primitive/`** — `database.ts` (the pool, `Database`, `DrizzleClient`) and `base.repository.ts` (the tenant `WHERE` clause and the transaction handle every repository inherits).
+- **`primitive/`** — `database.ts` (one pool, `Database`, `DrizzleClient`), `database-cluster.ts` (every physical node, indexed; **the only place in `src/` that writes `new Database(`**) and `base.repository.ts` (the tenant `WHERE` clause, the declared placement, and the transaction handle every repository inherits).
 - **`schema/`** — every table, one `*.schema.ts` per subject, plus the `index.ts` barrel that is the single Drizzle Kit entry. `check-architecture.mjs` asserts every domain table declares `organization_id`, and that the barrel names every file beside it.
 - **`repository/`** — every concrete adapter, one file each, **flat**. They sit together rather than in a folder per subject because they are all the same kind of thing: a class extending `BaseRepository`, reading `schema/`, running inside `TransactionScope`. A folder holding one file is a path, not a subject ([Simplicity](../opinions/simplicity.md)).
-- **`transaction/`** — `TransactionScope`, the `AsyncLocalStorage` every repository reads, and `PgUnitOfWork`.
+- **`transaction/`** — `TransactionScope`, the `AsyncLocalStorage` every repository reads; `ShardScope`, the second one holding `{ key, node }`; and `PgUnitOfWork`.
 - **`migrate/` and `seed/`** — scripts, not module code. Neither is exported from a barrel, both are exempt from `noConsole`, and the seed is idempotent: the owner role's grants come from `PermissionRegistry.all()` so they cannot fall behind the catalog.
 - **The tables are grouped by subject and the adapters are not**, and the asymmetry is deliberate: two tools require one entry naming every table, and nothing requires one naming every repository. A slice's files therefore land in two directories — `schema/lead.schema.ts` and `repository/pg-lead.repository.ts` — so a `CODEOWNERS` line per team needs both globs. `activity_log` is partitioned by month and written inside the caller's transaction, which is what makes an audit row and its state change commit together ([13](13-infrastructure-postgres.md)).
 - **Repositories fetch and persist. They never decide.** A `capabilities.can()` call in this package means an authorization decision escaped the use-case.
+- **Every repository declares one placement, and `catalog` / `local` / `routed` is the whole vocabulary.** The word names where a table lives, not what it holds: `catalog` is what a principal is built from before a key is known, `local` is present on every node, `routed` is everything a tenant produces and is the default. One repository, one placement — a CI assertion, and the reason `PgNotificationRecipientReader` takes a `ConversationRepository` rather than joining across the line.
+- **"Shard" is a physical node and nothing else.** There is no virtual shard, no bucket, no range: `shard_assignments` maps one key to one node. A `shardKey` is opaque text, and `node` is a number.
 - **Scoping by `organization_id` is not deciding.** The tenant filter is the boundary permissions are evaluated *inside*, not a permission check, so it belongs here — inherited from `BaseRepository` rather than written per method. A repository query with no tenant predicate is the bug; a repository asking `can()` is the other bug.
 - **Smell:** a permission check, or a non-Postgres concern inside `pg/`.
 
@@ -240,7 +242,9 @@ The Postgres side gets its own section because it is the largest folder in the p
 - **Constructs every concrete class exactly once.** This is the only file in the repository that knows `PgVectorStore` and `VectorStore` are related.
 - **Exposes ports as abstract types**, so a consumer holding `container.vectorStore` cannot accidentally depend on the concrete class.
 - **Contains no logic.** An `if` that is not about configuration means something crept in.
-- **Disposes in reverse construction order**, so the pool closes after the things using it.
+- **Disposes in reverse construction order**, so the pool closes after the things using it — one `cluster.close()` for every node, last.
+- **`shard/`** — `OrganizationShardingStrategy`, `keyOf(principal)`. One class, and the fork's swap point: a deployment sharding on region edits this file and three others, listed in [sharding](../../packages/infrastructure/docs/reference/sharding.md).
+- **`placed()` and `eachShard()` are the only two ways work is placed**, and they live here rather than on a port because choosing a key is a composition decision. Everything downstream reads the scope.
 - **Smell:** the word "if" anywhere except reading a config flag; lazy instantiation, which hides a construction failure until the first request.
 
 ---

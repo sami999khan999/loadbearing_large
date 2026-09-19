@@ -120,6 +120,31 @@ recover from.
 Guessing zero would work today and put a tenant's rows on the wrong machine the day it does not.
 `shard.resolution.failed` is logged at `error` and the read throws.
 
+## Sharding by something else: four edits, and nothing else
+
+A fork that shards by region, by plan, or by anything other than the organization changes four
+places. Nothing else in the repository names the choice, which is the property this whole seam
+exists to have.
+
+1. **`TenantKey` on the allowlist** — `application/src/primitive/partitioned-table.ts`, today
+   `"organization_id"`. It is the column name every tenant-owned table partitions by, and
+   `PartitionedTable` reads it to compose the `PARTITION BY LIST` clause. Change it and every
+   table's partition key changes with it.
+2. **One strategy class** — `composition/src/shard/organization.strategy.ts`, whose whole body is
+   `Shard.keyOf(principal.organizationId)`. `keyOf(principal)` is what the middleware calls once
+   a request has a principal, and a deployment sharding on region returns the region here.
+3. **`TENANT_COLUMN` in `check-architecture.mjs`** — the assertion that every domain table carries
+   the column and that every unique index leads with it. Asserted equal to `TenantKey`, so the
+   two cannot drift.
+4. **The worker's key derivation** — `apps/worker/src/bootstrap/with-shard.ts`, which turns a
+   job's payload into a principal. A job carries an organization id today; a region-sharded fork
+   carries whatever its strategy reads.
+
+**`shard_key` is opaque text and does not change.** The directory column is `text`, not a uuid and
+not a foreign key, precisely so a fork can put a region code in it without a migration. And both
+the generator and the seed read the alias rather than spelling the column, so neither is a fifth
+place.
+
 ## Rehearsing the split
 
 `pnpm infra:up:sharded` starts a second Postgres and its pooler; uncomment the two

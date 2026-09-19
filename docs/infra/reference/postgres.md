@@ -95,6 +95,7 @@ pnpm infra:reset
 |---|---|---|
 | `apps/web`, `apps/worker` (host) | `localhost:6432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
 | `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:5432` | DDL, via `DATABASE_DIRECT_URL` |
+| `migrate.ts`, `partitions.ts`, under the `sharded` profile | `localhost:5433` | the same DDL on node 1, via `DATABASE_SHARD_1_DIRECT_URL` |
 | `PgPartitionArchiveGateway` | `localhost:5432` | `DETACH … CONCURRENTLY` and a month-long stream |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
@@ -116,6 +117,24 @@ That is the whole reason the pooler is in the core stack rather than filed as a 
 the seed, `drizzle-kit` and the activity archive's `DETACH … CONCURRENTLY` need a connection with
 no pooler in it — and the timeout floor migration `0022` sets only reaches a session through the
 pooler once its server connections have been recycled with `RECONNECT`.
+
+---
+
+## One container is the catalog and node 0 at once
+
+There is one Postgres in the default stack and there is meant to be. The application reaches it
+through a `DatabaseCluster` and a key, every table is `catalog`, `local` or `routed`, and every
+tenant's row in `shard_assignments` names node 0 — so the routing runs for real against one
+machine, which is what makes a second one two environment variables rather than a project.
+
+`pnpm infra:up:sharded` starts `postgres-shard-1` and `pgbouncer-shard-1` on `:5433`/`:6433`, same
+image and same `postgres.init.sql`, on their own volume. That is for rehearsing the split and not
+for running one — `tests/smoke/sharded.smoke.spec.ts` is what it exists for. See
+[sharding](../../../packages/infrastructure/docs/reference/sharding.md) and
+[compose](compose.md).
+
+**`pgvector` has to be on every node, which is why the shard shares the init script.** A routed
+table with an embedding column on a database with no extension fails at insert, not at boot.
 
 ---
 

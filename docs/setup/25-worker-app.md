@@ -212,6 +212,16 @@ export class SystemPrincipal {
 
 **Every job carries an organization.** There is no global system principal, because there is no global data — a job that processes rows must know whose rows.
 
+**And that is also what places it.** `withShard(container, organizationId, work)` builds a
+`SystemPrincipal` for the tenant and hands it to `container.placed` — the worker's equivalent of
+the web app's middleware, once per job rather than once per request. A per-tenant handler that
+forgets it reaches a routed repository with no shard in scope, which throws.
+
+The passes with no tenant to derive a key from — the outbox drain, the partition runway, the
+digest fan-out — use `container.eachShard` instead and walk the nodes serially. Which loops which
+way, and why the projection is the exception, is in
+[the consumers](../../apps/worker/docs/reference/consumers.md).
+
 ---
 
 ## Step 25.4 — A consumer

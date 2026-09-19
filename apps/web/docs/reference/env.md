@@ -133,6 +133,23 @@ The build reads no configuration by design: `Env` is parsed at runtime and is se
 two addresses `Endpoint` holds are derived from `location`. Nothing at build time needs `.env`, so
 nothing should hand it one.
 
+## The shard block, and the two rules that make it safe
+
+`DATABASE_SHARD_<n>_URL` names every node after node 0, with an optional
+`DATABASE_SHARD_<n>_DIRECT_URL` beside each. Absent is one node, which is every deployment until
+the split — `DATABASE_URL` is node 0 and also the catalog.
+
+**Two rules, both enforced at boot rather than discovered later.** The indexes must be contiguous
+from 1: the cluster indexes the array it builds, so a `DATABASE_SHARD_2_URL` with no shard 1
+before it would put every tenant assigned to node 2 on the wrong database. And there is no
+`DATABASE_SHARD_0_URL`: node 0 is `DATABASE_URL`, and a second name for one pool is a
+disagreement waiting to happen about which is the catalog.
+
+There is no range or key configuration here, and that is the design.
+`shard_assignments` on the catalog names the node, one row per tenant, so adding a node is two
+variables and a placement decision — not a config file two processes have to agree about. See
+[sharding](../../../../packages/infrastructure/docs/reference/sharding.md).
+
 ## The six database variables, and which of them the pooler can see
 
 `DATABASE_URL` goes through pgBouncer in transaction mode. `DATABASE_DIRECT_URL` goes past it, and

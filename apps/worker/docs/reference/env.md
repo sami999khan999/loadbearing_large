@@ -46,6 +46,23 @@ the day the pipeline landed. The web app still parses them because it builds the
 parses no auth configuration to borrow an origin from. It is deliberately *not* `AUTH_URL`, which is
 Better Auth's own and exists only in the web app's schema.
 
+## The shard block, and the two rules that make it safe
+
+`DATABASE_SHARD_<n>_URL` names every node after node 0, with an optional
+`DATABASE_SHARD_<n>_DIRECT_URL` beside each. Absent is one node, which is every deployment until
+the split — `DATABASE_URL` is node 0 and also the catalog.
+
+**Two rules, both enforced at boot rather than discovered later.** The indexes must be contiguous
+from 1: the cluster indexes the array it builds, so a `DATABASE_SHARD_2_URL` with no shard 1
+before it would put every tenant assigned to node 2 on the wrong database. And there is no
+`DATABASE_SHARD_0_URL`: node 0 is `DATABASE_URL`, and a second name for one pool is a
+disagreement waiting to happen about which is the catalog.
+
+There is no range or key configuration here, and that is the design.
+`shard_assignments` on the catalog names the node, one row per tenant, so adding a node is two
+variables and a placement decision — not a config file two processes have to agree about. See
+[sharding](../../../../packages/infrastructure/docs/reference/sharding.md).
+
 ## The swappable stores
 
 A driver plus the connection detail that driver needs. `Container` reads the driver and builds the
