@@ -37,9 +37,8 @@ export class DatabaseCluster {
     return this.directAt(0);
   }
 
-  // A key resolves to a node, and an out-of-range node is an `InternalError` rather
-  // than a silent fall back to zero: the directory naming a node nobody deployed is a
-  // misconfiguration, and reading the wrong tenant's shard is worse than failing.
+  // An out-of-range node is an error rather than a fall back to zero: the directory
+  // naming a node nobody deployed is a misconfiguration, and the wrong shard is worse.
   public async forKey(key: ShardKey): Promise<Database> {
     return this.at(await this.resolver.resolve(key));
   }
