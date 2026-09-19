@@ -63,6 +63,10 @@ export class QueryKeys {
     policy: () => ["platform", "policy"] as const,
     gaps: () => ["platform", "projection", "gap"] as const,
     exports: (organizationId: string) => ["platform", "export", organizationId] as const,
+    shardMap: (params: unknown) => ["platform", "shard", "map", params] as const,
+    // The term is the key, because that is what the answer is about: two lookups of two
+    // tenants are two answers, not one refetched.
+    tenantLocation: (term: string) => ["platform", "shard", "tenant", term] as const,
   };
 
   public static readonly rbac = {

@@ -1,4 +1,4 @@
-import type { ApiClient, OrganizationId, TenantStorageQuery } from "../import.js";
+import type { ApiClient, OrganizationId, ShardMapQuery, TenantStorageQuery } from "../import.js";
 import { queryOptions } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 
@@ -41,6 +41,26 @@ export class PlatformQueries {
     return queryOptions({
       queryKey: QueryKeys.platform.exports(organizationId),
       queryFn: () => client.platform.listExports({ organizationId }),
+      staleTime: 0,
+    });
+  }
+
+  // A minute: the directory changes when a tenant is founded or moved, and neither is
+  // something an operator sits on this screen waiting for.
+  public static shardMap(client: ApiClient, params: ShardMapQuery) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.shardMap(params),
+      queryFn: () => client.platform.shardMap(params),
+      staleTime: 60_000,
+    });
+  }
+
+  // `staleTime: 0`, and `enabled` is the caller's: this answers "which node holds this
+  // one", and a cached answer after a move names the node it left.
+  public static tenantLocation(client: ApiClient, term: string) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.tenantLocation(term),
+      queryFn: () => client.platform.locateTenant({ term }),
       staleTime: 0,
     });
   }

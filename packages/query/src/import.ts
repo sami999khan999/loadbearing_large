@@ -61,6 +61,7 @@ export type {
   SearchDocumentsContractInput,
   SendMessageInput,
   SetMemberActiveInput,
+  ShardMapQuery,
   TenantDeletedDto,
   TenantDeleteInput,
   TenantExportInput,
