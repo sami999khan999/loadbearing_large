@@ -130,9 +130,12 @@ jobs:
       # `pnpm build:packages` filters to ./packages/*.
       - run: pnpm --filter @loadbearing/worker build
 
-      # The one step that evaluates `Env` and opens a connection. Everything above it
-      # runs against source and cannot tell that a variable is missing.
+      # The two steps that start a process. Everything above them runs against source and
+      # cannot tell that a variable is missing, because `env.ts` parses at module load.
+      # The web one also proves a request completes: `T-032` was a bundle that built,
+      # imported, listened, and answered 500 on every page.
       - run: node tooling/scripts/boot-smoke.mjs worker
+      - run: node tooling/scripts/boot-smoke.mjs web
 
       # The web build above is also what makes this pass rather than skip:
       # `check:architecture`'s bundle assertion greps the built client output, and

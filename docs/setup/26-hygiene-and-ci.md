@@ -256,9 +256,12 @@ jobs:
       # `pnpm build:packages` filters to ./packages/*.
       - run: pnpm --filter @loadbearing/worker build
 
-      # The one step that evaluates `Env` and opens a connection. Everything above it
-      # runs against source and cannot tell that a variable is missing.
+      # The two steps that start a process. Everything above them runs against source and
+      # cannot tell that a variable is missing, because `env.ts` parses at module load.
+      # The web one also proves a request completes: `T-032` was a bundle that built,
+      # imported, listened, and answered 500 on every page.
       - run: node tooling/scripts/boot-smoke.mjs worker
+      - run: node tooling/scripts/boot-smoke.mjs web
 
       # The web build above is also what makes this pass rather than skip:
       # `check:architecture`'s bundle assertion greps the built client output, and
@@ -947,12 +950,69 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through eighteen
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-four
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Seventeen of the
-eighteen are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-three of the
+twenty-four are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
+
+## Step 26.4d — The boot smoke, and why `/` is the probe
+
+```bash
+node tooling/scripts/boot-smoke.mjs worker
+node tooling/scripts/boot-smoke.mjs web
+```
+
+Everything else in the pipeline runs against source. `env.ts` parses at module load, so a variable
+the deployment forgot is invisible to `typecheck`, `lint`, `test` and every assertion in
+`check:architecture` — and shows up the first time a process starts, which until this script was
+in production.
+
+The script spawns the built entrypoint, waits for the line that app prints when its socket is open,
+then sends `SIGTERM` and reads what happened. `started` is that literal text rather than a shape
+imposed here: the worker emits `"event":"process.started"` through its own logger, and nitro prints
+`Listening on:`.
+
+**`web` was opted out, for a bug that has since been fixed.** The comment said the server bundle
+throws `jsxDEV is not a function`. That was `T-032`, fixed 2026-09-13 — and the comment also cited a
+TODO file under a *tasks/* directory that has never existed (it is [`plans/TODO.md`](../../plans/TODO.md)),
+and `T-034`, which is the dropped analytics-reader item. Three errors in four lines, which is what
+a comment nobody can run decays into.
+
+**The probe is `/`, and `/api/health` is the wrong one** — worth writing down, because the health
+route is the obvious choice and it is obviously right for about a minute:
+
+- It renders no JSX, so it would have answered 200 straight through `T-032` while every page
+  a user could reach answered 500. A gate that passes on the bug it was built for is not a gate.
+- It reports its dependencies. A 503 there means ClickHouse is not running, which is a statement
+  about the machine rather than the bundle. Measured locally: `/` 200 with 6 124 bytes of rendered
+  HTML, `/api/health` 503 with `analytics: false`, in the same process, in the same second.
+
+`/` is a server render — the router, the shell, the JSX runtime and a `Response` that completes.
+Nothing under `.output/public/` is a prerendered `index.html`, so a 200 there cannot come from a
+static file.
+
+**The clean-exit assertion is the worker's alone.** A drain that ends on the signal rather than on
+its own is a drain that did not finish, which is why the worker is sent `SIGTERM` rather than
+killed, and why it must exit `0` having logged `process.stopped`. The web server has no queue to
+drain, and on Windows `SIGTERM` is a terminate rather than a signal a process can catch, so
+requiring a clean exit there would assert the platform rather than the app.
+
+**The port is one the kernel just handed out**, not a constant: a developer with `pnpm dev` running
+would otherwise get a failure that names a port rather than a bug.
+
+**To run it locally**, give the child the environment CI gives it in the job block:
+
+```bash
+node --env-file=.env tooling/scripts/boot-smoke.mjs web
+```
+
+Without that, the built web server answers 500 on every request and prints a `ZodError` naming the
+missing key — which is the script working, and is exactly how a `.env` that has fallen behind
+`.env.example` announces itself.
+
+---
 
 ## Step 26.5 — Optional but worth it
 

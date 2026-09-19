@@ -1,7 +1,7 @@
 // Each assertion run against a tree that violates it, and against one that does not.
 //
 // The script derives ROOT from its own location, so a fixture is a temporary tree with a
-// copy of it under `tooling/scripts/` — no ROOT parameter to thread through eighteen
+// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-four
 // assertions, and the thing under test is the file the repository actually runs.
 
 // @ts-check

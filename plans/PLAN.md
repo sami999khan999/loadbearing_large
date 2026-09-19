@@ -3521,7 +3521,32 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     that proves it), or the totality of `NamespaceBundle` is relaxed back to `Partial` with a
     `check-architecture` assertion counting the gap instead. Do not ship both.
 
-- [ ] `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling`
+- [x] `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling`
+  - **Shipped 2026-09-20.** `APPS` has a `web` entry, `ci.yml` runs `boot-smoke.mjs web` beside the
+    worker, the stale comment is gone, and `docs/setup/26` gains step `26.4d` for the whole of it.
+    `started` is now the literal text an app prints rather than a shape the script imposes: the
+    worker's `"event":"process.started"`, nitro's `Listening on:`.
+  - `corrected:` **the probe is `/`, not `/api/health`**, and the "Done when" above had it the wrong
+    way round. Two reasons, the first fatal. The health route **renders no JSX**, so it would have
+    answered 200 straight through `T-032` while every page a user could reach answered 500 — a gate
+    that passes on the defect it was built for. And it reports its dependencies, so a 503 there is a
+    statement about the machine, not the bundle. Measured in one process, in one second: `/` → 200
+    with 6 124 bytes of server-rendered HTML; `/api/health` → 503 with `analytics: false`, because
+    nobody had started ClickHouse. Nothing under `.output/public/` is a prerendered `index.html`, so
+    the 200 cannot come from a static file.
+  - **The clean-exit assertion stays the worker's alone.** The web server has no queue to drain, and
+    on Windows `SIGTERM` is a terminate rather than a signal a process can catch — requiring an exit
+    code of 0 there would assert the platform. The same platform limit means
+    `boot-smoke.mjs worker` cannot pass on Windows at all: it reports `booted` and then
+    `did not exit cleanly on SIGTERM`. That is pre-existing and unchanged; the worker gate is a
+    Linux one, and CI is where it runs.
+  - **The port is one the kernel just handed out**, so a developer with `pnpm dev` up gets a real
+    failure rather than one that names a port.
+  - **It found something on its first run**, which is the argument for it. The built server answered
+    500 on `/` *and* on `/api/health`, with a `ZodError` naming `APP_BASE_URL` — a key present in
+    `.env.example` and absent from this machine's `.env`, along with thirteen others. That is a
+    stale local `.env`, not a repo defect; it is also precisely the class of failure the entry
+    describes, arriving unprompted the first time anything started the process.
   - **Goal:** `tooling/scripts/boot-smoke.mjs` knows one app, `worker`, and `ci.yml:135` runs only
     that one. The comment at line 19 says why: the web server bundle throws
     `jsxDEV is not a function`. That was `T-032`, and it was **fixed on 2026-09-13** — the built

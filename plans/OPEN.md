@@ -537,13 +537,13 @@ complete on its own.
 - `23.1` — the `jobId` duplicate-suppression window is ~5 s, not `removeOnCompleteAgeSeconds`. Not a correctness bug; needs one of three shapes chosen. `PLAN.md` line 3354.
 - `23.2` — `pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue; a running worker logs `queue.job.failed`. `PLAN.md` line 3370.
 - `23.3` — the QueryClient is not dehydrated, so every loader prefetch is thrown away. Needs decision (a) or (b); (c) is wrong. `PLAN.md` line 3376.
-- `23.16` — the web boot smoke is switched off for a bug (`T-032`) fixed on 2026-09-13; nothing proves the built web bundle serves a request. `PLAN.md` line 3512.
+- ~~`23.16`~~ — closed 2026-09-20. The built bundle now serves `/` under `boot-smoke.mjs web`, in CI.
 
 ---
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-seven boxes, all in Phases 23–26, after `23.4` and `23.13` closed. Phases 1–22 have none. The line
+Thirty-six boxes, all in Phases 23–26, after `23.4`, `23.13` and `23.16` closed. Phases 1–22 have none. The line
 number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
 edited above them.
 
@@ -572,7 +572,7 @@ From `TODO.md`
 - ~~`23.13` **Assert that every event code has an emitter**~~ — closed 2026-09-20: `check:architecture` §24, and `shard.assignment.created` gained the emitter it never had
 - `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h` `#api` `#db` — line 3470
 - `23.15` **The English fallback layer is now dead payload** `P3` `~3h` `#ui` — line 3494
-- `23.16` **The web boot smoke is still switched off for a bug that is fixed** `P2` `~1h` `#tooling` — line 3512
+- ~~`23.16` **The web boot smoke is still switched off for a bug that is fixed**~~ — closed 2026-09-20: `boot-smoke.mjs web` probes `/` and runs in CI
 
 ### Phase 24 — The physical split (gated on a second shard being provisioned)
 
@@ -623,5 +623,23 @@ Verified on this machine, against the live containers:
 | sharded smoke | 4 of 4, no teardown error |
 | orphan partitions, both nodes | 0, and self-cleaning |
 
-Section A is closed. What remains is the four already-filed fixes restated above (`23.1`, `23.2`,
-`23.3`, `23.16`) and the thirty-eight unchecked `PLAN.md` items in section B.
+Section A is closed. What remained at that point was the four already-filed fixes restated above
+(`23.1`, `23.2`, `23.3`, `23.16`) and the thirty-eight unchecked `PLAN.md` items in section B.
+Section C below is what has closed since.
+
+---
+
+## C. Landed since — 2026-09-20
+
+One line per section-B item that has closed, newest last. Each says what shipped and how it was
+proved; the argument stays in `PLAN.md`, which is also where the tick is.
+
+- `23.13` **Every event code has an emitter** — `check:architecture` §24, with five fixtures.
+  It failed on its first run: `shard.assignment.created` had been declared since the routing seam
+  and never emitted. `PgOrganizationFounder` emits it now, after the commit rather than inside the
+  transaction. The count moved to twenty-four in `AGENTS.md`, `workflow.md` and `docs/setup/26`.
+- `23.16` **The web boot smoke** — `boot-smoke.mjs web` boots `.output/server/index.mjs` on a
+  kernel-assigned port and requires `/` to answer 200 with a body; `ci.yml` runs it beside the
+  worker. **The entry's own "Done when" named `/api/health` and that is the wrong probe** — it
+  renders no JSX, so it answers 200 straight through the `T-032` bug the gate exists for, and it
+  reports dependencies, so it answers 503 for a ClickHouse nobody started. Both measured.
