@@ -1,6 +1,6 @@
 ---
 title: The consumers
-description: Three consumers, all serial, all with a public handle() — the batch sizes and why they are what they are, and the failure each one exists to make visible.
+description: Six consumers, all serial, all with a public handle() — the batch sizes and why they are what they are, and the failure each one exists to make visible.
 ---
 
 # The consumers
@@ -11,6 +11,7 @@ description: Three consumers, all serial, all with a public handle() — the bat
 | `EmbeddingConsumer` | `EMBEDDING` | index | always |
 | `MailConsumer` | `MAIL` | send | always |
 | `OutboxConsumer` | `EVENT` | drain · deliver | always |
+| `NotificationConsumer` | `NOTIFICATION` | digest-fanout · digest | always |
 | `AnalyticsConsumer` | `ANALYTICS` | project · reconcile | only with a ClickHouse config |
 
 ## `handle()` is public on every one of them
@@ -221,10 +222,31 @@ drain, or the outbox grows while the worker looks busy.
 events published" and "no events to publish" produce the same line. Sixty seconds behind, on a
 one-second schedule, means the drain is not running rather than that it is busy.
 
-> [!NOTE]
-> `QueueName.NOTIFICATION` still has no consumer. It gains one in Phase 3 of
-> [`plans/archive/COMMUNICATION-PLAN.md`](../../../../plans/archive/COMMUNICATION-PLAN.md), with the digest
-> schedule. `DigestComposer`, which nothing but its own spec ever constructed, is deleted.
+## `NotificationConsumer` fans out one job per tenant, and never sends
+
+Two jobs on `QueueName.NOTIFICATION`, the same split `OutboxConsumer` makes and for the same
+reason. `digest-fanout` asks every node which of its tenants has anyone to write to and publishes
+one `digest` job each; `digest` is one tenant's digest. One job per tenant rather than one job
+doing every tenant is what keeps a digest that fails for one organization from stopping the other
+four thousand.
+
+**It enqueues mail rather than sending it.** `SendNotificationDigestUseCase` ends at
+`mail.publish(...)`, so the message becomes a job on `QueueName.MAIL` and `MailConsumer` remains
+the only thing in this system that talks to SMTP.
+
+**The job id is `digest_<organizationId>_<day>`, and it is the deduplication key.** A schedule
+that fires twice, or a fan-out that is redelivered after a crash, produces the same ids and BullMQ
+sends one morning's digest. The day comes from `container.clock` in UTC rather than from the job
+payload, so a retry covers the day it was for and not the day it ran.
+
+**The fan-out is capped at 5 000 tenants** and the emitted `notification.digest.completed` carries
+the unclipped count, so a deployment that has outgrown one page of tenants says so in a line rather
+than by quietly dropping the tail. Paging the fan-out itself is the fix when that line appears.
+
+`digestOrganizations` is asked **per node**, inside `container.eachShard`, because
+`notification_preferences` is routed: which tenants have anyone to write to is a question each node
+answers about the tenants it holds. The per-tenant `digest` job then places itself with
+`withShard`.
 
 ## Every cross-tenant pass loops the cluster, and the loop is over nodes
 
