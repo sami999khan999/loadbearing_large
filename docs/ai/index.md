@@ -32,6 +32,7 @@ than ~900 tokens, so read the one or two a task needs.
 | Style anything — a colour, a component, a stylesheet | [`rules/color.md`](rules/color.md) |
 | Decide how much structure to build | [`rules/simplicity.md`](rules/simplicity.md) |
 | Run, verify, or commit a change | [`rules/workflow.md`](rules/workflow.md) |
+| Explain something to the person you are working with | [`rules/explaining.md`](rules/explaining.md) |
 | Write a commit message, a PR body, or a branch name | [`rules/workflow.md`](rules/workflow.md) — and never name yourself as author, co-author, or contributor |
 | Add a feature slice | [`skills/add-slice.md`](skills/add-slice.md) |
 | Write or extend a package's `docs/` | [`skills/add-docs.md`](skills/add-docs.md) |
@@ -56,7 +57,7 @@ convention you infer will be wrong in the ways that matter.
 ```
 CLAUDE.md                       ← Claude Code: loaded unprompted, ~8,400 tok
   ├── @AGENTS.md                ← the brief (~340 tok)
-  └── @docs/ai/rules/*.md       ← all twelve rule files, inlined at session start
+  └── @docs/ai/rules/*.md       ← all thirteen rule files, inlined at session start
 
 AGENTS.md                       ← every other tool: the only file loaded unprompted (~340 tok)
   └── docs/ai/index.md          ← this file: routes by task (~1,700 tok)
@@ -69,7 +70,7 @@ AGENTS.md                       ← every other tool: the only file loaded unpro
 **The rulebook loads whole, and that is a deliberate reversal.** This file used to argue the
 opposite — nothing loads that a task does not need, under 300 tokens unprompted, ~470 for a task
 that adds a dependency. The argument was sound while context was scarce and it stopped being sound
-when the window reached seven figures: twelve rule files is **~7,700 tokens**, and a session that
+when the window reached seven figures: thirteen rule files is **~8,500 tokens**, and a session that
 needs *any* rule was already paying ~1,700 for this router plus 410–890 for the file it names, so
 the true saving was never the headline number.
 
@@ -99,8 +100,10 @@ while the digest silently omits it, and a rule file cannot be orphaned, deleted,
 session load without the build noticing.
 
 That last one is the failure this reversal would otherwise introduce. Loading the rulebook from a
-hand-written list of twelve imports means the thirteenth rule is one someone forgot to add — routed
-to correctly, read by nobody, and indistinguishable from a rule that is simply being ignored.
+hand-written list of imports means the next rule added is one someone forgot to list — routed to
+correctly, read by nobody, and indistinguishable from a rule that is simply being ignored.
+`explaining.md` was the thirteenth, and it is the worked example: the file, its two routes, and the
+`@` line are one change because §12 fails on any of them alone.
 
 It does **not** check that a rule file's summary of its page is still *accurate*. That is why every
 file in `rules/` ends with the line saying `docs/opinions/` wins any disagreement.

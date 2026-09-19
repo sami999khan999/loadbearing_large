@@ -5,7 +5,7 @@ description: The rules an agent must know unprompted, one file per topic. A dige
 
 # Repository rules
 
-One file per topic, none longer than ~900 tokens, ~7,700 for all twelve. Procedures that touch many
+One file per topic, none longer than ~900 tokens, ~8,500 for all thirteen. Procedures that touch many
 files in a fixed order are run books instead, in [`../skills/`](../skills/index.md) — adding a
 feature slice, writing a package's docs.
 
@@ -28,6 +28,7 @@ the one or two files that answer a given task.
 | [`data.md`](data.md) | Which store owns which data, and what every new schema must carry |
 | [`simplicity.md`](simplicity.md) | The tie-breaker when two designs satisfy every other rule |
 | [`workflow.md`](workflow.md) | Commands, what to run before claiming done, commits and who authors them, adding a feature |
+| [`explaining.md`](explaining.md) | Answering a person: what to lead with, whose words to use, and verifying before you explain |
 
 ## What is in these files and what is not
 

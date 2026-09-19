@@ -27,6 +27,7 @@ This list is checked: `check-architecture.mjs` §12 fails if a file lands in `do
 @docs/ai/rules/data.md
 @docs/ai/rules/simplicity.md
 @docs/ai/rules/workflow.md
+@docs/ai/rules/explaining.md
 
 The skill run books in [`docs/ai/skills/`](docs/ai/skills/index.md) are **not** imported. They are
 procedures you execute on request, not rules you must hold — reach them by name (`/add-slice`,
