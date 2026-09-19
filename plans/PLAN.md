@@ -2798,6 +2798,19 @@ suite through the cluster, the tripwire spec, and the scope unit specs; the two-
 is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog foreign keys until
 `24.1`.
 
+**Where this phase stands, 2026-09-19.** The seam is built and the system runs on it: every
+repository declares a placement, `BaseRepository` trips on a crossing, the web middleware and the
+worker place their work, and three CI assertions keep it that way. `22.1`–`22.9`, `22.11`,
+`22.13`–`22.15` and `22.18` are done and verified; `pnpm test`, `pnpm smoke` and
+`pnpm check:architecture` are green.
+
+What is left is the part a second node needs, and none of it changes behaviour on one:
+`22.10` (splitting the one cross-placement reader), `22.12`'s remaining half (two unit-of-work
+instances bound per slice — there is one today, `catalog`, which is correct on one node),
+`22.16`–`22.17` (the cross-tenant loops and scripts walking every shard), `22.19`–`22.20` (the
+compose profile and the two-node rehearsal) and `22.21`–`22.22` (the rest of the docs and the
+verification pass). `sharding.md` is written already, because `22.3` needed it to exist.
+
 #### Primitives and ports (`application`)
 
 - [x] `22.1` **Primitives** — `packages/application/src/primitive/shard.ts`: `ShardKey` (branded
@@ -3005,7 +3018,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   `packages/composition/src/shard/`. It is the fork's swap point rather than a computation, which
   is the whole point of it being a port at all.
 
-- [~] `22.12` **`Container`** — `container.config.ts` `database` becomes
+- [ ] `22.12` **`Container`** — `container.config.ts` `database` becomes
   `{ url, directUrl, poolMax…, shards: readonly { index, url, directUrl }[] }`; both
   `env.ts` collect `DATABASE_SHARD_<n>_*` with a `z.preprocess` over `process.env` keys (still
   the one reader). `Container` builds `DatabaseCluster`, `ShardScope`,
