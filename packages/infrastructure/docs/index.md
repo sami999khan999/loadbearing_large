@@ -280,3 +280,6 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   offer.
 - [Realtime](reference/realtime.md) — one subscriber connection per process, ref-counted channels,
   and why the overflow is a `resync`.
+- [Fan-out](reference/fan-out.md) — the three §6 paths measured against the running stack, which of
+  the three costs nineteen of the twenty-four seconds, and what a `users` delete does to a
+  partitioned table.

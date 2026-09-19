@@ -14,10 +14,14 @@ const optional = (name: string): string | undefined => process.env[name] || unde
 
 // A comma-separated list of tenant counts, read here for the reason every other value is:
 // `noProcessEnv` and assertion 3 both walk `tests/`.
-const tenantCeiling = optional("TENANT_CEILING")
-  ?.split(",")
-  .map((value) => Number(value.trim()))
-  .filter((value) => Number.isInteger(value) && value > 0);
+const numbers = (name: string): number[] | undefined =>
+  optional(name)
+    ?.split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+const tenantCeiling = numbers("TENANT_CEILING");
+const fanOut = numbers("FAN_OUT_SCALE");
 
 const shard1Url = optional("DATABASE_SHARD_1_URL");
 const lokiUrl = optional("LOKI_URL");
@@ -30,6 +34,9 @@ export default defineConfig({
     // Serially: two files racing on the same bucket and the same queue key is a flake
     // that only reproduces on a fast machine.
     fileParallelism: false,
+    // The same sweep `vitest.config.ts` runs, and for the same reason: two files here
+    // found tenants, and a run killed half way through leaves their partitions behind.
+    globalSetup: ["tests/support/orphan-sweep.ts"],
     // Real round trips to five services, and MinIO's first request pays for the pool.
     testTimeout: 30_000,
     hookTimeout: 30_000,
@@ -63,6 +70,7 @@ export default defineConfig({
           forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
         },
         ...(tenantCeiling?.length ? { tenantCeiling } : {}),
+        ...(fanOut?.length ? { fanOut } : {}),
         ...(lokiUrl ? { loki: { url: lokiUrl, tenantId: optional("LOKI_TENANT_ID") } } : {}),
         ...(clickhouseUrl
           ? {

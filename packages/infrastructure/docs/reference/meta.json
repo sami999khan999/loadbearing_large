@@ -12,6 +12,7 @@
     "storage-policy",
     "clickhouse",
     "loki",
-    "realtime"
+    "realtime",
+    "fan-out"
   ]
 }
