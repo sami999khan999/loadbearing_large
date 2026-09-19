@@ -73,6 +73,7 @@ export {
   RoleMatrix,
   SessionProvider,
   type SessionUser,
+  ShardMapPanel,
   SignInForm,
   SignOutButton,
   SignUpForm,

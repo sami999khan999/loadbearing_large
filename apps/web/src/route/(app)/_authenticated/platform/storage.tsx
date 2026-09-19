@@ -30,8 +30,8 @@ function PlatformStorage() {
       <h1>{t("platform.storage.title")}</h1>
       <TenantStorageList />
       {
-        // Here rather than on a shard map, which does not exist yet: this is the one
-        // screen that lists tenants, and a delete belongs beside what it removes.
+        // Here and not on the shard map, which links to it: one confirmation form that
+        // asks for the slug to be typed back, in one place that can get it wrong.
         <Can permission="platform.tenant.manage" capabilities={capabilities}>
           <TenantExportPanel />
           <DeleteTenantPanel />

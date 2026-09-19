@@ -87,6 +87,14 @@ export class PlatformRouter {
     },
   );
 
+  public static readonly shardMap = authed.platform.shardMap.handler(({ input, context }) =>
+    context.container.platformAdmin.inspectShardMap.execute(context.principal, input),
+  );
+
+  public static readonly locateTenant = authed.platform.locateTenant.handler(({ input, context }) =>
+    context.container.platformAdmin.locateTenant.execute(context.principal, input),
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring
   // `PlatformProcedures.all`.
   public static readonly all = {
@@ -106,5 +114,7 @@ export class PlatformRouter {
     exportTenant: PlatformRouter.exportTenant,
     listExports: PlatformRouter.listExports,
     updateRetention: PlatformRouter.updateRetention,
+    shardMap: PlatformRouter.shardMap,
+    locateTenant: PlatformRouter.locateTenant,
   } as const;
 }
