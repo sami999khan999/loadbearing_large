@@ -25,9 +25,8 @@ export class ShardScope {
     return this.storage.run(placed, work);
   }
 
-  // For a caller that owns the rest of its execution context and has no callback to
-  // wrap — a spec's `beforeEach`, and nothing in `src/`. `within` is the shape a
-  // request and a job use, because both have exactly one body to run.
+  // For a caller that owns the rest of its context and has no callback to wrap — a
+  // spec's hooks, and nothing in `src/`, where `within` is always the shape.
   public enter(placed: PlacedShard): void {
     this.storage.enterWith(placed);
   }
