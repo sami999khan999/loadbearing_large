@@ -137,6 +137,34 @@ have opposite lifetimes. A cold object outlives its tenant on purpose — thirty
 window, swept by the nightly pass. A directory row for a tenant that no longer exists answers a
 question nobody can ask.
 
+## The directory has a screen, and it reads the directory rather than the cluster
+
+`/platform/shards` is one row per physical node, behind `platform.shards.read`.
+`PgShardMapReader` counts `shard_assignments` grouped by `node`, and that is the whole of it —
+**no join to the cluster, and no join to `organizations` for the node list**.
+
+That is worth stating because the obvious alternative is wrong in two directions at once. Asking
+the cluster how many nodes it has reports what `DATABASE_SHARD_<n>_URL` was set to, which is a
+statement about this process's environment rather than about where tenants are. And joining
+`organizations` would hide the one row an operator most needs to see: a directory row whose
+tenant is gone. A node the deployment has just added has no row here at all, which is the honest
+answer — nothing is on it yet.
+
+The tenants **under** a node are a second query and it does not run until a node is expanded.
+Every node's tenants at once is the whole directory, which is the one read this screen must not
+make; the expansion is paginated and ordered by name then id, so an offset means the same thing
+on the second page as it did on the first.
+
+**The move button is rendered and disabled.** `Container.hasShardMoves` is a getter returning a
+constant `false` until `24.2` registers the move job, and the use-case turns it into
+`moves: "unavailable" | "available"` on the wire. A screen that simply omitted the control would
+say nothing about what is missing; one that showed an enabled control would lie. The disabled
+one carries the reason as text — "tenant moves need the physical split".
+
+The tenant lookup takes an organization id **or** a slug and compares
+`organizations.id::text = $1`. Never `$1::uuid`: a slug cast to a uuid is a `22P02` from the
+database rather than the empty answer a typed search should get.
+
 ## Sharding by something else: four edits, and nothing else
 
 A fork that shards by region, by plan, or by anything other than the organization changes four
