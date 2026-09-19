@@ -123,6 +123,36 @@ export class PlatformContract {
     slug: z.string().min(1).max(64),
   });
 
+  public static readonly projectionEntry = z.object({
+    action: z.string().min(1),
+    label: z.string().min(1),
+    // The action's own prefix. The screen groups by it, which is the only reason it
+    // is on the wire rather than derived again in the browser.
+    module: z.string().min(1),
+    projected: z.boolean(),
+    ttlMonths: z.number().int().nullable(),
+    isDefault: z.boolean(),
+  });
+
+  public static readonly projection = z.object({
+    actions: z.array(PlatformContract.projectionEntry).readonly(),
+    defaultMonths: z.number().int(),
+    // What the store holds beside what the rows compose to, so the screen can show
+    // drift rather than assume the last write landed.
+    applied: z.string(),
+    expected: z.string(),
+    // The third state: not configured, rather than on or off.
+    configured: z.boolean(),
+  });
+
+  // `action` stays a string and is validated against `ActivityActions.isKnown` one
+  // layer in, for the reason every table name here is.
+  public static readonly projectionUpdate = z.object({
+    action: z.string().min(1).max(128),
+    projected: z.boolean(),
+    ttlMonths: z.number().int().min(1).max(120).nullable(),
+  });
+
   public static readonly tenantExport = z.object({
     organizationId: Identifiers.organizationId,
   });
@@ -202,6 +232,9 @@ export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequest
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type TenantDeleteInput = z.infer<typeof PlatformContract.tenantDelete>;
+export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
+export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
+export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;
 export type TenantExportInput = z.infer<typeof PlatformContract.tenantExport>;
 export type ExportRequestedDto = z.infer<typeof PlatformContract.exportRequested>;
 export type TenantExportObjectDto = z.infer<typeof PlatformContract.tenantExportObject>;

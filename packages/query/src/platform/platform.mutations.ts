@@ -1,6 +1,7 @@
 import type {
   ApiClient,
   ExportRequestedDto,
+  ProjectionUpdateInput,
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
@@ -48,6 +49,15 @@ export class PlatformMutations {
     return useAppMutation<ExportRequestedDto, TenantExportInput>({
       mutationFn: (input) => client.platform.exportTenant(input),
       invalidates: [],
+    });
+  }
+
+  // The list carries what the store currently holds, so a save that failed after the
+  // commit shows as drift rather than as success.
+  public static useUpdateProjection(client: ApiClient) {
+    return useAppMutation<{ ok: true }, ProjectionUpdateInput>({
+      mutationFn: (input) => client.platform.updateProjection(input),
+      invalidates: [QueryKeys.platform.projection()],
     });
   }
 

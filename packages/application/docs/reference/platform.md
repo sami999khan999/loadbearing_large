@@ -141,6 +141,23 @@ What the export **does not** carry is the hashes. `invitations.token_hash` and
 `api_keys.token_hash` are nulled on the way out: a hash is a credential, not data the customer
 owns, and handing one back is handing back the ability to brute-force the key it was made from.
 
+## The projection policy is composed in one place, read in three
+
+`RetentionRules.clickhouseTtlFrom(retentionRows, projectionRows)` is the whole expression. The
+screen reads it to show what the store *should* hold, `UpdateProjectionPolicyUseCase` writes it
+after a save, and the nightly `retention` job converges to it. Three callers composing the same
+string by hand is three places for it to drift, and the drift would only show as a TTL rewritten
+every night.
+
+Two rules inside it. An **excluded** action gets no clause: nothing writes it, so a window over
+it is a rule on rows that do not arrive. And the expression is **compared before it is written**,
+in the save as well as in the job — `MODIFY TTL` materialises every existing part, which on a
+years-deep table is a rewrite.
+
+The save's ClickHouse call is after the commit and its failure is logged rather than rethrown,
+exactly as the retention save's is: the row is the truth, the nightly job closes the gap, and a
+store that was unreachable must not fail a save that already committed.
+
 ## What lands here next
 
 | Phase | Files |

@@ -42,6 +42,17 @@ export class PlatformRouter {
     context.container.platformAdmin.listExports.execute(context.principal, input),
   );
 
+  public static readonly listProjection = authed.platform.listProjection.handler(({ context }) =>
+    context.container.platformAdmin.listProjection.execute(context.principal),
+  );
+
+  public static readonly updateProjection = authed.platform.updateProjection.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.updateProjection.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   public static readonly listStorage = authed.platform.listStorage.handler(({ input, context }) =>
     context.container.platformAdmin.listStorage.execute(context.principal, input),
   );
@@ -64,6 +75,8 @@ export class PlatformRouter {
     restorePartition: PlatformRouter.restorePartition,
     updateTenantRetention: PlatformRouter.updateTenantRetention,
     listStorage: PlatformRouter.listStorage,
+    listProjection: PlatformRouter.listProjection,
+    updateProjection: PlatformRouter.updateProjection,
     deleteTenant: PlatformRouter.deleteTenant,
     exportTenant: PlatformRouter.exportTenant,
     listExports: PlatformRouter.listExports,

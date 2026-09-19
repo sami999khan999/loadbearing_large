@@ -13,6 +13,11 @@ export {
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
 export {
+  ListProjectionPoliciesUseCase,
+  type ProjectionEntry,
+  type ProjectionPolicies,
+} from "./list-projection-policies.use-case.js";
+export {
   type ClickHouseRetention,
   ListRetentionPoliciesUseCase,
   type RetentionEntry,
@@ -63,6 +68,10 @@ export {
   TenantStorageReader,
   type TenantStorageRow,
 } from "./tenant-storage.reader.js";
+export {
+  type UpdateProjectionPolicyInput,
+  UpdateProjectionPolicyUseCase,
+} from "./update-projection-policy.use-case.js";
 export {
   ANALYTICS_TABLE,
   type UpdateRetentionPolicyInput,

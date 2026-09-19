@@ -239,9 +239,11 @@ export class MaintenanceConsumer {
   private async convergeClickHouse(rows: readonly RetentionPolicyRecord[]): Promise<void> {
     if (!this.container.hasProjector) return;
 
-    const row = rows.find((candidate) => candidate.store === "clickhouse");
-    const expression = RetentionRules.clickhouseTtlFor(
-      row?.hotMonths ?? RetentionRules.DEFAULT_CLICKHOUSE_MONTHS,
+    // Both tables, composed by the same function the screen and the save use: three
+    // callers composing the same string by hand is three places for it to drift.
+    const expression = RetentionRules.clickhouseTtlFrom(
+      rows,
+      await this.container.projectionPolicies.all(),
     );
 
     if ((await this.container.projector.retention()) === expression) return;

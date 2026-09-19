@@ -1,6 +1,7 @@
 import type {
   ArchivedObject,
   PartitionEstimate,
+  ProjectionPolicyRecord,
   RetentionPolicyRecord,
   TenantRetentionPolicyRecord,
 } from "@loadbearing/application";
@@ -11,6 +12,7 @@ import {
   InMemoryAnalyticsProjector,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
   InMemoryStoragePolicyGateway,
   InMemoryTenantRetentionPolicyRepository,
@@ -81,6 +83,9 @@ function harness(
     // An override is what makes the prune pass walk tenants rather than months, so
     // most cases here stage none and assert the table-month path.
     tenantPolicies?: readonly TenantRetentionPolicyRecord[];
+    // Empty for every case but the per-action TTL: an absent row is "projected, with
+    // the default", so staging nothing asserts the behaviour before the table existed.
+    projections?: readonly ProjectionPolicyRecord[];
     lifecycle?: InMemoryStoragePolicyGateway;
   } = {},
 ) {
@@ -93,6 +98,7 @@ function harness(
   const projector = new InMemoryAnalyticsProjector();
   const outbox = new InMemoryOutboxGateway();
   const retentionPolicies = new InMemoryRetentionPolicyRepository(options.policies);
+  const projectionPolicies = new InMemoryProjectionPolicyRepository(options.projections);
   const tenantRetentionPolicies = new InMemoryTenantRetentionPolicyRepository(
     options.tenantPolicies,
   );
@@ -109,6 +115,7 @@ function harness(
     // The harness fixes its own epoch; this spec asserts against a later month.
     clock: new FixedClock(NOW),
     retentionPolicies,
+    projectionPolicies,
     tenantRetentionPolicies,
     storagePolicy,
     // The **instance** with one method shadowed, never a spread: spreading a class
@@ -127,6 +134,7 @@ function harness(
     partitionArchive,
     outbox,
     retentionPolicies,
+    projectionPolicies,
     tenantRetentionPolicies,
     storagePolicy,
     logger,
@@ -431,6 +439,38 @@ describe("MaintenanceConsumer — the retention job", () => {
     expect(emitted(logger, "cold.tenant.exported")).toEqual([
       { organizationId: FIRST, objects: 2, rows: 12, bytes: 120 },
     ]);
+  });
+
+  // `20.4`: the nightly job composes from **both** tables. Three callers composing the
+  // same string by hand is three places for it to drift.
+  it("composes the ClickHouse TTL from the projection rows as well", async () => {
+    const { container, logger } = harness({
+      hasProjector: true,
+      projections: [{ action: "role.created", projected: true, ttlMonths: 120 }],
+    });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(emitted(logger, "analytics.retention.applied")).toEqual([
+      {
+        expression:
+          "toDateTime(occurred_at) + toIntervalMonth(120) WHERE action = 'role.created', " +
+          "toDateTime(occurred_at) + toIntervalMonth(60) WHERE action NOT IN ('role.created')",
+      },
+    ]);
+  });
+
+  // An excluded action gets no clause: nothing writes it, so a window over it is a
+  // rule on rows that do not arrive.
+  it("gives an excluded action no TTL clause", async () => {
+    const { container, logger } = harness({
+      hasProjector: true,
+      projections: [{ action: "ai.document.searched", projected: false, ttlMonths: 3 }],
+    });
+
+    await consumerFor(container).handle(job("retention"));
+
+    expect(emitted(logger, "analytics.retention.applied")).toEqual([]);
   });
 
   // Thirty days, and the line says why they went: a sweep for a deleted tenant reads

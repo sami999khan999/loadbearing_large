@@ -51,6 +51,7 @@ import {
   ListMembersUseCase,
   ListMessagesUseCase,
   ListNotificationsUseCase,
+  ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
   ListTenantExportsUseCase,
@@ -145,6 +146,7 @@ import {
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
+  UpdateProjectionPolicyUseCase,
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
@@ -348,11 +350,13 @@ export class Container {
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
+    readonly listProjection: ListProjectionPoliciesUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly listStorage: ListTenantStorageUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly restorePartition: RestorePartitionUseCase;
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
+    readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
@@ -786,6 +790,22 @@ export class Container {
         this.authorizer,
         this.platform,
         new ContainerHealthReader(this),
+      ),
+      listProjection: new ListProjectionPoliciesUseCase(
+        this.authorizer,
+        this.projectionPolicies,
+        this.retentionPolicies,
+        this.analyticsProjector ?? null,
+      ),
+      updateProjection: new UpdateProjectionPolicyUseCase(
+        this.authorizer,
+        this.projectionPolicies,
+        this.retentionPolicies,
+        this.platform,
+        this.activity,
+        this.unitOfWork,
+        this.analyticsProjector ?? null,
+        (error: unknown) => this.logger.failure(error, { at: "projection.apply" }),
       ),
       listRetention: new ListRetentionPoliciesUseCase(
         this.authorizer,

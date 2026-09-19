@@ -1,5 +1,6 @@
 import type { ActivityAction } from "../import.js";
 import type { LifecycleRule } from "../port/index.js";
+import type { ProjectionPolicyRecord } from "./projection-policy.repository.js";
 import type { RetentionPolicyRecord } from "./retention-policy.repository.js";
 
 // The average Gregorian month. S3 counts days and the policy is written in months, so
@@ -68,6 +69,32 @@ export class RetentionRules {
     clauses.push(`${base} WHERE action NOT IN (${excluded})`);
 
     return clauses.join(", ");
+  }
+
+  // The whole expression, from the two tables it is composed of. Here rather than at
+  // each caller: the screen, the save and the nightly job must compose the same string.
+  public static clickhouseTtlFrom(
+    retention: readonly RetentionPolicyRecord[],
+    projection: readonly ProjectionPolicyRecord[],
+  ): string {
+    const months = RetentionRules.clickhouseMonthsFrom(retention);
+
+    return RetentionRules.clickhouseTtlFor(
+      months,
+      // An excluded action needs no clause: nothing writes it, so a TTL over it is a
+      // window on rows that do not arrive.
+      projection
+        .filter((row) => row.projected && row.ttlMonths !== null)
+        .map((row) => ({ action: row.action, months: row.ttlMonths ?? months })),
+    );
+  }
+
+  // The default window, from the `clickhouse` row or the constant it falls back to.
+  public static clickhouseMonthsFrom(retention: readonly RetentionPolicyRecord[]): number {
+    return (
+      retention.find((row) => row.store === "clickhouse")?.hotMonths ??
+      RetentionRules.DEFAULT_CLICKHOUSE_MONTHS
+    );
   }
 
   // Rounded up, never down: rounding down expires an object inside the window an

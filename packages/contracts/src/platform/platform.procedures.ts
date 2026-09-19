@@ -55,6 +55,17 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantExport)
     .output(z.array(PlatformContract.tenantExportObject).readonly());
 
+  public static readonly listProjection = oc
+    .route({ method: "GET", path: "/platform/projection" })
+    .output(PlatformContract.projection);
+
+  // `PUT` rather than `PATCH`: the body carries every field of one row, and a partial
+  // projection change is not a thing an operator means.
+  public static readonly updateProjection = oc
+    .route({ method: "PUT", path: "/platform/projection" })
+    .input(PlatformContract.projectionUpdate)
+    .output(Envelope.acknowledged);
+
   public static readonly listStorage = oc
     .route({ method: "GET", path: "/platform/storage" })
     .input(PlatformContract.tenantStorageQuery)
@@ -76,6 +87,8 @@ export class PlatformProcedures {
     restorePartition: PlatformProcedures.restorePartition,
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
     listStorage: PlatformProcedures.listStorage,
+    listProjection: PlatformProcedures.listProjection,
+    updateProjection: PlatformProcedures.updateProjection,
     deleteTenant: PlatformProcedures.deleteTenant,
     exportTenant: PlatformProcedures.exportTenant,
     listExports: PlatformProcedures.listExports,

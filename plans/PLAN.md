@@ -2500,11 +2500,17 @@ reads the exclusion list once per run and passes it to all three queries.
   beside it, 1 with the guard. Both are `tests/smoke/analytics.smoke.spec.ts`, and `pnpm smoke`
   is green at 25 tests.
 
-- [ ] `20.5` **Use-cases, contract, router, container** — `list-projection-policies` (`platform.analytics.read`;
+- [x] `20.5` **Use-cases, contract, router, container** — `list-projection-policies` (`platform.analytics.read`;
   every catalog action joined to its row or the default) and `update-projection-policy`
   (`platform.analytics.manage`; `action` validated by `ActivityActions.isKnown`; write + audit in the
   transaction; `applyRetention` after it). `projection.list` / `projection.update` procedures, the
   permission entries, the router, `container.platform` grows two. **Docs:** `platform.md`.
+  `done: 2026-09-19` — `corrected:` the composition was about to live in three places (the list,
+  the save, the nightly job), so it is `RetentionRules.clickhouseTtlFrom(retention, projection)`
+  and each caller passes the two tables. `done:` the save compares before it writes, as the job
+  does, and its post-commit failure is logged rather than rethrown — the same shape
+  `UpdateRetentionPolicyUseCase` already had. `done:` an **excluded** action gets no TTL clause:
+  nothing writes it, so a window over it is a rule on rows that do not arrive.
 
 - [ ] `20.6` **The screen** — `projection-policy.form.tsx`: one row per action, grouped by the
   action's slice, a projected toggle and a months field; a `Callout tone="danger"` when a toggle goes

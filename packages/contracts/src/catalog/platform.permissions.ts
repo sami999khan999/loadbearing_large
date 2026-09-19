@@ -16,6 +16,8 @@ export const platformProcedurePermissions = {
   "platform.restorePartition": "platform.retention.manage",
   "platform.updateTenantRetention": "platform.retention.manage",
   "platform.listStorage": "platform.storage.read",
+  "platform.listProjection": "platform.analytics.read",
+  "platform.updateProjection": "platform.analytics.manage",
   "platform.deleteTenant": "platform.tenant.manage",
   "platform.exportTenant": "platform.tenant.manage",
   "platform.listExports": "platform.tenant.manage",

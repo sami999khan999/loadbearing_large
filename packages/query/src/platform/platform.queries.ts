@@ -45,6 +45,16 @@ export class PlatformQueries {
     });
   }
 
+  // A minute, like the retention read beside it: the rows change when somebody saves,
+  // and the mutation invalidates this key. The backstop is for a second tab.
+  public static projection(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.projection(),
+      queryFn: () => client.platform.listProjection(),
+      staleTime: 60_000,
+    });
+  }
+
   // A minute, like every other settings read: the rows change when somebody saves, and
   // the mutation invalidates this key. The backstop is for a second tab.
   public static retention(client: ApiClient) {
