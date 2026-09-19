@@ -13,11 +13,12 @@ import {
 import { Database, DatabaseCluster } from "../../src/pg/primitive/index.js";
 import {
   PgConversationRepository,
+  PgMaintenanceGateway,
   PgMessageRepository,
   PgShardResolver,
 } from "../../src/pg/repository/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
-import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
+import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { RecordingLogger } from "../support/recording.logger.js";
 import type {} from "./support/stack.js";
 
@@ -73,6 +74,10 @@ class MapCache extends CacheStore {
 }
 
 describe.skipIf(!shard1)("a two-node cluster", () => {
+  // `skipIf` skips the tests, not this body: vitest still runs it to register them. So
+  // the guard is what keeps a skipped run from opening four pools nothing will close.
+  if (!shard1) return;
+
   const logger = new RecordingLogger();
   const shards = new ShardScope();
   const scope = new TransactionScope();
@@ -82,8 +87,8 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
   // directly: the point is where a row physically landed, not where a port says it is.
   const catalog = new Database({ url: stack.database.url });
   const catalogDirect = new Database({ url: stack.database.directUrl });
-  const node1 = new Database({ url: shard1?.url ?? stack.database.url });
-  const node1Direct = new Database({ url: shard1?.directUrl ?? stack.database.directUrl });
+  const node1 = new Database({ url: shard1.url });
+  const node1Direct = new Database({ url: shard1.directUrl });
 
   const resolver = new PgShardResolver(
     () => catalog,
@@ -144,6 +149,21 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
   });
 
   afterAll(async () => {
+    // A partition outlives the row that caused it: the deletes below cascade rows away
+    // and leave the tables, so every run would strand a tenant's on the node it seeded.
+    for (const [direct, organizationId] of [
+      [catalogDirect, onNodeZero],
+      [node1Direct, onNodeOne],
+    ] as const) {
+      const node = DatabaseCluster.single(direct);
+      await new PgMaintenanceGateway(
+        node,
+        scope,
+        shards,
+        new PgUnitOfWork(node, scope, shards, "catalog"),
+      ).dropTenantPartitions(organizationId);
+    }
+
     for (const organizationId of [onNodeZero, onNodeOne]) {
       await catalog.client.execute(
         sql`delete from shard_assignments where shard_key = ${organizationId}`,
@@ -216,8 +236,8 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
     expect(await messageRowsOn(node1, messageId)).toBe(0);
   });
 
-  // **The split's first real cost, asserted rather than discovered.** Nine routed tables
-  // carry a foreign key to a catalog one, and `24.1` decides what happens to all nine.
+  // **The split's first real cost, asserted rather than discovered.** Ten foreign keys
+  // cross to the catalog — nine routed, one on local `outbox_event` — and `24.1` decides.
   it("fails on a foreign key naming a catalog table when the tenant is on node 1", async () => {
     const thrown = await placedOn(onNodeOne, () =>
       conversations
