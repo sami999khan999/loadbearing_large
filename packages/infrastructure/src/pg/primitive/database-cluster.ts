@@ -26,17 +26,17 @@ export class DatabaseCluster {
   // **The only place in `src/` that writes `new Database(`** — §23 asserts it. A second
   // one is a pool nothing closes and nothing counts.
   public static from(shards: readonly ShardConfig[], resolver: ShardResolver): DatabaseCluster {
-    if (shards.length === 0) throw new InternalError(new Error("A cluster needs one shard."));
-
-    return new DatabaseCluster(
-      shards.map((shard) => new Database(shard.pooled)),
-      shards.map((shard) => new Database(shard.direct)),
+    return DatabaseCluster.of(
+      shards.map((shard) => ({
+        pooled: new Database(shard.pooled),
+        direct: new Database(shard.direct),
+      })),
       resolver,
     );
   }
 
-  // Already-open pools, for a spec and for a script. It shares them rather than opening
-  // a second set, which is what keeps `close()` honest.
+  // Already-open pools, shared rather than reopened, which keeps `close()` honest. The
+  // one factory that reaches the constructor: what a node carries is declared once.
   public static of(
     nodes: readonly { readonly pooled: Database; readonly direct: Database }[],
     resolver: ShardResolver,
@@ -50,10 +50,10 @@ export class DatabaseCluster {
     );
   }
 
-  // One node from an already-open `Database`, for a spec and for a script. It shares
-  // the pool rather than opening a second, which is what keeps `close()` honest.
+  // `of` with the resolver that answers node 0 for every key, which is what an
+  // unsharded deployment is. One `direct` argument means DDL shares the pooled handle.
   public static single(database: Database, direct?: Database): DatabaseCluster {
-    return new DatabaseCluster([database], [direct ?? database], NODE_ZERO);
+    return DatabaseCluster.of([{ pooled: database, direct: direct ?? database }], NODE_ZERO);
   }
 
   // Node 0, always. The catalog is the last single primary and §4 files what to do
