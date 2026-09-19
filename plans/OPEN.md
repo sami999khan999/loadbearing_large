@@ -635,6 +635,26 @@ Section C below is what has closed since.
 One line per section-B item that has closed, newest last. Each says what shipped and how it was
 proved; the argument stays in `PLAN.md`, which is also where the tick is.
 
+Verified on this machine at the end of that session, against the live containers — Postgres,
+pgBouncer, two Redis, MinIO, Mailpit, Loki, ClickHouse and a second Postgres under the `sharded`
+profile:
+
+| Check | Result |
+|---|---|
+| `CI=true pnpm check:architecture` | 24 of 24, no skip |
+| `pnpm typecheck` | clean |
+| `pnpm lint` | clean |
+| `pnpm test` | 18 packages, every file green |
+| `pnpm smoke` | 6 of 6 files, 29 tests; 3 skipped are the opt-in measurements |
+| `pnpm check:contrast` | 117 pairings, 108 colours in gamut |
+| `pnpm check:comments` | 0 blocks over two lines |
+| `pnpm deps:check` · `pnpm repo:check` | silent |
+| `boot-smoke.mjs web` · `worker` | web serves `/`; worker is a Linux gate (see below) |
+
+**One local caveat, and it is the machine's rather than the tree's:** `boot-smoke.mjs worker`
+cannot pass on Windows. It reports `booted` and then `did not exit cleanly on SIGTERM`, because
+Windows has no catchable `SIGTERM` — the worker gate is a Linux one, and CI is where it runs.
+
 - `23.13` **Every event code has an emitter** — `check:architecture` §24, with five fixtures.
   It failed on its first run: `shard.assignment.created` had been declared since the routing seam
   and never emitted. `PgOrganizationFounder` emits it now, after the commit rather than inside the
