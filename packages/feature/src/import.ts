@@ -102,6 +102,7 @@ export {
   Icon,
   IconRegistry,
   Input,
+  Popover,
   QrCode,
   StatusBadge,
   type TableColumn,

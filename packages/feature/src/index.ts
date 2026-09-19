@@ -80,6 +80,8 @@ export {
   type NotificationBellProps,
   NotificationList,
   type NotificationListProps,
+  NotificationPeek,
+  type NotificationPeekProps,
   NotificationPreferenceForm,
 } from "./notification/index.js";
 export {
