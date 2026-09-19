@@ -6,6 +6,10 @@ services:
     restart: unless-stopped
     # pg_stat_statements is the measurement that answers "which query" before any move on
     # the scaling ladder. max_connections is sized for the pooler, not for the apps.
+    # max_locks_per_transaction is raised off the default 64 because every tenant is a
+    # partition: deleting a user cascades to `conversation_members` with no partition key,
+    # so the planner locks every tenant's partition to do it. At the default, a dev
+    # database with a few hundred tenants fails that delete with `53200`.
     command:
       [
         "postgres",
@@ -15,6 +19,8 @@ services:
         "track_io_timing=on",
         "-c",
         "max_connections=200",
+        "-c",
+        "max_locks_per_transaction=1024",
       ]
     environment:
       POSTGRES_USER: ratchet
@@ -72,6 +78,8 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     profiles: ["sharded"]
+    # Same settings as the catalog, for the same reasons: a shard is not a smaller
+    # database, and a rehearsal on different settings rehearses the settings.
     command:
       [
         "postgres",
@@ -81,6 +89,8 @@ services:
         "track_io_timing=on",
         "-c",
         "max_connections=200",
+        "-c",
+        "max_locks_per_transaction=1024",
       ]
     environment:
       POSTGRES_USER: ratchet
