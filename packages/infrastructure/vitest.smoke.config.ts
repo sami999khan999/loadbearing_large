@@ -19,6 +19,7 @@ const tenantCeiling = optional("TENANT_CEILING")
   .map((value) => Number(value.trim()))
   .filter((value) => Number.isInteger(value) && value > 0);
 
+const shard1Url = optional("DATABASE_SHARD_1_URL");
 const lokiUrl = optional("LOKI_URL");
 const clickhouseUrl = optional("CLICKHOUSE_URL");
 
@@ -41,6 +42,14 @@ export default defineConfig({
           // one URL, and the pooler-sensitive cases still mean something against it.
           directUrl: optional("DATABASE_DIRECT_URL") ?? required("DATABASE_URL"),
         },
+        ...(shard1Url
+          ? {
+              shard1: {
+                url: shard1Url,
+                directUrl: optional("DATABASE_SHARD_1_DIRECT_URL") ?? shard1Url,
+              },
+            }
+          : {}),
         redis: {
           cacheUrl: required("REDIS_CACHE_URL"),
           queueUrl: required("REDIS_QUEUE_URL"),

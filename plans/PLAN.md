@@ -3263,7 +3263,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   and no range line (`revised: 2026-09-16` — the directory names the node). **Docs:**
   `docs/infra/reference/compose.md`, `docs/setup/11`.
 
-- [ ] `22.20` **The rehearsal spec** — `packages/infrastructure/tests/smoke/sharded.spec.ts`,
+- [x] `22.20` **The rehearsal spec** — `packages/infrastructure/tests/smoke/sharded.spec.ts`,
   `describe.skipIf(!process.env.DATABASE_SHARD_1_URL)`: migrates both shards, creates two
   organizations whose assignment rows, written by the spec, name node 0 and node 1, sends one message in
   each through `MessagingUseCases`, asserts each `messages` row exists on exactly its physical

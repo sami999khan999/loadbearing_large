@@ -35,6 +35,21 @@ export class DatabaseCluster {
     );
   }
 
+  // Already-open pools, for a spec and for a script. It shares them rather than opening
+  // a second set, which is what keeps `close()` honest.
+  public static of(
+    nodes: readonly { readonly pooled: Database; readonly direct: Database }[],
+    resolver: ShardResolver,
+  ): DatabaseCluster {
+    if (nodes.length === 0) throw new InternalError(new Error("A cluster needs one shard."));
+
+    return new DatabaseCluster(
+      nodes.map((node) => node.pooled),
+      nodes.map((node) => node.direct),
+      resolver,
+    );
+  }
+
   // One node from an already-open `Database`, for a spec and for a script. It shares
   // the pool rather than opening a second, which is what keeps `close()` honest.
   public static single(database: Database, direct?: Database): DatabaseCluster {

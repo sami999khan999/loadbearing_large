@@ -4,6 +4,9 @@ export interface Stack {
   // Two URLs for one server. `url` goes through pgBouncer in transaction mode; `directUrl`
   // does not, and is what DDL a transaction pooler cannot carry uses.
   readonly database: { readonly url: string; readonly directUrl: string };
+  // Node 1, present only under the `sharded` profile with the two `.env.example` lines
+  // uncommented. Its absence is what the rehearsal skips on, and this is the only door.
+  readonly shard1?: { readonly url: string; readonly directUrl: string };
   readonly redis: { readonly cacheUrl: string; readonly queueUrl: string };
   readonly storage: {
     readonly endpoint: string;

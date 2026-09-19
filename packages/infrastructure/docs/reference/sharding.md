@@ -120,6 +120,34 @@ recover from.
 Guessing zero would work today and put a tenant's rows on the wrong machine the day it does not.
 `shard.resolution.failed` is logged at `error` and the read throws.
 
+## Rehearsing the split
+
+`pnpm infra:up:sharded` starts a second Postgres and its pooler; uncomment the two
+`DATABASE_SHARD_1_*` lines in `.env.example` and `pnpm db:migrate` applies the same schema to
+both. `tests/smoke/sharded.smoke.spec.ts` is what runs against it — gated on
+`Stack.shard1`, provided by `vitest.smoke.config.ts`, because `check-architecture` §3 walks
+`tests/` for `process.env` and that injection is the only door.
+
+It creates two tenants, writes their directory rows naming node 0 and node 1, and asserts four
+things:
+
+- each key resolves to the node its row names;
+- `shard_assignments` exists on the catalog and **not** on shard 1;
+- a message written under a tenant placed on node 0 lands on node 0 and on no other node;
+- a write under the tenant on node 1 fails with `23503` on a constraint naming a **catalog**
+  table — matched against `TablePlacement.CATALOG` rather than one constraint's name.
+
+**That last one is the point.** It is not a bug to fix now; it is the split's first real cost,
+made visible before anyone pays it. Nine routed tables carry a foreign key to a catalog one, every
+one `ON DELETE CASCADE`: `notifications` → `organizations`, `users`; `notification_preferences` →
+`organizations`, `users`; `conversations` → `organizations`; `conversation_members` →
+`organizations`, `users`; `messages` → `organizations`; `document_chunks` → `organizations`.
+Which of them trips first depends on insert order, which is why the expectation names the class.
+Phase 24 decides what happens to all nine.
+
+Asserted by SQLSTATE and constraint rather than by message: the message is localised and reworded
+between server versions, and drizzle wraps the driver error so the constraint is one `cause` down.
+
 ## What is not built, and why it is not
 
 **No placement policy.** Which node a *new* tenant lands on is a decision nobody has to make
@@ -127,6 +155,6 @@ while there is one node, and an interface with one implementation and no prospec
 what [Simplicity](../../../../docs/opinions/simplicity.md) names as ceremony. It earns its place
 at the split.
 
-**No second node.** `DATABASE_SHARD_<n>_URL` is read and the cluster indexes what it finds, but
-the compose file starts one Postgres. The rehearsal is `22.20`'s, and it is expected to fail on
-the catalog foreign keys until `24.1` decides what happens to them.
+**No second node in the default stack.** `DATABASE_SHARD_<n>_URL` is read and the cluster indexes
+what it finds, but `pnpm infra:up` starts one Postgres. The second is the `sharded` profile, and
+starting it is a rehearsal rather than a deployment — see above.
