@@ -30,6 +30,12 @@ export const notification = {
   "notification.inbox.unreadOnly": "Unread only",
   "notification.inbox.unreadCount": "{count} unread",
   "notification.inbox.open": "Open notifications",
+  "notification.peek.loading": "Loading…",
+  // "Mark read" and not "Dismiss": the row stays in the inbox, and a word that implied
+  // otherwise would be a promise the list does not keep.
+  "notification.peek.markRead": "Mark read",
+  // Rendered even when the peek is empty. The inbox holds the read ones too.
+  "notification.peek.seeAll": "See all notifications",
 
   "notification.preference.title": "How you hear from us",
   "notification.preference.description":

@@ -25,6 +25,9 @@ export const notification = {
   "notification.inbox.unreadOnly": "শুধু অপঠিত",
   "notification.inbox.unreadCount": "{count}টি অপঠিত",
   "notification.inbox.open": "বিজ্ঞপ্তি খুলুন",
+  "notification.peek.loading": "লোড হচ্ছে…",
+  "notification.peek.markRead": "পঠিত চিহ্নিত করুন",
+  "notification.peek.seeAll": "সব বিজ্ঞপ্তি দেখুন",
 
   "notification.preference.title": "আপনি কীভাবে খবর পাবেন",
   "notification.preference.description":
