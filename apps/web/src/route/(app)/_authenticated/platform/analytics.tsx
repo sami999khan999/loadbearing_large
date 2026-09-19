@@ -3,6 +3,7 @@ import {
   Can,
   type ClientNamespace,
   PlatformQueries,
+  ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
   useApiClient,
@@ -47,6 +48,7 @@ function PlatformAnalytics() {
         <ProjectionSwitchPanel auditMonths={auditMonths} />
       </Can>
       <Can permission="platform.analytics.manage" capabilities={capabilities}>
+        <ProjectionGapsPanel />
         <ProjectionPolicyForm />
       </Can>
     </main>

@@ -1,13 +1,23 @@
 import {
   type ActivityAction,
+  type ActivityRecord,
+  ActivitySubject,
   type Container,
   type Job,
   type OrganizationId,
+  PartitionedTable,
   type ProjectionCheckpoint,
   QueueName,
   type Redis,
   Worker,
 } from "../import.js";
+
+// What `cold-reproject` carries. A closed shape rather than the job's `unknown`,
+// checked at the one place the payload crosses from the queue into typed code.
+interface ReprojectJob {
+  readonly period: string;
+  readonly organizationId: OrganizationId | null;
+}
 
 // What makes ClickHouse derived rather than authoritative: `project` moves the rows and
 // `reconcile` notices when it has not. See docs/reference/consumers.md.
@@ -82,9 +92,70 @@ export class AnalyticsConsumer {
         return this.project();
       case "reconcile":
         return this.reconcile();
+      case "cold-reproject":
+        return this.reproject(job.data as ReprojectJob);
       default:
         throw new Error(`Unknown analytics job: ${job.name}`);
     }
+  }
+
+  // One month out of cold storage and back into the derived store. It owns the
+  // projector, which is why this lives here and not on `MaintenanceConsumer`.
+  private async reproject(data: ReprojectJob): Promise<void> {
+    const period = new Date(`${data.period}T00:00:00.000Z`);
+    const entries = await this.container.partitionArchive.entriesFor(
+      PartitionedTable.ACTIVITY_LOG,
+      data.period,
+      data.organizationId ?? undefined,
+    );
+    const excluding = await this.excluded();
+
+    for (const entry of entries) {
+      const rows = await this.container.coldArchive.rows(entry);
+      const records = rows
+        .map((row) => AnalyticsConsumer.recordOf(row, entry.organizationId))
+        .filter((record) => !excluding.includes(record.action as ActivityAction));
+
+      let projected = 0;
+      for (let at = 0; at < records.length; at += AnalyticsConsumer.BATCH_SIZE) {
+        projected += await this.container.projector.project(
+          records.slice(at, at + AnalyticsConsumer.BATCH_SIZE),
+        );
+      }
+
+      // Stamped after the rows land, never before: a stamp on a projection that failed
+      // is a gap the partial index can no longer find.
+      await this.container.partitionArchive.markProjected(
+        PartitionedTable.ACTIVITY_LOG,
+        period,
+        entry.organizationId,
+      );
+
+      this.container.logger.emit("cold.partition.reprojected", {
+        period: entry.period,
+        organizationId: entry.organizationId,
+        rows: projected,
+      });
+    }
+  }
+
+  // The archived line back into the shape the projector takes. `ActivitySubject.of` is
+  // the same lift `PgActivityReplayReader` does, which is why it is a shared primitive.
+  private static recordOf(
+    row: Readonly<Record<string, unknown>>,
+    organizationId: OrganizationId,
+  ): ActivityRecord {
+    const payload = (row.payload ?? {}) as Readonly<Record<string, unknown>>;
+
+    return {
+      id: String(row.id),
+      organizationId,
+      occurredAt: new Date(String(row.occurred_at)),
+      actorId: String(row.actor_id) as ActivityRecord["actorId"],
+      action: String(row.action),
+      subjectId: ActivitySubject.of(payload),
+      payload,
+    };
   }
 
   // Per tenant in both stores since `0023`: a walk with no tenant predicate appends every
@@ -313,12 +384,79 @@ export class AnalyticsConsumer {
     for (const row of drift) {
       this.container.logger.emit("analytics.reconciliation.drifted", {
         organizationId,
+        source: "hot",
         day: row.day,
         expected: row.source,
         actual: row.derived,
       });
     }
 
-    return { days: source.length, drifted: drift.length };
+    const cold = await this.reconcileCold(organizationId, excluding);
+
+    return { days: source.length + cold.months, drifted: drift.length + cold.drifted };
+  }
+
+  // The cold half. `activity_log`'s hot window is thirteen months and its cold window
+  // is years, so the hot diff above sees none of it — this closes that.
+  private async reconcileCold(
+    organizationId: OrganizationId,
+    excluding: readonly ActivityAction[],
+  ): Promise<{ months: number; drifted: number }> {
+    const months = await this.container.partitionArchive.monthsOf(
+      PartitionedTable.ACTIVITY_LOG,
+      organizationId,
+    );
+    // A known gap is not drift. `projected_at` null means this store never received the
+    // month, which the Gaps panel already says and a second alert would only repeat.
+    const projected = months.filter((entry) => entry.projectedAt !== null);
+    if (projected.length === 0) return { months: 0, drifted: 0 };
+
+    const first = projected[0];
+    const last = projected.at(-1);
+    if (!first || !last) return { months: 0, drifted: 0 };
+
+    // One query per tenant over the whole archived range, not one per month: the
+    // second shape is a round trip per month per tenant on a nightly job.
+    const derived = await this.container.projector.dailyCounts(
+      organizationId,
+      new Date(`${first.period}T00:00:00.000Z`),
+      AnalyticsConsumer.monthAfter(last.period),
+      excluding,
+    );
+
+    const byMonth = new Map<string, number>();
+    for (const count of derived) {
+      const month = `${count.day.slice(0, 7)}-01`;
+      byMonth.set(month, (byMonth.get(month) ?? 0) + count.rows);
+    }
+
+    let drifted = 0;
+    for (const entry of projected) {
+      const excluded = excluding.reduce(
+        (total, action) => total + (entry.actionCounts[action] ?? 0),
+        0,
+      );
+      const expected = entry.rowCount - excluded;
+      const actual = byMonth.get(entry.period) ?? 0;
+      if (expected === actual) continue;
+
+      drifted += 1;
+      this.container.logger.emit("analytics.reconciliation.drifted", {
+        organizationId,
+        source: "cold",
+        day: entry.period,
+        expected,
+        actual,
+      });
+    }
+
+    return { months: projected.length, drifted };
+  }
+
+  // The first of the month after the one `period` names. `[from, to)`, which is the
+  // half-open window both `dailyCounts` take.
+  private static monthAfter(period: string): Date {
+    const at = new Date(`${period}T00:00:00.000Z`);
+    return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1));
   }
 }

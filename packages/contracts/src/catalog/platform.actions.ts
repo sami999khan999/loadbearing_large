@@ -3,6 +3,7 @@ export const platformActions = {
   "platform.projection.paused": { label: "Projection paused" },
   "platform.projection.resumed": { label: "Projection resumed" },
   "platform.restore.requested": { label: "Restore requested" },
+  "platform.reproject.requested": { label: "Re-projection requested" },
   "tenant.retention.changed": { label: "Tenant retention changed" },
   "tenant.deleted": { label: "Tenant deleted" },
   "tenant.export_requested": { label: "Tenant export requested" },

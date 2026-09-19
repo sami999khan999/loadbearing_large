@@ -92,6 +92,7 @@ export {
 export {
   DeleteTenantPanel,
   PlatformStatusPanel,
+  ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
   type ProjectionSwitchPanelProps,

@@ -42,6 +42,15 @@ export class PlatformRouter {
     context.container.platformAdmin.listExports.execute(context.principal, input),
   );
 
+  public static readonly listGaps = authed.platform.listGaps.handler(({ context }) =>
+    context.container.platformAdmin.listGaps.execute(context.principal),
+  );
+
+  public static readonly reprojectPartition = authed.platform.reprojectPartition.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.reprojectPartition.execute(context.principal, input),
+  );
+
   public static readonly getPolicy = authed.platform.getPolicy.handler(async ({ context }) => {
     const policy = await context.container.platformAdmin.getPolicy.execute(context.principal);
     return policy;
@@ -88,6 +97,8 @@ export class PlatformRouter {
     updateTenantRetention: PlatformRouter.updateTenantRetention,
     listStorage: PlatformRouter.listStorage,
     getPolicy: PlatformRouter.getPolicy,
+    listGaps: PlatformRouter.listGaps,
+    reprojectPartition: PlatformRouter.reprojectPartition,
     updateProjectionSwitch: PlatformRouter.updateProjectionSwitch,
     listProjection: PlatformRouter.listProjection,
     updateProjection: PlatformRouter.updateProjection,

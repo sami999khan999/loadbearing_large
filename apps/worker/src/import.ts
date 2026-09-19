@@ -5,6 +5,8 @@
 // The principal a consumer runs as. `SystemPrincipal` narrows it; nothing here
 // constructs a user's.
 export {
+  type ActivityRecord,
+  ActivitySubject,
   type ArchivedPartition,
   PartitionedTable,
   type PartitionedTableEntry,

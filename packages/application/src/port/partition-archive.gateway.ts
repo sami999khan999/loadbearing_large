@@ -57,6 +57,15 @@ export interface TenantExport {
   readonly manifestKey: string;
 }
 
+// One archived month that the derived store never fully received. `tenants` is how many
+// of that month's objects carry a null `projected_at`, not how many exist.
+export interface ProjectionGap {
+  readonly tableName: string;
+  readonly period: string;
+  readonly tenants: number;
+  readonly rows: number;
+}
+
 // Counted two ways, because they answer different questions: how many customers this
 // finally forgot, and how many objects the bucket stopped being billed for.
 export interface DeletedTenantSweep {
@@ -98,6 +107,17 @@ export abstract class PartitionArchiveGateway {
   // Objects first, rows second: a crash leaves a row pointing at a deleted object, which
   // is re-runnable, rather than an object nothing points at, which is invisible forever.
   public abstract sweep(organizationId: OrganizationId): Promise<number>;
+
+  // Every archived month of one tenant, oldest first. The cold half of the
+  // reconciliation reads this; the primary key makes it one row per month.
+  public abstract monthsOf(
+    table: PartitionedTableName,
+    organizationId: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]>;
+
+  // The partial index's whole purpose: "what has a hole" as an index read rather than
+  // a scan over every tenant-month this system has ever archived.
+  public abstract gaps(table: PartitionedTableName): Promise<readonly ProjectionGap[]>;
 
   // Live rows, never detached: an export must not take the tenant's data offline while
   // it runs. One object per tenant-owned table, plus the catalog, plus the manifest.

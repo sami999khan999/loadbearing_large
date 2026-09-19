@@ -123,6 +123,25 @@ export class PlatformContract {
     slug: z.string().min(1).max(64),
   });
 
+  public static readonly projectionGap = z.object({
+    tableName: z.string().min(1),
+    period: z.string().min(1),
+    // Objects carrying a null `projected_at`, not objects that exist. The reason a
+    // gap exists is on a log line and not stored, so this says only that one does.
+    tenants: z.number().int(),
+    rows: z.number().int(),
+  });
+
+  public static readonly reproject = z.object({
+    period: z.string().regex(/^\d{4}-\d{2}-01$/),
+    organizationId: Identifiers.organizationId.optional(),
+  });
+
+  public static readonly reprojectRequested = z.object({
+    jobId: z.string().min(1),
+    objects: z.number().int(),
+  });
+
   public static readonly policy = z.object({
     projectionEnabled: z.boolean(),
     replicaReadsEnabled: z.boolean(),
@@ -243,6 +262,9 @@ export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPrevi
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type TenantDeleteInput = z.infer<typeof PlatformContract.tenantDelete>;
 export type PlatformPolicyDto = z.infer<typeof PlatformContract.policy>;
+export type ProjectionGapDto = z.infer<typeof PlatformContract.projectionGap>;
+export type ReprojectInput = z.infer<typeof PlatformContract.reproject>;
+export type ReprojectRequestedDto = z.infer<typeof PlatformContract.reprojectRequested>;
 export type ProjectionToggleInput = z.infer<typeof PlatformContract.projectionToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;

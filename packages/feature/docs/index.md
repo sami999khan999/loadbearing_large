@@ -59,6 +59,7 @@ packages/feature/src/
 │   └── invitation-list.tsx                 → InvitationList
 ├── platform/
 │   ├── platform-status.panel.tsx           → PlatformStatusPanel
+│   ├── projection-gaps.panel.tsx           → ProjectionGapsPanel
 │   ├── projection-policy.form.tsx          → ProjectionPolicyForm
 │   ├── projection-switch.panel.tsx         → ProjectionSwitchPanel
 │   ├── retention-policy.form.tsx           → RetentionPolicyForm

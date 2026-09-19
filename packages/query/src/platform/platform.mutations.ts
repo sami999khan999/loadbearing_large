@@ -3,6 +3,8 @@ import type {
   ExportRequestedDto,
   ProjectionToggleInput,
   ProjectionUpdateInput,
+  ReprojectInput,
+  ReprojectRequestedDto,
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,
@@ -49,6 +51,15 @@ export class PlatformMutations {
   public static useExportTenant(client: ApiClient) {
     return useAppMutation<ExportRequestedDto, TenantExportInput>({
       mutationFn: (input) => client.platform.exportTenant(input),
+      invalidates: [],
+    });
+  }
+
+  // Invalidates nothing: the job has only been queued, and the gap closes when the
+  // worker stamps `projected_at` rather than when the request returns.
+  public static useReprojectPartition(client: ApiClient) {
+    return useAppMutation<ReprojectRequestedDto, ReprojectInput>({
+      mutationFn: (input) => client.platform.reprojectPartition(input),
       invalidates: [],
     });
   }

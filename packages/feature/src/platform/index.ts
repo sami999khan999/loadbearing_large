@@ -1,5 +1,6 @@
 export { DeleteTenantPanel } from "./delete-tenant.panel.js";
 export { PlatformStatusPanel } from "./platform-status.panel.js";
+export { ProjectionGapsPanel } from "./projection-gaps.panel.js";
 export { ProjectionPolicyForm } from "./projection-policy.form.js";
 export {
   ProjectionSwitchPanel,

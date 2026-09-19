@@ -16,6 +16,7 @@ export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
+export { ListProjectionGapsUseCase } from "./list-projection-gaps.use-case.js";
 export {
   ListProjectionPoliciesUseCase,
   type ProjectionEntry,
@@ -53,6 +54,11 @@ export {
   type ProjectionPolicyRecord,
   ProjectionPolicyRepository,
 } from "./projection-policy.repository.js";
+export {
+  type ReprojectPartitionInput,
+  ReprojectPartitionUseCase,
+  type ReprojectRequested,
+} from "./reproject-partition.use-case.js";
 export {
   type RestorePartitionInput,
   RestorePartitionUseCase,

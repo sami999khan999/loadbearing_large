@@ -60,6 +60,9 @@ export const coreEvents = {
   // One per export, not one per object: nine lines a run would be nine lines saying
   // the same thing, and the counts are what an operator reads.
   "cold.tenant.exported": { level: "info" },
+  // One per tenant-month refilled from cold storage. Idempotent through the
+  // `ReplacingMergeTree`, so a second run over the same month is a no-op.
+  "cold.partition.reprojected": { level: "info" },
 
   // The vendor body, which `UnavailableError` deliberately does not carry: a ClickHouse
   // or Loki failure echoes the offending row, and the wire is not where that belongs.

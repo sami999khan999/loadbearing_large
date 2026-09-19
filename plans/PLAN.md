@@ -2569,7 +2569,7 @@ reads the exclusion list once per run and passes it to all three queries.
   lines, and a resume that picks the backlog up with no state restored — which is the checkpoint
   being read from the destination rather than kept beside it.
 
-- [ ] `20.10` **Re-project from cold storage** — `reproject-partition.use-case.ts`
+- [x] `20.10` **Re-project from cold storage** — `reproject-partition.use-case.ts`
   (`platform.analytics.manage`; input `{ period, organizationId? }`, `activity_log` only; refuses
   when not configured; records `platform.reproject.requested`; enqueues `cold-reproject` on
   `MAINTENANCE` with `jobId: "cold-reproject:activity_log:<period>:<org|all>"`, so a double click is
@@ -2582,8 +2582,16 @@ reads the exclusion list once per run and passes it to all three queries.
   `projected_at is null` row (the partial index from `17.2`), tenant counts, and a re-project
   button per period; the reason on the `analytics.projection.gap` line is not stored, so the panel
   shows only that a gap exists. **Docs:** `cold-restore.md`, `clickhouse.md`, `consumers.md`.
+  `done: 2026-09-19` — `corrected:` the dedupe `jobId` is dotted, not colon-separated, for the
+  reason `19.18` records: BullMQ rejects a colon. `corrected:` the Gaps panel needed a reader —
+  `PartitionArchiveGateway.gaps(table)` off the partial index, and `ListProjectionGapsUseCase`
+  over it — because nothing else could answer "which months have a hole" without a scan.
+  `done:` the re-projection drops the excluded actions on the way back in, which the item does
+  say and is worth restating: a re-projection that ignored the policy would put back exactly the
+  rows it says not to carry. `done:` `platform.reproject.requested` and `cold.partition.reprojected`
+  both had to be declared before they compiled, which is `20.1` doing its job twice.
 
-- [ ] `20.11` **Reconcile covers the cold window** — `reconcile()` also compares, for each archived
+- [x] `20.11` **Reconcile covers the cold window** — `reconcile()` also compares, for each archived
   period of `activity_log`, `sum(partition_archive.row_count)` minus the excluded actions' counts
   from `action_counts` against ClickHouse's `dailyCounts` summed over that month; drift emits
   `analytics.reconciliation.drifted` with `source: "cold"`. A period with any `projected_at is null`
@@ -2620,6 +2628,13 @@ method: `17.2`'s per-tenant objects are small enough to `get()` whole (roughly 8
 four-thousand-user organization-month), and a streaming read is the escape hatch if one ever
 exceeds ~50 MB, not day-one work. Every other hop copies `notification.list` exactly — contract,
 procedure, permission key, use-case, three-line router, `infiniteQueryOptions`, list component.
+  `done: 2026-09-19` — `corrected:` one `dailyCounts` per tenant over the **whole** archived
+  range, bucketed by month here, rather than one per month: the second shape is a round trip per
+  month per tenant on a nightly job. `done:` the drift line gains `source: "hot" | "cold"`, on
+  both halves — the two have different replay sources and different deadlines, so a dashboard has
+  to be able to tell them apart. `done:` a month with a null `projected_at` is skipped, and the
+  spec for that is the one that matters: a known gap is already on the Gaps panel, and a second
+  alert would repeat it with a deadline attached.
 
 - [ ] `21.1` **`ColdArchiveReader`** — port in `application/src/port/`, `S3ColdArchiveReader` in
   `infrastructure/src/s3/`. `list(organizationId, userId, table, period, cursor, limit)`: look up

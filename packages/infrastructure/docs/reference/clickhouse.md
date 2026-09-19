@@ -146,6 +146,20 @@ day is the grain an operator picks a replay window from. It is `error` and not `
 number a dashboard has shown since the first drifting day is wrong, and the fix is a replay, which
 only works while `activity_log` still covers the window. **The alert has a deadline attached.**
 
+**And the window has a cold half.** `activity_log`'s hot months are thirteen and its cold months
+are years, so the day-by-day diff above sees none of what has been archived. `reconcileCold`
+closes that: for each archived month of a tenant, `partition_archive.row_count` minus the excluded
+actions' counts from `action_counts` — which is what that column is for — against this store's
+own counts summed over the month.
+
+Two things make it cheap and quiet. It is **one query per tenant over the whole archived range**,
+bucketed by month here, rather than a round trip per month on a nightly job. And a month whose
+`projected_at` is null is **skipped**: a known gap is not drift, the Gaps panel already says so,
+and a second alert would repeat it with a deadline attached.
+
+The line carries `source: "hot" | "cold"`, because the two have different replay sources: a hot
+day replays from `activity_log`, and a cold month replays from S3 through the Gaps panel.
+
 Past that window the replay source is [`partition_archive`](cold-storage.md) and the objects
 `PgPartitionArchiveGateway` wrote to S3, which is why that gateway exists at all. The key has a
 shape now — `cold/activity_log/<yyyy>/<mm>/<organization_id>.ndjson.gz`, one object per tenant per

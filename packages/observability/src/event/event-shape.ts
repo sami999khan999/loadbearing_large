@@ -109,6 +109,11 @@ export interface EventShape {
     readonly organizations: number;
     readonly objects: number;
   };
+  readonly "cold.partition.reprojected": {
+    readonly period: string;
+    readonly organizationId: string;
+    readonly rows: number;
+  };
   readonly "cold.tenant.exported": {
     readonly organizationId: string;
     readonly objects: number;
@@ -207,6 +212,11 @@ export interface EventShape {
   // and a day is the grain an operator groups by.
   readonly "analytics.reconciliation.drifted": {
     readonly organizationId: string;
+    // Which comparison found it. `hot` is a day of `activity_log`; `cold` is a whole
+    // archived month, and the two have different replay sources and deadlines.
+    readonly source: "hot" | "cold";
+    // The day for `hot`, the month's first for `cold`. One field, because the grain a
+    // replay window is picked from is the grain the drift was found at.
     readonly day: string;
     readonly expected: number;
     readonly actual: number;

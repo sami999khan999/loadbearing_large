@@ -47,7 +47,7 @@ export const partitionArchive = pgTable(
     bytes: bigint("bytes", { mode: "number" }).notNull(),
     checksum: text("checksum").notNull(),
     // `{ "<action>": n }`, counted for free while the rows stream out. Empty for a table
-    // with no `action` column.
+    // with no `action` column. Read by the cold half of the reconciliation.
     actionCounts: jsonb("action_counts")
       .$type<Record<string, number>>()
       .notNull()

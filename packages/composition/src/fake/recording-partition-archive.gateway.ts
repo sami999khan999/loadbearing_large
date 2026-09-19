@@ -7,6 +7,7 @@ import {
   type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionedTableName,
+  type ProjectionGap,
   type RestoredMonth,
   type TenantExport,
 } from "../import.js";
@@ -33,6 +34,7 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
   private readonly deletedSweeps: Date[] = [];
+  private holes: readonly ProjectionGap[] = [];
   private readonly exports: { organizationId: OrganizationId; day: string }[] = [];
   private exported: readonly ExportedObject[] = [];
   private deleted: DeletedTenantSweep = { organizations: 0, objects: 0 };
@@ -154,6 +156,29 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
 
   public tenantExports(): readonly { organizationId: OrganizationId; day: string }[] {
     return this.exports;
+  }
+
+  // Staged, because a gap is what the screen lists and what a re-project acts on: a
+  // fake deriving it from the staged entries would let a spec pass on the wrong month.
+  public stageGaps(gaps: readonly ProjectionGap[]): void {
+    this.holes = gaps;
+  }
+
+  // Off the same staged entries `entriesFor` reads, so a spec cannot stage a month
+  // for one read and have the other disagree about it.
+  public override monthsOf(
+    table: PartitionedTableName,
+    organizationId: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]> {
+    return Promise.resolve(
+      this.entries
+        .filter((entry) => entry.tableName === table && entry.organizationId === organizationId)
+        .toSorted((left, right) => left.period.localeCompare(right.period)),
+    );
+  }
+
+  public override gaps(table: PartitionedTableName): Promise<readonly ProjectionGap[]> {
+    return Promise.resolve(this.holes.filter((gap) => gap.tableName === table));
   }
 
   public archived(): readonly ArchiveRequest[] {

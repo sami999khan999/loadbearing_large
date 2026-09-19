@@ -52,6 +52,7 @@ import {
   ListMembersUseCase,
   ListMessagesUseCase,
   ListNotificationsUseCase,
+  ListProjectionGapsUseCase,
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
@@ -123,6 +124,7 @@ import {
   RedisRealtimeSubscriber,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
+  ReprojectPartitionUseCase,
   RestorePartitionUseCase,
   type RetentionPolicyRepository,
   RevokeApiKeyUseCase,
@@ -355,12 +357,14 @@ export class Container {
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly getPolicy: GetPlatformPolicyUseCase;
+    readonly listGaps: ListProjectionGapsUseCase;
     readonly listProjection: ListProjectionPoliciesUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly listStorage: ListTenantStorageUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly restorePartition: RestorePartitionUseCase;
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
+    readonly reprojectPartition: ReprojectPartitionUseCase;
     readonly toggleProjection: ToggleProjectionUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
@@ -806,11 +810,20 @@ export class Container {
         this.platformPolicy,
         new ContainerHealthReader(this),
       ),
+      listGaps: new ListProjectionGapsUseCase(this.authorizer, this.partitionArchive),
       listProjection: new ListProjectionPoliciesUseCase(
         this.authorizer,
         this.projectionPolicies,
         this.retentionPolicies,
         this.analyticsProjector ?? null,
+      ),
+      reprojectPartition: new ReprojectPartitionUseCase(
+        this.authorizer,
+        this.partitionArchive,
+        this.queuePublisher,
+        new ContainerHealthReader(this),
+        this.platform,
+        this.activity,
       ),
       toggleProjection: new ToggleProjectionUseCase(
         this.authorizer,

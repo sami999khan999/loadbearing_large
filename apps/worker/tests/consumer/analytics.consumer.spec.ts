@@ -4,9 +4,11 @@ import {
   FixedClock,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryColdArchiveReader,
   InMemoryOrganizationReader,
   InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
+  RecordingPartitionArchiveGateway,
   TestContainer,
 } from "@loadbearing/composition";
 import { type ActivityAction, Identifiers } from "@loadbearing/contracts";
@@ -41,12 +43,16 @@ function harness(
 ) {
   const activityReplay = new InMemoryActivityReplayReader(records);
   const analyticsProjector = new InMemoryAnalyticsProjector();
+  const coldArchive = new InMemoryColdArchiveReader();
+  const partitionArchive = new RecordingPartitionArchiveGateway();
   const logger = { emit: vi.fn(), failure: vi.fn() };
 
   const container = {
     ...TestContainer.build({
       activityReplay,
       analyticsProjector,
+      coldArchive,
+      partitionArchive,
       organizations: new InMemoryOrganizationReader(TENANTS),
     }),
     // The consumer reads `container.projector`; the harness names the port after the
@@ -64,10 +70,12 @@ function harness(
     consumer: new AnalyticsConsumer(container, undefined as never, 1),
     logger,
     projected: analyticsProjector,
+    coldArchive,
+    partitionArchive,
   };
 }
 
-const job = (name: string): Job => ({ name }) as Job;
+const job = (name: string, data: unknown = {}): Job => ({ name, data }) as Job;
 
 const emitted = (logger: { emit: ReturnType<typeof vi.fn> }, code: string) =>
   logger.emit.mock.calls.filter((call) => call[0] === code).map((call) => call[1]);
@@ -107,6 +115,130 @@ describe("AnalyticsConsumer project", () => {
       events: 0,
       lagSeconds: 0,
     });
+  });
+});
+
+// `20.11`: the cold half. `activity_log`'s hot window is thirteen months and its cold
+// window is years, so the day-by-day diff above sees none of it.
+describe("AnalyticsConsumer reconcile over the cold window", () => {
+  const month = (period: string, rowCount: number, projectedAt: Date | null) => ({
+    organizationId: ORG as ActivityRecord["organizationId"],
+    tableName: "activity_log" as const,
+    period,
+    objectKey: `cold/activity_log/${period}.ndjson.gz`,
+    rowCount,
+    bytes: 1,
+    checksum: "x",
+    actionCounts: { "ai.document.searched": 1 },
+    projectedAt,
+  });
+
+  // A known gap is not drift: the Gaps panel already says so, and a second alert
+  // would only repeat it with a deadline attached.
+  it("skips a month the store never received", async () => {
+    const { consumer, logger, partitionArchive } = harness([]);
+    partitionArchive.stage([month("2024-01-01", 5, null)]);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.reconciliation.drifted")).toEqual([]);
+  });
+
+  // The whole point: a projected month whose archived count no longer matches the
+  // store is drift nothing else in this system would ever notice.
+  it("reports an archived month the store is short of", async () => {
+    const { consumer, logger, partitionArchive } = harness([]);
+    partitionArchive.stage([month("2024-01-01", 5, new Date("2024-02-01T00:00:00.000Z"))]);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.reconciliation.drifted")).toEqual([
+      { organizationId: ORG, source: "cold", day: "2024-01-01", expected: 5, actual: 0 },
+    ]);
+  });
+
+  // Off `action_counts`, which is what that column is for: without it, excluding an
+  // action makes every archived month read as drift forever.
+  it("subtracts the excluded actions from the archived count", async () => {
+    const { consumer, logger, partitionArchive } = harness([], ["ai.document.searched"]);
+    partitionArchive.stage([month("2024-01-01", 1, new Date("2024-02-01T00:00:00.000Z"))]);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.reconciliation.drifted")).toEqual([]);
+  });
+});
+
+// `20.10`: a month read back out of cold storage and into the derived store.
+describe("AnalyticsConsumer reproject", () => {
+  const ENTRY = {
+    organizationId: ORG as ActivityRecord["organizationId"],
+    tableName: "activity_log" as const,
+    period: "2026-01-01",
+    objectKey: "cold/activity_log/2026/01/org.ndjson.gz",
+    rowCount: 2,
+    bytes: 128,
+    checksum: "x",
+    actionCounts: {},
+    projectedAt: null,
+  };
+
+  const line = (id: string, action: string) => ({
+    id,
+    occurred_at: "2026-01-15T00:00:00.000Z",
+    actor_id: ACTOR,
+    action,
+    payload: {},
+  });
+
+  const staged = (excluded: readonly ActivityAction[] = []) => {
+    const parts = harness([], excluded);
+    parts.partitionArchive.stage([ENTRY]);
+    parts.coldArchive.stage(ENTRY.objectKey, [
+      line("r1", "role.created"),
+      line("r2", "ai.document.searched"),
+    ]);
+    return parts;
+  };
+
+  it("projects the archived rows and stamps the month", async () => {
+    const { consumer, projected, partitionArchive, logger } = staged();
+
+    await consumer.handle(job("cold-reproject", { period: "2026-01-01", organizationId: null }));
+
+    expect(
+      projected
+        .projected()
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(["r1", "r2"]);
+    expect(partitionArchive.projected()).toEqual([
+      { table: "activity_log", period: new Date("2026-01-01T00:00:00.000Z"), organizationId: ORG },
+    ]);
+    expect(emitted(logger, "cold.partition.reprojected")).toEqual([
+      { period: "2026-01-01", organizationId: ORG, rows: 2 },
+    ]);
+  });
+
+  // The same exclusion list the live projection uses: a re-projection that ignored it
+  // would put back exactly the rows the policy says not to carry.
+  it("drops an excluded action on the way back in", async () => {
+    const { consumer, projected } = staged(["ai.document.searched"]);
+
+    await consumer.handle(job("cold-reproject", { period: "2026-01-01", organizationId: null }));
+
+    expect(projected.projected().map((row) => row.id)).toEqual(["r1"]);
+  });
+
+  // Idempotent through the `ReplacingMergeTree`: a second run over the same month is
+  // the same rows keyed the same way, not a doubling.
+  it("is idempotent over the same month", async () => {
+    const { consumer, projected } = staged();
+
+    await consumer.handle(job("cold-reproject", { period: "2026-01-01", organizationId: null }));
+    await consumer.handle(job("cold-reproject", { period: "2026-01-01", organizationId: null }));
+
+    expect(projected.projected()).toHaveLength(2);
   });
 });
 

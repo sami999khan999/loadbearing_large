@@ -162,6 +162,21 @@ The `projection` label rides every line this consumer emits. There is one projec
 exists so a second one does not change the event shape, and so a dashboard filters on it rather than
 on the queue name.
 
+### `cold-reproject`
+
+One archived month read back out of S3 and into the derived store. It lives on this consumer and
+not on `MaintenanceConsumer` for one reason: **this consumer owns the projector**.
+
+Per object: read it through `ColdArchiveReader` (verified against the recorded checksum and
+count), map each line with the same `ActivitySubject.of` the live replay uses, **drop the excluded
+actions** — a re-projection that ignored the policy would put back exactly the rows it says not to
+carry — insert in batches, then stamp `projected_at`. The stamp is last: a stamp on a projection
+that failed is a gap the partial index can no longer find.
+
+Idempotent through the `ReplacingMergeTree`, so a second run over the same month is the same rows
+keyed the same way rather than a doubling. That is what lets the screen offer the button without
+a confirmation.
+
 ## `MailConsumer` is the only thing in this system that sends
 
 Every message — Better Auth's four, and the invitation — is published as a job rather than sent

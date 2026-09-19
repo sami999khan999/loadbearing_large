@@ -49,6 +49,8 @@ export type {
   QueuedDocumentDto,
   RealtimeEventName,
   RealtimeMessage,
+  ReprojectInput,
+  ReprojectRequestedDto,
   RestoreInput,
   RestoreRequestedDto,
   RetentionUpdateInput,

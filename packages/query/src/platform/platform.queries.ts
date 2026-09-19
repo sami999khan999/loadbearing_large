@@ -45,6 +45,16 @@ export class PlatformQueries {
     });
   }
 
+  // `staleTime: 0`: the list is what a re-project acts on, and acting on a stale one
+  // is queueing a job for a month that was filled a minute ago.
+  public static gaps(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.gaps(),
+      queryFn: () => client.platform.listGaps(),
+      staleTime: 0,
+    });
+  }
+
   // Ten seconds, like the status read: this is a switch somebody may have just thrown
   // from another tab, and a stale answer is a button that does the opposite.
   public static policy(client: ApiClient) {

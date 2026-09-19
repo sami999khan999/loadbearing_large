@@ -31,6 +31,7 @@ export {
   type DeletedTenantSweep,
   type ExportedObject,
   PartitionArchiveGateway,
+  type ProjectionGap,
   type RestoredMonth,
   type TenantExport,
 } from "./partition-archive.gateway.js";

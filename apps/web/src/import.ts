@@ -62,6 +62,7 @@ export {
   OrganizationSwitcher,
   PlatformStatusPanel,
   ProfileForm,
+  ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
   ResetPasswordForm,

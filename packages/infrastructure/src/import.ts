@@ -103,6 +103,7 @@ export {
   // an audit row as the tenant being created or joined.
   Principal,
   type ProjectionCheckpoint,
+  type ProjectionGap,
   type ProjectionPolicyRecord,
   type ProjectionPolicyRepository,
   QueuePublisher,

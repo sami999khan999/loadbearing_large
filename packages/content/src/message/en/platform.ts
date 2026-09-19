@@ -78,6 +78,15 @@ export const platform = {
   "platform.tenantDelete.action": "Delete tenant",
   "platform.tenantDelete.done":
     "Deleted. {archived} objects archived, {partitions} partitions dropped.",
+  "platform.gaps.title": "Gaps",
+  "platform.gaps.none": "Every archived month reached the analytics store.",
+  "platform.gaps.row": "{period} — {tenants} archived objects never projected.",
+  "platform.gaps.reproject": "Re-project this month",
+  // Said once rather than per row: the reason is on a log line and is not stored, so
+  // the screen can say a gap exists and not why.
+  "platform.gaps.reason":
+    "Why a month has a gap is on the log line, not in the row. Re-projecting is idempotent.",
+  "platform.gaps.queued": "Queued as {jobId}; {objects} objects to read back.",
   "platform.switch.title": "Projection",
   "platform.switch.on": "On",
   "platform.switch.off": "Paused",

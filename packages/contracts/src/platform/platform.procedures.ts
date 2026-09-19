@@ -55,6 +55,16 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantExport)
     .output(z.array(PlatformContract.tenantExportObject).readonly());
 
+  public static readonly listGaps = oc
+    .route({ method: "GET", path: "/platform/projection/gaps" })
+    .output(z.array(PlatformContract.projectionGap).readonly());
+
+  // `POST` and a job id back: a month is a read out of S3 and an insert per batch.
+  public static readonly reprojectPartition = oc
+    .route({ method: "POST", path: "/platform/projection/reproject" })
+    .input(PlatformContract.reproject)
+    .output(PlatformContract.reprojectRequested);
+
   public static readonly getPolicy = oc
     .route({ method: "GET", path: "/platform/policy" })
     .output(PlatformContract.policy);
@@ -97,6 +107,8 @@ export class PlatformProcedures {
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
     listStorage: PlatformProcedures.listStorage,
     getPolicy: PlatformProcedures.getPolicy,
+    listGaps: PlatformProcedures.listGaps,
+    reprojectPartition: PlatformProcedures.reprojectPartition,
     updateProjectionSwitch: PlatformProcedures.updateProjectionSwitch,
     listProjection: PlatformProcedures.listProjection,
     updateProjection: PlatformProcedures.updateProjection,

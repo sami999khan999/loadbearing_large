@@ -15,6 +15,7 @@ import {
   PartitionedTable,
   type PartitionedTableEntry,
   type PartitionedTableName,
+  type ProjectionGap,
   pipeline,
   Readable,
   type RestoredMonth,
@@ -462,6 +463,45 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     return JSON.stringify(row);
   }
 
+  // Leads with the tenant, which is what the primary key is ordered by — so this is a
+  // range scan on one tenant rather than a filter over every month ever archived.
+  public async monthsOf(
+    table: PartitionedTableName,
+    organizationId: OrganizationId,
+  ): Promise<readonly PartitionArchiveEntry[]> {
+    const rows = await this.db.execute<EntryRow>(
+      sql`select organization_id::text as organization_id, table_name, period::text as period,
+                 object_key,
+                 row_count, bytes::bigint::text as bytes, checksum, action_counts, projected_at
+          from partition_archive
+          where organization_id = ${organizationId}::uuid and table_name = ${table}
+          order by period`,
+    );
+
+    return rows.rows.map((row) => PgPartitionArchiveGateway.entryOf(row, table));
+  }
+
+  // Reads the partial index on `(table_name, period) where projected_at is null`, which
+  // is what keeps this off a scan over every tenant-month ever archived.
+  public async gaps(table: PartitionedTableName): Promise<readonly ProjectionGap[]> {
+    const rows = await this.db.execute<{ period: string; tenants: string; rows: string }>(
+      sql`select period::text as period,
+                 count(*)::text as tenants,
+                 coalesce(sum(row_count), 0)::text as rows
+          from partition_archive
+          where table_name = ${table} and projected_at is null
+          group by period
+          order by period`,
+    );
+
+    return rows.rows.map((row) => ({
+      tableName: table,
+      period: row.period,
+      tenants: Number(row.tenants),
+      rows: Number(row.rows),
+    }));
+  }
+
   // Tenants Postgres has forgotten and the bucket has not. `not exists` rather than a
   // left join: this runs nightly over a table that only grows.
   public async sweepDeleted(before: Date): Promise<DeletedTenantSweep> {
@@ -518,7 +558,12 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
           order by organization_id`,
     );
 
-    return rows.rows.map((row) => ({
+    return rows.rows.map((row) => PgPartitionArchiveGateway.entryOf(row, table));
+  }
+
+  // One mapper for both reads: two copies drifted the moment `projected_at` was added.
+  private static entryOf(row: EntryRow, table: PartitionedTableName): PartitionArchiveEntry {
+    return {
       organizationId: row.organization_id as OrganizationId,
       tableName: table,
       period: row.period,
@@ -528,7 +573,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       checksum: row.checksum,
       actionCounts: row.action_counts,
       projectedAt: row.projected_at === null ? null : new Date(row.projected_at),
-    }));
+    };
   }
 
   private async objectKeyOf(
