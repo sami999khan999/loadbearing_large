@@ -962,8 +962,8 @@ export class Container {
         this.clock,
       ),
       listExports: new ListTenantExportsUseCase(this.authorizer, this.storage),
-      // Local rather than a field, like `listStorage` below: nothing outside these two
-      // use-cases reads the directory this way.
+      // `hasShardMoves` is read while this constructor runs, so whatever replaces its
+      // literal has to be readable then — a field assigned later would be `undefined`.
       inspectShardMap: new InspectShardMapUseCase(
         this.authorizer,
         new PgShardMapReader(this.cluster, this.transactions, this.shards),
