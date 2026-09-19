@@ -87,6 +87,26 @@ to skip it would be a table with a hole in it. It is rate-limited to one signal 
 per conversation in the use-case, through a cache entry with a TTL: "have I published in the last
 two seconds" is exactly what a TTL answers, and nothing has to expire it.
 
+## The member frames go out in chunks, and that was worth measuring
+
+A message in a room of N members is **one** publish of the body on the conversation channel and
+**N** compact "something changed" frames on the members' own channels. The body is published once
+on purpose — N publishes of the same bytes is the thing a conversation channel exists to avoid —
+but the N frames are still N.
+
+They used to go out one at a time, each awaited. At 25 000 members that is 25 000 serialised Redis
+round trips and **eighteen seconds**. In chunks of 500 through `Promise.all` it is **769 ms**:
+ioredis multiplexes one socket, so a chunk leaves as one write rather than as five hundred round
+trips. Twenty-three times, for four lines.
+
+Chunked rather than `Promise.all` over the whole list, which is the only judgement in it: a room of
+a hundred thousand is not a write buffer to build.
+
+The measurement is
+[infrastructure · fan-out](../../../infrastructure/docs/reference/fan-out.md), and it times both
+shapes side by side so the difference cannot quietly go away again. What is left at 25 000 is the
+notification rows — five seconds of them — which is where §6 said the cost would be.
+
 ## How `messages` is partitioned, and where the dedupe went
 
 It is partitioned by tenant and then by month, like `activity_log` and `notifications`. It was the
