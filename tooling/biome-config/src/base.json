@@ -182,6 +182,7 @@
         "packages/infrastructure/seed.ts",
         "packages/infrastructure/smoke.ts",
         "packages/infrastructure/tests/smoke/tenant-ceiling.smoke.spec.ts",
+        "packages/infrastructure/tests/support/orphan-sweep.ts",
         "packages/observability/src/logger/json.logger.ts"
       ],
       "linter": {
