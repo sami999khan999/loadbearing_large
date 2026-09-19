@@ -3161,7 +3161,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
 
 #### Assertions (`tooling`)
 
-- [ ] `22.18` **§22 and §23; §9 derived** — `check-architecture.mjs`: §9's `TENANT_EXEMPT` is
+- [x] `22.18` **§22 and §23; §9 derived** — `check-architecture.mjs`: §9's `TENANT_EXEMPT` is
   parsed from `CatalogTable` in `application/src/primitive/shard.ts` (plus
   `__drizzle_migrations`), so a table cannot be catalog in one file and tenant-exempt in another.
   §22: for every `pg/repository/pg-*.ts`, the tables it imports from **any** `../schema/*` path
@@ -3220,6 +3220,16 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   the top of the script rather than the literal `organization_id` in two places, so a fork
   sharding by another column edits it once; its value is asserted equal to `TenantKey` on the
   allowlist, the way §9 parses that file.
+  `done: 2026-09-19` — §9's exemption set is now **derived** from `TablePlacement.CATALOG`, so a
+  table cannot be catalog in one file and tenant-exempt in another; `TENANT_COLUMN` is one
+  constant and the hand-written list is down to `__drizzle_migrations`, which no schema file
+  declares. §22 and §23 are written and `CROSS_PLACEMENT_KNOWN` holds exactly the one file the
+  audit found. `corrected:` §23 strips comments first — `database.ts` documents the call it
+  defines, and a grep that counted prose would make the assertion unfixable.
+  `verified:` each of the three was run against a deliberate break and reported it — a catalog
+  table removed from the list, the known exemption emptied, and a `new Database(` added to a
+  repository. Seven fixture tests added beside the existing fifty-one; the harness count moves
+  to twenty-three, as do `AGENTS.md`, `workflow.md` and `docs/setup/26`.
 
 #### The rehearsal kit (`infra`, `infrastructure`)
 

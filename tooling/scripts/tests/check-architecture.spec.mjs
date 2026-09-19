@@ -50,6 +50,11 @@ const BASE = {
   "docs/opinions/layering.md": "The argument.\n",
   "packages/application/package.json": PKG("application"),
   "packages/application/src/index.ts": 'export const NAME = "application";\n',
+  // §9 derives its exemption set from this file and §22 reads it for placements, so a
+  // fixture without it makes both skip rather than run.
+  "packages/application/src/primitive/shard.ts":
+    'const CATALOG = Object.freeze(["organizations", "users"] as const);\n' +
+    'const LOCAL = Object.freeze(["activity_log"] as const);\n',
 };
 
 function parse(output) {
@@ -131,7 +136,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(21);
+    expect(results).toHaveLength(23);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -781,6 +786,82 @@ describe("21 — every partitioned table is on the allowlist, with the same keys
       run({
         [ALLOWLIST]: allowlist(TENANT("ACTIVITY_LOG") + MONTH('"outbox_event"')),
         ...migration(TENANT_DDL("activity_log") + MONTH_DDL("outbox_event")),
+      }),
+      NAME,
+    );
+  });
+});
+
+describe("22 — every repository reads tables of one placement", () => {
+  const NAME = "every repository reads tables of one placement";
+
+  // The import shape the assertion reads: a repository names its tables through the
+  // schema modules, and the export name is the table name in camelCase.
+  const repository = (imports) => ({
+    "packages/infrastructure/src/pg/repository/pg-probe.repository.ts": `${imports}\nexport class PgProbeRepository extends BaseRepository {}\n`,
+  });
+
+  it("accepts a repository that reads only catalog tables", () => {
+    passes(
+      run(repository('import { organizations, users } from "../schema/rbac.schema.js";')),
+      NAME,
+    );
+  });
+
+  it("accepts a repository that reads only routed tables", () => {
+    passes(run(repository('import { tasks, notes } from "../schema/task.schema.js";')), NAME);
+  });
+
+  // The whole point: on one node it works, and on two it reads half its rows from the
+  // wrong database.
+  it("catches a repository that spans the catalog and a routed shard", () => {
+    fails(
+      run(repository('import { organizations, tasks } from "../schema/rbac.schema.js";')),
+      NAME,
+      "one repository, one placement",
+    );
+  });
+
+  // `local` is on every node, so it mixes with either and is not a crossing.
+  it("accepts a local table beside a catalog one", () => {
+    passes(
+      run(repository('import { activityLog, organizations } from "../schema/rbac.schema.js";')),
+      NAME,
+    );
+  });
+});
+
+describe("23 — only DatabaseCluster opens a pool inside src/", () => {
+  const NAME = "only `DatabaseCluster` opens a pool inside `src/`";
+
+  it("accepts the cluster opening pools", () => {
+    passes(
+      run({
+        "packages/infrastructure/src/pg/primitive/database-cluster.ts":
+          "const one = new Database({ url });\n",
+      }),
+      NAME,
+    );
+  });
+
+  it("catches a second place opening one", () => {
+    fails(
+      run({
+        "packages/infrastructure/src/pg/repository/pg-probe.repository.ts":
+          "const sneaky = new Database({ url });\n",
+      }),
+      NAME,
+      "only database-cluster.ts may",
+    );
+  });
+
+  // `database.ts` documents the call it defines; a grep that counted prose would make
+  // the assertion unfixable.
+  it("ignores the call named in a comment", () => {
+    passes(
+      run({
+        "packages/infrastructure/src/pg/primitive/database.ts":
+          "// a script that writes new Database({ url }) gets the same pool\n",
       }),
       NAME,
     );

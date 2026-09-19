@@ -409,41 +409,31 @@ assert("no server code in the client bundle", (failures) => {
 // narrows by. Drizzle tables are data, so no type can express this. See
 // docs/opinions/data-and-scale.md.
 
-const TENANT_EXEMPT = new Set([
-  // It is the tenant.
-  "organizations",
-  // Better Auth owns these, and they are global by nature: one person has one login
-  // and may belong to several organizations, so the tenant lives on `memberships`
-  // rather than here. The names are the `modelName` values doc 16 chose — Better
-  // Auth's own defaults are singular, and this list read `user`/`session`/`account`
-  // for a while after the rename, which made the whole assertion vacuous for them.
-  "users",
-  "accounts",
-  "verifications",
-  "two_factors",
-  // `sessions` carries `active_organization_id`, which is which tenant the session is
-  // pointed at rather than which owns the row — the same distinction that keeps `users`
-  // off this list despite `last_active_organization_id`. It passed until §9 stopped
-  // matching the tenant column as a substring, and had never actually been checked.
-  "sessions",
-  // A partition is the unit of archival and of dropping, and it spans every tenant — so
-  // a per-tenant retention row would describe something the storage engine cannot do.
-  // Per-tenant retention is `tenant_retention_policy`, which leads with the tenant.
-  "retention_policy",
-  // Whether an action reaches the analytics store is one deployment-wide decision, and
-  // the consumer that reads it projects across every tenant in one pass. A per-tenant
-  // row here would describe something nothing does.
-  "projection_policy",
-  // The directory, read before any shard is known. `22.18` makes this set derived
-  // from `TablePlacement.CATALOG`; until then it is the first entry to rely on it.
-  "shard_assignments",
-  // A deployment-wide switch has no tenant. One row, and `check (id = 1)` is what
-  // makes that a database guarantee rather than a convention.
-  "platform_policy",
-  "__drizzle_migrations",
-]);
+// The tenant column, in one place: a fork sharding by another edits this and §17
+// follows. Asserted equal to `TenantKey` on the allowlist below.
+const TENANT_COLUMN = "organization_id";
+
+// **Derived, not listed.** A table is tenant-exempt exactly when `TablePlacement`
+// calls it catalog — so it cannot be catalog in one file and exempt in another, which
+// is the drift a second hand-written list guarantees.
+const catalogTables = () => {
+  const file = join(ROOT, "packages/application/src/primitive/shard.ts");
+  if (!existsSync(file)) return null;
+
+  const source = readFileSync(file, "utf8");
+  const block = source.slice(source.indexOf("const CATALOG = Object.freeze(["));
+  const names = [...block.slice(0, block.indexOf("]")).matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+
+  return names.length > 0 ? new Set(names) : null;
+};
+
+// The one name that is nobody's table: drizzle writes it and no schema file declares it.
+const TENANT_EXEMPT_EXTRA = new Set(["__drizzle_migrations"]);
 
 assert("every domain table declares `organization_id`", (failures) => {
+  const catalog = catalogTables();
+  if (!catalog) return "packages/application has no shard.ts yet";
+
   const dir = join(ROOT, "packages/infrastructure/src");
   if (!existsSync(dir)) return "packages/infrastructure has no src/ yet";
 
@@ -451,15 +441,15 @@ assert("every domain table declares `organization_id`", (failures) => {
   if (!blocks) return "no *.schema.ts files yet";
 
   for (const block of blocks) {
-    if (TENANT_EXEMPT.has(block.table)) continue;
+    if (catalog.has(block.table) || TENANT_EXEMPT_EXTRA.has(block.table)) continue;
 
     // The same bracket-matched parse §17 and §18 use, and the same whole-name test: the
     // regex this replaced anchored on `\n});` at column 0, so a table Biome wrapped
     // differently was skipped silently, and a substring match would count
     // `last_active_organization_id` as a tenant column.
-    if (columnsOf(block).some((column) => column.column === "organization_id")) continue;
+    if (columnsOf(block).some((column) => column.column === TENANT_COLUMN)) continue;
 
-    failures.push(`${rel(block.file)}: table "${block.table}" has no organization_id`);
+    failures.push(`${rel(block.file)}: table "${block.table}" has no ${TENANT_COLUMN}`);
   }
 
   return null;
@@ -1227,6 +1217,87 @@ assert("every partitioned table is on the allowlist, with the same keys", (failu
 });
 
 // ── report ───────────────────────────────────────────────────────────────────
+
+// ── 22 — a repository reads tables of one placement ──────────────────────────
+//
+// A repository whose tables span the catalog and a routed shard is one that cannot be
+// split: on one node it works, and on two it reads half its rows from the wrong
+// database. `BaseRepository` catches the transaction-level case at runtime; this
+// catches the file-level case before anything runs. See
+// packages/infrastructure/docs/reference/sharding.md.
+
+// `24.1` empties this. One file today, audited: it resolves an audience out of RBAC on
+// the catalog and reads `notification_preferences`, which is routed.
+const CROSS_PLACEMENT_KNOWN = new Set(["pg-notification-recipient.reader.ts"]);
+
+assert("every repository reads tables of one placement", (failures) => {
+  const dir = join(ROOT, "packages/infrastructure/src/pg");
+  if (!existsSync(dir)) return "packages/infrastructure has no pg/ yet";
+
+  const catalog = catalogTables();
+  if (!catalog) return "packages/application has no shard.ts yet";
+
+  // The two local tables, read from the same file the catalog list comes from: a
+  // local table mixes with either placement, which is what `local` means.
+  const shardFile = readFileSync(join(ROOT, "packages/application/src/primitive/shard.ts"), "utf8");
+  const localBlock = shardFile.slice(shardFile.indexOf("const LOCAL = Object.freeze(["));
+  const local = new Set(
+    [...localBlock.slice(0, localBlock.indexOf("]")).matchAll(/"([a-z_]+)"/g)].map((m) => m[1]),
+  );
+
+  for (const file of walk(dir, [".ts"])) {
+    const source = readFileSync(file, "utf8");
+    if (!source.includes("extends BaseRepository")) continue;
+    if (CROSS_PLACEMENT_KNOWN.has(basename(file))) continue;
+
+    // Every identifier imported from a schema module, mapped back to its table name
+    // through the schema files themselves — the import name is camelCase.
+    const imported = [...source.matchAll(/import \{([^}]*)\} from "[^"]*schema\/[a-z.-]+\.js";/g)]
+      .flatMap((match) => match[1].split(","))
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0 && !name.startsWith("type "));
+
+    const placements = new Set(
+      imported
+        .map((name) => tableNameOf(name))
+        .filter((table) => table !== null && !local.has(table))
+        .map((table) => (catalog.has(table) ? "catalog" : "routed")),
+    );
+
+    if (placements.size > 1) {
+      failures.push(
+        `${rel(file)}: reads ${[...placements].join(" and ")} tables — one repository, one placement`,
+      );
+    }
+  }
+});
+
+// `notificationPreferences` -> `notification_preferences`, which is the convention
+// every schema file follows: the export name is the table name in camelCase.
+function tableNameOf(exported) {
+  return exported.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+// ── 23 — one place opens a pool ──────────────────────────────────────────────
+//
+// `DatabaseCluster` is what `close()` walks and what the health report counts. A second
+// `new Database(` in `src/` is a pool nothing closes, nothing counts, and no shard map
+// knows about. Scripts above `src/` open their own on purpose: they are one-shot.
+
+assert("only `DatabaseCluster` opens a pool inside `src/`", (failures) => {
+  const dir = join(ROOT, "packages/infrastructure/src");
+  if (!existsSync(dir)) return "packages/infrastructure has no src/ yet";
+
+  for (const file of walk(dir, [".ts"])) {
+    if (basename(file) === "database-cluster.ts") continue;
+    // Comments stripped first: `database.ts` documents the call it defines, and a
+    // grep that counted prose would make the assertion unfixable.
+    const code = readFileSync(file, "utf8").replaceAll(/^\s*\/\/.*$/gm, "");
+    if (!code.includes("new Database(")) continue;
+
+    failures.push(`${rel(file)}: opens a pool — only database-cluster.ts may`);
+  }
+});
 
 let failed = 0;
 let skippedCount = 0;

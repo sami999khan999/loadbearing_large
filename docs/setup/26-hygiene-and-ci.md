@@ -366,7 +366,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-one architectural assertions
+## Step 26.4 — The twenty-three architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Twenty-one greps can.
 
@@ -827,6 +827,29 @@ primary key, which has to carry both.
 rejects a partitioned table whose key omits a partition key. It is worth checking anyway because
 this is the one kind of DDL the repository writes by hand: the failure it catches is a file in
 review, not a database in production.
+
+### 22 — Every repository reads tables of one placement
+
+A repository whose tables span the catalog and a routed shard is one that cannot be split: on one
+node it works, and on two it reads half its rows from the wrong database. `BaseRepository` catches
+the transaction-level case at runtime; this catches the file-level case before anything runs.
+
+The placements come from `TablePlacement` in `application/src/primitive/shard.ts` — the same
+constant §9 derives its exemption set from, so a table cannot be catalog for one assertion and
+something else for another. `local` mixes with either, which is what `local` means.
+
+`CROSS_PLACEMENT_KNOWN` holds the audited exceptions, and it holds exactly one:
+`pg-notification-recipient.reader.ts` resolves an audience out of RBAC on the catalog and reads
+`notification_preferences`, which is routed. `24.1` empties the set.
+
+### 23 — Only `DatabaseCluster` opens a pool inside `src/`
+
+`DatabaseCluster` is what `close()` walks and what the health report counts. A second
+`new Database(` in `src/` is a pool nothing closes, nothing counts and no shard map knows about.
+
+Comments are stripped before the search, because `database.ts` documents the call it defines and
+a grep that counted prose would make the assertion unfixable. Scripts above `src/` open their own
+pools on purpose: they are one-shot and they exit.
 
 **This assertion and `partition-ddl.ts` are the two directions of one check.** The generator writes
 the clause from the allowlist onto a freshly generated migration; this reads the migrations back and
