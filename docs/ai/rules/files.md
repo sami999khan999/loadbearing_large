@@ -31,6 +31,11 @@ description: Kebab-case everywhere, the closed set of role suffixes, one class p
   may never contain logic.
 - **Tests mirror `src/` and never live inside it.** `src/error/app.error.ts` →
   `tests/error/app.error.spec.ts`. `*.stories.tsx` is not a test and stays in `src/`.
+- **One exemption: `infrastructure` organises `tests/` by subject**, not by its vendor folders —
+  `tests/rbac/`, `tests/messaging/`, `tests/cold/` — because mirroring `src/pg/repository/` piles
+  twenty-five specs in one directory, and because a spec like `tenant-cascade.spec.ts` covers no
+  single file to mirror. Vendor folders stay where the adapter *is* the subject (`tests/redis/`,
+  `tests/smtp/`). It is the only package with the exemption.
 
 ---
 

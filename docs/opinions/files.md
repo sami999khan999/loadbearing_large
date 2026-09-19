@@ -143,3 +143,24 @@ resolves into `src/` — while the mirrored path preserves the one thing colocat
 knowing where a subject's test is without looking.
 
 `*.stories.tsx` is **not** a test and stays in `src/`.
+
+### The mirror is the default, and `infrastructure` is the one package it does not fit
+
+Every other package's `src/` is organised by subject, so mirroring it produces a `tests/` organised
+by subject too, and the rule costs nothing. `infrastructure` is organised **by vendor** — `pg/`,
+`redis/`, `s3/`, `smtp/` — because that is what makes `rm -r src/clickhouse/` the complete answer
+to a swap. Mirroring that puts roughly twenty-five spec files in one flat `tests/pg/repository/`,
+which is the same pile the vendor split exists to avoid, one directory further down.
+
+So `infrastructure` organises `tests/` by **subject**: `rbac/`, `member/`, `messaging/`, `outbox/`,
+`platform/`, `cold/`, `maintenance/`, `vector/`. It keeps vendor folders — `redis/`, `smtp/`,
+`loki/`, `openai/`, `clickhouse/` — where a vendor's adapter is the subject, which is most of them
+outside `pg/`.
+
+**The deciding case is the spec that has no one file to mirror.** `tests/rbac/tenant-cascade.spec.ts`
+asserts that deleting a tenant reaches every table that references it; `tests/maintenance/tenant-partition.spec.ts`
+covers a seed, a gateway and the allowlist together. Neither is a test *of* a file, so the mirror
+rule has no answer for where they go, and a rule with no answer gets one invented per author.
+
+This is the only package with the exemption, and it is not a licence to reach for: the test is
+whether `src/` is organised by something other than subject. Nothing else here is.
