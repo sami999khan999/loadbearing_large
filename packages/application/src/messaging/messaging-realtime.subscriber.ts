@@ -20,6 +20,10 @@ const EVENTS: readonly DomainEventName[] = [
   "message.deleted",
 ];
 
+// How many member frames go out together. Bounded rather than `Promise.all` over every
+// member: a room of a hundred thousand is not a write buffer to build.
+const FAN_OUT_CHUNK = 500;
+
 // Which of them also reach each member's own stream, for the badge and the list order.
 // The rest are conversation-local and cost nothing to anyone with it closed.
 const FANS_OUT: ReadonlySet<string> = new Set([
@@ -63,14 +67,21 @@ export class MessagingRealtimeSubscriber extends EventSubscriber {
     // N publishes for N members, which is the amplification a large channel pays. The
     // swap when it hurts is a summary from a counter — see docs/reference/messaging.md.
     const members = await this.conversations.memberIds(event.organizationId, conversationId);
-    for (const userId of members) {
-      await this.realtime.publish(RealtimeChannels.user(event.organizationId, userId), {
-        kind: "event",
-        id: Uuid.v7(),
-        name: "conversation.changed",
-        at: event.occurredAt,
-        payload: {},
-      });
+
+    // In chunks, not one at a time: the frames are independent and best-effort, and a
+    // round trip each was 23× slower at 25 000 members — infrastructure fan-out.md.
+    for (let index = 0; index < members.length; index += FAN_OUT_CHUNK) {
+      await Promise.all(
+        members.slice(index, index + FAN_OUT_CHUNK).map((userId) =>
+          this.realtime.publish(RealtimeChannels.user(event.organizationId, userId), {
+            kind: "event",
+            id: Uuid.v7(),
+            name: "conversation.changed",
+            at: event.occurredAt,
+            payload: {},
+          }),
+        ),
+      );
     }
   }
 

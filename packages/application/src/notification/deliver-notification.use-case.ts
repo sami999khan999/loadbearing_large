@@ -21,6 +21,10 @@ import type { NotificationRecipientReader, Recipient } from "./notification-reci
 // is the fan-out `data-and-scale.md` §6 says to load-test before trusting.
 const RECIPIENT_LIMIT = 500;
 
+// How many recipients are notified together. The cap above is the ceiling on the whole
+// audience, so one chunk is usually the whole of it.
+const NOTIFY_CHUNK = 100;
+
 // What the subscriber hands in: the event, nothing else. It asserts no permission —
 // see docs/reference/ports.md.
 export class DeliverNotificationUseCase {
@@ -134,22 +138,30 @@ export class DeliverNotificationUseCase {
     modes: readonly PreferenceRecord[],
     row: PolicyRow,
   ): Promise<void> {
-    for (const recipient of recipients) {
-      await this.cache.delete(
-        CountUnreadNotificationsUseCase.key(event.organizationId, recipient.userId),
+    // Two Redis round trips a recipient, issued together rather than one at a time. At
+    // the 500 cap that is 60 ms instead of 800 — see infrastructure fan-out.md.
+    for (let index = 0; index < recipients.length; index += NOTIFY_CHUNK) {
+      await Promise.all(
+        recipients.slice(index, index + NOTIFY_CHUNK).map(async (recipient) => {
+          await this.cache.delete(
+            CountUnreadNotificationsUseCase.key(event.organizationId, recipient.userId),
+          );
+
+          const mode = DeliverNotificationUseCase.modeFor(modes, recipient.userId, "in_app", event);
+          if (mode === "off") return;
+
+          await this.realtime.publish(
+            RealtimeChannels.user(event.organizationId, recipient.userId),
+            {
+              kind: "event",
+              id: Uuid.v7(),
+              name: "notification.created",
+              at: event.occurredAt,
+              payload: { kind: row.kind },
+            },
+          );
+        }),
       );
-
-      if (DeliverNotificationUseCase.modeFor(modes, recipient.userId, "in_app", event) === "off") {
-        continue;
-      }
-
-      await this.realtime.publish(RealtimeChannels.user(event.organizationId, recipient.userId), {
-        kind: "event",
-        id: Uuid.v7(),
-        name: "notification.created",
-        at: event.occurredAt,
-        payload: { kind: row.kind },
-      });
     }
   }
 
