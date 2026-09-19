@@ -15,6 +15,7 @@ export {
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,
 } from "./retention-preview.notice.js";
+export { ShardMapPanel, type ShardMapPanelProps } from "./shard-map.panel.js";
 export { TenantExportPanel } from "./tenant-export.panel.js";
 export {
   TenantRetentionForm,

@@ -103,6 +103,8 @@ export {
   RetentionPolicyForm,
   RetentionPreviewNotice,
   type RetentionPreviewNoticeProps,
+  ShardMapPanel,
+  type ShardMapPanelProps,
   TenantExportPanel,
   TenantRetentionForm,
   type TenantRetentionFormProps,

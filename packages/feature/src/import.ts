@@ -40,6 +40,9 @@ export {
   type RetentionEntryDto,
   type RetentionPreviewDto,
   type RoleDto,
+  type ShardMovesDto,
+  type ShardNodeDto,
+  type ShardTenantDto,
   type TenantStorageMonthDto,
   type TenantStorageRowDto,
 } from "@loadbearing/contracts";
