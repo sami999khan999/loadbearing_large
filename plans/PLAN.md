@@ -3883,9 +3883,46 @@ one worth promoting without a trigger.
 - [ ] `26.7` **Per-tenant digest hour**, mention notifications for channels, notification
   grouping ("3 new messages from A").
 
-- [ ] `26.8` **Load test** the three §6 paths at 10× (digest fan-out, notification write
+- [x] `26.8` **Load test** the three §6 paths at 10× (digest fan-out, notification write
   amplification, message fan-out) against the compose stack before any of this is called
   production-ready.
+  - **Shipped 2026-09-20** as `tests/smoke/fan-out.smoke.spec.ts`, opt-in through
+    `FAN_OUT_SCALE=1000,10000,25000`, the same shape `TENANT_CEILING` has. The numbers and what
+    they mean live in
+    [`packages/infrastructure/docs/reference/fan-out.md`](../packages/infrastructure/docs/reference/fan-out.md).
+  - **Measured on the compose stack**, one tenant, 82 tenants on the node:
+
+    | Recipients | Write | Statements | Replay | Digest | Pages | Publish | Per publish |
+    |---|---|---|---|---|---|---|---|
+    | 1 000 | 267 ms | 1 | 160 ms | 20 ms | 6 | 813 ms | 812 µs |
+    | 10 000 | 2 157 ms | 10 | 1 103 ms | 123 ms | 51 | 7 741 ms | 774 µs |
+    | 25 000 | 5 022 ms | 25 | 2 819 ms | 327 ms | 126 | 18 660 ms | 746 µs |
+
+  - **The answer is message fan-out, and it is not the database.** One message to 25 000 members
+    costs about 24 seconds: 4.6 seconds of notification rows and **19.5 seconds of publishes**, dead
+    linear at ~0.78 ms each because each is a serialised Redis round trip. The two paths §6 warns
+    about loudest — the notification write and the digest scan — are 0.18 ms a row and 11 µs a
+    recipient, both flat.
+  - **Three things worth keeping.** The write costs one statement per chunk of a thousand, and the
+    spec asserts the *count* rather than the time, because that is the property that stops holding
+    silently. The **replay** — the same event redelivered, which at-least-once makes the normal
+    case — costs half the write and writes nothing. And the digest is one query per page of 200,
+    which is `SendNotificationDigestUseCase`'s claim confirmed rather than restated.
+  - **What to do about the nineteen seconds**, cheapest first: pipeline the publishes, which are
+    independent and already best-effort; or stop fanning out per user past some room size, since
+    the body already rides the conversation channel and the per-user frames only reorder a list;
+    or `26.5`, Redis Streams, where a member reads rather than being written to.
+  - **10× of the largest §3 column is 250 000**, which is not run here: it writes a `users` row per
+    recipient on a developer machine. All three curves are linear across the three scales measured,
+    so the extrapolation is honest — and `FAN_OUT_SCALE=250000` is there for a machine that can
+    afford it.
+  - **The fourth finding came from the teardown**, and it is the one nobody was looking for:
+    deleting a `users` row costs a `conversation_members` scan **per tenant partition on the node**,
+    because the cascade's predicate carries no partition key. Three hundred synthetic users exceeded
+    a 30-second `statement_timeout` at 82 tenants. That is `OPEN.md` A.10's observation with a
+    number on it, and it is why the fixture's people have deterministic ids and are never deleted.
+  - `24.6` is the other half and stays open: it is the same measurement against the `sharded`
+    profile, and it is gated on Phase 24 rather than on this.
 
 - [x] `26.9` **Resend actions** — "resend invitation" and "resend verification". These are what
   - **Half of it already shipped**, which the entry did not know. "Resend verification" is

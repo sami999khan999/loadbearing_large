@@ -543,7 +543,7 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-four boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4` and `26.9` closed. Phases 1–22 have none. The line
+Thirty-three boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.8` and `26.9` closed. Phases 1–22 have none. The line
 number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
 edited above them.
 
@@ -601,7 +601,7 @@ From `TODO.md`
 - `26.5` **Redis Streams behind `RealtimeSubscriber`** — line 3657
 - `26.6` **Global stream cap and presence** — line 3660
 - `26.7` **Per-tenant digest hour**, channel mentions, notification grouping — line 3663
-- `26.8` **Load test** the three §6 paths at 10× — line 3666
+- ~~`26.8` **Load test** the three §6 paths at 10×~~ — closed 2026-09-20: the answer is message fan-out, nineteen of twenty-four seconds, and it is not the database
 - ~~`26.9` **Resend actions**~~ — closed 2026-09-20: verification already shipped; the invitation resend is a reissue, and the same-primary-key upsert is now asserted against Postgres
 - `26.10` **A delivery log, if the question actually arrives** — line 3674
 - `26.11` **Move from SMTP to a provider API** — line 3680
@@ -659,3 +659,11 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   here it is the work. **Checked rather than reasoned about:** the reissue re-inserts the same
   primary key, so it conflicts on `invitations_pkey` as well as on the index `ON CONFLICT` names.
   It resolves through the update path, and a spec now says so.
+- `26.8` **Load test the three §6 paths** — `tests/smoke/fan-out.smoke.spec.ts`, opt-in through
+  `FAN_OUT_SCALE`, with the numbers in `packages/infrastructure/docs/reference/fan-out.md`. **One
+  message to 25 000 members costs about 24 seconds, and nineteen of them are Redis publishes** —
+  dead linear at 0.75 ms each, one serialised round trip per member. The two paths §6 warns about
+  loudest are flat: 0.2 ms a notification row, 13 µs a digest recipient. **And a fourth finding,
+  from the teardown:** deleting a `users` row costs a `conversation_members` scan per tenant
+  partition, which is A.10 with a number on it — three hundred users exceeded a 30-second
+  `statement_timeout` at 82 tenants.
