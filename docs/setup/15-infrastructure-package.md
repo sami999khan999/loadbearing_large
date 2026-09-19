@@ -469,26 +469,49 @@ The gateway supports both, and which one a feature uses is a domain decision:
 > that happens to consume it.
 
 ```ts
+const EMBEDDING = "embedding";
+const NOTIFICATION = "notification";
+const ANALYTICS = "analytics";
+const MAINTENANCE = "maintenance";
+const MAIL = "mail";
+const EVENT = "event";
+
+// Frozen at module load rather than left as a `static readonly`: the keyword freezes the
+// binding and not the array, which is the shape `docs/ai/rules/classes.md` bans.
+const ALL = Object.freeze([EMBEDDING, NOTIFICATION, ANALYTICS, MAINTENANCE, MAIL, EVENT] as const);
+
+// A handful of queues by concern, not one per job type. A queue is a concurrency
+// and priority boundary: embedding is slow and rate-limited, notifications bursty.
 export class QueueName {
   private constructor() {}
 
-  public static readonly EMBEDDING = "embedding";
-  public static readonly NOTIFICATION = "notification";
-  public static readonly DOCUMENT = "document";
-  public static readonly ANALYTICS = "analytics";
-  public static readonly MAINTENANCE = "maintenance";
-  public static readonly MAIL = "mail";
+  public static readonly EMBEDDING = EMBEDDING;
+  public static readonly NOTIFICATION = NOTIFICATION;
+  // Its own concern because it is allowed to fall behind — nobody waits on a
+  // dashboard row, and its depth is the health signal for the derived store.
+  public static readonly ANALYTICS = ANALYTICS;
+  public static readonly MAINTENANCE = MAINTENANCE;
+  // Its own concern because a provider's rate limit is a property of this queue and of
+  // nothing else: one limiter here beats a sleep in every caller.
+  public static readonly MAIL = MAIL;
+  // The outbox drain and the deliveries it fans out to. Its own concern because the
+  // drain must not queue behind the deliveries it just created.
+  public static readonly EVENT = EVENT;
 
-  public static readonly ALL = [
-    QueueName.EMBEDDING,
-    QueueName.NOTIFICATION,
-    QueueName.DOCUMENT,
-    QueueName.ANALYTICS,
-    QueueName.MAINTENANCE,
-    QueueName.MAIL,
-  ] as const;
+  public static readonly ALL = ALL;
 }
 ```
+
+> **`ALL` is frozen at module load, and that is not style.** A
+> `public static readonly ALL = [...]` freezes the *binding*, not the array — `ALL.push(…)` still
+> mutates it — which is the static mutable state [classes](../ai/rules/classes.md) bans. The
+> members are module constants for the same reason: one place declares each string, and the class
+> is a view onto it.
+
+> **A queue with no producer and no consumer is deleted, not reserved.** `DOCUMENT` was on this
+> list until `23.4`: `5.5` indexed documents through `EMBEDDING`, so nothing ever published to it
+> and nothing ever read it. A name in a closed union is a promise that something uses it, and the
+> next person to see it spends an hour looking for what.
 
 **A handful of queues by concern, not one per job type.** Queues are a concurrency and priority boundary: embedding is slow and rate-limited, notifications are fast and bursty, and you want to tune those separately. Fifty queues means fifty Redis connections and fifty things to monitor.
 
