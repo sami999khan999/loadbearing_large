@@ -31,14 +31,54 @@ and the built web server answers `/` with 200 and 6 124 bytes of server-rendered
 `node --env-file=.env tooling/scripts/boot-smoke.mjs web`. The application is in a state where the
 walk would have been possible.
 
-**`23.6` is blocked twice over**, and would have failed even with a browser. The QueryClient is
-not dehydrated (`23.3`), so a loader prefetch is thrown away and the client refetches. `23.6`
-cannot be ticked before `23.3` is decided and fixed, whoever does the walk.
 
-**To pick this up:** install the Claude in Chrome extension and sign in, or do the walk by hand —
-it is seven observations, each a sentence in `PLAN.md`. The stack is the one the walk needs:
-`pnpm infra:up`, `pnpm db:migrate && pnpm db:seed`, `pnpm dev`, and **the worker running**, because
-every message in this system is a job on `QueueName.MAIL` and Mailpit is on `:8025`.
+### The walk, as a checklist
+
+Written out because the eight entries in `PLAN.md` are each one sentence of *what* to observe, and
+the setup in front of them is the part that takes the time. **The stack was left up and seeded on
+2026-09-20**, so steps 1 and 2 may already be done.
+
+**Setup, once.**
+
+1. `pnpm infra:up` — or `pnpm infra:up:sharded`, which is what is currently running. Mailpit is on
+   `http://localhost:8025` and **every message in this system goes there**, never out.
+2. `pnpm db:migrate && pnpm db:seed`. The seed's tenant is `loadbearing`.
+3. `pnpm dev`. It builds the packages, then runs web on `:3000` and **the worker beside it** —
+   the worker is not optional here, because a verification mail and an invitation are both jobs on
+   `QueueName.MAIL`.
+4. Sign up at `/sign-up` as **Ada**. Verification is required, so open Mailpit, click the link, and
+   sign in. `AUTH_ENROLMENT_MODE=personal` on this machine, so Ada gets an organization of her own.
+5. In a **second browser profile** — not a second tab, they need different cookies — sign up as
+   **Grace** and verify her the same way. She is not in Ada's tenant yet; step 6 is what puts her
+   there.
+
+**The seven observations.** Each is one `PLAN.md` entry; tick it there when it holds.
+
+6. **`23.5` — the inviter's second tab.** As Ada, open `/settings/members` in **two** tabs. In tab
+   A, invite `grace@…`. **Watch tab B**: the pending invitation appears with no reload. Then open
+   the invitation link from Mailpit in Grace's profile to accept it.
+7. **`23.7` — the bell count on refocus.** As Grace, send Ada a direct message from `/messages`.
+   Switch to Ada's window and watch the bell: the badge moves without a reload.
+8. **`23.8` — the optimistic read.** As Ada, open `/notifications` and click a row. It reads as
+   read **before** the mutation returns, and it is still read once the list refetches.
+9. **`23.10` — the optimistic message.** In `/messages`, throttle the connection in devtools and
+   send. The message renders before the mutation returns, and when it does return the row is
+   **reconciled, not duplicated** — the client dedupes by message id.
+10. **`23.11` — the typing indicator.** Type in Grace's window and stop. Ada's "… is typing"
+    disappears within the indicator's timeout, with no further keystroke. It is rate-limited to one
+    signal per two seconds, so type for longer than that.
+11. **`23.9` — the stream reconnect.** With Ada's window open on `/messages`, open the network
+    panel, stop `pnpm dev`, and start it again. `EventSource` reconnects on its own — nothing
+    server-side can prove it — and a `resync` frame arrives on the re-opened stream.
+12. **`23.6` — the loader prefetch.** **This one will fail, and it is not the walk's fault.** The
+    QueryClient is not dehydrated (`23.3`), so a loader prefetch is thrown away and the client
+    refetches. Fix `23.3` first — the recommendation under it is four lines — or leave `23.6`
+    unticked and say why.
+13. **`23.12` — record it.** When the others are ticked, tick the matching clauses in
+    `archive/COMMUNICATION-PLAN.md`'s Exit blocks and close `T-036` in `TODO.md`.
+
+**To pick this up:** install the Claude in Chrome extension and sign in, or work the checklist
+above by hand. It is seven observations and about twenty minutes once the two accounts exist.
 
 ---
 

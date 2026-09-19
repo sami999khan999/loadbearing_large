@@ -17,8 +17,8 @@ import type {
 } from "./notification-preference.repository.js";
 import type { NotificationRecipientReader, Recipient } from "./notification-recipient.reader.js";
 
-// One page of recipients. A policy that resolves to more than this in one organization
-// is the fan-out `data-and-scale.md` §6 says to load-test before trusting.
+// One page of recipients, and §6's fan-out is now measured rather than trusted: at this cap
+// the in-app notify is ~60 ms — see `packages/infrastructure/docs/reference/fan-out.md`.
 const RECIPIENT_LIMIT = 500;
 
 // How many recipients are notified together. The cap above is the ceiling on the whole
