@@ -773,6 +773,12 @@ surprise, and so every piece is reversible.
 | ClickHouse | schema applied by `pnpm ch:migrate` | it goes with the analytics profile |
 | Git | 45 commits on `main`, **nothing pushed** | `git log origin/main..main` is the whole of it |
 
+**One account was created and removed.** Proving `25.4`'s Exit needed a real signed-in platform
+admin, so one was signed up over `/api/auth`, verified through the link Mailpit received, granted,
+and then deleted along with its personal organization. `select count(*) from organizations` is 78,
+which is what it was before. Mailpit still holds that one verification mail; it is a dev inbox and
+emptying it is a button.
+
 **Two things left in the database on purpose, both named where they matter.**
 
 - The fan-out measurement's people — up to 25 000 rows whose emails are `<n>@fan-out.test` — are
