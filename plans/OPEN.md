@@ -642,9 +642,9 @@ Section C below is what has closed since.
 One line per section-B item that has closed, newest last. Each says what shipped and how it was
 proved; the argument stays in `PLAN.md`, which is also where the tick is.
 
-Verified on this machine at the end of that session, against the live containers — Postgres,
-pgBouncer, two Redis, MinIO, Mailpit, Loki, ClickHouse and a second Postgres under the `sharded`
-profile:
+Verified on this machine at the end of that session, and re-run in full after the last commit,
+against the live containers — Postgres, pgBouncer, two Redis, MinIO, Mailpit, Loki, ClickHouse and
+a second Postgres under the `sharded` profile:
 
 | Check | Result |
 |---|---|
@@ -652,7 +652,7 @@ profile:
 | `pnpm typecheck` | clean |
 | `pnpm lint` | clean |
 | `pnpm test` | 18 packages, every file green |
-| `pnpm smoke` | 6 of 6 files, 29 tests; 3 skipped are the opt-in measurements |
+| `pnpm smoke` | 6 of 6 files, 29 tests; 3 skipped are the opt-in measurements and the tenant ceiling |
 | `pnpm check:contrast` | 117 pairings, 108 colours in gamut |
 | `pnpm check:comments` | 0 blocks over two lines |
 | `pnpm deps:check` · `pnpm repo:check` | silent |
