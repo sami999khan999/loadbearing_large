@@ -37,16 +37,19 @@ Docker on the same host, a database holding 82 tenants. **Orders of magnitude, n
 shape of each column is the point, not its absolute value, and consecutive runs move the
 millisecond columns by about a tenth while the statement and page counts do not move at all.
 
-| Recipients | Write | Statements | Replay | Digest | Pages | Publish | Per publish |
+| Recipients | Write | Statements | Replay | Digest | Pages | Publish, serial | Publish, chunked |
 |---|---|---|---|---|---|---|---|
-| 1 000 | 208 ms | 1 | 109 ms | 22 ms | 6 | 730 ms | 729 µs |
-| 10 000 | 2 047 ms | 10 | 1 139 ms | 170 ms | 51 | 7 848 ms | 785 µs |
-| 25 000 | 4 582 ms | 25 | 2 796 ms | 282 ms | 126 | 19 492 ms | 780 µs |
+| 1 000 | 209 ms | 1 | 146 ms | 18 ms | 6 | 806 ms | **42 ms** |
+| 10 000 | 1 826 ms | 10 | 1 123 ms | 144 ms | 51 | 8 053 ms | **289 ms** |
+| 25 000 | 5 026 ms | 25 | 2 825 ms | 696 ms | 126 | 17 944 ms | **769 ms** |
+
+The last two columns are the same `N` frames through the same publisher, once as a `await` per
+frame and once as `Promise.all` over chunks of 500.
 
 ## What they say
 
 **The notification write is not the problem it looks like.** Twenty-five thousand rows in
-twenty-five statements and 4.6 seconds — about 0.18 ms a row, and flat as the tenant grows. The
+twenty-five statements and 5.0 seconds — about 0.2 ms a row, and flat as the tenant grows. The
 chunking in `PgNotificationRepository` is what makes that true, and the spec asserts the statement
 count rather than the time, because that is the property that can silently stop holding. §6's
 warning about this path is about the **table**, not the write: five rows per change is five times
@@ -58,25 +61,31 @@ against the dedupe index still costs a statement per chunk and 2.8 seconds at 25
 the path running twice, because it will.
 
 **Digest fan-out is cheap, and the page count is the whole cost.** One query per page of 200 —
-126 queries and 282 milliseconds for 25 000 recipients, about 11 µs each. §6's fix for this path
+126 queries for 25 000 recipients, and between 0.14 and 0.7 seconds depending on what else the
+database is doing — tens of microseconds a recipient either way. §6's fix for this path
 is to group recipients by capability shape, and the reason it is not needed yet is the one
 `SendNotificationDigestUseCase` gives: the digest reads a recipient's own rows, so it resolves no
 capability per person. These numbers are what that claim looks like when it is true.
 
-**Message fan-out is the one to worry about.** Nineteen and a half seconds for one message to
-25 000 members, and it is dead linear — roughly 0.78 ms per publish at every scale, which is one
-serialised Redis round trip each. Nothing about that number is Postgres, and no store choice
-changes it.
+**Message fan-out was the one to worry about, and the fix was four lines.** Eighteen seconds for
+one message to 25 000 members, dead linear at ~0.8 ms a publish — one serialised round trip each.
+Nothing about that number is Postgres, and no store choice changes it. Issuing the same frames in
+chunks of 500 through the same publisher takes **769 ms**: ioredis multiplexes one socket, so a
+chunk leaves as one write instead of 500 round trips. **Twenty-three times faster**, at 31 µs a
+frame.
 
 > [!IMPORTANT]
-> One message to a conversation of 25 000 costs **~24 seconds** end to end on this stack: 4.6
-> seconds of notification rows and 19.5 seconds of publishes. The publishes are the nineteen.
+> One message to a conversation of 25 000 cost **~23 seconds** end to end, eighteen of them
+> publishes. Chunked, it is **~5.8 seconds**, and the publishes are 0.8 of it. The remaining cost
+> is the notification rows, which is where §6 said it would be.
 
-The publish loop is the thing to fix first, and the fix is not a bigger database. Three shapes, in
-the order they cost least:
+**Both loops are chunked now.** `MessagingRealtimeSubscriber` publishes its member frames 500 at a
+time, and `DeliverNotificationUseCase` notifies 100 recipients at a time — its audience is already
+capped at 500, so that is usually one chunk. Bounded rather than `Promise.all` over the whole list:
+a room of a hundred thousand is not a write buffer to build.
 
-- **Pipeline the publishes.** They are independent, fire-and-forget and already best-effort. A
-  pipelined `PUBLISH` batch turns `N` round trips into a handful.
+Two further shapes, neither needed yet, in the order they cost least:
+
 - **Do not fan out at all for the big rooms.** The body already rides the conversation channel and
   is published once; the per-user frames exist only to reorder a list. A room past some size can
   reorder on refocus instead — which is what the bell already does.

@@ -64,6 +64,10 @@ const DIGEST_PAGE = 200;
 // the claim; the reading below is what says whether it holds.
 const WRITE_CHUNK = 1_000;
 
+// How many frames go out together in the chunked reading below. Bounded rather than
+// `Promise.all` over every member: a room of a hundred thousand is not a write buffer.
+const PUBLISH_CHUNK = 500;
+
 const created: OrganizationId[] = [];
 
 interface Reading {
@@ -83,6 +87,9 @@ interface Reading {
   // §6 "Message fan-out": one conversation publish, then one per member.
   readonly publishMs: number;
   readonly perPublishUs: number;
+  // The same frames in chunks. The difference between the two is the whole finding.
+  readonly chunkedMs: number;
+  readonly perChunkedUs: number;
 }
 
 const readings: Reading[] = [];
@@ -254,6 +261,17 @@ describe.skipIf(!stack.fanOut)("the three fan-out paths", () => {
       async () => {
         const { id, members } = await tenantOf(size);
         const at = new Date();
+
+        // The compact "something changed" frame a member's own channel gets. Not the body:
+        // that rides the conversation channel and is published once.
+        const frame = (conversationId: string) =>
+          ({
+            kind: "event",
+            id: Uuid.v7(),
+            name: "conversation.changed",
+            at,
+            payload: { conversationId },
+          }) as const;
         // A uuid, because `event_id` is one: the column is the outbox event this delivery
         // came from, and the dedupe index is on it.
         const records = notificationsFor(id, members, Uuid.v7(), at);
@@ -284,21 +302,28 @@ describe.skipIf(!stack.fanOut)("the three fan-out paths", () => {
           const conversationId = Uuid.v7();
 
           await publisher.publish(RealtimeChannels.conversation(id, conversationId), {
-            kind: "event",
-            id: Uuid.v7(),
+            ...frame(conversationId),
             name: "message.sent",
-            at,
-            payload: { conversationId },
           });
 
           for (const userId of members) {
-            await publisher.publish(RealtimeChannels.user(id, userId), {
-              kind: "event",
-              id: Uuid.v7(),
-              name: "conversation.changed",
-              at,
-              payload: { conversationId },
-            });
+            await publisher.publish(RealtimeChannels.user(id, userId), frame(conversationId));
+          }
+        });
+
+        // The same frames, issued in chunks rather than one at a time. ioredis multiplexes
+        // one socket, so a chunk leaves as one write rather than as `chunk` round trips.
+        const [, chunkedMs] = await timed(async () => {
+          const conversationId = Uuid.v7();
+
+          for (let index = 0; index < members.length; index += PUBLISH_CHUNK) {
+            await Promise.all(
+              members
+                .slice(index, index + PUBLISH_CHUNK)
+                .map((userId) =>
+                  publisher.publish(RealtimeChannels.user(id, userId), frame(conversationId)),
+                ),
+            );
           }
         });
 
@@ -314,6 +339,8 @@ describe.skipIf(!stack.fanOut)("the three fan-out paths", () => {
           digestStatements,
           publishMs,
           perPublishUs: Math.round((publishMs * 1_000) / (size + 1)),
+          chunkedMs,
+          perChunkedUs: Math.round((chunkedMs * 1_000) / size),
         });
 
         // One row per recipient, and the replay adds none. Both halves matter: the first
