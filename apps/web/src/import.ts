@@ -63,6 +63,7 @@ export {
   PlatformStatusPanel,
   ProfileForm,
   ProjectionPolicyForm,
+  ProjectionSwitchPanel,
   ResetPasswordForm,
   RestorePartitionPanel,
   RetentionPolicyForm,

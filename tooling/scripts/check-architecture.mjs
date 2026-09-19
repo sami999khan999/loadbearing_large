@@ -434,6 +434,9 @@ const TENANT_EXEMPT = new Set([
   // the consumer that reads it projects across every tenant in one pass. A per-tenant
   // row here would describe something nothing does.
   "projection_policy",
+  // A deployment-wide switch has no tenant. One row, and `check (id = 1)` is what
+  // makes that a database guarantee rather than a convention.
+  "platform_policy",
   "__drizzle_migrations",
 ]);
 

@@ -93,6 +93,8 @@ export {
   DeleteTenantPanel,
   PlatformStatusPanel,
   ProjectionPolicyForm,
+  ProjectionSwitchPanel,
+  type ProjectionSwitchPanelProps,
   RestorePartitionPanel,
   type RestorePartitionPanelProps,
   RetentionPolicyForm,

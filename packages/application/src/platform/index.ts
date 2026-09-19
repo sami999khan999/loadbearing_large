@@ -9,6 +9,10 @@ export {
   type ExportRequested,
 } from "./export-organization.use-case.js";
 export {
+  GetPlatformPolicyUseCase,
+  type PlatformPolicyView,
+} from "./get-platform-policy.use-case.js";
+export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
 } from "./inspect-platform-status.use-case.js";
@@ -35,6 +39,10 @@ export {
 } from "./list-tenant-storage.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
+export {
+  type PlatformPolicyRecord,
+  PlatformPolicyRepository,
+} from "./platform-policy.repository.js";
 export {
   type PreviewedPartition,
   type PreviewRetentionChangeInput,
@@ -68,6 +76,10 @@ export {
   TenantStorageReader,
   type TenantStorageRow,
 } from "./tenant-storage.reader.js";
+export {
+  type ToggleProjectionInput,
+  ToggleProjectionUseCase,
+} from "./toggle-projection.use-case.js";
 export {
   type UpdateProjectionPolicyInput,
   UpdateProjectionPolicyUseCase,

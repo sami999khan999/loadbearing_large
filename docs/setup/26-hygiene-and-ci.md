@@ -566,6 +566,7 @@ const TENANT_EXEMPT = new Set([
   "sessions",
   "retention_policy",                                // global: a partition spans every tenant
   "projection_policy",                               // global: one deployment-wide decision per action
+  "platform_policy",                                 // global: a deployment-wide switch has no tenant
   "__drizzle_migrations",
 ]);
 ```

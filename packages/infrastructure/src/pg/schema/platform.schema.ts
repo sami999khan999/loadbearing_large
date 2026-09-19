@@ -5,6 +5,7 @@ import {
   type OrganizationId,
   pgTable,
   primaryKey,
+  smallint,
   sql,
   text,
   timestamp,
@@ -45,6 +46,23 @@ export const retentionPolicy = pgTable(
     check("retention_policy_hot_months_ck", sql`${t.hotMonths} >= 1`),
     check("retention_policy_cold_months_ck", sql`${t.coldMonths} is null or ${t.coldMonths} >= 0`),
   ],
+);
+
+// **One row, forever.** `check (id = 1)` is what makes that a database guarantee rather
+// than a convention: a second row would be a second deployment-wide answer.
+export const platformPolicy = pgTable(
+  "platform_policy",
+  {
+    id: smallint("id").primaryKey(),
+    // A pause, not a power switch — decision 12. Off stops the consumer projecting and
+    // nothing else: the connection stays, and the TTL is still converged nightly.
+    projectionEnabled: boolean("projection_enabled").notNull().default(true),
+    // Off by default, which is the safe direction: a replica read that is stale is a
+    // correctness bug, and turning it on is a decision someone makes.
+    replicaReadsEnabled: boolean("replica_reads_enabled").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("platform_policy_singleton_ck", sql`${t.id} = 1`)],
 );
 
 // One row per activity action, and an absent row is "projected, with the default TTL".

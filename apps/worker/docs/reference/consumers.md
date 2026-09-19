@@ -130,6 +130,11 @@ and every tenant's walk subtracts the same list. The list also goes to the lag q
 over rows that will never be projected is a backlog that never shrinks and an alert that never
 clears.
 
+**And both return immediately when `platform_policy.projection_enabled` is false.** No batches, no
+lag computation, no drift comparison, and **no log line** — 288 lines a day saying "paused" is
+noise the one line that matters would be lost in. The `retention` job's `applyRetention` still
+runs: the connection exists, and a TTL edit is not a projection.
+
 ### `reconcile`
 
 Counts per day on both sides and a diff. **Neither store reaches into the other** — each answers the

@@ -2533,7 +2533,7 @@ reads the exclusion list once per run and passes it to all three queries.
   passes, and a read driver has no such deadline. `data-and-scale.md` gains the paragraph.
   `21.6` marked moved.
 
-- [ ] `20.8` **`platform_policy` and the switch** — `platform.schema.ts`: `platform_policy (id smallint
+- [x] `20.8` **`platform_policy` and the switch** — `platform.schema.ts`: `platform_policy (id smallint
   primary key check (id = 1), projection_enabled boolean not null default true,
   replica_reads_enabled boolean not null default false, updated_at)`; a `TENANT_EXEMPT` line with
   the comment (a deployment-wide switch has no tenant). `platform-policy.repository.ts` (`get()` →
@@ -2547,14 +2547,27 @@ reads the exclusion list once per run and passes it to all three queries.
   keeps *N* months (from the retention row); re-enable within that or fill the gap from cold storage
   (`20.10`). Decision 12: a pause, not a power switch. **Docs:** `platform.md`, `clickhouse.md`,
   `docs/setup/13` §13.3, `docs/setup/26` §9.
+  `done: 2026-09-19` — migration `0030_platform_policy`, `TENANT_EXEMPT`'s fourth argued-for
+  entry. `corrected:` the item's `policy.get` needed a use-case of its own —
+  `GetPlatformPolicyUseCase` — because the row alone cannot express the third state; it joins the
+  health report so the screen can render "not configured" rather than "off". `done:` the migration
+  does **not** insert the row: an absent one is the defaults, so a deployment that never opens the
+  screen behaves as it always did, and the first save creates it. `done:` the deadline the screen
+  quotes is read from the retention rows rather than restated, so the two screens cannot disagree.
+  `verified:` against live Postgres — the table applied, and `insert … values (2)` is rejected by
+  `platform_policy_singleton_ck`.
 
-- [ ] `20.9` **The consumer honours it** — `AnalyticsConsumer.project()` and `reconcile()` read
+- [x] `20.9` **The consumer honours it** — `AnalyticsConsumer.project()` and `reconcile()` read
   `platformPolicy.get()` first and return when off: no batches, no lag computation, no drift
   comparison, and no log line — 288 lines a day is noise, and the status page shows the state. The
   `retention` job's `applyRetention` still runs when off: the connection exists, and a TTL edit is
   not a projection. Resume needs nothing, because the checkpoint is read from ClickHouse.
   Integration spec: off → insert rows → run → ClickHouse unchanged and no `lagged` line; on → run →
   the rows land. **Docs:** `consumers.md`.
+  `done: 2026-09-19` — both jobs return before anything else, and neither logs. `done:` three
+  specs: nothing projected and **`logger.emit` never called** while paused, no reconciliation
+  lines, and a resume that picks the backlog up with no state restored — which is the checkpoint
+  being read from the destination rather than kept beside it.
 
 - [ ] `20.10` **Re-project from cold storage** — `reproject-partition.use-case.ts`
   (`platform.analytics.manage`; input `{ period, organizationId? }`, `activity_log` only; refuses

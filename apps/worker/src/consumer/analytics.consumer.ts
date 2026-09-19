@@ -90,6 +90,10 @@ export class AnalyticsConsumer {
   // Per tenant in both stores since `0023`: a walk with no tenant predicate appends every
   // tenant's months into every batch.
   private async project(): Promise<void> {
+    // No batches, no lag computation, and **no log line**: 288 lines a day saying
+    // "paused" is noise, and the status screen already shows the state.
+    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+
     const startedAt = this.container.clock.now();
     // Once per run, not per tenant: it is one small table and every tenant's walk
     // subtracts the same list.
@@ -246,6 +250,10 @@ export class AnalyticsConsumer {
   // Counts per day on both sides and a diff, with today excluded because a difference in
   // it is timing rather than drift. See docs/reference/consumers.md.
   private async reconcile(): Promise<void> {
+    // Paused, so there is nothing to reconcile against: every day in the window would
+    // report drift, which is an alert that says only what the switch already says.
+    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+
     const now = this.container.clock.now();
     const excluding = await this.excluded();
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));

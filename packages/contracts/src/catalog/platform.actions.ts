@@ -1,5 +1,7 @@
 export const platformActions = {
   "platform.policy.changed": { label: "Platform policy changed" },
+  "platform.projection.paused": { label: "Projection paused" },
+  "platform.projection.resumed": { label: "Projection resumed" },
   "platform.restore.requested": { label: "Restore requested" },
   "tenant.retention.changed": { label: "Tenant retention changed" },
   "tenant.deleted": { label: "Tenant deleted" },

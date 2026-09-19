@@ -60,6 +60,7 @@ packages/feature/src/
 ├── platform/
 │   ├── platform-status.panel.tsx           → PlatformStatusPanel
 │   ├── projection-policy.form.tsx          → ProjectionPolicyForm
+│   ├── projection-switch.panel.tsx         → ProjectionSwitchPanel
 │   ├── retention-policy.form.tsx           → RetentionPolicyForm
 │   ├── retention-preview.notice.tsx        → RetentionPreviewNotice
 │   ├── restore-partition.panel.tsx         → RestorePartitionPanel

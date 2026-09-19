@@ -1,6 +1,7 @@
 import type {
   ApiClient,
   ExportRequestedDto,
+  ProjectionToggleInput,
   ProjectionUpdateInput,
   RestoreInput,
   RestoreRequestedDto,
@@ -49,6 +50,15 @@ export class PlatformMutations {
     return useAppMutation<ExportRequestedDto, TenantExportInput>({
       mutationFn: (input) => client.platform.exportTenant(input),
       invalidates: [],
+    });
+  }
+
+  // Both keys: pausing the projection changes the switch and makes every per-action
+  // row on the same screen moot until it is resumed.
+  public static useToggleProjection(client: ApiClient) {
+    return useAppMutation<{ ok: true }, ProjectionToggleInput>({
+      mutationFn: (input) => client.platform.updateProjectionSwitch(input),
+      invalidates: [QueryKeys.platform.policy(), QueryKeys.platform.projection()],
     });
   }
 

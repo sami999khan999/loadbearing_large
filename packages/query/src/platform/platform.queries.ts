@@ -45,6 +45,16 @@ export class PlatformQueries {
     });
   }
 
+  // Ten seconds, like the status read: this is a switch somebody may have just thrown
+  // from another tab, and a stale answer is a button that does the opposite.
+  public static policy(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.policy(),
+      queryFn: () => client.platform.getPolicy(),
+      staleTime: 10_000,
+    });
+  }
+
   // A minute, like the retention read beside it: the rows change when somebody saves,
   // and the mutation invalidates this key. The backstop is for a second tab.
   public static projection(client: ApiClient) {

@@ -158,6 +158,30 @@ The save's ClickHouse call is after the commit and its failure is logged rather 
 exactly as the retention save's is: the row is the truth, the nightly job closes the gap, and a
 store that was unreachable must not fail a save that already committed.
 
+## The projection switch is a pause, and the screen has three states
+
+`platform_policy` is one row, and `check (id = 1)` is what makes that a database guarantee rather
+than a convention — the repository reads it without an `order by`. The migration deliberately does
+**not** insert it: an absent row is the defaults, so a deployment that never opens the screen
+behaves exactly as the deploy before the table existed, and the first save is what creates it.
+
+Off stops `AnalyticsConsumer.project()` and `reconcile()` and nothing else. The connection stays,
+and the nightly `retention` job still converges the TTL — a TTL edit is not a projection. Resume
+needs no stored state at all, because the checkpoint is read from the destination: the rows
+written while it was off are exactly the ones the next run picks up.
+
+Neither job logs while paused. 288 lines a day saying "paused" is noise, and the screen shows the
+state; `reconcile` is silent for a second reason, which is that every day in the window would
+report drift and say only what the switch already says.
+
+`ToggleProjectionUseCase` refuses with `ConflictError("analytics", "not_configured")` when the
+health report says `analytics === null`. That third state is why the screen renders three and not
+two: rendering "not configured" as "off" invites someone to turn on a store that does not exist.
+
+The screen quotes its deadline from the **retention rows**, not from a constant — the number it
+shows is the same `activity_log` hot window the retention screen shows, so the two cannot
+disagree about how long a pause stays recoverable.
+
 ## What lands here next
 
 | Phase | Files |

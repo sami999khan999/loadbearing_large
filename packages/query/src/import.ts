@@ -44,6 +44,7 @@ export type {
   NotificationDto,
   OrganizationId,
   PaginationQuery,
+  ProjectionToggleInput,
   ProjectionUpdateInput,
   QueuedDocumentDto,
   RealtimeEventName,

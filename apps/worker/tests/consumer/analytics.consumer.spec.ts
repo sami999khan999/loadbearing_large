@@ -5,6 +5,7 @@ import {
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
   InMemoryOrganizationReader,
+  InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
   TestContainer,
 } from "@loadbearing/composition";
@@ -33,7 +34,11 @@ const record = (id: string, occurredAt: Date, action = "task.created"): Activity
   payload: {},
 });
 
-function harness(records: readonly ActivityRecord[], excluded: readonly ActivityAction[] = []) {
+function harness(
+  records: readonly ActivityRecord[],
+  excluded: readonly ActivityAction[] = [],
+  projectionEnabled = true,
+) {
   const activityReplay = new InMemoryActivityReplayReader(records);
   const analyticsProjector = new InMemoryAnalyticsProjector();
   const logger = { emit: vi.fn(), failure: vi.fn() };
@@ -47,6 +52,7 @@ function harness(records: readonly ActivityRecord[], excluded: readonly Activity
     // The consumer reads `container.projector`; the harness names the port after the
     // abstract class. Mapping it here is what keeps both names honest.
     projector: analyticsProjector,
+    platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled }),
     projectionPolicies: new InMemoryProjectionPolicyRepository(
       excluded.map((action) => ({ action, projected: false, ttlMonths: null })),
     ),
@@ -104,8 +110,45 @@ describe("AnalyticsConsumer project", () => {
   });
 });
 
-// `20.3`: one exclusion list, read once per run and passed to all three queries. What
-// makes it worth a spec is that both sides of the reconciliation have to subtract it.
+// A pause, not a power switch. Off stops the consumer and nothing else — the
+// connection stays and the nightly TTL convergence still runs.
+describe("AnalyticsConsumer with the projection paused", () => {
+  const rows = [record("a", minutesBefore(60 * 24))];
+
+  it("projects nothing and says nothing", async () => {
+    const { consumer, logger, projected } = harness(rows, [], false);
+
+    await consumer.handle(job("project"));
+
+    expect(projected.projected()).toEqual([]);
+    // **No line.** 288 a day saying "paused" is noise, and the screen shows the state.
+    expect(logger.emit).not.toHaveBeenCalled();
+  });
+
+  it("reconciles nothing, so a pause is not an alert storm", async () => {
+    const { consumer, logger } = harness(rows, [], false);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.reconciliation.drifted")).toEqual([]);
+    expect(emitted(logger, "analytics.reconciliation.completed")).toEqual([]);
+  });
+
+  // Resume needs no state: the checkpoint is read from the destination, so the rows
+  // written while it was off are exactly the ones the next run picks up.
+  it("picks the backlog up on resume with no state to restore", async () => {
+    const paused = harness(rows, [], false);
+    await paused.consumer.handle(job("project"));
+
+    const resumed = harness(rows, [], true);
+    await resumed.consumer.handle(job("project"));
+
+    expect(resumed.projected.projected().map((row) => row.id)).toEqual(["a"]);
+  });
+});
+
+// One exclusion list, read once per run and passed to all three queries. Both sides of
+// the reconciliation have to subtract it, which is what makes it worth a spec.
 describe("AnalyticsConsumer with an excluded action", () => {
   const rows = [
     record("a", minutesBefore(60 * 24), "ai.document.searched"),

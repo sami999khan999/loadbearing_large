@@ -59,6 +59,18 @@ export const platform = {
   "platform.tenantDelete.slug.hint": "সার্ভারও এটি মিলিয়ে দেখে।",
   "platform.tenantDelete.action": "টেন্যান্ট মুছুন",
   "platform.tenantDelete.done": "মোছা হয়েছে। {archived}টি অবজেক্ট আর্কাইভ, {partitions}টি পার্টিশন বাদ।",
+  "platform.switch.title": "প্রজেকশন",
+  "platform.switch.on": "চালু",
+  "platform.switch.off": "বিরতি",
+  "platform.switch.pause": "প্রজেকশন থামান",
+  "platform.switch.resume": "প্রজেকশন চালু করুন",
+  "platform.switch.notConfigured": "কনফিগার করা নেই",
+  "platform.switch.notConfigured.detail":
+    "এই ডিপ্লয়মেন্টে কোনো অ্যানালিটিক্স স্টোর নেই। চালু করতে CLICKHOUSE_URL সেট করুন।",
+  "platform.switch.deadline":
+    "বিরতির সময় সারিগুলি প্রজেক্ট হয় না। অডিট টেবিল {months} মাস রাখে; তার মধ্যে চালু করুন, নয়তো কোল্ড স্টোরেজ থেকে ফাঁক পূরণ করুন।",
+  "platform.switch.deadline.unbounded":
+    "বিরতির সময় সারিগুলি প্রজেক্ট হয় না। অডিট টেবিলের কোনো সীমা নেই, তাই ফাঁক পুনরায় চালানো যাবে।",
   "platform.projection.title": "অ্যানালিটিক্স প্রজেকশন",
   "platform.projection.description":
     "কোন কাজগুলি অ্যানালিটিক্স স্টোরে পৌঁছায়, এবং কতদিন। ফাঁকা রাখলে ডিফল্ট {months} মাস।",

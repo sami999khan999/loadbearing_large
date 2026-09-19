@@ -78,6 +78,20 @@ export const platform = {
   "platform.tenantDelete.action": "Delete tenant",
   "platform.tenantDelete.done":
     "Deleted. {archived} objects archived, {partitions} partitions dropped.",
+  "platform.switch.title": "Projection",
+  "platform.switch.on": "On",
+  "platform.switch.off": "Paused",
+  "platform.switch.pause": "Pause projection",
+  "platform.switch.resume": "Resume projection",
+  "platform.switch.notConfigured": "Not configured",
+  "platform.switch.notConfigured.detail":
+    "This deployment runs no analytics store. Set CLICKHOUSE_URL to start one.",
+  // The deadline, not just the consequence: a pause is recoverable only while the audit
+  // table still holds the window, and after that only from cold storage.
+  "platform.switch.deadline":
+    "While paused, rows stop being projected. The audit table keeps {months} months; resume within that or fill the gap from cold storage.",
+  "platform.switch.deadline.unbounded":
+    "While paused, rows stop being projected. The audit table has no retention limit set, so the gap stays replayable.",
   "platform.projection.title": "Analytics projection",
   "platform.projection.description":
     "Which actions reach the analytics store, and for how long. Blank keeps an action for the default {months} months.",

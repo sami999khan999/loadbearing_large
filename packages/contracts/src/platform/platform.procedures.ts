@@ -55,6 +55,15 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantExport)
     .output(z.array(PlatformContract.tenantExportObject).readonly());
 
+  public static readonly getPolicy = oc
+    .route({ method: "GET", path: "/platform/policy" })
+    .output(PlatformContract.policy);
+
+  public static readonly updateProjectionSwitch = oc
+    .route({ method: "PUT", path: "/platform/policy/projection" })
+    .input(PlatformContract.projectionToggle)
+    .output(Envelope.acknowledged);
+
   public static readonly listProjection = oc
     .route({ method: "GET", path: "/platform/projection" })
     .output(PlatformContract.projection);
@@ -87,6 +96,8 @@ export class PlatformProcedures {
     restorePartition: PlatformProcedures.restorePartition,
     updateTenantRetention: PlatformProcedures.updateTenantRetention,
     listStorage: PlatformProcedures.listStorage,
+    getPolicy: PlatformProcedures.getPolicy,
+    updateProjectionSwitch: PlatformProcedures.updateProjectionSwitch,
     listProjection: PlatformProcedures.listProjection,
     updateProjection: PlatformProcedures.updateProjection,
     deleteTenant: PlatformProcedures.deleteTenant,

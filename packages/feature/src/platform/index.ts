@@ -2,6 +2,10 @@ export { DeleteTenantPanel } from "./delete-tenant.panel.js";
 export { PlatformStatusPanel } from "./platform-status.panel.js";
 export { ProjectionPolicyForm } from "./projection-policy.form.js";
 export {
+  ProjectionSwitchPanel,
+  type ProjectionSwitchPanelProps,
+} from "./projection-switch.panel.js";
+export {
   RestorePartitionPanel,
   type RestorePartitionPanelProps,
 } from "./restore-partition.panel.js";

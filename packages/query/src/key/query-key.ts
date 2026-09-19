@@ -58,6 +58,7 @@ export class QueryKeys {
       ["platform", "retention", "preview", table, months] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
     projection: () => ["platform", "projection"] as const,
+    policy: () => ["platform", "policy"] as const,
     exports: (organizationId: string) => ["platform", "export", organizationId] as const,
   };
 

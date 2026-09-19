@@ -95,6 +95,8 @@ export {
   type PartitionedTableEntry,
   type PartitionedTableName,
   type PlatformOrganization,
+  type PlatformPolicyRecord,
+  type PlatformPolicyRepository,
   type PlatformReader,
   type PreferenceRecord,
   // A value, not a type: the founder and the invitation claimer construct one to write
@@ -229,6 +231,7 @@ export {
   pgTable,
   primaryKey,
   real,
+  smallint,
   text,
   timestamp,
   uniqueIndex,

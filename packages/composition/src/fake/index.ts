@@ -6,6 +6,7 @@ export { InMemoryColdArchiveReader } from "./in-memory-cold-archive.reader.js";
 export { InMemoryLogReader } from "./in-memory-log.reader.js";
 export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
+export { InMemoryPlatformPolicyRepository } from "./in-memory-platform-policy.repository.js";
 export { InMemoryProjectionPolicyRepository } from "./in-memory-projection-policy.repository.js";
 export { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";

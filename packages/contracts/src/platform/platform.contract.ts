@@ -123,6 +123,16 @@ export class PlatformContract {
     slug: z.string().min(1).max(64),
   });
 
+  public static readonly policy = z.object({
+    projectionEnabled: z.boolean(),
+    replicaReadsEnabled: z.boolean(),
+    // The third state, and the one the screen has to render differently: absent is
+    // "this deployment runs no analytics store", which is neither on nor off.
+    analyticsConfigured: z.boolean(),
+  });
+
+  public static readonly projectionToggle = z.object({ enabled: z.boolean() });
+
   public static readonly projectionEntry = z.object({
     action: z.string().min(1),
     label: z.string().min(1),
@@ -232,6 +242,8 @@ export type RestoreRequestedDto = z.infer<typeof PlatformContract.restoreRequest
 export type RetentionPreviewDto = z.infer<typeof PlatformContract.retentionPreview>;
 export type RetentionUpdateInput = z.infer<typeof PlatformContract.retentionUpdate>;
 export type TenantDeleteInput = z.infer<typeof PlatformContract.tenantDelete>;
+export type PlatformPolicyDto = z.infer<typeof PlatformContract.policy>;
+export type ProjectionToggleInput = z.infer<typeof PlatformContract.projectionToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
 export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;

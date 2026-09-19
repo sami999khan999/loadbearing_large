@@ -35,6 +35,7 @@ import {
   ExportOrganizationUseCase,
   GetConversationUseCase,
   GetNotificationPreferencesUseCase,
+  GetPlatformPolicyUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
@@ -97,6 +98,7 @@ import {
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
   PgPersonalOrganizationEnroller,
+  PgPlatformPolicyRepository,
   PgPlatformReader,
   PgProjectionPolicyRepository,
   PgRetentionPolicyRepository,
@@ -106,6 +108,7 @@ import {
   PgTenantStorageReader,
   PgUnitOfWork,
   PgVectorStore,
+  type PlatformPolicyRepository,
   type PlatformReader,
   PreviewRetentionChangeUseCase,
   PrincipalBuilder,
@@ -143,6 +146,7 @@ import {
   SubscriberRegistry,
   SystemClock,
   type TenantRetentionPolicyRepository,
+  ToggleProjectionUseCase,
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
@@ -350,12 +354,14 @@ export class Container {
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
+    readonly getPolicy: GetPlatformPolicyUseCase;
     readonly listProjection: ListProjectionPoliciesUseCase;
     readonly listRetention: ListRetentionPoliciesUseCase;
     readonly listStorage: ListTenantStorageUseCase;
     readonly previewRetention: PreviewRetentionChangeUseCase;
     readonly restorePartition: RestorePartitionUseCase;
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
+    readonly toggleProjection: ToggleProjectionUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
@@ -368,6 +374,9 @@ export class Container {
   // Read once per analytics run and once per retention run. Usually empty: an absent
   // row is "projected, with the default TTL".
   public readonly projectionPolicies: ProjectionPolicyRepository;
+  // One row, read at the top of every analytics job. An absent row is the defaults,
+  // so a deployment that never opens the screen behaves as it always did.
+  public readonly platformPolicy: PlatformPolicyRepository;
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -756,6 +765,7 @@ export class Container {
     // `this` is fully assigned by here, and `report()` is only ever called on a
     // request — the reader holds the container, it does not read it during the build.
     this.projectionPolicies = new PgProjectionPolicyRepository(this.database, this.transactions);
+    this.platformPolicy = new PgPlatformPolicyRepository(this.database, this.transactions);
     this.retentionPolicies = new PgRetentionPolicyRepository(this.database, this.transactions);
     this.tenantRetentionPolicies = new PgTenantRetentionPolicyRepository(
       this.database,
@@ -791,11 +801,24 @@ export class Container {
         this.platform,
         new ContainerHealthReader(this),
       ),
+      getPolicy: new GetPlatformPolicyUseCase(
+        this.authorizer,
+        this.platformPolicy,
+        new ContainerHealthReader(this),
+      ),
       listProjection: new ListProjectionPoliciesUseCase(
         this.authorizer,
         this.projectionPolicies,
         this.retentionPolicies,
         this.analyticsProjector ?? null,
+      ),
+      toggleProjection: new ToggleProjectionUseCase(
+        this.authorizer,
+        this.platformPolicy,
+        new ContainerHealthReader(this),
+        this.platform,
+        this.activity,
+        this.unitOfWork,
       ),
       updateProjection: new UpdateProjectionPolicyUseCase(
         this.authorizer,

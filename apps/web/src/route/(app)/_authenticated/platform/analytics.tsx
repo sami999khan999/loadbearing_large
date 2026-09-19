@@ -4,6 +4,9 @@ import {
   type ClientNamespace,
   PlatformQueries,
   ProjectionPolicyForm,
+  ProjectionSwitchPanel,
+  useApiClient,
+  useAppQuery,
   useCapabilities,
   useMessages,
 } from "~/import.js";
@@ -20,6 +23,8 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/analytics")
     Promise.all([
       context.messages.ensure(MESSAGES),
       context.queryClient.ensureQueryData(PlatformQueries.projection(context.api)),
+      context.queryClient.ensureQueryData(PlatformQueries.policy(context.api)),
+      context.queryClient.ensureQueryData(PlatformQueries.retention(context.api)),
     ]),
   component: PlatformAnalytics,
 });
@@ -27,10 +32,20 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/analytics")
 function PlatformAnalytics() {
   const { t } = useMessages("platform");
   const capabilities = useCapabilities();
+  const client = useApiClient();
+
+  // The audit table's hot window, read from the retention rows rather than restated:
+  // the deadline the switch quotes is exactly the one the retention screen shows.
+  const retention = useAppQuery(PlatformQueries.retention(client));
+  const auditMonths =
+    retention.data?.postgres.find((table) => table.tableName === "activity_log")?.hotMonths ?? null;
 
   return (
     <main>
       <h1>{t("platform.projection.title")}</h1>
+      <Can permission="platform.analytics.read" capabilities={capabilities}>
+        <ProjectionSwitchPanel auditMonths={auditMonths} />
+      </Can>
       <Can permission="platform.analytics.manage" capabilities={capabilities}>
         <ProjectionPolicyForm />
       </Can>
