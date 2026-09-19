@@ -25,6 +25,11 @@ export class MemberRouter {
     },
   );
 
+  public static readonly resendInvitation = authed.member.resendInvitation.handler(
+    ({ input, context }) =>
+      context.container.member.resendInvitation.execute(context.principal, input),
+  );
+
   public static readonly changeRole = authed.member.changeRole.handler(({ input, context }) =>
     context.container.member.changeMemberRole.execute(context.principal, input),
   );
@@ -45,6 +50,7 @@ export class MemberRouter {
     listInvitations: MemberRouter.listInvitations,
     invite: MemberRouter.invite,
     revokeInvitation: MemberRouter.revokeInvitation,
+    resendInvitation: MemberRouter.resendInvitation,
     changeRole: MemberRouter.changeRole,
     deactivate: MemberRouter.deactivate,
     reactivate: MemberRouter.reactivate,
