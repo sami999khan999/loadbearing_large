@@ -11,7 +11,7 @@ import {
   Uuid,
 } from "../../import.js";
 import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
-import { memberships, organizations, roles } from "../schema/index.js";
+import { memberships, organizations, roles, shardAssignments } from "../schema/index.js";
 import { SystemRoleSeed, TenantPartitionSeed } from "../seed/index.js";
 import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
@@ -57,6 +57,13 @@ export class PgOrganizationFounder extends BaseRepository {
           slug: slug ?? `o-${organizationId}`,
           name,
         });
+
+        // **Inside the transaction that creates the tenant**, which is what lets
+        // `PgShardResolver` throw on a missing row rather than guess node 0.
+        await this.db
+          .insert(shardAssignments)
+          .values({ shardKey: organizationId, node: 0 })
+          .onConflictDoNothing();
 
         // Before anything writes a tenant-owned row: `activity.record` below writes into
         // one of those partitioned tables inside this same transaction.

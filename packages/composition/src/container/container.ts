@@ -202,7 +202,9 @@ export interface MemberUseCases {
 // roll-up the probe's status code comes from.
 export interface HealthReport {
   readonly healthy: boolean;
-  readonly database: boolean;
+  // One entry per physical node, keyed by index. A single-node deployment reads
+  // `{ 0: true }`, which is the same answer the boolean was and says which node it is.
+  readonly database: Readonly<Record<number, boolean>>;
   readonly cache: boolean;
   readonly queue: boolean;
   // `null` when this deployment runs no ClickHouse — absent, rather than passing.
@@ -272,7 +274,12 @@ export class Container {
   public readonly vectors: VectorStore;
   public readonly embeddings: EmbeddingProvider;
   public readonly activity: ActivityLogger;
-  public readonly unitOfWork: UnitOfWork;
+  // RBAC, members, API keys, the enrollers and the platform screens. The catalog is
+  // the last single primary, so this one is always node 0.
+  public readonly catalogUnitOfWork: UnitOfWork;
+  // Notifications, messaging and documents: everything a tenant produces. Opens on
+  // whichever node the ambient `ShardScope` names.
+  public readonly routedUnitOfWork: UnitOfWork;
   public readonly content: ContentSource;
   // Built unconditionally: a missing analytics store means a feature is not deployed, a
   // missing mail transport means every sign-up is a dead end.
@@ -463,7 +470,28 @@ export class Container {
               this.logger.emit("database.pool.error", { message: error.message }),
           },
         },
-        ...(config.database.shards ?? []),
+        // Nodes 1 and up. Same pool settings as node 0, because a shard is the same
+        // database with a different set of tenants on it.
+        ...(config.database.shards ?? []).map((shard) => ({
+          pooled: {
+            url: shard.url,
+            maxConnections: config.database.poolMax,
+            statementTimeoutMs: config.database.statementTimeoutMs,
+            idleTimeoutMs: config.database.poolIdleTimeoutMs,
+            connectionTimeoutMs: config.database.poolConnectTimeoutMs,
+            applicationName: config.logging.app,
+            onError: (error: Error) =>
+              this.logger.emit("database.pool.error", { message: error.message }),
+          },
+          direct: {
+            url: shard.directUrl,
+            maxConnections: 1,
+            statementTimeoutMs: Container.DIRECT_STATEMENT_TIMEOUT_MS,
+            applicationName: `${config.logging.app}-direct`,
+            onError: (error: Error) =>
+              this.logger.emit("database.pool.error", { message: error.message }),
+          },
+        })),
       ],
       this.shardResolver,
     );
@@ -508,14 +536,31 @@ export class Container {
 
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
     this.queue = this.queuePublisher;
-    this.unitOfWork = new PgUnitOfWork(this.cluster, this.transactions, this.shards, "catalog", {
-      statementTimeoutMs: config.database.statementTimeoutMs,
-    });
+    // **Two, bound per slice** — decision D16. The port stays `run(work)`, so no
+    // use-case knows which one it was handed; a mis-binding fails the first spec.
+    this.routedUnitOfWork = new PgUnitOfWork(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      "routed",
+      {
+        statementTimeoutMs: config.database.statementTimeoutMs,
+      },
+    );
+    this.catalogUnitOfWork = new PgUnitOfWork(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      "catalog",
+      {
+        statementTimeoutMs: config.database.statementTimeoutMs,
+      },
+    );
     this.maintenance = new PgMaintenanceGateway(
       this.cluster,
       this.transactions,
       this.shards,
-      this.unitOfWork,
+      this.catalogUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
 
@@ -571,7 +616,7 @@ export class Container {
       this.cluster,
       this.transactions,
       this.shards,
-      this.unitOfWork,
+      this.catalogUnitOfWork,
     );
     this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
@@ -660,7 +705,7 @@ export class Container {
         this.authorizer,
         conversations,
         this.eventPublisher,
-        this.unitOfWork,
+        this.routedUnitOfWork,
       ),
       addMember: new AddConversationMemberUseCase(
         this.authorizer,
@@ -700,7 +745,7 @@ export class Container {
         messages,
         this.eventPublisher,
         this.realtime,
-        this.unitOfWork,
+        this.routedUnitOfWork,
         this.cache,
         this.clock,
       ),
@@ -795,14 +840,14 @@ export class Container {
           this.authorizer,
           apiKeyRepository,
           this.activity,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
           this.clock,
         ),
         revokeApiKey: new RevokeApiKeyUseCase(
           this.authorizer,
           apiKeyRepository,
           this.activity,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
           this.clock,
         ),
       };
@@ -826,14 +871,14 @@ export class Container {
           new QueuedInvitationMailer(this.mailPublisher, config.email.baseUrl),
           this.activity,
           this.eventPublisher,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
           this.clock,
         ),
         revokeInvitation: new RevokeInvitationUseCase(
           this.authorizer,
           invitations,
           this.activity,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
         ),
         changeMemberRole: new ChangeMemberRoleUseCase(
           this.authorizer,
@@ -842,13 +887,13 @@ export class Container {
           this.capabilities,
           this.activity,
           this.eventPublisher,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
         ),
         setMemberActive: new SetMemberActiveUseCase(
           this.authorizer,
           members,
           this.activity,
-          this.unitOfWork,
+          this.catalogUnitOfWork,
           this.clock,
         ),
       };
@@ -890,7 +935,7 @@ export class Container {
         this.capabilities,
         this.platform,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
         this.clock,
         this.analyticsProjector ?? null,
       ),
@@ -934,7 +979,7 @@ export class Container {
         new ContainerHealthReader(this),
         this.platform,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
       ),
       updateProjection: new UpdateProjectionPolicyUseCase(
         this.authorizer,
@@ -942,7 +987,7 @@ export class Container {
         this.retentionPolicies,
         this.platform,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
         this.analyticsProjector ?? null,
         (error: unknown) => this.logger.failure(error, { at: "projection.apply" }),
       ),
@@ -975,7 +1020,7 @@ export class Container {
         this.tenantRetentionPolicies,
         this.platform,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
       ),
       updateRetention: new UpdateRetentionPolicyUseCase(
         this.authorizer,
@@ -983,7 +1028,7 @@ export class Container {
         this.storagePolicy,
         this.platform,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
         this.analyticsProjector ?? null,
         // Logged, never rethrown: the row is the truth and the daily job closes the
         // gap, so a bucket that was unreachable must not fail a save that committed.
@@ -1000,9 +1045,24 @@ export class Container {
         members,
         capabilityRepository,
       ),
-      createRole: new CreateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
-      updateRole: new UpdateRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
-      deleteRole: new DeleteRoleUseCase(this.authorizer, roles, this.activity, this.unitOfWork),
+      createRole: new CreateRoleUseCase(
+        this.authorizer,
+        roles,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      updateRole: new UpdateRoleUseCase(
+        this.authorizer,
+        roles,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      deleteRole: new DeleteRoleUseCase(
+        this.authorizer,
+        roles,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
       // `CapabilityCache` bound to the `CapabilityInvalidator` port: the domain states
       // that a grant must flush, and this line is the only one that knows what to.
       grantPermission: new GrantPermissionUseCase(
@@ -1010,14 +1070,14 @@ export class Container {
         roles,
         this.capabilities,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
       ),
       revokePermission: new RevokePermissionUseCase(
         this.authorizer,
         roles,
         this.capabilities,
         this.activity,
-        this.unitOfWork,
+        this.catalogUnitOfWork,
       ),
     };
 
@@ -1028,7 +1088,7 @@ export class Container {
         this.embeddings,
         this.vectors,
         this.activity,
-        this.unitOfWork,
+        this.routedUnitOfWork,
       ),
       queueIndex: new QueueDocumentIndexUseCase(this.authorizer, this.queuePublisher),
       searchDocuments: new SearchDocumentsUseCase(
@@ -1142,7 +1202,7 @@ export class Container {
   // of a failing probe is what an operator reads. See docs/reference/container.md.
   public async health(): Promise<HealthReport> {
     const [database, cache, queue, analytics, realtime] = await Promise.all([
-      this.database.isHealthy(),
+      this.cluster.isHealthy(),
       this.redis.healthy("cache"),
       this.redis.healthy("queue"),
       // `null` rather than `true` when absent: it is not healthy and not degraded, it
@@ -1154,7 +1214,12 @@ export class Container {
     ]);
 
     return {
-      healthy: database && cache && queue && analytics !== false && realtime !== false,
+      healthy:
+        Object.values(database).every(Boolean) &&
+        cache &&
+        queue &&
+        analytics !== false &&
+        realtime !== false,
       database,
       cache,
       queue,
@@ -1207,8 +1272,9 @@ export class Container {
     // Before Postgres only because nothing else depends on it: an unclosed transport is
     // its own reason to be here, not a step in the ordering above.
     await this.emailSender.close();
-    await this.database.close();
-    await this.directDatabase.close();
+    // The cluster owns every pool including node 0's, so this is the one close and it
+    // is last: a repository on any node may still be finishing the lines above.
+    await this.cluster.close();
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The

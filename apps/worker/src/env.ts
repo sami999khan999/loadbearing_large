@@ -112,6 +112,39 @@ const Schema = z
     }
   });
 
+// `DATABASE_SHARD_<n>_URL` in index order, each with an optional `_DIRECT_URL` beside
+// it. Absent is one node, which is every deployment until the split.
+const shardsFromEnv = (): readonly { url: string; directUrl: string }[] => {
+  const found: { index: number; url: string; directUrl: string }[] = [];
+
+  for (const [name, value] of Object.entries(process.env)) {
+    const match = /^DATABASE_SHARD_(\d+)_URL$/.exec(name);
+    if (!match?.[1] || !value) continue;
+
+    const index = Number(match[1]);
+    // Node 0 is `DATABASE_URL`; a `DATABASE_SHARD_0_URL` beside it would be two names
+    // for one pool and a disagreement about which is the catalog.
+    if (index < 1) continue;
+
+    found.push({
+      index,
+      url: value,
+      directUrl: process.env[`DATABASE_SHARD_${index}_DIRECT_URL`] ?? value,
+    });
+  }
+
+  // Contiguity-checked: the cluster indexes this array, so a gap puts node 3 at
+  // index 2 and resolves every tenant on it to the wrong database.
+  const sorted = found.toSorted((left, right) => left.index - right.index);
+  sorted.forEach((shard, at) => {
+    if (shard.index !== at + 1) {
+      throw new Error(`DATABASE_SHARD_${shard.index}_URL has no shard ${at + 1} before it.`);
+    }
+  });
+
+  return sorted.map(({ url, directUrl }) => ({ url, directUrl }));
+};
+
 export class Env {
   private constructor() {}
 
@@ -175,6 +208,7 @@ export class Env {
         poolIdleTimeoutMs: e.DATABASE_POOL_IDLE_TIMEOUT_MS,
         poolConnectTimeoutMs: e.DATABASE_POOL_CONNECT_TIMEOUT_MS,
         statementTimeoutMs: e.DATABASE_STATEMENT_TIMEOUT_MS,
+        shards: shardsFromEnv(),
       },
       redis: { cacheUrl: e.REDIS_CACHE_URL, queueUrl: e.REDIS_QUEUE_URL },
       storage: {

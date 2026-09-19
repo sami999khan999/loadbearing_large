@@ -185,6 +185,8 @@ describe("Container.dispose", () => {
 
     await container.dispose();
 
+    // `database` closes through `DatabaseCluster.close()`, which holds node 0 — the
+    // same object, so patching its `close` still observes the order.
     expect(closed).toEqual(["queuePublisher", "redis", "emailSender", "database"]);
   });
 });
@@ -193,7 +195,8 @@ describe("Container.health", () => {
   it("reports each dependency separately and rolls them up", async () => {
     const report = await build().health();
 
-    expect(report.database).toBe(true);
+    // Keyed by node index, not a boolean: one node reads `{ 0: true }`.
+    expect(report.database).toEqual({ 0: true });
     expect(report.cache).toBe(true);
     expect(report.queue).toBe(true);
     // `null` rather than `true`: this deployment is not running one, which is neither
@@ -209,7 +212,7 @@ describe("Container.health", () => {
     const container = build({ database: { url: "postgres://nobody@localhost:1/none" } });
     const report = await container.health();
 
-    expect(report.database).toBe(false);
+    expect(report.database).toEqual({ 0: false });
     expect(report.healthy).toBe(false);
   });
 });

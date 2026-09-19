@@ -1,4 +1,4 @@
-import type { LogLevel, ShardConfig } from "../import.js";
+import type { LogLevel } from "../import.js";
 
 // Every value the system needs, in one shape, and none of it read from the environment:
 // the two `env.ts` files parse it, validate it, and hand this object down.
@@ -13,9 +13,9 @@ export interface ContainerConfig {
     readonly poolMax?: number;
     readonly poolIdleTimeoutMs?: number;
     readonly poolConnectTimeoutMs?: number;
-    // Nodes 1 and up, from `DATABASE_SHARD_<n>_URL`. Absent is one node, which is
-    // every deployment until the split — see packages/infrastructure/docs/reference/sharding.md.
-    readonly shards?: readonly ShardConfig[];
+    // Nodes 1 and up, from `DATABASE_SHARD_<n>_URL`, in index order; absent is one
+    // node. See packages/infrastructure/docs/reference/sharding.md.
+    readonly shards?: readonly { readonly url: string; readonly directUrl: string }[];
     readonly statementTimeoutMs?: number;
   };
   readonly redis: {

@@ -119,7 +119,7 @@ await this.queuePublisher.close();
 await this.redis.close();
 await this.clickhouse?.close();
 await this.emailSender.close();
-await this.database.close();
+await this.cluster.close();
 ```
 
 Queues before the Redis connections before Postgres. Closing Redis while BullMQ still holds blocking
@@ -137,6 +137,12 @@ as two fields on the container. Two fields is two things to remember at every sh
 one that gets forgotten is the queue — where an unclean close means in-flight jobs are redelivered
 rather than completed.
 
+**`cluster.close()` is the one Postgres close, and it is last.** The cluster owns every pool it
+built — node 0's pooled and direct connections included, which are what `database` and
+`directDatabase` point at — so closing it closes them, and closing them separately would close the
+same pool twice. Last because a repository on any node may still be finishing one of the lines
+above it.
+
 **The logger is constructed first and disposed last**, which is the same rule read from both ends.
 Constructed first, because a `Database` that cannot reach Postgres should produce a structured line
 rather than a stack trace on stderr. Disposed last, because everything closing above it may have
@@ -146,15 +152,29 @@ something to say on the way out.
 
 ```ts
 const [database, cache, queue, analytics, realtime] = await Promise.all([
-  this.database.isHealthy(),
+  this.cluster.isHealthy(),
   this.redis.healthy("cache"),
   this.redis.healthy("queue"),
   this.clickhouse ? this.clickhouse.healthy() : Promise.resolve(null),
   this.redis.opened("subscriber") ? this.redis.healthy("subscriber") : Promise.resolve(null),
 ]);
 
-return { healthy: database && cache && queue && analytics !== false && realtime !== false, … };
+return {
+  healthy: Object.values(database).every(Boolean) && cache && queue && analytics !== false && …,
+  …
+};
 ```
+
+**`database` is keyed by node index, not a boolean.** A single-node deployment reads `{ 0: true }`
+— the same answer the boolean was, and it says which node it is. Two nodes and one down reads
+`{ 0: true, 1: false }`, which is the difference between "restart this pod" and "page whoever owns
+shard 1"; a rolled-up `false` says neither. `pool` stays this process's own node-0 pool, because
+the shards are separate servers and one gauge over all of them would average a saturated pool with
+an idle one.
+
+`ContainerHealthReader` folds the record back to a boolean for `PlatformHealth`, the same narrowing
+it already does to drop `pool`. Which node is down is an operator's question and the readiness
+endpoint answers it; the platform screen is asking whether to worry.
 
 Postgres and **both** Redis instances. A cache that is down degrades; a queue that is down silently
 stops accepting work, which is worth knowing about — and the two are separate servers with different

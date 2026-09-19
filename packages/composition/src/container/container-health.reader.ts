@@ -10,7 +10,11 @@ export class ContainerHealthReader extends PlatformHealthReader {
 
   // `HealthReport` carries `pool` too, and this narrows it away: a screen that showed a
   // pool gauge would be reading one process's, which is not the deployment's.
-  public report(): Promise<PlatformHealth> {
-    return this.container.health();
+  public async report(): Promise<PlatformHealth> {
+    const { database, pool: _pool, ...rest } = await this.container.health();
+
+    // Every node folded into one boolean. Which node is down is an operator's question
+    // and the readiness endpoint answers it; the platform screen asks whether to worry.
+    return { ...rest, database: Object.values(database).every(Boolean) };
   }
 }

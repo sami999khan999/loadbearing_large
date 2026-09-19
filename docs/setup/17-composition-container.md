@@ -47,6 +47,9 @@ export interface ContainerConfig {
   readonly database: {
     readonly url: string;
     readonly maxConnections?: number;
+    // Node 0 is `url` above; this is every node after it, in index order.
+    // Empty is one node, which is every deployment until the split.
+    readonly shards?: readonly { readonly url: string; readonly directUrl: string }[];
   };
   readonly redis: {
     // Two instances, different durability. Neither is optional: a missing
@@ -285,6 +288,14 @@ Binding them puts `app` and `env` on every line, which is what lets the Alloy pi
 **4. `dispose()` closes in reverse construction order.** Queues before the Redis connections before Postgres. Closing Redis while BullMQ still holds blocking connections produces a hang on shutdown that looks like a deadlock, because it is one.
 
 `RedisConnection.close()` quits both instances, which is why they sit behind one object rather than as two fields on the container. Two fields is two things to remember at every shutdown path, and the one that gets forgotten is the queue — where an unclean close means in-flight jobs are redelivered rather than completed.
+
+**One Postgres close, and it is last.** The container holds a `DatabaseCluster` rather than a bare
+`Database`, and the cluster owns every pool it built — node 0's included. `await this.cluster.close()`
+is the whole shutdown of Postgres; closing `database` beside it would close the same pool twice.
+`health()` reads the cluster too, and reports `database` as `Record<node, boolean>`: one node is
+`{ 0: true }`, and two with one down is the difference between restarting a pod and paging whoever
+owns shard 1. The sharding seam itself is
+[`packages/infrastructure/docs/reference/sharding.md`](../../packages/infrastructure/docs/reference/sharding.md).
 
 **The logger is constructed first and disposed last**, which is the same rule read from both ends. Constructed first, because a `Database` that cannot reach Postgres should produce a structured line rather than a stack trace on stderr. Disposed last, because everything closing above it may have something to say on the way out.
 
