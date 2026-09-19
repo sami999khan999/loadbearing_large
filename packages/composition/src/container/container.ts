@@ -41,6 +41,7 @@ import {
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
   InspectPlatformStatusUseCase,
+  InspectShardMapUseCase,
   type InvitationClaimer,
   InvitationClaimingEnroller,
   InviteMemberUseCase,
@@ -60,6 +61,7 @@ import {
   ListRolesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
+  LocateTenantUseCase,
   type Logger,
   type LogReader,
   LokiLogReader,
@@ -107,6 +109,7 @@ import {
   PgRetentionPolicyRepository,
   PgRoleRepository,
   PgShardAssignmentRepository,
+  PgShardMapReader,
   PgShardResolver,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
@@ -377,6 +380,8 @@ export class Container {
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
+    readonly inspectShardMap: InspectShardMapUseCase;
+    readonly locateTenant: LocateTenantUseCase;
     readonly getPolicy: GetPlatformPolicyUseCase;
     readonly listGaps: ListProjectionGapsUseCase;
     readonly listProjection: ListProjectionPoliciesUseCase;
@@ -945,6 +950,18 @@ export class Container {
         this.clock,
       ),
       listExports: new ListTenantExportsUseCase(this.authorizer, this.storage),
+      // Local rather than a field, like `listStorage` below: nothing outside these two
+      // use-cases reads the directory this way.
+      inspectShardMap: new InspectShardMapUseCase(
+        this.authorizer,
+        new PgShardMapReader(this.cluster, this.transactions, this.shards),
+        this.hasShardMoves,
+      ),
+      locateTenant: new LocateTenantUseCase(
+        this.authorizer,
+        new PgShardMapReader(this.cluster, this.transactions, this.shards),
+        this.hasShardMoves,
+      ),
       inspectStatus: new InspectPlatformStatusUseCase(
         this.authorizer,
         this.platform,
@@ -1177,6 +1194,12 @@ export class Container {
   // is not running is the failure this prevents.
   public get hasProjector(): boolean {
     return this.analyticsProjector !== undefined;
+  }
+
+  // A constant until `24.2` registers the move job. The seam is here rather than on the
+  // screen because the retrofit otherwise touches the contract, the use-case and the panel.
+  public get hasShardMoves(): boolean {
+    return false;
   }
 
   public get logs(): LogReader {
