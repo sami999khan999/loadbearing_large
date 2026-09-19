@@ -58,6 +58,11 @@ repository that guessed would guess wrong exactly once.
 `BaseRepository.db` compares its own placement against the open transaction's and throws when
 they disagree. `local` is compatible with both of the others, which is what its name means.
 
+`tests/primitive/placement.spec.ts` is what holds all of this: a routed read with no key throws,
+so does a routed `run`, a catalog read inside a routed transaction throws, a routed transaction
+nested in a catalog one throws — and the same-placement case still goes through, which is the
+assertion that keeps the other four from being satisfied by breaking everything.
+
 **The point is that this throws on one node.** A catalog repository used inside a routed
 transaction is not a bug today — one Postgres holds both — and it is a data-corruption bug the
 day there are two. Failing now, in every environment, is the difference between finding those
@@ -119,6 +124,18 @@ recover from.
 
 Guessing zero would work today and put a tenant's rows on the wrong machine the day it does not.
 `shard.resolution.failed` is logged at `error` and the read throws.
+
+## A tenant delete sweeps its own directory row
+
+`shard_assignments.shard_key` is `text` with no foreign key, which is what lets a fork put a
+region code in it — and it means nothing cascades. `PgTenantRepository.delete` therefore does two
+statements: the directory row, then the organization. Without the first, the table grows with
+tenant churn forever and the move job scans rows nobody owns.
+
+It is the same reasoning `partition_archive` follows and the opposite conclusion, because the two
+have opposite lifetimes. A cold object outlives its tenant on purpose — thirty days of recovery
+window, swept by the nightly pass. A directory row for a tenant that no longer exists answers a
+question nobody can ask.
 
 ## Sharding by something else: four edits, and nothing else
 

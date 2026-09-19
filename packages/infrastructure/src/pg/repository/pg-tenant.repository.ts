@@ -6,7 +6,7 @@ import {
   type TenantRepository,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { organizations } from "../schema/index.js";
+import { organizations, shardAssignments } from "../schema/index.js";
 
 export class PgTenantRepository extends BaseRepository implements TenantRepository {
   // `organizations` is the catalog's own table.
@@ -27,9 +27,13 @@ export class PgTenantRepository extends BaseRepository implements TenantReposito
     return rows[0] ?? null;
   }
 
-  // One statement, and every referring table's `ON DELETE CASCADE` does the rest. The
-  // seven partitioned referrers are dropped before this runs, not cascaded.
+  // Two statements, because one of the two tables cannot cascade. Every referring table
+  // has `ON DELETE CASCADE`; the seven partitioned ones are dropped before this runs.
   public async delete(organizationId: OrganizationId): Promise<void> {
+    // The directory carries no foreign key on purpose — `shard_key` is opaque text, so a
+    // fork can put a region in it — which means nothing cascades and this is the sweep.
+    await this.db.delete(shardAssignments).where(eq(shardAssignments.shardKey, organizationId));
+
     await this.db.delete(organizations).where(eq(organizations.id, organizationId));
   }
 }

@@ -2798,18 +2798,30 @@ suite through the cluster, the tripwire spec, and the scope unit specs; the two-
 is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog foreign keys until
 `24.1`.
 
-**Where this phase stands, 2026-09-19.** The seam is built and the system runs on it: every
-repository declares a placement, `BaseRepository` trips on a crossing, the web middleware and the
-worker place their work, and three CI assertions keep it that way. `22.1`–`22.9`, `22.11`,
-`22.13`–`22.15` and `22.18` are done and verified; `pnpm test`, `pnpm smoke` and
-`pnpm check:architecture` are green.
+**Where this phase stands, 2026-09-19 — complete.** Every item `22.1`–`22.22` is done and
+verified; `22.23` is dropped. The seam is built and the system runs on it: every repository
+declares a placement, `BaseRepository` trips on a crossing, the web middleware and the worker
+place their work, every cross-tenant pass and every DDL script walks the cluster, and three CI
+assertions keep it that way.
 
-What is left is the part a second node needs, and none of it changes behaviour on one:
-`22.10` (splitting the one cross-placement reader), `22.12`'s remaining half (two unit-of-work
-instances bound per slice — there is one today, `catalog`, which is correct on one node),
-`22.16`–`22.17` (the cross-tenant loops and scripts walking every shard), `22.19`–`22.20` (the
-compose profile and the two-node rehearsal) and `22.21`–`22.22` (the rest of the docs and the
-verification pass). `sharding.md` is written already, because `22.3` needed it to exist.
+**Verified at one node:** `pnpm build:packages && pnpm --filter @loadbearing/web build`, then
+`CI=true check:architecture` 23/23 with no skip, `typecheck`, `lint`, `test`, `db:migrate`,
+`db:seed`, the infrastructure suite (33 files, 222 tests) and `pnpm smoke` 25/25 — all green.
+`DatabaseCluster.isHealthy()` reads `{"0":true}`.
+
+**Verified at two nodes**, with `infra:up:sharded` and the two env lines: `db:migrate` applies
+the schema to both, health reads `{"0":true,"1":true}`, and `pnpm smoke` is 29/29 including
+`sharded.smoke.spec.ts` — a message under a node-0 tenant lands on node 0 and on no other, and a
+write under the node-1 tenant fails with `23503` on a constraint naming a catalog table, which is
+Phase 24's whole subject.
+
+**Two things the verification pass found, both fixed here rather than filed.** A tenant delete
+left its `shard_assignments` row behind — the directory carries no foreign key on purpose, so
+nothing cascaded into it and the table grew with tenant churn; `PgTenantRepository.delete` now
+sweeps it, with `tests/platform/tenant-directory.spec.ts`. And the tripwire and the
+routed-without-a-key throw had no spec of their own, having only been checked by deliberately
+breaking them during the build; `tests/primitive/placement.spec.ts` locks in all four refusals
+and the one crossing that has to keep working.
 
 #### Primitives and ports (`application`)
 
@@ -3306,7 +3318,7 @@ verification pass). `sharding.md` is written already, because `22.3` needed it t
   `docs/setup/13`, `17`, `24`, `25`, `26`, `29`; `apps/web/docs/reference/env.md`,
   `apps/worker/docs/reference/env.md` (the shard block); `docs/infra/reference/postgres.md`.
 
-- [ ] `22.22` **Verify** — `pnpm build:packages && pnpm --filter @loadbearing/web build`;
+- [x] `22.22` **Verify** — `pnpm build:packages && pnpm --filter @loadbearing/web build`;
   `pnpm check:architecture` 23/23 no skip; `pnpm typecheck && pnpm lint && pnpm test`;
   `pnpm infra:up && pnpm db:migrate && pnpm db:seed`; `pnpm --filter @loadbearing/infrastructure
   test` (every Postgres suite now runs through `DatabaseCluster` with one shard); `pnpm smoke`;
