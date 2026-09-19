@@ -121,6 +121,8 @@ export {
   type RoleRecord,
   type RoleRepository,
   type SearchHit,
+  type ShardKey,
+  ShardResolver,
   StorageGateway,
   StoragePolicyGateway,
   type StoredObject,

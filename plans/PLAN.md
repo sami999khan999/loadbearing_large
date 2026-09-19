@@ -2839,7 +2839,7 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   the same commit that fixed it. `OrganizationShardingStrategy` in `composition/src/shard/` is
   one line, which is the point — it is the fork's swap point, not a computation.
 
-- [ ] `22.3` **`shard_assignments`** — `packages/infrastructure/src/pg/schema/shard.schema.ts`:
+- [x] `22.3` **`shard_assignments`** — `packages/infrastructure/src/pg/schema/shard.schema.ts`:
   `shard_key text primary key`, `node smallint not null default 0`, `assigned_at`,
   `moved_at` nullable; `shard_assignments_node_idx (node)` for the move job and the shard map. A
   catalog table, so no `organization_id` — §9's exemption set becomes derived from
@@ -2852,12 +2852,22 @@ is written, gated on `DATABASE_SHARD_1_URL`, and expected to fail on the catalog
   there is nothing to verify, the backfill is a constant (decision D28).
 
 #### Routing (`infrastructure`)
+  `done: 2026-09-19` — migration `0031_shard_assignments`, not `0024`: Phases 16–20 took `0023`
+  through `0030`. The backfill is hand-appended as the item says and is a constant, since node 0
+  is the only node an unsharded deployment has. `TENANT_EXEMPT` gains it by hand for now; `22.18`
+  makes that set derived from `TablePlacement.CATALOG`. `verified:` migrated against live
+  Postgres — the table, the index and one backfilled row for the seeded tenant.
 
-- [ ] `22.4` **`DatabaseCluster`** — `pg/primitive/database-cluster.ts`: one `Database` (and one
+- [x] `22.4` **`DatabaseCluster`** — `pg/primitive/database-cluster.ts`: one `Database` (and one
   direct `Database`, `14.11`) per physical index; `catalog()`, `forKey(key)` (awaits
   `ShardResolver.resolve`, which is the node), `each()`, `isHealthy()` per shard
   as `Record<index, boolean>`, `close()`. It is the only file in `src/` that writes
   `new Database(` (`22.18` §23). **Docs:** `sharding.md`.
+  `done: 2026-09-19` — `catalog()`, `forKey`, `each()`, `isHealthy()` per node and `close()`,
+  plus a direct pool per node for the DDL a transaction pooler cannot carry. `done:` an
+  out-of-range node is an `InternalError` rather than a fall back to zero: the directory naming
+  a node nobody deployed is a misconfiguration, and reading the wrong tenant's shard is worse
+  than failing.
 
 - [ ] `22.5` **`ShardScope` and placement in `TransactionScope`** — `pg/transaction/shard-scope.ts`
   (`current(): ShardKey | undefined`, `within(key, work)`); `transaction-scope.ts` stores

@@ -218,6 +218,13 @@
       "when": 1789779221901,
       "tag": "0030_platform_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789786956247,
+      "tag": "0031_shard_assignments",
+      "breakpoints": true
     }
   ]
 }
