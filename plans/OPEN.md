@@ -544,9 +544,9 @@ complete on its own.
 ## B. Not done — every unchecked item in `PLAN.md`
 
 Thirty-two boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4`, `26.2`, `26.8` and
-`26.9` closed. `26.12` was added and closed in the same night, so it never had a box here. Phases 1–22
-have none. The line number is the pointer; the body is not paraphrased here, and the numbers drift
-as `PLAN.md` is edited above them.
+`26.9` closed. `23.17` and `26.12` were added and closed in the same night, so neither ever had a
+box here. Phases 1–22 have none. The line number is the pointer; the body is not paraphrased here,
+and the numbers drift as `PLAN.md` is edited above them.
 
 ### Phase 23 — Loose ends (no gate, any spare hour)
 
