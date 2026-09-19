@@ -3887,7 +3887,33 @@ one worth promoting without a trigger.
   amplification, message fan-out) against the compose stack before any of this is called
   production-ready.
 
-- [ ] `26.9` **Resend actions** — "resend invitation" and "resend verification". These are what
+- [x] `26.9` **Resend actions** — "resend invitation" and "resend verification". These are what
+  - **Half of it already shipped**, which the entry did not know. "Resend verification" is
+    `VerifyEmailNotice`'s button, `SessionMutations.useResendVerification`,
+    `AuthClient.sendVerificationEmail`, and a `/send-verification-email` rule in the auth
+    factory's rate limits at three a minute. Nothing was needed there.
+  - **Shipped 2026-09-20: resend invitation**, `POST /members/invitations/{invitationId}/resend`
+    on `member.invite` — the same key as inviting, because it is the same act. A resend is a
+    **reissue**: only the digest is stored, so the original token cannot be read back, the row
+    takes a new one, and the old link stops working. The copy says that out loud, because
+    "resend" does not imply it.
+  - **Three decisions worth not re-deriving.** `createdAt` is the original, so a list ordered by
+    when an invitation was first sent does not reshuffle. **No domain event** — `member.invited`
+    fired when the row was created, and a subscriber that heard it twice would act twice. And the
+    mail failure is **not swallowed**, unlike `InviteMemberUseCase`'s: there the mail is a
+    consequence of the work, here it is the work, and a failure the caller cannot see is the
+    exact problem this action exists to solve.
+  - **Checked against Postgres rather than reasoned about.** The reissue re-inserts the *same*
+    primary key, so the statement conflicts on `invitations_pkey` as well as on the
+    `(organization_id, email)` index that `ON CONFLICT` names. It resolves through the update
+    path; `pg-invitation.repository.spec.ts` now asserts it, because the alternative was a
+    `23505` nobody would have seen until an operator pressed the button.
+  - `MemberRules.invitationExpiry` holds the seven days, which `InviteMemberUseCase` used to
+    keep in a module constant. A resend that extended the window by a different number would be a
+    second policy nobody decided on.
+  - **Verified.** Seven use-case specs, one integration spec, and the contract spec's procedure
+    list. Whole workspace green, `check:architecture` 24/24. The button itself is unproven in a
+    browser — see [`STUCK.md`](STUCK.md) S.1.
   cover the window between a commit and its enqueue, which decision D8 takes instead of a table.
   Small, and worth having before the first support question rather than after.
 

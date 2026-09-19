@@ -543,7 +543,7 @@ complete on its own.
 
 ## B. Not done — every unchecked item in `PLAN.md`
 
-Thirty-five boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16` and `25.4` closed. Phases 1–22 have none. The line
+Thirty-four boxes, all in Phases 23–26, after `23.4`, `23.13`, `23.16`, `25.4` and `26.9` closed. Phases 1–22 have none. The line
 number is the pointer; the body is not paraphrased here, and the numbers drift as `PLAN.md` is
 edited above them.
 
@@ -602,7 +602,7 @@ From `TODO.md`
 - `26.6` **Global stream cap and presence** — line 3660
 - `26.7` **Per-tenant digest hour**, channel mentions, notification grouping — line 3663
 - `26.8` **Load test** the three §6 paths at 10× — line 3666
-- `26.9` **Resend actions** — resend invitation, resend verification — line 3670
+- ~~`26.9` **Resend actions**~~ — closed 2026-09-20: verification already shipped; the invitation resend is a reissue, and the same-primary-key upsert is now asserted against Postgres
 - `26.10` **A delivery log, if the question actually arrives** — line 3674
 - `26.11` **Move from SMTP to a provider API** — line 3680
 
@@ -651,3 +651,11 @@ proved; the argument stays in `PLAN.md`, which is also where the tick is.
   statement-count assertion that a page costs two queries whatever it holds. **Found building it:**
   an aggregate over a timestamp column comes back as a string unless it carries `.mapWith`, because
   drizzle replaces node-postgres' parsers and converts per column.
+- `26.9` **Resend actions** — **half of it already shipped** and the entry did not know:
+  "resend verification" is `VerifyEmailNotice`'s button, rate-limited at three a minute in the
+  auth factory. What landed is the invitation resend, and it is a **reissue** — only the digest
+  is stored, so the old link stops working and the copy says so. The mail failure is *not*
+  swallowed here, unlike `InviteMemberUseCase`'s: there the mail is a consequence of the work,
+  here it is the work. **Checked rather than reasoned about:** the reissue re-inserts the same
+  primary key, so it conflicts on `invitations_pkey` as well as on the index `ON CONFLICT` names.
+  It resolves through the update path, and a spec now says so.
