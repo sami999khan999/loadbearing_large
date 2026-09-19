@@ -97,6 +97,20 @@ export class PlatformProcedures {
     .input(PlatformContract.retentionUpdate)
     .output(Envelope.acknowledged);
 
+  // `GET`, and `node` is a query parameter rather than a path segment: the node list is
+  // the resource, and expanding one is a narrowing of it.
+  public static readonly shardMap = oc
+    .route({ method: "GET", path: "/platform/shards" })
+    .input(PlatformContract.shardMapQuery)
+    .output(PlatformContract.shardMap);
+
+  // Its own procedure, not a field on the map: an operator typing a slug must not
+  // re-read the node list on every keystroke, and a miss is an answer rather than an error.
+  public static readonly locateTenant = oc
+    .route({ method: "GET", path: "/platform/shards/tenant" })
+    .input(PlatformContract.tenantLookup)
+    .output(PlatformContract.tenantLocation);
+
   // The object the merge point in `procedure/index.ts` mounts. One place to add a
   // procedure to, rather than two.
   public static readonly all = {
@@ -116,5 +130,7 @@ export class PlatformProcedures {
     exportTenant: PlatformProcedures.exportTenant,
     listExports: PlatformProcedures.listExports,
     updateRetention: PlatformProcedures.updateRetention,
+    shardMap: PlatformProcedures.shardMap,
+    locateTenant: PlatformProcedures.locateTenant,
   } as const;
 }

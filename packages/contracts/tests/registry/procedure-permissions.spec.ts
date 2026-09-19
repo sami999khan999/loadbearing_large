@@ -54,7 +54,6 @@ const AWAITING_A_PROCEDURE: ReadonlySet<string> = new Set([
   "platform.analytics.read", // 20.6
   "platform.analytics.manage", // 20.6
   "platform.storage.read", // 19.16
-  "platform.shards.read", // 22.19
   "platform.shards.manage", // 24.2
   "platform.tenant.manage", // 19.20
 ]);

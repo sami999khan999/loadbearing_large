@@ -249,6 +249,63 @@ export class PlatformContract {
     coldMonths: z.number().int().min(0).max(600).nullable(),
     coldMode: PlatformContract.coldMode,
   });
+
+  // One physical node, counted out of the directory rather than out of the cluster: a
+  // node the deployment has just added holds no tenant and so has no row here.
+  public static readonly shardNode = z.object({
+    node: z.number().int().nonnegative(),
+    tenants: z.number().int().nonnegative(),
+    lastAssignedAt: z.date(),
+    // Null until something on this node has been moved. `moved_at` is stamped only when
+    // the node actually changes, so this is "when did this node last receive one".
+    lastMovedAt: z.date().nullable(),
+  });
+
+  public static readonly shardTenant = z.object({
+    organizationId: Identifiers.organizationId,
+    slug: z.string().min(1),
+    name: z.string().min(1),
+    node: z.number().int().nonnegative(),
+    assignedAt: z.date(),
+    movedAt: z.date().nullable(),
+    // How many tables this tenant overrides, not the numbers themselves: the numbers
+    // are one screen away, and the count is what says whether to go there.
+    retentionOverrides: z.number().int().nonnegative(),
+  });
+
+  // Two words rather than a boolean. `movesEnabled: false` reads as a switch somebody
+  // turned off; this is a mechanism that has not been built yet.
+  public static readonly shardMoves = z.enum(["unavailable", "available"]);
+
+  public static readonly shardMapQuery = Pagination.query.extend({
+    // Absent is the node list on its own. Present expands one node, which is what the
+    // screen asks for on a click.
+    node: z.number().int().nonnegative().optional(),
+  });
+
+  public static readonly shardMap = z.object({
+    nodes: z.array(PlatformContract.shardNode).readonly(),
+    // Empty unless a node was named. Every node's tenants at once is the whole
+    // directory, which is the one read this screen must never make.
+    tenants: z.array(PlatformContract.shardTenant).readonly(),
+    total: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+    moves: PlatformContract.shardMoves,
+  });
+
+  // An id or a slug, whichever the operator is holding. Trimmed and bounded, because
+  // an empty term is a request for the whole directory wearing a search box.
+  public static readonly tenantLookup = z.object({
+    term: z.string().trim().min(1).max(128),
+  });
+
+  // Null is "no tenant answers to that", which is a normal answer to a typed search
+  // and not a `NOT_FOUND`.
+  public static readonly tenantLocation = z.object({
+    tenant: PlatformContract.shardTenant.nullable(),
+    moves: PlatformContract.shardMoves,
+  });
 }
 
 export type ColdModeDto = z.infer<typeof PlatformContract.coldMode>;
@@ -278,3 +335,10 @@ export type TenantStorageRowDto = z.infer<typeof PlatformContract.tenantStorageR
 export type TenantStorageMonthDto = z.infer<typeof PlatformContract.tenantStorageMonth>;
 export type TenantStorageQuery = z.infer<typeof PlatformContract.tenantStorageQuery>;
 export type PlatformStatusDto = z.infer<typeof PlatformContract.status>;
+export type ShardNodeDto = z.infer<typeof PlatformContract.shardNode>;
+export type ShardTenantDto = z.infer<typeof PlatformContract.shardTenant>;
+export type ShardMapDto = z.infer<typeof PlatformContract.shardMap>;
+export type ShardMapQuery = z.infer<typeof PlatformContract.shardMapQuery>;
+export type ShardMovesDto = z.infer<typeof PlatformContract.shardMoves>;
+export type TenantLookupInput = z.infer<typeof PlatformContract.tenantLookup>;
+export type TenantLocationDto = z.infer<typeof PlatformContract.tenantLocation>;

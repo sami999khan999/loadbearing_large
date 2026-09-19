@@ -25,4 +25,8 @@ export const platformProcedurePermissions = {
   "platform.deleteTenant": "platform.tenant.manage",
   "platform.exportTenant": "platform.tenant.manage",
   "platform.listExports": "platform.tenant.manage",
+  // Read, not manage: the map is where an operator finds out *whether* a move is needed,
+  // and gating that behind the right to perform one means nobody checks first.
+  "platform.shardMap": "platform.shards.read",
+  "platform.locateTenant": "platform.shards.read",
 } as const satisfies Record<string, PermissionKey>;
