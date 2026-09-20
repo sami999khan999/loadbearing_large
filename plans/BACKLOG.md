@@ -97,7 +97,10 @@ recommendation under the entry was measured, not argued.
   in the router's `SerializableExtensions` (a `declare module` block in `apps/web/src/router.tsx`),
   then `dehydrate(queryClient)` into the payload and `hydrate` back out. Written, typechecked,
   built and served, then reverted; no dependency, no cast. The one judgement left is that the
-  augmentation is global. **`23.6` is behind this.** — `archive/PLAN.md:3429`
+  augmentation is global. **Measured 2026-09-20**, which the entry had not been: `/settings/roles`
+  prefetches `role/list` in its loader and a cold load calls it again from the browser, so the
+  waste is real and observable. **`23.6` is *partly* behind this** — that route prefetches
+  nothing to begin with, so this is necessary and not sufficient. — `archive/PLAN.md:3429`
 
 **Exit clauses that needed a browser — walked on 2026-09-20.** The Claude in Chrome extension
 connects now, which is the whole of what `S.1` was waiting on. **Six of the seven observations
@@ -180,6 +183,17 @@ which is also what let the optimistic window be observed rather than guessed at.
   places each tenant *outside* the per-tenant `try`, so an unplaceable tenant aborts the run
   without `analytics.projection.failed`. **Recommended, one line:** move `withShard` inside the
   `try`. The larger question — skip or fail an unplaceable tenant — is left open. — `archive/PLAN.md:3802`
+  - **(2) is confirmed in the wild, 2026-09-20, and it is what stopped `S.2`'s clock.** One
+    leftover tenant from an integration run had no `shard_assignments` row, and the 12:05 run
+    logged `shard.resolution.failed` then `queue.job.failed` sixty milliseconds later — **not**
+    `analytics.projection.failed`, exactly as the entry predicts. It had already written the
+    first tenant's 37 rows, so the symptom is a projection that half-runs and then stops every
+    five minutes forever, with an error naming the queue rather than the projection. The orphan
+    was given a node-0 assignment to get the machine moving; **the defect is untouched**, and so
+    is the decision under it.
+  - **(1) has a companion in the same boot:** `worker.pool.oversubscribed` is logged on every
+    start, which is `23.20`. Two of the three things filed against the worker's first boot are
+    therefore reproducible on demand rather than remembered.
 - [ ] `23.25` **The typing indicator names a uuid, and names you.** Two defects in one line.
   `SignalTypingUseCase` publishes to the conversation channel, author included, and
   `useConversationStream` adds every `typing` frame's `userId` with no check that it is the
@@ -195,13 +209,14 @@ which is also what let the optimistic window be observed rather than guessed at.
   that marks **one** row read reads "Unread only" — the same words as the filter toggle directly
   above it, which does something else entirely. A screen reader gets the same collision, because
   it is the button's whole accessible name. Needs a key of its own in both locales.
-  **Check `tone="accent"` with it:** `accent` is not one of the twelve names `color.md` closes
-  over. — found 2026-09-20
+  **`tone="accent"` beside it is correct and is not part of this** — `accent` is one of
+  `BadgeTone`'s five semantic tones, which is exactly what `color.md` asks a component to take
+  instead of a colour. — found 2026-09-20
 - [ ] `23.27` **`pnpm dev` races its own package watchers and the worker loses.** `dev` is
   `pnpm build:packages && pnpm -r --parallel run dev`, and the second half starts fifteen
   `tsup --watch` processes *and* both apps in one wave. Every one of those configs is
   `clean: true`, so each watcher empties the `dist/` the build just filled while the apps are
-  already resolving against it. Seen twice on 2026-09-20: `apps/worker` died on
+  already resolving against it. **Two failures in one run** on 2026-09-20: `apps/worker` died on
   `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js`, and `packages/ui`'s DTS build
   failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
   directory from the other side. Running `pnpm dev:web` and `pnpm dev:worker` as two processes
@@ -561,6 +576,11 @@ asserting a value rather than `!== undefined` (`R.14`).
   them. `ANALYTICS_DRIVER` stays `postgres`, which is the adoption order `.env` itself documents.
   **What is left is genuinely only waiting**: run the worker for days, let the nightly
   reconciliation come back clean, then write the reader against real data. No session can do that.
+  - **But the waiting only works if the run does.** Turning it on immediately reproduced
+    `23.21`'s second defect: one orphan tenant with no shard assignment aborted the whole run,
+    after the first tenant's rows had landed. Left alone, `S.2`'s "a few days of data" would have
+    been the same 37 rows on day three. The orphan is placed now; the defect is not fixed, and
+    **`23.21` is a prerequisite of `23.14`** rather than an unrelated line in the same phase.
   - The count in the old note is stale too: `analytics.smoke.spec.ts` is **2** cases, not four.
 - [ ] `S.3` **Phase 24 is gated on a second shard being provisioned**, and one container is not
   that. Re-measured 2026-09-20 on the renumbered ports, because the numbers in this file were
@@ -620,10 +640,12 @@ database" — walked on 2026-09-13 in the communication plan's Phase 2 Exit.
 Every phase is unit-tested and most are verified against live containers; these are the clauses
 the record says were *not* proven, beyond the eight in `23.5`–`23.12`.
 
-**Six of the nine are browser-only, and nothing blocks them any more.** They were written while
+**Seven of the nine need a browser, and nothing blocks them any more.** They were written while
 `S.1` held; the extension connects as of 2026-09-20 and the walk above is the worked example of
-driving one. Each still needs a platform admin, which Ada is not — `pnpm platform:grant <email>`
-is the one step the walk did not take.
+driving one. Four of the seven — Phases 18, 19 and 20 and `25.4` — need a **platform admin**,
+which the walk's accounts are not: `pnpm platform:grant <email>` is the one setup step it did not
+take. The Phase 21 archived section rendered its empty state during the walk, which is not the
+clause; it wants a tenant with an archived month behind it.
 
 - [ ] **Phase 18 Exit, browser half** — "signed in as alice with a customer tenant active,
   `/platform/status` renders and the nav shows the module; as a tenant owner it redirects to
@@ -751,7 +773,8 @@ work is finished, and nothing else records it.
 | `CLICKHOUSE_URL` uncommented | root `.env` | `S.2` step two cannot start without it. **Leave it** until the reader is written; `ANALYTICS_DRIVER` is still `postgres`, which is the documented adoption order |
 | `analytics` profile up | compose | the same |
 | `ada@walk.test`, `grace@walk.test` | `users`, `memberships` in `loadbearing` | the two walk accounts. Ada was promoted to `owner` **by hand in SQL**, because `AUTH_ENROLMENT_MODE=bootstrap` enrols a sign-up as `member` and the walk needs `member.invite` |
-| `hopper@walk.test` | `invitations` | never accepted, on purpose: `23.5` needed a pending row that outlived the observation |
+| `hopper@walk.test`, `lovelace@walk.test` | `invitations` | never accepted, on purpose. The first is `23.5`'s pending row; the second was one auditable action, to watch the projection carry a row it had not seen |
+| `01a0bd49-5cef-…` placed on node 0 | `shard_assignments` | a leftover integration tenant with no assignment, which was aborting every analytics run. See `23.21` |
 | one direct conversation, two messages | `conversations`, `messages` | `23.10`'s proof that a retried optimistic send is one row |
 | `redis-cache` flushed | cache Redis | after the SQL promotion, so the capability cache did not serve the old role. Rebuildable by design |
 
@@ -770,5 +793,5 @@ work is finished, and nothing else records it.
 | 2026-09-20 | @sami | The five ledgers moved to `archive/` and this file became the only open one. Their relative links were repaired for the new depth, the nine inbound references from `docs/` and `packages/*/docs/` were repointed so §15 still passes, and `docs/data-flow.md`'s "what is planned and not yet built" now names this file. Section 8 split: two doc edits still owed, six stale lines inside `archive/` marked frozen rather than filed |
 | 2026-09-20 | @sami | Ten more, six of them the commit before this one had fixed and not ticked. `R.16`/`R.32` were one line: a caller's `documentId` reached the BullMQ job id verbatim, which refuses a `:`, and the key held no content, so a re-index with new words returned success and indexed nothing — `JobKey` hashes both. `R.42` a cursor validated its timestamp and not its id while every consumer casts it `::uuid`; `R.41` a repository used a numeric offset as a text keyset, so page two was every key alphabetically after "25"; `R.43` an order on a sum with no tie-break under limit/offset; `R.26` a route prefetching a query gated on a permission it does not require. Then four new: `R.17` — the conversation member column's only constraint is `users.id`, which every tenant's people share, so a manager could add a user from another tenant and probe which ids exist. Its port is named `isActiveMember` rather than `isActive` **because parameters compare bivariantly**: `auth`'s reader takes the user first, and one standing in for the other typechecks and then swaps the arguments at run time. `R.14` the preferences grid read a category's default off its first event, which has no recipients; `R.38` the digest counted rows from categories already emailed one at a time; `R.20` `deleteFor` had no caller anywhere and that table carries no foreign key |
 | 2026-09-20 | @sami | Every Medium review defect closed, in four commits. Three in the worker: the retention pass branched on `cold_mode` before reading the per-tenant overrides, and `drop` destroys a month, so a tenant that had bought three years lost it at the deployment's cutoff with nothing in cold storage; `deliver` jobs carried no priority, and BullMQ empties the plain wait list before it touches the prioritized set, so the drain's `priority: 1` put it exactly last rather than first; `cold-restore` and `tenant-export` named a tenant and placed nothing. Three in the web tier, all of them a client reconnecting forever: a deactivated membership still rendered the shell, a throw from inside a streaming handler never reached the error middleware because `next()` resolves when the generator is created, and the realtime provider was keyed on the api client, which an organization switch does not change. Three in messaging: a null `last_message_at` sorts first under DESC and its cursor was null, so the list truncated on any page ending on a conversation with no messages; six use-cases published outside any transaction; and the last-owner count was read before the transaction opened, so two concurrent demotions could commit a tenant down to zero owners. And one in platform: a retention save composed the ClickHouse TTL from the base months alone and erased every per-action window. **Twenty-three specs, every one red on the old code first** — the two for the conversation keyset against Postgres. `R.9` is the single one with no unit test, and the entry says why |
-| 2026-09-20 | @sami | **Section 3 is down to two, and neither of the two is a tool.** `S.1` closed: the Claude in Chrome extension connects, and the walk it was holding — `23.5` through `23.12` — was done end to end. Six of the seven observations hold and are recorded with what was measured rather than what was seen: tab B's network log was **cleared** before the invite, so its two calls are the refetch and not something already in flight; `markRead` and `message/send` were each held open in the page's own `fetch`, which is how the optimistic window was observed rather than inferred; and the reconnect was read off a clone of the response body, where the first frame after a kill-and-restart is a `resync` the router yields **only** for a client resuming with a `last-event-id`. The checklist's second browser profile turned out to be unnecessary — in every clause the second account only has to act, so Grace acted over `/api/rpc`. **`23.6` is the one that does not hold, and the entry had only half its reason:** `23.3` is real and was measured on `/settings/roles`, but `/notifications` prefetches nothing at all, so fixing `23.3` would not tick it. Two defects found on the way, filed as `23.25` and `23.26`: the typing indicator names a uuid **and names you**, and a notification row's unread badge is labelled with the filter's copy. **`S.2` was not in the state this file recorded** — ClickHouse had been dead five days and `CLICKHOUSE_URL` was commented out, so the projection had been writing nowhere and the wait for days of data had never started; both are on, and it wrote its first 37 rows inside one cycle. **`S.3` re-measured on the renumbered ports** — the sharded smoke is 5 passed rather than 4, a warm resolve 914 µs rather than 679 — and its blocker is unchanged, because `24.1` is a decision and not a container |
+| 2026-09-20 | @sami | **Section 3 is down to two, and neither of the two is a tool.** `S.1` closed: the Claude in Chrome extension connects, and the walk it was holding — `23.5` through `23.12` — was done end to end. Six of the seven observations hold and are recorded with what was measured rather than what was seen: tab B's network log was **cleared** before the invite, so its two calls are the refetch and not something already in flight; `markRead` and `message/send` were each held open in the page's own `fetch`, which is how the optimistic window was observed rather than inferred; and the reconnect was read off a clone of the response body, where the first frame after a kill-and-restart is a `resync` the router yields **only** for a client resuming with a `last-event-id`. The checklist's second browser profile turned out to be unnecessary — in every clause the second account only has to act, so Grace acted over `/api/rpc`. **`23.6` is the one that does not hold, and the entry had only half its reason:** `23.3` is real and was measured on `/settings/roles`, but `/notifications` prefetches nothing at all, so fixing `23.3` would not tick it. Two defects found on the way, filed as `23.25` and `23.26`: the typing indicator names a uuid **and names you**, and a notification row's unread badge is labelled with the filter's copy. **`S.2` was not in the state this file recorded** — ClickHouse had been dead five days and `CLICKHOUSE_URL` was commented out, so the projection had been writing nowhere and the wait for days of data had never started; both are on, and it wrote its first 37 rows inside one cycle. **Turning it on immediately reproduced `23.21`'s second defect**, which had only ever been reasoned about: one leftover tenant with no shard assignment logged `shard.resolution.failed` and then `queue.job.failed` sixty milliseconds later — not `analytics.projection.failed` — *after* the first tenant's rows had landed. Left alone, "a few days of data" would have been the same 37 rows on day three, which makes `23.21` a prerequisite of `23.14` rather than a neighbour of it. **`S.3` re-measured on the renumbered ports** — the sharded smoke is 5 passed rather than 4, a warm resolve 914 µs rather than 679 — and its blocker is unchanged, because `24.1` is a decision and not a container |
 | 2026-09-20 | @sami | **Section 2 is empty. All forty-five review defects are fixed.** The last ten, in three commits. Three were silent data loss: the projection checkpoint could pass a row that had not committed yet and the strictly-greater keyset never looked back; the archive's only pre-drop check was `exists`, and the comment above it already said a `HEAD` was not enough, so a partition could be dropped behind an object that had lost a multipart part; and the tenant export paged `role_permissions` on `permission`, which repeats once per role. Two were races: grant and revoke read the whole permission list and wrote it back, and a send retry arriving while the first attempt's transaction was still open took the claim over and wrote a second message. One was an authorization gap — a goal role assignable as an organization membership, where the rule turns out to be "not goal" rather than "org only", because `platform_admin` is `scope: "platform"` and *is* a membership row. One was an unkillable worker: SIGTERM chained off a `start()` that blocks on an unreachable queue Redis. One was five validation rules with no copy behind them. One was two specs whose assertion did not check what their name claimed. And `R.24` changed no behaviour at all — it made three comments and a reference page stop claiming a duplicate-suppression window the queue has never had |
