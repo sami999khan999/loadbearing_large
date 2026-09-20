@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { Principal, RealtimeChannels } from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import type { OrganizationId, RealtimeMessage, UserId } from "@loadbearing/contracts";
+import { ForbiddenError } from "@loadbearing/errors";
 import { SilentLogger } from "@loadbearing/observability";
 import { CapabilitySet } from "@loadbearing/permissions";
 import { RPCHandler } from "@orpc/server/fetch";
@@ -140,5 +141,34 @@ describe("the realtime stream over RPCHandler", () => {
     expect(applied).toBe(response);
     expect(applied.headers.get("content-type")).toContain("text/event-stream");
     expect(await applied.text()).toContain("00000000-0000-7000-8000-00000000000c");
+  });
+  // `next()` resolves when the generator is *created*, so a throw from inside the body
+  // never reached the catch. Every one was an opaque 500, logged nowhere.
+
+  it("sends a throw from inside the stream through the error interceptor", async () => {
+    const failures: unknown[] = [];
+    const container = containerWith([], []);
+
+    // `child()` returns itself, because `correlationMiddleware` logs through the child
+    // and a fresh `SilentLogger` would drop every call this case is counting.
+    const logger: unknown = Object.assign(new SilentLogger(), {
+      failure: (error: unknown) => failures.push(error),
+      child: () => logger,
+    });
+    (container as { logger: unknown }).logger = logger;
+    (container as { realtimeSubscriber: unknown }).realtimeSubscriber = {
+      // eslint-disable-next-line @typescript-eslint/require-await
+      subscribe: async function* () {
+        throw new ForbiddenError("realtime.stream");
+        // biome-ignore lint/correctness/noUnreachable: a generator with no yield is not one.
+        yield frame("00000000-0000-7000-8000-00000000000d");
+      },
+    };
+
+    const body = await (await call(container)).text();
+
+    expect(body).toContain("FORBIDDEN");
+    expect(body).not.toContain("INTERNAL_SERVER_ERROR");
+    expect(failures).toHaveLength(1);
   });
 });

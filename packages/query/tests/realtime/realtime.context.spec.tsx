@@ -37,22 +37,30 @@ function Probe() {
   return createElement("span", { "data-testid": "state" }, connected ? "on" : "off");
 }
 
-const mount = (client: ApiClient) => {
+const ORG = "00000000-0000-7000-8000-000000000001";
+
+const tree = (client: ApiClient, queryClient: QueryClient, organizationId: string | null) =>
+  createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(RealtimeProvider, {
+      client,
+      organizationId,
+      children: createElement(Probe),
+    } as {
+      client: ApiClient;
+      organizationId: string | null;
+      children: ReactNode;
+    }),
+  );
+
+const mount = (client: ApiClient, organizationId: string | null = ORG) => {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
 
-  const view = render(
-    createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      createElement(RealtimeProvider, { client, children: createElement(Probe) } as {
-        client: ApiClient;
-        children: ReactNode;
-      }),
-    ),
-  );
+  const view = render(tree(client, queryClient, organizationId));
 
-  return { view, invalidate };
+  return { view, invalidate, queryClient };
 };
 
 describe("RealtimeProvider", () => {
@@ -92,5 +100,41 @@ describe("RealtimeProvider", () => {
     const { view } = mount(failing);
 
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("off"));
+  });
+  // The server builds the channel from the principal when the stream opens, so a switch
+  // that does not reopen leaves the tab reading the tenant it just left.
+  it("reopens the stream when the active tenant changes", async () => {
+    const opened: number[] = [];
+    const client = {
+      realtime: {
+        stream: () => {
+          opened.push(opened.length);
+          return Promise.resolve(
+            (async function* (): AsyncGenerator<RealtimeMessage> {
+              await new Promise(() => {});
+            })(),
+          );
+        },
+      },
+    } as unknown as ApiClient;
+
+    const queryClient = new QueryClient();
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+
+    const view = render(tree(client, queryClient, ORG));
+    await waitFor(() => expect(opened).toHaveLength(1));
+
+    view.rerender(tree(client, queryClient, "00000000-0000-7000-8000-000000000002"));
+
+    await waitFor(() => expect(opened).toHaveLength(2));
+  });
+
+  // Before there is a tenant there is no channel to open, and the request would 401 and
+  // then retry forever on the plugin's infinite budget.
+  it("opens nothing while there is no active tenant", async () => {
+    const stream = vi.fn();
+    mount({ realtime: { stream } } as unknown as ApiClient, null);
+
+    await waitFor(() => expect(stream).not.toHaveBeenCalled());
   });
 });

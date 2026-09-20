@@ -32,12 +32,17 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
 
     // The same cache and the same merge `PrincipalBuilder` runs, so client `can()` and
     // server `assert()` answer off one set. The membership list rides along too.
-    const [tenant, platform, organizations, platformOrganizationId] = await Promise.all([
+    const [tenant, platform, organizations, platformOrganizationId, isActive] = await Promise.all([
       container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
       container.capabilities.platformFor(userId),
       container.memberships.organizationsFor(userId),
       container.platform.organizationId(),
+      container.memberships.isActive(userId, activeOrganizationId as OrganizationId),
     ]);
+
+    // `PrincipalBuilder` returns null for a deactivated membership, so without this the
+    // shell rendered and every stream it opened answered UNAUTHORIZED and reconnected.
+    if (!isActive) return anonymous();
 
     const capabilities = CapabilitySet.from({
       ...tenant.toJSON(),
