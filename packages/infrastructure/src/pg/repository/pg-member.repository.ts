@@ -140,6 +140,25 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
     return row?.total ?? 0;
   }
 
+  // `for update` on the membership rows, not on the joined role: an aggregate cannot
+  // carry the clause, so the rows come back and are counted here.
+  public async lockActiveOwners(organizationId: OrganizationId): Promise<number> {
+    const rows = await this.db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .where(
+        and(
+          eq(memberships.organizationId, organizationId),
+          eq(roles.key, "owner"),
+          isNull(memberships.deactivatedAt),
+        ),
+      )
+      .for("update", { of: memberships });
+
+    return rows.length;
+  }
+
   public async existsByEmail(organizationId: OrganizationId, email: string): Promise<boolean> {
     const [row] = await this.db
       .select({ id: memberships.id })

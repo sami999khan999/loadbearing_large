@@ -31,16 +31,18 @@ export class SetMemberActiveUseCase {
 
     if (member.deactivated === !active) return member;
 
-    if (!active) {
-      // Locking yourself out is recoverable by a colleague; locking out the last owner
-      // is not recoverable from inside the product at all.
-      if (member.userId === actor.userId) throw new ConflictError("member", "self");
-      if (MemberRules.isOwner(member)) await this.assertNotLastOwner(actor);
-    }
+    // Locking yourself out is recoverable by a colleague; locking out the last owner
+    // is not recoverable from inside the product at all.
+    if (!active && member.userId === actor.userId) throw new ConflictError("member", "self");
 
     const at = active ? null : this.clock.now();
+    const risky = !active && MemberRules.isOwner(member);
 
     await this.unitOfWork.run(async () => {
+      // Inside the transaction and before the write. Read outside it, two concurrent
+      // deactivations each saw two owners and the tenant committed its way down to none.
+      if (risky) await this.assertNotLastOwner(actor);
+
       await this.members.setDeactivatedAt(actor.organizationId, member.userId, at);
       await this.activity.record(actor, active ? "member.reactivated" : "member.deactivated", {
         userId: member.userId,
@@ -50,8 +52,10 @@ export class SetMemberActiveUseCase {
     return { ...member, deactivated: !active };
   }
 
+  // `lockActiveOwners`, not `countActiveOwners`: the lock is what makes the second
+  // deactivation wait and then read the number its own commit would leave behind.
   private async assertNotLastOwner(actor: Principal): Promise<void> {
-    const owners = await this.members.countActiveOwners(actor.organizationId);
+    const owners = await this.members.lockActiveOwners(actor.organizationId);
     if (owners <= 1) throw new ConflictError("member", "lastOwner");
   }
 }

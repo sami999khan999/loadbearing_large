@@ -1,5 +1,5 @@
 import { ConflictError, type ConversationMemberInput, NotFoundError } from "../import.js";
-import type { DomainEventPublisher, TenantMembershipReader } from "../port/index.js";
+import type { DomainEventPublisher, TenantMembershipReader, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
 import type { ConversationAccess } from "./conversation-access.js";
@@ -11,6 +11,7 @@ export class AddConversationMemberUseCase {
     private readonly conversations: ConversationRepository,
     private readonly events: DomainEventPublisher,
     private readonly memberships: TenantMembershipReader,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(actor: Principal, input: ConversationMemberInput): Promise<void> {
@@ -30,16 +31,20 @@ export class AddConversationMemberUseCase {
       throw new NotFoundError("member", input.userId);
     }
 
-    await this.conversations.saveMember(
-      actor.organizationId,
-      input.conversationId,
-      input.userId,
-      "member",
-    );
+    // Write and publish together, as `send` does. A member row with no outbox row is a
+    // person in the conversation whose other tabs never learn they are in it.
+    await this.unitOfWork.run(async () => {
+      await this.conversations.saveMember(
+        actor.organizationId,
+        input.conversationId,
+        input.userId,
+        "member",
+      );
 
-    await this.events.publish(actor, {
-      name: "conversation.member.added",
-      payload: { conversationId: input.conversationId, userId: input.userId },
+      await this.events.publish(actor, {
+        name: "conversation.member.added",
+        payload: { conversationId: input.conversationId, userId: input.userId },
+      });
     });
   }
 }

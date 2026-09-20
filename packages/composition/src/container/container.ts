@@ -738,24 +738,28 @@ export class Container {
         conversations,
         this.eventPublisher,
         this.tenantMemberships,
+        this.routedUnitOfWork,
       ),
       removeMember: new RemoveConversationMemberUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       leave: new LeaveConversationUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       rename: new RenameConversationUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       markRead: new MarkConversationReadUseCase(
         this.authorizer,
@@ -781,6 +785,7 @@ export class Container {
         messages,
         this.eventPublisher,
         this.clock,
+        this.routedUnitOfWork,
       ),
       remove: new DeleteMessageUseCase(
         this.authorizer,
@@ -788,6 +793,7 @@ export class Container {
         messages,
         this.eventPublisher,
         this.clock,
+        this.routedUnitOfWork,
       ),
       typing: new SignalTypingUseCase(
         this.authorizer,

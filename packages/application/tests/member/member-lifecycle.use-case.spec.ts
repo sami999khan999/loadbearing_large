@@ -54,6 +54,7 @@ function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
 class RecordingMembers implements MemberRepository {
   public readonly roleChanges: { userId: UserId; roleId: RoleId }[] = [];
   public readonly deactivations: { userId: UserId; at: Date | null }[] = [];
+  public locked = 0;
 
   public constructor(
     private readonly row: MemberRecord | null,
@@ -86,6 +87,13 @@ class RecordingMembers implements MemberRepository {
   }
 
   public countActiveOwners(): Promise<number> {
+    return Promise.resolve(this.activeOwners);
+  }
+
+  // The same answer, and it records that the locking read is the one taken: the
+  // unlocked count outside the transaction is exactly what the race exploited.
+  public lockActiveOwners(): Promise<number> {
+    this.locked += 1;
     return Promise.resolve(this.activeOwners);
   }
 }
@@ -381,5 +389,48 @@ describe("SetMemberActiveUseCase", () => {
 
     expect(members.deactivations).toEqual([]);
     expect(activity.records).toEqual([]);
+  });
+});
+
+// `R.19`: both use-cases read the owner count before the transaction, so two concurrent
+// demotions each saw two owners and the tenant committed its way down to none.
+describe("the last-owner rule takes the locking read", () => {
+  it("locks the owner rows rather than counting them unlocked", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: MEMBER_ROLE,
+    });
+
+    expect(members.locked).toBe(1);
+  });
+
+  it("locks before deactivating an owner too", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = setActive(members);
+
+    await useCase.execute(actorHolding("member.deactivate"), { userId: TARGET }, false);
+
+    expect(members.locked).toBe(1);
+  });
+
+  // Promotion and reactivation touch no owner floor, so a lock there would serialise
+  // every membership edit in the tenant behind one row.
+  it("takes no lock when the change cannot drop the owner count", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = setActive(members);
+
+    await useCase.execute(actorHolding("member.deactivate"), { userId: TARGET }, false);
+    const after = new RecordingMembers({ ...member(), deactivated: true }, 2);
+
+    await setActive(after).useCase.execute(
+      actorHolding("member.deactivate"),
+      { userId: TARGET },
+      true,
+    );
+
+    expect(after.locked).toBe(0);
   });
 });

@@ -134,6 +134,7 @@ describe("membership changes", () => {
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
       new Memberships(),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await expect(
@@ -150,6 +151,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await expect(
@@ -165,6 +167,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await useCase.execute(manager(), { conversationId: CONVERSATION, userId: GRACE });
@@ -181,6 +184,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await useCase.execute(principal(GRACE, ["messaging.conversation.read"]), {
@@ -199,6 +203,7 @@ describe("membership changes", () => {
         new ConversationAccess(repo as unknown as ConversationRepository),
         repo as unknown as ConversationRepository,
         new RecordingEvents() as unknown as DomainEventPublisher,
+        new CountingUnitOfWork() as unknown as UnitOfWork,
       );
 
     await expect(
@@ -224,6 +229,7 @@ describe("membership changes", () => {
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
       new Memberships([GRACE]),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await expect(

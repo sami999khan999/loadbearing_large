@@ -65,12 +65,18 @@ export interface RecordedEvent {
 
 export class RecordingEvents {
   public readonly published: DomainEventInput<DomainEventName>[] = [];
+  // Whether a transaction was open on each publish, in order. Given one, the fake can
+  // answer the question a spec actually has about the outbox.
+  public readonly inTransaction: boolean[] = [];
+
+  public constructor(private readonly unitOfWork?: CountingUnitOfWork) {}
 
   public publish<N extends DomainEventName>(
     _actor: Principal,
     event: DomainEventInput<N>,
   ): Promise<void> {
     this.published.push(event as DomainEventInput<DomainEventName>);
+    this.inTransaction.push(this.unitOfWork?.open ?? false);
     return Promise.resolve();
   }
 }
@@ -88,9 +94,18 @@ export class RecordingRealtime {
 // package may not import, being to its left.
 export class CountingUnitOfWork {
   public calls = 0;
+  // True only while `run`'s callback is executing. A publish that reads `false` here is
+  // an outbox row that can commit apart from the write beside it.
+  public open = false;
 
-  public run<T>(work: () => Promise<T>): Promise<T> {
+  public async run<T>(work: () => Promise<T>): Promise<T> {
     this.calls += 1;
-    return work();
+    this.open = true;
+
+    try {
+      return await work();
+    } finally {
+      this.open = false;
+    }
   }
 }

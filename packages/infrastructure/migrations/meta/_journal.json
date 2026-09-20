@@ -232,6 +232,13 @@
       "when": 1789882224962,
       "tag": "0032_archive_tombstone",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789893776993,
+      "tag": "0033_conversation_keyset",
+      "breakpoints": true
     }
   ]
 }

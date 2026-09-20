@@ -41,12 +41,13 @@ export class ChangeMemberRoleUseCase {
 
     if (member.roleId === role.id) return member;
 
-    // Demoting the last active owner leaves nobody who can promote one back.
-    if (MemberRules.isOwner(member) && !MemberRules.isOwnerKey(role.key)) {
-      await this.assertNotLastOwner(actor);
-    }
+    const demoting = MemberRules.isOwner(member) && !MemberRules.isOwnerKey(role.key);
 
     await this.unitOfWork.run(async () => {
+      // Inside the transaction and before the write. Read outside it, two concurrent
+      // demotions each saw two owners and the tenant committed its way down to none.
+      if (demoting) await this.assertNotLastOwner(actor);
+
       await this.members.changeRole(actor.organizationId, member.userId, role.id);
       await this.activity.record(actor, "member.role.changed", {
         userId: member.userId,
@@ -68,8 +69,10 @@ export class ChangeMemberRoleUseCase {
     return { ...member, roleId: role.id, roleKey: role.key, roleName: role.name };
   }
 
+  // `lockActiveOwners`, not `countActiveOwners`: the lock is what makes the second
+  // demotion wait and then read the number its own commit would leave behind.
   private async assertNotLastOwner(actor: Principal): Promise<void> {
-    const owners = await this.members.countActiveOwners(actor.organizationId);
+    const owners = await this.members.lockActiveOwners(actor.organizationId);
     if (owners <= 1) throw new ConflictError("member", "lastOwner");
   }
 }

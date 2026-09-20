@@ -168,3 +168,46 @@ describe("PgConversationRepository.listByMember", () => {
     expect(second.nextCursor).toBeNull();
   });
 });
+
+// `R.11`. Declared after the suite above on purpose: its fixture adds a fifth row, and
+// vitest runs a nested `beforeAll` when that suite starts, not when the file loads.
+describe("PgConversationRepository.listByMember — a conversation with no messages", () => {
+  let quiet: ConversationId;
+
+  beforeAll(async () => {
+    // Never touched, so `last_message_at` stays null. Under `DESC` Postgres puts nulls
+    // first, and the cursor was encoded from a column that had nothing in it.
+    quiet = await repository.save({
+      organizationId,
+      kind: "channel",
+      title: "Quiet",
+      directKey: null,
+      createdBy: alice,
+      memberIds: [alice],
+    });
+  });
+
+  it("hands back a cursor rather than truncating the list", async () => {
+    const page = await repository.listByMember(organizationId, alice, { limit: 1 });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.nextCursor).not.toBeNull();
+  });
+
+  it("walks every conversation, the quiet one included", async () => {
+    const walked: ConversationId[] = [];
+    let cursor: string | undefined;
+
+    for (let page = 0; page < 10; page += 1) {
+      const result = await repository.listByMember(organizationId, alice, { limit: 2, cursor });
+      walked.push(...result.items.map((item) => item.id));
+      if (!result.nextCursor) break;
+      cursor = result.nextCursor;
+    }
+
+    expect(walked).toHaveLength(5);
+    expect(walked).toContain(quiet);
+    // Last, not first: `created_at` is today and every other row was touched into 2030.
+    expect(walked.at(-1)).toBe(quiet);
+  });
+});

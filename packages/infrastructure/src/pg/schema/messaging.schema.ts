@@ -48,8 +48,13 @@ export const conversations = pgTable(
     uniqueIndex("conversations_direct_uq")
       .on(t.organizationId, t.directKey)
       .where(sql`direct_key is not null`),
-    // The list's keyset, in the order its ORDER BY asks for.
-    index("conversations_recent_idx").on(t.organizationId, t.lastMessageAt.desc(), t.id.desc()),
+    // Coalesced, because `last_message_at` is null until the first message and a null
+    // in the keyset's row constructor ends the walk. The list's ORDER BY matches.
+    index("conversations_recent_idx").on(
+      t.organizationId,
+      sql`coalesce(${t.lastMessageAt}, ${t.createdAt}) desc`,
+      t.id.desc(),
+    ),
   ],
 );
 

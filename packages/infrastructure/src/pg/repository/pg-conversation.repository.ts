@@ -45,8 +45,19 @@ export class PgConversationRepository extends BaseRepository implements Conversa
   ): Promise<ConversationPage> {
     const after = page.cursor ? KeysetCursor.decode(page.cursor) : null;
 
+    // The sort key, not `last_message_at`: that is null until the first message, and a
+    // null in the row constructor below makes the comparison null rather than true.
+    // ──
+    // `mapWith`, because an expression has no column to take a mapper from: drizzle
+    // hands timestamps back as strings otherwise and the cursor was built from one.
+    const recentAt =
+      sql`coalesce(${conversations.lastMessageAt}, ${conversations.createdAt})`.mapWith(
+        conversations.createdAt,
+      );
+
     const rows = await this.db
       .select({
+        recentAt,
         id: conversations.id,
         kind: conversations.kind,
         title: conversations.title,
@@ -70,11 +81,11 @@ export class PgConversationRepository extends BaseRepository implements Conversa
           // A row constructor, not `a < x OR (a = x AND b < y)`: only this form walks
           // `conversations_recent_idx` rather than sorting it.
           after
-            ? sql`(${conversations.lastMessageAt}, ${conversations.id}) < (${after.at}, ${after.id}::uuid)`
+            ? sql`(${recentAt}, ${conversations.id}) < (${after.at}, ${after.id}::uuid)`
             : undefined,
         ),
       )
-      .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
+      .orderBy(desc(recentAt), desc(conversations.id))
       .limit(page.limit + 1);
 
     const window = rows.slice(0, page.limit);
@@ -86,10 +97,10 @@ export class PgConversationRepository extends BaseRepository implements Conversa
 
     return {
       items: window.map((row) => PgConversationRepository.toRecord(row, members.get(row.id) ?? [])),
+      // No null branch any more. `recentAt` falls back to `created_at`, which is not
+      // null — a page ending on a conversation with no messages used to truncate here.
       nextCursor:
-        rows.length > page.limit && last?.lastMessageAt
-          ? KeysetCursor.encode(last.lastMessageAt, last.id)
-          : null,
+        rows.length > page.limit && last ? KeysetCursor.encode(last.recentAt, last.id) : null,
     };
   }
 
