@@ -3,7 +3,7 @@ import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { StorageGateway, StoredObject } from "../../src/import.js";
+import type { StorageGateway } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgPartitionArchiveGateway } from "../../src/pg/repository/pg-partition-archive.gateway.js";

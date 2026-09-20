@@ -1009,6 +1009,7 @@ describe("25 — .env.example documents every key an app requires", () => {
     // needs the file the exemption is read out of.
     const withCompose = {
       ...tree("DATABASE_URL=x\nPOSTGRES_PORT=15432\n", ONE_KEY),
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: compose's own interpolation, which a template literal would resolve away
       "infra/docker-compose.yml": 'ports: ["${POSTGRES_PORT:-15432}:5432"]\n',
     };
 
@@ -1086,8 +1087,7 @@ describe("26 — every script above src/ is typechecked", () => {
 describe("27 — every host port is stated once", () => {
   const NAME = "every host port is stated once";
 
-  // A single-quoted string, not a template: `${LOKI_PORT:-13100}` is exactly what a
-  // template literal would try to interpolate.
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: compose's own interpolation, which a template literal would resolve away
   const COMPOSE = 'services:\n  loki:\n    ports: ["${LOKI_PORT:-13100}:3100"]\n';
 
   // One port key and the URL beside it, which is the smallest tree that can drift.
