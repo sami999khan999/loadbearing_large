@@ -49,11 +49,11 @@ Where you genuinely need host access — `psql` from your laptop — bind to loo
 through an SSH tunnel:
 
 ```yaml
-ports: ["127.0.0.1:5432:5432"]
+ports: ["127.0.0.1:15432:5432"]
 ```
 
 ```bash
-ssh -L 5432:localhost:5432 you@vps    # then psql against localhost:5432
+ssh -L 5432:localhost:15432 you@vps    # then psql against localhost:5432
 ```
 
 ---

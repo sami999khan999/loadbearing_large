@@ -35,9 +35,11 @@ again the first time someone introduces one because "it is just a cache."
   bucket's lifecycle rules and the ClickHouse TTL are **converged to those rows nightly**, never
   written once and trusted — and compared before they are written, because `MODIFY TTL`
   materialises every part of the table.
-- **A deleted tenant keeps its cold objects for thirty days.** The archive index carries no
-  foreign key, so nothing cascades; the nightly sweep is what ends the window, and it is what
-  makes a delete recoverable at the moment it is most likely to have been a mistake.
+- **A deleted tenant keeps its cold objects for thirty days, measured from the delete.** The
+  archive index carries no foreign key, so nothing cascades; the delete stamps `deleted_at` on
+  every one of that tenant's rows and the nightly sweep reads *that*, never `archived_at`. Keyed
+  on the archive time the window would measure the age of each month instead, so a tenant with a
+  year of cold storage would lose all but the newest months the night after the delete.
 - **ClickHouse is purely derived and must stay so.** Only the projection consumer writes to it.
 - **Never write a query that cannot be scoped to a tenant.** A cross-tenant aggregate in application
   code cannot be sharded; those belong in the analytics store from day one.

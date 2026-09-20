@@ -12,7 +12,7 @@ than an oversight.
 | --- | --- |
 | **Image** | `clickhouse/clickhouse-server:24.12-alpine` |
 | **Inside the network** | `clickhouse:8123` (HTTP), `clickhouse:9000` (native) |
-| **From the host** | `localhost:8123`, `localhost:9002` |
+| **From the host** | `localhost:18123`, `localhost:19002` |
 | **Credentials** | `ratchet` / `ratchet`, database `ratchet` |
 | **Volume** | `clickhousedata` |
 | **Config file** | `clickhouse.init.sql` |
@@ -219,12 +219,12 @@ rebuilt from.
 ## Checking it
 
 ```bash
-curl -s http://localhost:8123/ping
+curl -s http://localhost:18123/ping
 
-curl -s "http://localhost:8123/?user=ratchet&password=ratchet" \
+curl -s "http://localhost:18123/?user=ratchet&password=ratchet" \
   --data-binary "SELECT database, name, engine FROM system.tables WHERE name = 'activity_events' FORMAT TSV"
 
-curl -s "http://localhost:8123/?user=ratchet&password=ratchet" \
+curl -s "http://localhost:18123/?user=ratchet&password=ratchet" \
   --data-binary "SELECT partition_key, sorting_key FROM system.tables WHERE database = 'ratchet' AND name = 'activity_events' FORMAT TSV"
 ```
 

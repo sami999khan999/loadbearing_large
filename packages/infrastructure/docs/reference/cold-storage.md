@@ -179,12 +179,27 @@ which is re-runnable, rather than an object nothing points at, which is invisibl
 gone, because a delete that also destroyed the archive would be unrecoverable at the moment it is
 most likely to have been a mistake.
 
-`sweepDeleted(before)` is what ends that window. It runs nightly inside the `retention` job and
-takes every `partition_archive` row whose `organization_id` matches no `organizations` row and
-whose `archived_at` is older than the cutoff — `not exists`, not a left join, because this reads a
-table that only grows. Per row: delete the object, then delete the row, so a crash re-runs
-cleanly. One `cold.objects.swept` line per run, carrying `reason: "tenant_deleted"` and both
-counts; nothing at all when there was nothing to sweep.
+`sweepDeleted(before)` is what ends that window, and it reads a **tombstone**.
+`DeleteOrganizationUseCase` calls `markTenantDeleted` before the row goes, stamping `deleted_at`
+on every one of that tenant's `partition_archive` rows; the sweep takes the rows whose `deleted_at`
+is older than the cutoff **and** whose `organization_id` matches no `organizations` row —
+`not exists`, not a left join, because this reads a table that only grows. Per row: delete the
+object, then delete the row, so a crash re-runs cleanly. One `cold.objects.swept` line per run,
+carrying `reason: "tenant_deleted"` and both counts; nothing at all when there was nothing to sweep.
+
+> [!IMPORTANT]
+> **The tombstone is not decoration, and `archived_at` is the wrong column for this.** Keyed on
+> the archive time, the window measured how old each *month* was rather than how long ago the
+> tenant was deleted. A tenant with a year of cold months had eleven of them already past the
+> cutoff, so they were destroyed the night after the delete and only the two months
+> `archiveEverything` had just re-written survived — the opposite of what this section promises.
+>
+> It also destroyed every `outbox_event` archive of every live deployment. That table has no
+> tenant level, so its months are recorded under `NO_TENANT`, the nil uuid, which no
+> `organizations` row ever matches; `not exists` was therefore true for all of them forever.
+> `retention_policy.cold_months` for `outbox_event` was never honoured. A tombstone fixes both at
+> once: an outbox row is never stamped, so the sweep never sees it.
+> `tests/cold/sweep-deleted.spec.ts` pins both cases.
 
 `sweep(organizationId)` remains the immediate version, and an operator still reaches it by hand
 when thirty days is not the answer:

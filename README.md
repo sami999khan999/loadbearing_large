@@ -13,21 +13,25 @@ a boot failure rather than a 500 an hour later.
     pnpm install
     node -e "require('fs').copyFileSync('.env.example', '.env')"
 
-**2 · Host ports, if any are taken.** Every published port has a default in the compose file, so
-`infra/.env` does not exist until you need one — create it, and note that compose reads it rather
-than the root `.env`: with `-f infra/docker-compose.yml`, `infra/` is the project directory. Add the
-override there and change the matching URL in the root `.env`:
+**2 · Host ports, if any are taken.** Every published port is the well-known one with a `1` in
+front — Postgres on `15432`, Redis on `16379` — so this stack does not fight another one on your
+machine for `5432`. Inside the compose network nothing moved: `postgres:5432` is still `postgres:5432`.
 
-    # infra/.env                    # .env
-    POSTGRES_PORT=15432             DATABASE_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
-    REDIS_CACHE_PORT=16379          REDIS_CACHE_URL=redis://localhost:16379
-    REDIS_QUEUE_PORT=16380          REDIS_QUEUE_URL=redis://localhost:16380
+There is **one env file**, the `.env` at the root, and both halves of a port live in it — the
+`*_PORT` that compose publishes and the URL that dials it. Change both together:
 
-`POSTGRES_PORT` `REDIS_CACHE_PORT` `REDIS_QUEUE_PORT` `S3_PORT` `MINIO_CONSOLE_PORT` `SMTP_PORT`
-`MAILPIT_UI_PORT` `LOKI_PORT` `ALLOY_PORT` `CLICKHOUSE_HTTP_PORT` `CLICKHOUSE_NATIVE_PORT` are all
-overridable. For the web app itself, change
-`--port` in `apps/web/package.json` and keep `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` in step — Better
-Auth signs cookies against the first and the CORS layer reads the second.
+    POSTGRES_PORT=15432
+    DATABASE_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
+
+`POSTGRES_PORT` `PGBOUNCER_PORT` `REDIS_CACHE_PORT` `REDIS_QUEUE_PORT` `S3_PORT`
+`MINIO_CONSOLE_PORT` `SMTP_PORT` `MAILPIT_UI_PORT` `LOKI_PORT` `ALLOY_PORT` `CLICKHOUSE_HTTP_PORT`
+`CLICKHOUSE_NATIVE_PORT` and `WEB_PORT` are the full set, each documented in `.env.example`.
+`check:architecture` §27 fails the build if a `*_PORT` and the URL beside it ever disagree, which
+is the failure that otherwise reads as a connection refused and names nothing.
+
+For the web app, `WEB_PORT` is the one to change: `apps/web/vite.config.ts` reads it, and
+`APP_BASE_URL`, `AUTH_URL` and `AUTH_TRUSTED_ORIGINS` must all name it — Better Auth signs cookies
+against the second and the CORS layer reads the third. §27 checks all three.
 
 **3 · Infrastructure.** Postgres + pgvector, two Redis instances (cache and queue, deliberately
 separate), MinIO, Mailpit, and the Loki/Alloy log pipeline. ClickHouse sits behind
@@ -54,11 +58,11 @@ the root `.env` themselves.
 
 | | |
 |---|---|
-| Web app | http://localhost:3000 |
-| Mailpit — catches every outgoing mail | http://localhost:8025 |
-| MinIO console | http://localhost:9001 |
-| Loki API | http://localhost:3100 |
-| Readiness probe | http://localhost:3000/api/health |
+| Web app | http://localhost:13000 |
+| Mailpit — catches every outgoing mail | http://localhost:18025 |
+| MinIO console | http://localhost:19001 |
+| Loki API | http://localhost:13100 |
+| Readiness probe | http://localhost:13000/api/health |
 | Drizzle Studio | `pnpm db:studio` |
 
 **6 · First sign-in.** Sign up at `/sign-up`. `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults to on, so

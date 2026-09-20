@@ -12,7 +12,7 @@ than first executed on the day you deploy.
 | --- | --- |
 | **Image** | `coollabsio/minio:RELEASE.2025-10-15T17-29-55Z` |
 | **Inside the network** | `minio:9000` |
-| **From the host** | `localhost:9000` (API), `localhost:9001` (console) |
+| **From the host** | `localhost:19000` (API), `localhost:19001` (console) |
 | **Credentials** | `ratchet` / `ratchetsecret` |
 | **Volume** | `miniodata` |
 | **Buckets** | `ratchet`, `loki` |
@@ -109,10 +109,10 @@ Without that, Loki starts before its bucket exists and fails on the first write.
 C="docker compose -f infra/docker-compose.yml"
 
 # both buckets exist
-$C exec minio sh -c "mc alias set l http://localhost:9000 ratchet ratchetsecret >/dev/null && mc ls l"
+$C exec minio sh -c "mc alias set l http://localhost:19000 ratchet ratchetsecret >/dev/null && mc ls l"
 
 # Loki is genuinely writing into its bucket
-$C exec minio sh -c "mc alias set l http://localhost:9000 ratchet ratchetsecret >/dev/null && mc ls --recursive l/loki | head"
+$C exec minio sh -c "mc alias set l http://localhost:19000 ratchet ratchetsecret >/dev/null && mc ls --recursive l/loki | head"
 ```
 
 `loki_cluster_seed.json` and an `index/` prefix appear as soon as Loki starts. **Chunks take longer**:
@@ -122,7 +122,7 @@ used when `auth_enabled: false` — only shows up after the first flush, not aft
 An empty `loki` bucket with a healthy Loki means Loki is running but nothing has been shipped to it —
 check [alloy](alloy.md). An `index/` but no `fake/` after a few minutes of traffic is normal.
 
-The console at `http://localhost:9001` signs in with the same credentials and is the fastest way to
+The console at `http://localhost:19001` signs in with the same credentials and is the fastest way to
 look at an uploaded object.
 
 > **MinIO stopped publishing community images in October 2025**, and pulled the existing ones from

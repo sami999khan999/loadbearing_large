@@ -18,7 +18,7 @@ change — the write path has no dependency to swap.
 | --- | --- |
 | **Image** | `grafana/loki:3.3.2` |
 | **Inside the network** | `loki:3100` |
-| **From the host** | `localhost:3100` |
+| **From the host** | `localhost:13100` |
 | **Volume** | `lokidata` — index and WAL only |
 | **Chunks** | MinIO, bucket `loki` |
 | **Retention** | 30 days |
@@ -193,7 +193,7 @@ restart.
 |---|---|---|
 | in | `alloy` | `POST http://loki:3100/loki/api/v1/push` |
 | out | `LokiLogReader` | `GET http://loki:3100/loki/api/v1/query_range` |
-| out | you | `curl localhost:3100/loki/api/v1/...` |
+| out | you | `curl localhost:13100/loki/api/v1/...` |
 | storage | `minio` | chunks and index to bucket `loki` |
 
 `LokiLogReader` is built only when `LOKI_URL` is set, and its absence changes nothing about what is
@@ -210,11 +210,11 @@ enforced by the shape of the port rather than by convention.
 ## Checking it
 
 ```bash
-curl -s http://localhost:3100/ready          # "ready"
-curl -s http://localhost:3100/config | head  # what it actually loaded, after defaults
+curl -s http://localhost:13100/ready          # "ready"
+curl -s http://localhost:13100/config | head  # what it actually loaded, after defaults
 
 # the label set — query a FRESH window, not the global list
-curl -s -G http://localhost:3100/loki/api/v1/series \
+curl -s -G http://localhost:13100/loki/api/v1/series \
   --data-urlencode "start=$(($(date +%s)-60))000000000" \
   --data-urlencode 'match[]={app=~".+"}'
 ```

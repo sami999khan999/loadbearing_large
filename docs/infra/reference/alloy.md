@@ -261,7 +261,7 @@ All three were found by running the stack and querying Loki. **None appears anyw
 ## Checking it
 
 ```bash
-curl -s -G http://localhost:3100/loki/api/v1/series \
+curl -s -G http://localhost:13100/loki/api/v1/series \
   --data-urlencode "start=$(($(date +%s)-60))000000000" \
   --data-urlencode 'match[]={app=~".+"}'
 ```
@@ -270,7 +270,7 @@ Every stream in that fresh window must carry only the four. **The global `/label
 streams from before any config change** and shows ghosts long after the cause is fixed.
 
 ```bash
-curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
+curl -s -G http://localhost:13100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
 ```
 
 One entry per compose service. A missing value means that container has logged nothing yet, not that

@@ -113,15 +113,15 @@ Two numbers per service, and confusing them is the usual source of "connection r
 
 | Service | Inside the network | From the host |
 |---|---|---|
-| postgres | `postgres:5432` | `localhost:5432` — **direct**, `DATABASE_DIRECT_URL` |
-| pgbouncer | `pgbouncer:5432` | `localhost:6432` — **pooled**, `DATABASE_URL` |
-| redis-cache | `redis-cache:6379` | `localhost:6379` |
-| redis-queue | `redis-queue:6379` | `localhost:6380` |
-| mailpit | `mailpit:1025` | `localhost:1025`, UI `:8025` |
-| minio | `minio:9000` | `localhost:9000`, console `:9001` |
-| loki | `loki:3100` | `localhost:3100` |
+| postgres | `postgres:5432` | `localhost:15432` — **direct**, `DATABASE_DIRECT_URL` |
+| pgbouncer | `pgbouncer:5432` | `localhost:16432` — **pooled**, `DATABASE_URL` |
+| redis-cache | `redis-cache:6379` | `localhost:16379` |
+| redis-queue | `redis-queue:6379` | `localhost:16380` |
+| mailpit | `mailpit:1025` | `localhost:11025`, UI `:8025` |
+| minio | `minio:9000` | `localhost:19000`, console `:9001` |
+| loki | `loki:3100` | `localhost:13100` |
 | alloy | `alloy:12345` | `localhost:12345` |
-| clickhouse | `clickhouse:8123` | `localhost:8123`, native `:9002` |
+| clickhouse | `clickhouse:8123` | `localhost:18123`, native `:9002` |
 
 **Both Redis instances listen on 6379 inside.** They are different containers, so there is no
 collision; only the host mapping differs. `redis-queue:6380` from inside the network is wrong and
@@ -209,7 +209,7 @@ Seven `healthy`, `minio-init` `exited (0)`, no `clickhouse`.
 
 ```bash
 # every service is being collected — one entry per container
-curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
+curl -s -G http://localhost:13100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
 ```
 
 Per-service checks are on each reference page. The most common failures across all of them:

@@ -181,21 +181,27 @@ volumes:
 
 > The cache has no volume on purpose. A named volume for something explicitly disposable invites someone to treat it as durable.
 
-> **Every host port is overridable, and every container port is not.** `${MINIO_CONSOLE_PORT:-9001}:9001`
+> **Every host port is overridable, and every container port is not.** `${MINIO_CONSOLE_PORT:-19001}:9001`
 > keeps the documented default while letting one developer move it. Port collisions on a developer
 > machine are not hypothetical — this stack met one on the first run, where `9001` was already held
-> by an unrelated tool — and the fix should be a line in `infra/.env` rather than an edit to a file
-> everyone shares:
+> by an unrelated tool, and later met five at once against two other projects. Hence the `1` prefix
+> on every published port: Postgres on `15432`, Redis on `16379`.
+>
+> **The override goes in the root `.env`, which is the only env file.** Compose reads it because
+> `pnpm infra:up` runs `tooling/scripts/compose.mjs`, which passes `--env-file` when that file is
+> there. Compose's own default would be `infra/.env`, beside the compose file, and that is how the
+> stack and the applications once disagreed about where Postgres was.
 >
 > ```ini
-> # infra/.env — gitignored, this machine only
-> MINIO_CONSOLE_PORT=9003
+> # .env — the port and the URL that dials it are edited together
+> POSTGRES_PORT=15432
+> DATABASE_DIRECT_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
 > ```
 >
-> Compose reads that file automatically because it sits beside the compose file. The container-side
+> `check:architecture` §27 fails the build when a `*_PORT` and its URL disagree. The container-side
 > port never changes, so nothing inside the network has to know.
 
-> **ClickHouse's native port is remapped to 9002.** MinIO already owns 9000, and the collision produces a container that starts, binds nothing useful, and fails at connect time with an error naming neither service.
+> **ClickHouse's native port is remapped to 19002.** MinIO already owns the `19000` a `1` prefix would give it, and the collision produces a container that starts, binds nothing useful, and fails at connect time with an error naming neither service.
 
 ### Why each choice
 
@@ -230,7 +236,7 @@ idea what an organization is.
 
 `analytics` is **off** by default because [Data and scale](../opinions/data-and-scale.md) says not to adopt ClickHouse yet, and it means it. Postgres answers every question this kit will ask for years, and nothing in the kit reads an analytics store at all. The container is here so that the day the trigger fires — snapshots stop covering ad-hoc queries — adopting it is `--profile analytics`, `CLICKHOUSE_URL`, and then the reader the dashboard needs, rather than an infrastructure project.
 
-`sharded` is **off** for the same kind of reason, and it arrives later — Phase 22 of `plans/PLAN.md` builds the routing seam without running a second Postgres. `postgres-shard-1` and `pgbouncer-shard-1` are the same image and the same `postgres.init.sql` on their own volume, so a rehearsal applies the identical schema to both. Starting them is `pnpm infra:up:sharded` plus the two commented lines in `.env.example`; nothing else configures a shard, because `shard_assignments` on the catalog names the node one row per tenant.
+`sharded` is **off** for the same kind of reason, and it arrives later — Phase 22 of `plans/archive/PLAN.md` builds the routing seam without running a second Postgres. `postgres-shard-1` and `pgbouncer-shard-1` are the same image and the same `postgres.init.sql` on their own volume, so a rehearsal applies the identical schema to both. Starting them is `pnpm infra:up:sharded` plus the two commented lines in `.env.example`; nothing else configures a shard, because `shard_assignments` on the catalog names the node one row per tenant.
 
 > **A running ClickHouse with nothing writing to it is worse than no ClickHouse**, because it looks like a decision that was made. Leave it stopped until a projection consumer exists. The same applies to the second node: an empty shard nothing routes to is a machine to pay for and a schema to keep migrated.
 
@@ -604,15 +610,15 @@ docker compose -f infra/docker-compose.yml exec redis-queue redis-cli ping
 ```
 > `PONG`.
 
-Open `http://localhost:9001` and sign in with `ratchet` / `ratchetsecret`. Two buckets should be listed: `ratchet`, empty, and `loki`, which fills as soon as anything logs.
+Open `http://localhost:19001` and sign in with `ratchet` / `ratchetsecret`. Two buckets should be listed: `ratchet`, empty, and `loki`, which fills as soon as anything logs.
 
 ```bash
-curl -s http://localhost:3100/ready
+curl -s http://localhost:13100/ready
 ```
 > `ready`. Loki is accepting writes.
 
 ```bash
-curl -s -G http://localhost:3100/loki/api/v1/labels | jq -r '.data[]'
+curl -s -G http://localhost:13100/loki/api/v1/labels | jq -r '.data[]'
 ```
 > Once anything has logged, this is the whole point of the exercise: it should print `app`, `env`, `event_code`, `level` — **and nothing else**. A fifth label here means the Alloy pipeline promoted something it should not have, and it is far cheaper to notice now than at a hundred thousand streams.
 
@@ -620,7 +626,7 @@ There is no log UI to open. Query Loki over HTTP instead — the same `query_ran
 admin dashboard will call:
 
 ```bash
-curl -s -G http://localhost:3100/loki/api/v1/query_range   --data-urlencode 'query={app="postgres"} | json'   --data-urlencode "start=$(date -d '15 minutes ago' +%s)000000000"   | jq -r '.data.result[].values[][1]'
+curl -s -G http://localhost:13100/loki/api/v1/query_range   --data-urlencode 'query={app="postgres"} | json'   --data-urlencode "start=$(date -d '15 minutes ago' +%s)000000000"   | jq -r '.data.result[].values[][1]'
 ```
 > Worth keeping as a shell alias. It is the break-glass path for as long as the dashboard is the
 > only reader, and it stays the break-glass path afterwards — a log query that depends on the app
@@ -692,11 +698,11 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
 - `redis-cache` reports `maxmemory_policy:allkeys-lru` and `redis-queue` reports `noeviction`:
   `docker compose -f infra/docker-compose.yml exec redis-queue redis-cli config get maxmemory-policy`
 - `SELECT extname FROM pg_extension;` includes `vector`.
-- The MinIO console at `http://localhost:9001` shows `ratchet` and `loki` buckets.
-- `curl -s http://localhost:3100/ready` returns `ready`.
+- The MinIO console at `http://localhost:19001` shows `ratchet` and `loki` buckets.
+- `curl -s http://localhost:13100/ready` returns `ready`.
 - **The label set is exactly four.** Query a *fresh* window and inspect real streams, not the global label list — the global list includes streams from before any config change and will show ghosts:
   ```bash
-  curl -s -G http://localhost:3100/loki/api/v1/series     --data-urlencode "start=$(($(date +%s)-60))000000000"     --data-urlencode 'match[]={app=~".+"}'
+  curl -s -G http://localhost:13100/loki/api/v1/series     --data-urlencode "start=$(($(date +%s)-60))000000000"     --data-urlencode 'match[]={app=~".+"}'
   ```
   Every stream must carry only `app`, `env`, `level`, `event_code`.
 
@@ -707,14 +713,14 @@ The `S3_FORCE_PATH_STYLE` switch already exists in `.env.example` from [02](02-r
   > cannot see either one.
 - **Every service is being collected.** This lists one entry per compose service, not just the ones that emit JSON:
   ```bash
-  curl -s -G http://localhost:3100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
+  curl -s -G http://localhost:13100/loki/api/v1/label/app/values | jq -r '.data[]' | sort
   ```
   Expect `alloy`, `loki`, `minio`, `postgres`, `redis-cache`, `redis-queue`. A missing entry means that container has logged nothing yet, not that it is being skipped — restart it and look again.
 - **Nothing from other projects leaked in.** No value above belongs to a container outside this compose file. If one does, the `com.docker.compose.project` filter is wrong.
 - Loki answers a `query_range` curl with lines from at least one container.
-- `pnpm infra:up:analytics` starts clickhouse, `curl -s http://localhost:8123/ping` returns `Ok`, and the table is in the **`ratchet`** database rather than `default`:
+- `pnpm infra:up:analytics` starts clickhouse, `curl -s http://localhost:18123/ping` returns `Ok`, and the table is in the **`ratchet`** database rather than `default`:
   ```bash
-  curl -s "http://localhost:8123/?user=ratchet&password=ratchet"     --data-binary "SELECT database, name FROM system.tables WHERE name = 'activity_events' FORMAT TSV"
+  curl -s "http://localhost:18123/?user=ratchet&password=ratchet"     --data-binary "SELECT database, name FROM system.tables WHERE name = 'activity_events' FORMAT TSV"
   ```
   Then `docker compose -f infra/docker-compose.yml --profile analytics stop clickhouse` — nothing writes to it yet.
 

@@ -173,34 +173,39 @@ ports: ["${MINIO_CONSOLE_PORT:-9001}:9001"]
 ```
 
 Port collisions on a developer machine are not hypothetical — this stack met one on its first run,
-where `9001` was already held by an unrelated tool. The fix is a line in `infra/.env` — a file that
-is **not in the repository**, because every port above already has a default and a template of
-defaults would be a file to keep in step for no gain. Create it when you need one; Compose reads it
-automatically, because with `-f infra/docker-compose.yml` the project directory is `infra/` and not
-the repository root:
+where `9001` was already held by an unrelated tool, and later met five at once against two other
+projects. So every published port is the well-known one with a `1` in front, which keeps it
+readable as the service it belongs to and leaves `2xxxx` for the next stack on the same machine.
 
-```ini
-# infra/.env — you create this; gitignored, this machine only
-MINIO_CONSOLE_PORT=9003
-```
-
-**It is not the root `.env`, and confusing the two is the common failure.** The root `.env` is what
-the *applications* read through `env.ts`; `infra/.env` is what *Compose* reads. Override a port in
-one and you must change the matching URL in the other — `MINIO_CONSOLE_PORT` has no counterpart, but
-`POSTGRES_PORT` and `DATABASE_URL` do.
+**They live in the root `.env`, and it is the only env file.** Compose used to read `infra/.env`
+instead — with `-f infra/docker-compose.yml` the project directory is `infra/`, not the repository
+root — so the stack and the applications each had their own idea of where Postgres was, and nothing
+compared them. `pnpm infra:up` now goes through `tooling/scripts/compose.mjs`, which passes
+`--env-file <root>/.env` when that file exists. It has to be conditional: `--env-file` errors on a
+missing file, compose has no `-if-exists` form, and CI runs the stack with no `.env` at all.
 
 | Variable | Default | Variable | Default |
 |---|---|---|---|
-| `POSTGRES_PORT` | 5432 | `LOKI_PORT` | 3100 |
-| `REDIS_CACHE_PORT` | 6379 | `ALLOY_PORT` | 12345 |
-| `REDIS_QUEUE_PORT` | 6380 | — | — |
-| `S3_PORT` | 9000 | `CLICKHOUSE_HTTP_PORT` | 8123 |
-| `MINIO_CONSOLE_PORT` | 9001 | `CLICKHOUSE_NATIVE_PORT` | 9002 |
+| `POSTGRES_PORT` | 15432 | `LOKI_PORT` | 13100 |
+| `PGBOUNCER_PORT` | 16432 | `ALLOY_PORT` | 12345 |
+| `REDIS_CACHE_PORT` | 16379 | `MAILPIT_UI_PORT` | 18025 |
+| `REDIS_QUEUE_PORT` | 16380 | `SMTP_PORT` | 11025 |
+| `S3_PORT` | 19000 | `CLICKHOUSE_HTTP_PORT` | 18123 |
+| `MINIO_CONSOLE_PORT` | 19001 | `CLICKHOUSE_NATIVE_PORT` | 19002 |
+
+These defaults are what a checkout with no `.env` gets, which is exactly what CI is, so
+`check:architecture` §27 asserts each one equals the value `.env.example` documents. It also pairs
+each `*_PORT` with the URL that dials it — `POSTGRES_PORT` with `DATABASE_DIRECT_URL`,
+`PGBOUNCER_PORT` with `DATABASE_URL` — and fails when the two disagree. `MINIO_CONSOLE_PORT`,
+`MAILPIT_UI_PORT`, `ALLOY_PORT` and `CLICKHOUSE_NATIVE_PORT` have no counterpart: nothing in the
+application dials them, you do.
 
 **Nothing inside the network changes when you override one**, because only the left-hand side moves.
 `alloy.config.alloy` still says `loki:3100` regardless of `LOKI_PORT`.
 
-One default is already non-obvious: ClickHouse's native port is 9002 because MinIO owns 9000.
+Two defaults are non-obvious. ClickHouse's native port is `19002` rather than `19000`, because the
+`1` prefix of its own `9000` would collide with MinIO's. And `ALLOY_PORT` keeps `12345`, which was
+already clear of everything.
 
 ---
 

@@ -21,8 +21,8 @@ No config file and no volume. Every setting is a flag or a default, and the inbo
 ## What it is for
 
 `SmtpEmailSender` in `packages/infrastructure/src/smtp/` dials `SMTP_URL`, which is
-`smtp://localhost:1025` locally. Mailpit accepts the message, **delivers it nowhere**, and shows it
-at <http://localhost:8025>.
+`smtp://localhost:11025` locally. Mailpit accepts the message, **delivers it nowhere**, and shows it
+at <http://localhost:18025>.
 
 > [!IMPORTANT]
 > **It cannot send mail to a real address, and that is the feature.** A misaddressed digest during
@@ -32,8 +32,8 @@ at <http://localhost:8025>.
 ## Reading what was sent
 
 ```bash
-open http://localhost:8025          # the UI — subject, recipients, HTML and text parts
-curl -s localhost:8025/api/v1/messages | jq '.messages[0].Subject'
+open http://localhost:18025          # the UI — subject, recipients, HTML and text parts
+curl -s localhost:18025/api/v1/messages | jq '.messages[0].Subject'
 ```
 
 The API is what makes it usable from a test: send, then assert on what arrived, without a
@@ -44,7 +44,7 @@ provider's sandbox or a fake in the container.
 One environment variable, no code change:
 
 ```
-SMTP_URL=smtp://localhost:1025                    # mailpit
+SMTP_URL=smtp://localhost:11025                    # mailpit
 SMTP_URL=smtps://user:key@smtp.provider.com:465   # any real provider
 ```
 
