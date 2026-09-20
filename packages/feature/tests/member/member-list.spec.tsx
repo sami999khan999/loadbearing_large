@@ -1,10 +1,11 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { MemberDto } from "@loadbearing/contracts";
 import { ForbiddenError } from "@loadbearing/errors";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MemberList } from "../../src/member/member-list.js";
 import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
+import { transportError } from "../support/transport-error.js";
 
 const MEMBER: MemberDto = {
   userId: "00000000-0000-7000-8000-000000000001" as MemberDto["userId"],
@@ -63,5 +64,70 @@ describe("MemberList", () => {
 
     await waitFor(() => expect(screen.getByText("Ada")).toBeDefined());
     expect(screen.getByText("ada@example.test")).toBeDefined();
+  });
+
+  // The refusal arrives as the transport decoded it, not as an `AppError`. Every other
+  // spec in this package rejects with an instance, which is the shape HTTP never sends.
+  describe("a refusal that came over the wire", () => {
+    const GRACE: MemberDto = {
+      ...MEMBER,
+      userId: "00000000-0000-7000-8000-000000000002" as MemberDto["userId"],
+      name: "Grace",
+      email: "grace@example.test",
+    };
+
+    const renderWithDeactivate = (deactivate: () => Promise<unknown>) =>
+      renderWithFakes(
+        <MemberList />,
+        capabilitiesWith(["member.deactivate"]),
+        undefined,
+        ["member"],
+        {
+          member: {
+            list: () => Promise.resolve({ items: [GRACE], total: 1 }),
+            deactivate,
+          },
+        } as unknown as ApiClient,
+      );
+
+    const clickDeactivate = async () => {
+      await waitFor(() => expect(screen.getByText("Grace")).toBeDefined());
+      fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
+    };
+
+    // The crash: `envelope.context.reason` read `undefined.reason` and threw a
+    // `TypeError` into the error boundary instead of rendering the sentence.
+    it("renders the last-owner sentence rather than throwing on an absent context", async () => {
+      await renderWithDeactivate(() =>
+        Promise.reject(
+          transportError({
+            code: "CONFLICT",
+            context: { resource: "member", reason: "lastOwner" },
+          }),
+        ),
+      );
+      await clickDeactivate();
+
+      await waitFor(() =>
+        expect(
+          screen.getByText("This is the only active owner. Promote someone else to owner first."),
+        ).toBeDefined(),
+      );
+    });
+
+    // The two reasons share a code, so reading `context` is the only thing that tells
+    // them apart — and it is exactly what the wire was dropping.
+    it("tells the two CONFLICT reasons apart", async () => {
+      await renderWithDeactivate(() =>
+        Promise.reject(
+          transportError({ code: "CONFLICT", context: { resource: "member", reason: "self" } }),
+        ),
+      );
+      await clickDeactivate();
+
+      await waitFor(() =>
+        expect(screen.getByText("You cannot deactivate your own membership.")).toBeDefined(),
+      );
+    });
   });
 });
