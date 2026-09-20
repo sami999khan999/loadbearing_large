@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { shardUrls } from "./shard-env.js";
 import { migrate, type OrganizationId, sql } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";

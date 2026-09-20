@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { AuthFactory } from "./src/factory/index.js";
 import { type CacheStore, Database, getSchema, type OrganizationId } from "./src/import.js";
 import { AuthMailer } from "./src/mail/index.js";
@@ -14,7 +13,7 @@ import {
 // Better Auth's own tables, printed from the pinned runtime rather than by
 // `@better-auth/cli`, which trails the library. Diff against pg/schema/auth.schema.ts.
 
-const url = process.env.DATABASE_URL ?? "postgres://unused:unused@localhost:5432/unused";
+const url = process.env.DATABASE_URL ?? "postgres://unused:unused@localhost:15432/unused";
 
 const unreachable = (): never => {
   throw new Error("auth.tables.ts inspects configuration only.");
@@ -100,7 +99,7 @@ class UnusedOrganizationFounder extends OrganizationFounder {
 const auth = AuthFactory.create(
   {
     secret: "inspect-only-inspect-only-inspect-only",
-    baseUrl: "http://localhost:3000",
+    baseUrl: "http://localhost:13000",
     trustedOrigins: [],
     sessionMaxAgeSeconds: 604_800,
     cookieCacheMaxAgeSeconds: 60,

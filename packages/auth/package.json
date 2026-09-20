@@ -21,12 +21,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf dist",
-    "auth:tables": "tsx tables.ts"
+    "auth:tables": "tsx --env-file-if-exists=../../.env tables.ts"
   },
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",
     "@types/node": "catalog:",
-    "dotenv": "catalog:",
     "rimraf": "catalog:",
     "tsx": "catalog:",
     "tsup": "catalog:",

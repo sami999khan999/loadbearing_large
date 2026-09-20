@@ -36,7 +36,6 @@
     "@types/node": "catalog:",
     "@types/nodemailer": "catalog:",
     "@types/pg": "catalog:",
-    "dotenv": "catalog:",
     "drizzle-kit": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

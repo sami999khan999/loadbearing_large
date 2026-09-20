@@ -9,9 +9,15 @@ import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transac
 // One node, so nothing is ever placed: every repository here resolves to it.
 const shards = new ShardScope();
 
-// The local scratch stack, whose credentials are `ratchet` everywhere on purpose so
-// a database nobody can debug is not the price of a secret ([11]).
-export const DATABASE_URL = "postgres://ratchet:ratchet@localhost:5432/ratchet";
+// This suite's `env.ts`: the one place it reads the environment, named in §3 and in
+// Biome's overrides so the harness dials the port `.env` names rather than a literal.
+// ──
+// Direct rather than pooled — these specs run DDL a pooler cannot carry — and the
+// fallback is what a checkout with no `.env` gets. Credentials are `ratchet` ([11]).
+export const DATABASE_URL =
+  process.env.DATABASE_DIRECT_URL ??
+  process.env.DATABASE_URL ??
+  "postgres://ratchet:ratchet@localhost:15432/ratchet";
 
 const URL = DATABASE_URL;
 

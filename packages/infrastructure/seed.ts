@@ -3,7 +3,6 @@
 // needed `SystemRoleSeed`: importing that folder barrel would have executed this script,
 // connected to Postgres and called `process.exit` in the middle of a sign-in.
 
-import "dotenv/config";
 import { eq, Identifiers, Uuid } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";
 import { organizations, shardAssignments } from "./src/pg/schema/index.js";
