@@ -88,6 +88,14 @@ class Notifications implements NotificationRepository {
   public listUnreadSince(): Promise<readonly NotificationRecord[]> {
     return Promise.resolve([]);
   }
+
+  public recipientsWithUnreadSince(): Promise<readonly never[]> {
+    return Promise.resolve([]);
+  }
+
+  public organizationsWithUnreadSince(): Promise<readonly never[]> {
+    return Promise.resolve([]);
+  }
 }
 
 class Preferences implements NotificationPreferenceRepository {

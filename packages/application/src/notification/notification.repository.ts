@@ -95,6 +95,19 @@ export abstract class NotificationRepository {
     since: Date,
     limit: number,
   ): Promise<readonly NotificationRecord[]>;
+
+  // The digest's candidate list, keyset on the user id. Driven by unread rows rather
+  // than by stored preferences: a reader on the policy default has no row to be found by.
+  public abstract recipientsWithUnreadSince(
+    organizationId: OrganizationId,
+    since: Date,
+    limit: number,
+    afterUserId: UserId | null,
+  ): Promise<readonly UserId[]>;
+
+  // Which tenants have anything to digest at all, for the worker's fan-out. Cross-tenant
+  // by construction, looped per shard by the consumer, and read once a day.
+  public abstract organizationsWithUnreadSince(since: Date): Promise<readonly OrganizationId[]>;
 }
 
 export type { NotificationDto };

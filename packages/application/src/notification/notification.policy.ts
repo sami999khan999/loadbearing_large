@@ -83,6 +83,18 @@ const ROWS = Object.freeze({
 
 const NAMES: readonly DomainEventName[] = Object.freeze(Object.keys(ROWS) as DomainEventName[]);
 
+// Keyed by kind, and built only from the rows that actually write one: a row with no
+// recipients describes no notification in the table, so its modes are not a default.
+const DEFAULT_BY_KIND: Readonly<
+  Record<string, Readonly<Record<NotificationChannel, NotificationMode>>>
+> = Object.freeze(
+  Object.fromEntries(
+    Object.values(ROWS as Record<string, PolicyRow>)
+      .filter((row) => row.recipients.kind !== "none")
+      .map((row) => [row.kind, row.defaultMode]),
+  ),
+);
+
 // The one place that decides what an event means to a person. A `Policy` rather than a
 // use-case because it is a domain rule too broad for one entity.
 export class NotificationPolicy {
@@ -100,6 +112,15 @@ export class NotificationPolicy {
 
   public static defaultMode(name: DomainEventName, channel: NotificationChannel): NotificationMode {
     return NotificationPolicy.rowFor(name)?.defaultMode[channel] ?? "off";
+  }
+
+  // What a stored preference falls back to, for a row already written. Keyed by kind
+  // rather than category: `membership` holds one kind on digest and one on immediate.
+  public static defaultModeForKind(
+    kind: NotificationKind,
+    channel: NotificationChannel,
+  ): NotificationMode {
+    return DEFAULT_BY_KIND[kind]?.[channel] ?? "off";
   }
 
   // Absent `when` means every event of the name produces one, which is the common case

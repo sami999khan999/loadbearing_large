@@ -34,13 +34,4 @@ export abstract class NotificationPreferenceRepository {
     userId: UserId,
     preference: Omit<PreferenceRecord, "userId">,
   ): Promise<void>;
-
-  // For the digest fan-out: which organizations have anyone on `digest` at all.
-  public abstract organizationsWithDigest(): Promise<readonly OrganizationId[]>;
-
-  public abstract digestRecipients(
-    organizationId: OrganizationId,
-    limit: number,
-    afterUserId: UserId | null,
-  ): Promise<readonly UserId[]>;
 }

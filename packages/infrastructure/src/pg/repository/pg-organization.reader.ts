@@ -40,6 +40,16 @@ export class PgOrganizationReader extends BaseRepository implements Organization
     return rows.map((row) => row.id);
   }
 
+  public async nameOf(organizationId: OrganizationId): Promise<string | null> {
+    const rows = await this.db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+
+    return rows[0]?.name ?? null;
+  }
+
   // A correlated `EXISTS` rather than a join, so the projection and the keyset stay
   // exactly what they are without it — the filter is the only difference.
   private placedOn(node: number) {

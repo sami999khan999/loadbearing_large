@@ -5,9 +5,18 @@ import { type OrganizationId, OrganizationReader } from "../import.js";
 export class InMemoryOrganizationReader extends OrganizationReader {
   private readonly ids: readonly OrganizationId[];
 
-  public constructor(ids: readonly OrganizationId[] = []) {
+  // Names are optional: a spec that is not about the copy passes ids alone and gets
+  // `null`, which is the same answer a tenant deleted mid-run would give.
+  public constructor(
+    ids: readonly OrganizationId[] = [],
+    private readonly names: ReadonlyMap<string, string> = new Map(),
+  ) {
     super();
     this.ids = [...ids].sort();
+  }
+
+  public override nameOf(organizationId: OrganizationId): Promise<string | null> {
+    return Promise.resolve(this.names.get(organizationId) ?? null);
   }
 
   public override page(
