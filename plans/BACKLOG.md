@@ -35,7 +35,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | Section | What | Open |
 |---|---|---|
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 35 |
-| 2 | `archive/REVIEW.md` defects | 20 |
+| 2 | `archive/REVIEW.md` defects | 10 |
 | 3 | `archive/STUCK.md` blockers | 3 |
 | 4 | Unfinished work buried inside ticked items | 7 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
@@ -308,30 +308,36 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
     Three fail on the old predicate and pass on the new one, including one case per defect.
   - **Docs corrected**, because both stated the promise the code did not keep:
     `cold-storage.md` and `docs/ai/rules/data.md`.
-- [ ] `R.6` **`coldMode: "drop"` ignores per-tenant retention overrides** — the `drop` branch in
+- [x] `R.6` **`coldMode: "drop"` ignores per-tenant retention overrides** — the `drop` branch in
   `maintenance.consumer.ts:403–412` returns before reading `tenantRetentionPolicies`. A tenant with
   a longer override loses its month unrecoverably. Fix: read overrides before branching on mode.
-- [ ] `R.7` **The outbox drain runs *behind* every `deliver` job**, the opposite of its
+  `done: 2026-09-20` — the overrides are read before the mode branch, and the tenant walk drops at each tenant's own cutoff.
+- [x] `R.7` **The outbox drain runs *behind* every `deliver` job**, the opposite of its
   `priority: 1`. BullMQ pops the wait list before the prioritized set, and `deliver` jobs carry no
   priority. Fix: give `deliver` a higher-numbered priority, or drop the priority from both.
-- [ ] `R.8` **`cold-restore` and `tenant-export` never place a shard**, so they always read node 0.
+  `done: 2026-09-20` — `deliver` takes `priority: 10`. A job with none goes on the plain wait list, which `moveToActive` empties before it looks at the prioritized set — so the drain's `priority: 1` had put it exactly last.
+- [x] `R.8` **`cold-restore` and `tenant-export` never place a shard**, so they always read node 0.
   Neither `restore` nor `export` in `maintenance.consumer.ts` wraps in `withShard`. Fix: resolve the
   tenant's placement and run inside it, as the projection does. Latent on one node.
-- [ ] `R.9` **The SSR session ignores a deactivated membership, and the shell then retries the
+  `done: 2026-09-20` — the restore places per archive entry, because the index is catalog and the scratch table and its ATTACH are the tenant's; the export places the tenant it names.
+- [x] `R.9` **The SSR session ignores a deactivated membership, and the shell then retries the
   stream forever.** `session.fn.ts` checks only that `activeOrganizationId` is present;
   `PrincipalBuilder` returns null for an inactive membership. A deactivated user gets the shell,
   an UNAUTHORIZED stream reconnecting every two seconds, and no way out but sign-out. Fix: add
   `memberships.isActive` to `fetchSession`'s `Promise.all`.
-- [ ] `R.10` **An error thrown inside a streaming handler bypasses the error interceptor.** For an
+  `done: 2026-09-20` — the membership check rides in the same `Promise.all` as the capabilities. **No unit test:** `session.fn.ts` calls `createServerFn` at module scope and hangs under vitest without the react-start plugin. `apps/web/docs/reference/server-functions.md` now names this second case of the rule it already stated.
+- [x] `R.10` **An error thrown inside a streaming handler bypasses the error interceptor.** For an
   `async function*` handler, `next()` resolves before the body runs, so a FORBIDDEN from
   `message.stream` or a `RateLimitedError` from `assertUnderCap` becomes an opaque
   `INTERNAL_SERVER_ERROR` on the stream, logged nowhere, and the client reconnects forever. Fix:
   run the membership assertion and the cap check before returning the iterator, or wrap the
   iterator's `next` the way `shardMiddleware` does.
-- [ ] `R.11` **The conversation list truncates when a page ends on a conversation with no
+  `done: 2026-09-20` — `errorMiddleware` wraps a streaming output the way `shardMiddleware` already wraps one, so each frame's rejection goes through the interceptor.
+- [x] `R.11` **The conversation list truncates when a page ends on a conversation with no
   messages.** `ORDER BY last_message_at DESC` puts NULLs first and `nextCursor` is null for a null
   row. Fix: sort and cursor on `coalesce(last_message_at, created_at)`, keep
   `conversations_recent_idx` in step.
+  `done: 2026-09-20` — the sort key is `coalesce(last_message_at, created_at)`, never null, and `conversations_recent_idx` moves with it in `0033_conversation_keyset`. `mapWith` on the expression: drizzle hands a raw timestamp back as a string, and the cursor was being built from one.
 - [x] `R.12` **Notification and digest emails link to relative URLs** (`/settings/members`).
   Only the invitation mailer prefixes `config.email.baseUrl`. Fix: prefix in one place the two
   notification mailers share.
@@ -346,10 +352,11 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   takes the *first* policy row per category, and `member.invited` (recipients `none`) comes first.
   Fix: derive the default from rows that have recipients, or declare it on the category.
   `done: 2026-09-20` — `NotificationPolicy.defaultModeForCategory`, built from the rows that have recipients, so the grid and delivery read the same table.
-- [ ] `R.15` **Saving a retention row rewrites the ClickHouse TTL without its per-action clauses**
+- [x] `R.15` **Saving a retention row rewrites the ClickHouse TTL without its per-action clauses**
   — `update-retention-policy.use-case.ts:82` composes the base clause only, with no
   compare-before-write; `list-retention-policies` computes `expected` the same way. Fix: both
   through `clickhouseTtlFrom`, compare first.
+  `done: 2026-09-20` — both go through `clickhouseTtlFrom`, and the save compares before it writes.
 - [x] `R.16` **Re-indexing a document within an hour is silently dropped** — `jobId:
   <org>_<documentId>` with completed jobs kept 3 600 s. Fix: a content hash or version in the id.
   `done: 2026-09-20` — `JobKey.of(documentId, text)`; the text is in the key, so new words are a new job.
@@ -357,18 +364,21 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   `add-conversation-member` and `create-conversation` never check membership; also an existence
   oracle. Fix: assert `memberships.isActive` for every added user.
   `done: 2026-09-20` — `TenantMembershipReader`, a new port. Named apart from `auth`'s `isActive`: parameters compare bivariantly and the two take their arguments in opposite orders.
-- [ ] `R.18` **Six messaging use-cases publish outbox events outside any transaction** — edit,
+- [x] `R.18` **Six messaging use-cases publish outbox events outside any transaction** — edit,
   delete, add member, remove member, rename, leave. Fix: inject the routed unit of work and wrap
   write plus publish, as `send-message` does.
-- [ ] `R.19` **Last-owner protection is check-then-act outside the transaction** in
+  `done: 2026-09-20` — all six take the routed unit of work and wrap write plus publish, as `send` does.
+- [x] `R.19` **Last-owner protection is check-then-act outside the transaction** in
   `change-member-role` and `set-member-active`. Two concurrent demotions leave zero owners. Fix:
   count inside the transaction under `for update` or a per-tenant advisory lock. Likely.
+  `done: 2026-09-20` — the count moves inside the transaction and takes `for update` on the owner rows. Promotion and reactivation take no lock: they cannot drop the count, and locking there would serialise every membership edit in the tenant.
 - [x] `R.20` **Tenant delete never sweeps `tenant_retention_policy`** — `deleteFor` has no caller
   anywhere. Fix: call it inside the delete transaction.
   `done: 2026-09-20` — `tenantRetention.deleteFor` inside the delete transaction.
-- [ ] `R.21` **The realtime stream stays subscribed to the previous tenant after an organization
+- [x] `R.21` **The realtime stream stays subscribed to the previous tenant after an organization
   switch** — `RealtimeProvider` opens once per `client` identity and nothing remounts it. Fix: key
   the provider on the active organization id. Likely.
+  `done: 2026-09-20` — the provider takes the active tenant and reopens on it, and opens nothing before there is one.
 - [x] `R.22` **The notification inbox traps the user in "unread only"** — with no unread rows the
   toggle is not rendered. Fix: render the toggle above the empty state.
 
@@ -650,3 +660,4 @@ work is finished, and nothing else records it.
 | 2026-09-20 | @sami | `R.3` and `R.4` fixed, the two High defects that did not need a second node. `R.3` in `ErrorNormalizer` rather than in `api-client`, because the normaliser covers the in-process SSR client too — and the spec found a second hole the review had not: an unknown wrapped code adopted the wrapper's own. `R.4` moved the digest's candidate list off `notification_preferences` and onto `notifications`, deleted the two preference methods rather than leaving them beside the new ones, and keyed the policy default by kind because one category holds two kinds that disagree. Seven red-then-green specs for `R.3`, eight for `R.4`; the two Postgres queries under `R.4` are `unverified:`, with the command. Two pre-existing blockers cleared on the way: `pnpm typecheck` needed a package build, and `pnpm lint` had been red since the fan-out commit on a dead pair of locals |
 | 2026-09-20 | @sami | The five ledgers moved to `archive/` and this file became the only open one. Their relative links were repaired for the new depth, the nine inbound references from `docs/` and `packages/*/docs/` were repointed so §15 still passes, and `docs/data-flow.md`'s "what is planned and not yet built" now names this file. Section 8 split: two doc edits still owed, six stale lines inside `archive/` marked frozen rather than filed |
 | 2026-09-20 | @sami | Ten more, six of them the commit before this one had fixed and not ticked. `R.16`/`R.32` were one line: a caller's `documentId` reached the BullMQ job id verbatim, which refuses a `:`, and the key held no content, so a re-index with new words returned success and indexed nothing — `JobKey` hashes both. `R.42` a cursor validated its timestamp and not its id while every consumer casts it `::uuid`; `R.41` a repository used a numeric offset as a text keyset, so page two was every key alphabetically after "25"; `R.43` an order on a sum with no tie-break under limit/offset; `R.26` a route prefetching a query gated on a permission it does not require. Then four new: `R.17` — the conversation member column's only constraint is `users.id`, which every tenant's people share, so a manager could add a user from another tenant and probe which ids exist. Its port is named `isActiveMember` rather than `isActive` **because parameters compare bivariantly**: `auth`'s reader takes the user first, and one standing in for the other typechecks and then swaps the arguments at run time. `R.14` the preferences grid read a category's default off its first event, which has no recipients; `R.38` the digest counted rows from categories already emailed one at a time; `R.20` `deleteFor` had no caller anywhere and that table carries no foreign key |
+| 2026-09-20 | @sami | Every Medium review defect closed, in four commits. Three in the worker: the retention pass branched on `cold_mode` before reading the per-tenant overrides, and `drop` destroys a month, so a tenant that had bought three years lost it at the deployment's cutoff with nothing in cold storage; `deliver` jobs carried no priority, and BullMQ empties the plain wait list before it touches the prioritized set, so the drain's `priority: 1` put it exactly last rather than first; `cold-restore` and `tenant-export` named a tenant and placed nothing. Three in the web tier, all of them a client reconnecting forever: a deactivated membership still rendered the shell, a throw from inside a streaming handler never reached the error middleware because `next()` resolves when the generator is created, and the realtime provider was keyed on the api client, which an organization switch does not change. Three in messaging: a null `last_message_at` sorts first under DESC and its cursor was null, so the list truncated on any page ending on a conversation with no messages; six use-cases published outside any transaction; and the last-owner count was read before the transaction opened, so two concurrent demotions could commit a tenant down to zero owners. And one in platform: a retention save composed the ClickHouse TTL from the base months alone and erased every per-action window. **Twenty-three specs, every one red on the old code first** — the two for the conversation keyset against Postgres. `R.9` is the single one with no unit test, and the entry says why |
