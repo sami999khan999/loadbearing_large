@@ -67,6 +67,10 @@ export class DeleteOrganizationUseCase {
       actor.kind,
     );
 
+    // Before the row goes. The sweep reads this and nothing else, so a delete that
+    // skipped it would leave the objects in the bucket with nothing to end their window.
+    await this.archive.markTenantDeleted(input.organizationId, this.clock.now());
+
     await this.unitOfWork.run(async () => {
       await this.tenants.delete(input.organizationId);
 

@@ -34,6 +34,7 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   private readonly forgotten: ArchiveRequest[] = [];
   private readonly sweeps: OrganizationId[] = [];
   private readonly deletedSweeps: Date[] = [];
+  private readonly tombstones: { organizationId: OrganizationId; at: Date }[] = [];
   private holes: readonly ProjectionGap[] = [];
   private readonly exports: { organizationId: OrganizationId; day: string }[] = [];
   private exported: readonly ExportedObject[] = [];
@@ -126,6 +127,17 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
   // let a line claiming it swept nothing pass whatever the sweep did.
   public stageDeleted(sweep: DeletedTenantSweep): void {
     this.deleted = sweep;
+  }
+
+  // Recorded rather than counted: the delete use-case's spec asserts the tombstone was
+  // stamped at all, which is the half that makes the sweep reachable.
+  public override markTenantDeleted(organizationId: OrganizationId, at: Date): Promise<number> {
+    this.tombstones.push({ organizationId, at });
+    return Promise.resolve(1);
+  }
+
+  public tenantsMarkedDeleted(): readonly { organizationId: OrganizationId; at: Date }[] {
+    return this.tombstones;
   }
 
   public override sweepDeleted(before: Date): Promise<DeletedTenantSweep> {

@@ -507,13 +507,27 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     }));
   }
 
-  // Tenants Postgres has forgotten and the bucket has not. `not exists` rather than a
-  // left join: this runs nightly over a table that only grows.
+  // The tombstone every row of a deleted tenant carries. Written once, at the delete,
+  // so the recovery window runs from then rather than from when a month was archived.
+  public async markTenantDeleted(organizationId: OrganizationId, at: Date): Promise<number> {
+    const marked = await this.catalogDb.execute(
+      sql`update partition_archive
+          set deleted_at = ${at.toISOString()}::timestamptz
+          where organization_id = ${organizationId}::uuid
+            and deleted_at is null`,
+    );
+
+    return marked.rowCount ?? 0;
+  }
+
+  // Keyed on the tombstone, never on `archived_at`: a tenant with a year of cold months
+  // lost all but the newest the night after the delete. See docs/reference/cold-storage.md.
   public async sweepDeleted(before: Date): Promise<DeletedTenantSweep> {
     const rows = await this.catalogDb.execute<{ organization_id: string; object_key: string }>(
       sql`select pa.organization_id, pa.object_key
           from partition_archive pa
-          where pa.archived_at < ${before.toISOString()}::timestamptz
+          where pa.deleted_at is not null
+            and pa.deleted_at < ${before.toISOString()}::timestamptz
             and not exists (select 1 from organizations o where o.id = pa.organization_id)`,
     );
 

@@ -56,6 +56,9 @@ export const partitionArchive = pgTable(
     // rather than blocking the drop — see docs/reference/cold-storage.md.
     projectedAt: timestamp("projected_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }).notNull().defaultNow(),
+    // When the tenant was deleted, not when the month was archived. The recovery
+    // window runs from here — see docs/reference/cold-storage.md.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
     // Leading with the tenant is not cosmetic: it is what lets one tenant's cold months
@@ -66,5 +69,8 @@ export const partitionArchive = pgTable(
     index("partition_archive_unprojected_idx")
       .on(t.tableName, t.period)
       .where(sql`projected_at is null`),
+    // Partial for the same reason: the nightly sweep asks "what was deleted before X",
+    // and every row of a live tenant is null here.
+    index("partition_archive_deleted_idx").on(t.deletedAt).where(sql`deleted_at is not null`),
   ],
 );

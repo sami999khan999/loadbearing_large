@@ -123,8 +123,12 @@ export abstract class PartitionArchiveGateway {
   // it runs. One object per tenant-owned table, plus the catalog, plus the manifest.
   public abstract exportTenant(organizationId: OrganizationId, day: Date): Promise<TenantExport>;
 
-  // Every tenant whose `organizations` row is gone and whose objects were archived
-  // before `before`. The delay is deliberate: a deletion is recoverable for that long.
+  // The tombstone the recovery window is measured from. Stamped when the tenant is
+  // deleted, because `archived_at` dates the month rather than the deletion.
+  public abstract markTenantDeleted(organizationId: OrganizationId, at: Date): Promise<number>;
+
+  // Every tenant deleted before `before`, read off the tombstone. The delay is
+  // deliberate: a deletion is recoverable for exactly that long.
   public abstract sweepDeleted(before: Date): Promise<DeletedTenantSweep>;
 
   // Rows only. The bucket's lifecycle rule deletes the object, and a row still pointing

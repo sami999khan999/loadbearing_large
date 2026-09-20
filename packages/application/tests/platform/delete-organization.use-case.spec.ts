@@ -42,6 +42,12 @@ class FakeTenants implements TenantRepository {
 
 class FakeArchive implements Partial<PartitionArchiveGateway> {
   public readonly calls: { table: string; period: string; organizationId?: string }[] = [];
+  public readonly tombstones: { organizationId: string; at: string }[] = [];
+
+  public markTenantDeleted(organizationId: string, at: Date): Promise<number> {
+    this.tombstones.push({ organizationId, at: at.toISOString() });
+    return Promise.resolve(1);
+  }
 
   public archive(table: string, period: Date, organizationId?: string): Promise<ArchivedPartition> {
     this.calls.push({ table, period: period.toISOString().slice(0, 10), organizationId });
@@ -222,6 +228,16 @@ describe("DeleteOrganizationUseCase", () => {
     expect(parts.maintenance.drops).toEqual([TENANT]);
     expect(parts.tenants.deleted).toEqual([TENANT]);
     expect(result.partitions).toBe(3);
+  });
+
+  // The sweep reads the tombstone and nothing else, so a delete that skipped this
+  // leaves the objects in the bucket with nothing to end their window.
+  it("stamps the tombstone the recovery window is measured from", async () => {
+    const { parts, useCase } = build();
+    await useCase.execute(actor("platform.tenant.manage"), input);
+
+    expect(parts.archive.tombstones).toHaveLength(1);
+    expect(parts.archive.tombstones[0]?.organizationId).toBe(TENANT);
   });
 
   // Rebased onto the tier, which is the only reason the row survives the delete: under
