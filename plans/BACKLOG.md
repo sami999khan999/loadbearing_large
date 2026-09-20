@@ -34,14 +34,14 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 35 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 31 |
 | 2 | `archive/REVIEW.md` defects | 0 |
-| 3 | `archive/STUCK.md` blockers | 3 |
+| 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
 | 6 | Conditional work — "reopen when" | 11 |
 | 7 | `archive/TODO.md` ledger rows | 3 |
-| 8 | Doc housekeeping still owed | 2 |
+| 8 | Doc housekeeping still owed | 6 |
 
 Sections 1–3 are the work. Section 4 is work the ledgers say is done and is not. Sections 5–8
 are cheaper than the rest and are listed so nobody re-derives them.
@@ -68,10 +68,11 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the thirty-five open boxes
+## 1. `archive/PLAN.md` — the thirty-one open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
-on, and the `archive/PLAN.md` line that holds the entry.
+on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
+on 2026-09-20 with the browser walk; `23.25`, `23.26` and `23.27` are new and were found doing it.
 
 ### Phase 23 — Loose ends, no gate
 
@@ -98,31 +99,67 @@ recommendation under the entry was measured, not argued.
   built and served, then reverted; no dependency, no cast. The one judgement left is that the
   augmentation is global. **`23.6` is behind this.** — `archive/PLAN.md:3429`
 
-**Exit clauses that need a browser** — the eight from Phases 10–13, blocked by `S.1`. The
-checklist that turns these into twenty minutes of work is in `archive/STUCK.md` S.1.
+**Exit clauses that needed a browser — walked on 2026-09-20.** The Claude in Chrome extension
+connects now, which is the whole of what `S.1` was waiting on. **Six of the seven observations
+hold; `23.6` does not, and for a reason the entry did not have.**
 
-- [ ] `23.5` **The inviter's second tab refetches the member list without a reload.** The server
-  half is proved (an SSE stream over `curl` received `member.changed` after an invite). What is
-  left is the browser reacting to it. — `archive/PLAN.md:3515`
-- [ ] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.** Will fail
-  until `23.3` lands; leave unticked and say why, or fix `23.3` first. — `archive/PLAN.md:3523`
-- [ ] `23.7` **The bell count moves on refocus.** — `archive/PLAN.md:3528`
-- [ ] `23.8` **A row is marked read optimistically and stays read after refetch.** — `archive/PLAN.md:3532`
-- [ ] `23.9` **Killing the web process and restarting it reconnects the stream, and a `resync`
-  frame arrives.** `EventSource`'s own reconnect; only the network panel can show it. — `archive/PLAN.md:3536`
-- [ ] `23.10` **A sent message appears optimistically** and is reconciled, not duplicated, on a
-  throttled connection. — `archive/PLAN.md:3540`
-- [ ] `23.11` **Typing indicator clears** within its timeout with no further keystroke. — `archive/PLAN.md:3544`
-- [ ] `23.12` **Record the walk** — tick the matching clauses in
-  `archive/COMMUNICATION-PLAN.md`'s Exit blocks (lines 679, 942, 1209, 1522) and close `T-036` in
-  `archive/TODO.md`. — `archive/PLAN.md:3548`
+Two accounts, one browser profile. Ada is in Chrome; Grace acts over `/api/rpc` with her own
+cookie jar. The checklist asked for a second profile, and it does not need one: in every clause
+the second session only has to *act*, and the thing under test is the first session reacting.
+Latency was simulated by delaying one call in the page's own `fetch` rather than in devtools,
+which is also what let the optimistic window be observed rather than guessed at.
+
+- [x] `23.5` **The inviter's second tab refetches the member list without a reload.**
+  `done: 2026-09-20`
+  - Two tabs on `/settings/members`, both Ada. Tab B's network log was **cleared**, then tab A
+    invited. Tab B issued exactly two calls — `member/list` and `member/listInvitations` — and
+    grew the pending row. It was never reloaded, and the cleared log is what rules out a refetch
+    that was already in flight.
+  - The same mechanism moved something nobody asked it to: when Grace's sign-up enrolled her, the
+    open tab grew her member row and dropped her invitation, live.
+- [ ] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.**
+  **Still open, and the entry names only half the reason.** `23.3` is real and was measured:
+  `/settings/roles` does `ensureQueryData(RoleQueries.list(…))` in its loader, and a cold load
+  still calls `role/list` from the browser. But `/notifications` **prefetches nothing at all** —
+  its loader is `context.messages.ensure(MESSAGES)` and no more, so there is no prefetch for
+  `23.3` to deliver. **Fixing `23.3` alone would not tick this**; the loader needs the two
+  `ensureQueryData` calls first, and those are the clause's actual subject. — `archive/PLAN.md:3523`
+- [x] `23.7` **The bell count moves on refocus.** `done: 2026-09-20` — Grace sent Ada a direct
+  message; the badge went **1 → 2** in an already-open tab, with no reload and no refocus. Worth
+  correcting the clause while it is being ticked: focus is not the mechanism. The stream
+  invalidates the key, which is why `NotificationQueries.unreadCount` sets no
+  `refetchOnWindowFocus` and says so.
+- [x] `23.8` **A row is marked read optimistically and stays read after refetch.**
+  `done: 2026-09-20` — `notification/markRead` was held four seconds. The row lost its unread
+  badge **while the request was still in flight**, kept it after the response landed and the list
+  refetched, and the bell went 2 → 1 on settle rather than on click.
+- [x] `23.9` **Killing the web process and restarting it reconnects the stream, and a `resync`
+  frame arrives.** `done: 2026-09-20` — the web process was killed and restarted under an open
+  tab. `realtime/stream` and `message/stream` each answered **503 twice** while it was down, then
+  200, with no user action. The first frame on the re-opened stream, read off a clone of the
+  response body, was `{"kind":"resync","id":"01a0beb0-c59a-…"}` — which the router yields **only**
+  when the client resumes with a `last-event-id`, so the frame is itself the proof of the resume.
+- [x] `23.10` **A sent message appears optimistically** and is reconciled, not duplicated, on a
+  throttled connection. `done: 2026-09-20` — `message/send` was held six seconds. The row rendered
+  before the request returned, re-rendered from the server's row when it did, and `messages` holds
+  exactly one row for that `client_id`.
+- [x] `23.11` **Typing indicator clears** within its timeout with no further keystroke.
+  `done: 2026-09-20` — Grace signalled four times across four seconds and stopped. Ada's notice
+  was gone inside the 4 s expiry with nothing further sent. **Two defects in the indicator
+  itself**, neither of which this clause covers: `23.25`.
+- [x] `23.12` **Record the walk** `done: 2026-09-20` — recorded **here**, not in
+  `archive/COMMUNICATION-PLAN.md`: rule 2 of this file is that `archive/` is not edited, and the
+  entry predates that rule. `T-036` is section 7 and **still cannot close** — its "Done when"
+  names Phase 26, filed by decision, and `23.1`–`23.3`, open. The walk is done; the narrowing
+  the row asks for is the owner's.
 
 **From `archive/TODO.md`.**
 
 - [ ] `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h`. Gated on
   its own order: let the projection fill and reconcile for days first, then write the reader
   against real data. Four decisions carry over (new port, read-only, resolved scope, ISO periods).
-  Step one is done — the analytics profile is up and `ch:migrate` applied (`S.2`). — `archive/PLAN.md:3586`
+  Step one is done **and this time it is running** — the container is up, `CLICKHOUSE_URL` is set,
+  and the projection has written rows rather than merely being able to (`S.2`). — `archive/PLAN.md:3586`
 - [ ] `23.15` **The English fallback layer is dead payload** `P3` `~3h`. A `bn` page carries
   3 471 characters of English it can never read. **Recommended:** drop the base layer —
   `StaticContentSource.messages` returns `base: {}`; `MessageSnapshot` keeps both fields for a CMS
@@ -143,6 +180,36 @@ checklist that turns these into twenty minutes of work is in `archive/STUCK.md` 
   places each tenant *outside* the per-tenant `try`, so an unplaceable tenant aborts the run
   without `analytics.projection.failed`. **Recommended, one line:** move `withShard` inside the
   `try`. The larger question — skip or fail an unplaceable tenant — is left open. — `archive/PLAN.md:3802`
+- [ ] `23.25` **The typing indicator names a uuid, and names you.** Two defects in one line.
+  `SignalTypingUseCase` publishes to the conversation channel, author included, and
+  `useConversationStream` adds every `typing` frame's `userId` with no check that it is the
+  reader — so typing in `/messages` renders "`01a0bea8-… is typing…`" **to the person typing**.
+  `TypingNotice` takes an optional `nameFor` and `messages/$conversationId.tsx` passes none, which
+  is the uuid half. Seen on 2026-09-20 walking `23.10` and `23.11`; both clauses still hold, this
+  is beside them. **Recommended:** filter the reader's own id in the hook, not on the server —
+  the frame is legitimately addressed to the whole channel — and pass `nameFor` from the
+  conversation's members. — found 2026-09-20
+- [ ] `23.26` **A notification row's unread badge is labelled with the filter's copy.**
+  `notification.list.tsx`'s `readAt` column renders
+  `<StatusBadge tone="accent">{t("notification.inbox.unreadOnly")}</StatusBadge>`, so the button
+  that marks **one** row read reads "Unread only" — the same words as the filter toggle directly
+  above it, which does something else entirely. A screen reader gets the same collision, because
+  it is the button's whole accessible name. Needs a key of its own in both locales.
+  **Check `tone="accent"` with it:** `accent` is not one of the twelve names `color.md` closes
+  over. — found 2026-09-20
+- [ ] `23.27` **`pnpm dev` races its own package watchers and the worker loses.** `dev` is
+  `pnpm build:packages && pnpm -r --parallel run dev`, and the second half starts fifteen
+  `tsup --watch` processes *and* both apps in one wave. Every one of those configs is
+  `clean: true`, so each watcher empties the `dist/` the build just filled while the apps are
+  already resolving against it. Seen twice on 2026-09-20: `apps/worker` died on
+  `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js`, and `packages/ui`'s DTS build
+  failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
+  directory from the other side. Running `pnpm dev:web` and `pnpm dev:worker` as two processes
+  works immediately, which is what the `S.1` walk used. **Recommended:** `dev` should run the two
+  apps' `dev` scripts only, since `build:packages` has already produced what they import; a
+  package watcher is a thing you start deliberately when editing that package.
+  **Note for whoever takes it:** `docs/ai/rules/workflow.md` documents `pnpm dev` as the entry
+  point, so the doc line moves with the fix. — found 2026-09-20
 - [ ] `23.24` **`apps/web` has no smoke suite.** Nothing proves the system behaves as a system;
   one `curl` session (`archive/OPEN.md` "Proved end to end over HTTP") did it by hand. Shape:
   `apps/web/vitest.smoke.config.ts`, a `globalSetup` that spawns `.output/server/index.mjs` (extract
@@ -480,17 +547,29 @@ asserting a value rather than `!== undefined` (`R.14`).
 
 ## 3. `archive/STUCK.md` — what a session could not do, and exactly why
 
-- [ ] `S.1` **The browser walk, `23.5`–`23.12`.** The Claude in Chrome extension reports
-  `Browser extension is not connected`; installing it and signing in is not something an agent can
-  do. The stack was up, migrated and seeded, and the built server answered `/` with 200 — the
-  application was ready. `archive/STUCK.md` holds the thirteen-step checklist (two accounts in two browser
-  profiles, then seven observations, about twenty minutes). Fix `23.3` first or leave `23.6` unticked.
-- [ ] `S.2` **`23.14`, the analytics reader, is gated on data that does not exist yet.** Step one is
-  done (ClickHouse up, schema applied, four smoke cases passing). Step two is waiting: run the
-  worker for days so the projection fills. No session can do it.
+- [x] `S.1` **The browser walk, `23.5`–`23.12`.** `done: 2026-09-20` — **the blocker lifted and
+  the work landed**, which is the only thing that closes a section here. The extension connects,
+  and six of the seven observations hold; the seventh, `23.6`, is not a browser problem and its
+  entry in section 1 now says what it actually is. The checklist's "two browser profiles" turned
+  out to be unnecessary — the second account only ever has to act, so it acted over `/api/rpc`.
+- [ ] `S.2` **`23.14`, the analytics reader, is gated on data that does not exist yet.**
+  **Step one was not in the state this file recorded, and now is.** On 2026-09-20 the ClickHouse
+  container was `Exited (137)` five days old and `CLICKHOUSE_URL` was commented out in `.env` —
+  so the projection had been writing **nowhere**, and the wait for "a few days of data" had never
+  started. Both are on now, `ch:migrate` re-applied, and the projection wrote its first 37 rows
+  within one five-minute cycle, `member.invited` and `member.joined` from the `S.1` walk among
+  them. `ANALYTICS_DRIVER` stays `postgres`, which is the adoption order `.env` itself documents.
+  **What is left is genuinely only waiting**: run the worker for days, let the nightly
+  reconciliation come back clean, then write the reader against real data. No session can do that.
+  - The count in the old note is stale too: `analytics.smoke.spec.ts` is **2** cases, not four.
 - [ ] `S.3` **Phase 24 is gated on a second shard being provisioned**, and one container is not
-  that. Half of `24.5` and half of `24.6` are done; the rest waits on `24.1`, which is deliberately
-  filed until a production node exists.
+  that. Re-measured 2026-09-20 on the renumbered ports, because the numbers in this file were
+  taken before them: `sharded.smoke.spec.ts` is **5 passed**, not 4 — the fifth is `R.2`'s runway
+  assertion — and a warm placement resolve is **914 µs** against the 679 µs recorded, a miss
+  **3 576 µs** against 2 568 µs. The third routed case still passes for the reason it exists: a
+  routed insert on node 1 is a `23503` before it can be timed. **The blocker is unchanged and is
+  not a tool.** `24.1` is a decision about what a production catalog and a production shard do to
+  each other under a tenant delete, and it is deliberately filed until that node exists.
 
 ---
 
@@ -540,6 +619,11 @@ database" — walked on 2026-09-13 in the communication plan's Phase 2 Exit.
 
 Every phase is unit-tested and most are verified against live containers; these are the clauses
 the record says were *not* proven, beyond the eight in `23.5`–`23.12`.
+
+**Six of the nine are browser-only, and nothing blocks them any more.** They were written while
+`S.1` held; the extension connects as of 2026-09-20 and the walk above is the worked example of
+driving one. Each still needs a platform admin, which Ada is not — `pnpm platform:grant <email>`
+is the one step the walk did not take.
 
 - [ ] **Phase 18 Exit, browser half** — "signed in as alice with a customer tenant active,
   `/platform/status` renders and the nav shows the module; as a tenant owner it redirects to
@@ -660,6 +744,17 @@ on this machine — `.env.backup-2026-09-20`, three compose profiles up, 25 000 
 users left on purpose, four organizations with no directory row. That is the state to undo when the
 work is finished, and nothing else records it.
 
+**Added to that table on 2026-09-20, by the `S.1` walk and by `S.2`:**
+
+| What | Where | Why it is there |
+|---|---|---|
+| `CLICKHOUSE_URL` uncommented | root `.env` | `S.2` step two cannot start without it. **Leave it** until the reader is written; `ANALYTICS_DRIVER` is still `postgres`, which is the documented adoption order |
+| `analytics` profile up | compose | the same |
+| `ada@walk.test`, `grace@walk.test` | `users`, `memberships` in `loadbearing` | the two walk accounts. Ada was promoted to `owner` **by hand in SQL**, because `AUTH_ENROLMENT_MODE=bootstrap` enrols a sign-up as `member` and the walk needs `member.invite` |
+| `hopper@walk.test` | `invitations` | never accepted, on purpose: `23.5` needed a pending row that outlived the observation |
+| one direct conversation, two messages | `conversations`, `messages` | `23.10`'s proof that a retried optimistic send is one row |
+| `redis-cache` flushed | cache Redis | after the SQL promotion, so the capability cache did not serve the old role. Rebuildable by design |
+
 ---
 
 ## Changelog
@@ -675,4 +770,5 @@ work is finished, and nothing else records it.
 | 2026-09-20 | @sami | The five ledgers moved to `archive/` and this file became the only open one. Their relative links were repaired for the new depth, the nine inbound references from `docs/` and `packages/*/docs/` were repointed so §15 still passes, and `docs/data-flow.md`'s "what is planned and not yet built" now names this file. Section 8 split: two doc edits still owed, six stale lines inside `archive/` marked frozen rather than filed |
 | 2026-09-20 | @sami | Ten more, six of them the commit before this one had fixed and not ticked. `R.16`/`R.32` were one line: a caller's `documentId` reached the BullMQ job id verbatim, which refuses a `:`, and the key held no content, so a re-index with new words returned success and indexed nothing — `JobKey` hashes both. `R.42` a cursor validated its timestamp and not its id while every consumer casts it `::uuid`; `R.41` a repository used a numeric offset as a text keyset, so page two was every key alphabetically after "25"; `R.43` an order on a sum with no tie-break under limit/offset; `R.26` a route prefetching a query gated on a permission it does not require. Then four new: `R.17` — the conversation member column's only constraint is `users.id`, which every tenant's people share, so a manager could add a user from another tenant and probe which ids exist. Its port is named `isActiveMember` rather than `isActive` **because parameters compare bivariantly**: `auth`'s reader takes the user first, and one standing in for the other typechecks and then swaps the arguments at run time. `R.14` the preferences grid read a category's default off its first event, which has no recipients; `R.38` the digest counted rows from categories already emailed one at a time; `R.20` `deleteFor` had no caller anywhere and that table carries no foreign key |
 | 2026-09-20 | @sami | Every Medium review defect closed, in four commits. Three in the worker: the retention pass branched on `cold_mode` before reading the per-tenant overrides, and `drop` destroys a month, so a tenant that had bought three years lost it at the deployment's cutoff with nothing in cold storage; `deliver` jobs carried no priority, and BullMQ empties the plain wait list before it touches the prioritized set, so the drain's `priority: 1` put it exactly last rather than first; `cold-restore` and `tenant-export` named a tenant and placed nothing. Three in the web tier, all of them a client reconnecting forever: a deactivated membership still rendered the shell, a throw from inside a streaming handler never reached the error middleware because `next()` resolves when the generator is created, and the realtime provider was keyed on the api client, which an organization switch does not change. Three in messaging: a null `last_message_at` sorts first under DESC and its cursor was null, so the list truncated on any page ending on a conversation with no messages; six use-cases published outside any transaction; and the last-owner count was read before the transaction opened, so two concurrent demotions could commit a tenant down to zero owners. And one in platform: a retention save composed the ClickHouse TTL from the base months alone and erased every per-action window. **Twenty-three specs, every one red on the old code first** — the two for the conversation keyset against Postgres. `R.9` is the single one with no unit test, and the entry says why |
+| 2026-09-20 | @sami | **Section 3 is down to two, and neither of the two is a tool.** `S.1` closed: the Claude in Chrome extension connects, and the walk it was holding — `23.5` through `23.12` — was done end to end. Six of the seven observations hold and are recorded with what was measured rather than what was seen: tab B's network log was **cleared** before the invite, so its two calls are the refetch and not something already in flight; `markRead` and `message/send` were each held open in the page's own `fetch`, which is how the optimistic window was observed rather than inferred; and the reconnect was read off a clone of the response body, where the first frame after a kill-and-restart is a `resync` the router yields **only** for a client resuming with a `last-event-id`. The checklist's second browser profile turned out to be unnecessary — in every clause the second account only has to act, so Grace acted over `/api/rpc`. **`23.6` is the one that does not hold, and the entry had only half its reason:** `23.3` is real and was measured on `/settings/roles`, but `/notifications` prefetches nothing at all, so fixing `23.3` would not tick it. Two defects found on the way, filed as `23.25` and `23.26`: the typing indicator names a uuid **and names you**, and a notification row's unread badge is labelled with the filter's copy. **`S.2` was not in the state this file recorded** — ClickHouse had been dead five days and `CLICKHOUSE_URL` was commented out, so the projection had been writing nowhere and the wait for days of data had never started; both are on, and it wrote its first 37 rows inside one cycle. **`S.3` re-measured on the renumbered ports** — the sharded smoke is 5 passed rather than 4, a warm resolve 914 µs rather than 679 — and its blocker is unchanged, because `24.1` is a decision and not a container |
 | 2026-09-20 | @sami | **Section 2 is empty. All forty-five review defects are fixed.** The last ten, in three commits. Three were silent data loss: the projection checkpoint could pass a row that had not committed yet and the strictly-greater keyset never looked back; the archive's only pre-drop check was `exists`, and the comment above it already said a `HEAD` was not enough, so a partition could be dropped behind an object that had lost a multipart part; and the tenant export paged `role_permissions` on `permission`, which repeats once per role. Two were races: grant and revoke read the whole permission list and wrote it back, and a send retry arriving while the first attempt's transaction was still open took the claim over and wrote a second message. One was an authorization gap — a goal role assignable as an organization membership, where the rule turns out to be "not goal" rather than "org only", because `platform_admin` is `scope: "platform"` and *is* a membership row. One was an unkillable worker: SIGTERM chained off a `start()` that blocks on an unreachable queue Redis. One was five validation rules with no copy behind them. One was two specs whose assertion did not check what their name claimed. And `R.24` changed no behaviour at all — it made three comments and a reference page stop claiming a duplicate-suppression window the queue has never had |
