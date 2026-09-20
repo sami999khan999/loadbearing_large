@@ -284,6 +284,9 @@ export class Container {
   // Notifications, messaging and documents: everything a tenant produces. Opens on
   // whichever node the ambient `ShardScope` names.
   public readonly routedUnitOfWork: UnitOfWork;
+  // The partition runway and the outbox drain, which `eachShard` walks node by node.
+  // Catalog-placed here meant the loop ran, and every iteration wrote to node 0.
+  public readonly localUnitOfWork: UnitOfWork;
   public readonly content: ContentSource;
   // Built unconditionally: a missing analytics store means a feature is not deployed, a
   // missing mail transport means every sign-up is a dead end.
@@ -561,11 +564,16 @@ export class Container {
         statementTimeoutMs: config.database.statementTimeoutMs,
       },
     );
+    // Three, not two: `local` tables exist on every node, and the two passes that walk
+    // the cluster have to open their transaction on the node they are walking.
+    this.localUnitOfWork = new PgUnitOfWork(this.cluster, this.transactions, this.shards, "local", {
+      statementTimeoutMs: config.database.statementTimeoutMs,
+    });
     this.maintenance = new PgMaintenanceGateway(
       this.cluster,
       this.transactions,
       this.shards,
-      this.catalogUnitOfWork,
+      this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
 
@@ -597,7 +605,7 @@ export class Container {
     this.emailSender = new SmtpEmailSender(config.email, this.logger);
     this.email = this.emailSender;
     this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
-    this.mailRenderer = new ContentMailRenderer(this.content);
+    this.mailRenderer = new ContentMailRenderer(this.content, config.email.baseUrl);
     this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(
@@ -621,7 +629,7 @@ export class Container {
       this.cluster,
       this.transactions,
       this.shards,
-      this.catalogUnitOfWork,
+      this.localUnitOfWork,
     );
     this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
@@ -694,8 +702,9 @@ export class Container {
         notificationPreferences,
         notificationRecipients,
         this.mailPublisher,
+        this.organizations,
       ),
-      digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
+      digestOrganizations: new ListDigestOrganizationsUseCase(notifications),
     };
 
     const messages = new PgMessageRepository(this.cluster, this.transactions, this.shards);

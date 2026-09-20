@@ -1,4 +1,4 @@
-import { Shard, TablePlacement } from "@loadbearing/application";
+import { PartitionedTable, Shard, TablePlacement } from "@loadbearing/application";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import {
   CacheStore,
@@ -182,12 +182,52 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
     return shards.within({ key, node: await resolver.resolve(key) }, work);
   };
 
+  // `to_regclass` rather than a catalog join: it answers null instead of throwing, and
+  // the question here is only whether the relation is on this node at all.
+  const relationExists = async (database: Database, name: string) => {
+    const found = await database.client.execute<{ present: boolean }>(
+      sql`select to_regclass(${name}) is not null as present`,
+    );
+    return found.rows[0]?.present === true;
+  };
+
   const messageRowsOn = async (database: Database, messageId: MessageId) => {
     const found = await database.client.execute<{ count: string }>(
       sql`select count(*)::text as count from messages where id = ${messageId}::uuid`,
     );
     return Number(found.rows[0]?.count ?? 0);
   };
+
+  // Both cross-node passes opened their transaction through the **catalog** unit of
+  // work, which never reads `ShardScope` — so the loop ran and every node got node 0.
+  // ──
+  // The runway is the half provable without `24.1`: a month partition needs no key.
+  it("creates the month partition on the node the loop is walking", async () => {
+    const period = new Date(Date.UTC(2033, 6, 1));
+    const parent = TenantPartitionSeed.partitionName(PartitionedTable.ACTIVITY_LOG, onNodeOne);
+    const child = `${parent}_2033_07`;
+
+    // Built exactly as `Container` builds it: one cluster spanning both nodes, and a
+    // `local` unit of work. With a catalog one this lands on node 0 instead.
+    const maintenance = new PgMaintenanceGateway(
+      cluster,
+      scope,
+      shards,
+      new PgUnitOfWork(cluster, scope, shards, "local"),
+    );
+
+    await placedOn(onNodeOne, () =>
+      maintenance.ensureMonthlyPartitions(PartitionedTable.ACTIVITY_LOG, onNodeOne, period, 1),
+    );
+
+    expect(await relationExists(node1Direct, child)).toBe(true);
+    // The other half of the assertion, and the one that fails on the old binding: the
+    // partition must not have been created on the catalog node.
+    expect(await relationExists(catalogDirect, child)).toBe(false);
+
+    await node1Direct.client.execute(sql.raw(`drop table if exists ${child}`));
+    await catalogDirect.client.execute(sql.raw(`drop table if exists ${child}`));
+  });
 
   it("resolves each tenant to the node its directory row names", async () => {
     expect(await resolver.resolve(Shard.keyOf(onNodeZero))).toBe(0);

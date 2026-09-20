@@ -46,18 +46,22 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     super(cluster, scope, shards);
   }
 
+  // **`catalogDb`, not `db`.** All three tables are catalog ones, and this gateway is
+  // `local` — so `db` would sweep whichever node a surrounding loop had placed it on.
   public async sweepExpired(now: Date): Promise<SweepOutcome> {
     // Two statements rather than one CTE: they hit different indexes, and a failure
     // sweeping one should not hold the other's rows.
-    const expiredSessions = await this.db.delete(sessions).where(lt(sessions.expiresAt, now));
+    const expiredSessions = await this.catalogDb
+      .delete(sessions)
+      .where(lt(sessions.expiresAt, now));
 
-    const expiredVerifications = await this.db
+    const expiredVerifications = await this.catalogDb
       .delete(verifications)
       .where(lt(verifications.expiresAt, now));
 
     // Swept for a reason the other two do not have: `invitations_email_uq` means a lapsed
     // row keeps that address un-invitable until it is gone.
-    const expiredInvitations = await this.db
+    const expiredInvitations = await this.catalogDb
       .delete(invitations)
       .where(lt(invitations.expiresAt, now));
 
