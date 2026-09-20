@@ -12,8 +12,20 @@ import { MailLayout } from "./mail-layout.js";
 // Where the `email` catalog and the mail layout meet, which is why it is in the wiring
 // package: `application` owes no words and `content` owes no markup.
 export class ContentMailRenderer extends MailRenderer {
-  public constructor(private readonly content: ContentSource) {
+  // `baseUrl`, because a link in a message has no page to resolve against. The
+  // notification templates build `/settings/members`, which renders as nothing at all.
+  public constructor(
+    private readonly content: ContentSource,
+    private readonly baseUrl: string,
+  ) {
     super();
+  }
+
+  // Absolute already, or made absolute here. A caller that knows the origin still
+  // passes one — this is the floor, not a second place to decide the link.
+  private absolute(url: string): string {
+    if (!url) return url;
+    return /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `${this.baseUrl}${url}`;
   }
 
   public override async render<K extends MailTemplateKey>(
@@ -40,13 +52,17 @@ export class ContentMailRenderer extends MailRenderer {
         return ContentMailRenderer.otp(t, params as MailTemplateParams<"auth.otp">);
       case "member.invitation":
         return ContentMailRenderer.invitation(t, params as MailTemplateParams<"member.invitation">);
-      case "notification.single":
-        return ContentMailRenderer.notification(
-          t,
-          params as MailTemplateParams<"notification.single">,
-        );
-      case "notification.digest":
-        return ContentMailRenderer.digest(t, params as MailTemplateParams<"notification.digest">);
+      case "notification.single": {
+        const single = params as MailTemplateParams<"notification.single">;
+        return ContentMailRenderer.notification(t, {
+          ...single,
+          url: this.absolute(single.url),
+        });
+      }
+      case "notification.digest": {
+        const digest = params as MailTemplateParams<"notification.digest">;
+        return ContentMailRenderer.digest(t, { ...digest, url: this.absolute(digest.url) });
+      }
       default:
         // Exhaustive: a key added to the manifest fails to compile here until it has a
         // template, which is the whole reason the manifest is closed.

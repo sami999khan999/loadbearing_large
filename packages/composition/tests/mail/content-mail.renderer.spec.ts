@@ -7,7 +7,9 @@ import {
 import { describe, expect, it } from "vitest";
 import { ContentMailRenderer } from "../../src/mail/content-mail.renderer.js";
 
-const renderer = () => new ContentMailRenderer(new StaticContentSource(SERVER_CATALOG));
+const BASE = "https://app.example.test";
+
+const renderer = () => new ContentMailRenderer(new StaticContentSource(SERVER_CATALOG), BASE);
 
 const URL = "https://app.example.test/verify?token=a%20b&next=/x";
 
@@ -69,6 +71,42 @@ describe("ContentMailRenderer", () => {
     const bn = await renderer().render("auth.verify", "bn", { url: URL });
 
     expect(bn.subject).not.toBe(en.subject);
+  });
+
+  // A mail client has no page to resolve a relative href against, so `/settings/members`
+  // rendered as nothing at all. The policy builds paths; the origin belongs here.
+  it("makes a relative notification link absolute", async () => {
+    const mail = await renderer().render("notification.single", "en", {
+      kind: "member.joined",
+      name: "Ada",
+      url: "/settings/members",
+    });
+
+    expect(mail.html).toContain(`${BASE}/settings/members`);
+    expect(mail.text).toContain(`${BASE}/settings/members`);
+  });
+
+  it("makes the digest's link absolute too", async () => {
+    const mail = await renderer().render("notification.digest", "en", {
+      count: 3,
+      name: "Ada",
+      organization: "Acme",
+      url: "/notifications",
+    });
+
+    expect(mail.html).toContain(`${BASE}/notifications`);
+  });
+
+  // A caller that already knows the origin still passes one, and this must not double it.
+  it("leaves an absolute link alone", async () => {
+    const mail = await renderer().render("notification.single", "en", {
+      kind: "member.joined",
+      name: "Ada",
+      url: "https://elsewhere.test/x",
+    });
+
+    expect(mail.html).toContain("https://elsewhere.test/x");
+    expect(mail.html).not.toContain(`${BASE}https://`);
   });
 });
 
