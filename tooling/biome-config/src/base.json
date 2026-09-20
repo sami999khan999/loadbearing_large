@@ -133,6 +133,8 @@
         "apps/*/*.config.js",
         "apps/*/*.config.mjs",
         "packages/auth/tables.ts",
+        "packages/composition/tests/support/config.ts",
+        "packages/infrastructure/tests/support/database.ts",
         "packages/infrastructure/clickhouse-migrate.ts",
         "packages/infrastructure/migrate.ts",
         "packages/infrastructure/partitions.ts",

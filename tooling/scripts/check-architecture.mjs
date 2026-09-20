@@ -199,6 +199,9 @@ const ENV_EXEMPT = [
   // Every runnable script sits above `src/`, so a folder barrel can be imported without
   // executing one — see packages/infrastructure/seed.ts for the failure that moved them.
   /^packages\/auth\/tables\.ts$/,
+  // Each suite's own `env.ts`: the one file in it that reads the environment, so the
+  // harness dials the ports `.env` names rather than a literal that silently drifts.
+  /^packages\/(composition|infrastructure)\/tests\/support\/(config|database)\.ts$/,
   /^packages\/infrastructure\/(clickhouse-migrate|migrate|partitions|platform-grant|seed|shard-env|smoke)\.ts$/,
 ];
 
@@ -297,7 +300,9 @@ assert("no top-level await in a built barrel", (failures) => {
 const CLIENT_PACKAGES = new Set(["ui", "query", "feature"]);
 
 assert('`"use client"` only in ui, query, feature', (failures) => {
-  for (const dir of packageDirs()) {
+  // `sourceDirs()`, not `packageDirs()`: the rule is repo-wide, and an `apps/*` tree was
+  // exempt by accident — a boundary there is the one that reaches a route component.
+  for (const dir of sourceDirs()) {
     const name = dir.split(/[\\/]/).pop() ?? "";
     if (CLIENT_PACKAGES.has(name)) continue;
 
@@ -1415,6 +1420,24 @@ const UNDOCUMENTED = new Set(["APP"]);
 // rather than by a schema, so no literal key can appear in one.
 const NOT_A_SCHEMA_KEY = /^DATABASE_SHARD_\d+_/;
 
+// Every `${NAME:-default}` the compose file substitutes. Parsed rather than listed: a
+// variable compose stops reading stops being exempt, which a hand-kept list cannot do.
+function composeVariables() {
+  const file = join(ROOT, "infra", "docker-compose.yml");
+  if (!existsSync(file)) return new Map();
+
+  const found = new Map();
+  for (const match of readFileSync(file, "utf8").matchAll(/\$\{([A-Z0-9_]+):-([^}]*)\}/g)) {
+    found.set(match[1] ?? "", match[2] ?? "");
+  }
+
+  return found;
+}
+
+// `WEB_PORT` is the one `.env.example` key compose does not read — `apps/web/vite.config.ts`
+// does, and a config file is the other thing allowed to touch `process.env`.
+const NOT_A_SCHEMA_KEY_ELSEWHERE = new Set(["WEB_PORT"]);
+
 assert("`.env.example` documents every key an app requires", (failures) => {
   const example = exampleKeys();
   if (!example) return "no .env.example at the root";
@@ -1431,8 +1454,13 @@ assert("`.env.example` documents every key an app requires", (failures) => {
   // a documented key nothing reads sends somebody to set a variable that does nothing.
   const declared = new Set(schemas.map((entry) => entry.key));
 
+  // Read by `docker compose` or by a config file rather than by either schema, and
+  // documented because `.env.example` is the file somebody edits when a port collides.
+  const compose = composeVariables();
+
   for (const key of example) {
     if (declared.has(key) || NOT_A_SCHEMA_KEY.test(key)) continue;
+    if (compose.has(key) || NOT_A_SCHEMA_KEY_ELSEWHERE.has(key)) continue;
     failures.push(`${key}: .env.example documents it, no app's env.ts reads it`);
   }
 });
@@ -1463,6 +1491,94 @@ assert("every script above `src/` is in its package's tsconfig", (failures) => {
       if (include.includes(`"${file}"`)) continue;
 
       failures.push(`${rel(join(dir, file))}: not in ${rel(config)}, so nothing typechecks it`);
+    }
+  }
+});
+
+// ── 27 — every host port is stated once ──────────────────────────────────────
+//
+// A port is named twice by construction: `POSTGRES_PORT` is what compose publishes and
+// `DATABASE_DIRECT_URL` is what dials it. Nothing used to hold the two together, so the
+// stack came up on one port while every app reached for another, and the failure names
+// neither — it is a connection refused, or worse, a different project's database.
+
+// Each pair is `[port key, url key]`. A commented URL still counts: `.env.example`
+// documents an optional key by showing it commented, and the port beside it is real.
+const PORT_PAIRS = [
+  ["POSTGRES_PORT", "DATABASE_DIRECT_URL"],
+  ["PGBOUNCER_PORT", "DATABASE_URL"],
+  ["POSTGRES_SHARD_1_PORT", "DATABASE_SHARD_1_DIRECT_URL"],
+  ["PGBOUNCER_SHARD_1_PORT", "DATABASE_SHARD_1_URL"],
+  ["REDIS_CACHE_PORT", "REDIS_CACHE_URL"],
+  ["REDIS_QUEUE_PORT", "REDIS_QUEUE_URL"],
+  ["SMTP_PORT", "SMTP_URL"],
+  ["S3_PORT", "S3_ENDPOINT"],
+  ["LOKI_PORT", "LOKI_URL"],
+  ["CLICKHOUSE_HTTP_PORT", "CLICKHOUSE_URL"],
+  // Three URLs restate the web port, and a sign-in that fails because they disagree
+  // reports a CORS or origin error naming none of them.
+  ["WEB_PORT", "APP_BASE_URL"],
+  ["WEB_PORT", "AUTH_URL"],
+  ["WEB_PORT", "AUTH_TRUSTED_ORIGINS"],
+];
+
+// Values, including commented assignments — the same shape `exampleKeys` reads for §25.
+function exampleValues() {
+  const file = join(ROOT, ".env.example");
+  if (!existsSync(file)) return null;
+
+  const found = new Map();
+
+  // Split on `\r?\n`, not `\n`. This file is CRLF on a Windows checkout, `.` does not
+  // match `\r`, and a `$`-anchored value would then quietly capture nothing at all.
+  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
+    const match = /^\s*#?\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (match?.[1]) found.set(match[1], (match[2] ?? "").trim());
+  }
+
+  return found;
+}
+
+// The first `:<digits>` that is followed by `/` or end-of-value. A bare `host:port` with
+// no path and a `scheme://host:port/db` both land here; `postgres://` does not.
+function portOf(value) {
+  const match = /:(\d{2,5})(?:\/|$|,)/.exec(value.replace(/^[a-z+]+:\/\//, ""));
+  return match?.[1] ?? null;
+}
+
+assert("every host port is stated once", (failures) => {
+  const values = exampleValues();
+  if (!values) return "no .env.example at the root";
+
+  for (const [portKey, urlKey] of PORT_PAIRS) {
+    const port = values.get(portKey);
+    const url = values.get(urlKey);
+    if (!port || !url) continue;
+
+    const stated = portOf(url);
+    if (stated === null) {
+      failures.push(`${urlKey}: names no port, so ${portKey} has nothing to agree with`);
+    } else if (stated !== port) {
+      failures.push(`${urlKey} dials :${stated}, ${portKey} publishes :${port}`);
+    }
+  }
+
+  // The compose default is what a checkout with no `.env` gets — CI is exactly that —
+  // so a default that disagrees with the template is a second answer to the same question.
+  for (const [key, fallback] of composeVariables()) {
+    const documented = values.get(key);
+    if (documented && documented !== fallback) {
+      failures.push(`${key}: compose defaults to ${fallback}, .env.example says ${documented}`);
+    }
+  }
+
+  // One file, and this is what stops a second one coming back. `infra/.env` was read by
+  // compose instead of the root file, and `packages/infrastructure/.env` layered under
+  // five scripts through `dotenv`'s cwd lookup — both invisible, both holding ports.
+  for (const dir of [join(ROOT, "infra"), ...sourceDirs()]) {
+    const stray = join(dir, ".env");
+    if (existsSync(stray)) {
+      failures.push(`${rel(stray)}: the only env file is the one at the root`);
     }
   }
 });

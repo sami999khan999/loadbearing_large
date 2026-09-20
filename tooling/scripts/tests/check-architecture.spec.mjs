@@ -136,7 +136,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(26);
+    expect(results).toHaveLength(27);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -1002,6 +1002,19 @@ describe("25 — .env.example documents every key an app requires", () => {
     passes(run(tree("DATABASE_URL=x\n# DATABASE_SHARD_1_URL=y\n", ONE_KEY)), NAME);
   });
 
+  // Read by `docker compose` and by `apps/web/vite.config.ts`, never by a schema, and
+  // documented because the example is the file somebody edits when a port collides.
+  it("allows a host port in the example that no schema reads", () => {
+    // Derived from the compose file rather than from a name pattern, so the fixture
+    // needs the file the exemption is read out of.
+    const withCompose = {
+      ...tree("DATABASE_URL=x\nPOSTGRES_PORT=15432\n", ONE_KEY),
+      "infra/docker-compose.yml": 'ports: ["${POSTGRES_PORT:-15432}:5432"]\n',
+    };
+
+    passes(run(withCompose), NAME);
+  });
+
   it("skips a tree with no example to compare against", () => {
     expect(entry(run(), NAME).status).toBe("○");
   });
@@ -1067,5 +1080,68 @@ describe("26 — every script above src/ is typechecked", () => {
       }),
       NAME,
     );
+  });
+});
+
+describe("27 — every host port is stated once", () => {
+  const NAME = "every host port is stated once";
+
+  // A single-quoted string, not a template: `${LOKI_PORT:-13100}` is exactly what a
+  // template literal would try to interpolate.
+  const COMPOSE = 'services:\n  loki:\n    ports: ["${LOKI_PORT:-13100}:3100"]\n';
+
+  // One port key and the URL beside it, which is the smallest tree that can drift.
+  const pair = (published, dialled) => ({
+    ".env.example": `POSTGRES_PORT=${published}\nDATABASE_DIRECT_URL=postgres://u:p@localhost:${dialled}/db\n`,
+  });
+
+  it("accepts a port key and the URL beside it agreeing", () => {
+    passes(run(pair("15432", "15432")), NAME);
+  });
+
+  it("catches a URL dialling a port nothing publishes", () => {
+    fails(run(pair("15432", "5432")), NAME, "DATABASE_DIRECT_URL");
+  });
+
+  // The example is CRLF on a Windows checkout, and `.` matches no carriage return, so a
+  // `$`-anchored value captures nothing and the assertion passes on everything.
+  it("reads a CRLF example, which is what a Windows checkout has", () => {
+    const crlf = {
+      ".env.example":
+        "POSTGRES_PORT=15432\r\nDATABASE_DIRECT_URL=postgres://u:p@localhost:5432/db\r\n",
+    };
+    fails(run(crlf), NAME, "DATABASE_DIRECT_URL");
+  });
+
+  // Commented out is still documented, and the port beside it is still published.
+  it("checks a commented URL too", () => {
+    const tree = { ".env.example": "LOKI_PORT=13100\n# LOKI_URL=http://localhost:3100\n" };
+    fails(run(tree), NAME, "LOKI_URL");
+  });
+
+  // CI has no `.env`, so the compose default is what CI gets. One that disagrees with
+  // the template is a second answer to the same question.
+  it("catches a compose default that disagrees with the example", () => {
+    const tree = {
+      ".env.example": "LOKI_PORT=13100\n",
+      "infra/docker-compose.yml": COMPOSE.replace("13100", "3100"),
+    };
+    fails(run(tree), NAME, "LOKI_PORT");
+  });
+
+  it("accepts a compose default that matches", () => {
+    const tree = { ".env.example": "LOKI_PORT=13100\n", "infra/docker-compose.yml": COMPOSE };
+    passes(run(tree), NAME);
+  });
+
+  // The two that existed: compose read `infra/.env` rather than the root file, and
+  // `dotenv`'s cwd lookup layered `packages/infrastructure/.env` under five scripts.
+  it("catches a second env file coming back", () => {
+    const tree = { ".env.example": "LOKI_PORT=13100\n", "infra/.env": "LOKI_PORT=3100\n" };
+    fails(run(tree), NAME, "infra/.env");
+  });
+
+  it("skips a tree with no example to compare against", () => {
+    expect(entry(run(), NAME).status).toBe("○");
   });
 });
