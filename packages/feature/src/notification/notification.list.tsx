@@ -88,22 +88,30 @@ export function NotificationList({ limit = 25 }: NotificationListProps) {
     [t, markRead],
   );
 
-  if (inbox.isPending) return <DataTable.Skeleton columns={3} rows={5} />;
-  if (inbox.isError) {
-    return (
-      <Callout tone="danger">
-        {describe(inbox.error)?.message ?? t("notification.inbox.error")}
-      </Callout>
-    );
-  }
+  // The controls sit above every state, never inside one. Two ways this trapped a
+  // reader: the empty state replaced the whole tree, and so did the pending skeleton —
+  // ──
+  // and toggling the filter re-enters pending, so the button removed itself on click.
+  const body = () => {
+    if (inbox.isPending) return <DataTable.Skeleton columns={3} rows={5} />;
+    if (inbox.isError) {
+      return (
+        <Callout tone="danger">
+          {describe(inbox.error)?.message ?? t("notification.inbox.error")}
+        </Callout>
+      );
+    }
 
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        title={t(unreadOnly ? "notification.inbox.emptyUnread" : "notification.inbox.empty")}
-      />
-    );
-  }
+    if (rows.length === 0) {
+      return (
+        <EmptyState
+          title={t(unreadOnly ? "notification.inbox.emptyUnread" : "notification.inbox.empty")}
+        />
+      );
+    }
+
+    return <DataTable columns={columns} rows={rows} />;
+  };
 
   return (
     <div>
@@ -114,7 +122,7 @@ export function NotificationList({ limit = 25 }: NotificationListProps) {
         {t("notification.inbox.markAllRead")}
       </Button>
 
-      <DataTable columns={columns} rows={rows} />
+      {body()}
 
       {
         // Absent rather than disabled at the end: a permanently greyed button reads as

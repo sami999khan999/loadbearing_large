@@ -23,6 +23,9 @@ export interface ShardMapPanelProps {
   // `feature` may not import routing, so the destination arrives as a string. It is
   // `ROUTES.platform.storage`, which is where a tenant is exported and deleted.
   readonly storageHref: string;
+  // Arrives with `25.5`, which lands the `shards.move` procedure alongside `24.2`.
+  // Absent keeps the button disabled however the server answers `moves`.
+  readonly onMove?: (organizationId: string) => void;
   readonly limit?: number;
 }
 
@@ -38,7 +41,7 @@ interface TenantRow extends ShardTenantDto {
 // rather than asking the server about every keystroke.
 const LOOKUP_FLOOR = 3;
 
-export function ShardMapPanel({ storageHref, limit = 25 }: ShardMapPanelProps) {
+export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanelProps) {
   const { t } = useMessages("platform");
   const describe = useErrorMessage();
   const client = useApiClient();
@@ -146,7 +149,11 @@ export function ShardMapPanel({ storageHref, limit = 25 }: ShardMapPanelProps) {
         // to be typed back, and two places to get that confirmation wrong is one too many.
         cell: () => (
           <>
-            <Button variant="ghost" disabled={moves === "unavailable"}>
+            {
+              // Disabled without a handler as well as on `moves`: `25.5` supplies both,
+              // and until it does this goes live when `hasShardMoves` flips and does nothing.
+            }
+            <Button variant="ghost" disabled={moves === "unavailable" || onMove === undefined}>
               {t("platform.shards.move")}
             </Button>
             <a href={storageHref}>{t("platform.shards.manage")}</a>
@@ -154,7 +161,7 @@ export function ShardMapPanel({ storageHref, limit = 25 }: ShardMapPanelProps) {
         ),
       },
     ],
-    [t, moves, storageHref],
+    [t, moves, onMove, storageHref],
   );
 
   const total = map.data?.total ?? 0;

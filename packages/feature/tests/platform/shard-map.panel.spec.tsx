@@ -105,4 +105,26 @@ describe("ShardMapPanel", () => {
 
     expect(await screen.findByText("No tenant answers to that.")).toBeTruthy();
   });
+  // It was `disabled={moves === "unavailable"}` alone, so the day `hasShardMoves` flips
+  // it would render live and do nothing. The server saying "available" is not enough.
+  it("keeps the move button disabled while no handler is wired", async () => {
+    await renderWithFakes(
+      <ShardMapPanel storageHref="/platform/storage" />,
+      capabilitiesWith([]),
+      undefined,
+      ["platform"],
+      ApiClient.inProcess({
+        platform: {
+          shardMap: (input: { node?: number }) =>
+            Promise.resolve({ ...map(input.node), moves: "available" as const }),
+          locateTenant: () => Promise.resolve({ tenant: null, moves: "available" }),
+        },
+      } as unknown as AppClient),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show tenants" }));
+
+    const move = await screen.findByRole("button", { name: "Move" });
+    expect(move.hasAttribute("disabled")).toBe(true);
+  });
 });
