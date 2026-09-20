@@ -1,4 +1,5 @@
 import {
+  asc,
   desc,
   eq,
   type OrganizationId,
@@ -42,7 +43,13 @@ export class PgTenantStorageReader extends BaseRepository implements TenantStora
       .leftJoin(organizations, eq(organizations.id, partitionArchive.organizationId))
       .where(filter)
       .groupBy(partitionArchive.organizationId, organizations.name, partitionArchive.tableName)
-      .orderBy(desc(sql`sum(${partitionArchive.bytes})`))
+      // The tie-break is not cosmetic under `limit`/`offset`: two tenants with equal
+      // totals have no defined order, so one can appear on two pages or on neither.
+      .orderBy(
+        desc(sql`sum(${partitionArchive.bytes})`),
+        asc(partitionArchive.organizationId),
+        asc(partitionArchive.tableName),
+      )
       .limit(page.limit)
       .offset(page.offset);
 

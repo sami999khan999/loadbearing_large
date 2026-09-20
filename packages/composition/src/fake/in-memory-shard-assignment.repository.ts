@@ -1,9 +1,4 @@
-import {
-  type PaginationQuery,
-  type ShardAssignment,
-  ShardAssignmentRepository,
-  type ShardKey,
-} from "../import.js";
+import { type ShardAssignment, ShardAssignmentRepository, type ShardKey } from "../import.js";
 
 // Rows in a Map, keyed the way the table is. Empty by default, which is the state that
 // matters: a key with no row is node 0, and an unsharded deployment has no rows at all.
@@ -24,7 +19,14 @@ export class InMemoryShardAssignmentRepository extends ShardAssignmentRepository
     return Promise.resolve();
   }
 
-  public override all(page: PaginationQuery): Promise<readonly ShardAssignment[]> {
-    return Promise.resolve([...this.rows.values()].slice(page.offset, page.offset + page.limit));
+  // Sorted and cut at the cursor, the way the real one is. A fake that sliced an offset
+  // would let a caller that never advances the cursor pass here and loop in production.
+  public override all(after: ShardKey | null, limit: number): Promise<readonly ShardAssignment[]> {
+    const ordered = [...this.rows.values()].toSorted((left, right) =>
+      left.key.localeCompare(right.key),
+    );
+    const rest = after ? ordered.filter((row) => row.key > after) : ordered;
+
+    return Promise.resolve(rest.slice(0, limit));
   }
 }

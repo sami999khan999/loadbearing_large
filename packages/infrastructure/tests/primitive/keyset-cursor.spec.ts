@@ -36,4 +36,12 @@ describe("KeysetCursor", () => {
 
     expect(() => KeysetCursor.decode(bad)).toThrow(ValidationError);
   });
+
+  // The id half was unchecked while every consumer casts it `::uuid`, so this decoded
+  // cleanly and died deep in Postgres as a `22P02` — a 500, not the error above.
+  it("rejects a cursor whose id is not a uuid", () => {
+    const bad = Buffer.from("2026-09-01T00:00:00.000Z|x", "utf8").toString("base64url");
+
+    expect(() => KeysetCursor.decode(bad)).toThrow(ValidationError);
+  });
 });

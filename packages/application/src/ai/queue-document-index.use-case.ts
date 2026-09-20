@@ -1,6 +1,6 @@
 import { Uuid, ValidationError } from "../import.js";
 import type { QueuePublisher } from "../port/index.js";
-import { type Authorizer, type Principal, QueueName } from "../primitive/index.js";
+import { type Authorizer, JobKey, type Principal, QueueName } from "../primitive/index.js";
 
 export interface QueueDocumentIndexInput {
   // Optional: a caller re-indexing an existing document supplies its id, and a caller
@@ -48,7 +48,12 @@ export class QueueDocumentIndexUseCase {
       },
       // Keyed on the tenant *and* the document: two organizations re-indexing documents
       // that happen to share an id must not collapse into one job. `_`, never `:`.
-      { jobId: `${actor.organizationId}_${documentId}` },
+      // ──
+      // The id is the caller's and BullMQ refuses a `:` in one, so `doc:1` was a 500.
+      // ──
+      // The text is in the key too: a re-index with new words returned success and
+      // enqueued nothing, because the completed job still held the id.
+      { jobId: `${actor.organizationId}_${JobKey.of(documentId, input.text)}` },
     );
 
     return { documentId };

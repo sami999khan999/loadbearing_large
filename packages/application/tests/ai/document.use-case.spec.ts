@@ -126,7 +126,47 @@ describe("QueueDocumentIndexUseCase", () => {
       text: "a document",
     });
 
-    expect(queue.published[0]?.options?.jobId).toBe(`${ORG}_doc-1`);
+    expect(queue.published[0]?.options?.jobId).toContain(`${ORG}_`);
+  });
+
+  // A caller's id reaches the key, and `doc:1` is a legal `documentId` — it was a 500
+  // from inside BullMQ rather than the BAD_REQUEST the contract implies.
+  it("keeps a caller's id out of the job id verbatim", async () => {
+    await useCase().execute(actorHolding("ai.embedding.write"), {
+      documentId: "doc:1",
+      text: "a document",
+    });
+
+    const jobId = queue.published[0]?.options?.jobId ?? "";
+    expect(jobId).not.toContain(":");
+    expect(jobId).not.toContain("doc");
+  });
+
+  // The window is an hour of completed jobs, and BullMQ hands back the existing job for
+  // a duplicate id without error — so the second text was accepted and never indexed.
+  it("gives a re-index with different text a different job", async () => {
+    await useCase().execute(actorHolding("ai.embedding.write"), {
+      documentId: "doc-1",
+      text: "the first text",
+    });
+    await useCase().execute(actorHolding("ai.embedding.write"), {
+      documentId: "doc-1",
+      text: "the second text",
+    });
+
+    expect(queue.published[0]?.options?.jobId).not.toBe(queue.published[1]?.options?.jobId);
+  });
+
+  // And the same text twice is still one job: the dedupe exists for a double submit.
+  it("keeps the same document and text on one job", async () => {
+    for (let index = 0; index < 2; index += 1) {
+      await useCase().execute(actorHolding("ai.embedding.write"), {
+        documentId: "doc-1",
+        text: "the same text",
+      });
+    }
+
+    expect(queue.published[0]?.options?.jobId).toBe(queue.published[1]?.options?.jobId);
   });
 
   // A `:` separator reached the queue once and BullMQ refused the job at publish time,

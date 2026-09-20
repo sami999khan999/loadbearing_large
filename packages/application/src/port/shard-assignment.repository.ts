@@ -1,4 +1,3 @@
-import type { PaginationQuery } from "../import.js";
 import type { ShardKey } from "../primitive/index.js";
 
 export interface ShardAssignment {
@@ -16,7 +15,7 @@ export abstract class ShardAssignmentRepository {
 
   public abstract save(assignment: { key: ShardKey; node: number }): Promise<void>;
 
-  // Paged, because the move job walks every tenant and a deployment that needs
-  // sharding is one where reading them all into memory is the thing that stops working.
-  public abstract all(page: PaginationQuery): Promise<readonly ShardAssignment[]>;
+  // Keyset on the shard key, said so rather than an offset the adapter reinterprets:
+  // `String(offset)` compared as text made page two every key after `"25"`.
+  public abstract all(after: ShardKey | null, limit: number): Promise<readonly ShardAssignment[]>;
 }
