@@ -1,6 +1,7 @@
 import type { AnalyticsProjector, StoragePolicyGateway } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import { PartitionedTable } from "../primitive/index.js";
+import type { ProjectionPolicyRepository } from "./projection-policy.repository.js";
 import { RetentionRules } from "./retention.rules.js";
 import type {
   ColdMode,
@@ -48,6 +49,9 @@ export class ListRetentionPoliciesUseCase {
     // Absent on a deployment with no analytics store, which is the third state the
     // screen renders — not configured, rather than on or off.
     private readonly projector: AnalyticsProjector | null,
+    // The per-action clauses. Without them `expected` was the base clause alone and the
+    // screen reported drift against a store that was exactly right.
+    private readonly projectionPolicies: ProjectionPolicyRepository,
   ) {}
 
   public async execute(actor: Principal): Promise<RetentionPolicies> {
@@ -85,12 +89,16 @@ export class ListRetentionPoliciesUseCase {
 
     const row = rows.find((candidate) => candidate.store === "clickhouse");
     const months = row?.hotMonths ?? RetentionRules.DEFAULT_CLICKHOUSE_MONTHS;
+    const [applied, projection] = await Promise.all([
+      this.projector.retention(),
+      this.projectionPolicies.all(),
+    ]);
 
     return {
       months,
       isDefault: row === undefined,
-      applied: await this.projector.retention(),
-      expected: RetentionRules.clickhouseTtlFor(months),
+      applied,
+      expected: RetentionRules.clickhouseTtlFrom(rows, projection),
     };
   }
 

@@ -8,6 +8,7 @@ import type {
 import type { Authorizer } from "../primitive/index.js";
 import { PartitionedTable, Principal } from "../primitive/index.js";
 import type { PlatformReader } from "./platform.reader.js";
+import type { ProjectionPolicyRepository } from "./projection-policy.repository.js";
 import { RetentionRules } from "./retention.rules.js";
 import type {
   ColdMode,
@@ -36,6 +37,9 @@ export class UpdateRetentionPolicyUseCase {
     private readonly activity: ActivityLogger,
     private readonly unitOfWork: UnitOfWork,
     private readonly projector: AnalyticsProjector | null,
+    // The per-action clauses. Composed from the base months alone, a save here erased
+    // every one of them and the rows they were keeping expired at the default.
+    private readonly projectionPolicies: ProjectionPolicyRepository,
     // Post-commit failures are logged rather than rethrown: the row is the truth and the
     // daily job closes the gap, so a bucket that was unreachable must not fail the save.
     private readonly onDrift: (error: unknown) => void,
@@ -74,13 +78,23 @@ export class UpdateRetentionPolicyUseCase {
 
   private async apply(input: UpdateRetentionPolicyInput): Promise<void> {
     try {
-      await this.storagePolicy.applyLifecycle(
-        RetentionRules.lifecycleFor(await this.policies.all()),
+      const rows = await this.policies.all();
+      await this.storagePolicy.applyLifecycle(RetentionRules.lifecycleFor(rows));
+
+      if (input.store !== "clickhouse" || !this.projector) return;
+
+      // Both tables, through the one composer the screen and the nightly job use. The
+      // base clause alone dropped every per-action window this save did not touch.
+      const expression = RetentionRules.clickhouseTtlFrom(
+        rows,
+        await this.projectionPolicies.all(),
       );
 
-      if (input.store === "clickhouse" && this.projector) {
-        await this.projector.applyRetention(RetentionRules.clickhouseTtlFor(input.hotMonths));
-      }
+      // Compared before it is written, for the reason the daily job compares: `MODIFY
+      // TTL` materialises every existing part, which on a years-deep table is a rewrite.
+      if ((await this.projector.retention()) === expression) return;
+
+      await this.projector.applyRetention(expression);
     } catch (error: unknown) {
       this.onDrift(error);
     }

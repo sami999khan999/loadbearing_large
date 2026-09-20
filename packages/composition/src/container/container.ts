@@ -1049,6 +1049,7 @@ export class Container {
         this.retentionPolicies,
         this.storagePolicy,
         this.analyticsProjector ?? null,
+        this.projectionPolicies,
       ),
       // Local rather than a field: nothing outside this use-case reads it, and a
       // public port is a thing the worker has to be told not to use.
@@ -1083,6 +1084,7 @@ export class Container {
         this.activity,
         this.catalogUnitOfWork,
         this.analyticsProjector ?? null,
+        this.projectionPolicies,
         // Logged, never rethrown: the row is the truth and the daily job closes the
         // gap, so a bucket that was unreachable must not fail a save that committed.
         (error: unknown) => this.logger.failure(error, { at: "retention.apply" }),
