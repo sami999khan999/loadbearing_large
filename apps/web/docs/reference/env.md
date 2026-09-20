@@ -25,7 +25,7 @@ first sign-in an hour later.
 
 ## The two cross-field rules
 
-`bootstrap` with no `AUTH_BOOTSTRAP_ORGANIZATION_SLUG` is a mode that **silently enrols nobody**:
+`bootstrap` with no `BOOTSTRAP_ORGANIZATION_SLUG` is a mode that **silently enrols nobody**:
 every sign-up succeeds, every first sign-in is refused, and nothing in either log says why. Failing
 at boot with a field path is the whole reason this file parses eagerly, and it is why the schema
 carries a refinement at all.

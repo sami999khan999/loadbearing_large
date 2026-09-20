@@ -1,6 +1,6 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { NotificationDto } from "@loadbearing/contracts";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { NotificationList } from "../../src/notification/notification.list.js";
 import { capabilitiesWith, renderWithFakes } from "../support/render-with-fakes.js";
@@ -76,5 +76,18 @@ describe("NotificationList", () => {
     await render(() => Promise.resolve({ items: [ROW], nextCursor: "abc" }));
 
     await waitFor(() => expect(screen.getByText("Load older")).toBeDefined());
+  });
+  // The trap: with the filter on and nothing unread, the empty state replaced the whole
+  // tree and took the toggle with it, so there was no way back short of a reload.
+  it("keeps the unread-only toggle beside the empty state", async () => {
+    await render(() => Promise.resolve({ items: [], nextCursor: null }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Nothing yet. This is where updates will appear.")).toBeDefined(),
+    );
+
+    expect(screen.getByText("Unread only")).toBeDefined();
+    fireEvent.click(screen.getByText("Unread only"));
+    expect(screen.getByText("Unread only")).toBeDefined();
   });
 });

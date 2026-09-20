@@ -1,5 +1,5 @@
 import { ConflictError, type LeaveConversationInput } from "../import.js";
-import type { DomainEventPublisher } from "../port/index.js";
+import type { DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
 import type { ConversationAccess } from "./conversation-access.js";
@@ -11,6 +11,7 @@ export class LeaveConversationUseCase {
     private readonly access: ConversationAccess,
     private readonly conversations: ConversationRepository,
     private readonly events: DomainEventPublisher,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   // On `read`, not `manage`: leaving is something anyone in a conversation may always
@@ -29,11 +30,19 @@ export class LeaveConversationUseCase {
       throw new ConflictError("conversation", "lastOwner");
     }
 
-    await this.conversations.deleteMember(actor.organizationId, input.conversationId, actor.userId);
+    // Write and publish together, as `send` does. Leaving with no outbox row keeps the
+    // conversation in everyone else's member list until the next full refetch.
+    await this.unitOfWork.run(async () => {
+      await this.conversations.deleteMember(
+        actor.organizationId,
+        input.conversationId,
+        actor.userId,
+      );
 
-    await this.events.publish(actor, {
-      name: "conversation.member.removed",
-      payload: { conversationId: input.conversationId, userId: actor.userId },
+      await this.events.publish(actor, {
+        name: "conversation.member.removed",
+        payload: { conversationId: input.conversationId, userId: actor.userId },
+      });
     });
   }
 }

@@ -11,7 +11,7 @@ one worth understanding before changing anything.
 | | `redis-cache` | `redis-queue` |
 | --- | --- | --- |
 | **Inside the network** | `redis-cache:6379` | `redis-queue:6379` |
-| **From the host** | `localhost:6379` | `localhost:6380` |
+| **From the host** | `localhost:16379` | `localhost:16380` |
 | **Eviction** | `allkeys-lru` | `noeviction` |
 | **Persistence** | none | AOF |
 | **Volume** | none | `redisqueuedata` |

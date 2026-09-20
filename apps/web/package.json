@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js dev --port 3000",
+    "dev": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js dev",
     "build": "node node_modules/vite/bin/vite.js build",
     "preview": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js preview",
     "typecheck": "tsc --noEmit",

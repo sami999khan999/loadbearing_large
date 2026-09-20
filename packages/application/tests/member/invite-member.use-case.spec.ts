@@ -31,6 +31,8 @@ const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000
 const OTHER_ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-0000000000b0");
 const USER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
 const ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c1");
+// A goal role belongs on `goal_members`, never on a membership.
+const GOAL_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c3");
 const NOW = new Date("2026-09-03T12:00:00.000Z");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -63,8 +65,11 @@ class StubRoleRepository implements RoleRepository {
   }
 
   public findById(organizationId: string, roleId: RoleId): Promise<RoleRecord | null> {
-    const found = organizationId === this.organizationId && roleId === ROLE;
-    return Promise.resolve(found ? memberRole(organizationId) : null);
+    if (organizationId !== this.organizationId) return Promise.resolve(null);
+    if (roleId === GOAL_ROLE) {
+      return Promise.resolve({ ...memberRole(organizationId), id: GOAL_ROLE, scope: "goal" });
+    }
+    return Promise.resolve(roleId === ROLE ? memberRole(organizationId) : null);
   }
 
   public findByKey(): Promise<RoleRecord | null> {
@@ -80,6 +85,13 @@ class StubRoleRepository implements RoleRepository {
   }
 
   public countAssignments(): Promise<number> {
+    throw new Error("not under test");
+  }
+  public savePermission(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public deletePermission(): Promise<void> {
     throw new Error("not under test");
   }
 }
@@ -108,6 +120,10 @@ class StubMemberRepository implements MemberRepository {
   }
 
   public countActiveOwners(): Promise<number> {
+    throw new Error("not under test");
+  }
+
+  public lockActiveOwners(): Promise<number> {
     throw new Error("not under test");
   }
 }
@@ -336,5 +352,20 @@ describe("InviteMemberUseCase", () => {
     expect(result.email).toBe("b@example.test");
     expect(h.invitations.saved).toHaveLength(1);
     expect(h.activity.records).toHaveLength(1);
+  });
+});
+
+// `R.37`. Assigned as a membership a goal role would hand its keys out across the whole
+// tenant rather than inside one goal, and no key ships goal-scoped to catch it.
+describe("InviteMemberUseCase — the role's scope", () => {
+  it("refuses an invitation onto a goal-scoped role", async () => {
+    const h = harness();
+
+    await expect(
+      h.useCase.execute(actorHolding("member.invite"), {
+        email: "b@example.test",
+        roleId: GOAL_ROLE,
+      }),
+    ).rejects.toThrow("CONFLICT");
   });
 });

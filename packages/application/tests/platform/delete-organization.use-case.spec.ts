@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DeleteOrganizationUseCase } from "../../src/platform/delete-organization.use-case.js";
 import type { PlatformReader } from "../../src/platform/platform.reader.js";
 import type { TenantRecord, TenantRepository } from "../../src/platform/tenant.repository.js";
+import type { TenantRetentionPolicyRepository } from "../../src/platform/tenant-retention-policy.repository.js";
 import type {
   ActivityLogger,
   AnalyticsProjector,
@@ -40,8 +41,25 @@ class FakeTenants implements TenantRepository {
   }
 }
 
+// `deleteFor` had no caller anywhere, and the schema has no foreign key on that table
+// precisely because the delete path is what sweeps it.
+class FakeTenantRetention {
+  public readonly swept: string[] = [];
+
+  public deleteFor(organizationId: string): Promise<void> {
+    this.swept.push(organizationId);
+    return Promise.resolve();
+  }
+}
+
 class FakeArchive implements Partial<PartitionArchiveGateway> {
   public readonly calls: { table: string; period: string; organizationId?: string }[] = [];
+  public readonly tombstones: { organizationId: string; at: string }[] = [];
+
+  public markTenantDeleted(organizationId: string, at: Date): Promise<number> {
+    this.tombstones.push({ organizationId, at: at.toISOString() });
+    return Promise.resolve(1);
+  }
 
   public archive(table: string, period: Date, organizationId?: string): Promise<ArchivedPartition> {
     this.calls.push({ table, period: period.toISOString().slice(0, 10), organizationId });
@@ -125,6 +143,7 @@ interface Parts {
   readonly activity: FakeActivity;
   readonly capabilities: FakeInvalidator;
   readonly projector: FakeProjector | null;
+  readonly tenantRetention: FakeTenantRetention;
 }
 
 const build = (overrides: Partial<Parts> = {}) => {
@@ -135,6 +154,7 @@ const build = (overrides: Partial<Parts> = {}) => {
     activity: new FakeActivity(),
     capabilities: new FakeInvalidator(),
     projector: new FakeProjector(),
+    tenantRetention: new FakeTenantRetention(),
     ...overrides,
   };
 
@@ -157,6 +177,7 @@ const build = (overrides: Partial<Parts> = {}) => {
       unitOfWork,
       { now: () => NOW },
       parts.projector as unknown as AnalyticsProjector | null,
+      parts.tenantRetention as unknown as TenantRetentionPolicyRepository,
     ),
   };
 };
@@ -224,6 +245,16 @@ describe("DeleteOrganizationUseCase", () => {
     expect(result.partitions).toBe(3);
   });
 
+  // The sweep reads the tombstone and nothing else, so a delete that skipped this
+  // leaves the objects in the bucket with nothing to end their window.
+  it("stamps the tombstone the recovery window is measured from", async () => {
+    const { parts, useCase } = build();
+    await useCase.execute(actor("platform.tenant.manage"), input);
+
+    expect(parts.archive.tombstones).toHaveLength(1);
+    expect(parts.archive.tombstones[0]?.organizationId).toBe(TENANT);
+  });
+
   // Rebased onto the tier, which is the only reason the row survives the delete: under
   // the tenant it would be a partition that no longer exists.
   it("records the audit row under the platform organization", async () => {
@@ -249,5 +280,13 @@ describe("DeleteOrganizationUseCase", () => {
       archived: 0,
       partitions: 3,
     });
+  });
+  // No foreign key on that table, so nothing cascades. `deleteFor` had no caller at all,
+  // and an override outlived its tenant forever.
+  it("sweeps the tenant's retention overrides", async () => {
+    const { parts, useCase } = build();
+    await useCase.execute(actor("platform.tenant.manage"), input);
+
+    expect(parts.tenantRetention.swept).toEqual([TENANT]);
   });
 });

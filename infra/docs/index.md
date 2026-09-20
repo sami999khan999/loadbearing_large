@@ -66,15 +66,15 @@ configured, what breaks, what to check — is its reference page.
 
 | Service | From the host | Spoken by | Profile |
 |---|---|---|---|
-| [postgres](../../docs/infra/reference/postgres.md) | `localhost:5432` | `drizzle-orm` + `pg` | always |
-| [redis-cache](../../docs/infra/reference/redis.md) | `localhost:6379` | `CacheStore` | always |
-| [redis-queue](../../docs/infra/reference/redis.md) | `localhost:6380` | `QueuePublisher`, BullMQ | always |
-| [mailpit](../../docs/infra/reference/mailpit.md) | `localhost:1025`, UI `:8025` | `SmtpEmailSender` | always |
-| [minio](../../docs/infra/reference/minio.md) | `localhost:9000`, console `:9001` | `StorageGateway`, AWS SDK | always |
+| [postgres](../../docs/infra/reference/postgres.md) | `localhost:15432` | `drizzle-orm` + `pg` | always |
+| [redis-cache](../../docs/infra/reference/redis.md) | `localhost:16379` | `CacheStore` | always |
+| [redis-queue](../../docs/infra/reference/redis.md) | `localhost:16380` | `QueuePublisher`, BullMQ | always |
+| [mailpit](../../docs/infra/reference/mailpit.md) | `localhost:11025`, UI `:8025` | `SmtpEmailSender` | always |
+| [minio](../../docs/infra/reference/minio.md) | `localhost:19000`, console `:9001` | `StorageGateway`, AWS SDK | always |
 | [minio-init](../../docs/infra/reference/minio.md) | — | nothing; creates buckets and exits | always |
-| [loki](../../docs/infra/reference/loki.md) | `localhost:3100` | `LokiLogReader`, when `LOKI_URL` is set | `observability` |
+| [loki](../../docs/infra/reference/loki.md) | `localhost:13100` | `LokiLogReader`, when `LOKI_URL` is set | `observability` |
 | [alloy](../../docs/infra/reference/alloy.md) | `localhost:12345` | nothing — it reads, it is not called | `observability` |
-| [clickhouse](../../docs/infra/reference/clickhouse.md) | `localhost:8123`, native `:9002` | the worker's projector, when `CLICKHOUSE_URL` is set | `analytics` |
+| [clickhouse](../../docs/infra/reference/clickhouse.md) | `localhost:18123`, native `:9002` | the worker's projector, when `CLICKHOUSE_URL` is set | `analytics` |
 
 Three of those rows are worth a sentence, because each looks like a mistake:
 

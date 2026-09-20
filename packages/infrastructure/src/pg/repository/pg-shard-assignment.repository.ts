@@ -2,7 +2,6 @@ import {
   asc,
   eq,
   gt,
-  type PaginationQuery,
   type Placement,
   type ShardAssignment,
   type ShardAssignmentRepository,
@@ -65,9 +64,7 @@ export class PgShardAssignmentRepository
 
   // Keyset on `shard_key`, not offset: the move job walks every tenant, and a
   // deployment that needs sharding is one where `OFFSET 40000` is the problem.
-  public async all(page: PaginationQuery): Promise<readonly ShardAssignment[]> {
-    const after = page.offset > 0 ? String(page.offset) : null;
-
+  public async all(after: ShardKey | null, limit: number): Promise<readonly ShardAssignment[]> {
     const rows = await this.db
       .select({
         key: shardAssignments.shardKey,
@@ -77,7 +74,7 @@ export class PgShardAssignmentRepository
       .from(shardAssignments)
       .where(after ? gt(shardAssignments.shardKey, after) : undefined)
       .orderBy(asc(shardAssignments.shardKey))
-      .limit(page.limit);
+      .limit(limit);
 
     return rows.map((row) => ({ ...row, key: row.key as ShardKey }));
   }

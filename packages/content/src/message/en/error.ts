@@ -15,4 +15,8 @@ export const error = {
   "error.field.tooLong": "{field} must be at most {max} characters.",
   "error.field.invalidFormat": "{field} is not in the expected format.",
   "error.field.invalid": "{field} is not valid.",
+  "error.field.unknown": "{field} is not one we recognise.",
+  "error.field.past": "{field} must be in the past.",
+  "error.field.range": "{field} is outside the range we allow.",
+  "error.field.min": "{field} is below the smallest value we allow.",
 } as const;

@@ -61,6 +61,10 @@ export class InMemoryStorageGateway extends StorageGateway {
     return Promise.resolve();
   }
 
+  public override sizeOf(key: string): Promise<number | null> {
+    return Promise.resolve(this.objects.get(key)?.body.byteLength ?? null);
+  }
+
   public override exists(key: string): Promise<boolean> {
     return Promise.resolve(this.objects.has(key));
   }

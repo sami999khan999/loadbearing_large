@@ -10,6 +10,7 @@ import {
 import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRepository } from "../rbac/role.repository.js";
+import { RoleRules } from "../rbac/role.rules.js";
 import type { InvitationMailer } from "./invitation.mailer.js";
 import type { InvitationRecord, InvitationRepository } from "./invitation.repository.js";
 import type { MemberRepository } from "./member.repository.js";
@@ -42,6 +43,7 @@ export class InviteMemberUseCase {
     // the actor's tenant is what stops it.
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
+    RoleRules.assertMembershipScope(role);
 
     // Lowercased once, here, so the unique index on `(organization_id, email)` sees one
     // address as one row.

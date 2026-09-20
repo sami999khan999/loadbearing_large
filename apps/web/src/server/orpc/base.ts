@@ -81,6 +81,36 @@ function withScope<T>(
   } as AsyncIterableIterator<T>;
 }
 
+// The same wrapping one level up, for errors rather than for the shard scope: each
+// frame's rejection goes through the interceptor that a unary failure goes through.
+function withTransport<T>(
+  source: AsyncIterableIterator<T>,
+  log: Logger,
+  traceId: TraceId,
+): AsyncIterableIterator<T> {
+  const guard = async <R>(work: () => Promise<R>): Promise<R> => {
+    try {
+      return await work();
+    } catch (thrown) {
+      ErrorInterceptor.toTransport(thrown, log, traceId);
+    }
+  };
+
+  // Bound once rather than read through `source.?.` inside the closure: the optional
+  // access widens the result with `undefined` and the iterator contract has none.
+  const ret = source.return?.bind(source);
+  const thr = source.throw?.bind(source);
+
+  return {
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+    next: (...args) => guard(() => source.next(...args)),
+    return: ret ? (value?: never) => guard(() => ret(value)) : undefined,
+    throw: thr ? (error?: unknown) => guard(() => thr(error)) : undefined,
+  } as AsyncIterableIterator<T>;
+}
+
 // Inside the chain rather than at the adapter, because an adapter-level interceptor has
 // no `traceId` and no request-scoped logger. See docs/reference/enforcement-surfaces.md.
 export const errorMiddleware = os
@@ -102,7 +132,11 @@ export const errorMiddleware = os
         durationMs: Date.now() - startedAt,
       });
 
-      return result;
+      // A streaming handler's body has not run yet: `next()` resolved when the
+      // generator was created, so a throw inside it would never reach the catch below.
+      return isAsyncIterable(result.output)
+        ? { ...result, output: withTransport(result.output, context.log, context.traceId) }
+        : result;
     } catch (thrown) {
       // Before the interceptor, because `toTransport` never returns: it logs the
       // failure and throws the envelope.

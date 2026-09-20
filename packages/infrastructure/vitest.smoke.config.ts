@@ -1,8 +1,11 @@
-import { config } from "dotenv";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// The repository root, not this package: a pnpm filter runs with the package as cwd.
-config({ path: new URL("../../.env", import.meta.url) });
+// The repository root, not this package: a pnpm filter runs with the package as cwd. A
+// vitest config is a bin's argument rather than a `tsx` entrypoint, so it loads its own.
+const ENV_FILE = fileURLToPath(new URL("../../.env", import.meta.url));
+if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 
 const required = (name: string): string => {
   const value = process.env[name];

@@ -22,12 +22,19 @@ const listeners = new Set<Listener>();
 
 export interface RealtimeProviderProps {
   readonly client: ApiClient;
+  // The active tenant. The server builds the channel from the principal when the stream
+  // opens, so a switch with no remount leaves the tab reading the tenant it left.
+  readonly organizationId: string | null;
   readonly children: ReactNode;
 }
 
 // One stream per tab, opened here rather than per component. On HTTP/1.1 a browser holds
 // six connections to an origin, and each open stream is one of them.
-export function RealtimeProvider({ client, children }: RealtimeProviderProps): ReactNode {
+export function RealtimeProvider({
+  client,
+  organizationId,
+  children,
+}: RealtimeProviderProps): ReactNode {
   const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
   // Read inside the effect rather than listed as a dependency: a new `QueryClient`
@@ -39,6 +46,7 @@ export function RealtimeProvider({ client, children }: RealtimeProviderProps): R
     // No `window` is SSR. Opening a stream there would hold a server-side request open
     // for the life of a render that has already finished.
     if (typeof window === "undefined") return;
+    if (organizationId === null) return;
 
     const controller = new AbortController();
     let cancelled = false;
@@ -78,7 +86,7 @@ export function RealtimeProvider({ client, children }: RealtimeProviderProps): R
       setConnected(false);
       controller.abort();
     };
-  }, [client]);
+  }, [client, organizationId]);
 
   return <RealtimeContext.Provider value={{ connected }}>{children}</RealtimeContext.Provider>;
 }

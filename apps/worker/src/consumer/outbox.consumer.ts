@@ -22,8 +22,8 @@ const MAX_BATCHES_PER_RUN = 20;
 // behind means the drain is not running rather than that it is busy.
 const LAG_THRESHOLD_MS = 60_000;
 
-// The duplicate-suppression window, not tuning: a crash between relay and mark
-// re-publishes the same job ids, and BullMQ drops them only while it still holds them.
+// The window we *ask* for. The real one is seconds: the drain's repeat job trims this
+// queue's shared completed set to ten every second. See docs/reference/consumers.md.
 const DELIVERY_RETENTION_SECONDS = 86_400;
 
 export class OutboxConsumer {
@@ -118,6 +118,9 @@ export class OutboxConsumer {
           { subscriber, event },
           {
             name: "deliver",
+            // Numbered, not absent. A job with no priority goes on the plain wait list,
+            // which `moveToActive` drains *before* it looks at the prioritized set.
+            priority: 10,
             // No `:` — BullMQ keys on this and rejects the job at publish time.
             jobId: `${subscriber}_${event.id}`,
             attempts: 5,

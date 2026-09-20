@@ -1,3 +1,4 @@
+import type { OrganizationId, UserId } from "@loadbearing/contracts";
 import { describe, expect, it } from "vitest";
 import { AddConversationMemberUseCase } from "../../src/messaging/add-conversation-member.use-case.js";
 import type {
@@ -10,6 +11,7 @@ import { LeaveConversationUseCase } from "../../src/messaging/leave-conversation
 import { MessagingRules } from "../../src/messaging/messaging.rules.js";
 import { RemoveConversationMemberUseCase } from "../../src/messaging/remove-conversation-member.use-case.js";
 import type { DomainEventPublisher, UnitOfWork } from "../../src/port/index.js";
+import { TenantMembershipReader } from "../../src/port/index.js";
 import {
   ADA,
   authorizer,
@@ -43,6 +45,21 @@ class Conversations {
   };
 }
 
+// Every added user is checked against the tenant now: the column's only constraint is
+// `users.id`, which every tenant's people share.
+class Memberships extends TenantMembershipReader {
+  public constructor(private readonly absent: readonly string[] = []) {
+    super();
+  }
+
+  public override isActiveMember(
+    _organizationId: OrganizationId,
+    userId: UserId,
+  ): Promise<boolean> {
+    return Promise.resolve(!this.absent.includes(userId));
+  }
+}
+
 const creator = (existing: ConversationRecord | null) => {
   const conversations = new Conversations(existing);
   const events = new RecordingEvents();
@@ -55,6 +72,7 @@ const creator = (existing: ConversationRecord | null) => {
       conversations as unknown as ConversationRepository,
       events as unknown as DomainEventPublisher,
       unitOfWork as unknown as UnitOfWork,
+      new Memberships(),
     ),
   };
 };
@@ -115,6 +133,8 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new Memberships(),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await expect(
@@ -131,6 +151,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await expect(
@@ -146,6 +167,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await useCase.execute(manager(), { conversationId: CONVERSATION, userId: GRACE });
@@ -162,6 +184,7 @@ describe("membership changes", () => {
       new ConversationAccess(conversations as unknown as ConversationRepository),
       conversations as unknown as ConversationRepository,
       new RecordingEvents() as unknown as DomainEventPublisher,
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     );
 
     await useCase.execute(principal(GRACE, ["messaging.conversation.read"]), {
@@ -180,6 +203,7 @@ describe("membership changes", () => {
         new ConversationAccess(repo as unknown as ConversationRepository),
         repo as unknown as ConversationRepository,
         new RecordingEvents() as unknown as DomainEventPublisher,
+        new CountingUnitOfWork() as unknown as UnitOfWork,
       );
 
     await expect(
@@ -193,5 +217,23 @@ describe("membership changes", () => {
   it("names the owner role from the rules rather than a literal", () => {
     expect(MessagingRules.isOwner(owner.role)).toBe(true);
     expect(MessagingRules.isOwner(plain.role)).toBe(false);
+  });
+
+  // The column's only constraint is `users.id`, which every tenant's people share, so a
+  // manager in one tenant could add a user id from another and fan frames to them.
+  it("refuses a user who is not a member of the tenant", async () => {
+    const conversations = new Conversations(null, channel([owner]));
+    const useCase = new AddConversationMemberUseCase(
+      authorizer,
+      new ConversationAccess(conversations as unknown as ConversationRepository),
+      conversations as unknown as ConversationRepository,
+      new RecordingEvents() as unknown as DomainEventPublisher,
+      new Memberships([GRACE]),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
+    );
+
+    await expect(
+      useCase.execute(manager(), { conversationId: CONVERSATION, userId: GRACE }),
+    ).rejects.toThrow("NOT_FOUND");
   });
 });

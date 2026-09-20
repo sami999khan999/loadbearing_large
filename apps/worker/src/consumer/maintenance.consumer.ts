@@ -1,5 +1,7 @@
+import { withShard } from "../bootstrap/index.js";
 import {
   type ArchivedPartition,
+  type ColdMode,
   type Container,
   type Job,
   type OrganizationId,
@@ -141,20 +143,26 @@ export class MaintenanceConsumer {
     const inWindow = cutoff === null || period.getTime() >= cutoff.getTime();
 
     for (const entry of entries) {
-      const restored = await this.container.partitionArchive.restore(
-        table,
-        period,
-        entry.organizationId,
-      );
-
-      if (inWindow) {
-        await this.container.maintenance.attachMonthlyPartition(
+      // Placed per entry, not per job: the index is catalog and the scratch table and
+      // its ATTACH are the tenant's, so unplaced they were written to node 0.
+      const restored = await withShard(this.container, entry.organizationId, async () => {
+        const outcome = await this.container.partitionArchive.restore(
           table,
-          PartitionedTable.byName(table).tenantKey ? entry.organizationId : null,
           period,
-          restored.scratchTable,
+          entry.organizationId,
         );
-      }
+
+        if (inWindow) {
+          await this.container.maintenance.attachMonthlyPartition(
+            table,
+            PartitionedTable.byName(table).tenantKey ? entry.organizationId : null,
+            period,
+            outcome.scratchTable,
+          );
+        }
+
+        return outcome;
+      });
 
       this.container.logger.emit("cold.partition.restored", {
         table,
@@ -169,9 +177,13 @@ export class MaintenanceConsumer {
   // One object per tenant-owned table, plus the catalog, plus a manifest — live rows,
   // so an export never takes the tenant's data offline.
   private async export(data: ExportJob): Promise<void> {
-    const exported = await this.container.partitionArchive.exportTenant(
-      data.organizationId,
-      new Date(`${data.day}T00:00:00.000Z`),
+    // Live rows, so this reads the tenant's own tables. Unplaced it read node 0 and
+    // wrote a manifest saying a tenant elsewhere had nothing.
+    const exported = await withShard(this.container, data.organizationId, () =>
+      this.container.partitionArchive.exportTenant(
+        data.organizationId,
+        new Date(`${data.day}T00:00:00.000Z`),
+      ),
     );
 
     // One line per export, not one per object: nine lines a run would be nine lines
@@ -398,9 +410,19 @@ export class MaintenanceConsumer {
     // archived out from under the drain. One table's guard, never every table's.
     if (table === PartitionedTable.OUTBOX_EVENT && (await this.outboxIsBehind(cutoff))) return;
 
+    // Overrides make a table's cutoff differ per tenant, so the pass walks them. Read
+    // **before** the mode branch: `drop` destroys a month, and an override cannot undo it.
+    const overrides = await this.container.tenantRetentionPolicies.forTable(table);
+    const mode = policy?.coldMode ?? "archive";
+
+    if (overrides.size > 0) {
+      await this.pruneByTenant(table, months, overrides, node, mode);
+      return;
+    }
+
     // `drop` destroys the month rather than archiving it, which is a table of transport
     // rows deciding it is not worth the bytes. The outbox guard above still applies.
-    if (policy?.coldMode === "drop") {
+    if (mode === "drop") {
       for (const partition of await this.container.maintenance.dropMonthlyPartitionsBefore(
         table,
         null,
@@ -408,14 +430,6 @@ export class MaintenanceConsumer {
       )) {
         this.container.logger.emit("maintenance.partition.dropped", { table, partition });
       }
-      return;
-    }
-
-    // Overrides make a table's cutoff differ per tenant, so the pass walks them. Usually
-    // there are none, and the common case stays one call per table-month.
-    const overrides = await this.container.tenantRetentionPolicies.forTable(table);
-    if (overrides.size > 0) {
-      await this.pruneByTenant(table, months, overrides, node);
       return;
     }
 
@@ -431,6 +445,7 @@ export class MaintenanceConsumer {
     defaultMonths: number,
     overrides: ReadonlyMap<OrganizationId, TenantRetentionPolicyRecord>,
     node: number,
+    mode: ColdMode,
   ): Promise<void> {
     const now = this.container.clock.now();
     let after: OrganizationId | null = null;
@@ -446,6 +461,17 @@ export class MaintenanceConsumer {
       for (const organizationId of page) {
         const months = overrides.get(organizationId)?.hotMonths ?? defaultMonths;
         const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));
+
+        if (mode === "drop") {
+          for (const partition of await this.container.maintenance.dropMonthlyPartitionsBefore(
+            table,
+            organizationId,
+            cutoff,
+          )) {
+            this.container.logger.emit("maintenance.partition.dropped", { table, partition });
+          }
+          continue;
+        }
 
         for (const period of await this.periodsBefore(table, cutoff, organizationId)) {
           await this.archivePeriod(table, period, organizationId);

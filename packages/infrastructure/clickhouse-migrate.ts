@@ -5,7 +5,6 @@
 // A no-op with a printed sentence when `CLICKHOUSE_URL` is unset, because the store is
 // opt-in twice over and a migrator that failed without it would break every other run.
 
-import "dotenv/config";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";

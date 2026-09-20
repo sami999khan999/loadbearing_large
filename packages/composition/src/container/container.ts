@@ -160,6 +160,7 @@ import {
   type StoragePolicyGateway,
   SubscriberRegistry,
   SystemClock,
+  type TenantMembershipReader,
   type TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,
   TransactionScope,
@@ -284,6 +285,9 @@ export class Container {
   // Notifications, messaging and documents: everything a tenant produces. Opens on
   // whichever node the ambient `ShardScope` names.
   public readonly routedUnitOfWork: UnitOfWork;
+  // The partition runway and the outbox drain, which `eachShard` walks node by node.
+  // Catalog-placed here meant the loop ran, and every iteration wrote to node 0.
+  public readonly localUnitOfWork: UnitOfWork;
   public readonly content: ContentSource;
   // Built unconditionally: a missing analytics store means a feature is not deployed, a
   // missing mail transport means every sign-up is a dead end.
@@ -331,6 +335,9 @@ export class Container {
   // The worker reads none, and building them there costs nothing: none opens a
   // connection until called.
   public readonly memberships: MembershipReader;
+  // The same instance under `application`'s port. Two names because the two ports ask
+  // the same question in the opposite argument order — see `tenant-membership.reader.ts`.
+  public readonly tenantMemberships: TenantMembershipReader;
   public readonly invitationClaimer: InvitationClaimer;
   public readonly organizationFounder: OrganizationFounder;
 
@@ -561,11 +568,16 @@ export class Container {
         statementTimeoutMs: config.database.statementTimeoutMs,
       },
     );
+    // Three, not two: `local` tables exist on every node, and the two passes that walk
+    // the cluster have to open their transaction on the node they are walking.
+    this.localUnitOfWork = new PgUnitOfWork(this.cluster, this.transactions, this.shards, "local", {
+      statementTimeoutMs: config.database.statementTimeoutMs,
+    });
     this.maintenance = new PgMaintenanceGateway(
       this.cluster,
       this.transactions,
       this.shards,
-      this.catalogUnitOfWork,
+      this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
 
@@ -597,7 +609,7 @@ export class Container {
     this.emailSender = new SmtpEmailSender(config.email, this.logger);
     this.email = this.emailSender;
     this.mailPublisher = new QueuedMailPublisher(this.queue, this.logger);
-    this.mailRenderer = new ContentMailRenderer(this.content);
+    this.mailRenderer = new ContentMailRenderer(this.content, config.email.baseUrl);
     this.mail = { send: new SendMailUseCase(this.mailRenderer, this.email) };
 
     const capabilityRepository = new PgCapabilityRepository(
@@ -621,7 +633,7 @@ export class Container {
       this.cluster,
       this.transactions,
       this.shards,
-      this.catalogUnitOfWork,
+      this.localUnitOfWork,
     );
     this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
@@ -694,9 +706,16 @@ export class Container {
         notificationPreferences,
         notificationRecipients,
         this.mailPublisher,
+        this.organizations,
       ),
-      digestOrganizations: new ListDigestOrganizationsUseCase(notificationPreferences),
+      digestOrganizations: new ListDigestOrganizationsUseCase(notifications),
     };
+
+    // One instance under two ports, and they must never be passed for each other:
+    // `auth`'s takes the user first, `application`'s the tenant.
+    const memberships = new PgMembershipReader(this.cluster, this.transactions, this.shards);
+    this.memberships = memberships;
+    this.tenantMemberships = memberships;
 
     const messages = new PgMessageRepository(this.cluster, this.transactions, this.shards);
     // One instance, shared: the membership check is the same question every messaging
@@ -711,30 +730,36 @@ export class Container {
         conversations,
         this.eventPublisher,
         this.routedUnitOfWork,
+        this.tenantMemberships,
       ),
       addMember: new AddConversationMemberUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.tenantMemberships,
+        this.routedUnitOfWork,
       ),
       removeMember: new RemoveConversationMemberUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       leave: new LeaveConversationUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       rename: new RenameConversationUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.routedUnitOfWork,
       ),
       markRead: new MarkConversationReadUseCase(
         this.authorizer,
@@ -760,6 +785,7 @@ export class Container {
         messages,
         this.eventPublisher,
         this.clock,
+        this.routedUnitOfWork,
       ),
       remove: new DeleteMessageUseCase(
         this.authorizer,
@@ -767,6 +793,7 @@ export class Container {
         messages,
         this.eventPublisher,
         this.clock,
+        this.routedUnitOfWork,
       ),
       typing: new SignalTypingUseCase(
         this.authorizer,
@@ -786,7 +813,6 @@ export class Container {
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
-    this.memberships = new PgMembershipReader(this.cluster, this.transactions, this.shards);
     this.organizationFounder = new PgOrganizationFounder(
       this.cluster,
       this.transactions,
@@ -952,6 +978,7 @@ export class Container {
         this.catalogUnitOfWork,
         this.clock,
         this.analyticsProjector ?? null,
+        this.tenantRetentionPolicies,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,
@@ -1022,6 +1049,7 @@ export class Container {
         this.retentionPolicies,
         this.storagePolicy,
         this.analyticsProjector ?? null,
+        this.projectionPolicies,
       ),
       // Local rather than a field: nothing outside this use-case reads it, and a
       // public port is a thing the worker has to be told not to use.
@@ -1056,6 +1084,7 @@ export class Container {
         this.activity,
         this.catalogUnitOfWork,
         this.analyticsProjector ?? null,
+        this.projectionPolicies,
         // Logged, never rethrown: the row is the truth and the daily job closes the
         // gap, so a bucket that was unreachable must not fail a save that committed.
         (error: unknown) => this.logger.failure(error, { at: "retention.apply" }),

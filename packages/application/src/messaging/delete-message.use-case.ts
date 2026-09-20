@@ -1,6 +1,6 @@
 import type { Clock } from "../import.js";
 import { type DeleteMessageInput, ForbiddenError, NotFoundError } from "../import.js";
-import type { DomainEventPublisher } from "../port/index.js";
+import type { DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessageRecord, MessageRepository } from "./message.repository.js";
@@ -13,6 +13,7 @@ export class DeleteMessageUseCase {
     private readonly messages: MessageRepository,
     private readonly events: DomainEventPublisher,
     private readonly clock: Clock,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(actor: Principal, input: DeleteMessageInput): Promise<void> {
@@ -32,20 +33,24 @@ export class DeleteMessageUseCase {
 
     this.assertMayChange(actor, existing);
 
-    await this.messages.softDelete(
-      actor.organizationId,
-      input.messageId,
-      input.createdAt,
-      this.clock.now(),
-    );
+    // Write and publish together, as `send` does. The soft delete could otherwise
+    // commit with no outbox row, and every other tab would keep rendering the message.
+    await this.unitOfWork.run(async () => {
+      await this.messages.softDelete(
+        actor.organizationId,
+        input.messageId,
+        input.createdAt,
+        this.clock.now(),
+      );
 
-    await this.events.publish(actor, {
-      name: "message.deleted",
-      payload: {
-        conversationId: input.conversationId,
-        messageId: input.messageId,
-        createdAt: input.createdAt,
-      },
+      await this.events.publish(actor, {
+        name: "message.deleted",
+        payload: {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          createdAt: input.createdAt,
+        },
+      });
     });
   }
 

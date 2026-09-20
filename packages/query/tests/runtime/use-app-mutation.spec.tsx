@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type AppMutationOptions, useAppMutation } from "../../src/runtime/use-app-mutation.js";
 
 const LIST = ["sessions", "list"] as const;
@@ -163,13 +163,23 @@ describe("useAppMutation — the optimistic edit", () => {
   // the server's pre-mutation answer and puts the row straight back.
   it("cancels queries on the key before it writes", async () => {
     const { client, wrapper } = harness();
-    const seen: string[] = [];
+    const order: string[] = [];
 
     client.setQueryData(LIST, [{ id: "a" }]);
+
+    // The call itself, not a cache event that every optimistic write produces: the old
+    // assertion was `seen` containing "success", which holds with no cancel at all.
+    const cancel = vi
+      .spyOn(client, "cancelQueries")
+      .mockImplementation(async (filters?: { queryKey?: readonly unknown[] }) => {
+        order.push(`cancel:${JSON.stringify(filters?.queryKey)}`);
+        return Promise.resolve();
+      });
+
     client.getQueryCache().subscribe((event) => {
       if (event.type !== "updated") return;
-      if (event.action.type === "invalidate") return;
-      seen.push(event.action.type);
+      if (event.action.type !== "success") return;
+      order.push("write");
     });
 
     const { result } = mount<void, string, Row[]>(wrapper, {
@@ -181,9 +191,13 @@ describe("useAppMutation — the optimistic edit", () => {
       await result.current.mutateAsync("a");
     });
 
-    // `success` is the cache write. Nothing may follow a cancel that undoes it, and
-    // nothing may precede the write that was not a cancel.
-    expect(seen).toContain("success");
+    expect(cancel).toHaveBeenCalledWith({ queryKey: LIST });
+    // A refetch already in flight resolves with the server's pre-mutation answer, so a
+    // cancel after the write puts the row straight back.
+    expect(order[0]).toBe(`cancel:${JSON.stringify(LIST)}`);
+    expect(order).toContain("write");
+
+    cancel.mockRestore();
   });
 });
 

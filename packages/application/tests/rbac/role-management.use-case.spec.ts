@@ -42,9 +42,11 @@ function role(overrides: Partial<RoleRecord> = {}): RoleRecord {
 class RecordingRoles implements RoleRepository {
   public readonly saved: RoleRecord[] = [];
   public readonly deleted: RoleId[] = [];
+  public readonly granted: { roleId: RoleId; permission: string }[] = [];
+  public readonly revoked: { roleId: RoleId; permission: string }[] = [];
 
   public constructor(
-    private readonly rows: readonly RoleRecord[] = [],
+    private rows: readonly RoleRecord[] = [],
     private readonly assignments = 0,
   ) {}
 
@@ -64,6 +66,28 @@ class RecordingRoles implements RoleRepository {
 
   public save(_org: OrganizationId, row: RoleRecord): Promise<void> {
     this.saved.push(row);
+    return Promise.resolve();
+  }
+
+  public savePermission(_org: OrganizationId, roleId: RoleId, permission: string): Promise<void> {
+    this.granted.push({ roleId, permission });
+    // Mutated, so the re-read inside the transaction returns the set the write left —
+    // a fake that only recorded would let the use-case return a stale list and pass.
+    this.rows = this.rows.map((row) =>
+      row.id === roleId && !row.permissions.includes(permission)
+        ? { ...row, permissions: [...row.permissions, permission].sort() }
+        : row,
+    );
+    return Promise.resolve();
+  }
+
+  public deletePermission(_org: OrganizationId, roleId: RoleId, permission: string): Promise<void> {
+    this.revoked.push({ roleId, permission });
+    this.rows = this.rows.map((row) =>
+      row.id === roleId
+        ? { ...row, permissions: row.permissions.filter((held) => held !== permission) }
+        : row,
+    );
     return Promise.resolve();
   }
 
@@ -435,5 +459,58 @@ describe("RevokePermissionUseCase", () => {
 
     expect(roles.saved).toEqual([]);
     expect(capabilities.flushed).toEqual([]);
+  });
+});
+
+// `R.34`. Both use-cases read the whole permission list, edited it in memory and wrote
+// it back, so two concurrent grants each wrote the set the other had not seen.
+describe("granting and revoking write one row, not the whole set", () => {
+  const actor = () =>
+    actorHolding("rbac.permission.grant", "rbac.permission.revoke", "member.read", "member.invite");
+
+  it("grants by inserting the one permission", async () => {
+    reset([role()]);
+
+    const updated = await grant().execute(actor(), {
+      roleId: EDITABLE,
+      permission: "member.invite",
+    });
+
+    // The row, not a reconciliation. `saved` holding a list is the read-modify-write.
+    expect(roles.granted).toEqual([{ roleId: EDITABLE, permission: "member.invite" }]);
+    expect(roles.saved).toEqual([]);
+    expect(updated.permissions).toContain("member.invite");
+  });
+
+  it("revokes by deleting the one permission", async () => {
+    reset([role({ permissions: ["member.read"] })]);
+
+    const updated = await revoke().execute(actor(), {
+      roleId: EDITABLE,
+      permission: "member.read",
+    });
+
+    expect(roles.revoked).toEqual([{ roleId: EDITABLE, permission: "member.read" }]);
+    expect(roles.saved).toEqual([]);
+    expect(updated.permissions).not.toContain("member.read");
+  });
+
+  // The lost update itself: a grant that landed after this caller read the role is in
+  // the answer, because the answer is re-read inside the transaction.
+  it("returns a permission another writer added between the read and the write", async () => {
+    reset([role({ permissions: ["member.read"] })]);
+    const useCase = grant();
+    await roles.savePermission(ORG, EDITABLE, "member.remove");
+
+    const updated = await useCase.execute(actor(), {
+      roleId: EDITABLE,
+      permission: "member.invite",
+    });
+
+    expect([...updated.permissions].sort()).toEqual([
+      "member.invite",
+      "member.read",
+      "member.remove",
+    ]);
   });
 });

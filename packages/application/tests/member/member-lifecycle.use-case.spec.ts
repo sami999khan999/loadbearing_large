@@ -25,6 +25,10 @@ const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
 const TARGET = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000012");
 const OWNER_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c1");
 const MEMBER_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c2");
+// The two scopes a membership must tell apart: `goal` belongs on `goal_members`, and
+// `platform` is `platform_admin`, which *is* a membership in the tier.
+const GOAL_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c3");
+const PLATFORM_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c4");
 
 const CLOCK = { now: () => new Date("2026-09-06T00:00:00.000Z") };
 
@@ -54,6 +58,7 @@ function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
 class RecordingMembers implements MemberRepository {
   public readonly roleChanges: { userId: UserId; roleId: RoleId }[] = [];
   public readonly deactivations: { userId: UserId; at: Date | null }[] = [];
+  public locked = 0;
 
   public constructor(
     private readonly row: MemberRecord | null,
@@ -86,6 +91,13 @@ class RecordingMembers implements MemberRepository {
   }
 
   public countActiveOwners(): Promise<number> {
+    return Promise.resolve(this.activeOwners);
+  }
+
+  // The same answer, and it records that the locking read is the one taken: the
+  // unlocked count outside the transaction is exactly what the race exploited.
+  public lockActiveOwners(): Promise<number> {
+    this.locked += 1;
     return Promise.resolve(this.activeOwners);
   }
 }
@@ -135,7 +147,25 @@ class StubRoles implements RoleRepository {
         permissions: [],
       });
     }
+    if (roleId === GOAL_ROLE || roleId === PLATFORM_ROLE) {
+      return Promise.resolve({
+        id: roleId,
+        key: roleId === GOAL_ROLE ? "goal_reviewer" : "platform_admin",
+        name: "Scoped",
+        description: null,
+        scope: roleId === GOAL_ROLE ? "goal" : "platform",
+        isSystem: false,
+        permissions: [],
+      });
+    }
     return Promise.resolve(null);
+  }
+  public savePermission(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public deletePermission(): Promise<void> {
+    throw new Error("not under test");
   }
 }
 
@@ -381,5 +411,80 @@ describe("SetMemberActiveUseCase", () => {
 
     expect(members.deactivations).toEqual([]);
     expect(activity.records).toEqual([]);
+  });
+});
+
+// `R.19`: both use-cases read the owner count before the transaction, so two concurrent
+// demotions each saw two owners and the tenant committed its way down to none.
+describe("the last-owner rule takes the locking read", () => {
+  it("locks the owner rows rather than counting them unlocked", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: MEMBER_ROLE,
+    });
+
+    expect(members.locked).toBe(1);
+  });
+
+  it("locks before deactivating an owner too", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = setActive(members);
+
+    await useCase.execute(actorHolding("member.deactivate"), { userId: TARGET }, false);
+
+    expect(members.locked).toBe(1);
+  });
+
+  // Promotion and reactivation touch no owner floor, so a lock there would serialise
+  // every membership edit in the tenant behind one row.
+  it("takes no lock when the change cannot drop the owner count", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = setActive(members);
+
+    await useCase.execute(actorHolding("member.deactivate"), { userId: TARGET }, false);
+    const after = new RecordingMembers({ ...member(), deactivated: true }, 2);
+
+    await setActive(after).useCase.execute(
+      actorHolding("member.deactivate"),
+      { userId: TARGET },
+      true,
+    );
+
+    expect(after.locked).toBe(0);
+  });
+});
+
+// `R.37`. A goal role belongs on `goal_members`. Assigned as a membership it would hand
+// its keys out across the whole tenant instead of inside one goal.
+describe("a membership role cannot be goal-scoped", () => {
+  it("refuses to change a member onto a goal role", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await expect(
+      useCase.execute(actorHolding("member.role.change"), {
+        userId: TARGET,
+        roleId: GOAL_ROLE,
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(members.roleChanges).toEqual([]);
+  });
+
+  // `platform_admin` is `scope: "platform"` and *is* a membership row, in the one
+  // organization marked `is_platform`. The rule is "not goal", never "org only".
+  it("leaves a platform-scoped role assignable", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: PLATFORM_ROLE,
+    });
+
+    expect(members.roleChanges).toHaveLength(1);
   });
 });

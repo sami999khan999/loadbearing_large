@@ -6,10 +6,11 @@ import { DeleteMessageUseCase } from "../../src/messaging/delete-message.use-cas
 import { EditMessageUseCase } from "../../src/messaging/edit-message.use-case.js";
 import type { MessageRecord, MessageRepository } from "../../src/messaging/message.repository.js";
 import { MessagingRules } from "../../src/messaging/messaging.rules.js";
-import type { DomainEventPublisher } from "../../src/port/index.js";
+import type { DomainEventPublisher, UnitOfWork } from "../../src/port/index.js";
 import {
   authorizer,
   CONVERSATION,
+  CountingUnitOfWork,
   conversation,
   GRACE,
   MESSAGE,
@@ -51,6 +52,7 @@ const editor = (row: MessageRecord | null, at = NOW) => {
       messages as unknown as MessageRepository,
       events as unknown as DomainEventPublisher,
       clockAt(at),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     ),
   };
 };
@@ -127,6 +129,7 @@ const remover = (row: MessageRecord | null) => {
       messages as unknown as MessageRepository,
       events as unknown as DomainEventPublisher,
       clockAt(NOW),
+      new CountingUnitOfWork() as unknown as UnitOfWork,
     ),
   };
 };

@@ -92,8 +92,8 @@ class StubAuthMailer extends AuthMailer {
 
 const BASE: AuthConfig = {
   secret: "inspect-only-inspect-only-inspect-only",
-  baseUrl: "http://localhost:3000",
-  trustedOrigins: ["http://localhost:3000"],
+  baseUrl: "http://localhost:13000",
+  trustedOrigins: ["http://localhost:13000"],
   sessionMaxAgeSeconds: 604_800,
   cookieCacheMaxAgeSeconds: 60,
   requireEmailVerification: true,

@@ -23,7 +23,19 @@ export default defineConfig(({ command }) => {
   // consuming `dist/`, which still works with a rebuild between edit and reload.
   const devCondition = command === "serve" ? ["development"] : [];
 
+  // The one port `.env` names, and the three URLs that must agree with it are
+  // `APP_BASE_URL`, `AUTH_URL` and the first `AUTH_TRUSTED_ORIGINS` entry — `check:
+  // architecture` §27 holds them together. Read here because a config file is the only
+  // thing outside `env.ts` that may touch `process.env`.
+  //
+  // The fallback matters: `vite build` deliberately runs without `.env` loaded, since
+  // that file sets `NODE_ENV=development` and the dev JSX transform would then ship into
+  // the production bundle. `server` and `preview` are dev-only anyway.
+  const port = Number(process.env.WEB_PORT ?? 13000);
+
   return {
+    server: { port },
+    preview: { port },
     resolve: { tsconfigPaths: true, conditions: [...devCondition, ...defaultClientConditions] },
     ssr: {
       resolve: {

@@ -12,4 +12,8 @@ export abstract class OrganizationReader {
     // tenant, which is what a loop that resolves each tenant's node itself wants.
     onNode?: number,
   ): Promise<readonly OrganizationId[]>;
+
+  // For the copy a person reads. The digest's footer said "you belong to
+  // 018f8c00-0000-…" because the id was the only thing the use-case held.
+  public abstract nameOf(organizationId: OrganizationId): Promise<string | null>;
 }

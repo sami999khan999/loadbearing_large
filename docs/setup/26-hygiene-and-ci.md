@@ -369,7 +369,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-six architectural assertions
+## Step 26.4 — The twenty-seven architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Twenty-six greps can.
 
@@ -948,6 +948,43 @@ matching reason: it is types rather than code.
 
 ---
 
+### 27 — Every host port is stated once
+
+A published port is named twice by construction. `POSTGRES_PORT` is what Compose publishes and
+`DATABASE_DIRECT_URL` is what dials it, and until this assertion nothing held the two together.
+
+**It is written from a real afternoon.** Five of this stack's well-known ports were held by two
+unrelated projects on one machine, so nothing would start. Worse, the two halves of the fix lived in
+different files that did not know about each other: Compose read `infra/.env`, because with
+`-f infra/docker-compose.yml` the project directory is `infra/` rather than the repository root,
+while the applications read the root `.env`. A third file, `packages/infrastructure/.env`, layered
+under five scripts through `dotenv`'s cwd lookup and pointed `DATABASE_URL` at a different port
+again. Each was invisible from the others, and the symptom was a connection refused — or, once,
+another project's database answering.
+
+The assertion checks three things, all against `.env.example`, which is the committed template:
+
+1. **Each `*_PORT` and the URL beside it agree.** `POSTGRES_PORT` with `DATABASE_DIRECT_URL`,
+   `PGBOUNCER_PORT` with `DATABASE_URL`, and so on down the list. `WEB_PORT` is checked against
+   all three of `APP_BASE_URL`, `AUTH_URL` and `AUTH_TRUSTED_ORIGINS`, because a sign-in that
+   fails because they disagree reports an origin error naming none of them.
+2. **Each Compose default equals the template's value.** A checkout with no `.env` falls back to
+   the default, and CI is exactly that checkout — so a default that has drifted is a second answer
+   to the same question, and it is the answer CI gets.
+3. **No `.env` exists outside the repository root.** This is what stops the other two files
+   coming back.
+
+> [!NOTE]
+> **It parses the example with `split(/?
+/)`, and that is not cosmetic.** `.env.example` is CRLF
+> on a Windows checkout, JavaScript's `.` matches no carriage return, and a `$`-anchored value
+> therefore captures nothing at all. The first draft of this assertion passed on every tree because
+> of it — including the trees it was supposed to fail. A fixture pins the CRLF case for that reason.
+
+`.env.example` is also where these keys are documented, which §25 would otherwise reject: nothing in
+either `env.ts` reads `POSTGRES_PORT`, because Compose and `apps/web/vite.config.ts` do. §25 skips
+anything matching `/_PORT$/` for that reason, beside the shard-family skip it already had.
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -1009,10 +1046,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-six
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-seven
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
 with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-five of the
-twenty-six are covered both ways — the tree that violates it fails, and the tree that does not
+twenty-seven are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 
@@ -1035,7 +1072,7 @@ imposed here: the worker emits `"event":"process.started"` through its own logge
 
 **`web` was opted out, for a bug that has since been fixed.** The comment said the server bundle
 throws `jsxDEV is not a function`. That was `T-032`, fixed 2026-09-13 — and the comment also cited a
-TODO file under a *tasks/* directory that has never existed (it is [`plans/TODO.md`](../../plans/TODO.md)),
+TODO file under a *tasks/* directory that has never existed (it is [`plans/archive/TODO.md`](../../plans/archive/TODO.md)),
 and `T-034`, which is the dropped analytics-reader item. Three errors in four lines, which is what
 a comment nobody can run decays into.
 

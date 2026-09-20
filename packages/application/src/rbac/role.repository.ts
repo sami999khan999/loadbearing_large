@@ -46,6 +46,20 @@ export abstract class RoleRepository {
   // narrower methods would let a caller rename a role and leave its grants behind.
   public abstract save(organizationId: OrganizationId, role: RoleRecord): Promise<void>;
 
+  // One grant, not the whole set. `save` reconciles against a list read before the
+  // transaction, so two concurrent grants each wrote the set the other had not seen.
+  public abstract savePermission(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+    permission: string,
+  ): Promise<void>;
+
+  public abstract deletePermission(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+    permission: string,
+  ): Promise<void>;
+
   public abstract delete(organizationId: OrganizationId, roleId: RoleId): Promise<void>;
 
   // Memberships and goal memberships both reference `roles` with `on delete no action`,

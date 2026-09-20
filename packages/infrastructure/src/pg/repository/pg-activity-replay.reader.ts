@@ -11,6 +11,7 @@ import {
   gte,
   inArray,
   lt,
+  lte,
   not,
   type OrganizationId,
   or,
@@ -35,6 +36,9 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     checkpoint: ProjectionCheckpoint,
     limit: number,
     excluding: readonly ActivityAction[] = [],
+    // No default. A `new Date()` fallback reads as harmless and silently excludes every
+    // row for a caller that has not been told the horizon exists.
+    until: Date = new Date(8.64e15),
   ): Promise<readonly ActivityRecord[]> {
     const after =
       checkpoint.lastOccurredAt && checkpoint.lastId
@@ -61,6 +65,9 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
         and(
           eq(activityLog.organizationId, organizationId),
           after,
+          // The settle horizon. Without it a transaction that stamped an early
+          // `occurred_at` and committed late lands below a checkpoint already past it.
+          lte(activityLog.occurredAt, until),
           PgActivityReplayReader.without(excluding),
         ),
       )

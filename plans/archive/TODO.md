@@ -78,7 +78,7 @@ probe.
 > `pnpm/action-setup@v4` with "No pnpm version is specified" — the root `package.json` declares
 > `devEngines.packageManager` rather than the `packageManager` field the action reads. It fails
 > identically on every run of the default branch, so nothing here has ever been verified by CI.
-> `P8.12` in [`IMPLEMENTATION-PLAN.md`](archive/IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
+> `P8.12` in [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) carries the one-line fix. Until it
 > lands, "covered in CI" is not an answer any task may give.
 
 ---
@@ -107,7 +107,7 @@ probe.
     A port, an adapter and a `Container` line land together or not at all — that is what `P5.11`
     established.
   - **Build the interface broker-shaped**, because these four are what Kafka or Redis Streams
-    cannot give back later ([Data and scale](../docs/opinions/data-and-scale.md) §7):
+    cannot give back later ([Data and scale](../../docs/opinions/data-and-scale.md) §7):
     - `publish` is async and returns nothing — a caller reading a return value is doing RPC.
     - Handlers are idempotent, keyed on a stable event id: at-least-once is what every broker offers.
     - No ordering assumptions. Two events published in order may be handled out of order.
@@ -118,7 +118,7 @@ probe.
     `docs/ai/rules/files.md`, removed with the port because every other row in that table names a
     file that exists. The analytics projection is the second consumer class and already works
     without this: it reads `activity_log`, which is a different stream with a different guarantee.
-  - **Closed 2026-09-12 by Phase 2 of [`COMMUNICATION-PLAN.md`](archive/COMMUNICATION-PLAN.md)**
+  - **Closed 2026-09-12 by Phase 2 of [`COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md)**
     (`C2.1`–`C2.9`). The four broker-shaped properties hold, and one publisher plus one subscriber
     landed with the port, the adapter and the `Container` line in one change, as `P5.11` requires.
     **Both corrections above are now applied:**
@@ -448,7 +448,7 @@ probe.
     - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
       `project()` on the object a dashboard query holds.
     - **Read-only by construction.** A write method is the moment a derived store becomes
-      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
+      authoritative ([Data and scale](../../docs/opinions/data-and-scale.md) §2).
     - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
       analytics store holds no `CapabilitySet` and can join back to nothing.
     - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return

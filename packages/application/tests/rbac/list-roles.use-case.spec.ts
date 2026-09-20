@@ -64,6 +64,13 @@ class RecordingRoleRepository implements RoleRepository {
   public countAssignments(): Promise<number> {
     throw new Error("not under test");
   }
+  public savePermission(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public deletePermission(): Promise<void> {
+    throw new Error("not under test");
+  }
 }
 
 describe("ListRolesUseCase", () => {

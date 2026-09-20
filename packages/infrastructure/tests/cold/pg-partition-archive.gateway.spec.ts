@@ -35,6 +35,9 @@ let second: OrganizationId;
 class FakeStorage implements Partial<StorageGateway> {
   public failOnPut = false;
   public present = true;
+  // Bytes S3 reports back, when that is not what was sent. A lost multipart part is the
+  // shape: the object is there, answers its `HEAD`, and is short.
+  public truncateTo: number | null = null;
   public body: Readable | undefined;
   public readonly objects = new Map<string, Uint8Array>();
 
@@ -73,6 +76,11 @@ class FakeStorage implements Partial<StorageGateway> {
 
   public exists(key: string): Promise<boolean> {
     return Promise.resolve(this.present && this.objects.has(key));
+  }
+
+  public sizeOf(key: string): Promise<number | null> {
+    if (!this.present || !this.objects.has(key)) return Promise.resolve(null);
+    return Promise.resolve(this.truncateTo ?? this.objects.get(key)?.byteLength ?? null);
   }
 }
 
@@ -272,7 +280,21 @@ describe("PgPartitionArchiveGateway.archive", () => {
     const storage = new FakeStorage();
     storage.present = false;
 
-    await expect(gateway(storage).archive(TABLE, PERIOD)).rejects.toThrow("Archive object missing");
+    await expect(gateway(storage).archive(TABLE, PERIOD)).rejects.toThrow("missing bytes");
+
+    expect(await isAttached(first)).toBe(true);
+  });
+
+  // `R.39`. The object is there and answers its `HEAD`, which is all the check used to
+  // ask — so a partition was dropped behind an archive that had lost a part.
+  it("re-attaches when the stored object is shorter than what was sent", async () => {
+    await freshPartitions();
+    await write(first, "task.reactivated", 2);
+
+    const storage = new FakeStorage();
+    storage.truncateTo = 3;
+
+    await expect(gateway(storage).archive(TABLE, PERIOD)).rejects.toThrow("3 bytes, expected");
 
     expect(await isAttached(first)).toBe(true);
   });

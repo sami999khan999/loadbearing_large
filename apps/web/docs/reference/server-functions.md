@@ -45,6 +45,11 @@ A session with no `activeOrganizationId` is treated as no session at all, agreei
 `BetterAuthSessionResolver` on purpose: **a shell that renders a user the server would refuse is
 worse than one that renders nobody.**
 
+A **deactivated membership** is the second case of the same rule, and it is the one that was
+missed. `PrincipalBuilder` returns null for one, so every call the shell then made answered
+`UNAUTHORIZED` — including the realtime stream, which reconnects on an infinite budget. The
+membership check rides in the same `Promise.all` as the capabilities, so it costs no round trip.
+
 **`fetchAppearance`** is why the first painted byte is already the right colour: a cookie the server
 can read beats a preference only the client knows. `Sec-CH-Prefers-Color-Scheme` is sent only when
 the document opted in with `Accept-CH`, so its absence means light rather than dark, and the inline

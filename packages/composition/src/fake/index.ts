@@ -15,6 +15,7 @@ export { InMemoryShardResolver } from "./in-memory-shard.resolver.js";
 export { InMemoryShardAssignmentRepository } from "./in-memory-shard-assignment.repository.js";
 export { InMemoryStorageGateway } from "./in-memory-storage.gateway.js";
 export { InMemoryStoragePolicyGateway } from "./in-memory-storage-policy.gateway.js";
+export { InMemoryTenantMembershipReader } from "./in-memory-tenant-membership.reader.js";
 export { InMemoryTenantRetentionPolicyRepository } from "./in-memory-tenant-retention-policy.repository.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";

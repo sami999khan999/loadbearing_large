@@ -95,6 +95,35 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
     return row ? this.findById(organizationId, row.id as RoleId) : null;
   }
 
+  // `on conflict do nothing`, so a grant already held is a no-op rather than a
+  // duplicate-key error — two callers race and both may be right.
+  public async savePermission(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+    permission: string,
+  ): Promise<void> {
+    await this.db
+      .insert(rolePermissions)
+      .values({ organizationId, roleId, permission })
+      .onConflictDoNothing();
+  }
+
+  public async deletePermission(
+    organizationId: OrganizationId,
+    roleId: RoleId,
+    permission: string,
+  ): Promise<void> {
+    await this.db
+      .delete(rolePermissions)
+      .where(
+        and(
+          eq(rolePermissions.organizationId, organizationId),
+          eq(rolePermissions.roleId, roleId),
+          eq(rolePermissions.permission, permission),
+        ),
+      );
+  }
+
   // The row and its grants in one call, reconciled rather than replaced: deleting every
   // permission and re-inserting would churn the index on a rename.
   public async save(organizationId: OrganizationId, role: RoleRecord): Promise<void> {

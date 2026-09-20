@@ -11,7 +11,7 @@ pnpm build                # topological, derived from workspace:* — no order d
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
 pnpm test
-pnpm check:architecture   # 26 assertions that no linter expresses
+pnpm check:architecture   # 27 assertions that no linter expresses
 pnpm check:contrast       # WCAG AA + sRGB gamut, every theme × mode. A gate, not a report
 pnpm check:comments       # comment density and block counts; reports, never fails
 pnpm deps:check           # syncpack: one dependency, one version line
@@ -31,7 +31,7 @@ pnpm auth:tables          # print Better Auth's own schema; run by hand
 reading of `DATABASE_SHARD_<n>_URL`. `db:generate`, `db:studio` and `db:seed` stay on the
 catalog: every node runs the same schema, and the bootstrap tenant is node 0's.
 
-Mail goes to **Mailpit** in development, never out — inbox on `:8025`. A flow that sends
+Mail goes to **Mailpit** in development, never out — inbox on `:18025`. A flow that sends
 (verification, reset, an invitation) is checked there, not in a real inbox — and **only while the
 worker is running**, because every message in this system is a job on `QueueName.MAIL`.
 
@@ -39,7 +39,7 @@ Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a pack
 
 ## Before you claim a change is done
 
-Run **`pnpm check:architecture`** — twenty-six assertions in `tooling/scripts/check-architecture.mjs`
+Run **`pnpm check:architecture`** — twenty-seven assertions in `tooling/scripts/check-architecture.mjs`
 that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
 domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
@@ -50,8 +50,9 @@ declarations disagreeing, a unique index on a tenant table that does not lead wi
 `organization_id`, a foreign key with no index leading with it, a partitioned table that the
 `PartitionedTable` allowlist does not name, a repository whose tables span two placements, a
 second place that opens a database pool, an event code the catalog declares that nothing emits,
-`.env.example` drifting from what an app actually requires, and a runnable script above `src/` that
-nothing typechecks.
+`.env.example` drifting from what an app actually requires, a runnable script above `src/` that
+nothing typechecks, and a host port stated twice — a `*_PORT` and the URL that dials it, or the
+compose default and the template — that no longer agree.
 
 **On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
 `pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every

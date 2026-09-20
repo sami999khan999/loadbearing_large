@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   desc,
   eq,
   gt,
@@ -206,6 +207,42 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
       .limit(limit);
 
     return rows.map((row) => PgNotificationRepository.toRecord(row));
+  }
+
+  // Keyset on the user id, which is the only stable order this page has. It prunes to
+  // the tenant partition on `organization_id` and to the months `since` reaches.
+  public async recipientsWithUnreadSince(
+    organizationId: OrganizationId,
+    since: Date,
+    limit: number,
+    afterUserId: UserId | null,
+  ): Promise<readonly UserId[]> {
+    const rows = await this.db
+      .selectDistinct({ userId: notifications.userId })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.organizationId, organizationId),
+          isNull(notifications.readAt),
+          gt(notifications.createdAt, since),
+          afterUserId ? gt(notifications.userId, afterUserId) : undefined,
+        ),
+      )
+      .orderBy(asc(notifications.userId))
+      .limit(limit);
+
+    return rows.map((row) => row.userId);
+  }
+
+  // Cross-tenant by design and reachable only from the worker's digest fan-out, which
+  // loops the shards. `since` is what keeps it off every month this table holds.
+  public async organizationsWithUnreadSince(since: Date): Promise<readonly OrganizationId[]> {
+    const rows = await this.db
+      .selectDistinct({ organizationId: notifications.organizationId })
+      .from(notifications)
+      .where(and(isNull(notifications.readAt), gt(notifications.createdAt, since)));
+
+    return rows.map((row) => row.organizationId);
   }
 
   private static toRecord(row: typeof notifications.$inferSelect): NotificationRecord {

@@ -77,7 +77,7 @@ lands keep their old value until they close — `server_idle_timeout` (600 s) fo
 `server_lifetime` (3600 s, randomised) for a busy one. The deploy step is:
 
 ```
-psql "postgres://ratchet:ratchet@localhost:6432/pgbouncer" -c "RECONNECT"
+psql "postgres://ratchet:ratchet@localhost:16432/pgbouncer" -c "RECONNECT"
 ```
 
 **Not a restart.** `RECONNECT` closes server-side connections and leaves clients alone. Restarting
@@ -107,7 +107,7 @@ knowing before a liveness probe with a short timeout takes a busy replica out of
 Ask the pooler:
 
 ```
-psql "postgres://ratchet:ratchet@localhost:6432/pgbouncer" -c "SHOW POOLS"
+psql "postgres://ratchet:ratchet@localhost:16432/pgbouncer" -c "SHOW POOLS"
 ```
 
 `cl_active`, `cl_waiting`, `sv_active` and `maxwait` are the four that matter. `ADMIN_USERS`

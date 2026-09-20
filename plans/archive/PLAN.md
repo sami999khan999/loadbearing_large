@@ -235,7 +235,7 @@ D23. **Retention is the allowlist entry and nothing else.** (2026-09-14) `Partit
     `retention_policy` — a row an operator edits without a deploy — has no editor until a platform
     tier exists (`21.6`), and until then a SQL edit and an allowlist edit plus a deploy are the same
     operation with a review attached to the second. Both items are in
-    [`DB-SCALING-DEFERRED.md`](archive/DB-SCALING-DEFERRED.md), IDs kept.
+    [`DB-SCALING-DEFERRED.md`](DB-SCALING-DEFERRED.md), IDs kept.
     `revised: 2026-09-14` — reopened the same day by a broader request: an administrator managing
     ClickHouse projection, cold storage and the replica from a screen. That needs the tier, so
     Phases 18–20 build it on RBAC (Phase 18) and the row
@@ -3598,7 +3598,7 @@ bug that has since been fixed. Take one when a build is waiting on CI.
     - It is a **new port**, separate from `AnalyticsProjector`. A single port with both would put
       `project()` on the object a dashboard query holds.
     - **Read-only by construction.** A write method is the moment a derived store becomes
-      authoritative ([Data and scale](../docs/opinions/data-and-scale.md) §2).
+      authoritative ([Data and scale](../../docs/opinions/data-and-scale.md) §2).
     - **Any permitted scope arrives resolved**, as `VectorStore.search()` takes `goalIds`. A remote
       analytics store holds no `CapabilitySet` and can join back to nothing.
     - **Periods are ISO `YYYY-MM-DD` strings**, not `Date`s: `date_trunc` and `toYYYYMM` return
@@ -3946,7 +3946,7 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
     compose stack at 82 tenants: three hundred synthetic users exceeded a 30-second
     `statement_timeout`, and ~9 ms a user warm. Three routed tables cascade from `users`, so it is
     three such scans per row.
-    [`fan-out.md`](../packages/infrastructure/docs/reference/fan-out.md) has the numbers.
+    [`fan-out.md`](../../packages/infrastructure/docs/reference/fan-out.md) has the numbers.
   - **Option (b) multiplies that by the node count.** Replicating `users` and `organizations` to
     every shard means the cascade fires on *every* node, each scanning its own partitions. The
     thing (b) is bought for — keeping `ON DELETE CASCADE` meaning something — is the thing that is
@@ -3998,7 +3998,7 @@ down so the seam in Phase 22 is judged against a real target rather than a feeli
   of this is called production-ready.
   - **Half of it ran, 2026-09-20, and the other half cannot** — `tests/smoke/routed.smoke.spec.ts`,
     `ROUTED_SCALE=1 pnpm smoke` with the `sharded` profile up. The numbers are in
-    [`sharding.md`](../packages/infrastructure/docs/reference/sharding.md).
+    [`sharding.md`](../../packages/infrastructure/docs/reference/sharding.md).
   - **What a routed request pays, averaged over a thousand resolutions:** a warm placement is
     **679 µs** — one cache read, never a query — and a miss is **2 568 µs**, three round trips, once
     per key per five minutes. A bare cache invalidate costs 667 µs on the same stack, which is what
@@ -4177,7 +4177,7 @@ one worth promoting without a trigger.
   - **Shipped 2026-09-20** as `tests/smoke/fan-out.smoke.spec.ts`, opt-in through
     `FAN_OUT_SCALE=1000,10000,25000`, the same shape `TENANT_CEILING` has. The numbers and what
     they mean live in
-    [`packages/infrastructure/docs/reference/fan-out.md`](../packages/infrastructure/docs/reference/fan-out.md).
+    [`packages/infrastructure/docs/reference/fan-out.md`](../../packages/infrastructure/docs/reference/fan-out.md).
   - **Measured on the compose stack**, one tenant, 82 tenants on the node:
 
     | Recipients | Write | Statements | Replay | Digest | Pages | Publish, serial | Publish, chunked |

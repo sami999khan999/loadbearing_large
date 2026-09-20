@@ -4,7 +4,6 @@
 // `--sweep <organization_id>` is the other half: cold storage outlives a tenant, and
 // until a delete use-case enqueues the job, this is what reaches it.
 
-import "dotenv/config";
 import { shardUrls } from "./shard-env.js";
 import { type OrganizationId, PartitionedTable, sql } from "./src/import.js";
 import { Database, DatabaseCluster } from "./src/pg/primitive/index.js";

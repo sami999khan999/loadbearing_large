@@ -91,41 +91,6 @@ export class PgNotificationPreferenceRepository
       });
   }
 
-  // Cross-tenant by design and reachable only from the worker's digest fan-out: the
-  // schedule asks "which tenants have anyone to write to at all".
-  public async organizationsWithDigest(): Promise<readonly OrganizationId[]> {
-    const rows = await this.db
-      .selectDistinct({ organizationId: notificationPreferences.organizationId })
-      .from(notificationPreferences)
-      .where(eq(notificationPreferences.mode, "digest"));
-
-    return rows.map((row) => row.organizationId);
-  }
-
-  // Keyset on the user id, which is the only stable order a preference page has. Offset
-  // here would re-read every earlier recipient for each page of a large tenant.
-  public async digestRecipients(
-    organizationId: OrganizationId,
-    limit: number,
-    afterUserId: UserId | null,
-  ): Promise<readonly UserId[]> {
-    const rows = await this.db
-      .selectDistinct({ userId: notificationPreferences.userId })
-      .from(notificationPreferences)
-      .where(
-        and(
-          eq(notificationPreferences.organizationId, organizationId),
-          eq(notificationPreferences.channel, "email"),
-          eq(notificationPreferences.mode, "digest"),
-          afterUserId ? gt(notificationPreferences.userId, afterUserId) : undefined,
-        ),
-      )
-      .orderBy(asc(notificationPreferences.userId))
-      .limit(limit);
-
-    return rows.map((row) => row.userId);
-  }
-
   private static toRecord(row: typeof notificationPreferences.$inferSelect): PreferenceRecord {
     return {
       userId: row.userId,

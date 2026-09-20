@@ -3,7 +3,6 @@
 // can grant the first `platform.*` key through the API. Every later admin is invited
 // through the members screen with the platform organization active.
 
-import "dotenv/config";
 import { and, eq, Uuid } from "./src/import.js";
 import { Database } from "./src/pg/primitive/index.js";
 import { memberships, organizations, roles, users } from "./src/pg/schema/index.js";

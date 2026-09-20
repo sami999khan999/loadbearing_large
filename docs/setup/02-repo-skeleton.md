@@ -96,16 +96,16 @@ infra/logs/*
 
 ```ini
 # ── Postgres ─────────────────────────────────────────────
-DATABASE_URL=postgres://ratchet:ratchet@localhost:5432/ratchet
+DATABASE_URL=postgres://ratchet:ratchet@localhost:15432/ratchet
 
 # ── Redis ────────────────────────────────────────────────
 # Two instances, because they have different durability needs. The cache evicts
 # under pressure; the queue must not, since a lost job is work that never happens.
-REDIS_CACHE_URL=redis://localhost:6379
-REDIS_QUEUE_URL=redis://localhost:6380
+REDIS_CACHE_URL=redis://localhost:16379
+REDIS_QUEUE_URL=redis://localhost:16380
 
 # ── S3 / MinIO ───────────────────────────────────────────
-S3_ENDPOINT=http://localhost:9000
+S3_ENDPOINT=http://localhost:19000
 S3_REGION=us-east-1
 S3_BUCKET=ratchet
 S3_ACCESS_KEY=ratchet
@@ -114,12 +114,12 @@ S3_FORCE_PATH_STYLE=true
 
 # ── Auth ─────────────────────────────────────────────────
 AUTH_SECRET=change-me-generate-with-openssl-rand-base64-32
-AUTH_URL=http://localhost:3000
+AUTH_URL=http://localhost:13000
 # Both Tauri origins from the first deployment — the webview scheme differs by
 # platform (tauri://localhost on macOS/Linux, http://tauri.localhost on Windows),
 # so shipping one produces an app that works for half your team. The same list
 # drives the CORS allowlist on /api/rpc and /api/auth.
-AUTH_TRUSTED_ORIGINS=http://localhost:3000,tauri://localhost,http://tauri.localhost
+AUTH_TRUSTED_ORIGINS=http://localhost:13000,tauri://localhost,http://tauri.localhost
 
 # Session lifetime is an operational value, not a literal in a factory: it differs
 # between a staging box and production. Slides on activity — Better Auth refreshes
@@ -192,7 +192,7 @@ pnpm workspaces · TanStack Start + oRPC · standalone worker · Postgres + pgve
     pnpm db:migrate && pnpm db:seed
     pnpm dev
 
-Web: http://localhost:3000 · Loki API: http://localhost:3100 · MinIO console: http://localhost:9001
+Web: http://localhost:13000 · Loki API: http://localhost:13100 · MinIO console: http://localhost:19001
 
 See `docs/` for the architecture and the build order.
 ```

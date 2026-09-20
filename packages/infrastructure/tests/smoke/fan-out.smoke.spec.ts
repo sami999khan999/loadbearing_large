@@ -40,8 +40,8 @@ const direct = new Database({ url: stack.database.directUrl });
 const cluster = DatabaseCluster.single(database, direct);
 
 const notifications = new PgNotificationRepository(cluster, scope, shards);
-const conversations = new PgConversationRepository(cluster, scope, shards);
-const recipients = new PgNotificationRecipientReader(cluster, scope, shards, conversations);
+// The recipient reader and its conversation repository are built on `countedCluster`
+// below: the measurement is statement counts, so an uncounted pair reads nothing.
 const maintenance = new PgMaintenanceGateway(
   DatabaseCluster.single(direct),
   scope,

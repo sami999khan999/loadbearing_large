@@ -116,7 +116,7 @@ describe("Container — the derived stores", () => {
     const container = build({
       analytics: {
         clickhouse: {
-          url: "http://localhost:8123",
+          url: "http://localhost:18123",
           database: "loadbearing",
           username: "default",
           password: "",
@@ -136,7 +136,7 @@ describe("Container — the derived stores", () => {
   });
 
   it("builds the log reader when Loki is configured", () => {
-    const container = build({ logs: { driver: "loki", url: "http://localhost:3100" } });
+    const container = build({ logs: { driver: "loki", url: "http://localhost:13100" } });
 
     expect(container.hasLogs).toBe(true);
     expect(container.logs).toBeDefined();

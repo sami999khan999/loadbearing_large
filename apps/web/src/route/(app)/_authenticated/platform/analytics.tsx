@@ -20,12 +20,13 @@ const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
 export const Route = createFileRoute("/(app)/_authenticated/platform/analytics")({
   beforeLoad: RouteGuard.requirePermission("platform.analytics.read"),
   staticData: { messages: MESSAGES },
+  // The retention read is **not** prefetched: it is gated on `platform.retention.read`,
+  // which this route does not require, and prefetching it threw the whole page away.
   loader: ({ context }) =>
     Promise.all([
       context.messages.ensure(MESSAGES),
       context.queryClient.ensureQueryData(PlatformQueries.projection(context.api)),
       context.queryClient.ensureQueryData(PlatformQueries.policy(context.api)),
-      context.queryClient.ensureQueryData(PlatformQueries.retention(context.api)),
     ]),
   component: PlatformAnalytics,
 });
@@ -37,7 +38,14 @@ function PlatformAnalytics() {
 
   // The audit table's hot window, read from the retention rows rather than restated:
   // the deadline the switch quotes is exactly the one the retention screen shows.
-  const retention = useAppQuery(PlatformQueries.retention(client));
+  // ──
+  // Asked for only by a reader who may have it. Without the guard this is a refusal the
+  // page has no way to render, for a deadline that is a sentence in a callout.
+  const mayReadRetention = capabilities.can("platform.retention.read");
+  const retention = useAppQuery({
+    ...PlatformQueries.retention(client),
+    enabled: mayReadRetention,
+  });
   const auditMonths =
     retention.data?.postgres.find((table) => table.tableName === "activity_log")?.hotMonths ?? null;
 

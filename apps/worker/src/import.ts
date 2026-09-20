@@ -8,6 +8,7 @@ export {
   type ActivityRecord,
   ActivitySubject,
   type ArchivedPartition,
+  type ColdMode,
   PartitionedTable,
   type PartitionedTableEntry,
   type PartitionedTableName,

@@ -66,6 +66,7 @@ describe("TestContainer", () => {
       "sharding",
       "storage",
       "storagePolicy",
+      "tenantMemberships",
       "unitOfWork",
       "vectors",
     ]);

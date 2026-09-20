@@ -12,7 +12,7 @@ domain rows, RBAC, the audit trail, auth tables, and embeddings.
 | --- | --- |
 | **Image** | `pgvector/pgvector:pg17` |
 | **Inside the network** | `postgres:5432` |
-| **From the host** | `localhost:5432` |
+| **From the host** | `localhost:15432` |
 | **Credentials** | `ratchet` / `ratchet`, database `ratchet` |
 | **Volume** | `pgdata` |
 | **Config file** | `postgres.init.sql` |
@@ -93,13 +93,13 @@ pnpm infra:reset
 
 | Consumer | Reaches it at | For |
 |---|---|---|
-| `apps/web`, `apps/worker` (host) | `localhost:6432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
-| `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:5432` | DDL, via `DATABASE_DIRECT_URL` |
-| `migrate.ts`, `partitions.ts`, under the `sharded` profile | `localhost:5433` | the same DDL on node 1, via `DATABASE_SHARD_1_DIRECT_URL` |
-| `PgPartitionArchiveGateway` | `localhost:5432` | `DETACH … CONCURRENTLY` and a month-long stream |
+| `apps/web`, `apps/worker` (host) | `localhost:16432` | everything, via `DATABASE_URL` — **through [pgBouncer](pgbouncer.md)** |
+| `migrate.ts`, `seed.ts`, `drizzle-kit` (host) | `localhost:15432` | DDL, via `DATABASE_DIRECT_URL` |
+| `migrate.ts`, `partitions.ts`, under the `sharded` profile | `localhost:15433` | the same DDL on node 1, via `DATABASE_SHARD_1_DIRECT_URL` |
+| `PgPartitionArchiveGateway` | `localhost:15432` | `DETACH … CONCURRENTLY` and a month-long stream |
 
 **Two different hostnames for one database**, and the difference is which side of the bridge network
-the client is on. A container using `localhost:5432` would reach *its own* loopback and find
+the client is on. A container using `localhost:15432` would reach *its own* loopback and find
 nothing.
 
 Connections are pooled per process at `DATABASE_POOL_MAX` (10 by default,

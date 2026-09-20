@@ -1,7 +1,7 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { RealtimeMessage } from "@loadbearing/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -37,22 +37,30 @@ function Probe() {
   return createElement("span", { "data-testid": "state" }, connected ? "on" : "off");
 }
 
-const mount = (client: ApiClient) => {
+const ORG = "00000000-0000-7000-8000-000000000001";
+
+const tree = (client: ApiClient, queryClient: QueryClient, organizationId: string | null) =>
+  createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(RealtimeProvider, {
+      client,
+      organizationId,
+      children: createElement(Probe),
+    } as {
+      client: ApiClient;
+      organizationId: string | null;
+      children: ReactNode;
+    }),
+  );
+
+const mount = (client: ApiClient, organizationId: string | null = ORG) => {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
 
-  const view = render(
-    createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      createElement(RealtimeProvider, { client, children: createElement(Probe) } as {
-        client: ApiClient;
-        children: ReactNode;
-      }),
-    ),
-  );
+  const view = render(tree(client, queryClient, organizationId));
 
-  return { view, invalidate };
+  return { view, invalidate, queryClient };
 };
 
 describe("RealtimeProvider", () => {
@@ -85,12 +93,78 @@ describe("RealtimeProvider", () => {
   // A stream that fails to open is the retry plugin's business, not a rendered error:
   // the tab keeps working and refetches on focus meanwhile.
   it("stays mounted and disconnected when the stream cannot open", async () => {
-    const failing = {
-      realtime: { stream: () => Promise.reject(new Error("UNAVAILABLE")) },
+    const stream = vi.fn(() => Promise.reject(new Error("UNAVAILABLE")));
+    const { view } = mount({ realtime: { stream } } as unknown as ApiClient);
+
+    // The attempt first. `off` is also the state before the effect has run, so asserting
+    // it alone passed against a provider that never opened anything.
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+
+    expect(view.getByTestId("state").textContent).toBe("off");
+    expect(view.getByTestId("state")).toBeTruthy();
+  });
+
+  // The transition the case above cannot show: connected, then the stream drops. Without
+  // it "disconnected" is indistinguishable from "never connected".
+  it("returns to disconnected when an open stream ends", async () => {
+    let end: (() => void) | undefined;
+    const client = {
+      realtime: {
+        stream: () =>
+          Promise.resolve(
+            (async function* (): AsyncGenerator<RealtimeMessage> {
+              await new Promise<void>((resolve) => {
+                end = resolve;
+              });
+            })(),
+          ),
+      },
     } as unknown as ApiClient;
 
-    const { view } = mount(failing);
+    const { view } = mount(client);
+    await waitFor(() => expect(view.getByTestId("state").textContent).toBe("on"));
+
+    await act(async () => {
+      end?.();
+      await Promise.resolve();
+    });
 
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("off"));
+  });
+  // The server builds the channel from the principal when the stream opens, so a switch
+  // that does not reopen leaves the tab reading the tenant it just left.
+  it("reopens the stream when the active tenant changes", async () => {
+    const opened: number[] = [];
+    const client = {
+      realtime: {
+        stream: () => {
+          opened.push(opened.length);
+          return Promise.resolve(
+            (async function* (): AsyncGenerator<RealtimeMessage> {
+              await new Promise(() => {});
+            })(),
+          );
+        },
+      },
+    } as unknown as ApiClient;
+
+    const queryClient = new QueryClient();
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+
+    const view = render(tree(client, queryClient, ORG));
+    await waitFor(() => expect(opened).toHaveLength(1));
+
+    view.rerender(tree(client, queryClient, "00000000-0000-7000-8000-000000000002"));
+
+    await waitFor(() => expect(opened).toHaveLength(2));
+  });
+
+  // Before there is a tenant there is no channel to open, and the request would 401 and
+  // then retry forever on the plugin's infinite budget.
+  it("opens nothing while there is no active tenant", async () => {
+    const stream = vi.fn();
+    mount({ realtime: { stream } } as unknown as ApiClient, null);
+
+    await waitFor(() => expect(stream).not.toHaveBeenCalled());
   });
 });

@@ -1,5 +1,6 @@
 import type {
   ArchivedObject,
+  PartitionArchiveEntry,
   PartitionEstimate,
   ProjectionPolicyRecord,
   RetentionPolicyRecord,
@@ -112,6 +113,10 @@ function harness(
   const storagePolicy = options.lifecycle ?? new InMemoryStoragePolicyGateway();
   const logger = { emit: vi.fn(), failure: vi.fn() };
 
+  // Which tenant each unit of work was placed on. `TestContainer`'s `placed` runs the
+  // work and records nothing, so an unplaced job is invisible to every other assertion.
+  const placements: string[] = [];
+
   const container = {
     ...TestContainer.build({
       maintenance,
@@ -134,6 +139,10 @@ function harness(
     }),
     hasProjector: options.hasProjector ?? false,
     logger,
+    placed: <T>(principal: { organizationId: string }, work: () => Promise<T>): Promise<T> => {
+      placements.push(principal.organizationId);
+      return work();
+    },
   } as unknown as Container;
 
   return {
@@ -146,6 +155,7 @@ function harness(
     tenantRetentionPolicies,
     storagePolicy,
     logger,
+    placements,
   };
 }
 
@@ -685,5 +695,82 @@ describe("MaintenanceConsumer — a per-tenant retention override", () => {
     await consumerFor(container).handle(job("partitions"));
 
     expect(partitionArchive.archived().map(({ table }) => table)).not.toContain("messages");
+  });
+});
+
+// `R.6`, `R.8`: two ways a pass reached the wrong rows — a mode that skipped the
+// overrides, and two jobs that named a tenant and never placed it.
+describe("MaintenanceConsumer — the overrides and the node", () => {
+  const period = new Date(Date.UTC(2024, 0, 1));
+
+  const entry = (organizationId: OrganizationId): PartitionArchiveEntry => ({
+    organizationId,
+    tableName: "activity_log",
+    period: "2024-01-01",
+    objectKey: `cold/activity_log/2024/01/${organizationId}.ndjson.gz`,
+    rowCount: 4,
+    bytes: 512,
+    checksum: "sha-512",
+    actionCounts: {},
+    projectedAt: null,
+  });
+
+  // `drop` destroys the month. Branching on the mode before reading the overrides meant
+  // a tenant that had paid for three years lost the month at the deployment's cutoff.
+  it("honours a per-tenant override under cold_mode drop", async () => {
+    const { container, maintenance } = harness({
+      estimates: [estimate(period)],
+      policies: [
+        {
+          store: "postgres",
+          tableName: "activity_log",
+          hotMonths: 12,
+          coldMonths: null,
+          coldMode: "drop",
+        },
+      ],
+      tenantPolicies: [
+        { organizationId: FIRST, tableName: "activity_log", hotMonths: 36, coldMonths: null },
+      ],
+    });
+
+    await consumerFor(container).handle(job("partitions"));
+
+    const drops = maintenance
+      .partitionsDropped()
+      .filter(({ table }) => table === "activity_log")
+      .map(({ organizationId, cutoff }) => ({ organizationId, cutoff: cutoff.toISOString() }));
+
+    // One drop per tenant at its own cutoff, never one table-wide drop at the
+    // deployment's. `SECOND` has no override and keeps the row's twelve months.
+    expect(drops).toEqual([
+      { organizationId: FIRST, cutoff: "2023-08-01T00:00:00.000Z" },
+      { organizationId: SECOND, cutoff: "2025-08-01T00:00:00.000Z" },
+    ]);
+  });
+
+  // The archive index is catalog and the scratch table is the tenant's. Unplaced, the
+  // restore wrote node 0 and a tenant on another node got somebody else's table.
+  it("places cold-restore on the tenant that owns the object", async () => {
+    const { container, partitionArchive, placements } = harness();
+    partitionArchive.stage([entry(SECOND)]);
+
+    await consumerFor(container).handle(
+      job("cold-restore", { table: "activity_log", period: "2024-01-01", organizationId: null }),
+    );
+
+    expect(placements).toEqual([SECOND]);
+  });
+
+  // An export reads live rows, so an unplaced one read node 0 and wrote a manifest
+  // saying a tenant on another node had nothing.
+  it("places tenant-export on the tenant it names", async () => {
+    const { container, placements } = harness();
+
+    await consumerFor(container).handle(
+      job("tenant-export", { organizationId: SECOND, day: "2026-08-15" }),
+    );
+
+    expect(placements).toEqual([SECOND]);
   });
 });

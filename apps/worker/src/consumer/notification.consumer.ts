@@ -65,15 +65,17 @@ export class NotificationConsumer {
   // One job per tenant rather than one job doing every tenant: a digest that fails for
   // one organization must not stop the other four thousand.
   private async fanOut(): Promise<void> {
-    const day = NotificationConsumer.dayOf(this.container.clock.now());
+    const now = this.container.clock.now();
+    const day = NotificationConsumer.dayOf(now);
     const organizations: OrganizationId[] = [];
 
-    // `notification_preferences` is routed, so "which tenants have anyone to write to"
-    // is a question each node answers about the tenants it holds.
+    // `notifications` is routed, so "which tenants have anything to send" is a question
+    // each node answers about the tenants it holds.
     await this.container.eachShard(async () => {
       organizations.push(
         ...(await this.container.notification.digestOrganizations.execute(
           SystemPrincipal.platform(),
+          now,
         )),
       );
     });

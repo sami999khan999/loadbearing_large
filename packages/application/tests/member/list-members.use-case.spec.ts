@@ -57,6 +57,10 @@ class RecordingMemberRepository implements MemberRepository {
   public countActiveOwners(): Promise<number> {
     throw new Error("not under test");
   }
+
+  public lockActiveOwners(): Promise<number> {
+    throw new Error("not under test");
+  }
 }
 
 class RecordingInvitationRepository implements InvitationRepository {

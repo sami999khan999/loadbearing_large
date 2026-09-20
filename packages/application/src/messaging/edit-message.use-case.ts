@@ -1,6 +1,6 @@
 import type { Clock } from "../import.js";
 import { type EditMessageInput, ForbiddenError, NotFoundError } from "../import.js";
-import type { DomainEventPublisher } from "../port/index.js";
+import type { DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
 import type { MessageRecord, MessageRepository } from "./message.repository.js";
@@ -13,6 +13,7 @@ export class EditMessageUseCase {
     private readonly messages: MessageRepository,
     private readonly events: DomainEventPublisher,
     private readonly clock: Clock,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(actor: Principal, input: EditMessageInput): Promise<MessageRecord> {
@@ -32,25 +33,30 @@ export class EditMessageUseCase {
     this.assertMayChange(actor, existing);
 
     const now = this.clock.now();
-    const edited = await this.messages.edit(
-      actor.organizationId,
-      input.messageId,
-      input.createdAt,
-      input.body,
-      now,
-    );
-    if (!edited) throw new NotFoundError("message", input.messageId);
 
-    await this.events.publish(actor, {
-      name: "message.edited",
-      payload: {
-        conversationId: input.conversationId,
-        messageId: input.messageId,
-        createdAt: input.createdAt,
-      },
+    // Write and publish together, as `send` does. Outside a transaction the edit could
+    // commit and the outbox row not, and no subscriber would ever hear about it.
+    return this.unitOfWork.run(async () => {
+      const edited = await this.messages.edit(
+        actor.organizationId,
+        input.messageId,
+        input.createdAt,
+        input.body,
+        now,
+      );
+      if (!edited) throw new NotFoundError("message", input.messageId);
+
+      await this.events.publish(actor, {
+        name: "message.edited",
+        payload: {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          createdAt: input.createdAt,
+        },
+      });
+
+      return edited;
     });
-
-    return edited;
   }
 
   // Your own, inside the window — or `manage`, which is how a moderator reaches somebody

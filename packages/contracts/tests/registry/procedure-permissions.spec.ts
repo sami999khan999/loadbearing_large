@@ -51,11 +51,7 @@ describe("ContractWalker", () => {
 // Registered ahead of the procedure that asserts each, so the seed grants them once
 // rather than per deploy. Each line names the item that removes it; the list only shrinks.
 const AWAITING_A_PROCEDURE: ReadonlySet<string> = new Set([
-  "platform.analytics.read", // 20.6
-  "platform.analytics.manage", // 20.6
-  "platform.storage.read", // 19.16
   "platform.shards.manage", // 24.2
-  "platform.tenant.manage", // 19.20
 ]);
 
 describe("ProcedurePermissions", () => {

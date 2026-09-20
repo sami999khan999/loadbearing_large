@@ -573,6 +573,10 @@ describe("the retention tail is pruned, for the reads that carry a floor", () =>
           organizationId,
           { lastOccurredAt: SECOND, lastId: "00000000-0000-0000-0000-000000000000" },
           100,
+          [],
+          // Past every month this spec plants: the claim is about the floor pruning the
+          // tail, and a horizon would prune the head instead and prove nothing.
+          new Date("2099-01-01T00:00:00.000Z"),
         ),
       /from "activity_log"/i,
     );

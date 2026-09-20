@@ -26,7 +26,7 @@ services:
       POSTGRES_USER: ratchet
       POSTGRES_PASSWORD: ratchet
       POSTGRES_DB: ratchet
-    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    ports: ["${POSTGRES_PORT:-15432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
@@ -65,7 +65,7 @@ services:
       ADMIN_USERS: ratchet
     # 5432 inside the container, not 6432: this image's own `listen_port` is the Postgres
     # default, and a healthcheck on 6432 would report unhealthy forever.
-    ports: ["${PGBOUNCER_PORT:-6432}:5432"]
+    ports: ["${PGBOUNCER_PORT:-16432}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ratchet"]
       interval: 5s
@@ -96,7 +96,7 @@ services:
       POSTGRES_USER: ratchet
       POSTGRES_PASSWORD: ratchet
       POSTGRES_DB: ratchet
-    ports: ["${POSTGRES_SHARD_1_PORT:-5433}:5432"]
+    ports: ["${POSTGRES_SHARD_1_PORT:-15433}:5432"]
     # Its own volume, and that is the point: a shard sharing the catalog's data
     # directory would rehearse nothing.
     volumes:
@@ -130,7 +130,7 @@ services:
       SERVER_RESET_QUERY: DISCARD ALL
       IGNORE_STARTUP_PARAMETERS: statement_timeout,lock_timeout,idle_in_transaction_session_timeout,extra_float_digits
       ADMIN_USERS: ratchet
-    ports: ["${PGBOUNCER_SHARD_1_PORT:-6433}:5432"]
+    ports: ["${PGBOUNCER_SHARD_1_PORT:-16433}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ratchet"]
       interval: 5s
@@ -140,8 +140,19 @@ services:
   redis-cache:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--maxmemory-policy", "allkeys-lru"]
-    ports: ["${REDIS_CACHE_PORT:-6379}:6379"]
+    # `--maxmemory` is what makes the policy reachable: the default is 0, meaning no
+    # ceiling, so `allkeys-lru` never evicts and the container is OOM-killed instead.
+    command:
+      [
+        "redis-server",
+        "--save",
+        "",
+        "--maxmemory",
+        "${REDIS_CACHE_MAXMEMORY:-256mb}",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    ports: ["${REDIS_CACHE_PORT:-16379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -159,7 +170,7 @@ services:
         "--maxmemory-policy",
         "noeviction",
       ]
-    ports: ["${REDIS_QUEUE_PORT:-6380}:6379"]
+    ports: ["${REDIS_QUEUE_PORT:-16380}:6379"]
     volumes:
       - redisqueuedata:/data
     healthcheck:
@@ -172,8 +183,8 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - "${SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
+      - "${SMTP_PORT:-11025}:1025"
+      - "${MAILPIT_UI_PORT:-18025}:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 10s
@@ -189,7 +200,7 @@ services:
     environment:
       MINIO_ROOT_USER: ratchet
       MINIO_ROOT_PASSWORD: ratchetsecret
-    ports: ["${S3_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
+    ports: ["${S3_PORT:-19000}:9000", "${MINIO_CONSOLE_PORT:-19001}:9001"]
     volumes:
       - miniodata:/data
     # No healthcheck, and that is the second time this service has had one it could not
@@ -222,7 +233,7 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yml"]
-    ports: ["${LOKI_PORT:-3100}:3100"]
+    ports: ["${LOKI_PORT:-13100}:3100"]
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -273,8 +284,8 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
       [
-        "${CLICKHOUSE_HTTP_PORT:-8123}:8123",
-        "${CLICKHOUSE_NATIVE_PORT:-9002}:9000",
+        "${CLICKHOUSE_HTTP_PORT:-18123}:8123",
+        "${CLICKHOUSE_NATIVE_PORT:-19002}:9000",
       ]
     volumes:
       # No init script. The entrypoint runs one only on an empty volume and never on a

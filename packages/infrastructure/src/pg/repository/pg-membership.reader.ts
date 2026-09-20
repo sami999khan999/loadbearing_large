@@ -64,8 +64,12 @@ export class PgMembershipReader extends BaseRepository {
     return row !== undefined;
   }
 
-  // One row on `memberships_uq`, and the column it reads is why deactivation is per
-  // membership: the same person stays active everywhere else.
+  // `application`'s side of the same question, tenant first like every port there.
+  // One row on `memberships_uq`, so deactivation stays per membership.
+  public isActiveMember(organizationId: OrganizationId, userId: UserId): Promise<boolean> {
+    return this.isActive(userId, organizationId);
+  }
+
   public async isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean> {
     const [row] = await this.db
       .select({ id: memberships.id })
