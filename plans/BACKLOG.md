@@ -35,7 +35,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | Section | What | Open |
 |---|---|---|
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 35 |
-| 2 | `archive/REVIEW.md` defects | 30 |
+| 2 | `archive/REVIEW.md` defects | 20 |
 | 3 | `archive/STUCK.md` blockers | 3 |
 | 4 | Unfinished work buried inside ticked items | 7 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
@@ -342,26 +342,30 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   `send-notification-digest.use-case.ts:78` passes `input.organizationId` as `organization`.
   `done: 2026-09-20` — `OrganizationReader` gains `nameOf` — one method on a port that already existed, so
   the container's port count is unchanged. Resolved once per run, not per recipient.
-- [ ] `R.14` **The preferences screen shows `off / off` as the membership default** — the use-case
+- [x] `R.14` **The preferences screen shows `off / off` as the membership default** — the use-case
   takes the *first* policy row per category, and `member.invited` (recipients `none`) comes first.
   Fix: derive the default from rows that have recipients, or declare it on the category.
+  `done: 2026-09-20` — `NotificationPolicy.defaultModeForCategory`, built from the rows that have recipients, so the grid and delivery read the same table.
 - [ ] `R.15` **Saving a retention row rewrites the ClickHouse TTL without its per-action clauses**
   — `update-retention-policy.use-case.ts:82` composes the base clause only, with no
   compare-before-write; `list-retention-policies` computes `expected` the same way. Fix: both
   through `clickhouseTtlFrom`, compare first.
-- [ ] `R.16` **Re-indexing a document within an hour is silently dropped** — `jobId:
+- [x] `R.16` **Re-indexing a document within an hour is silently dropped** — `jobId:
   <org>_<documentId>` with completed jobs kept 3 600 s. Fix: a content hash or version in the id.
-- [ ] `R.17` **A conversation can hold users who are not members of the organization** —
+  `done: 2026-09-20` — `JobKey.of(documentId, text)`; the text is in the key, so new words are a new job.
+- [x] `R.17` **A conversation can hold users who are not members of the organization** —
   `add-conversation-member` and `create-conversation` never check membership; also an existence
   oracle. Fix: assert `memberships.isActive` for every added user.
+  `done: 2026-09-20` — `TenantMembershipReader`, a new port. Named apart from `auth`'s `isActive`: parameters compare bivariantly and the two take their arguments in opposite orders.
 - [ ] `R.18` **Six messaging use-cases publish outbox events outside any transaction** — edit,
   delete, add member, remove member, rename, leave. Fix: inject the routed unit of work and wrap
   write plus publish, as `send-message` does.
 - [ ] `R.19` **Last-owner protection is check-then-act outside the transaction** in
   `change-member-role` and `set-member-active`. Two concurrent demotions leave zero owners. Fix:
   count inside the transaction under `for update` or a per-tenant advisory lock. Likely.
-- [ ] `R.20` **Tenant delete never sweeps `tenant_retention_policy`** — `deleteFor` has no caller
+- [x] `R.20` **Tenant delete never sweeps `tenant_retention_policy`** — `deleteFor` has no caller
   anywhere. Fix: call it inside the delete transaction.
+  `done: 2026-09-20` — `tenantRetention.deleteFor` inside the delete transaction.
 - [ ] `R.21` **The realtime stream stays subscribed to the previous tenant after an organization
   switch** — `RealtimeProvider` opens once per `client` identity and nothing remounts it. Fix: key
   the provider on the active organization id. Likely.
@@ -380,9 +384,10 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   publisher always sets `count: 1_000` and the consumer raises only `age`. Same fact as `23.1`.
 - [ ] `R.25` **The projection checkpoint can permanently skip a row that commits late** — no
   settle lag on `(occurred_at, id)`. An `occurred_at < now() - interval` guard is the usual shape.
-- [ ] `R.26` **`/platform/analytics` prefetches a query gated by a different permission than the
+- [x] `R.26` **`/platform/analytics` prefetches a query gated by a different permission than the
   route** (`platform.retention.read` via `PlatformQueries.retention`); a role with analytics but
   not retention gets the error boundary.
+  `done: 2026-09-20` — the retention read is no longer prefetched; the component gates it on `platform.retention.read`.
 - [x] `R.27` **CORS omits `last-event-id`**, so a cross-origin stream (the Tauri origin) can never
   resume.
   `done: 2026-09-20` — `last-event-id` added to the allowlist, with a spec beside the `x-api-key` one it mirrors.
@@ -401,7 +406,8 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   `apps/web/src` passes.
   `done: 2026-09-20` — Assertion 7 walks `sourceDirs()` now, so `apps/*` is covered. Proved with a temporary
   `"use client"` under `apps/web/src`, which it caught.
-- [ ] `R.32` **A `documentId` containing `:` becomes a 500** (BullMQ rejects `:` in a job id).
+- [x] `R.32` **A `documentId` containing `:` becomes a 500** (BullMQ rejects `:` in a job id).
+  `done: 2026-09-20` — the id is hashed, so no character a caller supplies reaches the job id.
 - [ ] `R.33` **Validation rules emitted with no copy behind them** — `unknown`, `past`, `format`,
   `range`, `min` are absent from `FIELD_RULE_COPY` and fall back to "Something went wrong".
 - [ ] `R.34` **Grant and revoke permission are a read-modify-write race.** Likely.
@@ -415,16 +421,20 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   `findById` null while the first transaction is still open. Likely.
 - [ ] `R.37` **A `scope: "goal"` role can be assigned as an organization membership role.** No
   goal-scoped keys ship today. Likely.
-- [ ] `R.38` **The digest includes categories the user did not set to digest.**
+- [x] `R.38` **The digest includes categories the user did not set to digest.**
+  `done: 2026-09-20` — `forDigest` replaces `wantsDigest`, and the count is the digestable rows.
 - [ ] `R.39` **The archive's only pre-drop verification is a `HEAD`** — `putStream` sends no
   whole-object checksum; a truncated object is first detected after the drop.
 - [ ] `R.40` **Tenant export loses `role_permissions` rows past five thousand** — the keyset is on
   `permission`, which is not unique within a tenant, with no tie-break.
-- [ ] `R.41` **`PgShardAssignmentRepository.all` uses the numeric offset as a text keyset cursor.**
+- [x] `R.41` **`PgShardAssignmentRepository.all` uses the numeric offset as a text keyset cursor.**
   No caller today; `24.2` will be the first.
-- [ ] `R.42` **A malformed keyset cursor becomes a Postgres `22P02`** — `KeysetCursor` validates the
+  `done: 2026-09-20` — `all(after, limit)` takes a cursor; the fake sorts and cuts the way the real one does.
+- [x] `R.42` **A malformed keyset cursor becomes a Postgres `22P02`** — `KeysetCursor` validates the
   timestamp but not `id`.
-- [ ] `R.43` **`PgTenantStorageReader.byTenant` offset-pages over an unstable order** (no tie-break).
+  `done: 2026-09-20` — the id half is validated as a uuid before the cursor decodes.
+- [x] `R.43` **`PgTenantStorageReader.byTenant` offset-pages over an unstable order** (no tie-break).
+  `done: 2026-09-20` — the order gains `organization_id` and `table_name` as tie-breaks.
 - [x] `R.44` **A dead "Move" control on the shard map** — `disabled={moves === "unavailable"}` and
   no `onClick`. Goes live and does nothing the day `25.5` flips the flag.
   `done: 2026-09-20` — Gated on a handler as well as on the server's `moves`, and nothing passes one yet —
@@ -639,3 +649,4 @@ work is finished, and nothing else records it.
 | 2026-09-20 | @sami | One env file, and ports that do not collide. Four env files became one: compose read `infra/.env` because `infra/` is its project directory, and `dotenv`'s cwd lookup layered `packages/infrastructure/.env` under five scripts with `DATABASE_URL` on a different port again. Both deleted; `tooling/scripts/compose.mjs` passes `--env-file` when the root file exists, which is conditional because `--env-file` errors on a missing file and CI has none. `dotenv` dropped entirely for Node's own loader. Every published port is the well-known one with a `1` in front, which is the scheme the README already taught, and `WEB_PORT` is now read rather than ignored. Assertion §27 pairs each `*_PORT` with the URL that dials it, checks every compose default against the template, and refuses a second `.env` anywhere. **It was written wrong first and the fixture caught it:** the template is CRLF, `.` matches no carriage return, and the `$`-anchored parse silently returned nothing, so the assertion passed on every tree including the broken ones |
 | 2026-09-20 | @sami | `R.3` and `R.4` fixed, the two High defects that did not need a second node. `R.3` in `ErrorNormalizer` rather than in `api-client`, because the normaliser covers the in-process SSR client too — and the spec found a second hole the review had not: an unknown wrapped code adopted the wrapper's own. `R.4` moved the digest's candidate list off `notification_preferences` and onto `notifications`, deleted the two preference methods rather than leaving them beside the new ones, and keyed the policy default by kind because one category holds two kinds that disagree. Seven red-then-green specs for `R.3`, eight for `R.4`; the two Postgres queries under `R.4` are `unverified:`, with the command. Two pre-existing blockers cleared on the way: `pnpm typecheck` needed a package build, and `pnpm lint` had been red since the fan-out commit on a dead pair of locals |
 | 2026-09-20 | @sami | The five ledgers moved to `archive/` and this file became the only open one. Their relative links were repaired for the new depth, the nine inbound references from `docs/` and `packages/*/docs/` were repointed so §15 still passes, and `docs/data-flow.md`'s "what is planned and not yet built" now names this file. Section 8 split: two doc edits still owed, six stale lines inside `archive/` marked frozen rather than filed |
+| 2026-09-20 | @sami | Ten more, six of them the commit before this one had fixed and not ticked. `R.16`/`R.32` were one line: a caller's `documentId` reached the BullMQ job id verbatim, which refuses a `:`, and the key held no content, so a re-index with new words returned success and indexed nothing — `JobKey` hashes both. `R.42` a cursor validated its timestamp and not its id while every consumer casts it `::uuid`; `R.41` a repository used a numeric offset as a text keyset, so page two was every key alphabetically after "25"; `R.43` an order on a sum with no tie-break under limit/offset; `R.26` a route prefetching a query gated on a permission it does not require. Then four new: `R.17` — the conversation member column's only constraint is `users.id`, which every tenant's people share, so a manager could add a user from another tenant and probe which ids exist. Its port is named `isActiveMember` rather than `isActive` **because parameters compare bivariantly**: `auth`'s reader takes the user first, and one standing in for the other typechecks and then swaps the arguments at run time. `R.14` the preferences grid read a category's default off its first event, which has no recipients; `R.38` the digest counted rows from categories already emailed one at a time; `R.20` `deleteFor` had no caller anywhere and that table carries no foreign key |
