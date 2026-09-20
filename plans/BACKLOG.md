@@ -35,7 +35,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | Section | What | Open |
 |---|---|---|
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 35 |
-| 2 | `archive/REVIEW.md` defects | 10 |
+| 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 3 |
 | 4 | Unfinished work buried inside ticked items | 7 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
@@ -225,8 +225,12 @@ A full read at `d98c9f3`, verified by reading callers; **runtime-proved** means 
 script. Each line: where, the failure, the shape of the fix. The full entry with the proof is in
 `archive/REVIEW.md` under the same ID. Ranked as the review ranked them.
 
-**Fifteen are fixed**, all on 2026-09-20: every High (`R.1`–`R.5`), plus `R.12`, `R.13`,
-`R.22`, `R.27`, `R.28`, `R.29`, `R.30`, `R.31`, `R.35` and `R.44`. **Thirty are open.**
+**All forty-five are fixed**, on 2026-09-20. Every entry below carries a `done:` line saying what
+the fix was; the ones with something a reader should still know say it there. **Two are worth
+finding again without reading the whole list:** `R.9` is the one defect that ships with no unit
+test, because `session.fn.ts` calls `createServerFn` at module scope and hangs under vitest; and
+`R.24` changed no behaviour at all, only comments that were untrue, because the behaviour behind it
+is `23.1`'s decision to take.
 
 ### High — data loss, a page that crashes, or a feature that never happens
 
@@ -387,13 +391,16 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   a skeleton, so the button removed itself on click.
 ### Low — a wrong edge, a wrong number, or a promise in a doc the code does not keep
 
-- [ ] `R.23` **SIGTERM is ignored while boot is hung** (`main.ts`: the handler is
+- [x] `R.23` **SIGTERM is ignored while boot is hung** (`main.ts`: the handler is
   `started.then(...)`, and `start()` blocks on an unreachable queue Redis). Race `started` against a
   hard exit on a boot-phase signal.
-- [ ] `R.24` **The `deliver` de-duplication window is "the last thousand completions"** — the
+  `done: 2026-09-20` — the wait for boot is bounded at five seconds; past it the worker logs and exits non-zero rather than pretending to drain.
+- [x] `R.24` **The `deliver` de-duplication window is "the last thousand completions"** — the
   publisher always sets `count: 1_000` and the consumer raises only `age`. Same fact as `23.1`.
-- [ ] `R.25` **The projection checkpoint can permanently skip a row that commits late** — no
+  `done: 2026-09-20` — **no behaviour change**, because the behaviour is `23.1`'s decision. Three comments and `consumers.md` stop claiming a 24-hour window the queue does not have: BullMQ trims on every completion by whichever of age and count bites first, and the drain's repeat job trims this queue to ten every second. Nothing depends on it — the subscribers are idempotent on `event.id`.
+- [x] `R.25` **The projection checkpoint can permanently skip a row that commits late** — no
   settle lag on `(occurred_at, id)`. An `occurred_at < now() - interval` guard is the usual shape.
+  `done: 2026-09-20` — the walk and the lag query stop thirty seconds behind the clock. `occurred_at` is stamped at write and rows commit out of that order, so a slow transaction landed below a checkpoint already past it and the keyset never looked back.
 - [x] `R.26` **`/platform/analytics` prefetches a query gated by a different permission than the
   route** (`platform.retention.read` via `PlatformQueries.retention`); a role with analytics but
   not retention gets the error boundary.
@@ -418,25 +425,31 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   `"use client"` under `apps/web/src`, which it caught.
 - [x] `R.32` **A `documentId` containing `:` becomes a 500** (BullMQ rejects `:` in a job id).
   `done: 2026-09-20` — the id is hashed, so no character a caller supplies reaches the job id.
-- [ ] `R.33` **Validation rules emitted with no copy behind them** — `unknown`, `past`, `format`,
+- [x] `R.33` **Validation rules emitted with no copy behind them** — `unknown`, `past`, `format`,
   `range`, `min` are absent from `FIELD_RULE_COPY` and fall back to "Something went wrong".
-- [ ] `R.34` **Grant and revoke permission are a read-modify-write race.** Likely.
+  `done: 2026-09-20` — five keys in both locales, and `format` reuses `invalidFormat`.
+- [x] `R.34` **Grant and revoke permission are a read-modify-write race.** Likely.
+  `done: 2026-09-20` — `savePermission` and `deletePermission` write one row, and the answer is re-read inside the transaction.
 - [x] `R.35` **A stale allowlist in the procedure-coverage spec** — `AWAITING_A_PROCEDURE` still
   names `platform.analytics.read`, `platform.analytics.manage`, `platform.storage.read` and
   `platform.tenant.manage`, all gated since Phases 19–20 (re-read 2026-09-20: still stale). Only
   `platform.shards.manage` belongs there until `24.2`.
   `done: 2026-09-20` — Four gated keys removed; only `platform.shards.manage` remains, and it waits on `24.2`.
   Each of the four was checked against `PROCEDURE_PERMISSIONS` before removing it.
-- [ ] `R.36` **An in-flight duplicate send writes two rows** — the retry finds the claim held and
+- [x] `R.36` **An in-flight duplicate send writes two rows** — the retry finds the claim held and
   `findById` null while the first transaction is still open. Likely.
-- [ ] `R.37` **A `scope: "goal"` role can be assigned as an organization membership role.** No
+  `done: 2026-09-20` — a claim younger than ten seconds is the first attempt still writing, and is refused rather than taken over.
+- [x] `R.37` **A `scope: "goal"` role can be assigned as an organization membership role.** No
   goal-scoped keys ship today. Likely.
+  `done: 2026-09-20` — `RoleRules.assertMembershipScope`, called by invite and change-role. The rule is "not goal", never "org only": `platform_admin` is `scope: "platform"` and *is* a membership row in the tier.
 - [x] `R.38` **The digest includes categories the user did not set to digest.**
   `done: 2026-09-20` — `forDigest` replaces `wantsDigest`, and the count is the digestable rows.
-- [ ] `R.39` **The archive's only pre-drop verification is a `HEAD`** — `putStream` sends no
+- [x] `R.39` **The archive's only pre-drop verification is a `HEAD`** — `putStream` sends no
   whole-object checksum; a truncated object is first detected after the drop.
-- [ ] `R.40` **Tenant export loses `role_permissions` rows past five thousand** — the keyset is on
+  `done: 2026-09-20` — the stored length is compared against the bytes streamed, through a new `sizeOf` on the port. A multipart upload that lost a part answers the same `HEAD`.
+- [x] `R.40` **Tenant export loses `role_permissions` rows past five thousand** — the keyset is on
   `permission`, which is not unique within a tenant, with no tie-break.
+  `done: 2026-09-20` — `(role_id, permission)` as a row constructor, and a spec checks every export table's keyset against the unique indexes Postgres actually has.
 - [x] `R.41` **`PgShardAssignmentRepository.all` uses the numeric offset as a text keyset cursor.**
   No caller today; `24.2` will be the first.
   `done: 2026-09-20` — `all(after, limit)` takes a cursor; the fake sorts and cuts the way the real one does.
@@ -449,12 +462,13 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   no `onClick`. Goes live and does nothing the day `25.5` flips the flag.
   `done: 2026-09-20` — Gated on a handler as well as on the server's `moves`, and nothing passes one yet —
   `25.5` supplies both. Without that it goes live doing nothing the day the flag flips.
-- [ ] `R.45` **Two specs whose assertion does not check what their name claims** —
+- [x] `R.45` **Two specs whose assertion does not check what their name claims** —
   `use-app-mutation.spec.tsx` "cancels queries" (never observes `cancelQueries`) and
   `realtime.context.spec.tsx` "stays disconnected" (asserts `"off"`, the initial state before
   the effect runs). Both re-checked 2026-09-20 and both still true.
   **The third bullet is closed:** `packages/feature/tests/support/transport-error.ts` is the
   wire-shape fixture whose absence let `R.3` ship, and two specs use it.
+  `done: 2026-09-20` — the cancel case spies on `cancelQueries` and pins the ordering; the disconnected case waits for the attempt, and a second case covers the transition a failure-to-open cannot show.
 
 **The specs that would have caught the high ones, and do not exist:** a `sweepDeleted` spec under
 `tests/cold/` (`R.1`, `R.5`); a two-node drain in the sharded smoke, gated on `24.1` (`R.2`); a
@@ -661,3 +675,4 @@ work is finished, and nothing else records it.
 | 2026-09-20 | @sami | The five ledgers moved to `archive/` and this file became the only open one. Their relative links were repaired for the new depth, the nine inbound references from `docs/` and `packages/*/docs/` were repointed so §15 still passes, and `docs/data-flow.md`'s "what is planned and not yet built" now names this file. Section 8 split: two doc edits still owed, six stale lines inside `archive/` marked frozen rather than filed |
 | 2026-09-20 | @sami | Ten more, six of them the commit before this one had fixed and not ticked. `R.16`/`R.32` were one line: a caller's `documentId` reached the BullMQ job id verbatim, which refuses a `:`, and the key held no content, so a re-index with new words returned success and indexed nothing — `JobKey` hashes both. `R.42` a cursor validated its timestamp and not its id while every consumer casts it `::uuid`; `R.41` a repository used a numeric offset as a text keyset, so page two was every key alphabetically after "25"; `R.43` an order on a sum with no tie-break under limit/offset; `R.26` a route prefetching a query gated on a permission it does not require. Then four new: `R.17` — the conversation member column's only constraint is `users.id`, which every tenant's people share, so a manager could add a user from another tenant and probe which ids exist. Its port is named `isActiveMember` rather than `isActive` **because parameters compare bivariantly**: `auth`'s reader takes the user first, and one standing in for the other typechecks and then swaps the arguments at run time. `R.14` the preferences grid read a category's default off its first event, which has no recipients; `R.38` the digest counted rows from categories already emailed one at a time; `R.20` `deleteFor` had no caller anywhere and that table carries no foreign key |
 | 2026-09-20 | @sami | Every Medium review defect closed, in four commits. Three in the worker: the retention pass branched on `cold_mode` before reading the per-tenant overrides, and `drop` destroys a month, so a tenant that had bought three years lost it at the deployment's cutoff with nothing in cold storage; `deliver` jobs carried no priority, and BullMQ empties the plain wait list before it touches the prioritized set, so the drain's `priority: 1` put it exactly last rather than first; `cold-restore` and `tenant-export` named a tenant and placed nothing. Three in the web tier, all of them a client reconnecting forever: a deactivated membership still rendered the shell, a throw from inside a streaming handler never reached the error middleware because `next()` resolves when the generator is created, and the realtime provider was keyed on the api client, which an organization switch does not change. Three in messaging: a null `last_message_at` sorts first under DESC and its cursor was null, so the list truncated on any page ending on a conversation with no messages; six use-cases published outside any transaction; and the last-owner count was read before the transaction opened, so two concurrent demotions could commit a tenant down to zero owners. And one in platform: a retention save composed the ClickHouse TTL from the base months alone and erased every per-action window. **Twenty-three specs, every one red on the old code first** — the two for the conversation keyset against Postgres. `R.9` is the single one with no unit test, and the entry says why |
+| 2026-09-20 | @sami | **Section 2 is empty. All forty-five review defects are fixed.** The last ten, in three commits. Three were silent data loss: the projection checkpoint could pass a row that had not committed yet and the strictly-greater keyset never looked back; the archive's only pre-drop check was `exists`, and the comment above it already said a `HEAD` was not enough, so a partition could be dropped behind an object that had lost a multipart part; and the tenant export paged `role_permissions` on `permission`, which repeats once per role. Two were races: grant and revoke read the whole permission list and wrote it back, and a send retry arriving while the first attempt's transaction was still open took the claim over and wrote a second message. One was an authorization gap — a goal role assignable as an organization membership, where the rule turns out to be "not goal" rather than "org only", because `platform_admin` is `scope: "platform"` and *is* a membership row. One was an unkillable worker: SIGTERM chained off a `start()` that blocks on an unreachable queue Redis. One was five validation rules with no copy behind them. One was two specs whose assertion did not check what their name claimed. And `R.24` changed no behaviour at all — it made three comments and a reference page stop claiming a duplicate-suppression window the queue has never had |
