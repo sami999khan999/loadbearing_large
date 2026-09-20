@@ -1,8 +1,6 @@
 import {
   and,
-  asc,
   eq,
-  gt,
   inArray,
   type NotificationCategory,
   type NotificationPreferenceRepository,
