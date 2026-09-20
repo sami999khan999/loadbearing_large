@@ -35,6 +35,15 @@ export class RoleRules {
     if (role.isSystem) throw new ConflictError("role", "system");
   }
 
+  // A goal role belongs on `goal_members`, never on `memberships`: assigned as one it
+  // would hand its keys out across the whole tenant instead of inside one goal.
+  // ──
+  // Not "org only". `platform_admin` is `scope: "platform"` and *is* a membership row,
+  // in the one organization marked `is_platform`.
+  public static assertMembershipScope(role: RoleRecord): void {
+    if (role.scope === "goal") throw new ConflictError("role", "scope");
+  }
+
   public static assertKnownPermission(permission: string): PermissionKey {
     if (!PermissionRegistry.instance.isKnown(permission)) {
       throw new ValidationError([{ field: "permission", rule: "unknown" }]);

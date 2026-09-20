@@ -6,7 +6,7 @@ import type {
   UnitOfWork,
 } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
-import type { RoleRepository } from "../rbac/index.js";
+import { type RoleRepository, RoleRules } from "../rbac/index.js";
 import type { MemberRecord, MemberRepository } from "./member.repository.js";
 import { MemberRules } from "./member.rules.js";
 
@@ -38,6 +38,7 @@ export class ChangeMemberRoleUseCase {
     // rather than assigned across the boundary.
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
+    RoleRules.assertMembershipScope(role);
 
     if (member.roleId === role.id) return member;
 

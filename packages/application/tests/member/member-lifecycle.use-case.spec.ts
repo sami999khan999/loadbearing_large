@@ -25,6 +25,10 @@ const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
 const TARGET = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000012");
 const OWNER_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c1");
 const MEMBER_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c2");
+// The two scopes a membership must tell apart: `goal` belongs on `goal_members`, and
+// `platform` is `platform_admin`, which *is* a membership in the tier.
+const GOAL_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c3");
+const PLATFORM_ROLE = Identifiers.roleId.parse("018f8c00-0000-7000-8000-0000000000c4");
 
 const CLOCK = { now: () => new Date("2026-09-06T00:00:00.000Z") };
 
@@ -143,7 +147,25 @@ class StubRoles implements RoleRepository {
         permissions: [],
       });
     }
+    if (roleId === GOAL_ROLE || roleId === PLATFORM_ROLE) {
+      return Promise.resolve({
+        id: roleId,
+        key: roleId === GOAL_ROLE ? "goal_reviewer" : "platform_admin",
+        name: "Scoped",
+        description: null,
+        scope: roleId === GOAL_ROLE ? "goal" : "platform",
+        isSystem: false,
+        permissions: [],
+      });
+    }
     return Promise.resolve(null);
+  }
+  public savePermission(): Promise<void> {
+    throw new Error("not under test");
+  }
+
+  public deletePermission(): Promise<void> {
+    throw new Error("not under test");
   }
 }
 
@@ -432,5 +454,37 @@ describe("the last-owner rule takes the locking read", () => {
     );
 
     expect(after.locked).toBe(0);
+  });
+});
+
+// `R.37`. A goal role belongs on `goal_members`. Assigned as a membership it would hand
+// its keys out across the whole tenant instead of inside one goal.
+describe("a membership role cannot be goal-scoped", () => {
+  it("refuses to change a member onto a goal role", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await expect(
+      useCase.execute(actorHolding("member.role.change"), {
+        userId: TARGET,
+        roleId: GOAL_ROLE,
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(members.roleChanges).toEqual([]);
+  });
+
+  // `platform_admin` is `scope: "platform"` and *is* a membership row, in the one
+  // organization marked `is_platform`. The rule is "not goal", never "org only".
+  it("leaves a platform-scoped role assignable", async () => {
+    const members = new RecordingMembers(member(), 2);
+    const { useCase } = changeRole(members);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: PLATFORM_ROLE,
+    });
+
+    expect(members.roleChanges).toHaveLength(1);
   });
 });

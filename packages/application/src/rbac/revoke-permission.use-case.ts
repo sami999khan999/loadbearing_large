@@ -29,23 +29,24 @@ export class RevokePermissionUseCase {
     // by a renamed permission is exactly the one somebody needs to be able to remove.
     if (!role.permissions.includes(input.permission)) return role;
 
-    const updated: RoleRecord = {
-      ...role,
-      permissions: role.permissions.filter((held) => held !== input.permission),
-    };
-
-    await this.unitOfWork.run(async () => {
-      await this.roles.save(actor.organizationId, updated);
+    // One row, not the whole set. `save` reconciles against the list read above, so a
+    // concurrent grant was undone by a revoke that had never seen it.
+    const updated = await this.unitOfWork.run(async () => {
+      await this.roles.deletePermission(actor.organizationId, role.id, input.permission);
       await this.activity.record(actor, "role.permission.revoked", {
         roleId: role.id,
         permission: input.permission,
       });
+
+      return this.roles.findById(actor.organizationId, role.id);
     });
 
     // After the commit, never inside it: a flush while the old row is still the
     // committed one lets a concurrent read put the stale set straight back.
     await this.capabilities.invalidateOrganization(actor.organizationId);
 
-    return updated;
+    // The row cannot be gone: the transaction above wrote to it. Falling back keeps the
+    // return type honest without a throw for a case the database rules out.
+    return updated ?? role;
   }
 }

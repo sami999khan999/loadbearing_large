@@ -37,23 +37,26 @@ export class GrantPermissionUseCase {
 
     if (role.permissions.includes(permission)) return role;
 
-    const updated: RoleRecord = {
-      ...role,
-      permissions: [...role.permissions, permission].sort(),
-    };
-
-    await this.unitOfWork.run(async () => {
-      await this.roles.save(actor.organizationId, updated);
+    // One row, not the whole set. `save` reconciles against the list read above, so two
+    // concurrent grants each wrote the set the other had not seen and one was lost.
+    const updated = await this.unitOfWork.run(async () => {
+      await this.roles.savePermission(actor.organizationId, role.id, permission);
       await this.activity.record(actor, "role.permission.granted", {
         roleId: role.id,
         permission,
       });
+
+      // Re-read inside the transaction, so the answer includes a grant that landed
+      // between this caller's read and its write rather than silently dropping it.
+      return this.roles.findById(actor.organizationId, role.id);
     });
 
     // After the commit, never inside it: a flush while the old row is still the
     // committed one lets a concurrent read put the stale set straight back.
     await this.capabilities.invalidateOrganization(actor.organizationId);
 
-    return updated;
+    // The row cannot be gone: the transaction above wrote to it. Falling back keeps the
+    // return type honest without a throw for a case the database rules out.
+    return updated ?? role;
   }
 }

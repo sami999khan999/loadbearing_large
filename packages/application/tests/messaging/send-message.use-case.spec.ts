@@ -206,13 +206,13 @@ describe("SendMessageUseCase, the send dedupe", () => {
     expect(harness.realtime.frames).toHaveLength(1);
   });
 
-  // The branch worth the spec: the first attempt set the key and then rolled back, so
-  // the claim names a row that is not there.
+  // The first attempt set the key and then rolled back, so the claim names a row that is
+  // not there. A minute ago, which is what separates that from one still writing.
   it("sends as new when the claim names a row that was never written", async () => {
     const harness = build();
     harness.cache.entries.set(dedupeKey, {
       id: "018f8c00-0000-7000-8000-0000000000de",
-      createdAt: NOW.toISOString(),
+      createdAt: new Date(NOW.getTime() - 60_000).toISOString(),
     });
 
     const sent = await harness.useCase.execute(principal(), input);
@@ -222,5 +222,24 @@ describe("SendMessageUseCase, the send dedupe", () => {
     // And the claim now names the row that exists, so the *next* retry is deduped
     // rather than writing a third message.
     expect(harness.cache.entries.get(dedupeKey)).toMatchObject({ id: sent.id });
+  });
+
+  // `R.36`. The retry arrives while the first attempt's transaction is still open, so
+  // the claim is held and `findById` cannot see the row it has already written.
+  it("refuses a retry that arrives while the first attempt is still writing", async () => {
+    const harness = build();
+    harness.cache.entries.set(dedupeKey, {
+      id: "018f8c00-0000-7000-8000-0000000000de",
+      createdAt: NOW.toISOString(),
+    });
+
+    await expect(harness.useCase.execute(principal(), input)).rejects.toThrow("CONFLICT");
+
+    // Nothing written, and the claim untouched: taking it over is what produced the
+    // second row once the first transaction finally committed.
+    expect(harness.messages.saved).toEqual([]);
+    expect(harness.cache.entries.get(dedupeKey)).toMatchObject({
+      id: "018f8c00-0000-7000-8000-0000000000de",
+    });
   });
 });

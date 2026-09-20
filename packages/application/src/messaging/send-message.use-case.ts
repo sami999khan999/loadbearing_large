@@ -1,5 +1,6 @@
 import {
   type Clock,
+  ConflictError,
   type ConversationKind,
   type MessageId,
   type SendMessageInput,
@@ -19,6 +20,10 @@ import type { MessageRecord, MessageRepository } from "./message.repository.js";
 // A day. Long enough that no client retries past it, short enough that the dedupe set is
 // bounded by a day of traffic rather than by the conversation's whole history.
 const DEDUPE_TTL_SECONDS = 86_400;
+
+// How long a claim whose row is not there yet reads as "still being written" rather than
+// "rolled back". Longer than any send transaction, shorter than a person's patience.
+const IN_FLIGHT_MS = 10_000;
 
 // What the dedupe key holds: enough to find the row the first attempt wrote, and nothing
 // else — `findById` carries `createdAt` as the partition hint.
@@ -59,13 +64,21 @@ export class SendMessageUseCase {
     );
 
     if (!claimed) {
-      const held = await this.replay(actor, input, key);
+      const previous = await this.cache.get<HeldSend>(key);
+      const held = previous ? await this.replay(actor, input, previous) : null;
+
       // Returned without touching the conversation, the outbox or the fast path, so the
       // two attempts stay indistinguishable — which is what the old `DO UPDATE` bought.
       if (held) return held;
 
-      // The key named a row that is not there: the first attempt rolled back after
-      // setting it. Take the claim over, so the next retry finds this attempt's row.
+      // A claim whose row is not there *yet* is the first attempt still running, not a
+      // rollback: its transaction is open, so `findById` cannot see what it wrote.
+      if (previous && createdAt.getTime() - Date.parse(previous.createdAt) < IN_FLIGHT_MS) {
+        throw new ConflictError("message", "inFlight");
+      }
+
+      // Past the window the first attempt is gone, and it rolled back after setting the
+      // key. Take the claim over, so the next retry finds this attempt's row.
       await this.cache.set<HeldSend>(
         key,
         { id, createdAt: createdAt.toISOString() },
@@ -93,16 +106,13 @@ export class SendMessageUseCase {
     return message;
   }
 
-  // Null means the claim is held and the row is not there — the first attempt rolled back
-  // after setting the key. Sending as new is the branch worth a spec.
+  // Null means the claim is held and the row is not there — either the first attempt is
+  // still inside its transaction, or it rolled back. The caller tells those apart.
   private async replay(
     actor: Principal,
     input: SendMessageInput,
-    key: string,
+    held: HeldSend,
   ): Promise<MessageRecord | null> {
-    const held = await this.cache.get<HeldSend>(key);
-    if (!held) return null;
-
     return this.messages.findById(
       actor.organizationId,
       input.conversationId,

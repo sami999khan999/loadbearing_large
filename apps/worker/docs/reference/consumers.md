@@ -216,9 +216,17 @@ would still do its work again on every retry.
 
 **The job id is `<subscriber>_<eventId>`, and it is the deduplication key.** A crash between
 `relay` and the `published_at` mark re-drains the same rows, produces the same ids, and BullMQ
-drops the duplicates — which is why `removeOnCompleteAgeSeconds` on this queue is 24 hours rather
-than the default hour. That window is the guarantee, not tuning. Anything older is caught by the
-subscribers' own idempotency, which is a stated requirement rather than a hope.
+drops the duplicates — which is why `removeOnCompleteAgeSeconds` on this queue asks for 24 hours
+rather than the default hour.
+
+**The window it actually gets is seconds, and that is not a bug to fix here.** BullMQ trims a
+queue's completed set on *every* completion, by whichever of age and count bites first. The
+publisher sets `count: 1_000`, and the drain's own repeat job — on this same queue, once a second —
+sets `removeOnComplete: 10`. So the set holds roughly the last ten completions, and the 24 hours
+never applies. **Nothing depends on it**: the subscribers are idempotent on `event.id`, which is a
+stated requirement rather than a hope, and the id dedupe is a cheap first line rather than the
+guarantee. Giving the drain a queue of its own would restore the long window; that is a decision
+with a cost, and it is filed rather than taken.
 
 **An event nobody listens for still gets marked published.** Leaving it pending would make the
 outbox grow forever on a name whose subscriber was deleted.
@@ -226,7 +234,10 @@ outbox grow forever on a name whose subscriber was deleted.
 **The drain is bounded**: 100 rows a batch, at most 20 batches a run. Unbounded, a backlog would
 hold the worker inside one job while the one-second schedule piled up behind it. And it runs at
 `priority: 1`, ahead of the deliveries it creates — a backlog of `deliver` jobs must not starve the
-drain, or the outbox grows while the worker looks busy.
+drain, or the outbox grows while the worker looks busy — and the deliveries carry
+`priority: 10` for that to mean anything. A job with **no** priority goes on the plain wait list,
+which `moveToActive` empties before it looks at the prioritized set, so a priority on the drain
+alone put it exactly last.
 
 `outbox.drain.lagged` exists because a drain that has stopped running is otherwise silent: "no
 events published" and "no events to publish" produce the same line. Sixty seconds behind, on a
