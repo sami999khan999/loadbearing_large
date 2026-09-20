@@ -38,6 +38,10 @@ let organization: OrganizationId;
 // cannot separate them, and the bug that hides is invisible against spread-out data.
 const INSTANT = new Date("2031-03-01T00:00:00.000Z");
 
+// Past every row this spec writes. The settle horizon is the consumer's policy — these
+// cases are about the keyset, and a horizon here would hide it behind an empty page.
+const NO_HORIZON = new Date("2099-01-01T00:00:00.000Z");
+
 // Where every read starts, because `since()` walks the whole table by design. Both
 // halves: a checkpoint carrying only a timestamp is treated as none at all.
 const BEFORE = {
@@ -90,7 +94,7 @@ const write = async (count: number) => {
 // Only this spec's rows: nothing else writes to 2031-03, and the partition is dropped
 // afterwards, so reading from `BEFORE` is exactly this window.
 const mine = async () =>
-  (await reader.since(organization, BEFORE, 1_000)).filter(
+  (await reader.since(organization, BEFORE, 1_000, [], NO_HORIZON)).filter(
     (record) => record.occurredAt.getTime() === INSTANT.getTime(),
   );
 
@@ -107,7 +111,7 @@ describe("PgActivityReplayReader", () => {
     let checkpoint: { lastOccurredAt: Date | null; lastId: string | null } = { ...BEFORE };
 
     for (let i = 0; i < 10; i++) {
-      const batch = await reader.since(organization, checkpoint, 2);
+      const batch = await reader.since(organization, checkpoint, 2, [], NO_HORIZON);
       const window = batch.filter((r) => r.occurredAt.getTime() === INSTANT.getTime());
       seen.push(...window.map((r) => r.id));
       if (batch.length === 0) break;
@@ -131,6 +135,8 @@ describe("PgActivityReplayReader", () => {
         organization,
         { lastOccurredAt: third.occurredAt, lastId: third.id },
         1_000,
+        [],
+        NO_HORIZON,
       )
     ).filter((record) => record.occurredAt.getTime() === INSTANT.getTime());
 
@@ -166,7 +172,7 @@ describe("PgActivityReplayReader", () => {
   // Per tenant since `16.6`, which is what makes the tenant level pay: the predicate
   // prunes to one list partition, and the walk runs on an index inside it.
   it("prunes to one tenant's partition and walks it on an index", async () => {
-    await reader.since(organization, BEFORE, 2);
+    await reader.since(organization, BEFORE, 2, [], NO_HORIZON);
 
     const issued = recorder.last;
     if (!issued) throw new Error("expected the walk above to have been logged");

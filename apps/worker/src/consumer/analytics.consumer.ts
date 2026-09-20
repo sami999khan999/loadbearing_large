@@ -27,6 +27,10 @@ export class AnalyticsConsumer {
   // see docs/reference/consumers.md.
   private static readonly BATCH_SIZE = 5_000;
 
+  // How far behind the clock the walk stops. `occurred_at` is stamped when a transaction
+  // starts, so a slow one commits below a checkpoint that has already passed it.
+  private static readonly SETTLE_LAG_MS = 30_000;
+
   // A ceiling on one job, not on the backlog, and total across tenants: one busy tenant
   // cannot make the run cost tenants x batches.
   private static readonly MAX_BATCHES_PER_RUN = 20;
@@ -265,6 +269,9 @@ export class AnalyticsConsumer {
     excluding: readonly ActivityAction[],
   ): Promise<{ projected: number; batches: number; lagMs: number }> {
     const projector = this.container.projector;
+    // The settle horizon for this tenant's whole walk, taken once. `occurred_at` is
+    // stamped at write and rows commit out of that order. See docs/reference/consumers.md.
+    const until = new Date(this.container.clock.now().getTime() - AnalyticsConsumer.SETTLE_LAG_MS);
     let checkpoint = await projector.checkpoint(organizationId);
     let projected = 0;
     let batches = 0;
@@ -276,6 +283,7 @@ export class AnalyticsConsumer {
         checkpoint,
         AnalyticsConsumer.BATCH_SIZE,
         excluding,
+        until,
       );
       if (records.length === 0) {
         caughtUp = true;
@@ -297,7 +305,7 @@ export class AnalyticsConsumer {
       }
     }
 
-    const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp, excluding);
+    const lagMs = await this.lagMs(organizationId, checkpoint, caughtUp, excluding, until);
     return { projected, batches, lagMs };
   }
 
@@ -308,16 +316,18 @@ export class AnalyticsConsumer {
     checkpoint: ProjectionCheckpoint,
     caughtUp: boolean,
     excluding: readonly ActivityAction[],
+    until: Date,
   ): Promise<number> {
     if (caughtUp) return 0;
 
-    // The same exclusion: lag measured over rows that will never be projected is a
-    // backlog that never shrinks and an alert that never clears.
+    // The same exclusion and the same horizon: lag measured over rows this walk was
+    // never going to reach is a backlog that never shrinks and an alert that never clears.
     const [oldest] = await this.container.activityReplay.since(
       organizationId,
       checkpoint,
       1,
       excluding,
+      until,
     );
     if (!oldest) return 0;
     return this.container.clock.now().getTime() - oldest.occurredAt.getTime();

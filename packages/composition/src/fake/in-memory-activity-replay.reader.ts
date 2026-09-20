@@ -24,9 +24,13 @@ export class InMemoryActivityReplayReader extends ActivityReplayReader {
     checkpoint: ProjectionCheckpoint,
     limit: number,
     excluding: readonly ActivityAction[] = [],
+    until: Date = new Date(8.64e15),
   ): Promise<readonly ActivityRecord[]> {
     const after = this.of(organizationId).filter((record) => {
       if (excluding.includes(record.action as ActivityAction)) return false;
+      // The settle horizon, applied here like the real one's `WHERE`: a fake that
+      // ignored it would let a consumer that forgot to pass one pass every test.
+      if (record.occurredAt > until) return false;
       if (!checkpoint.lastOccurredAt || !checkpoint.lastId) return true;
       const delta = record.occurredAt.getTime() - checkpoint.lastOccurredAt.getTime();
       return delta > 0 || (delta === 0 && record.id > checkpoint.lastId);

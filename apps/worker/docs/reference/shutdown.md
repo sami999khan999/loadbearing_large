@@ -74,6 +74,12 @@ signal arriving **during** boot drains rather than getting Node's default handli
 consumers running and schedules half registered. The handler waits on that promise before calling
 `stop()`: there is nothing to drain until the consumers exist.
 
+**That wait is bounded at five seconds.** `start()` blocks on an unreachable queue Redis, and a
+handler that simply chained off the promise did nothing at all in that state — the signal was
+accepted, no shutdown ran, and the orchestrator's grace period ended in a SIGKILL. When the deadline
+wins the race the worker logs a failure and exits non-zero rather than draining, because nothing was
+registered and `close()` on a worker that never started is not the same as a drain.
+
 Top-level `await` works here because the package is ESM and the tsconfig targets ES2024 under
 NodeNext resolution.
 

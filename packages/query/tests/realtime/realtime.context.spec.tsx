@@ -1,7 +1,7 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { RealtimeMessage } from "@loadbearing/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -93,11 +93,41 @@ describe("RealtimeProvider", () => {
   // A stream that fails to open is the retry plugin's business, not a rendered error:
   // the tab keeps working and refetches on focus meanwhile.
   it("stays mounted and disconnected when the stream cannot open", async () => {
-    const failing = {
-      realtime: { stream: () => Promise.reject(new Error("UNAVAILABLE")) },
+    const stream = vi.fn(() => Promise.reject(new Error("UNAVAILABLE")));
+    const { view } = mount({ realtime: { stream } } as unknown as ApiClient);
+
+    // The attempt first. `off` is also the state before the effect has run, so asserting
+    // it alone passed against a provider that never opened anything.
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+
+    expect(view.getByTestId("state").textContent).toBe("off");
+    expect(view.getByTestId("state")).toBeTruthy();
+  });
+
+  // The transition the case above cannot show: connected, then the stream drops. Without
+  // it "disconnected" is indistinguishable from "never connected".
+  it("returns to disconnected when an open stream ends", async () => {
+    let end: (() => void) | undefined;
+    const client = {
+      realtime: {
+        stream: () =>
+          Promise.resolve(
+            (async function* (): AsyncGenerator<RealtimeMessage> {
+              await new Promise<void>((resolve) => {
+                end = resolve;
+              });
+            })(),
+          ),
+      },
     } as unknown as ApiClient;
 
-    const { view } = mount(failing);
+    const { view } = mount(client);
+    await waitFor(() => expect(view.getByTestId("state").textContent).toBe("on"));
+
+    await act(async () => {
+      end?.();
+      await Promise.resolve();
+    });
 
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("off"));
   });

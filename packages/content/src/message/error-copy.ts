@@ -25,6 +25,13 @@ export const FIELD_RULE_COPY: Readonly<Record<string, ShellMessageKey>> = {
   tooLong: "error.field.tooLong",
   invalidFormat: "error.field.invalidFormat",
   invalid: "error.field.invalid",
+  // The five the domain actually emits. Unlisted they fell through to "Something went
+  // wrong", which tells a person nothing about the field their form is pointing at.
+  format: "error.field.invalidFormat",
+  unknown: "error.field.unknown",
+  past: "error.field.past",
+  range: "error.field.range",
+  min: "error.field.min",
 };
 
 // The seam an error page, boundary, or toast calls. Writes the unknown-rule fallback once.

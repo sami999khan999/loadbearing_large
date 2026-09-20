@@ -111,6 +111,16 @@ acknowledged, so a projector that failed mid-insert resumes from what is actuall
 A short batch means the replay has caught up — continuing would issue one more query to learn what
 the length already said.
 
+**The walk stops thirty seconds behind the clock, and that bound is not tuning.** `occurred_at` is
+stamped when a transaction *starts*, and transactions commit in whatever order they finish. A slow
+write that stamped an early timestamp becomes visible after a fast one that stamped a later one, so
+without a horizon the checkpoint moves past a row that has not been written yet — and the keyset is
+strictly greater, so that row is never read again. The projection is rebuildable and the loss would
+still be silent: ClickHouse would simply be missing rows nobody counted. Thirty seconds is longer
+than any transaction this system runs, and the cost is that analytics trail the audit trail by half
+a minute. The same horizon goes to the lag query, or the metric reports a backlog the walk was never
+going to reach.
+
 **Lag is warned on separately, at `warn` rather than `debug`.** A projection that throws is already an
 error line; one that quietly falls further behind every run produces nothing at all.
 

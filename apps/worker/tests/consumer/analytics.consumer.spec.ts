@@ -348,3 +348,45 @@ describe("AnalyticsConsumer reconcile", () => {
     });
   });
 });
+
+// `R.25`. `occurred_at` is stamped when a transaction starts and rows commit out of that
+// order, so a row can become visible below a checkpoint that has already passed it.
+describe("AnalyticsConsumer project — the settle horizon", () => {
+  const secondsBefore = (seconds: number) => new Date(NOW.getTime() - seconds * 1_000);
+
+  it("leaves a row inside the settle window for the next run", async () => {
+    const { consumer, projected } = harness([
+      record("a", secondsBefore(120)),
+      // Ten seconds old, so a transaction that started at the same instant and has not
+      // committed yet would land underneath it.
+      record("b", secondsBefore(10)),
+    ]);
+
+    await consumer.handle(job("project"));
+
+    expect(projected.projected().map((row) => row.id)).toEqual(["a"]);
+  });
+
+  // The other half: the horizon is a delay, never a filter. A row that has settled is
+  // projected on the run after the one that skipped it.
+  it("projects it once it is older than the window", async () => {
+    const { consumer, projected } = harness([record("b", secondsBefore(45))]);
+
+    await consumer.handle(job("project"));
+
+    expect(projected.projected().map((row) => row.id)).toEqual(["b"]);
+  });
+
+  // Lag takes the same horizon. Measured without it, a run reports a backlog made
+  // entirely of rows the walk was never going to reach, and the alert never clears.
+  it("reports no lag for a backlog that is all inside the window", async () => {
+    const { consumer, logger } = harness([record("b", secondsBefore(5))]);
+
+    await consumer.handle(job("project"));
+
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({
+      events: 0,
+      lagSeconds: 0,
+    });
+  });
+});

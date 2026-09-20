@@ -33,11 +33,15 @@ export interface DailyCount {
 export abstract class ActivityReplayReader {
   // Keyset on `(occurredAt, id)` within one tenant. `excluding` is applied in the
   // query: filtered after it, a full page of excluded rows reads as caught up.
+  // ──
+  // `until` is the settle horizon. `occurred_at` is stamped when a transaction starts
+  // and rows commit out of that order, so one can appear below a checkpoint already past it.
   public abstract since(
     organizationId: OrganizationId,
     checkpoint: ProjectionCheckpoint,
     limit: number,
     excluding: readonly ActivityAction[],
+    until: Date,
   ): Promise<readonly ActivityRecord[]>;
 
   // The authoritative half of the daily reconciliation, `[from, to)`, one tenant. Both

@@ -54,16 +54,31 @@ const EXPORT_PAGE = 5_000;
 
 // Beyond the seven partitioned tables, the rows a tenant owns in the catalog — and the
 // columns each one redacts. A hash is a credential, not data the customer owns.
-const CATALOG_TABLES = Object.freeze([
-  Object.freeze({ name: "memberships", key: "id", redacted: [] as readonly string[] }),
-  Object.freeze({ name: "roles", key: "id", redacted: [] as readonly string[] }),
-  // Keyed on the permission: its primary key is `(organization_id, role_id, permission)`
-  // and it has no `id` column, so the keyset cannot be the one every other table uses.
-  Object.freeze({ name: "role_permissions", key: "permission", redacted: [] as readonly string[] }),
-  Object.freeze({ name: "goal_members", key: "id", redacted: [] as readonly string[] }),
-  Object.freeze({ name: "permission_overrides", key: "id", redacted: [] as readonly string[] }),
-  Object.freeze({ name: "invitations", key: "id", redacted: ["token_hash"] as readonly string[] }),
-  Object.freeze({ name: "api_keys", key: "id", redacted: ["token_hash"] as readonly string[] }),
+type ExportTable = {
+  readonly name: string;
+  readonly keys: readonly string[];
+  readonly redacted: readonly string[];
+};
+
+const catalogTable = (
+  name: string,
+  keys: readonly string[],
+  redacted: readonly string[] = [],
+): ExportTable =>
+  Object.freeze({ name, keys: Object.freeze(keys), redacted: Object.freeze(redacted) });
+
+// Exported for the spec that checks each one's keys really are unique within the tenant.
+// `role_permissions` was declared on `permission` alone, which repeats once per role.
+export const CATALOG_TABLES: readonly ExportTable[] = Object.freeze([
+  catalogTable("memberships", ["id"]),
+  catalogTable("roles", ["id"]),
+  // Both columns of its key past the tenant. Its primary key is `(organization_id,
+  // role_id, permission)`, and `permission` alone repeats once per role that holds it.
+  catalogTable("role_permissions", ["role_id", "permission"]),
+  catalogTable("goal_members", ["id"]),
+  catalogTable("permission_overrides", ["id"]),
+  catalogTable("invitations", ["id"], ["token_hash"]),
+  catalogTable("api_keys", ["id"], ["token_hash"]),
 ]);
 
 // An alias rather than an interface: drizzle's `execute<T>` constrains `T` to
@@ -96,9 +111,12 @@ type EntryRow = {
 
 // An alias, not an interface, for the reason `ArchiveRow` gives: drizzle's `execute<T>`
 // wants an implicit index signature and only aliases have one.
+// ──
+// One `cursor_<column>` per key column: `role_permissions` pages on two of them,
+// because `permission` alone repeats once per role that holds it.
 type ExportRow = {
   line: string;
-  cursor: string;
+  [cursor: string]: string;
 };
 
 interface Cursor {
@@ -221,9 +239,13 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       // Recorded before anything is destroyed.
       await this.record(table, period, object);
 
-      // A `HEAD` is not enough: it proves an object exists, not that its bytes survived.
-      if (!(await this.storage.exists(stored.key))) {
-        throw new Error(`Archive object missing after upload: ${stored.key}`);
+      // The length, not existence. A multipart upload that lost a part answers the same
+      // `HEAD`, so the only pre-drop check passed on an object that was already short.
+      const length = await this.storage.sizeOf(stored.key);
+      if (length !== stored.size) {
+        throw new Error(
+          `Archive object is ${length ?? "missing"} bytes, expected ${stored.size}: ${stored.key}`,
+        );
       }
 
       await this.db.execute(sql`drop table ${sql.identifier(child.name)}`);
@@ -349,27 +371,13 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       const object = await this.exportTable(
         organizationId,
         stamp,
-        entry.name,
-        "id",
-        [],
-        sql`select row_to_json(t)::text as line, t.id::text as cursor
-            from ${sql.identifier(entry.name)} t
-            where t.organization_id = ${organizationId}::uuid`,
+        catalogTable(entry.name, ["id"]),
       );
       if (object) objects.push(object);
     }
 
     for (const table of CATALOG_TABLES) {
-      const object = await this.exportTable(
-        organizationId,
-        stamp,
-        table.name,
-        table.key,
-        table.redacted,
-        sql`select row_to_json(t)::text as line, t.${sql.identifier(table.key)}::text as cursor
-            from ${sql.identifier(table.name)} t
-            where t.organization_id = ${organizationId}::uuid`,
-      );
+      const object = await this.exportTable(organizationId, stamp, table);
       if (object) objects.push(object);
     }
 
@@ -388,15 +396,12 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
   private async exportTable(
     organizationId: OrganizationId,
     stamp: string,
-    table: string,
-    key: string,
-    redacted: readonly string[],
-    base: SQL,
+    table: ExportTable,
   ): Promise<ExportedObject | null> {
     const counted = { rows: 0 };
-    const source = Readable.from(this.exportRows(base, key, redacted, counted));
+    const source = Readable.from(this.exportRows(organizationId, table, counted));
     const body = source.pipe(createGzip());
-    const objectKey = `${EXPORT_PREFIX}/${organizationId}/${stamp}/${table}.ndjson.gz`;
+    const objectKey = `${EXPORT_PREFIX}/${organizationId}/${stamp}/${table.name}.ndjson.gz`;
 
     try {
       const stored = await this.storage.putStream(objectKey, body, "application/x-ndjson+gzip");
@@ -409,7 +414,7 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
       }
 
       return {
-        table,
+        table: table.name,
         key: stored.key,
         rowCount: counted.rows,
         bytes: stored.size,
@@ -421,25 +426,43 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
     }
   }
 
-  // Keyset on one column, which every table here has a unique one of within the tenant.
+  // Keyset on the columns unique within the tenant — plural, because `role_permissions`
+  // needs two and `permission` alone repeats once per role that holds it.
+  // ──
   // `OFFSET` would re-scan the table once per page and skip rows written in between.
   private async *exportRows(
-    base: SQL,
-    key: string,
-    redacted: readonly string[],
+    organizationId: OrganizationId,
+    table: ExportTable,
     counted: { rows: number },
   ): AsyncGenerator<Uint8Array> {
     const encoder = new TextEncoder();
-    const column = sql.identifier(key);
-    let after: string | null = null;
+    const columns = table.keys.map((key) => sql`t.${sql.identifier(key)}::text`);
+    const ordering = sql.join(columns, sql`, `);
+    const selected = sql.join(
+      table.keys.map(
+        (key, index) => sql`${columns[index] ?? sql`null`} as ${sql.identifier(`cursor_${key}`)}`,
+      ),
+      sql`, `,
+    );
+    let after: readonly string[] | null = null;
 
     for (;;) {
-      // Annotated, both of them: a ternary between two `sql` templates infers through
-      // `after` and back, which the compiler reports as an implicit `any`.
-      const keyset: SQL = after === null ? sql`` : sql`and t.${column}::text > ${after}`;
+      // A row constructor, so two columns compare as one pair rather than independently.
+      // Annotated: a ternary between two `sql` templates infers back as an implicit `any`.
+      const keyset: SQL =
+        after === null
+          ? sql``
+          : sql`and (${ordering}) > (${sql.join(
+              after.map((value) => sql`${value}`),
+              sql`, `,
+            )})`;
+
       const page: ExportRow[] = (
         await this.db.execute<ExportRow>(
-          sql`${base} ${keyset} order by t.${column} limit ${EXPORT_PAGE}`,
+          sql`select row_to_json(t)::text as line, ${selected}
+              from ${sql.identifier(table.name)} t
+              where t.organization_id = ${organizationId}::uuid ${keyset}
+              order by ${ordering} limit ${EXPORT_PAGE}`,
         )
       ).rows;
 
@@ -447,11 +470,14 @@ export class PgPartitionArchiveGateway extends BaseRepository implements Partiti
 
       for (const row of page) {
         counted.rows += 1;
-        yield encoder.encode(`${PgPartitionArchiveGateway.redact(row.line, redacted)}${NEWLINE}`);
+        yield encoder.encode(
+          `${PgPartitionArchiveGateway.redact(row.line, table.redacted)}${NEWLINE}`,
+        );
       }
 
-      after = page[page.length - 1]?.cursor ?? null;
-      if (page.length < EXPORT_PAGE) return;
+      const last = page[page.length - 1];
+      if (!last || page.length < EXPORT_PAGE) return;
+      after = table.keys.map((key) => String(last[`cursor_${key}`]));
     }
   }
 

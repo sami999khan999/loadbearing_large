@@ -123,6 +123,19 @@ export class S3StorageGateway extends StorageGateway {
     }
   }
 
+  // `ContentLength` off the same `HEAD`. A multipart upload that lost a part still
+  // answers that head, which is why existence alone proved nothing about the bytes.
+  public override async sizeOf(key: string): Promise<number | null> {
+    try {
+      const head = await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      );
+      return head.ContentLength ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // `ListObjectsV2` returns up to a thousand keys and this asks for no more: the one
   // reader is a tenant's exports, which is nine objects a day for seven days.
   public override async list(prefix: string): Promise<readonly string[]> {

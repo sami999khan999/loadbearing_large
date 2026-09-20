@@ -26,23 +26,55 @@ process.on("uncaughtException", (error: unknown) => {
   process.exit(1);
 });
 
+// How long a signal waits for boot to finish before giving up on a drain. `start()`
+// blocks on an unreachable queue Redis, and an unbounded wait is a SIGKILL.
+const BOOT_GRACE_MS = 5_000;
+
 // Started but not yet awaited, so the handlers below exist while boot is still running.
 // A signal arriving in that window drains instead of killing a half-built worker.
 const started = bootstrap.start();
 
+// Which side of the race won. `Promise.race` reports neither, and "boot finished" is
+// the whole question: there is nothing to drain until the consumers are registered.
+let booted = false;
+void started.then(
+  () => {
+    booted = true;
+  },
+  () => undefined,
+);
+
+const shutdown = async (signal: "SIGTERM" | "SIGINT"): Promise<never> => {
+  try {
+    await Promise.race([
+      started.catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, BOOT_GRACE_MS).unref()),
+    ]);
+
+    // Hung boot. Exiting non-zero is the honest answer: nothing was registered, so
+    // `close()` on a worker that never started is not the same as a drain.
+    if (!booted) {
+      container.logger.failure(new Error("boot did not finish before the signal deadline"), {
+        service: "worker",
+        signal,
+        graceMs: BOOT_GRACE_MS,
+      });
+      return process.exit(1);
+    }
+
+    await bootstrap.stop(signal);
+    return process.exit(0);
+  } catch (error: unknown) {
+    // Logged, never swallowed: a bare `.catch(() => process.exit(1))` turns every
+    // shutdown failure into an exit code.
+    container.logger.failure(error, { service: "worker", signal });
+    return process.exit(1);
+  }
+};
+
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    void started
-      // Boot first: there is nothing to drain until the consumers are registered, and
-      // `close()` on a worker that was never started is not the same as a drain.
-      .then(() => bootstrap.stop(signal))
-      .then(() => process.exit(0))
-      .catch((error: unknown) => {
-        // Logged, never swallowed: a bare `.catch(() => process.exit(1))` turns every
-        // shutdown failure into an exit code.
-        container.logger.failure(error, { service: "worker", signal });
-        process.exit(1);
-      });
+    void shutdown(signal);
   });
 }
 

@@ -21,6 +21,10 @@ export abstract class StorageGateway {
   public abstract delete(key: string): Promise<void>;
   public abstract exists(key: string): Promise<boolean>;
 
+  // The stored length, or null when there is no object. `exists` answers whether a key
+  // is there; this is what lets a caller check the bytes it wrote all arrived.
+  public abstract sizeOf(key: string): Promise<number | null>;
+
   // One page, and the caller picks a prefix narrow enough that one page is the answer.
   // Paging this would be a second method for a case no reader in this system has.
   public abstract list(prefix: string): Promise<readonly string[]>;

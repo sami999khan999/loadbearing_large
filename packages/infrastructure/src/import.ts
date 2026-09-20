@@ -223,6 +223,7 @@ export {
   isNull,
   type Logger as DrizzleLogger,
   lt,
+  lte,
   not,
   or,
   type SQL,
