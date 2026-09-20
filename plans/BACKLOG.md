@@ -35,7 +35,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | Section | What | Open |
 |---|---|---|
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 35 |
-| 2 | `archive/REVIEW.md` defects | 40 |
+| 2 | `archive/REVIEW.md` defects | 30 |
 | 3 | `archive/STUCK.md` blockers | 3 |
 | 4 | Unfinished work buried inside ticked items | 7 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
@@ -225,7 +225,8 @@ A full read at `d98c9f3`, verified by reading callers; **runtime-proved** means 
 script. Each line: where, the failure, the shape of the fix. The full entry with the proof is in
 `archive/REVIEW.md` under the same ID. Ranked as the review ranked them.
 
-**All four High are fixed**, 2026-09-20: `R.1`, `R.2`, `R.3` and `R.4`. Forty are open.
+**Fifteen are fixed**, all on 2026-09-20: every High (`R.1`–`R.5`), plus `R.12`, `R.13`,
+`R.22`, `R.27`, `R.28`, `R.29`, `R.30`, `R.31`, `R.35` and `R.44`. **Thirty are open.**
 
 ### High — data loss, a page that crashes, or a feature that never happens
 
@@ -331,11 +332,16 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
   messages.** `ORDER BY last_message_at DESC` puts NULLs first and `nextCursor` is null for a null
   row. Fix: sort and cursor on `coalesce(last_message_at, created_at)`, keep
   `conversations_recent_idx` in step.
-- [ ] `R.12` **Notification and digest emails link to relative URLs** (`/settings/members`).
+- [x] `R.12` **Notification and digest emails link to relative URLs** (`/settings/members`).
   Only the invitation mailer prefixes `config.email.baseUrl`. Fix: prefix in one place the two
   notification mailers share.
-- [ ] `R.13` **The digest footer names the organization by its UUID.**
+  `done: 2026-09-20` — Fixed in `ContentMailRenderer`, which is the one place both notification templates
+  pass through: it takes the base url and absolutises a relative one, leaving an already
+  absolute link alone. Three renderer specs.
+- [x] `R.13` **The digest footer names the organization by its UUID.**
   `send-notification-digest.use-case.ts:78` passes `input.organizationId` as `organization`.
+  `done: 2026-09-20` — `OrganizationReader` gains `nameOf` — one method on a port that already existed, so
+  the container's port count is unchanged. Resolved once per run, not per recipient.
 - [ ] `R.14` **The preferences screen shows `off / off` as the membership default** — the use-case
   takes the *first* policy row per category, and `member.invited` (recipients `none`) comes first.
   Fix: derive the default from rows that have recipients, or declare it on the category.
@@ -359,9 +365,12 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
 - [ ] `R.21` **The realtime stream stays subscribed to the previous tenant after an organization
   switch** — `RealtimeProvider` opens once per `client` identity and nothing remounts it. Fix: key
   the provider on the active organization id. Likely.
-- [ ] `R.22` **The notification inbox traps the user in "unread only"** — with no unread rows the
+- [x] `R.22` **The notification inbox traps the user in "unread only"** — with no unread rows the
   toggle is not rendered. Fix: render the toggle above the empty state.
 
+  `done: 2026-09-20` — The controls moved above every state rather than inside one. **The spec found the same
+  trap one layer up:** toggling the filter re-enters `isPending`, which also early-returned
+  a skeleton, so the button removed itself on click.
 ### Low — a wrong edge, a wrong number, or a promise in a doc the code does not keep
 
 - [ ] `R.23` **SIGTERM is ignored while boot is hung** (`main.ts`: the handler is
@@ -374,24 +383,34 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
 - [ ] `R.26` **`/platform/analytics` prefetches a query gated by a different permission than the
   route** (`platform.retention.read` via `PlatformQueries.retention`); a role with analytics but
   not retention gets the error boundary.
-- [ ] `R.27` **CORS omits `last-event-id`**, so a cross-origin stream (the Tauri origin) can never
+- [x] `R.27` **CORS omits `last-event-id`**, so a cross-origin stream (the Tauri origin) can never
   resume.
-- [ ] `R.28` **`redis-cache` sets an eviction policy but no `maxmemory`**, so it never evicts and is
+  `done: 2026-09-20` — `last-event-id` added to the allowlist, with a spec beside the `x-api-key` one it mirrors.
+- [x] `R.28` **`redis-cache` sets an eviction policy but no `maxmemory`**, so it never evicts and is
   OOM-killed instead. `infra/docker-compose.yml:143`.
-- [ ] `R.29` **`.env.example` ships an `AUTH_SECRET` placeholder that passes the only check**
+  `done: 2026-09-20` — `--maxmemory` is now set from `REDIS_CACHE_MAXMEMORY`, default 256mb. The policy was
+  unreachable without it: the default ceiling is 0, meaning none.
+- [x] `R.29` **`.env.example` ships an `AUTH_SECRET` placeholder that passes the only check**
   (46 characters against `min(32)`). Shorten it below 32 or refine against it.
-- [ ] `R.30` **`apps/web/docs/reference/env.md` names `AUTH_BOOTSTRAP_ORGANIZATION_SLUG`**; the key
+  `done: 2026-09-20` — The placeholder is nine characters, so it fails the schema's own `min(32)` rather than
+  booting. A placeholder that boots is one that reaches production.
+- [x] `R.30` **`apps/web/docs/reference/env.md` names `AUTH_BOOTSTRAP_ORGANIZATION_SLUG`**; the key
   is `BOOTSTRAP_ORGANIZATION_SLUG`.
-- [ ] `R.31` **`check:architecture` §7 does not look at `apps/*`** — a `"use client"` under
+  `done: 2026-09-20` — The doc names `BOOTSTRAP_ORGANIZATION_SLUG`, which is the key the schema has.
+- [x] `R.31` **`check:architecture` §7 does not look at `apps/*`** — a `"use client"` under
   `apps/web/src` passes.
+  `done: 2026-09-20` — Assertion 7 walks `sourceDirs()` now, so `apps/*` is covered. Proved with a temporary
+  `"use client"` under `apps/web/src`, which it caught.
 - [ ] `R.32` **A `documentId` containing `:` becomes a 500** (BullMQ rejects `:` in a job id).
 - [ ] `R.33` **Validation rules emitted with no copy behind them** — `unknown`, `past`, `format`,
   `range`, `min` are absent from `FIELD_RULE_COPY` and fall back to "Something went wrong".
 - [ ] `R.34` **Grant and revoke permission are a read-modify-write race.** Likely.
-- [ ] `R.35` **A stale allowlist in the procedure-coverage spec** — `AWAITING_A_PROCEDURE` still
+- [x] `R.35` **A stale allowlist in the procedure-coverage spec** — `AWAITING_A_PROCEDURE` still
   names `platform.analytics.read`, `platform.analytics.manage`, `platform.storage.read` and
   `platform.tenant.manage`, all gated since Phases 19–20 (re-read 2026-09-20: still stale). Only
   `platform.shards.manage` belongs there until `24.2`.
+  `done: 2026-09-20` — Four gated keys removed; only `platform.shards.manage` remains, and it waits on `24.2`.
+  Each of the four was checked against `PROCEDURE_PERMISSIONS` before removing it.
 - [ ] `R.36` **An in-flight duplicate send writes two rows** — the retry finds the claim held and
   `findById` null while the first transaction is still open. Likely.
 - [ ] `R.37` **A `scope: "goal"` role can be assigned as an organization membership role.** No
@@ -406,12 +425,16 @@ script. Each line: where, the failure, the shape of the fix. The full entry with
 - [ ] `R.42` **A malformed keyset cursor becomes a Postgres `22P02`** — `KeysetCursor` validates the
   timestamp but not `id`.
 - [ ] `R.43` **`PgTenantStorageReader.byTenant` offset-pages over an unstable order** (no tie-break).
-- [ ] `R.44` **A dead "Move" control on the shard map** — `disabled={moves === "unavailable"}` and
+- [x] `R.44` **A dead "Move" control on the shard map** — `disabled={moves === "unavailable"}` and
   no `onClick`. Goes live and does nothing the day `25.5` flips the flag.
-- [ ] `R.45` **Three specs whose assertion does not check what their name claims** —
-  `use-app-mutation.spec.tsx` "cancels queries" (never observes `cancelQueries`),
-  `realtime.context.spec.tsx` "stays disconnected" (asserts the initial state), and no spec in
-  `feature` or `api-client` feeds a decoded `ORPCError` (why `R.3` shipped).
+  `done: 2026-09-20` — Gated on a handler as well as on the server's `moves`, and nothing passes one yet —
+  `25.5` supplies both. Without that it goes live doing nothing the day the flag flips.
+- [ ] `R.45` **Two specs whose assertion does not check what their name claims** —
+  `use-app-mutation.spec.tsx` "cancels queries" (never observes `cancelQueries`) and
+  `realtime.context.spec.tsx` "stays disconnected" (asserts `"off"`, the initial state before
+  the effect runs). Both re-checked 2026-09-20 and both still true.
+  **The third bullet is closed:** `packages/feature/tests/support/transport-error.ts` is the
+  wire-shape fixture whose absence let `R.3` ship, and two specs use it.
 
 **The specs that would have caught the high ones, and do not exist:** a `sweepDeleted` spec under
 `tests/cold/` (`R.1`, `R.5`); a two-node drain in the sharded smoke, gated on `24.1` (`R.2`); a
@@ -610,6 +633,7 @@ work is finished, and nothing else records it.
 | Date | Who | Change |
 |---|---|---|
 | 2026-09-20 | @sami | Created at `885e144` from a full read of `PLAN.md`, `OPEN.md`, `REVIEW.md`, `STUCK.md`, `TODO.md` and every file already in `archive/`. Every "still true" and "already resolved" claim in section 4 was re-read from the source tree rather than from the plan |
+| 2026-09-20 | @sami | Ten more review defects, all verified against the tree before being marked: `R.12` notification mail linked to relative paths, fixed in the renderer both templates share; `R.13` the digest footer printed a uuid, so `OrganizationReader` gained `nameOf`; `R.22` the inbox trapped a reader in `unread only`, **and its spec found the same trap one layer up** — the pending skeleton removed the toggle too, so toggling deleted the button on click; `R.27` CORS omitted `last-event-id`, so a cross-origin stream could never resume; `R.28` an eviction policy with no ceiling never evicts; `R.29` a placeholder secret that booted; `R.30` a doc naming a key the schema does not have; `R.31` assertion 7 never walked `apps/*`; `R.35` four keys that had been gated since phases 19 and 20; `R.44` a live button with no handler. `R.45` narrowed to the two bullets still true |
 | 2026-09-20 | @sami | `R.2` fixed, and it was less blocked than the entry said. Both cross-node passes were handed the catalog unit of work, which never reads `ShardScope`, so `eachShard` looped the nodes and every iteration wrote to node 0; `Container` now builds a third `local`-placed `PgUnitOfWork` for them. That exposed the second bug the review flagged under the same binding — `sweepExpired` deletes three catalog tables from a `local` gateway, and was correct only by the node-0 fallback — so it uses `catalogDb`, the sanctioned crossing. **Proved on two real nodes:** `24.1` gates only the outbox half, because that needs a row whose foreign key is the `23503`; a month partition needs no key, so the sharded smoke asserts the runway lands on node 1 and not on the catalog, and it fails on the old binding. All four High defects are now closed |
 | 2026-09-20 | @sami | `R.1` and `R.5` fixed together, which is what the review said one tombstone would do. `partition_archive.deleted_at` is stamped by the delete and read by the nightly sweep, which had been keyed on `archived_at` — so the window measured how old each *month* was rather than how long ago the tenant went, and a tenant with a year of cold storage lost all but the newest months the night after the delete. The same predicate destroyed every `outbox_event` archive on every deployment, because that table has no tenant level and its months sit under a nil uuid no `organizations` row can match. Seven specs in `tests/cold/sweep-deleted.spec.ts`, the file the review named as missing; three fail on the old predicate. `R.4`'s `unverified:` note closed too, with eight cases running its two queries against Postgres |
 | 2026-09-20 | @sami | One env file, and ports that do not collide. Four env files became one: compose read `infra/.env` because `infra/` is its project directory, and `dotenv`'s cwd lookup layered `packages/infrastructure/.env` under five scripts with `DATABASE_URL` on a different port again. Both deleted; `tooling/scripts/compose.mjs` passes `--env-file` when the root file exists, which is conditional because `--env-file` errors on a missing file and CI has none. `dotenv` dropped entirely for Node's own loader. Every published port is the well-known one with a `1` in front, which is the scheme the README already taught, and `WEB_PORT` is now read rather than ignored. Assertion §27 pairs each `*_PORT` with the URL that dials it, checks every compose default against the template, and refuses a second `.env` anywhere. **It was written wrong first and the fixture caught it:** the template is CRLF, `.` matches no carriage return, and the `$`-anchored parse silently returned nothing, so the assertion passed on every tree including the broken ones |
