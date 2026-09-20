@@ -155,4 +155,17 @@ describe("OutboxConsumer", () => {
 
     expect(healthy.handled).toHaveLength(1);
   });
+  // The drain's `priority: 1` is only ahead of jobs that have one. BullMQ's
+  // `moveToActive` empties the plain wait list before it looks at the prioritized set.
+  it("gives every delivery a priority, so the drain outranks it", async () => {
+    const { container, outbox, queue } = harness();
+    outbox.enqueue(joined("018f8c00-0000-7000-8000-000000000021"));
+
+    await consumerFor(container).handle(job("drain"));
+
+    const priorities = queue.publishedTo(QueueName.EVENT).map((sent) => sent.options?.priority);
+
+    expect(priorities).toEqual([10]);
+    expect(priorities.every((value) => typeof value === "number")).toBe(true);
+  });
 });

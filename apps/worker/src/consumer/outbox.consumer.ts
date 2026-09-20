@@ -118,6 +118,9 @@ export class OutboxConsumer {
           { subscriber, event },
           {
             name: "deliver",
+            // Numbered, not absent. A job with no priority goes on the plain wait list,
+            // which `moveToActive` drains *before* it looks at the prioritized set.
+            priority: 10,
             // No `:` — BullMQ keys on this and rejects the job at publish time.
             jobId: `${subscriber}_${event.id}`,
             attempts: 5,
