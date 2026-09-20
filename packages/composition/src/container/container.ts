@@ -160,6 +160,7 @@ import {
   type StoragePolicyGateway,
   SubscriberRegistry,
   SystemClock,
+  type TenantMembershipReader,
   type TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,
   TransactionScope,
@@ -334,6 +335,9 @@ export class Container {
   // The worker reads none, and building them there costs nothing: none opens a
   // connection until called.
   public readonly memberships: MembershipReader;
+  // The same instance under `application`'s port. Two names because the two ports ask
+  // the same question in the opposite argument order — see `tenant-membership.reader.ts`.
+  public readonly tenantMemberships: TenantMembershipReader;
   public readonly invitationClaimer: InvitationClaimer;
   public readonly organizationFounder: OrganizationFounder;
 
@@ -707,6 +711,12 @@ export class Container {
       digestOrganizations: new ListDigestOrganizationsUseCase(notifications),
     };
 
+    // One instance under two ports, and they must never be passed for each other:
+    // `auth`'s takes the user first, `application`'s the tenant.
+    const memberships = new PgMembershipReader(this.cluster, this.transactions, this.shards);
+    this.memberships = memberships;
+    this.tenantMemberships = memberships;
+
     const messages = new PgMessageRepository(this.cluster, this.transactions, this.shards);
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.
@@ -720,12 +730,14 @@ export class Container {
         conversations,
         this.eventPublisher,
         this.routedUnitOfWork,
+        this.tenantMemberships,
       ),
       addMember: new AddConversationMemberUseCase(
         this.authorizer,
         conversationAccess,
         conversations,
         this.eventPublisher,
+        this.tenantMemberships,
       ),
       removeMember: new RemoveConversationMemberUseCase(
         this.authorizer,
@@ -795,7 +807,6 @@ export class Container {
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
     // is structural, so these lines are where a signature drift is caught.
-    this.memberships = new PgMembershipReader(this.cluster, this.transactions, this.shards);
     this.organizationFounder = new PgOrganizationFounder(
       this.cluster,
       this.transactions,
@@ -961,6 +972,7 @@ export class Container {
         this.catalogUnitOfWork,
         this.clock,
         this.analyticsProjector ?? null,
+        this.tenantRetentionPolicies,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,

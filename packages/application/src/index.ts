@@ -245,6 +245,7 @@ export {
   type StoredObject,
   type SweepOutcome,
   type TenantExport,
+  TenantMembershipReader,
   UnitOfWork,
   VectorStore,
 } from "./port/index.js";

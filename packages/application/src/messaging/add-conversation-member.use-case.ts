@@ -1,5 +1,5 @@
-import { ConflictError, type ConversationMemberInput } from "../import.js";
-import type { DomainEventPublisher } from "../port/index.js";
+import { ConflictError, type ConversationMemberInput, NotFoundError } from "../import.js";
+import type { DomainEventPublisher, TenantMembershipReader } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
 import type { ConversationAccess } from "./conversation-access.js";
@@ -10,6 +10,7 @@ export class AddConversationMemberUseCase {
     private readonly access: ConversationAccess,
     private readonly conversations: ConversationRepository,
     private readonly events: DomainEventPublisher,
+    private readonly memberships: TenantMembershipReader,
   ) {}
 
   public async execute(actor: Principal, input: ConversationMemberInput): Promise<void> {
@@ -22,6 +23,12 @@ export class AddConversationMemberUseCase {
 
     const already = conversation.members.some((member) => member.userId === input.userId);
     if (already) return;
+
+    // The only constraint on this column is `users.id`, not membership, so a holder in
+    // one tenant could add a user id from another and probe which ones exist.
+    if (!(await this.memberships.isActiveMember(actor.organizationId, input.userId))) {
+      throw new NotFoundError("member", input.userId);
+    }
 
     await this.conversations.saveMember(
       actor.organizationId,

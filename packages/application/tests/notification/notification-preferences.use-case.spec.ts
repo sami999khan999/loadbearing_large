@@ -123,4 +123,17 @@ describe("UpdateNotificationPreferenceUseCase", () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  // `member.invited` comes first and has no recipients, so the grid read the whole
+  // category `off` while delivery was using the two rows after it.
+  it("shows a membership default a reader would actually get", () => {
+    const useCase = new GetNotificationPreferencesUseCase(new Authorizer(), new Preferences());
+
+    return useCase.execute(actorHolding("notification.inbox.read")).then((resolved) => {
+      const membership = resolved.filter((row) => row.category === "membership");
+
+      expect(membership).not.toHaveLength(0);
+      for (const row of membership) expect(row.mode).not.toBe("off");
+    });
+  });
 });

@@ -82,19 +82,20 @@ export class SendNotificationDigestUseCase {
         since,
         SAMPLE,
       );
-      // Nothing to say. A daily message reading "you have 0 notifications" is how a
-      // digest gets filtered.
-      if (unread.length === 0) continue;
       // The candidate list is everyone with unread rows, so this is where the reader's
       // own answer is applied — stored if they set one, the policy's default if not.
-      if (!SendNotificationDigestUseCase.wantsDigest(stored, person.userId, unread)) continue;
+      const digestable = SendNotificationDigestUseCase.forDigest(stored, person.userId, unread);
+
+      // Nothing to say. A daily message reading "you have 0 notifications" is how a
+      // digest gets filtered, and a row already emailed immediately is not news.
+      if (digestable.length === 0) continue;
 
       await this.mail.publish({
         template: "notification.digest",
         to: person.email,
         locale: person.locale,
         params: {
-          count: unread.length,
+          count: digestable.length,
           name: person.name,
           organization,
           url: "/notifications",
@@ -127,14 +128,14 @@ export class SendNotificationDigestUseCase {
     return modes;
   }
 
-  // One unread row on digest is enough. A reader who set `messaging` to digest and left
-  // `membership` alone still gets a digest, and it is the messaging rows that earned it.
-  private static wantsDigest(
+  // The rows that earned the digest, not every unread row. A reader with one category on
+  // `immediate` was counted its items too, which they had already been emailed.
+  private static forDigest(
     stored: ReadonlyMap<string, string>,
     userId: UserId,
     unread: readonly NotificationRecord[],
-  ): boolean {
-    return unread.some((row) => {
+  ): readonly NotificationRecord[] {
+    return unread.filter((row) => {
       const mode =
         stored.get(storedKey(userId, row.category)) ??
         NotificationPolicy.defaultModeForKind(row.kind, "email");

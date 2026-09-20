@@ -83,6 +83,33 @@ const ROWS = Object.freeze({
 
 const NAMES: readonly DomainEventName[] = Object.freeze(Object.keys(ROWS) as DomainEventName[]);
 
+// How intrusive a mode is, most first. Where two kinds of one category disagree, the
+// screen shows the strongest: under-promising is the half a reader cannot discover.
+const LOUDNESS: readonly NotificationMode[] = Object.freeze(["immediate", "digest", "off"]);
+
+// Keyed by category for the preferences screen, whose toggle is per category. Same rows
+// as delivery reads, so the screen and delivery cannot disagree about which ones count.
+const DEFAULT_BY_CATEGORY: Readonly<
+  Record<string, Readonly<Record<NotificationChannel, NotificationMode>>>
+> = Object.freeze(
+  Object.values(ROWS as Record<string, PolicyRow>)
+    .filter((row) => row.recipients.kind !== "none")
+    .reduce<Record<string, Record<NotificationChannel, NotificationMode>>>((found, row) => {
+      const current = found[row.category];
+      if (!current) {
+        found[row.category] = { ...row.defaultMode };
+        return found;
+      }
+
+      for (const channel of ["in_app", "email"] as const) {
+        const mine = LOUDNESS.indexOf(row.defaultMode[channel]);
+        if (mine < LOUDNESS.indexOf(current[channel])) current[channel] = row.defaultMode[channel];
+      }
+
+      return found;
+    }, {}),
+);
+
 // Keyed by kind, and built only from the rows that actually write one: a row with no
 // recipients describes no notification in the table, so its modes are not a default.
 const DEFAULT_BY_KIND: Readonly<
@@ -112,6 +139,15 @@ export class NotificationPolicy {
 
   public static defaultMode(name: DomainEventName, channel: NotificationChannel): NotificationMode {
     return NotificationPolicy.rowFor(name)?.defaultMode[channel] ?? "off";
+  }
+
+  // What the preferences screen shows for a category nobody has saved. `member.invited`
+  // is `off/off` and comes first, so the first-row reading said membership was off.
+  public static defaultModeForCategory(
+    category: NotificationCategory,
+    channel: NotificationChannel,
+  ): NotificationMode {
+    return DEFAULT_BY_CATEGORY[category]?.[channel] ?? "off";
   }
 
   // What a stored preference falls back to, for a row already written. Keyed by kind

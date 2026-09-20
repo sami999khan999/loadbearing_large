@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DeleteOrganizationUseCase } from "../../src/platform/delete-organization.use-case.js";
 import type { PlatformReader } from "../../src/platform/platform.reader.js";
 import type { TenantRecord, TenantRepository } from "../../src/platform/tenant.repository.js";
+import type { TenantRetentionPolicyRepository } from "../../src/platform/tenant-retention-policy.repository.js";
 import type {
   ActivityLogger,
   AnalyticsProjector,
@@ -36,6 +37,17 @@ class FakeTenants implements TenantRepository {
 
   public delete(organizationId: string): Promise<void> {
     this.deleted.push(organizationId);
+    return Promise.resolve();
+  }
+}
+
+// `deleteFor` had no caller anywhere, and the schema has no foreign key on that table
+// precisely because the delete path is what sweeps it.
+class FakeTenantRetention {
+  public readonly swept: string[] = [];
+
+  public deleteFor(organizationId: string): Promise<void> {
+    this.swept.push(organizationId);
     return Promise.resolve();
   }
 }
@@ -131,6 +143,7 @@ interface Parts {
   readonly activity: FakeActivity;
   readonly capabilities: FakeInvalidator;
   readonly projector: FakeProjector | null;
+  readonly tenantRetention: FakeTenantRetention;
 }
 
 const build = (overrides: Partial<Parts> = {}) => {
@@ -141,6 +154,7 @@ const build = (overrides: Partial<Parts> = {}) => {
     activity: new FakeActivity(),
     capabilities: new FakeInvalidator(),
     projector: new FakeProjector(),
+    tenantRetention: new FakeTenantRetention(),
     ...overrides,
   };
 
@@ -163,6 +177,7 @@ const build = (overrides: Partial<Parts> = {}) => {
       unitOfWork,
       { now: () => NOW },
       parts.projector as unknown as AnalyticsProjector | null,
+      parts.tenantRetention as unknown as TenantRetentionPolicyRepository,
     ),
   };
 };
@@ -265,5 +280,13 @@ describe("DeleteOrganizationUseCase", () => {
       archived: 0,
       partitions: 3,
     });
+  });
+  // No foreign key on that table, so nothing cascades. `deleteFor` had no caller at all,
+  // and an override outlived its tenant forever.
+  it("sweeps the tenant's retention overrides", async () => {
+    const { parts, useCase } = build();
+    await useCase.execute(actor("platform.tenant.manage"), input);
+
+    expect(parts.tenantRetention.swept).toEqual([TENANT]);
   });
 });

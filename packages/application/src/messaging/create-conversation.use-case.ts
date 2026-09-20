@@ -1,5 +1,10 @@
-import { ConflictError, type CreateConversationInput, type UserId } from "../import.js";
-import type { DomainEventPublisher, UnitOfWork } from "../port/index.js";
+import {
+  ConflictError,
+  type CreateConversationInput,
+  NotFoundError,
+  type UserId,
+} from "../import.js";
+import type { DomainEventPublisher, TenantMembershipReader, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationRepository } from "./conversation.repository.js";
 import type { ConversationListItem } from "./list-conversations.use-case.js";
@@ -11,6 +16,7 @@ export class CreateConversationUseCase {
     private readonly conversations: ConversationRepository,
     private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
+    private readonly memberships: TenantMembershipReader,
   ) {}
 
   public async execute(
@@ -22,6 +28,15 @@ export class CreateConversationUseCase {
     const other = input.memberIds[0];
     if (input.kind === "direct" && other === actor.userId) {
       throw new ConflictError("conversation", "self");
+    }
+
+    // Membership is the only thing that scopes these ids to the tenant: the column's
+    // foreign key is `users.id`, which every tenant's people share.
+    for (const userId of input.memberIds) {
+      if (userId === actor.userId) continue;
+      if (!(await this.memberships.isActiveMember(actor.organizationId, userId))) {
+        throw new NotFoundError("member", userId);
+      }
     }
 
     const directKey =

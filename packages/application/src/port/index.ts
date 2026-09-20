@@ -52,5 +52,6 @@ export {
 export { ShardingStrategy } from "./sharding.strategy.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
 export { type LifecycleRule, StoragePolicyGateway } from "./storage-policy.gateway.js";
+export { TenantMembershipReader } from "./tenant-membership.reader.js";
 export { UnitOfWork } from "./unit-of-work.js";
 export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";

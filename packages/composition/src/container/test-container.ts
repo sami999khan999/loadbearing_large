@@ -13,6 +13,7 @@ import {
   InMemoryShardResolver,
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
+  InMemoryTenantMembershipReader,
   InMemoryVectorStore,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
@@ -61,6 +62,7 @@ import {
   StaticContentSource,
   type StorageGateway,
   type StoragePolicyGateway,
+  type TenantMembershipReader,
   type UnitOfWork,
   type VectorStore,
 } from "../import.js";
@@ -97,6 +99,7 @@ export interface TestPorts {
   readonly sharding: ShardingStrategy;
   readonly storage: StorageGateway;
   readonly storagePolicy: StoragePolicyGateway;
+  readonly tenantMemberships: TenantMembershipReader;
   readonly unitOfWork: UnitOfWork;
   readonly vectors: VectorStore;
 }
@@ -163,6 +166,7 @@ export class TestContainer {
       sharding: overrides.sharding ?? new OrganizationShardingStrategy(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
       storagePolicy: overrides.storagePolicy ?? new InMemoryStoragePolicyGateway(),
+      tenantMemberships: overrides.tenantMemberships ?? new InMemoryTenantMembershipReader(),
       unitOfWork: overrides.unitOfWork ?? new DirectUnitOfWork(),
       vectors: overrides.vectors ?? new InMemoryVectorStore(),
     };

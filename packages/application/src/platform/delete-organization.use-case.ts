@@ -11,6 +11,7 @@ import type { Authorizer } from "../primitive/index.js";
 import { PartitionedTable, Principal } from "../primitive/index.js";
 import type { PlatformReader } from "./platform.reader.js";
 import type { TenantRepository } from "./tenant.repository.js";
+import type { TenantRetentionPolicyRepository } from "./tenant-retention-policy.repository.js";
 
 export interface DeleteOrganizationInput {
   readonly organizationId: OrganizationId;
@@ -38,6 +39,9 @@ export class DeleteOrganizationUseCase {
     // Absent on a deployment running no analytics store. Skipped rather than failed:
     // there is no derived copy to forget.
     private readonly projector: AnalyticsProjector | null,
+    // The overrides. No foreign key on that table — the schema says so, and says
+    // the delete path sweeps it — and `deleteFor` had no caller anywhere.
+    private readonly tenantRetention: TenantRetentionPolicyRepository,
   ) {}
 
   public async execute(
@@ -72,6 +76,7 @@ export class DeleteOrganizationUseCase {
     await this.archive.markTenantDeleted(input.organizationId, this.clock.now());
 
     await this.unitOfWork.run(async () => {
+      await this.tenantRetention.deleteFor(input.organizationId);
       await this.tenants.delete(input.organizationId);
 
       // Rebased onto the tier, which is the only reason this row survives the delete

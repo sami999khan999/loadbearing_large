@@ -143,6 +143,7 @@ export {
   SubscriberRegistry,
   type SweepOutcome,
   type TenantExport,
+  TenantMembershipReader,
   type TenantRetentionPolicyRecord,
   TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,

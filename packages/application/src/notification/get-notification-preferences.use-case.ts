@@ -36,7 +36,9 @@ export class GetNotificationPreferencesUseCase {
         resolved.push({
           category: row.category,
           channel,
-          mode: saved?.mode ?? row.defaultMode[channel],
+          // The category's default, not this row's: the first row of `membership` is
+          // `member.invited`, which has no recipients and reads `off` for both channels.
+          mode: saved?.mode ?? NotificationPolicy.defaultModeForCategory(row.category, channel),
         });
       }
     }

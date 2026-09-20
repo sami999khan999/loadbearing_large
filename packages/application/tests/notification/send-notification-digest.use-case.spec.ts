@@ -234,4 +234,16 @@ describe("SendNotificationDigestUseCase", () => {
 
     expect(published[0]?.params).toMatchObject({ organization: "Acme" });
   });
+
+  // A reader on `membership: immediate` and `messaging: digest` had the membership rows
+  // counted too — items they had already been emailed about one at a time.
+  it("counts only the rows that earned the digest", async () => {
+    const published = await run(
+      [unread("member.role.changed", "membership"), unread("message.received", "messaging")],
+      [{ userId: USER, category: "membership", channel: "email", mode: "immediate" }],
+    );
+
+    expect(published).toHaveLength(1);
+    expect(published[0]?.params).toMatchObject({ count: 1 });
+  });
 });
