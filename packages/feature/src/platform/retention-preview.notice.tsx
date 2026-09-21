@@ -21,6 +21,9 @@ export interface RetentionPreviewNoticeProps {
   // Lifted, because the save button is the caller's and **it is disabled until a
   // preview for the current value has loaded**. That is the whole point of the item.
   readonly onReady: (ready: boolean) => void;
+  // Absent previews the table across every tenant. Present previews one tenant's
+  // months, which is the only number a per-tenant override will ever act on.
+  readonly organizationId?: string;
 }
 
 const parsed = (value: string): number | null => {
@@ -32,6 +35,7 @@ export function RetentionPreviewNotice({
   tableName,
   hotMonths,
   onReady,
+  organizationId,
 }: RetentionPreviewNoticeProps) {
   const { t } = useMessages("platform");
   const client = useApiClient();
@@ -46,7 +50,7 @@ export function RetentionPreviewNotice({
   }, [hotMonths]);
 
   const preview = useAppQuery({
-    ...PlatformQueries.retentionPreview(client, tableName, settled ?? 1),
+    ...PlatformQueries.retentionPreview(client, tableName, settled ?? 1, organizationId),
     enabled: settled !== null,
   });
 

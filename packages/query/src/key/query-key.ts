@@ -54,10 +54,10 @@ export class QueryKeys {
     all: () => ["platform"] as const,
     status: () => ["platform", "status"] as const,
     retention: () => ["platform", "retention"] as const,
-    // The typed value is in the key, because that is what the answer is about: two
-    // previews of two different numbers are two answers, not one refetched.
-    retentionPreview: (table: string, months: number) =>
-      ["platform", "retention", "preview", table, months] as const,
+    // The typed value and the tenant are both in the key, because that is what the
+    // answer is about: the same months over two tenants are two sets of partitions.
+    retentionPreview: (table: string, months: number, organizationId?: string) =>
+      ["platform", "retention", "preview", table, months, organizationId ?? null] as const,
     storage: (params: unknown) => ["platform", "storage", params] as const,
     projection: () => ["platform", "projection"] as const,
     policy: () => ["platform", "policy"] as const,

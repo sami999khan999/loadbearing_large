@@ -697,12 +697,22 @@ Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `conc
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
 the end so nobody chases them.
 
-- [ ] `19.19` **`19.15`'s preview does not take an optional `organizationId`** — the screen
-  previews the table's own numbers, not a tenant's override.
-  `packages/application/src/platform/preview-retention-change.use-case.ts` has no such input
-  (still true). The entry also expected the override to be edited from the shard map's tenant row;
-  `25.4` shipped a count there and a link to storage, and the editor is `tenant-retention.form.tsx`
-  on `/platform/retention`. — `archive/PLAN.md:2306`
+- [x] `19.19` **`19.15`'s preview takes an optional `organizationId`.** `done: 2026-09-21` —
+  the screen previewed the table's numbers while the operator was editing one tenant's override,
+  which is a different set of partitions and usually a far larger one.
+  - **The port and the adapter were already there.** `MaintenanceGateway.partitionsBefore` has
+    taken an optional tenant since `19.15`, and `PgMaintenanceGateway` scopes the parents on it;
+    only the use-case never passed one. The change is the input, the contract and the wiring.
+  - **The refusal is the save's, exactly.** A tenant preview is narrowed to a table that is
+    tenant-partitioned *and* has non-null `retentionMonths` — the same predicate
+    `UpdateTenantRetentionUseCase` enforces — so the screen cannot preview an override that would
+    be refused on save. The table-wide preview of that same table is still allowed, because
+    nothing is being saved and the number is an honest answer.
+  - **The tenant is in the query key and echoed in the response.** Two previews in flight over
+    two tenants are two answers, not one refetched, and a slow response cannot render under the
+    wrong heading.
+  - **`tenant-retention.form.tsx` now keeps the same contract the table-wide form does**: the save
+    waits for a preview of the value on screen. Six specs. — `archive/PLAN.md:2306`
 - [ ] `19.20` **`shards.invalidate(key)` is never called on a tenant delete.** The note said
   Phase 22's resolver did not exist yet; it does now, `PgShardResolver` has `invalidate`, and
   `delete-organization.use-case.ts` still calls only `capabilities.invalidateOrganization`

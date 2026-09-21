@@ -54,6 +54,8 @@ export const platform = {
   "platform.tenantRetention.organization": "Organization id",
   // The asymmetry: hot months are exact because the tenant's month is its own
   // partition, and cold months are the worker's because a prefix rule cannot be.
+  "platform.tenantRetention.organizationFirst":
+    "Type an organization id to see what this would retire.",
   "platform.tenantRetention.coldNote":
     "Cold months shorter than the table's are enforced by the nightly run rather than by the bucket.",
   "platform.tenantRetention.saved": "Saved.",

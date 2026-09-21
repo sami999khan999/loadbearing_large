@@ -9,8 +9,10 @@ import {
   PlatformMutations,
   type RetentionEntryDto,
   useApiClient,
+  useCallback,
   useState,
 } from "../import.js";
+import { RetentionPreviewNotice } from "./retention-preview.notice.js";
 
 export interface TenantRetentionFormProps {
   // Tenant-partitioned **and** already retired by the calendar: the use-case refuses
@@ -30,13 +32,24 @@ export function TenantRetentionForm({ tables }: TenantRetentionFormProps) {
   const [tableName, setTableName] = useState(tables[0]?.tableName ?? "");
   const [hotMonths, setHotMonths] = useState("");
   const [coldMonths, setColdMonths] = useState("");
+  // The same contract the table-wide form keeps: **the save waits for a preview of the
+  // value on screen**, so a number that retires a tenant's months is never one click away.
+  const [previewed, setPreviewed] = useState(false);
 
   const months = (value: string): number | null => {
     const parsed = Number(value.trim());
     return value.trim() !== "" && Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
   };
 
-  const ready = organizationId.length > 0 && tableName !== "" && (months(hotMonths) ?? 0) >= 1;
+  const onReady = useCallback((value: boolean) => setPreviewed(value), []);
+
+  const ready =
+    organizationId.length > 0 &&
+    tableName !== "" &&
+    (months(hotMonths) ?? 0) >= 1 &&
+    // Only once a tenant has been typed: a preview keyed on an empty id is a request
+    // the server would refuse, and the notice would report it as a failure.
+    previewed;
 
   if (tables.length === 0) return null;
 
@@ -91,6 +104,17 @@ export function TenantRetentionForm({ tables }: TenantRetentionFormProps) {
           onChange={(event) => setColdMonths(event.target.value)}
         />
       </Field>
+
+      {organizationId.length > 0 ? (
+        <RetentionPreviewNotice
+          tableName={tableName}
+          hotMonths={hotMonths}
+          organizationId={organizationId}
+          onReady={onReady}
+        />
+      ) : (
+        <p>{t("platform.tenantRetention.organizationFirst")}</p>
+      )}
 
       <Button
         disabled={!ready || update.isPending}
