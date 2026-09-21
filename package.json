@@ -50,6 +50,7 @@
     "platform:grant": "pnpm --filter @loadbearing/infrastructure run platform:grant",
     "auth:tables": "pnpm --filter @loadbearing/auth run auth:tables",
     "smoke": "pnpm --filter @loadbearing/infrastructure run smoke",
+    "smoke:web": "pnpm --filter @loadbearing/web run smoke",
     "prepare": "husky"
   },
   "devDependencies": {

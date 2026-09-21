@@ -202,6 +202,9 @@ const ENV_EXEMPT = [
   // Each suite's own `env.ts`: the one file in it that reads the environment, so the
   // harness dials the ports `.env` names rather than a literal that silently drifts.
   /^packages\/(composition|infrastructure)\/tests\/support\/(config|database)\.ts$/,
+  // The web smoke's `globalSetup`: it spawns the built server, so it composes that
+  // child's whole environment out of the one it was given.
+  /^apps\/web\/tests\/smoke\/support\/server\.ts$/,
   /^packages\/infrastructure\/(clickhouse-migrate|migrate|partitions|platform-grant|seed|shard-env|smoke)\.ts$/,
 ];
 

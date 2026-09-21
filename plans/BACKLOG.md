@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 22 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 21 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-two open boxes
+## 1. `archive/PLAN.md` — the twenty-one open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -303,12 +303,32 @@ which is also what let the optimistic window be observed rather than guessed at.
   - **A package watcher is now something you start deliberately** when you are editing that
     package, which is what `pnpm --filter @loadbearing/<pkg> run dev` is for and what the
     workflow rules already tell you to prefer. — found 2026-09-20
-- [ ] `23.24` **`apps/web` has no smoke suite.** Nothing proves the system behaves as a system;
-  one `curl` session (`archive/OPEN.md` "Proved end to end over HTTP") did it by hand. Shape:
-  `apps/web/vitest.smoke.config.ts`, a `globalSetup` that spawns `.output/server/index.mjs` (extract
-  from `tooling/scripts/boot-smoke.mjs`), Mailpit's HTTP API as the verification channel. **Decide
-  first:** whether it runs in the `compose` job or a third one, and whether it shares `pnpm test`'s
-  database. **Cheapest useful subset:** one case proving an SSE frame reaches an HTTP client. — `archive/PLAN.md:3875`
+- [x] `23.24` **`apps/web` has a smoke suite.** `done: 2026-09-21` — the cheapest useful subset
+  the entry named, and it is the one thing nothing else in the repository proved: **a realtime
+  frame reaching an HTTP client**. `redis.smoke.spec.ts` proves publisher to subscriber, and
+  `23.5`–`23.11` proved the rest by eye.
+  - **Both decisions taken, and recorded here rather than left implicit.** It runs in the
+    `compose` job, which is the only one with Mailpit up and so the only one where the sign-up
+    leg means anything. It creates accounts in the same database `pnpm test` uses, with a global
+    sweep — the answer `packages/infrastructure` already gives.
+  - **One case, and it is the whole chain**: sign up over `/api/auth`, wait for the mail (a job
+    on `QueueName.MAIL`, so it only passes with a worker up), follow the verification link, sign
+    in and keep the cookie, open `realtime/stream` and **start reading before causing anything** —
+    pub/sub has no replay — then invite from a second connection and read `member.changed` off
+    the open one. 2.6 s against the built server.
+  - **The sweep deletes the tenant, not just the user**, which is the half that is easy to miss:
+    `personal` enrolment founds an organization per sign-up, and one left behind is exactly what
+    `23.21` found aborting the projection. Bounded by the run's own start rather than by a
+    membership join, because an organization whose members have gone is invisible to a join.
+  - **`boot-smoke.mjs`'s spawn-and-wait is extracted** to `tooling/scripts/boot-app.mjs` and used
+    by both, as the entry asked. Two findings came out of that. The helper now takes `env`
+    with no default — a boot helper that silently inherits is how a child gets half a
+    configuration. And it can wait on a **socket** rather than a log line: under vitest the
+    child's pipes deliver nothing to the runner, and for a server an answered request is the
+    better signal anyway. `boot-smoke.mjs` keeps the line, because asserting the line is its job.
+  - **A trap worth stating once:** the suite waits for the worker's `process.started`, which it
+    emits at `info`. An early draft set `LOG_LEVEL=warn` for tidiness and then waited the full
+    sixty seconds for a line that was never going to be printed. — `archive/PLAN.md:3875`
 
 ### Phase 24 — The physical split 📁
 

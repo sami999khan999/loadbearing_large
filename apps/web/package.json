@@ -9,6 +9,7 @@
     "preview": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "smoke": "vitest run -c vitest.smoke.config.ts",
     "clean": "rimraf dist .output .nitro .tanstack"
   },
   "dependencies": {
@@ -36,9 +37,11 @@
   "devDependencies": {
     "@loadbearing/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "@types/pg": "catalog:",
     "@types/react": "catalog:react",
     "@types/react-dom": "catalog:react",
     "@vitejs/plugin-react": "catalog:",
+    "pg": "catalog:",
     "rimraf": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
