@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 31 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 28 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the thirty-one open boxes
+## 1. `archive/PLAN.md` — the twenty-eight open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -79,28 +79,40 @@ on 2026-09-20 with the browser walk; `23.25`, `23.26` and `23.27` are new and we
 **Fixes with a recommendation filed and not taken.** Each is a decision the owner has to make; the
 recommendation under the entry was measured, not argued.
 
-- [ ] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.** The drain's
-  repeat job (`removeOnComplete: 10`, once a second) trims the shared `EVENT` completed set, so the
-  deliveries' `removeOnCompleteAgeSeconds` never applies. Not a correctness bug — subscribers are
-  idempotent on `event.id`. **Recommended:** accept the seconds-long window and correct two
-  comments (`10.8`'s note and `JobOptions.removeOnCompleteAgeSeconds` in
-  `packages/application/src/port/queue.publisher.ts`). No behaviour change. `R.24` is the same
-  fact from the other bound. — `archive/PLAN.md:3354`
-- [ ] `23.2` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue**, and a
-  running worker logs `queue.job.failed {jobId: "smoke-unnamed"}`. **Recommended:** one local
-  constant `SMOKE_QUEUE = "smoke"` in
-  `packages/infrastructure/tests/smoke/redis.smoke.spec.ts` replacing the seven
-  `QueueName.MAINTENANCE` references — `publish` takes a `string`, so no `QueueName` member is
-  added. — `archive/PLAN.md:3397`
-- [ ] `23.3` **The QueryClient is not dehydrated**, so every loader prefetch is thrown away and the
-  client refetches what SSR already rendered. **Recommended, option (d):** name `DehydratedState`
-  in the router's `SerializableExtensions` (a `declare module` block in `apps/web/src/router.tsx`),
-  then `dehydrate(queryClient)` into the payload and `hydrate` back out. Written, typechecked,
-  built and served, then reverted; no dependency, no cast. The one judgement left is that the
-  augmentation is global. **Measured 2026-09-20**, which the entry had not been: `/settings/roles`
-  prefetches `role/list` in its loader and a cold load calls it again from the browser, so the
-  waste is real and observable. **`23.6` is *partly* behind this** — that route prefetches
-  nothing to begin with, so this is necessary and not sufficient. — `archive/PLAN.md:3429`
+- [x] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.**
+  `done: 2026-09-21` — **the recommendation was taken, and `R.24` had already delivered it.**
+  Accepting the seconds-long window is the decision; correcting the comments is the work, and
+  `R.24` did all three plus the reference page on 2026-09-20 without anyone ticking this.
+  Re-read today against the tree, because a ledger that says "recommended" over a change already
+  made is the kind of entry somebody re-does: `DELIVERY_RETENTION_SECONDS` says "the window we
+  *ask* for"; `JobOptions.removeOnCompleteAgeSeconds` says "an upper bound only"; and
+  `consumers.md` carries the paragraph beginning "The window it actually gets is seconds". No
+  behaviour change, and none wanted — the subscribers are idempotent on `event.id`. Giving the
+  drain a queue of its own would restore the long window and stays filed. — `archive/PLAN.md:3354`
+- [x] `23.2` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue.**
+  `done: 2026-09-21` — the recommendation, unchanged: one local `SMOKE_QUEUE = "smoke"` replacing
+  all seven references, and `QueueName` leaves the spec's imports with them. `publish` takes a
+  string, so the enum gains nothing — it names queues the application owns, and this is not one.
+  **Verified against the running instance**, which is the only place this was ever visible:
+  8 cases pass and the probes are on `bull:smoke:*`, with `bull:maintenance:*` untouched by the
+  run. — `archive/PLAN.md:3397`
+- [x] `23.3` **The QueryClient is not dehydrated.** `done: 2026-09-21` — option (d), as filed
+  and this time kept. `RouterDehydrated` gains `queries: DehydratedState`, `dehydrate` puts
+  `dehydrate(queryClient)` in the payload and `hydrate` calls `hydrate(queryClient, …)` back out.
+  No dependency added: `apps/web` already had `@tanstack/react-query`, so the three names join
+  `src/import.ts` beside `QueryClient`.
+  - **The judgement was taken rather than dodged.** `SerializableExtensions` is global, so
+    nothing else in the app may now declare `DehydratedState` as something the wire cannot
+    carry. The alternative was a cast, and a cast would have hidden exactly the failure the
+    serializer exists to catch.
+  - **Proved on the same route that measured it.** A cold `/settings/roles` called `role/list`
+    from the browser on 2026-09-20 and does not today; what is left is `notification/unreadCount`
+    and `realtime/stream`, and neither is a loader prefetch — one is the bell, which no loader
+    asks for, and the other is a stream, which cannot be dehydrated at all.
+  - **`staleTime` is what finishes the job.** `createQueryClient` sets 30 s, so hydrated data is
+    fresh on mount. At the library default of 0 the render would come from cache and the refetch
+    would go out anyway, which is the shape of this fix that looks like it works and does not.
+  - **`23.6` is still not ticked by this**, and now for its own single reason. — `archive/PLAN.md:3429`
 
 **Exit clauses that needed a browser — walked on 2026-09-20.** The Claude in Chrome extension
 connects now, which is the whole of what `S.1` was waiting on. **Six of the seven observations

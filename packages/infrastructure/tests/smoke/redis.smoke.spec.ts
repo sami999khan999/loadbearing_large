@@ -1,4 +1,4 @@
-import { QueueName, RealtimeChannels } from "@loadbearing/application";
+import { RealtimeChannels } from "@loadbearing/application";
 import { Queue } from "bullmq";
 import { afterAll, describe, expect, inject, it } from "vitest";
 import { BullMqQueuePublisher } from "../../src/bullmq/index.js";
@@ -105,7 +105,13 @@ describe("realtime against the running cache instance", () => {
 });
 
 describe("QueuePublisher against the running queue instance", () => {
-  const queue = () => new Queue(QueueName.MAINTENANCE, { connection: redis.queueClient() });
+  // Its own queue, never `QueueName.MAINTENANCE`: a running worker consumes that one and
+  // these probes carry no job it can run, so it logged `queue.job.failed` on every smoke.
+  // ──
+  // `publish` takes a string, so this costs no enum member for a queue nothing owns.
+  const SMOKE_QUEUE = "smoke";
+
+  const queue = () => new Queue(SMOKE_QUEUE, { connection: redis.queueClient() });
 
   // The port's whole write surface, and its only exercised path anywhere: a fake would
   // prove that BullMQ's client accepts the arguments, not that a job lands on a queue.
@@ -116,7 +122,7 @@ describe("QueuePublisher against the running queue instance", () => {
     const reader = queue();
 
     try {
-      await publisher.publish(QueueName.MAINTENANCE, { probe: true }, { jobId: "smoke-probe" });
+      await publisher.publish(SMOKE_QUEUE, { probe: true }, { jobId: "smoke-probe" });
       const job = await reader.getJob("smoke-probe");
 
       expect(job?.data).toEqual({ probe: true });
@@ -138,8 +144,8 @@ describe("QueuePublisher against the running queue instance", () => {
     const reader = queue();
 
     try {
-      await publisher.publish(QueueName.MAINTENANCE, { attempt: 1 }, { jobId: "smoke-once" });
-      await publisher.publish(QueueName.MAINTENANCE, { attempt: 2 }, { jobId: "smoke-once" });
+      await publisher.publish(SMOKE_QUEUE, { attempt: 1 }, { jobId: "smoke-once" });
+      await publisher.publish(SMOKE_QUEUE, { attempt: 2 }, { jobId: "smoke-once" });
 
       expect((await reader.getJob("smoke-once"))?.data).toEqual({ attempt: 1 });
     } finally {
@@ -157,7 +163,7 @@ describe("QueuePublisher against the running queue instance", () => {
 
     try {
       await publisher.publish(
-        QueueName.MAINTENANCE,
+        SMOKE_QUEUE,
         { probe: true },
         { jobId: "smoke-named", name: "partitions", priority: 1 },
       );
@@ -179,9 +185,9 @@ describe("QueuePublisher against the running queue instance", () => {
     const reader = queue();
 
     try {
-      await publisher.publish(QueueName.MAINTENANCE, { probe: true }, { jobId: "smoke-unnamed" });
+      await publisher.publish(SMOKE_QUEUE, { probe: true }, { jobId: "smoke-unnamed" });
 
-      expect((await reader.getJob("smoke-unnamed"))?.name).toBe(QueueName.MAINTENANCE);
+      expect((await reader.getJob("smoke-unnamed"))?.name).toBe(SMOKE_QUEUE);
     } finally {
       await (await reader.getJob("smoke-unnamed"))?.remove();
       await reader.close();

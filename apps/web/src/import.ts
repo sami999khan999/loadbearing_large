@@ -149,7 +149,13 @@ export { default as classCss } from "@loadbearing/ui/class.css?url";
 export { default as themeCss } from "@loadbearing/ui/theme.css?url";
 
 // ── @tanstack/react-query ────────────────────────────────────────────────────
-export { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
+export {
+  type DehydratedState,
+  dehydrate,
+  hydrate,
+  type QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 
 // ── @tanstack/react-router ───────────────────────────────────────────────────
 // `router.tsx` only. Everything under `route/` imports this package directly.
