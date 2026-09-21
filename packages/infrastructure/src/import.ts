@@ -146,6 +146,7 @@ export {
   UnitOfWork,
   type UnreadCount,
   type UnreadQuery,
+  type UserReader,
   type VectorStore,
 } from "@loadbearing/application";
 

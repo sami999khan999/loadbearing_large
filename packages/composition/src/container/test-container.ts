@@ -14,6 +14,7 @@ import {
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
   InMemoryTenantMembershipReader,
+  InMemoryUserReader,
   InMemoryVectorStore,
   RecordingActivityLogger,
   RecordingCapabilityInvalidator,
@@ -64,6 +65,7 @@ import {
   type StoragePolicyGateway,
   type TenantMembershipReader,
   type UnitOfWork,
+  type UserReader,
   type VectorStore,
 } from "../import.js";
 import { OrganizationShardingStrategy } from "../shard/index.js";
@@ -101,6 +103,7 @@ export interface TestPorts {
   readonly storagePolicy: StoragePolicyGateway;
   readonly tenantMemberships: TenantMembershipReader;
   readonly unitOfWork: UnitOfWork;
+  readonly users: UserReader;
   readonly vectors: VectorStore;
 }
 
@@ -168,6 +171,7 @@ export class TestContainer {
       storagePolicy: overrides.storagePolicy ?? new InMemoryStoragePolicyGateway(),
       tenantMemberships: overrides.tenantMemberships ?? new InMemoryTenantMembershipReader(),
       unitOfWork: overrides.unitOfWork ?? new DirectUnitOfWork(),
+      users: overrides.users ?? new InMemoryUserReader(),
       vectors: overrides.vectors ?? new InMemoryVectorStore(),
     };
   }

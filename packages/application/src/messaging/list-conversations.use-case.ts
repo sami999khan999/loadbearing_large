@@ -1,11 +1,12 @@
 import type { ListConversationsInput } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
-import type { ConversationRecord, ConversationRepository } from "./conversation.repository.js";
+import type { ConversationRepository } from "./conversation.repository.js";
+import type { ConversationNaming, NamedConversation } from "./conversation-naming.js";
 import type { MessageRepository } from "./message.repository.js";
 
-// The record plus the one thing that is computed per reader. Kept out of
-// `ConversationRecord` because it is a property of who is asking, not of the row.
-export interface ConversationListItem extends ConversationRecord {
+// The record plus the two things that are not on the row: the unread count, which is a
+// property of who is asking, and the member names, which live on another placement.
+export interface ConversationListItem extends NamedConversation {
   readonly unreadCount: number;
 }
 
@@ -19,6 +20,7 @@ export class ListConversationsUseCase {
     private readonly authorizer: Authorizer,
     private readonly conversations: ConversationRepository,
     private readonly messages: MessageRepository,
+    private readonly naming: ConversationNaming,
   ) {}
 
   // Always the actor's own. There is no "list someone else's" — the driving side of the
@@ -38,8 +40,12 @@ export class ListConversationsUseCase {
       page.items.map((item) => item.id),
     );
 
+    // Also one statement for the page. No transaction is open here, which is what makes
+    // a catalog read beside a routed one legal at all.
+    const named = await this.naming.attach(actor.organizationId, page.items);
+
     return {
-      items: page.items.map((item) => ({
+      items: named.map((item) => ({
         ...item,
         unreadCount: counts.find((count) => count.conversationId === item.id)?.count ?? 0,
       })),

@@ -32,4 +32,5 @@ export { PgShardMapReader } from "./pg-shard-map.reader.js";
 export { PgTenantRepository } from "./pg-tenant.repository.js";
 export { PgTenantRetentionPolicyRepository } from "./pg-tenant-retention-policy.repository.js";
 export { PgTenantStorageReader } from "./pg-tenant-storage.reader.js";
+export { PgUserReader } from "./pg-user.reader.js";
 export { PgVectorStore } from "./pg-vector.store.js";

@@ -22,6 +22,9 @@ export class ConversationContract {
 
   public static readonly member = z.object({
     userId: Identifiers.userId,
+    // Resolved on the catalog after the routed read, never joined to it. Null is a
+    // member this tenant can no longer name, and the copy layer decides what to render.
+    name: z.string().nullable(),
     role: memberRole,
     joinedAt: z.date(),
     // The reader's own position. Every other member's is deliberately absent: read

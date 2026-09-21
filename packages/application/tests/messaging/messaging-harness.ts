@@ -1,8 +1,16 @@
-import type { DomainEventInput, DomainEventName, RealtimeMessage } from "@loadbearing/contracts";
+import type {
+  DomainEventInput,
+  DomainEventName,
+  OrganizationId,
+  RealtimeMessage,
+  UserId,
+} from "@loadbearing/contracts";
 import { Identifiers } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import type { ConversationRecord } from "../../src/messaging/conversation.repository.js";
+import { ConversationNaming } from "../../src/messaging/conversation-naming.js";
 import type { MessageRecord } from "../../src/messaging/message.repository.js";
+import { UserReader } from "../../src/port/index.js";
 import { Authorizer, Principal, type RealtimeChannel } from "../../src/primitive/index.js";
 
 export const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
@@ -109,3 +117,36 @@ export class CountingUnitOfWork {
     }
   }
 }
+
+// The catalog half of a named conversation, and the reason it is a fake rather than a
+// stub: the spec's real question is *when* it was called, not what it returned.
+export class RecordingUserReader extends UserReader {
+  public readonly calls: (readonly UserId[])[] = [];
+  // Whether a transaction was open on each call. A `true` here is the crossing
+  // `data.md` forbids — a catalog read inside a routed unit of work.
+  public readonly inTransaction: boolean[] = [];
+
+  public constructor(
+    private readonly names: ReadonlyMap<UserId, string> = new Map([
+      [ADA, "Ada Lovelace"],
+      [GRACE, "Grace Hopper"],
+    ]),
+    private readonly unitOfWork?: CountingUnitOfWork,
+  ) {
+    super();
+  }
+
+  public override namesOf(
+    _organizationId: OrganizationId,
+    userIds: readonly UserId[],
+  ): Promise<ReadonlyMap<UserId, string>> {
+    this.calls.push(userIds);
+    this.inTransaction.push(this.unitOfWork?.open ?? false);
+    return Promise.resolve(this.names);
+  }
+}
+
+export const naming = (users = new RecordingUserReader()) => ({
+  users,
+  instance: new ConversationNaming(users),
+});

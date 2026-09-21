@@ -6,6 +6,7 @@ import type {
   ConversationRepository,
 } from "../../src/messaging/conversation.repository.js";
 import { ConversationAccess } from "../../src/messaging/conversation-access.js";
+import { ConversationNaming } from "../../src/messaging/conversation-naming.js";
 import { CreateConversationUseCase } from "../../src/messaging/create-conversation.use-case.js";
 import { LeaveConversationUseCase } from "../../src/messaging/leave-conversation.use-case.js";
 import { MessagingRules } from "../../src/messaging/messaging.rules.js";
@@ -21,6 +22,7 @@ import {
   GRACE,
   principal,
   RecordingEvents,
+  RecordingUserReader,
 } from "./messaging-harness.js";
 
 class Conversations {
@@ -64,15 +66,20 @@ const creator = (existing: ConversationRecord | null) => {
   const conversations = new Conversations(existing);
   const events = new RecordingEvents();
   const unitOfWork = new CountingUnitOfWork();
+  // Handed the same unit of work, so the reader records whether a transaction was open
+  // when the names were resolved. That is the assertion, not the names themselves.
+  const users = new RecordingUserReader(undefined, unitOfWork);
   return {
     conversations,
     events,
+    users,
     useCase: new CreateConversationUseCase(
       authorizer,
       conversations as unknown as ConversationRepository,
       events as unknown as DomainEventPublisher,
       unitOfWork as unknown as UnitOfWork,
       new Memberships(),
+      new ConversationNaming(users),
     ),
   };
 };
@@ -107,6 +114,34 @@ describe("CreateConversationUseCase", () => {
     await expect(
       harness.useCase.execute(principal(), { kind: "direct", memberIds: [ADA] }),
     ).rejects.toThrow("CONFLICT");
+  });
+
+  // `conversations` is routed and `users` is catalog, and the crossing is invisible on
+  // one node — asserted here rather than found the week of a split.
+  it("resolves the names after the transaction, never inside it", async () => {
+    const harness = creator(null);
+
+    const result = await harness.useCase.execute(principal(), {
+      kind: "direct",
+      memberIds: [GRACE],
+    });
+
+    expect(harness.users.inTransaction).toEqual([false]);
+    expect(result.members.map((member) => member.name)).toEqual(["Ada Lovelace", "Grace Hopper"]);
+  });
+
+  // The early return opens no transaction at all, so this one only pins that it names
+  // the row it returns. A DM opened twice used to come back with two bare uuids.
+  it("names the existing conversation it returns instead of creating one", async () => {
+    const harness = creator(conversation());
+
+    const result = await harness.useCase.execute(principal(), {
+      kind: "direct",
+      memberIds: [GRACE],
+    });
+
+    expect(harness.conversations.saved).toBe(0);
+    expect(result.members.map((member) => member.name)).toEqual(["Ada Lovelace", "Grace Hopper"]);
   });
 });
 

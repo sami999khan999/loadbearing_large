@@ -6,7 +6,8 @@ import {
 } from "../import.js";
 import type { DomainEventPublisher, TenantMembershipReader, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
-import type { ConversationRepository } from "./conversation.repository.js";
+import type { ConversationRecord, ConversationRepository } from "./conversation.repository.js";
+import type { ConversationNaming } from "./conversation-naming.js";
 import type { ConversationListItem } from "./list-conversations.use-case.js";
 import { MessagingRules } from "./messaging.rules.js";
 
@@ -17,6 +18,7 @@ export class CreateConversationUseCase {
     private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
     private readonly memberships: TenantMembershipReader,
+    private readonly naming: ConversationNaming,
   ) {}
 
   public async execute(
@@ -48,17 +50,26 @@ export class CreateConversationUseCase {
       const existing = await this.conversations.findByDirectKey(actor.organizationId, directKey);
       // Zero rather than counted: this path returns a conversation the caller is about to
       // open, and the list it came from carries the real number.
-      if (existing) return { ...existing, unreadCount: 0 };
+      if (existing) return this.named(actor, existing);
     }
 
-    return this.unitOfWork.run(() => this.insert(actor, input, directKey));
+    const conversation = await this.unitOfWork.run(() => this.insert(actor, input, directKey));
+
+    // **After the transaction, never inside it.** `insert` runs in a routed unit of work
+    // and the names come off the catalog, which is the crossing `data.md` forbids.
+    return this.named(actor, conversation);
+  }
+
+  private async named(actor: Principal, conversation: ConversationRecord) {
+    const item = await this.naming.attachOne(actor.organizationId, conversation);
+    return { ...item, unreadCount: 0 };
   }
 
   private async insert(
     actor: Principal,
     input: CreateConversationInput,
     directKey: string | null,
-  ): Promise<ConversationListItem> {
+  ): Promise<ConversationRecord> {
     const members: readonly UserId[] = [
       actor.userId,
       ...input.memberIds.filter((id) => id !== actor.userId),
@@ -83,6 +94,6 @@ export class CreateConversationUseCase {
       payload: { conversationId: conversation.id, kind: conversation.kind },
     });
 
-    return { ...conversation, unreadCount: 0 };
+    return conversation;
   }
 }

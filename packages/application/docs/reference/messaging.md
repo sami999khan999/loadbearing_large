@@ -35,6 +35,34 @@ The insert is `ON CONFLICT … DO UPDATE … RETURNING id`, not `DO NOTHING`. Tw
 same DM in the same second must both be handed the one row that exists; `DO NOTHING` returns no
 row to the loser, and a use-case that then read by direct key would be racing the commit.
 
+## A member's name is a second statement, never a join
+
+`conversation_members` is routed and `users` is catalog, so no repository may join them — one
+repository reads tables of one placement, and that is a CI assertion rather than a convention.
+`ConversationNaming` is the join, in the use-case, after the routed read has returned.
+
+**One statement for a whole page.** A page of twenty-five conversations holding a hundred members
+each is two queries this way and twenty-six the obvious way. The ids are collected across the
+page, `UserReader.namesOf` resolves them once, and the map is attached by key. Keyed, never
+zipped: pairing two arrays by index hands one member another's name the moment a row is missing.
+
+**Never inside a unit of work.** `CreateConversationUseCase` writes in a routed transaction and
+then names the row it wrote *after* the commit, because a catalog read inside a routed
+transaction is the crossing a shard split cannot honour. It is invisible on one node, which is
+why a spec asserts the ordering rather than a reviewer noticing it.
+
+**Its own port rather than `NotificationRecipientReader`,** which already resolves users. Three
+reasons, and the first is the one that matters: `Recipient` carries an email address, and a
+use-case holding one is a spread away from putting it on a member DTO. The second is that
+`users()` there filters out deactivated memberships — correct for a recipient list, and for a
+thread it is how every message someone wrote goes back to rendering a uuid the day they leave.
+The third is that `namesOf` returns names and nothing else.
+
+**A name is nullable and the fallback is copy.** `conversation_members` has a foreign key to
+`users` today; once `24.1` drops the ones that cross to the catalog, a membership row can outlive
+the row that named it. `null` reaches the client, and `messaging.member.unknown` is what renders
+— never the id, which is the defect the whole increment removes.
+
 ## Unread is computed, never counted
 
 There is no `unread_count` column. `last_read_at` on the membership row is the only state, and
