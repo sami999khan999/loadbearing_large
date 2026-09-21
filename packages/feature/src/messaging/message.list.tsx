@@ -15,6 +15,9 @@ import {
 
 export interface MessageListProps {
   readonly conversationId: string;
+  // From the conversation this thread belongs to, which is where the names are. Absent
+  // renders no author at all rather than a uuid, which is what it did before `23.26b`.
+  readonly nameFor?: (userId: string) => string | null;
 }
 
 // The page envelope, structurally: the contract's type is inferred per procedure and
@@ -24,7 +27,7 @@ interface MessagePage {
   readonly olderCursor: string | null;
 }
 
-export function MessageList({ conversationId }: MessageListProps) {
+export function MessageList({ conversationId, nameFor }: MessageListProps) {
   const { t } = useMessages("messaging");
   const describe = useErrorMessage();
   const client = useApiClient();
@@ -64,6 +67,9 @@ export function MessageList({ conversationId }: MessageListProps) {
       <ol>
         {rows.map((row) => (
           <li key={row.id}>
+            {nameFor ? (
+              <strong>{nameFor(row.authorId) ?? t("messaging.member.unknown")}</strong>
+            ) : null}
             {row.deleted ? <em>{t("messaging.conversation.deleted")}</em> : <span>{row.body}</span>}
             <small>
               {DateFormat.day(row.createdAt)}

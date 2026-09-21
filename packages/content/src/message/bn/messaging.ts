@@ -8,6 +8,7 @@ export const messaging = {
   "messaging.inbox.open": "বার্তা খুলুন",
   "messaging.inbox.unread": "{count}টি অপঠিত",
   "messaging.inbox.direct": "সরাসরি বার্তা",
+  "messaging.member.unknown": "কেউ একজন",
 
   "messaging.conversation.empty": "এখনও কোনও বার্তা নেই। কিছু বলুন।",
   "messaging.conversation.error": "এই কথোপকথনটি লোড করা যায়নি।",

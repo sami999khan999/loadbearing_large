@@ -21,8 +21,20 @@ const direct = (over: Partial<ConversationDto> = {}): ConversationDto => ({
   lastMessageAt: null,
   lastMessageId: null,
   members: [
-    { userId: ADA, role: "owner", joinedAt: new Date("2026-09-03T00:00:00Z"), lastReadAt: null },
-    { userId: GRACE, role: "member", joinedAt: new Date("2026-09-03T00:00:00Z"), lastReadAt: null },
+    {
+      userId: ADA,
+      name: "Ada Lovelace",
+      role: "owner",
+      joinedAt: new Date("2026-09-03T00:00:00Z"),
+      lastReadAt: null,
+    },
+    {
+      userId: GRACE,
+      name: "Grace Hopper",
+      role: "member",
+      joinedAt: new Date("2026-09-03T00:00:00Z"),
+      lastReadAt: null,
+    },
   ],
   unreadCount: 0,
   ...over,
@@ -72,29 +84,73 @@ describe("ConversationContract", () => {
     expect(result.success).toBe(true);
   });
 
-  // Every other member's read position is deliberately absent from the wire. Read
-  // receipts across a channel are a per-member row nobody asked to publish.
-  it("carries only the reader's own read position", () => {
+  // A name, and nothing else beside it: every other member's read position stays off
+  // the wire, and an email address on this DTO would be one spread away from it.
+  it("carries a name and the reader's own read position, and no more", () => {
     const parsed = ConversationContract.member.parse({
       userId: ADA,
+      name: "Ada Lovelace",
       role: "owner",
       joinedAt: new Date("2026-09-03T00:00:00Z"),
       lastReadAt: null,
     });
 
-    expect(Object.keys(parsed).sort()).toEqual(["joinedAt", "lastReadAt", "role", "userId"]);
+    expect(Object.keys(parsed).sort()).toEqual([
+      "joinedAt",
+      "lastReadAt",
+      "name",
+      "role",
+      "userId",
+    ]);
   });
 });
 
 describe("ConversationEntity", () => {
-  it("names the other member of a direct conversation", () => {
-    expect(ConversationEntity.from(direct()).otherMember(ADA)).toBe(GRACE);
+  it("finds the other member of a direct conversation", () => {
+    expect(ConversationEntity.from(direct()).otherMember(ADA)?.userId).toBe(GRACE);
   });
 
-  it("names nobody for a channel, which titles itself", () => {
+  it("finds nobody for a channel, which titles itself", () => {
     const channel = direct({ kind: "channel", title: "Deployments" });
 
     expect(ConversationEntity.from(channel).otherMember(ADA)).toBeNull();
+  });
+
+  // The whole of `23.26b`: a direct conversation used to render "Direct message" on
+  // every row, and the typing notice under it printed a uuid.
+  it("titles a direct conversation after the other person", () => {
+    expect(ConversationEntity.from(direct()).displayTitle(ADA)).toBe("Grace Hopper");
+  });
+
+  it("prefers a channel’s own title to any member", () => {
+    const channel = direct({ kind: "channel", title: "Deployments" });
+
+    expect(ConversationEntity.from(channel).displayTitle(ADA)).toBe("Deployments");
+  });
+
+  // Null rather than the id, so the caller renders copy. Returning the uuid here is the
+  // defect wearing a different hat.
+  it("titles nothing when the other member can no longer be named", () => {
+    const nameless = direct({
+      members: [
+        {
+          userId: ADA,
+          name: "Ada Lovelace",
+          role: "owner",
+          joinedAt: new Date(),
+          lastReadAt: null,
+        },
+        { userId: GRACE, name: null, role: "member", joinedAt: new Date(), lastReadAt: null },
+      ],
+    });
+
+    expect(ConversationEntity.from(nameless).displayTitle(ADA)).toBeNull();
+    expect(ConversationEntity.from(nameless).nameOf(GRACE)).toBeNull();
+  });
+
+  it("names a member by id, for an author line and a typing frame", () => {
+    expect(ConversationEntity.from(direct()).nameOf(ADA)).toBe("Ada Lovelace");
+    expect(ConversationEntity.from(direct()).nameOf("nobody")).toBeNull();
   });
 
   it("caps the badge rather than showing a number that is a lie", () => {

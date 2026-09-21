@@ -7,6 +7,9 @@ export const messaging = {
   "messaging.inbox.open": "Open messages",
   "messaging.inbox.unread": "{count} unread",
   "messaging.inbox.direct": "Direct message",
+  // The name of whoever is no longer resolvable. A member can outlive the row that
+  // named them, and "Direct message" for a person reads as a bug rather than as a gap.
+  "messaging.member.unknown": "Someone",
 
   "messaging.conversation.empty": "No messages yet. Say something.",
   "messaging.conversation.error": "This conversation could not be loaded.",
