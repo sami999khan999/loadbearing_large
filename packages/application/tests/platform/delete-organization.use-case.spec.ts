@@ -14,6 +14,7 @@ import type {
   MaintenanceGateway,
   PartitionArchiveGateway,
   PartitionEstimate,
+  ShardResolver,
   UnitOfWork,
 } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
@@ -136,6 +137,23 @@ const actor = (...platform: readonly PermissionKey[]): Principal =>
     }),
   );
 
+// Records the keys it was asked to forget. The placement cache has a deliberately long
+// TTL, so "was it invalidated" is the whole behaviour and a double that shrugged would
+// ──
+// let a deleted tenant keep resolving to a node for minutes.
+class FakeShards {
+  public readonly invalidated: string[] = [];
+
+  public resolve(): Promise<number> {
+    return Promise.resolve(0);
+  }
+
+  public invalidate(key: string): Promise<void> {
+    this.invalidated.push(key);
+    return Promise.resolve();
+  }
+}
+
 interface Parts {
   readonly tenants: FakeTenants;
   readonly archive: FakeArchive;
@@ -144,6 +162,7 @@ interface Parts {
   readonly capabilities: FakeInvalidator;
   readonly projector: FakeProjector | null;
   readonly tenantRetention: FakeTenantRetention;
+  readonly shards: FakeShards;
 }
 
 const build = (overrides: Partial<Parts> = {}) => {
@@ -155,6 +174,7 @@ const build = (overrides: Partial<Parts> = {}) => {
     capabilities: new FakeInvalidator(),
     projector: new FakeProjector(),
     tenantRetention: new FakeTenantRetention(),
+    shards: new FakeShards(),
     ...overrides,
   };
 
@@ -178,6 +198,7 @@ const build = (overrides: Partial<Parts> = {}) => {
       { now: () => NOW },
       parts.projector as unknown as AnalyticsProjector | null,
       parts.tenantRetention as unknown as TenantRetentionPolicyRepository,
+      parts.shards as unknown as ShardResolver,
     ),
   };
 };
@@ -288,5 +309,29 @@ describe("DeleteOrganizationUseCase", () => {
     await useCase.execute(actor("platform.tenant.manage"), input);
 
     expect(parts.tenantRetention.swept).toEqual([TENANT]);
+  });
+});
+
+// `19.20`: the placement cache outlived the tenant. Its TTL is deliberately long —
+// the answer changes only on a move — so nothing else would have cleared it.
+describe("DeleteOrganizationUseCase and the placement cache", () => {
+  it("forgets the deleted tenant's placement", async () => {
+    const { parts, useCase } = build();
+
+    await useCase.execute(actor("platform.tenant.manage"), input);
+
+    expect(parts.shards.invalidated).toEqual([TENANT]);
+  });
+
+  // After the commit, like the capability flush beside it: a cache cleared first is
+  // refilled from rows the transaction has not removed yet.
+  it("does not forget it when the delete refuses", async () => {
+    const { parts, useCase } = build();
+
+    await expect(
+      useCase.execute(actor("platform.tenant.manage"), { ...input, slug: "not-the-slug" }),
+    ).rejects.toThrow();
+
+    expect(parts.shards.invalidated).toEqual([]);
   });
 });

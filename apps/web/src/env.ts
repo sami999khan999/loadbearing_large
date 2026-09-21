@@ -11,7 +11,7 @@ const Schema = z
     // The same server without the pooler. Defaults to `DATABASE_URL`, which is correct
     // only while nothing is pooling — see docs/reference/env.md.
     DATABASE_DIRECT_URL: z.url().optional(),
-    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
     DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
     // Today an unreachable Postgres hangs the request for the OS default, which is
     // longer than every timeout in front of it.

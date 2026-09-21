@@ -81,8 +81,10 @@ export default defineConfig({
           ? {
               clickhouse: {
                 url: clickhouseUrl,
-                database: process.env.CLICKHOUSE_DATABASE ?? "ratchet",
-                username: process.env.CLICKHOUSE_USER ?? "ratchet",
+                // Named explicitly, the rule both `env.ts` schemas enforce. A default
+                // that guesses the project name is a credential in shipped code.
+                database: required("CLICKHOUSE_DATABASE"),
+                username: required("CLICKHOUSE_USER"),
                 password: process.env.CLICKHOUSE_PASSWORD ?? "",
               },
             }

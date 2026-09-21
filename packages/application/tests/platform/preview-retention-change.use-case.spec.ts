@@ -14,12 +14,16 @@ const NOW = new Date("2026-08-15T00:00:00.000Z");
 // Records what it was asked for: the cutoff is the whole behaviour, and a double that
 // ignored it would let the arithmetic drift from `prune()`'s without a failure.
 class RecordingMaintenance implements Partial<MaintenanceGateway> {
-  public readonly asked: { table: string; cutoff: Date }[] = [];
+  public readonly asked: { table: string; cutoff: Date; organizationId: string | null }[] = [];
 
   public constructor(private readonly estimates: readonly PartitionEstimate[] = []) {}
 
-  public partitionsBefore(table: string, cutoff: Date): Promise<readonly PartitionEstimate[]> {
-    this.asked.push({ table, cutoff });
+  public partitionsBefore(
+    table: string,
+    cutoff: Date,
+    organizationId?: string | null,
+  ): Promise<readonly PartitionEstimate[]> {
+    this.asked.push({ table, cutoff, organizationId: organizationId ?? null });
     return Promise.resolve(this.estimates);
   }
 }
@@ -61,7 +65,9 @@ describe("PreviewRetentionChangeUseCase", () => {
     });
 
     expect(maintenance.asked).toEqual([
-      { table: "activity_log", cutoff: new Date(Date.UTC(2026, 1, 1)) },
+      // `organizationId: null` is the table-wide read, and asserting it here is what
+      // keeps `19.19`'s per-tenant preview from silently becoming the default.
+      { table: "activity_log", cutoff: new Date(Date.UTC(2026, 1, 1)), organizationId: null },
     ]);
   });
 
@@ -135,5 +141,98 @@ describe("PreviewRetentionChangeUseCase", () => {
         hotMonths: 0,
       }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+// `19.19`: the screen edits a tenant's override and used to preview the table's own
+// numbers, which are a different set of partitions and usually a much larger one.
+describe("PreviewRetentionChangeUseCase for one tenant", () => {
+  const OTHER = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000099");
+
+  it("asks the gateway for that tenant's partitions rather than every tenant's", async () => {
+    const maintenance = new RecordingMaintenance();
+    const useCase = new PreviewRetentionChangeUseCase(
+      new Authorizer(),
+      maintenance as unknown as MaintenanceGateway,
+      { now: () => NOW },
+    );
+
+    await useCase.execute(actor("platform.retention.read"), {
+      tableName: "activity_log",
+      hotMonths: 3,
+      organizationId: OTHER,
+    });
+
+    expect(maintenance.asked[0]?.organizationId).toBe(OTHER);
+  });
+
+  it("still asks across every tenant when none is named", async () => {
+    const maintenance = new RecordingMaintenance();
+    const useCase = new PreviewRetentionChangeUseCase(
+      new Authorizer(),
+      maintenance as unknown as MaintenanceGateway,
+      { now: () => NOW },
+    );
+
+    await useCase.execute(actor("platform.retention.read"), {
+      tableName: "activity_log",
+      hotMonths: 3,
+    });
+
+    expect(maintenance.asked[0]?.organizationId).toBeNull();
+  });
+
+  it("echoes the tenant back, so two previews in flight cannot be confused", async () => {
+    const maintenance = new RecordingMaintenance();
+    const useCase = new PreviewRetentionChangeUseCase(
+      new Authorizer(),
+      maintenance as unknown as MaintenanceGateway,
+      { now: () => NOW },
+    );
+
+    const preview = await useCase.execute(actor("platform.retention.read"), {
+      tableName: "activity_log",
+      hotMonths: 3,
+      organizationId: OTHER,
+    });
+
+    expect(preview.organizationId).toBe(OTHER);
+  });
+
+  // The same predicate `UpdateTenantRetentionUseCase` refuses on, so the screen cannot
+  // offer a preview of an override that would not save. `messages` is `retentionMonths:
+  // ──
+  // null` by decision D47 — the calendar never retires it.
+  it("refuses a tenant preview of a table the calendar never retires", async () => {
+    const useCase = new PreviewRetentionChangeUseCase(
+      new Authorizer(),
+      new RecordingMaintenance() as unknown as MaintenanceGateway,
+      { now: () => NOW },
+    );
+
+    await expect(
+      useCase.execute(actor("platform.retention.read"), {
+        tableName: "messages",
+        hotMonths: 3,
+        organizationId: OTHER,
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  // And the table-wide preview of the same table is still allowed: nothing is being
+  // saved, and the number is the honest answer to "what would three months retire".
+  it("allows the table-wide preview of that same table", async () => {
+    const useCase = new PreviewRetentionChangeUseCase(
+      new Authorizer(),
+      new RecordingMaintenance() as unknown as MaintenanceGateway,
+      { now: () => NOW },
+    );
+
+    const preview = await useCase.execute(actor("platform.retention.read"), {
+      tableName: "messages",
+      hotMonths: 3,
+    });
+
+    expect(preview.tableName).toBe("messages");
   });
 });

@@ -6,9 +6,11 @@ export interface MessageSnapshot {
   readonly locale: Locale;
   // Which namespaces `base` and `overrides` cover. Always includes the shell.
   readonly namespaces: readonly Namespace[];
-  // English, for the loaded namespaces only. The fallback layer.
+  // The layer beneath, read only where `overrides` has no key. `StaticContentSource`
+  // leaves it empty — its bundles are total — and a CMS source is what it exists for.
   readonly base: MessageBundle;
-  // The requested locale, loaded namespaces only. Empty when locale is "en".
+  // The requested locale, loaded namespaces only. The static source puts every locale
+  // here, English included, so a snapshot is one layer unless something supplies two.
   readonly overrides: MessageBundle;
 }
 

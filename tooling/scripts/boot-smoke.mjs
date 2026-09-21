@@ -8,11 +8,10 @@
 
 // @ts-check
 
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { bootApp, freePort } from "./boot-app.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -55,42 +54,25 @@ if (!existsSync(entry)) {
   process.exit(1);
 }
 
-// A port the kernel just handed out and nothing else holds, rather than a constant that
-// collides with the dev server a developer left running.
-function freePort() {
-  return new Promise((keep, drop) => {
-    const socket = createServer();
-    socket.on("error", drop);
-    socket.listen(0, "127.0.0.1", () => {
-      const address = socket.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      socket.close(() => keep(port));
-    });
-  });
-}
-
 const port = app.probe ? await freePort() : 0;
-
-const child = spawn(process.execPath, [entry], {
-  cwd: ROOT,
-  stdio: ["ignore", "pipe", "pipe"],
-  env: app.probe ? { ...process.env, PORT: String(port) } : process.env,
-});
-
-let output = "";
-let signalled = false;
 
 const fail = (why) => {
   console.error(`✗ ${name}: ${why}`);
-  if (output.trim()) console.error(output.trim());
-  if (child.exitCode === null) child.kill("SIGKILL");
   process.exit(1);
 };
 
-const timer = setTimeout(
-  () => fail(`no \`${app.started}\` within ${TIMEOUT_MS / 1000}s`),
-  TIMEOUT_MS,
-);
+// The line, not the socket, even for the web app: unlike the smoke suite this script
+// exists to assert that the app *says* it started. See `boot-app.mjs`.
+const booted = await bootApp({
+  entry,
+  started: app.started,
+  cwd: ROOT,
+  env: app.probe ? { ...process.env, PORT: String(port) } : process.env,
+  timeoutMs: TIMEOUT_MS,
+}).catch((error) => fail(error.message));
+
+const { child } = booted;
+console.log(`✓ ${name}: booted`);
 
 // A request that completes, with a body, from the built bundle. `T-032` was a server
 // that imported cleanly, listened, and answered 500 on every page.
@@ -105,33 +87,13 @@ async function serves() {
   console.log(`✓ ${name}: ${app.probe} answered 200, ${body.length} bytes`);
 }
 
-const read = (chunk) => {
-  output += chunk;
+if (app.probe) {
+  await serves().catch((error) => fail(`${app.probe} could not be reached — ${error.message}`));
+}
 
-  // On the *first* sighting only: the line is printed once, but a consumer could log
-  // something containing it and a second SIGTERM would race the drain.
-  if (!signalled && output.includes(app.started)) {
-    signalled = true;
-    console.log(`✓ ${name}: booted`);
-
-    if (!app.probe) return child.kill("SIGTERM");
-    serves().then(
-      () => child.kill("SIGTERM"),
-      (error) => fail(`${app.probe} could not be reached — ${error.message}`),
-    );
-  }
-};
-
-child.stdout.on("data", read);
-child.stderr.on("data", read);
-
-child.on("error", (error) => fail(`could not spawn — ${error.message}`));
-
+// Attached before the signal, never after: a process that exits between the two has
+// nowhere to report it and the script would hang on an event that already fired.
 child.on("exit", (code, signal) => {
-  clearTimeout(timer);
-
-  if (!signalled) return fail(`exited during boot (code ${code}, signal ${signal})`);
-
   // Only an app with a drain has a clean exit to assert. The web server holds no queue,
   // and on Windows SIGTERM is a terminate rather than a signal a process can catch.
   if (!app.stopped) return console.log(`✓ ${name}: served, then stopped`);
@@ -139,7 +101,9 @@ child.on("exit", (code, signal) => {
   // A drain that ends on the signal rather than on its own is a drain that did not
   // finish — the whole reason to send SIGTERM rather than kill the process.
   if (code !== 0) return fail(`did not exit cleanly on SIGTERM (code ${code}, signal ${signal})`);
-  if (!output.includes(app.stopped)) return fail(`no \`${app.stopped}\` on shutdown`);
+  if (!booted.output().includes(app.stopped)) return fail(`no \`${app.stopped}\` on shutdown`);
 
   console.log(`✓ ${name}: drained and exited cleanly`);
 });
+
+booted.stop();

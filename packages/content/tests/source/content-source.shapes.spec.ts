@@ -11,14 +11,14 @@ describe("lazy namespaces", () => {
     const snapshot = await source.messages("en", ["auth"]);
 
     expect(snapshot.namespaces).toEqual(["common", "error", "auth"]);
-    expect(snapshot.base["auth.signIn"]).toBe("Sign in");
+    expect(snapshot.overrides["auth.signIn"]).toBe("Sign in");
   });
 
   it("does not load a namespace nobody asked for", async () => {
     const snapshot = await source.messages("en", ["auth"]);
 
     expect(snapshot.namespaces).not.toContain("nav");
-    expect(snapshot.base["nav.roles"]).toBeUndefined();
+    expect(snapshot.overrides["nav.roles"]).toBeUndefined();
   });
 
   // The right failure mode: `nav.roles` on screen names the exact string to grep for,
@@ -30,16 +30,15 @@ describe("lazy namespaces", () => {
     expect(t.loaded("nav")).toBe(false);
   });
 
-  // English rides beneath a *lazy* namespace, not only beneath the shell. Asserted on the
-  // two layers rather than on a key that happens to be untranslated today.
-  it("falls back to English inside a lazy namespace too", async () => {
+  // A lazy namespace is one layer like the shell is, since `23.15`. Asserted on the
+  // snapshot as well as through the translator, because the payload is the point.
+  it("carries one layer inside a lazy namespace too", async () => {
     const snapshot = await source.messages("bn", ["auth"]);
     const t = await source.translator("bn", ["auth"]);
 
     expect(t.t("auth.signIn")).toBe("সাইন ইন");
     expect(snapshot.overrides["auth.signIn"]).toBe("সাইন ইন");
-    // The layer that answers whenever the override above is absent.
-    expect(snapshot.base["auth.signIn"]).toBe("Sign in");
+    expect(snapshot.base).toEqual({});
   });
 
   it("keeps error copy working on a route that declared something else", async () => {
@@ -77,17 +76,18 @@ describe("the server-only email namespace", () => {
     const snapshot = await server.messages("en", ["email"]);
 
     expect(snapshot.namespaces).toEqual(["common", "error", "email"]);
-    expect(snapshot.base["error.conflict"]).toBeDefined();
+    expect(snapshot.overrides["error.conflict"]).toBeDefined();
   });
 
-  it("carries both layers inside the email namespace too", async () => {
+  it("carries one layer inside the email namespace too", async () => {
     const t = await server.translator("bn", ["email"]);
 
     expect(t.t("email.digest.viewAll")).toBe("ড্যাশবোর্ড খুলুন");
-    // The English layer is loaded beneath it whether or not any key needs it — which is
-    // what makes the *server* catalog behave like the client one.
+    // No English beneath it, which is what makes the *server* catalog behave like the
+    // client one — a worker rendering Bengali mail carries no second copy either.
     const snapshot = await server.messages("bn", ["email"]);
-    expect(snapshot.base["email.digest.viewAll"]).toBe("Open the dashboard");
+    expect(snapshot.base).toEqual({});
+    expect(snapshot.overrides["email.digest.viewAll"]).toBe("ড্যাশবোর্ড খুলুন");
   });
 
   // A client catalog has no email loader, so the lookup is skipped and `t()` renders the

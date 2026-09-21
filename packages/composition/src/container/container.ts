@@ -18,6 +18,7 @@ import {
   type ColdArchiveReader,
   type ContentSource,
   ConversationAccess,
+  ConversationNaming,
   CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
   CreateConversationUseCase,
@@ -115,6 +116,7 @@ import {
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
   PgUnitOfWork,
+  PgUserReader,
   PgVectorStore,
   type PlatformPolicyRepository,
   type PlatformReader,
@@ -721,16 +723,32 @@ export class Container {
     // One instance, shared: the membership check is the same question every messaging
     // use-case asks, and a second copy is a second place for it to drift.
     const conversationAccess = new ConversationAccess(conversations);
+    // Catalog-placed, beside a routed repository on purpose: a conversation's members
+    // are routed and their names are not, so the two are read apart and joined here.
+    const conversationNaming = new ConversationNaming(
+      new PgUserReader(this.cluster, this.transactions, this.shards),
+    );
 
     this.messaging = {
-      listConversations: new ListConversationsUseCase(this.authorizer, conversations, messages),
-      getConversation: new GetConversationUseCase(this.authorizer, conversationAccess, messages),
+      listConversations: new ListConversationsUseCase(
+        this.authorizer,
+        conversations,
+        messages,
+        conversationNaming,
+      ),
+      getConversation: new GetConversationUseCase(
+        this.authorizer,
+        conversationAccess,
+        messages,
+        conversationNaming,
+      ),
       createConversation: new CreateConversationUseCase(
         this.authorizer,
         conversations,
         this.eventPublisher,
         this.routedUnitOfWork,
         this.tenantMemberships,
+        conversationNaming,
       ),
       addMember: new AddConversationMemberUseCase(
         this.authorizer,
@@ -979,6 +997,7 @@ export class Container {
         this.clock,
         this.analyticsProjector ?? null,
         this.tenantRetentionPolicies,
+        this.shardResolver,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,

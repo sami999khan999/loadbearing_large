@@ -1,5 +1,8 @@
-import type { UserId } from "../primitive/index.js";
-import { ConversationContract, type ConversationDto } from "./conversation.contract.js";
+import {
+  ConversationContract,
+  type ConversationDto,
+  type ConversationMemberDto,
+} from "./conversation.contract.js";
 
 // Capped in the repository, and the badge says so rather than showing a number that is
 // quietly a lie.
@@ -17,10 +20,21 @@ export class ConversationEntity {
   }
 
   // A direct conversation carries no title, so the client names it after the other
-  // person. Asking the entity which one that is keeps that lookup out of a component.
-  public otherMember(self: UserId): UserId | null {
+  // person. The whole member, because a caller wants the name and sometimes the id.
+  public otherMember(self: string): ConversationMemberDto | null {
     if (this.dto.kind !== "direct") return null;
-    return this.dto.members.find((member) => member.userId !== self)?.userId ?? null;
+    return this.dto.members.find((member) => member.userId !== self) ?? null;
+  }
+
+  // What a conversation is called on screen: its own title, then the other person, and
+  // `null` for a direct conversation nobody in it can still be named — copy decides then.
+  public displayTitle(self: string): string | null {
+    return this.dto.title ?? this.otherMember(self)?.name ?? null;
+  }
+
+  // For an author line and for a typing frame, both of which arrive holding only an id.
+  public nameOf(userId: string): string | null {
+    return this.dto.members.find((member) => member.userId === userId)?.name ?? null;
   }
 
   public get unread(): boolean {
@@ -34,7 +48,7 @@ export class ConversationEntity {
 
   // A channel with one owner left cannot lose them: the same rule the organization's
   // last owner has, for the same reason — nobody could administer it afterwards.
-  public get lastOwner(): UserId | null {
+  public get lastOwner(): ConversationDto["members"][number]["userId"] | null {
     const owners = this.dto.members.filter((member) => member.role === "owner");
     return owners.length === 1 ? (owners[0]?.userId ?? null) : null;
   }

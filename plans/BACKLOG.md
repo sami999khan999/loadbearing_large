@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, from every plan file, in one place
-updated: 2026-09-20
+updated: 2026-09-21
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -34,14 +34,14 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 31 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 20 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
-| 4 | Unfinished work buried inside ticked items | 7 |
-| 5 | Verification owed — browser, manual, or a scale not run | 9 |
+| 4 | Unfinished work buried inside ticked items | 4 |
+| 5 | Verification owed — browser, manual, or a scale not run | 2 |
 | 6 | Conditional work — "reopen when" | 11 |
-| 7 | `archive/TODO.md` ledger rows | 3 |
-| 8 | Doc housekeeping still owed | 6 |
+| 7 | `archive/TODO.md` ledger rows | 1 |
+| 8 | Doc housekeeping still owed | 1 |
 
 Sections 1–3 are the work. Section 4 is work the ledgers say is done and is not. Sections 5–8
 are cheaper than the rest and are listed so nobody re-derives them.
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the thirty-one open boxes
+## 1. `archive/PLAN.md` — the twenty-one open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -79,32 +79,44 @@ on 2026-09-20 with the browser walk; `23.25`, `23.26` and `23.27` are new and we
 **Fixes with a recommendation filed and not taken.** Each is a decision the owner has to make; the
 recommendation under the entry was measured, not argued.
 
-- [ ] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.** The drain's
-  repeat job (`removeOnComplete: 10`, once a second) trims the shared `EVENT` completed set, so the
-  deliveries' `removeOnCompleteAgeSeconds` never applies. Not a correctness bug — subscribers are
-  idempotent on `event.id`. **Recommended:** accept the seconds-long window and correct two
-  comments (`10.8`'s note and `JobOptions.removeOnCompleteAgeSeconds` in
-  `packages/application/src/port/queue.publisher.ts`). No behaviour change. `R.24` is the same
-  fact from the other bound. — `archive/PLAN.md:3354`
-- [ ] `23.2` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue**, and a
-  running worker logs `queue.job.failed {jobId: "smoke-unnamed"}`. **Recommended:** one local
-  constant `SMOKE_QUEUE = "smoke"` in
-  `packages/infrastructure/tests/smoke/redis.smoke.spec.ts` replacing the seven
-  `QueueName.MAINTENANCE` references — `publish` takes a `string`, so no `QueueName` member is
-  added. — `archive/PLAN.md:3397`
-- [ ] `23.3` **The QueryClient is not dehydrated**, so every loader prefetch is thrown away and the
-  client refetches what SSR already rendered. **Recommended, option (d):** name `DehydratedState`
-  in the router's `SerializableExtensions` (a `declare module` block in `apps/web/src/router.tsx`),
-  then `dehydrate(queryClient)` into the payload and `hydrate` back out. Written, typechecked,
-  built and served, then reverted; no dependency, no cast. The one judgement left is that the
-  augmentation is global. **Measured 2026-09-20**, which the entry had not been: `/settings/roles`
-  prefetches `role/list` in its loader and a cold load calls it again from the browser, so the
-  waste is real and observable. **`23.6` is *partly* behind this** — that route prefetches
-  nothing to begin with, so this is necessary and not sufficient. — `archive/PLAN.md:3429`
+- [x] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.**
+  `done: 2026-09-21` — **the recommendation was taken, and `R.24` had already delivered it.**
+  Accepting the seconds-long window is the decision; correcting the comments is the work, and
+  `R.24` did all three plus the reference page on 2026-09-20 without anyone ticking this.
+  Re-read today against the tree, because a ledger that says "recommended" over a change already
+  made is the kind of entry somebody re-does: `DELIVERY_RETENTION_SECONDS` says "the window we
+  *ask* for"; `JobOptions.removeOnCompleteAgeSeconds` says "an upper bound only"; and
+  `consumers.md` carries the paragraph beginning "The window it actually gets is seconds". No
+  behaviour change, and none wanted — the subscribers are idempotent on `event.id`. Giving the
+  drain a queue of its own would restore the long window and stays filed. — `archive/PLAN.md:3354`
+- [x] `23.2` **`pnpm smoke` publishes a probe job onto the live `MAINTENANCE` queue.**
+  `done: 2026-09-21` — the recommendation, unchanged: one local `SMOKE_QUEUE = "smoke"` replacing
+  all seven references, and `QueueName` leaves the spec's imports with them. `publish` takes a
+  string, so the enum gains nothing — it names queues the application owns, and this is not one.
+  **Verified against the running instance**, which is the only place this was ever visible:
+  8 cases pass and the probes are on `bull:smoke:*`, with `bull:maintenance:*` untouched by the
+  run. — `archive/PLAN.md:3397`
+- [x] `23.3` **The QueryClient is not dehydrated.** `done: 2026-09-21` — option (d), as filed
+  and this time kept. `RouterDehydrated` gains `queries: DehydratedState`, `dehydrate` puts
+  `dehydrate(queryClient)` in the payload and `hydrate` calls `hydrate(queryClient, …)` back out.
+  No dependency added: `apps/web` already had `@tanstack/react-query`, so the three names join
+  `src/import.ts` beside `QueryClient`.
+  - **The judgement was taken rather than dodged.** `SerializableExtensions` is global, so
+    nothing else in the app may now declare `DehydratedState` as something the wire cannot
+    carry. The alternative was a cast, and a cast would have hidden exactly the failure the
+    serializer exists to catch.
+  - **Proved on the same route that measured it.** A cold `/settings/roles` called `role/list`
+    from the browser on 2026-09-20 and does not today; what is left is `notification/unreadCount`
+    and `realtime/stream`, and neither is a loader prefetch — one is the bell, which no loader
+    asks for, and the other is a stream, which cannot be dehydrated at all.
+  - **`staleTime` is what finishes the job.** `createQueryClient` sets 30 s, so hydrated data is
+    fresh on mount. At the library default of 0 the render would come from cache and the refetch
+    would go out anyway, which is the shape of this fix that looks like it works and does not.
+  - **`23.6` went with it**, once the loader had something to dehydrate. — `archive/PLAN.md:3429`
 
 **Exit clauses that needed a browser — walked on 2026-09-20.** The Claude in Chrome extension
-connects now, which is the whole of what `S.1` was waiting on. **Six of the seven observations
-hold; `23.6` does not, and for a reason the entry did not have.**
+connects now, which is the whole of what `S.1` was waiting on. **Six of the seven held on the
+day**; `23.6` needed `23.3` and a prefetch that did not exist, and closed on 2026-09-21.
 
 Two accounts, one browser profile. Ada is in Chrome; Grace acts over `/api/rpc` with her own
 cookie jar. The checklist asked for a second profile, and it does not need one: in every clause
@@ -120,13 +132,24 @@ which is also what let the optimistic window be observed rather than guessed at.
     that was already in flight.
   - The same mechanism moved something nobody asked it to: when Grace's sign-up enrolled her, the
     open tab grew her member row and dropped her invitation, live.
-- [ ] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.**
-  **Still open, and the entry names only half the reason.** `23.3` is real and was measured:
-  `/settings/roles` does `ensureQueryData(RoleQueries.list(…))` in its loader, and a cold load
-  still calls `role/list` from the browser. But `/notifications` **prefetches nothing at all** —
-  its loader is `context.messages.ensure(MESSAGES)` and no more, so there is no prefetch for
-  `23.3` to deliver. **Fixing `23.3` alone would not tick this**; the loader needs the two
-  `ensureQueryData` calls first, and those are the clause's actual subject. — `archive/PLAN.md:3523`
+- [x] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.**
+  `done: 2026-09-21` — and it took both halves, which is why it outlived `23.3`.
+  - **The prefetch did not exist.** The entry read as though the loader fetched and the payload
+    dropped it; in fact `/notifications` ensured the copy namespace and nothing else. Page one is
+    now `ensureInfiniteQueryData(NotificationQueries.list(…))` on the route, and the count is
+    `ensureQueryData(NotificationQueries.unreadCount(…))` on `_authenticated` — the layout, not
+    the page, because the bell renders on every route under it.
+  - **The count is gated the way the bell is.** `CapabilitySet.from(…).can("notification.inbox.read")`,
+    the same key `<Can>` checks, so a member without an inbox issues no query rather than one
+    the procedure refuses. `(shell)/index.tsx` already had this shape.
+  - **`PAGE` is shared with the component.** The query key is built from `limit` and
+    `unreadOnly`, and `NotificationList` defaulted `limit` itself — a loader prefetching 25 into
+    a key the component read at some other number would have looked exactly like this bug.
+  - **Measured on a cold load**, which is the clause: `notification/list` and
+    `notification/unreadCount` are both gone, the rows and the badge render from the payload.
+    What remains is `notification/archivedMonths`, which belongs to a different component behind
+    a different permission and prefetches nothing, and `realtime/stream`, which is a stream and
+    cannot be dehydrated at all. — `archive/PLAN.md:3523`
 - [x] `23.7` **The bell count moves on refocus.** `done: 2026-09-20` — Grace sent Ada a direct
   message; the badge went **1 → 2** in an already-open tab, with no reload and no refocus. Worth
   correcting the clause while it is being ticked: focus is not the mechanism. The stream
@@ -163,26 +186,73 @@ which is also what let the optimistic window be observed rather than guessed at.
   against real data. Four decisions carry over (new port, read-only, resolved scope, ISO periods).
   Step one is done **and this time it is running** — the container is up, `CLICKHOUSE_URL` is set,
   and the projection has written rows rather than merely being able to (`S.2`). — `archive/PLAN.md:3586`
-- [ ] `23.15` **The English fallback layer is dead payload** `P3` `~3h`. A `bn` page carries
-  3 471 characters of English it can never read. **Recommended:** drop the base layer —
-  `StaticContentSource.messages` returns `base: {}`; `MessageSnapshot` keeps both fields for a CMS
-  source; two specs. Both reasons the entry gave for keeping it were checked and neither holds as
-  built. — `archive/PLAN.md:3610`
+- [x] `23.15` **The English fallback layer is dead payload** `done: 2026-09-21` — the first of
+  the two decisions the entry allowed, and the one it recommended: the base layer is dropped, and
+  `NamespaceBundle` stays total. **Not both**, which the entry was explicit about.
+  - **Verified before touching it, because this removes a safety net.** Every `en` bundle was
+    compared against its `bn` twin: 14 namespaces, 453 keys, **zero** missing and zero orphans.
+    And that is enforced rather than lucky — a `bn` bundle is typed `NamespaceBundle<"nav">`,
+    a total `Record`, so a key added to `en` without a translation fails `tsc`. The layer beneath
+    could not be reached by anything that ships.
+  - **Measured red then green**, off the source rather than out of the HTML, for the namespaces
+    `/sign-in` loads:
+
+    | locale | before | after |
+    |---|---|---|
+    | `en` | 3 707 chars | 3 707 |
+    | `bn` | 7 495 chars | **3 792** |
+
+    English is unchanged, because it was always one layer wearing two names — it now arrives in
+    `overrides` like every other locale. Bengali loses **3 703 characters, 49 %** of its message
+    payload. The page itself went 15 210 → 11 541 bytes.
+  - **What it gives up, and the entry said so first:** adding a third language is now
+    all-or-nothing at runtime as well as at compile time. It already was at compile time, and a
+    contributor landing a partial locale meets `tsc` long before they meet a page.
+  - **`Translator` keeps both layers** — `t`, `has`, `with` and `merge` are untouched, and
+    `translator.spec.ts` still proves an override beats a base. A CMS behind `ContentSource` is a
+    different implementation and is free to fill `base`; that is what the port is for.
+  - **Five specs moved with it**, four of them assertions that read the English out of `base` on
+    an `en` page — which was never the fallback doing anything. The one that proved a per-key
+    fallback used a hand-built partial catalog the type system forbids, and its own comment said
+    so; the mechanism it covered lives in `Translator` and is tested there. — `archive/PLAN.md:3610`
 
 **Found on 2026-09-20, filed rather than fixed.**
 
-- [ ] `23.20` **The shipped configuration warns about itself on every worker boot** —
-  `worker.pool.oversubscribed {concurrency: 20, poolMax: 10}` from `.env.example`'s own numbers.
-  **Recommended (a):** raise the shipped `DATABASE_POOL_MAX` to 20 in `.env.example` and both
-  `env.ts` defaults. (b) count only consumers that touch the database; (c) a separate
-  `WORKER_DATABASE_POOL_MAX`. A defaults decision; the number wants choosing beside `23.21`'s. — `archive/PLAN.md:3767`
-- [ ] `23.21` **The worker's first boot against a real stack is not clean.** Two things. (1)
-  `partitions-boot` logs nothing for 29.9 s, BullMQ's 30 s `lockDuration` expires, the job is
-  re-delivered and runs twice — at 78 tenants. **Recommended:** a `lockDuration` on the
-  maintenance `Worker` that matches its work (five minutes). (2) `AnalyticsConsumer.project`
-  places each tenant *outside* the per-tenant `try`, so an unplaceable tenant aborts the run
-  without `analytics.projection.failed`. **Recommended, one line:** move `withShard` inside the
-  `try`. The larger question — skip or fail an unplaceable tenant — is left open. — `archive/PLAN.md:3802`
+- [x] `23.20` **The shipped configuration warns about itself on every worker boot.**
+  `done: 2026-09-21` — **(a), the recommendation.** `DATABASE_POOL_MAX` is 20 in `.env.example`
+  and in both schema defaults, so the shipped numbers no longer disagree with themselves: six
+  consumers sum to exactly twenty — embedding 4, mail 4, event 8, notification 2, maintenance 1,
+  analytics 1.
+  - **Checked downstream before choosing the number**, because a pool ceiling that does not fit
+    is a stall rather than a warning. pgBouncer is `POOL_MODE: transaction` with
+    `DEFAULT_POOL_SIZE: 20` and `MAX_CLIENT_CONN: 1000`, so twenty per process is twenty *client*
+    connections multiplexed onto a shared twenty backend ones. Web and worker at twenty each is
+    forty clients against a ceiling of a thousand. The entry's "twenty is not twenty backend
+    connections" holds.
+  - **Verified on a real boot**, which is where it was found: the warning is gone and
+    `process.started {consumers: 6}` is the whole of the boot's own commentary.
+  - **(c) is still the honest model and is still open** — `DATABASE_POOL_MAX` remains one variable
+    read by two processes with unlike profiles, which is section 8's entry. This makes the default
+    correct; it does not make the coupling right. Worth taking when somebody has tuned them apart
+    in anger, which is what the entry said. — `archive/PLAN.md:3767`
+- [x] `23.21` **The worker's first boot against a real stack is not clean.** `done: 2026-09-21`
+  — both halves, both as recommended.
+  - **(1) `lockDuration: 300_000` on the maintenance `Worker`.** BullMQ's default is 30 s, which
+    is a number for short jobs; `partitions-boot` logged nothing for 29.9 s at 78 tenants, the
+    lock expired, and the job was re-delivered and ran a second time. Idempotent, so it was waste
+    rather than damage. The named constant says what the number is for, because five minutes
+    chosen silently reads as superstition.
+  - **(2) `withShard` moved inside `projectTenantOrReport`'s `try`.** A tenant with no
+    `shard_assignments` row threw past the per-tenant guard, so the run died reporting
+    `queue.job.failed` and the line a projection dashboard filters on was never emitted. The
+    checkpoint read in the `catch` stays *outside* the shard scope deliberately — it is
+    ClickHouse, one store for the deployment, not a routed table.
+  - **Proved red then green.** Two specs; the first fails on the old code with
+    `analytics.projection.failed` never emitted. The second asserts the run still fails, which is
+    the behaviour that was never in question and is the easy thing to break while fixing this.
+  - **The larger question is still open on purpose:** skip an unplaceable tenant, or fail the
+    run. Today it fails, now audibly. That is a decision about whether a derived store should
+    keep working for everyone else while somebody fixes a directory row.
   - **(2) is confirmed in the wild, 2026-09-20, and it is what stopped `S.2`'s clock.** One
     leftover tenant from an integration run had no `shard_assignments` row, and the 12:05 run
     logged `shard.resolution.failed` then `queue.job.failed` sixty milliseconds later — **not**
@@ -194,43 +264,93 @@ which is also what let the optimistic window be observed rather than guessed at.
   - **(1) has a companion in the same boot:** `worker.pool.oversubscribed` is logged on every
     start, which is `23.20`. Two of the three things filed against the worker's first boot are
     therefore reproducible on demand rather than remembered.
-- [ ] `23.25` **The typing indicator names a uuid, and names you.** Two defects in one line.
-  `SignalTypingUseCase` publishes to the conversation channel, author included, and
-  `useConversationStream` adds every `typing` frame's `userId` with no check that it is the
-  reader — so typing in `/messages` renders "`01a0bea8-… is typing…`" **to the person typing**.
-  `TypingNotice` takes an optional `nameFor` and `messages/$conversationId.tsx` passes none, which
-  is the uuid half. Seen on 2026-09-20 walking `23.10` and `23.11`; both clauses still hold, this
-  is beside them. **Recommended:** filter the reader's own id in the hook, not on the server —
-  the frame is legitimately addressed to the whole channel — and pass `nameFor` from the
-  conversation's members. — found 2026-09-20
-- [ ] `23.26` **A notification row's unread badge is labelled with the filter's copy.**
-  `notification.list.tsx`'s `readAt` column renders
-  `<StatusBadge tone="accent">{t("notification.inbox.unreadOnly")}</StatusBadge>`, so the button
-  that marks **one** row read reads "Unread only" — the same words as the filter toggle directly
-  above it, which does something else entirely. A screen reader gets the same collision, because
-  it is the button's whole accessible name. Needs a key of its own in both locales.
-  **`tone="accent"` beside it is correct and is not part of this** — `accent` is one of
-  `BadgeTone`'s five semantic tones, which is exactly what `color.md` asks a component to take
-  instead of a colour. — found 2026-09-20
-- [ ] `23.27` **`pnpm dev` races its own package watchers and the worker loses.** `dev` is
-  `pnpm build:packages && pnpm -r --parallel run dev`, and the second half starts fifteen
-  `tsup --watch` processes *and* both apps in one wave. Every one of those configs is
-  `clean: true`, so each watcher empties the `dist/` the build just filled while the apps are
-  already resolving against it. **Two failures in one run** on 2026-09-20: `apps/worker` died on
-  `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js`, and `packages/ui`'s DTS build
-  failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
-  directory from the other side. Running `pnpm dev:web` and `pnpm dev:worker` as two processes
-  works immediately, which is what the `S.1` walk used. **Recommended:** `dev` should run the two
-  apps' `dev` scripts only, since `build:packages` has already produced what they import; a
-  package watcher is a thing you start deliberately when editing that package.
-  **Note for whoever takes it:** `docs/ai/rules/workflow.md` documents `pnpm dev` as the entry
-  point, so the doc line moves with the fix. — found 2026-09-20
-- [ ] `23.24` **`apps/web` has no smoke suite.** Nothing proves the system behaves as a system;
-  one `curl` session (`archive/OPEN.md` "Proved end to end over HTTP") did it by hand. Shape:
-  `apps/web/vitest.smoke.config.ts`, a `globalSetup` that spawns `.output/server/index.mjs` (extract
-  from `tooling/scripts/boot-smoke.mjs`), Mailpit's HTTP API as the verification channel. **Decide
-  first:** whether it runs in the `compose` job or a third one, and whether it shares `pnpm test`'s
-  database. **Cheapest useful subset:** one case proving an SSE frame reaches an HTTP client. — `archive/PLAN.md:3875`
+- [x] `23.25` **The typing indicator named you.** `done: 2026-09-21` — the half that was a
+  defect. `useConversationStream` takes the reader's id and drops a `typing` frame carrying it,
+  so nobody is told they are typing. Filtered in the hook rather than at the publisher, because
+  the frame is legitimately addressed to the whole channel and every other member wants it. The
+  id rides a `useRef` for the same reason `queryClient` does — naming it as a dependency would
+  tear the stream down and reopen it the moment the session resolves, on every page load.
+  - **The spec caught itself first.** The obvious shape — yield the reader's own frame, assert
+    the list is empty — **passes on the unfixed code**, because empty is also the state before
+    any frame lands. It yields the reader's frame first and waits for a second one from somebody
+    else, so the assertion cannot be satisfied until both have been processed. That is `R.45`'s
+    failure mode, found in a spec written to close a different entry.
+- [x] `23.26b` **Messaging resolves names now.** `done: 2026-09-21` — built at the size the entry
+  filed it at: a port, an adapter, a contract field, three use-cases and three components.
+  - **The name cannot be a join, and that is the whole shape of it.** `conversation_members` is
+    routed and `users` is catalog, so no repository may read both — §22 is the assertion.
+    `ConversationNaming` does it in the use-case, after the routed read returns: one statement
+    for a whole page, because twenty-five conversations of a hundred members each is two queries
+    that way and twenty-six the obvious way. Attached **by key, never zipped by index**, which a
+    spec pins with a reader that answers about somebody else.
+  - **`CreateConversationUseCase` names the row after the commit, not inside `unitOfWork.run`.**
+    A catalog read inside a routed transaction is the crossing `data.md` forbids and it is
+    invisible on one node, so the spec asserts the ordering rather than a reviewer noticing it —
+    red on the shape that reads more naturally, which is exactly where it would have been written.
+  - **Its own port rather than `NotificationRecipientReader`, and the first reason is the one that
+    matters.** `Recipient` carries an email address, and a use-case holding one is a spread away
+    from putting it on a member DTO. `users()` there also filters out deactivated memberships —
+    right for a recipient list, and for a thread it is how every message somebody wrote goes back
+    to rendering a uuid the day they leave. `namesOf` returns names and nothing else.
+  - **Nullable, because `24.1` will make it reachable.** Today `conversation_members` has a
+    foreign key to `users`; once the ones crossing to the catalog are dropped, a membership row
+    can outlive the row that named it. `null` reaches the client and `messaging.member.unknown`
+    renders — never the id, in any of the three components.
+  - **`ConversationEntity` answers all three questions**, rather than a second helper doing it
+    again. `otherMember(self)` was written for exactly this and had no caller; it returns the
+    member now, and `displayTitle` and `nameOf` are built on it. The entity is constructed once
+    per fetch rather than per render — `from` parses, and the typing map changes on every
+    keystroke somebody else makes.
+  - **Verified on the wire, not only in specs.** `conversation/create`, `conversation/get` and
+    `conversation/list` over `/api/rpc` against live Postgres all return
+    `"name":"Bob Example"` beside the id. Thirteen unit and component cases, six integration
+    cases for the tenant scope and the deactivated member, and the argument is in
+    `packages/application/docs/reference/messaging.md`. — found 2026-09-21
+- [x] `23.26` **A notification row's unread badge was labelled with the filter's copy.**
+  `done: 2026-09-21` — `notification.inbox.markRead` in both locales, so the control that marks
+  **one** row read no longer reads "Unread only" like the filter directly above it. That string
+  was the button's whole accessible name, so a screen reader heard the collision too. The Bengali
+  matches `notification.peek.markRead`, which is the same action one component over. — found 2026-09-20
+- [x] `23.27` **`pnpm dev` raced its own package watchers and the worker lost.**
+  `done: 2026-09-21` — `dev` filters to `./apps/*`, so `build:packages` produces the `dist/`
+  the two apps import and nothing then empties it underneath them. Every package's `dev` is
+  `tsup --watch` over a `clean: true` config, and `-r --parallel` started all fifteen of them in
+  the same wave as the apps.
+  - **Verified by running it.** Before: `apps/worker` died on
+    `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js` and `packages/ui`'s DTS build
+    failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
+    directory seen from both sides. After: two dev scripts run and they are `apps/web` and
+    `apps/worker`, **zero** `tsup --watch` processes, web listening on 13000 and
+    `process.started {consumers: 6}`, with no module or build error in the whole run.
+  - **A package watcher is now something you start deliberately** when you are editing that
+    package, which is what `pnpm --filter @loadbearing/<pkg> run dev` is for and what the
+    workflow rules already tell you to prefer. — found 2026-09-20
+- [x] `23.24` **`apps/web` has a smoke suite.** `done: 2026-09-21` — the cheapest useful subset
+  the entry named, and it is the one thing nothing else in the repository proved: **a realtime
+  frame reaching an HTTP client**. `redis.smoke.spec.ts` proves publisher to subscriber, and
+  `23.5`–`23.11` proved the rest by eye.
+  - **Both decisions taken, and recorded here rather than left implicit.** It runs in the
+    `compose` job, which is the only one with Mailpit up and so the only one where the sign-up
+    leg means anything. It creates accounts in the same database `pnpm test` uses, with a global
+    sweep — the answer `packages/infrastructure` already gives.
+  - **One case, and it is the whole chain**: sign up over `/api/auth`, wait for the mail (a job
+    on `QueueName.MAIL`, so it only passes with a worker up), follow the verification link, sign
+    in and keep the cookie, open `realtime/stream` and **start reading before causing anything** —
+    pub/sub has no replay — then invite from a second connection and read `member.changed` off
+    the open one. 2.6 s against the built server.
+  - **The sweep deletes the tenant, not just the user**, which is the half that is easy to miss:
+    `personal` enrolment founds an organization per sign-up, and one left behind is exactly what
+    `23.21` found aborting the projection. Bounded by the run's own start rather than by a
+    membership join, because an organization whose members have gone is invisible to a join.
+  - **`boot-smoke.mjs`'s spawn-and-wait is extracted** to `tooling/scripts/boot-app.mjs` and used
+    by both, as the entry asked. Two findings came out of that. The helper now takes `env`
+    with no default — a boot helper that silently inherits is how a child gets half a
+    configuration. And it can wait on a **socket** rather than a log line: under vitest the
+    child's pipes deliver nothing to the runner, and for a server an answered request is the
+    better signal anyway. `boot-smoke.mjs` keeps the line, because asserting the line is its job.
+  - **A trap worth stating once:** the suite waits for the worker's `process.started`, which it
+    emits at `info`. An early draft set `LOG_LEVEL=warn` for tidiness and then waited the full
+    sixty seconds for a line that was never going to be printed. — `archive/PLAN.md:3875`
 
 ### Phase 24 — The physical split 📁
 
@@ -599,16 +719,34 @@ Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `conc
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
 the end so nobody chases them.
 
-- [ ] `19.19` **`19.15`'s preview does not take an optional `organizationId`** — the screen
-  previews the table's own numbers, not a tenant's override.
-  `packages/application/src/platform/preview-retention-change.use-case.ts` has no such input
-  (still true). The entry also expected the override to be edited from the shard map's tenant row;
-  `25.4` shipped a count there and a link to storage, and the editor is `tenant-retention.form.tsx`
-  on `/platform/retention`. — `archive/PLAN.md:2306`
-- [ ] `19.20` **`shards.invalidate(key)` is never called on a tenant delete.** The note said
-  Phase 22's resolver did not exist yet; it does now, `PgShardResolver` has `invalidate`, and
-  `delete-organization.use-case.ts` still calls only `capabilities.invalidateOrganization`
-  (still true). A deleted tenant's placement stays cached for up to 300 s. — `archive/PLAN.md:2330`
+- [x] `19.19` **`19.15`'s preview takes an optional `organizationId`.** `done: 2026-09-21` —
+  the screen previewed the table's numbers while the operator was editing one tenant's override,
+  which is a different set of partitions and usually a far larger one.
+  - **The port and the adapter were already there.** `MaintenanceGateway.partitionsBefore` has
+    taken an optional tenant since `19.15`, and `PgMaintenanceGateway` scopes the parents on it;
+    only the use-case never passed one. The change is the input, the contract and the wiring.
+  - **The refusal is the save's, exactly.** A tenant preview is narrowed to a table that is
+    tenant-partitioned *and* has non-null `retentionMonths` — the same predicate
+    `UpdateTenantRetentionUseCase` enforces — so the screen cannot preview an override that would
+    be refused on save. The table-wide preview of that same table is still allowed, because
+    nothing is being saved and the number is an honest answer.
+  - **The tenant is in the query key and echoed in the response.** Two previews in flight over
+    two tenants are two answers, not one refetched, and a slow response cannot render under the
+    wrong heading.
+  - **`tenant-retention.form.tsx` now keeps the same contract the table-wide form does**: the save
+    waits for a preview of the value on screen. Six specs. — `archive/PLAN.md:2306`
+- [x] `19.20` **`shards.invalidate(key)` is called on a tenant delete.** `done: 2026-09-21` —
+  beside the capability flush and, like it, **after the commit**: a cache cleared first is
+  refilled from rows the transaction has not removed yet, which is the stale entry it exists to
+  stop. The placement cache's TTL is deliberately long — the answer changes only on a move — so
+  nothing else was ever going to clear it, and a deleted tenant kept resolving to a node for up
+  to five minutes.
+  - **The `shard_assignments` row is left, and that is deliberate rather than missed.** Every
+    reader inner-joins `organizations` (`PgShardMapReader.tenantsOn`, `findByTerm`), so an
+    assignment with no tenant is invisible rather than stale. The *cache* was the problem,
+    because it answers from Redis without the join. Said here so nobody adds a delete later.
+  - Two specs, the first red on the old code. The second pins that a refused delete — a
+    mistyped slug — forgets nothing. — `archive/PLAN.md:2330`
 - [ ] `19.20` `concern:` **the archive runs inside the request.** For a large tenant that is minutes
   of streaming on a pooled connection; when it bites, make it a `tenant-delete` job the way
   `19.18` and `19.21` are. — `archive/PLAN.md:2340`
@@ -621,9 +759,20 @@ the end so nobody chases them.
   so. About fifty minutes of creation and half an hour of cleanup. — `archive/PLAN.md:1352`
 - [ ] `26.8` **`FAN_OUT_SCALE=250000` was not run** — 10× of the largest §3 column, deferred to a
   machine that can afford a `users` row per recipient. Curves are linear across 1 000–25 000. — `archive/PLAN.md:4202`
-- [ ] `23.13` **The permissions counterpart of §24 is still not a `check-architecture`
-  assertion.** The property — every key in `CATALOG` named by a `PROCEDURE_PERMISSIONS` entry —
-  lives only in `procedure-permissions.spec.ts`, whose allowlist is stale (`R.35`). — `archive/PLAN.md:3570`
+- [x] `23.13` **The permissions counterpart of §24.** `done: 2026-09-21` — assertion **28**, the same
+  shape `23.13` named: every key in `CATALOG` a value of some `PROCEDURE_PERMISSIONS` entry.
+  - **The module is read off the entry, never off the key's first segment.**
+    `core.realtime.subscribe` *is* gated — `realtime.stream` asserts it — and `core.activity.write`
+    is not, because `CapabilitySet.can()` grants every `core` key to every resolved principal
+    rather than through a role. Splitting on the name exempts both and catches neither, and a
+    fixture case fails if anyone tries it.
+  - **The property moved rather than being checked twice**, which also closes section 8's
+    `AWAITING_A_PROCEDURE` entry: two allowlists for one property is how the spec's went stale for
+    two phases with four keys behind it. `procedure-permissions.spec.ts` keeps the two directions
+    that need the real router — every procedure gated, no entry naming a procedure that is gone.
+  - **Proved red on the tree**, not only in a fixture: an invented `member.badge.polish` fails the
+    assertion by name and the tree is green with it removed. §24's fragment resolver is now shared,
+    so a `...billingPermissions` added tomorrow is covered without editing either. — `archive/PLAN.md:3570`
 
 **Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
 open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
@@ -640,30 +789,102 @@ database" — walked on 2026-09-13 in the communication plan's Phase 2 Exit.
 Every phase is unit-tested and most are verified against live containers; these are the clauses
 the record says were *not* proven, beyond the eight in `23.5`–`23.12`.
 
-**Seven of the nine need a browser, and nothing blocks them any more.** They were written while
-`S.1` held; the extension connects as of 2026-09-20 and the walk above is the worked example of
-driving one. Four of the seven — Phases 18, 19 and 20 and `25.4` — need a **platform admin**,
-which the walk's accounts are not: `pnpm platform:grant <email>` is the one setup step it did not
-take. The Phase 21 archived section rendered its empty state during the walk, which is not the
-clause; it wants a tenant with an archived month behind it.
+**All seven browser clauses were walked on 2026-09-21**, in one pass against `pnpm dev` on
+`:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the
+setup step the 2026-09-20 walk had not taken; it moves her `loadbearing` membership from `owner`
+to `platform_admin`, which is the tier by construction.
 
-- [ ] **Phase 18 Exit, browser half** — "signed in as alice with a customer tenant active,
-  `/platform/status` renders and the nav shows the module; as a tenant owner it redirects to
-  `/forbidden`". Every link in the chain is asserted; the round trip is not. — `archive/PLAN.md:1998`
-- [ ] **Phase 19 screens** — `/platform/retention` and `/platform/storage`: wired, typechecked,
-  use-cases unit-tested, no clause below the API clicked. — `archive/PLAN.md:2419`
-- [ ] **Phase 20 screen** — `/platform/analytics`, the same. — `archive/PLAN.md:2642`
-- [ ] **Phase 21 screen** — the archived section on `/notifications`, the same. — `archive/PLAN.md:2767`
-- [ ] **`25.4` rendered page** — `/platform/shards` answers 200 for a real platform admin and both
-  procedures answer with live data; the *rendered* expanded panel is browser-only. — `archive/PLAN.md:4094`
-- [ ] **`26.9` resend button** — the procedure is proved over `/api/rpc`; the button is not. — `archive/PLAN.md:4241`
-- [ ] **`T-029`'s ten-step manual pass** — organization switch, accept, switcher, found, and
-  **step 5**: an RPC immediately after a switch answers for the new tenant inside the sixty-second
-  `session.cookieCache` window. `archive/TODO.md` says "still owed"; `archive/IMPLEMENTATION-PLAN.md:2523`
-  lists it in the whole-plan verification; nothing records it walked. — `archive/TODO.md:228–241`
-- [ ] **The whole-plan verification** — `archive/PLAN.md`'s own closing section: the command block, then
-  each phase's Exit line by hand, and the one that cannot be automated: a tenant owner typing
-  `/platform/retention` into the address bar and being redirected. — `archive/PLAN.md:4284`
+**Two accounts, four organizations, and every clause below the API actually called.** What the
+pass created, and what it left behind, is in the state table at the end of this file. Two findings
+are worth carrying rather than burying in the ticks:
+
+- **A platform admin is not a tenant member, and `/notifications` proves it.** Alice with
+  `loadbearing` active is refused `/notifications` — `platform_admin` holds the nine platform keys
+  and no `notification.inbox.read`. That is the design working, and it is also why the archived
+  month had to be manufactured for a *tenant owner* rather than for her.
+- **A synthetic mouse click misses in this harness and a real one does not.** Three buttons —
+  pause projection, send invitation, restore — read as dead on a coordinate click and fired on
+  `element.click()`. Checked before filing anything: `elementFromPoint` returned the button
+  itself, so it was the input path and not an `R.44`-shaped missing handler. Worth knowing before
+  the next walk files a defect against a button that works.
+
+- [x] **Phase 18 Exit, browser half** `done: 2026-09-21` — both halves, and the customer tenant is
+  the half that matters. Alice founded **Walk Co** at `/organization/new`, which switched to it on
+  creation; with Walk Co active `/platform/status` renders, the nav carries the Platform link, and
+  the panel names the tier it is held through — "Platform organization: Loadbearing (loadbearing)"
+  — while the active tenant is something else entirely. Bob, owner of **Bob Co** and nothing more,
+  gets `/forbidden` from `/platform/status`, and his nav has no Platform entry at all.
+  — `archive/PLAN.md:1998`
+- [x] **Phase 19 screens** `done: 2026-09-21` — and the cold path is no longer an empty state.
+  - **`/platform/retention`**: `previewRetention` answered for the table-wide forms and for
+    `19.19`'s tenant override, whose own table list refuses `messages` exactly as the save does.
+    Against a real month it reads *"The next run drops 1 partitions, about 0 rows, 106496 bytes"*
+    — the row estimate is `reltuples` on a partition nothing has analysed, the bytes are real.
+    `updateRetention` saved, and **Restore a month** queued
+    `cold-restore.notifications.2026-06-01.all`; the worker read both objects back and logged
+    `attached: false`, which is the screen's own copy about a month outside the hot window.
+  - **`/platform/storage`**: `listStorage`, `exportTenant` and `listExports`, all below the API.
+    The export queued, the worker logged `cold.tenant.exported {objects: 4, rows: 50}`, and the
+    five object keys appeared under the form. Cold storage by tenant renders rows now rather than
+    "Nothing has been archived yet": Loadbearing 848 B / 7 rows / 2 months, Bob Co 493 B / 5 / 1.
+  — `archive/PLAN.md:2419`
+- [x] **Phase 20 screen** `done: 2026-09-21` — `/platform/analytics` renders the switch, the gaps
+  section and all twenty-four actions grouped by module. Driven below the API and put back:
+  `updateProjectionSwitch` paused it, `platform_policy.projection_enabled` went `t` → `f` → `t`,
+  and the audit trail carries `platform.projection.paused` then `platform.projection.resumed`
+  thirteen seconds apart. The screen refetched `getPolicy`, `listProjection` and `listGaps` on
+  each. **What the run could not distinguish** is Phase 20's own correction — a paused projection
+  reporting `disabled` rather than `behind` — because with no archived month behind it at the time
+  the gaps list is empty either way. That half stays where it is proved, in its spec.
+  — `archive/PLAN.md:2642`
+- [x] **Phase 21 screen** `done: 2026-09-21` — **populated, not the empty state**, which is what
+  the entry asked for and is the first time anything has read an archived month through the UI.
+  - Getting there needed a month that does not exist on a three-month-old database: a June
+    partition created with the seed's own create-then-attach DDL, five rows inserted,
+    `notifications` set to one hot month from the retention screen, and a `partitions` job
+    enqueued on the maintenance queue. The worker archived and dropped it —
+    `maintenance.partition.archived` then `maintenance.partition.dropped` — so the rows the page
+    renders are **only** in S3.
+  - The section sits under `Can permission="notification.archive.read"`, so it is a tenant
+    *owner* who sees it: bob in Bob Co. `notification/archivedMonths` and `notification/archived`
+    both answered 200, the month selector offered `2026-06-01`, and all five rows rendered out of
+    the gzipped object. — `archive/PLAN.md:2767`
+- [x] **`25.4` rendered page** `done: 2026-09-21` — the expanded panel, rendered. `shardMap` gave
+  node 0 with three tenants; **Show tenants** expanded to all three with placement, last-moved and
+  retention columns; every **Move** button is `disabled` and the reason is on the page rather than
+  in a tooltip — *"Tenant moves need the physical split — Phase 24."* `locateTenant` answered both
+  ways: `loadbearing` → "Loadbearing (loadbearing) is on node 0", a miss → "No tenant answers to
+  that." — `archive/PLAN.md:4094`
+- [x] **`26.9` resend button** `done: 2026-09-21` — pressed, with the row read before and after.
+  The invitation kept its `id` **and** its `created_at`, the `token_hash` changed
+  (`4e23a25c…` → `6bc43c24…`), `expires_at` moved to seven days from the resend, and Mailpit
+  received a **second** invitation to the same address. Every claim the procedure's entry makes,
+  this time from the button. — `archive/PLAN.md:4241`
+- [x] **`T-029`'s ten-step manual pass** `done: 2026-09-21` — all ten, in order, alice and bob.
+  - **Step 5 is the one the entry says matters, and it holds.** Bob switched Walk Co → Loadbearing
+    from the header and, **2.1 s later**, `member/list` over `/api/rpc` answered with
+    Loadbearing's five — alice as `platform_admin`, joined 2026-09-13 — and not Walk Co's two,
+    where alice is `owner` and joined today. Well inside the sixty-second `session.cookieCache`
+    window, which is the whole of what `rebind` exists to invalidate.
+  - Steps 1–4: alice invited bob into Walk Co; bob accepted from `/invitation/$token` and landed
+    **switched to Walk Co**, "You are Member here", with a nav of three entries rather than an
+    owner's seven; the switcher listed both memberships.
+  - Steps 6–7: a full page load kept the switched tenant; sign out and back in landed him in
+    Loadbearing, his last-used, not the one he had been in before the switch. The same held for
+    alice, who came back to Walk Co.
+  - Steps 8–9: `/organization/new` founded Bob Co and switched to it on creation. Signed out,
+    `/invitation/$token` rendered the anonymous preview — "Walk Co has invited bob@example.test
+    to join" — and its sign-in button carried
+    `?redirect=%2Finvitation%2F…`, which returned there after signing in.
+  - **Step 10 held at every step**: `users.last_active_organization_id` matched the switcher after
+    the found, after the accept, after the switch, after the reload and after the re-sign-in. It
+    is `null` until the first switch or found, because a plain sign-in does not write it.
+  — `archive/TODO.md:228–241`
+- [ ] **The whole-plan verification** — `archive/PLAN.md`'s own closing section: the command block,
+  then each phase's Exit line by hand. **The clause it says cannot be automated is done**: a tenant
+  owner — bob, owner of Bob Co — typed `/platform/retention` into the address bar on 2026-09-21
+  and landed on `/forbidden`. What is left is the by-hand pass over every phase's Exit line, which
+  is a reading job rather than a browser one. — `archive/PLAN.md:4284`
 - [ ] **`archive/REVIEW.md`'s own gap** — the `infrastructure` integration specs and the smoke suites were
   not run in the review session (no Docker). They were green on 2026-09-20 in `archive/OPEN.md` C, so this
   is closed unless the review's fixes land without re-running them.
@@ -699,52 +920,70 @@ a feeling.
 
 ## 7. `archive/TODO.md` — the three ledger rows
 
-`archive/TODO.md` is history since 2026-09-17 and these are its only open lines.
+`archive/TODO.md` is history since 2026-09-17 and these are its only open lines. **Two of the
+three closed on 2026-09-21**, once section 5's browser clauses made their Exit lines true rather
+than merely claimed.
 
 - [ ] `T-036` **Communication plan** `P1`. Done when Phases 9–13 **and 26** are closed, plus
-  `23.1`–`23.3` and `23.5`–`23.12`. Phases 9–13 are done; 26 is filed by decision, so as written
-  the row cannot close while Phase 26 stays filed. Either narrow the "Done when" to the walk
-  (`23.12` says the walk closes it) or accept it stays open. — `archive/TODO.md:140`
-- [ ] `T-037` **Database scaling plan** `P1`. Done when Phases 14–17, 21 and 22 report their Exit
-  lines true, Phase 24 filed. **All six are met** (`archive/PLAN.md` Exit notes dated 2026-09-13 to 19).
-  This row can be ticked. — `archive/TODO.md:159`
-- [ ] `T-038` **Platform admin** `P2`. Done when Phases 18–20 report their Exit lines true,
-  Phase 25 filed. **All three are met** (2026-09-19). This row can be ticked. — `archive/TODO.md:170`
+  `23.1`–`23.3` and `23.5`–`23.12`. **Every clause but one is now met** — Phases 9–13 are done,
+  `23.1`–`23.3` closed on 2026-09-21 and `23.5`–`23.12` on the walk. Phase 26 is filed by
+  decision, so as written the row cannot close. The choice is unchanged and is the owner's: narrow
+  the "Done when" to the walk (`23.12` says the walk closes it) or accept it stays open until
+  somebody unfiles Phase 26. — `archive/TODO.md:140`
+- [x] `T-037` **Database scaling plan** `P1`. `done: 2026-09-21` — Phases 14–17, 21 and 22 all
+  report their Exit lines true and Phase 24 is filed. It was **not** ticked on the file's own
+  say-so: Phase 21's Exit carried a "not verified through a browser" note, which section 5 closed
+  today with the archived section rendering five rows read out of S3.
+  — `archive/TODO.md:159`
+- [x] `T-038` **Platform admin** `P2`. `done: 2026-09-21` — Phases 18–20 report their Exit lines
+  true and Phase 25 is filed. Same reservation as `T-037`, and the same answer: all three Exit
+  lines carried a browser clause that nothing had walked, and all three were walked today — the
+  round trip for 18, both screens below the API for 19, and pause-and-resume for 20.
+  — `archive/TODO.md:170`
 
 ---
 
 ## 8. Doc housekeeping still owed
 
-Two real edits, both in shipped documentation rather than in a plan.
+**Five of the six closed on 2026-09-21.** What is left is the one that was never a doc edit:
+three env parsers that cannot be merged into a package, which wants its own decision.
 
-- [ ] **Four doc sentences describe the transactional outbox as a backlog item.** It shipped as
-  Phase 10 on 2026-09-12. The paths were repointed at `plans/archive/TODO.md` on 2026-09-20 so
-  §15 still passes, which fixed the link and not the tense:
-  `packages/composition/docs/index.md:134`,
-  `packages/composition/docs/reference/test-container.md:133`,
-  `docs/setup/17-composition-container.md:317`, `docs/setup/12-application-package.md:553`.
-  A fifth, `packages/content/docs/reference/namespace.md:122`, cites `T-035`, which is `23.15`.
-- [ ] **`AWAITING_A_PROCEDURE`** in `procedure-permissions.spec.ts` — the same stale list as
-  `R.35`, listed here too because it is a comment claiming "only shrinks" over a set that did not.
+- [x] **Four doc sentences describing the transactional outbox as a backlog item.**
+  `done: 2026-09-21` — all four now say it shipped, and say it shipped *whole*: a port, an adapter
+  and a `Container` line in one change, which is the shape the `EventBus` deletion argued for.
+  The fifth, `packages/content/docs/reference/namespace.md`, was wrong twice — it cited `T-035` as
+  an open trade-off and described an English fallback layer `23.15` has since dropped. Verified
+  against the tree before rewriting: `StaticContentSource` leaves `base` empty.
+- [x] **`AWAITING_A_PROCEDURE`** `done: 2026-09-21` — closed by `23.13` moving the property it
+  guarded. `R.35` had already cut the list to one key; the entry stayed open because one list in a
+  spec and one property is still the wrong number of places. Both now live in assertion 28.
 - [ ] **Three independent `DATABASE_SHARD_<n>_URL` parsers**, with two different contiguity
   algorithms — `apps/web/src/env.ts:143`, `apps/worker/src/env.ts:117` and
   `packages/infrastructure/shard-env.ts:14`. Found while unifying env on 2026-09-20 and left
   alone: the two `env.ts` copies cannot be merged into a package, which `docs/setup/25:144`
   forbids by name, so the fix is narrower than it looks and wants its own decision.
-- [ ] **Three disagreeing ClickHouse default sets.** `env.ts` defaults database and user to
-  `default` and then *rejects* that value when a URL is set; `clickhouse-migrate.ts` uses
-  `ratchet` and `default`; `vitest.smoke.config.ts` uses `ratchet` for both. Same session, same
-  reason for leaving it: it is a defaults decision, not a mechanical fix.
-- [ ] **`partitions.ts` defaults `S3_FORCE_PATH_STYLE` to true**, the opposite of both schemas,
-  by reading `!== "false"` where they read `=== "true"`.
-- [ ] **Nine broken relative links in the docs**, found 2026-09-20 by resolving all 1 503 of them.
-  Nothing in CI checks a link target: §15 checks a **backticked** path, so a `](…)` that resolves
-  nowhere passes. Eight are one `../` short in `apps/*/docs/reference/` — from there `packages/`
-  is `../../../../`, not `../../../`: `enforcement-surfaces.md`, `env.md` (web),
-  `consumers.md` ×2, `env.md`, `schedules.md` ×2, `shutdown.md` (worker). The ninth is
-  `docs/setup/12-application-package.md` naming `15-infrastructure-clickhouse.md`, which has been
-  `15-infrastructure-package.md` since `T-013`. **Worth doing with it:** widen §15 to resolve link
-  targets as well as backticked spans, which is the assertion that would have caught all nine.
+- [x] **Three disagreeing ClickHouse default sets.** `done: 2026-09-21` — and the decision it
+  needed was already made: both `env.ts` schemas reject `default` when `CLICKHOUSE_URL` is set,
+  because a default naming the project is a credential in shipped code and ClickHouse's own
+  `default` cannot reach the compose container. Neither script loads an `env.ts`, so each enforces
+  the same rule itself — an absent name throws rather than resolving to a guess. **Verified against
+  the running container**: `ch:migrate` reports `nothing to do, 1 applied`, and an empty
+  `CLICKHOUSE_DATABASE` throws by name. The `default` user is the trap — it exists with no
+  password, so the wrong guess fails by *connecting*.
+- [x] **`partitions.ts` defaulted `S3_FORCE_PATH_STYLE` to true** `done: 2026-09-21` — it reads
+  `=== "true"` now, the way both schemas do. The sweep it runs is the only caller, and it was
+  defaulting to path-style addressing against real S3, where addressing is by host.
+- [x] **Nine broken relative links in the docs** `done: 2026-09-21` — fixed, and **the assertion
+  that would have caught them landed first**, which is what made them nine failures rather than a
+  list to work through by hand. §15 now resolves a `](…)` as well as a backticked span and is
+  renamed to *every path the docs name exists*.
+  - **A target resolves against the page's own directory and nowhere else**, because that is what
+    a renderer does. §12 also treats a `docs/…` target as root-anchored — right for the root files
+    it was written for, wrong one directory down — and the spec's own fixture held a link of
+    exactly that shape: passing §12, broken in a browser. Fixed with the rest.
+  - A URL, a `mailto:`, an anchor-only `#jump` and a braced or globbed shape are left alone. The
+    three remaining hits in the tree are regex fragments inside fences, which `outsideFences`
+    already blanks.
 
 ### Do not fix these — they are frozen by design
 
@@ -778,12 +1017,34 @@ work is finished, and nothing else records it.
 | one direct conversation, two messages | `conversations`, `messages` | `23.10`'s proof that a retried optimistic send is one row |
 | `redis-cache` flushed | cache Redis | after the SQL promotion, so the capability cache did not serve the old role. Rebuildable by design |
 
+**Added on 2026-09-21 by the section 5 walk.** Left in place deliberately: the next walk needs a
+platform admin, two tenants and an archived month, and manufacturing them again is the expensive
+part. What was debris was removed — the two `*_2026_06_restore` scratch tables are dropped and
+`retention_policy` is empty again, so an absent row is the code default exactly as before.
+
+| What | Where | Why it is there |
+|---|---|---|
+| `alice@example.test` is `platform_admin` | `memberships` in `loadbearing` | `pnpm platform:grant`. It **moved** her from `owner`, which is what the script does; `ada@walk.test` is still `loadbearing`'s owner |
+| **Walk Co** (`o-01a0c2c3-…`) | `organizations` | alice founded it for Phase 18's *customer tenant active* half. bob is a member of it |
+| **Bob Co** (`o-01a0c2cf-…`) | `organizations` | bob founded it for Phase 18's *tenant owner is redirected* half and for Phase 21's archived section, which needs `notification.archive.read` |
+| three archived months | `partition_archive`, `cold/notifications/2026/0{6,7}/` | two for `loadbearing`, one for Bob Co. **The rows exist only in S3** — the partitions were archived and dropped. Deleting the objects makes `/notifications` and `/platform/storage` empty again |
+| one tenant export | `export/01a0c2c3-…/2026-09-21/` | five objects, from `/platform/storage`'s button. The bucket lifecycle deletes them after seven days |
+| two invitation mails to `bob@example.test` | Mailpit | `26.9`: the second is the resend, and the pair is the proof |
+| `bob@example.test` in `Walk Co` | `memberships` | `T-029` step 2. His `loadbearing` membership is untouched |
+
+Not left behind, and worth saying so: `platform_policy.projection_enabled` is `t` again, the two
+scratch tables are gone, and `retention_policy` holds no rows.
+
 ---
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-21 | @sami | `23.26b` built, at the size it was filed at. **A conversation member carries a name now**, and it cannot be a join: `conversation_members` is routed and `users` is catalog, so `ConversationNaming` resolves the page in one catalog statement after the routed read and attaches it by key. `CreateConversationUseCase` names the row it wrote **after** the commit rather than inside `unitOfWork.run` — a crossing that is invisible on one node, so a spec asserts the ordering and is red on the shape that reads more naturally. Its own narrow port rather than `NotificationRecipientReader`, because `Recipient` carries an email address and its `users()` hides deactivated members, which for a thread is how every message somebody wrote goes back to a uuid the day they leave. On the client `ConversationEntity` answers all three questions — its `otherMember` had been written for this and had no caller — so the typing notice, the inbox title and the author line come from one place, and none of them can print an id: `messaging.member.unknown` is the fallback. Proved over `/api/rpc` against live Postgres as well as in nineteen specs |
+| 2026-09-21 | @sami | **Section 5's seven browser clauses, walked in one pass.** Phases 18–21, `25.4`, `26.9` and `T-029`'s ten steps, against `pnpm dev` on `:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the setup step the previous walk had not taken. Every tick records what was measured: the invitation row read before and after the resend, `platform_policy` read after the pause and after the resume, `users.last_active_organization_id` read at each of `T-029`'s steps, and `member/list` called 2.1 s after a switch to prove the cookie cache was invalidated. **Phase 21 needed a month that did not exist**, so one was manufactured through the product's own machinery — a June partition, one hot month set from the retention screen, a `partitions` job on the maintenance queue — and the page then rendered five rows that live only in S3. Two findings kept out of the ticks: a `platform_admin` is refused `/notifications`, which is the tier working and not a defect; and three buttons that read as dead under a synthetic mouse click fire under `element.click()`, checked with `elementFromPoint` before anything was filed |
+
+| 2026-09-21 | @sami | Section 8 down to one, and `23.13` closed. **A doc link that resolves nowhere is now a build failure** — §15 read backticked paths and not link targets, so resolving all 1 503 of them found nine broken: eight pages under `apps/*/docs/reference/` one `../` short of `packages/`, and one naming a doc `T-013` renamed. The assertion landed first, which is what made them nine failures rather than a list. It also found a link in the check's own fixture that passed §12 and was broken in a browser. **Assertion 28** is §24 from the other vocabulary: a permission the catalog declares that no procedure asserts, which is a checkbox in the role editor granting nothing. The property moved out of `procedure-permissions.spec.ts` rather than being checked twice, which closed `AWAITING_A_PROCEDURE` with it. **Three env defaults that disagreed** — `partitions.ts` read `S3_FORCE_PATH_STYLE !== "false"`, so its sweep defaulted to path-style against real S3; `clickhouse-migrate.ts` and `vitest.smoke.config.ts` guessed three different database-and-user pairs between them, none of them the pair both `env.ts` schemas enforce, and the guess that reached a live container did so because ClickHouse ships a `default` user with no password. And **five doc sentences** that were out of date: four describing the transactional outbox as a backlog item since Phase 10 shipped it, and one describing an English fallback layer `23.15` dropped |
 | 2026-09-20 | @sami | Created at `885e144` from a full read of `PLAN.md`, `OPEN.md`, `REVIEW.md`, `STUCK.md`, `TODO.md` and every file already in `archive/`. Every "still true" and "already resolved" claim in section 4 was re-read from the source tree rather than from the plan |
 | 2026-09-20 | @sami | Ten more review defects, all verified against the tree before being marked: `R.12` notification mail linked to relative paths, fixed in the renderer both templates share; `R.13` the digest footer printed a uuid, so `OrganizationReader` gained `nameOf`; `R.22` the inbox trapped a reader in `unread only`, **and its spec found the same trap one layer up** — the pending skeleton removed the toggle too, so toggling deleted the button on click; `R.27` CORS omitted `last-event-id`, so a cross-origin stream could never resume; `R.28` an eviction policy with no ceiling never evicts; `R.29` a placeholder secret that booted; `R.30` a doc naming a key the schema does not have; `R.31` assertion 7 never walked `apps/*`; `R.35` four keys that had been gated since phases 19 and 20; `R.44` a live button with no handler. `R.45` narrowed to the two bullets still true |
 | 2026-09-20 | @sami | `R.2` fixed, and it was less blocked than the entry said. Both cross-node passes were handed the catalog unit of work, which never reads `ShardScope`, so `eachShard` looped the nodes and every iteration wrote to node 0; `Container` now builds a third `local`-placed `PgUnitOfWork` for them. That exposed the second bug the review flagged under the same binding — `sweepExpired` deletes three catalog tables from a `local` gateway, and was correct only by the node-0 fallback — so it uses `catalogDb`, the sanctioned crossing. **Proved on two real nodes:** `24.1` gates only the outbox half, because that needs a row whose foreign key is the `23503`; a month partition needs no key, so the sharded smoke asserts the runway lands on node 1 and not on the catalog, and it fails on the old binding. All four High defects are now closed |

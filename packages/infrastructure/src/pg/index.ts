@@ -43,6 +43,7 @@ export {
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
+  PgUserReader,
   PgVectorStore,
 } from "./repository/index.js";
 export {

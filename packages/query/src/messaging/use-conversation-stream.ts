@@ -18,10 +18,20 @@ export interface ConversationStreamState {
 export function useConversationStream(
   client: ApiClient,
   conversationId: string,
+  // The reader's own id, so their own keystrokes do not render as somebody typing at
+  // them. Filtered here rather than at the publisher: the frame is legitimately
+  // ──
+  // addressed to the whole channel, and every other member does want it.
+  selfId?: string,
 ): ConversationStreamState {
   const queryClient = useQueryClient();
   const cache = useRef(queryClient);
   cache.current = queryClient;
+
+  // A ref for the same reason `cache` is one: naming it as a dependency would tear the
+  // stream down and reopen it the moment the session resolves, on every page load.
+  const self = useRef(selfId);
+  self.current = selfId;
 
   const [connected, setConnected] = useState(false);
   const [typing, setTyping] = useState<ReadonlyMap<string, number>>(new Map());
@@ -44,6 +54,7 @@ export function useConversationStream(
         if (cancelled) break;
 
         if (frame.kind === "typing") {
+          if (frame.userId === self.current) continue;
           const expiresAt = Date.now() + TYPING_EXPIRY_MS;
           setTyping((current) => new Map(current).set(frame.userId, expiresAt));
           continue;

@@ -55,7 +55,9 @@ if (sweepAt !== -1) {
     bucket: process.env.S3_BUCKET ?? "",
     accessKey: process.env.S3_ACCESS_KEY ?? "",
     secretKey: process.env.S3_SECRET_KEY ?? "",
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
+    // `=== "true"`, the way both `env.ts` schemas read it. `!== "false"` defaulted this
+    // script to path-style against real S3, where the addressing is by host.
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
   });
 
   // The catalog's, and only the catalog's: `partition_archive` is one index for the

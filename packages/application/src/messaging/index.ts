@@ -7,6 +7,11 @@ export {
   type NewConversation,
 } from "./conversation.repository.js";
 export { ConversationAccess } from "./conversation-access.js";
+export {
+  ConversationNaming,
+  type NamedConversation,
+  type NamedConversationMember,
+} from "./conversation-naming.js";
 export { CreateConversationUseCase } from "./create-conversation.use-case.js";
 export { DeleteMessageUseCase } from "./delete-message.use-case.js";
 export { EditMessageUseCase } from "./edit-message.use-case.js";

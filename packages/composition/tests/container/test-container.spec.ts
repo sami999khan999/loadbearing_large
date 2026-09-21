@@ -68,6 +68,7 @@ describe("TestContainer", () => {
       "storagePolicy",
       "tenantMemberships",
       "unitOfWork",
+      "users",
       "vectors",
     ]);
   });

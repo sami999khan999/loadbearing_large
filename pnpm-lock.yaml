@@ -503,6 +503,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.21.0
       '@types/react':
         specifier: catalog:react
         version: 19.2.18
@@ -512,6 +515,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 6.1.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3

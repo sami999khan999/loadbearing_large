@@ -5,10 +5,11 @@ import type {
   CapabilityInvalidator,
   MaintenanceGateway,
   PartitionArchiveGateway,
+  ShardResolver,
   UnitOfWork,
 } from "../port/index.js";
 import type { Authorizer } from "../primitive/index.js";
-import { PartitionedTable, Principal } from "../primitive/index.js";
+import { PartitionedTable, Principal, Shard } from "../primitive/index.js";
 import type { PlatformReader } from "./platform.reader.js";
 import type { TenantRepository } from "./tenant.repository.js";
 import type { TenantRetentionPolicyRepository } from "./tenant-retention-policy.repository.js";
@@ -42,6 +43,9 @@ export class DeleteOrganizationUseCase {
     // The overrides. No foreign key on that table — the schema says so, and says
     // the delete path sweeps it — and `deleteFor` had no caller anywhere.
     private readonly tenantRetention: TenantRetentionPolicyRepository,
+    // The placement cache. Its TTL is deliberately long, so without this a deleted
+    // tenant keeps resolving to a node for up to five minutes after its rows are gone.
+    private readonly shards: ShardResolver,
   ) {}
 
   public async execute(
@@ -93,6 +97,11 @@ export class DeleteOrganizationUseCase {
     // After the commit. A cache flushed before it would be refilled from rows the
     // transaction had not removed yet, which is the stale entry it was meant to stop.
     await this.capabilities.invalidateOrganization(input.organizationId);
+    // The `shard_assignments` row itself is left, deliberately: every reader inner-joins
+    // `organizations`, so it is invisible rather than stale. The *cache* is the problem —
+    // ──
+    // it answers from Redis without the join, for as long as its TTL holds.
+    await this.shards.invalidate(Shard.keyOf(input.organizationId));
     await this.projector?.deleteTenant(input.organizationId);
 
     return { archived, partitions: partitions.length };

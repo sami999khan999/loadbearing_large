@@ -27,7 +27,7 @@ loop alive once every worker has already drained.
 2. **Redis**, once nothing is consuming.
 3. **`container.dispose()` last**, because everything closing above it may have had something to say.
    See
-   [`composition/docs/reference/container.md`](../../../packages/composition/docs/reference/container.md)
+   [`composition/docs/reference/container.md`](../../../../packages/composition/docs/reference/container.md)
    for why `dispose()` itself closes in reverse construction order.
 
 ## `stop()` is idempotent, and the second caller *joins*

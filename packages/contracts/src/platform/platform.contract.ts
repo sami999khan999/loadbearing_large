@@ -94,11 +94,17 @@ export class PlatformContract {
   public static readonly previewQuery = z.object({
     tableName: z.string().min(1).max(64),
     hotMonths: z.coerce.number().int().min(1).max(600),
+    // Absent previews the table across every tenant; present previews one tenant's
+    // override, which is the only number the row being edited will actually act on.
+    organizationId: Identifiers.organizationId.optional(),
   });
 
   public static readonly retentionPreview = z.object({
     tableName: z.string().min(1),
     hotMonths: z.number().int(),
+    // Echoed back, so a screen cannot render a tenant's preview under the table's
+    // heading when a slow response arrives after the operator moved on.
+    organizationId: Identifiers.organizationId.nullable(),
     partitions: z
       .array(
         z.object({

@@ -1,4 +1,3 @@
-import { CORE_MODULE, PermissionRegistry } from "@loadbearing/permissions";
 import { isContractProcedure, oc } from "@orpc/contract";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -48,12 +47,6 @@ describe("ContractWalker", () => {
   });
 });
 
-// Registered ahead of the procedure that asserts each, so the seed grants them once
-// rather than per deploy. Each line names the item that removes it; the list only shrinks.
-const AWAITING_A_PROCEDURE: ReadonlySet<string> = new Set([
-  "platform.shards.manage", // 24.2
-]);
-
 describe("ProcedurePermissions", () => {
   it("gates every procedure the contract router declares", () => {
     const declared = ContractWalker.paths(contract);
@@ -78,21 +71,6 @@ describe("ProcedurePermissions", () => {
     expect(ProcedurePermissions.required("task.list")).toBeUndefined();
   });
 
-  // The direction the two above do not cover: they prove every *procedure* is gated,
-  // not that every *key* gates something reachable.
-  it("leaves no permission in the catalog without a procedure behind it", () => {
-    const gated = new Set<string>(
-      ProcedurePermissions.paths().map((path) => ProcedurePermissions.required(path) as string),
-    );
-
-    const orphans = PermissionRegistry.instance
-      .all()
-      // `core` is held implicitly by every principal in `CapabilitySet.can()` rather
-      // than granted through a role, so no procedure asserts it and none should.
-      .filter((key) => PermissionRegistry.instance.meta(key)?.module !== CORE_MODULE)
-      .filter((key) => !AWAITING_A_PROCEDURE.has(key))
-      .filter((key) => !gated.has(key));
-
-    expect(orphans).toEqual([]);
-  });
+  // The direction the two above do not cover — every *key* gating something reachable —
+  // is `check-architecture` §28, which owns the allowlist that goes with it.
 });

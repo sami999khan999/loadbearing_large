@@ -8,7 +8,7 @@ const Schema = z
     // The same server without the pooler. Migrations, the seed and the archive's DDL
     // use it — see docs/reference/env.md.
     DATABASE_DIRECT_URL: z.url().optional(),
-    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
     DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
     DATABASE_POOL_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1).default(5_000),
     // 120 s, against the web app's 30 s: a batch holds no browser open, and the outbox

@@ -151,6 +151,11 @@ Setting `CLICKHOUSE_URL` also makes `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER` 
 default to ClickHouse's own `default` and the compose container is `ratchet`, so the defaults cannot
 reach the only ClickHouse this kit ships.
 
+**The two scripts above `src/` enforce it themselves**, because neither loads an `env.ts`:
+`clickhouse-migrate.ts` and `vitest.smoke.config.ts` throw on an absent name rather than guessing
+one. They used to guess three different pairs between them, and the one that reached a live
+container did so because ClickHouse ships a `default` user with no password.
+
 **What makes the vector swap cheap is not the switch.** It is that `VectorStore.search()` takes the
 resolved goal scope as a parameter. A remote store holds no `CapabilitySet` and can join back to
 nothing, so the permission filter had to run on the input set from the first day or the port would

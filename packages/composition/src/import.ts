@@ -18,6 +18,7 @@ export {
   ColdArchiveReader,
   type ColdPage,
   ConversationAccess,
+  ConversationNaming,
   CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
   CreateConversationUseCase,
@@ -153,6 +154,7 @@ export {
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
+  UserReader,
   VectorStore,
 } from "@loadbearing/application";
 
@@ -253,6 +255,7 @@ export {
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
   PgUnitOfWork,
+  PgUserReader,
   PgVectorStore,
   RedisCacheStore,
   RedisConnection,

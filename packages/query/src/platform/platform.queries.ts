@@ -17,10 +17,20 @@ export class PlatformQueries {
 
   // `staleTime: 0`, and `enabled` is the caller's: this answers "what would this
   // number destroy", and a cached answer is the wrong one.
-  public static retentionPreview(client: ApiClient, tableName: string, hotMonths: number) {
+  public static retentionPreview(
+    client: ApiClient,
+    tableName: string,
+    hotMonths: number,
+    organizationId?: string,
+  ) {
     return queryOptions({
-      queryKey: QueryKeys.platform.retentionPreview(tableName, hotMonths),
-      queryFn: () => client.platform.previewRetention({ tableName, hotMonths }),
+      queryKey: QueryKeys.platform.retentionPreview(tableName, hotMonths, organizationId),
+      queryFn: () =>
+        client.platform.previewRetention({
+          tableName,
+          hotMonths,
+          ...(organizationId ? { organizationId } : {}),
+        }),
       staleTime: 0,
     });
   }

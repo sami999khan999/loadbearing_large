@@ -369,9 +369,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-seven architectural assertions
+## Step 26.4 — The twenty-eight architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Twenty-six greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-eight greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -675,12 +675,13 @@ Scope is the same as §5: `{src,tests}` under `packages/*` and `apps/*`, generat
 > [!NOTE]
 > **`pnpm check:comments` is the companion report, and it never fails.** `tooling/scripts/comment-density.mjs` prints per-package comment percentage, block count and the twenty-five files carrying the most comment lines. A package drifting toward the ceiling is visible there long before any single file trips §14 — and after the phase-1 sweep the tree sits at 13 % overall with zero blocks.
 
-### 15 — Every backticked path in the docs exists
+### 15 — Every path the docs name exists
 
 ```js
-// fail if a backticked repo-relative path in docs/**, README.md, AGENTS.md or a
-// package's docs/** names nothing on disk — and, in a `//` comment under
-// packages/*/src or apps/*/src, a docs/reference/<page>.md the package does not have
+// fail if a backticked repo-relative path, or a Markdown link target, in docs/**,
+// README.md, AGENTS.md or a package's docs/** names nothing on disk — and, in a `//`
+// comment under packages/*/src or apps/*/src, a docs/reference/<page>.md the package
+// does not have
 ```
 
 The cheapest kind of documentation rot and the one a reader trusts most: a path in backticks reads
@@ -703,6 +704,20 @@ add exemptions rather than fix paths:
 
 `apps/desktop` and `apps/api` are exempt by name. Both appear only in sentences about what *would*
 move there, and doc [30](30-desktop-app.md) is a plan for one of them.
+
+**It resolves Markdown link targets as well, and that is the half a reader actually clicks.** A
+backticked path is prose about the tree; a `](…)` is a door. Nothing in CI could see one until
+2026-09-21, and resolving all 1 503 of them found nine broken — eight pages under
+`apps/*/docs/reference/` one `../` short of `packages/`, which from there is four levels up and not
+three, and one naming `15-infrastructure-clickhouse.md`, renamed to
+[15](15-infrastructure-package.md) by `T-013`.
+
+**A target resolves against the page's own directory and nowhere else**, because that is what a
+renderer does. §12 also treats a `docs/…` target
+as root-anchored, which is right for the root files it was written for and wrong one directory
+down — the fixture tree had a link of exactly that shape, passing §12 and broken in a browser, and
+this half is what found it. A URL, a `mailto:`, an anchor-only `#jump` and a braced or globbed
+shape are all left alone.
 
 **It reads source comments too, and that is the half nothing else covers.**
 [Comments](../ai/rules/comments.md) tells an author to say the constraint in the code and leave
@@ -985,6 +1000,32 @@ The assertion checks three things, all against `.env.example`, which is the comm
 either `env.ts` reads `POSTGRES_PORT`, because Compose and `apps/web/vite.config.ts` do. §25 skips
 anything matching `/_PORT$/` for that reason, beside the shard-family skip it already had.
 
+### 28 — Every permission in the catalog gates a procedure
+
+```js
+// fail if a key in packages/permissions/src/catalog is not a value of any
+// PROCEDURE_PERMISSIONS entry — excluding the `core` module, which every resolved
+// principal holds without a role, and an allowlist naming the item that removes each
+```
+
+§24 from the other vocabulary, and Phase 5's own exit criterion, checked for the first time. A key
+nothing asserts is a checkbox in the role editor that grants nothing: an administrator ticks it, a
+member is told they have the right, and every call still fails with the same `FORBIDDEN` as before.
+
+**The module is read off the entry, never off the key's first segment.** `core.realtime.subscribe`
+*is* gated — `realtime.stream` asserts it — and `core.activity.write` is not, because
+`CapabilitySet.can()` grants every `core` key to every resolved principal rather than through a
+role. Splitting on the name would have exempted both and caught neither.
+
+**The allowlist lives here rather than in a spec, because the property does.** It used to be the
+last case in `packages/contracts/tests/registry/procedure-permissions.spec.ts` with its own
+`AWAITING_A_PROCEDURE` set; two lists for one property is how the spec's went stale for two phases
+while four keys sat gated behind it. The spec keeps the two directions it uniquely covers — every
+procedure is gated, and no entry names a procedure that is gone — which need the real router.
+
+Both catalogs are resolved through their barrel's spreads, the same way §24 resolves the event
+catalog, so a `...billingPermissions` added tomorrow is covered without anyone editing this.
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -992,7 +1033,7 @@ pnpm check:contrast   # node tooling/scripts/check-contrast.mjs
 OK 117 pairings meet WCAG AA and 108 colours are inside sRGB, across every theme and mode.
 ```
 
-**Twenty-one assertions above read source; this one computes.** It resolves the twelve colour names
+**Twenty-eight assertions above read source; this one computes.** It resolves the twelve colour names
 ([Opinions · Colour](../ai/rules/color.md)) for every theme in every mode, walks the pairings
 `packages/ui/src/theme/class/` actually produces, and fails on a contrast ratio under WCAG AA, a
 name a theme forgot to declare, or an `oklch()` value outside the sRGB gamut.
@@ -1046,10 +1087,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-seven
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-eight
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
 with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-five of the
-twenty-seven are covered both ways — the tree that violates it fails, and the tree that does not
+twenty-eight are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 

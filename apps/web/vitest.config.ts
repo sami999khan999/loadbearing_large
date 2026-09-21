@@ -58,6 +58,9 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.spec.ts", "tests/**/*.spec.tsx"],
+    // The smoke suite needs a built server, a worker and live containers, and has
+    // its own config. Without this `pnpm test` collects it and hangs on a boot.
+    exclude: ["tests/smoke/**"],
     globals: false,
     env: ENV,
   },

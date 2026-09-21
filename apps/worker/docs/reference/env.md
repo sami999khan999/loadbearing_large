@@ -72,7 +72,7 @@ The ClickHouse block is optional, and **its absence is what keeps ClickHouse sto
 projection runs and the reconciliation reports; nothing reads the store back, because there is no
 analytics reader. There is no read driver to flip, and that is the point — a flag that moved reads
 the moment the pipeline started would cut a dashboard over to a store still backfilling. See
-[`composition/docs/reference/container.md`](../../../packages/composition/docs/reference/container.md).
+[`composition/docs/reference/container.md`](../../../../packages/composition/docs/reference/container.md).
 
 **Setting `CLICKHOUSE_URL` makes `CLICKHOUSE_DATABASE` and `CLICKHOUSE_USER` required.** Both default
 to ClickHouse's own `default`, and the compose container is `ratchet` — so the defaults cannot reach

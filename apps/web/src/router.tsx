@@ -5,6 +5,9 @@ import {
   createIsomorphicFn,
   createQueryClient,
   createRouter as createTanStackRouter,
+  type DehydratedState,
+  dehydrate,
+  hydrate,
   Locales,
   type MessageSnapshot,
   MessageStore,
@@ -23,6 +26,9 @@ export interface RouterDehydrated {
   // Rides the payload like the other two: without it the client re-reads the cookie
   // during hydration and the picker flashes its default.
   readonly appearance: AppearanceSnapshot;
+  // Every loader's `ensureQueryData`, which the server has already paid for. Without it
+  // the browser refetches all of it on mount and SSR bought nothing but the first paint.
+  readonly queries: DehydratedState;
 }
 
 // The server branch and its imports are removed from the client build, which is what
@@ -72,11 +78,15 @@ export function getRouter() {
       messages: messages.dehydrate(),
       session: session.dehydrate(),
       appearance: appearance.dehydrate(),
+      queries: dehydrate(queryClient),
     }),
     hydrate: (payload: RouterDehydrated) => {
       messages.restore(payload.messages);
       session.restore(payload.session);
       appearance.restore(payload.appearance);
+      // Before the first render, so a mounted `useQuery` reads cache rather than opening
+      // a request. `staleTime` is 30 s, which is what stops it refetching anyway.
+      hydrate(queryClient, payload.queries);
     },
   });
 }
@@ -84,5 +94,13 @@ export function getRouter() {
 declare module "@tanstack/react-router" {
   interface Register {
     router: ReturnType<typeof getRouter>;
+  }
+
+  // The serializer validates `dehydrate`'s return structurally and refuses a type it
+  // does not know. This is global, which is the one judgement in the change: nothing
+  // ──
+  // else may then declare `DehydratedState` as something the wire cannot carry.
+  interface SerializableExtensions {
+    DehydratedState: DehydratedState;
   }
 }

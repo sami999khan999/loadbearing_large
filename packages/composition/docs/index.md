@@ -131,4 +131,6 @@ so a use-case that published an event would have published into a recording fake
 nothing at all in production. It was deleted rather than implemented, because a seam with no
 implementation and no caller is what [Simplicity](../../../docs/opinions/simplicity.md) argues
 against: it costs nothing today and teaches the next reader that events are a thing this system
-does. The design it was reserving — a transactional outbox — is in `plans/archive/TODO.md`.
+does. The design it was reserving — a transactional outbox — shipped later, and shipped whole:
+`DomainEventPublisher`, `PgOutboxPublisher` and a `Container` line in one change. That is the shape
+the deletion was arguing for.

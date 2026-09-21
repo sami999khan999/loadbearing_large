@@ -3,9 +3,11 @@ import { Endpoint } from "~/endpoint.js";
 import {
   AuthClient,
   Can,
+  CapabilitySet,
   type ClientNamespace,
   ModuleNav,
   NotificationBell,
+  NotificationQueries,
   OrganizationClient,
   OrganizationSwitcher,
   RealtimeProvider,
@@ -34,12 +36,19 @@ export const Route = createFileRoute("/(app)/_authenticated")({
   // The menu is content, so it is loaded like content. Both in parallel: neither
   // depends on the other and the header needs both before it renders.
   loader: async ({ context }) => {
+    // Gated on the same key `<Can>` checks below, so a member without the inbox issues
+    // no count query at all rather than a request the procedure refuses.
+    const counted = CapabilitySet.from(context.capabilities).can("notification.inbox.read")
+      ? context.queryClient.ensureQueryData(NotificationQueries.unreadCount(context.api))
+      : Promise.resolve(null);
+
     // The logo goes through `ContentSource.media()` rather than importing the file:
     // content records hold `"brand.logo"`, never a path, so a CDN is one adapter.
     const [, nav, logo] = await Promise.all([
       context.messages.ensure(MESSAGES),
       context.content.nav(),
       context.content.media("brand.logo"),
+      counted,
     ]);
 
     return { nav, logo };

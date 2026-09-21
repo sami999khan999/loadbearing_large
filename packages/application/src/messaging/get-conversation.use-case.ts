@@ -1,6 +1,7 @@
 import type { ConversationId } from "../import.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { ConversationAccess } from "./conversation-access.js";
+import type { ConversationNaming } from "./conversation-naming.js";
 import type { ConversationListItem } from "./list-conversations.use-case.js";
 import type { MessageRepository } from "./message.repository.js";
 
@@ -9,6 +10,7 @@ export class GetConversationUseCase {
     private readonly authorizer: Authorizer,
     private readonly access: ConversationAccess,
     private readonly messages: MessageRepository,
+    private readonly naming: ConversationNaming,
   ) {}
 
   // Also what the conversation stream calls before it subscribes: opening a channel is
@@ -26,6 +28,8 @@ export class GetConversationUseCase {
       conversationId,
     ]);
 
-    return { ...conversation, unreadCount: unread?.count ?? 0 };
+    const named = await this.naming.attachOne(actor.organizationId, conversation);
+
+    return { ...named, unreadCount: unread?.count ?? 0 };
   }
 }

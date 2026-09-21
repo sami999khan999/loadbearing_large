@@ -43,6 +43,7 @@ export const platform = {
   "platform.tenantRetention.description":
     "একটি প্রতিষ্ঠানের জন্য টেবিলের নিজস্ব সংখ্যা অগ্রাহ্য করে। ক্যালেন্ডার ইতিমধ্যেই যে টেবিলগুলি অবসর দেয়, কেবল সেগুলিই অগ্রাহ্য করা যায়।",
   "platform.tenantRetention.organization": "প্রতিষ্ঠানের আইডি",
+  "platform.tenantRetention.organizationFirst": "এটি কী সরাবে তা দেখতে একটি প্রতিষ্ঠান আইডি লিখুন।",
   "platform.tenantRetention.coldNote": "টেবিলের চেয়ে কম কোল্ড মাস বাকেট নয়, রাতের কাজ কার্যকর করে।",
   "platform.tenantRetention.saved": "সংরক্ষিত।",
   "platform.tenantExport.title": "একটি টেন্যান্ট রপ্তানি",

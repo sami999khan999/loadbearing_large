@@ -57,7 +57,7 @@ name after a rename — which is why the cross-field rule above refuses those de
 `AUTH_COOKIE_CACHE_MAX_AGE_SECONDS` is capped in the schema, not by convention. A deploy that raises
 it "to improve cache hit rate" fails at boot instead of quietly widening the gap between removing
 access and access stopping. See
-[`auth/docs/reference/capability-cache.md`](../../../packages/auth/docs/reference/capability-cache.md).
+[`auth/docs/reference/capability-cache.md`](../../../../packages/auth/docs/reference/capability-cache.md).
 
 `AUTH_SECRET` has a length floor: a short secret is a real weakness, and this schema is the only
 place anyone will ever check.

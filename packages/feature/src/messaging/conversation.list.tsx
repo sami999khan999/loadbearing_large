@@ -1,9 +1,11 @@
+import { useSession } from "../auth/index.js";
 import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Button,
   Callout,
   type ConversationDto,
+  ConversationEntity,
   DataTable,
   DateFormat,
   EmptyState,
@@ -22,6 +24,9 @@ export interface ConversationListProps {
 
 interface ConversationRow extends ConversationDto {
   readonly id: ConversationDto["id"];
+  // Resolved once per page rather than per render: `ConversationEntity.from` parses,
+  // and a cell renderer runs on every keystroke somewhere else on the screen.
+  readonly displayTitle: string | null;
 }
 
 // The keyset envelope, structurally. Restated rather than imported because the contract's
@@ -39,13 +44,21 @@ export function ConversationList({ onOpen, limit = 25 }: ConversationListProps) 
   const { t } = useMessages("messaging");
   const describe = useErrorMessage();
   const client = useApiClient();
+  const { user } = useSession();
+  const self = user?.id ?? "";
 
   const inbox = useAppInfiniteQuery(MessagingQueries.conversations(client, { limit }));
 
   const rows = useMemo<readonly ConversationRow[]>(() => {
     const pages: readonly ConversationPage[] = inbox.data?.pages ?? [];
-    return pages.flatMap((page) => page.items.map((item) => ({ ...item, id: item.id })));
-  }, [inbox.data]);
+    return pages.flatMap((page) =>
+      page.items.map((item) => ({
+        ...item,
+        id: item.id,
+        displayTitle: ConversationEntity.from(item).displayTitle(self),
+      })),
+    );
+  }, [inbox.data, self]);
 
   const columns = useMemo<readonly TableColumn<ConversationRow>[]>(
     () => [
@@ -54,7 +67,11 @@ export function ConversationList({ onOpen, limit = 25 }: ConversationListProps) 
         header: t("messaging.inbox.title"),
         cell: (row: ConversationRow) => (
           <Button variant="ghost" onClick={() => onOpen(row.id)}>
-            {row.title ?? t("messaging.inbox.direct")}
+            {
+              // The generic label only when nobody can be named. "Direct message" on
+              // every row is an inbox in which no conversation is findable.
+              row.displayTitle ?? t("messaging.inbox.direct")
+            }
           </Button>
         ),
       },

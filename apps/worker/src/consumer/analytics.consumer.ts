@@ -189,14 +189,10 @@ export class AnalyticsConsumer {
         tenants += 1;
         if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) continue;
 
-        // Placed per tenant rather than per node: the read side is routed
-        // `activity_log` and the write side is one ClickHouse for the deployment.
-        const outcome = await withShard(this.container, organizationId, () =>
-          this.projectTenantOrReport(
-            organizationId,
-            AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
-            excluding,
-          ),
+        const outcome = await this.projectTenantOrReport(
+          organizationId,
+          AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
+          excluding,
         );
         projected += outcome.projected;
         batches += outcome.batches;
@@ -247,10 +243,19 @@ export class AnalyticsConsumer {
     excluding: readonly ActivityAction[],
   ): Promise<{ projected: number; batches: number; lagMs: number }> {
     try {
-      return await this.projectTenant(organizationId, budget, excluding);
+      // Placed *inside* the guard. Outside it a tenant with no `shard_assignments` row
+      // threw past this catch, so the run died on `queue.job.failed` and the line a
+      // ──
+      // projection dashboard filters on was never emitted. Per tenant rather than per
+      // node: the read side is routed `activity_log`, the write side one ClickHouse.
+      return await withShard(this.container, organizationId, () =>
+        this.projectTenant(organizationId, budget, excluding),
+      );
     } catch (error: unknown) {
       // Read after the throw rather than before it, so the failure line names where the
-      // destination actually stands rather than where this run hoped to start.
+      // destination actually stands rather than where this run hoped to start. Outside
+      // ──
+      // the shard scope on purpose: the checkpoint is ClickHouse, one for the deployment.
       const checkpoint = await this.container.projector.checkpoint(organizationId);
       this.container.logger.emit("analytics.projection.failed", {
         projection: AnalyticsConsumer.PROJECTION,

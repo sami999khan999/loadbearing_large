@@ -25,11 +25,11 @@ export {
   MessageStore,
   StaticContentSource,
 } from "@loadbearing/content";
-
-// ── @loadbearing/contracts ───────────────────────────────────────────────────
-// The two branded ids `session.fn.ts` casts to. The shapes a component renders arrive
-// through `@loadbearing/query`.
 export type { OrganizationId, UserId } from "@loadbearing/contracts";
+// ── @loadbearing/contracts ───────────────────────────────────────────────────
+// The two branded ids `session.fn.ts` casts to, and the one entity a route asks a
+// question of. The shapes a component renders arrive through `@loadbearing/query`.
+export { ConversationEntity } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
@@ -108,6 +108,8 @@ export {
   ApiKeyQueries,
   createQueryClient,
   MemberQueries,
+  MessagingQueries,
+  NotificationQueries,
   PlatformQueries,
   RealtimeProvider,
   RoleQueries,
@@ -149,7 +151,13 @@ export { default as classCss } from "@loadbearing/ui/class.css?url";
 export { default as themeCss } from "@loadbearing/ui/theme.css?url";
 
 // ── @tanstack/react-query ────────────────────────────────────────────────────
-export { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
+export {
+  type DehydratedState,
+  dehydrate,
+  hydrate,
+  type QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 
 // ── @tanstack/react-router ───────────────────────────────────────────────────
 // `router.tsx` only. Everything under `route/` imports this package directly.

@@ -390,3 +390,58 @@ describe("AnalyticsConsumer project — the settle horizon", () => {
     });
   });
 });
+
+// `23.21` (2). A tenant in `organizations` with no `shard_assignments` row throws out of
+// `PgShardResolver`, and the placement used to sit outside the per-tenant guard.
+describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
+  const SECOND = "018f8c00-0000-7000-8000-000000000020";
+
+  function unplaceable() {
+    const activityReplay = new InMemoryActivityReplayReader([record("a", minutesBefore(1))]);
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay,
+        analyticsProjector,
+        organizations: new InMemoryOrganizationReader([
+          Identifiers.organizationId.parse(ORG),
+          Identifiers.organizationId.parse(SECOND),
+        ]),
+      }),
+      projector: analyticsProjector,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      // What the resolver does for a tenant the directory has no row for.
+      placed: <T>(principal: { organizationId: string }, work: () => Promise<T>) => {
+        if (principal.organizationId === SECOND) {
+          return Promise.reject(new Error(`No shard assignment for ${SECOND}.`));
+        }
+        return work();
+      },
+    } as unknown as Container;
+
+    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), logger };
+  }
+
+  it("reports the failure in the projection's own vocabulary", async () => {
+    const { consumer, logger } = unplaceable();
+
+    await expect(consumer.handle(job("project"))).rejects.toThrow("No shard assignment");
+
+    // The defect: this was empty, because the throw escaped `projectTenantOrReport`'s
+    // `try` and only `queue.job.failed` named the run at all.
+    expect(emitted(logger, "analytics.projection.failed")[0]).toMatchObject({
+      organizationId: SECOND,
+    });
+  });
+
+  it("still fails the run, which is the behaviour that was not in question", async () => {
+    const { consumer } = unplaceable();
+
+    await expect(consumer.handle(job("project"))).rejects.toThrow();
+  });
+});

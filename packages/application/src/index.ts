@@ -60,6 +60,7 @@ export {
   type ConversationListItem,
   type ConversationListPage,
   type ConversationMemberRecord,
+  ConversationNaming,
   type ConversationPage,
   type ConversationRecord,
   ConversationRepository,
@@ -247,6 +248,7 @@ export {
   type TenantExport,
   TenantMembershipReader,
   UnitOfWork,
+  UserReader,
   VectorStore,
 } from "./port/index.js";
 export {

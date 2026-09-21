@@ -313,9 +313,9 @@ owns shard 1. The sharding seam itself is
 > publishing `invoice.approved` rather than importing the notification slice — with no adapter in
 > `infrastructure` and no field here. A use-case that published would have published into a
 > recording fake under test and into nothing at all in production, which is worse than a missing
-> feature: it reads as working. It was deleted; the transactional outbox it was reserving is a
-> backlog item in `plans/archive/TODO.md`, and it lands as a port, an adapter and a `Container` line
-> together or not at all.
+> feature: it reads as working. It was deleted; the transactional outbox it was reserving arrived
+> later and arrived whole — a port, an adapter and a `Container` line in one change, which is the
+> only shape that was ever acceptable.
 
 ---
 

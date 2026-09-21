@@ -1,4 +1,4 @@
-import { ValidationError } from "../import.js";
+import { type OrganizationId, ValidationError } from "../import.js";
 import type { MaintenanceGateway } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import { PartitionedTable, type PartitionedTableName } from "../primitive/index.js";
@@ -8,6 +8,9 @@ export interface PreviewRetentionChangeInput {
   // The value being typed, not the value saved. A preview of what is already stored
   // would tell an operator nothing they did not already have.
   readonly hotMonths: number;
+  // Absent previews the table across every tenant. Present previews that one tenant's
+  // months, which is what the row on `/platform/retention` is actually editing.
+  readonly organizationId?: OrganizationId;
 }
 
 export interface PreviewedPartition {
@@ -20,6 +23,9 @@ export interface PreviewedPartition {
 export interface RetentionPreview {
   readonly tableName: string;
   readonly hotMonths: number;
+  // Echoed rather than assumed by the caller: a screen with two previews in flight
+  // would otherwise render one tenant's numbers under the other's heading.
+  readonly organizationId: OrganizationId | null;
   readonly partitions: readonly PreviewedPartition[];
   readonly totalPartitions: number;
   // The planner's number, refreshed by autovacuum and `-1` on a child never analysed —
@@ -44,7 +50,10 @@ export class PreviewRetentionChangeUseCase {
     // Read, not manage: seeing the consequence must not require the right to cause it.
     this.authorizer.assert(actor, "platform.retention.read");
 
-    const table = PreviewRetentionChangeUseCase.assertKnownTable(input.tableName);
+    const table = PreviewRetentionChangeUseCase.assertKnownTable(
+      input.tableName,
+      input.organizationId !== undefined,
+    );
     if (!Number.isInteger(input.hotMonths) || input.hotMonths < 1) {
       throw new ValidationError([{ field: "hotMonths", rule: "min" }]);
     }
@@ -54,11 +63,16 @@ export class PreviewRetentionChangeUseCase {
     const now = this.clock.now();
     const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - input.hotMonths, 1));
 
-    const estimates = await this.maintenance.partitionsBefore(table, cutoff);
+    const estimates = await this.maintenance.partitionsBefore(
+      table,
+      cutoff,
+      input.organizationId ?? null,
+    );
 
     return {
       tableName: table,
       hotMonths: input.hotMonths,
+      organizationId: input.organizationId ?? null,
       partitions: estimates.map((estimate) => ({
         name: estimate.name,
         period: estimate.period.toISOString().slice(0, 10),
@@ -72,8 +86,18 @@ export class PreviewRetentionChangeUseCase {
   }
 
   // Never a free string, for the reason decision D37 gives: the name reaches DDL.
-  private static assertKnownTable(tableName: string): PartitionedTableName {
-    const known = PartitionedTable.MONTH_PARTITIONED.find((entry) => entry.name === tableName);
+  // ──
+  // `forTenant` narrows it to exactly what `UpdateTenantRetentionUseCase` will accept, so
+  // the screen cannot preview an override that would be refused on save: a table with no
+  // ──
+  // tenant key has no per-tenant months, and one the calendar never retires would save,
+  // read back and do nothing.
+  private static assertKnownTable(tableName: string, forTenant: boolean): PartitionedTableName {
+    const known = PartitionedTable.MONTH_PARTITIONED.find(
+      (entry) =>
+        entry.name === tableName &&
+        (!forTenant || (entry.tenantKey !== null && entry.retentionMonths !== null)),
+    );
     if (!known) throw new ValidationError([{ field: "tableName", rule: "unknown" }]);
     return known.name;
   }

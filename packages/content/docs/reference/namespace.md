@@ -119,12 +119,13 @@ Two properties at once:
   the type boundary are the same boundary.**
 
 The cost is that a new locale cannot land half-finished, and the English fallback layer beneath it
-is now unreachable for anything that compiles — `T-035` in `plans/archive/TODO.md` holds that trade-off
-open rather than settling it here.
+was unreachable for anything that compiles. `23.15` in `plans/BACKLOG.md` settled that trade-off by
+dropping the layer rather than keeping a safety net nothing could reach: `StaticContentSource`
+leaves `base` empty, and English arrives in `overrides` like every other locale.
 
 English files are `as const` rather than `NamespaceBundle<N>`: they are the source the union is
-derived *from*, so they cannot be checked against it, and they are the fallback layer, so they must
-be complete.
+derived *from*, so they cannot be checked against it. Every other locale is — which makes English's
+own completeness the one thing nothing checks and everything depends on.
 
 ---
 

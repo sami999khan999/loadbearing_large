@@ -55,6 +55,7 @@ export {
   PgTenantStorageReader,
   PgUnitOfWork,
   type PgUnitOfWorkConfig,
+  PgUserReader,
   PgVectorStore,
   type PlacedShard,
   type ShardConfig,

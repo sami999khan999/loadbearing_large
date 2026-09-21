@@ -43,7 +43,10 @@ const BASE = {
     "Start at docs/ai/index.md. The rulebook is [layering](docs/ai/rules/layering.md).\n",
   "CLAUDE.md": "@docs/ai/rules/layering.md\n",
   "docs/index.md": "Docs.\n",
-  "docs/ai/index.md": "Router. [layering](docs/ai/rules/layering.md)\n",
+  // Relative, not `docs/ai/rules/…`: §12 resolves a root-anchored target from the root,
+  // §15 resolves every target the way a renderer does, and only one of those is a link
+  // that works from inside `docs/ai/`.
+  "docs/ai/index.md": "Router. [layering](rules/layering.md)\n",
   "docs/ai/rules/index.md": "Contents. [layering](layering.md)\n",
   "docs/ai/rules/layering.md": "Dependencies point one way. See docs/opinions/layering.md.\n",
   "docs/opinions/index.md": "Opinions.\n",
@@ -136,7 +139,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(27);
+    expect(results).toHaveLength(28);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -373,8 +376,7 @@ describe("12 — the rule files route to every opinions page", () => {
       run({
         "docs/ai/rules/files.md": "Kebab-case. See docs/opinions/files.md.\n",
         "docs/opinions/files.md": "The argument.\n",
-        "docs/ai/index.md":
-          "Router. [layering](docs/ai/rules/layering.md) [files](docs/ai/rules/files.md)\n",
+        "docs/ai/index.md": "Router. [layering](rules/layering.md) [files](rules/files.md)\n",
       }),
       "the rule files route to every opinions page",
       "does not @-import",
@@ -430,8 +432,8 @@ describe("14 — no comment block over two lines", () => {
   });
 });
 
-describe("15 — every backticked path in the docs exists", () => {
-  const NAME = "every backticked path in the docs exists";
+describe("15 — every path the docs name exists", () => {
+  const NAME = "every path the docs name exists";
 
   it("catches a path that names nothing, and ignores one inside a fence", () => {
     fails(
@@ -440,6 +442,41 @@ describe("15 — every backticked path in the docs exists", () => {
       "packages/nowhere/src/index.ts",
     );
     passes(run({ "docs/index.md": "```\n`packages/nowhere/src/index.ts`\n```\n" }), NAME);
+  });
+
+  // The link half. A backticked path is prose about the tree; a link is a door, and the
+  // eight that were one `../` short of `packages/` rendered as links the whole time.
+  it("catches a link target that resolves nowhere", () => {
+    fails(
+      run({ "docs/setup/index.md": "See [ports](../../packages/application/docs/ports.md).\n" }),
+      NAME,
+      "../../packages/application/docs/ports.md",
+    );
+  });
+
+  it("resolves a target against the page's own directory, not the root", () => {
+    passes(
+      run({
+        "docs/setup/index.md": "See [layering](../ai/rules/layering.md).\n",
+      }),
+      NAME,
+    );
+    fails(
+      run({ "docs/setup/index.md": "See [layering](docs/ai/rules/layering.md).\n" }),
+      NAME,
+      "docs/ai/rules/layering.md",
+    );
+  });
+
+  it("leaves a URL, an anchor and a shape alone", () => {
+    passes(
+      run({
+        "docs/index.md":
+          "[a](https://example.test/x.md) [b](#section) [c](mailto:x@y.test)" +
+          " [d](packages/{a,b}/index.md)\n",
+      }),
+      NAME,
+    );
   });
 
   // The source half. `comments.md` tells an author to leave `// see docs/reference/x.md`
@@ -1142,6 +1179,51 @@ describe("27 — every host port is stated once", () => {
   });
 
   it("skips a tree with no example to compare against", () => {
+    expect(entry(run(), NAME).status).toBe("○");
+  });
+});
+
+describe("28 — every permission in the catalog gates a procedure", () => {
+  const NAME = "every permission in the catalog gates a procedure";
+
+  const catalogs = (declared, gated) => ({
+    "packages/permissions/package.json": PKG("permissions"),
+    "packages/permissions/src/catalog/index.ts":
+      'import { memberPermissions } from "./member.permissions.js";\n' +
+      "export const CATALOG = { ...memberPermissions } as const;\n",
+    "packages/permissions/src/catalog/member.permissions.ts": `export const memberPermissions = {${declared}} as const;\n`,
+    "packages/contracts/package.json": PKG("contracts"),
+    "packages/contracts/src/catalog/index.ts":
+      'import { memberProcedurePermissions } from "./member.permissions.js";\n' +
+      "export const PROCEDURE_PERMISSIONS = { ...memberProcedurePermissions };\n",
+    "packages/contracts/src/catalog/member.permissions.ts": `export const memberProcedurePermissions = {${gated}} as const;\n`,
+  });
+
+  const INVITE = '"member.invite": { scope: "org", module: "member", label: "Invite" },';
+
+  it("catches a key no procedure asserts", () => {
+    fails(run(catalogs(INVITE, "")), NAME, "member.invite");
+  });
+
+  it("accepts one a procedure asserts", () => {
+    passes(run(catalogs(INVITE, '"member.invite": "member.invite",')), NAME);
+  });
+
+  // Held by every resolved principal in `CapabilitySet.can()` rather than through a role,
+  // so no procedure asserts it. Read off the entry, not off the key's first segment.
+  it("exempts a core key by its module, not by its name", () => {
+    passes(
+      run(catalogs('"member.audit": { scope: "org", module: "core", label: "Audit" },', "")),
+      NAME,
+    );
+    fails(
+      run(catalogs('"core.audit": { scope: "org", module: "member", label: "Audit" },', "")),
+      NAME,
+      "core.audit",
+    );
+  });
+
+  it("skips a tree with no permission catalog", () => {
     expect(entry(run(), NAME).status).toBe("○");
   });
 });

@@ -27,6 +27,7 @@ export {
   type CapabilitiesDto,
   type ColdModeDto,
   type ConversationDto,
+  ConversationEntity,
   type DocumentHitDto,
   type InvitationDto,
   type MemberDto,

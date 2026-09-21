@@ -6,12 +6,12 @@ description: The commands, what to run before claiming a change is done, the com
 # Working in this repo
 
 ```bash
-pnpm dev                  # builds packages, then web + worker in parallel
+pnpm dev                  # builds packages once, then web + worker in parallel
 pnpm build                # topological, derived from workspace:* — no order declared anywhere
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
 pnpm test
-pnpm check:architecture   # 27 assertions that no linter expresses
+pnpm check:architecture   # 28 assertions that no linter expresses
 pnpm check:contrast       # WCAG AA + sRGB gamut, every theme × mode. A gate, not a report
 pnpm check:comments       # comment density and block counts; reports, never fails
 pnpm deps:check           # syncpack: one dependency, one version line
@@ -39,20 +39,21 @@ Prefer `pnpm --filter @loadbearing/<pkg> run <script>` over `cd`-ing into a pack
 
 ## Before you claim a change is done
 
-Run **`pnpm check:architecture`** — twenty-seven assertions in `tooling/scripts/check-architecture.mjs`
+Run **`pnpm check:architecture`** — twenty-eight assertions in `tooling/scripts/check-architecture.mjs`
 that typecheck, lint, and tests all pass without noticing: framework leaking into the domain, the
 domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block comment, top-level
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
 `organization_id`, the audit port renamed, a schema file missing from the drizzle barrel, these rule
 files drifting from `docs/opinions/`, a `docs/` folder with no `index.md`, a comment block over
-two lines, a backticked path in the docs that names nothing on disk, the two pnpm version
-declarations disagreeing, a unique index on a tenant table that does not lead with
-`organization_id`, a foreign key with no index leading with it, a partitioned table that the
-`PartitionedTable` allowlist does not name, a repository whose tables span two placements, a
-second place that opens a database pool, an event code the catalog declares that nothing emits,
-`.env.example` drifting from what an app actually requires, a runnable script above `src/` that
-nothing typechecks, and a host port stated twice — a `*_PORT` and the URL that dials it, or the
-compose default and the template — that no longer agree.
+two lines, a path in the docs that names nothing on disk — backticked, or the target of a
+link — the two pnpm version declarations disagreeing, a unique index on a tenant table that
+does not lead with `organization_id`, a foreign key with no index leading with it, a
+partitioned table that the `PartitionedTable` allowlist does not name, a repository whose
+tables span two placements, a second place that opens a database pool, an event code the
+catalog declares that nothing emits, `.env.example` drifting from what an app actually
+requires, a runnable script above `src/` that nothing typechecks, and a host port stated
+twice — a `*_PORT` and the URL that dials it, or the compose default and the template — that
+no longer agree, and a permission the catalog declares that no procedure asserts.
 
 **On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
 `pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every
