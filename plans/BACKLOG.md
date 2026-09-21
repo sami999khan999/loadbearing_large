@@ -37,10 +37,10 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 21 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
-| 4 | Unfinished work buried inside ticked items | 6 |
-| 5 | Verification owed — browser, manual, or a scale not run | 9 |
+| 4 | Unfinished work buried inside ticked items | 4 |
+| 5 | Verification owed — browser, manual, or a scale not run | 2 |
 | 6 | Conditional work — "reopen when" | 11 |
-| 7 | `archive/TODO.md` ledger rows | 3 |
+| 7 | `archive/TODO.md` ledger rows | 1 |
 | 8 | Doc housekeeping still owed | 1 |
 
 Sections 1–3 are the work. Section 4 is work the ledgers say is done and is not. Sections 5–8
@@ -767,30 +767,102 @@ database" — walked on 2026-09-13 in the communication plan's Phase 2 Exit.
 Every phase is unit-tested and most are verified against live containers; these are the clauses
 the record says were *not* proven, beyond the eight in `23.5`–`23.12`.
 
-**Seven of the nine need a browser, and nothing blocks them any more.** They were written while
-`S.1` held; the extension connects as of 2026-09-20 and the walk above is the worked example of
-driving one. Four of the seven — Phases 18, 19 and 20 and `25.4` — need a **platform admin**,
-which the walk's accounts are not: `pnpm platform:grant <email>` is the one setup step it did not
-take. The Phase 21 archived section rendered its empty state during the walk, which is not the
-clause; it wants a tenant with an archived month behind it.
+**All seven browser clauses were walked on 2026-09-21**, in one pass against `pnpm dev` on
+`:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the
+setup step the 2026-09-20 walk had not taken; it moves her `loadbearing` membership from `owner`
+to `platform_admin`, which is the tier by construction.
 
-- [ ] **Phase 18 Exit, browser half** — "signed in as alice with a customer tenant active,
-  `/platform/status` renders and the nav shows the module; as a tenant owner it redirects to
-  `/forbidden`". Every link in the chain is asserted; the round trip is not. — `archive/PLAN.md:1998`
-- [ ] **Phase 19 screens** — `/platform/retention` and `/platform/storage`: wired, typechecked,
-  use-cases unit-tested, no clause below the API clicked. — `archive/PLAN.md:2419`
-- [ ] **Phase 20 screen** — `/platform/analytics`, the same. — `archive/PLAN.md:2642`
-- [ ] **Phase 21 screen** — the archived section on `/notifications`, the same. — `archive/PLAN.md:2767`
-- [ ] **`25.4` rendered page** — `/platform/shards` answers 200 for a real platform admin and both
-  procedures answer with live data; the *rendered* expanded panel is browser-only. — `archive/PLAN.md:4094`
-- [ ] **`26.9` resend button** — the procedure is proved over `/api/rpc`; the button is not. — `archive/PLAN.md:4241`
-- [ ] **`T-029`'s ten-step manual pass** — organization switch, accept, switcher, found, and
-  **step 5**: an RPC immediately after a switch answers for the new tenant inside the sixty-second
-  `session.cookieCache` window. `archive/TODO.md` says "still owed"; `archive/IMPLEMENTATION-PLAN.md:2523`
-  lists it in the whole-plan verification; nothing records it walked. — `archive/TODO.md:228–241`
-- [ ] **The whole-plan verification** — `archive/PLAN.md`'s own closing section: the command block, then
-  each phase's Exit line by hand, and the one that cannot be automated: a tenant owner typing
-  `/platform/retention` into the address bar and being redirected. — `archive/PLAN.md:4284`
+**Two accounts, four organizations, and every clause below the API actually called.** What the
+pass created, and what it left behind, is in the state table at the end of this file. Two findings
+are worth carrying rather than burying in the ticks:
+
+- **A platform admin is not a tenant member, and `/notifications` proves it.** Alice with
+  `loadbearing` active is refused `/notifications` — `platform_admin` holds the nine platform keys
+  and no `notification.inbox.read`. That is the design working, and it is also why the archived
+  month had to be manufactured for a *tenant owner* rather than for her.
+- **A synthetic mouse click misses in this harness and a real one does not.** Three buttons —
+  pause projection, send invitation, restore — read as dead on a coordinate click and fired on
+  `element.click()`. Checked before filing anything: `elementFromPoint` returned the button
+  itself, so it was the input path and not an `R.44`-shaped missing handler. Worth knowing before
+  the next walk files a defect against a button that works.
+
+- [x] **Phase 18 Exit, browser half** `done: 2026-09-21` — both halves, and the customer tenant is
+  the half that matters. Alice founded **Walk Co** at `/organization/new`, which switched to it on
+  creation; with Walk Co active `/platform/status` renders, the nav carries the Platform link, and
+  the panel names the tier it is held through — "Platform organization: Loadbearing (loadbearing)"
+  — while the active tenant is something else entirely. Bob, owner of **Bob Co** and nothing more,
+  gets `/forbidden` from `/platform/status`, and his nav has no Platform entry at all.
+  — `archive/PLAN.md:1998`
+- [x] **Phase 19 screens** `done: 2026-09-21` — and the cold path is no longer an empty state.
+  - **`/platform/retention`**: `previewRetention` answered for the table-wide forms and for
+    `19.19`'s tenant override, whose own table list refuses `messages` exactly as the save does.
+    Against a real month it reads *"The next run drops 1 partitions, about 0 rows, 106496 bytes"*
+    — the row estimate is `reltuples` on a partition nothing has analysed, the bytes are real.
+    `updateRetention` saved, and **Restore a month** queued
+    `cold-restore.notifications.2026-06-01.all`; the worker read both objects back and logged
+    `attached: false`, which is the screen's own copy about a month outside the hot window.
+  - **`/platform/storage`**: `listStorage`, `exportTenant` and `listExports`, all below the API.
+    The export queued, the worker logged `cold.tenant.exported {objects: 4, rows: 50}`, and the
+    five object keys appeared under the form. Cold storage by tenant renders rows now rather than
+    "Nothing has been archived yet": Loadbearing 848 B / 7 rows / 2 months, Bob Co 493 B / 5 / 1.
+  — `archive/PLAN.md:2419`
+- [x] **Phase 20 screen** `done: 2026-09-21` — `/platform/analytics` renders the switch, the gaps
+  section and all twenty-four actions grouped by module. Driven below the API and put back:
+  `updateProjectionSwitch` paused it, `platform_policy.projection_enabled` went `t` → `f` → `t`,
+  and the audit trail carries `platform.projection.paused` then `platform.projection.resumed`
+  thirteen seconds apart. The screen refetched `getPolicy`, `listProjection` and `listGaps` on
+  each. **What the run could not distinguish** is Phase 20's own correction — a paused projection
+  reporting `disabled` rather than `behind` — because with no archived month behind it at the time
+  the gaps list is empty either way. That half stays where it is proved, in its spec.
+  — `archive/PLAN.md:2642`
+- [x] **Phase 21 screen** `done: 2026-09-21` — **populated, not the empty state**, which is what
+  the entry asked for and is the first time anything has read an archived month through the UI.
+  - Getting there needed a month that does not exist on a three-month-old database: a June
+    partition created with the seed's own create-then-attach DDL, five rows inserted,
+    `notifications` set to one hot month from the retention screen, and a `partitions` job
+    enqueued on the maintenance queue. The worker archived and dropped it —
+    `maintenance.partition.archived` then `maintenance.partition.dropped` — so the rows the page
+    renders are **only** in S3.
+  - The section sits under `Can permission="notification.archive.read"`, so it is a tenant
+    *owner* who sees it: bob in Bob Co. `notification/archivedMonths` and `notification/archived`
+    both answered 200, the month selector offered `2026-06-01`, and all five rows rendered out of
+    the gzipped object. — `archive/PLAN.md:2767`
+- [x] **`25.4` rendered page** `done: 2026-09-21` — the expanded panel, rendered. `shardMap` gave
+  node 0 with three tenants; **Show tenants** expanded to all three with placement, last-moved and
+  retention columns; every **Move** button is `disabled` and the reason is on the page rather than
+  in a tooltip — *"Tenant moves need the physical split — Phase 24."* `locateTenant` answered both
+  ways: `loadbearing` → "Loadbearing (loadbearing) is on node 0", a miss → "No tenant answers to
+  that." — `archive/PLAN.md:4094`
+- [x] **`26.9` resend button** `done: 2026-09-21` — pressed, with the row read before and after.
+  The invitation kept its `id` **and** its `created_at`, the `token_hash` changed
+  (`4e23a25c…` → `6bc43c24…`), `expires_at` moved to seven days from the resend, and Mailpit
+  received a **second** invitation to the same address. Every claim the procedure's entry makes,
+  this time from the button. — `archive/PLAN.md:4241`
+- [x] **`T-029`'s ten-step manual pass** `done: 2026-09-21` — all ten, in order, alice and bob.
+  - **Step 5 is the one the entry says matters, and it holds.** Bob switched Walk Co → Loadbearing
+    from the header and, **2.1 s later**, `member/list` over `/api/rpc` answered with
+    Loadbearing's five — alice as `platform_admin`, joined 2026-09-13 — and not Walk Co's two,
+    where alice is `owner` and joined today. Well inside the sixty-second `session.cookieCache`
+    window, which is the whole of what `rebind` exists to invalidate.
+  - Steps 1–4: alice invited bob into Walk Co; bob accepted from `/invitation/$token` and landed
+    **switched to Walk Co**, "You are Member here", with a nav of three entries rather than an
+    owner's seven; the switcher listed both memberships.
+  - Steps 6–7: a full page load kept the switched tenant; sign out and back in landed him in
+    Loadbearing, his last-used, not the one he had been in before the switch. The same held for
+    alice, who came back to Walk Co.
+  - Steps 8–9: `/organization/new` founded Bob Co and switched to it on creation. Signed out,
+    `/invitation/$token` rendered the anonymous preview — "Walk Co has invited bob@example.test
+    to join" — and its sign-in button carried
+    `?redirect=%2Finvitation%2F…`, which returned there after signing in.
+  - **Step 10 held at every step**: `users.last_active_organization_id` matched the switcher after
+    the found, after the accept, after the switch, after the reload and after the re-sign-in. It
+    is `null` until the first switch or found, because a plain sign-in does not write it.
+  — `archive/TODO.md:228–241`
+- [ ] **The whole-plan verification** — `archive/PLAN.md`'s own closing section: the command block,
+  then each phase's Exit line by hand. **The clause it says cannot be automated is done**: a tenant
+  owner — bob, owner of Bob Co — typed `/platform/retention` into the address bar on 2026-09-21
+  and landed on `/forbidden`. What is left is the by-hand pass over every phase's Exit line, which
+  is a reading job rather than a browser one. — `archive/PLAN.md:4284`
 - [ ] **`archive/REVIEW.md`'s own gap** — the `infrastructure` integration specs and the smoke suites were
   not run in the review session (no Docker). They were green on 2026-09-20 in `archive/OPEN.md` C, so this
   is closed unless the review's fixes land without re-running them.
@@ -826,17 +898,26 @@ a feeling.
 
 ## 7. `archive/TODO.md` — the three ledger rows
 
-`archive/TODO.md` is history since 2026-09-17 and these are its only open lines.
+`archive/TODO.md` is history since 2026-09-17 and these are its only open lines. **Two of the
+three closed on 2026-09-21**, once section 5's browser clauses made their Exit lines true rather
+than merely claimed.
 
 - [ ] `T-036` **Communication plan** `P1`. Done when Phases 9–13 **and 26** are closed, plus
-  `23.1`–`23.3` and `23.5`–`23.12`. Phases 9–13 are done; 26 is filed by decision, so as written
-  the row cannot close while Phase 26 stays filed. Either narrow the "Done when" to the walk
-  (`23.12` says the walk closes it) or accept it stays open. — `archive/TODO.md:140`
-- [ ] `T-037` **Database scaling plan** `P1`. Done when Phases 14–17, 21 and 22 report their Exit
-  lines true, Phase 24 filed. **All six are met** (`archive/PLAN.md` Exit notes dated 2026-09-13 to 19).
-  This row can be ticked. — `archive/TODO.md:159`
-- [ ] `T-038` **Platform admin** `P2`. Done when Phases 18–20 report their Exit lines true,
-  Phase 25 filed. **All three are met** (2026-09-19). This row can be ticked. — `archive/TODO.md:170`
+  `23.1`–`23.3` and `23.5`–`23.12`. **Every clause but one is now met** — Phases 9–13 are done,
+  `23.1`–`23.3` closed on 2026-09-21 and `23.5`–`23.12` on the walk. Phase 26 is filed by
+  decision, so as written the row cannot close. The choice is unchanged and is the owner's: narrow
+  the "Done when" to the walk (`23.12` says the walk closes it) or accept it stays open until
+  somebody unfiles Phase 26. — `archive/TODO.md:140`
+- [x] `T-037` **Database scaling plan** `P1`. `done: 2026-09-21` — Phases 14–17, 21 and 22 all
+  report their Exit lines true and Phase 24 is filed. It was **not** ticked on the file's own
+  say-so: Phase 21's Exit carried a "not verified through a browser" note, which section 5 closed
+  today with the archived section rendering five rows read out of S3.
+  — `archive/TODO.md:159`
+- [x] `T-038` **Platform admin** `P2`. `done: 2026-09-21` — Phases 18–20 report their Exit lines
+  true and Phase 25 is filed. Same reservation as `T-037`, and the same answer: all three Exit
+  lines carried a browser clause that nothing had walked, and all three were walked today — the
+  round trip for 18, both screens below the API for 19, and pause-and-resume for 20.
+  — `archive/TODO.md:170`
 
 ---
 
@@ -914,12 +995,32 @@ work is finished, and nothing else records it.
 | one direct conversation, two messages | `conversations`, `messages` | `23.10`'s proof that a retried optimistic send is one row |
 | `redis-cache` flushed | cache Redis | after the SQL promotion, so the capability cache did not serve the old role. Rebuildable by design |
 
+**Added on 2026-09-21 by the section 5 walk.** Left in place deliberately: the next walk needs a
+platform admin, two tenants and an archived month, and manufacturing them again is the expensive
+part. What was debris was removed — the two `*_2026_06_restore` scratch tables are dropped and
+`retention_policy` is empty again, so an absent row is the code default exactly as before.
+
+| What | Where | Why it is there |
+|---|---|---|
+| `alice@example.test` is `platform_admin` | `memberships` in `loadbearing` | `pnpm platform:grant`. It **moved** her from `owner`, which is what the script does; `ada@walk.test` is still `loadbearing`'s owner |
+| **Walk Co** (`o-01a0c2c3-…`) | `organizations` | alice founded it for Phase 18's *customer tenant active* half. bob is a member of it |
+| **Bob Co** (`o-01a0c2cf-…`) | `organizations` | bob founded it for Phase 18's *tenant owner is redirected* half and for Phase 21's archived section, which needs `notification.archive.read` |
+| three archived months | `partition_archive`, `cold/notifications/2026/0{6,7}/` | two for `loadbearing`, one for Bob Co. **The rows exist only in S3** — the partitions were archived and dropped. Deleting the objects makes `/notifications` and `/platform/storage` empty again |
+| one tenant export | `export/01a0c2c3-…/2026-09-21/` | five objects, from `/platform/storage`'s button. The bucket lifecycle deletes them after seven days |
+| two invitation mails to `bob@example.test` | Mailpit | `26.9`: the second is the resend, and the pair is the proof |
+| `bob@example.test` in `Walk Co` | `memberships` | `T-029` step 2. His `loadbearing` membership is untouched |
+
+Not left behind, and worth saying so: `platform_policy.projection_enabled` is `t` again, the two
+scratch tables are gone, and `retention_policy` holds no rows.
+
 ---
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-21 | @sami | **Section 5's seven browser clauses, walked in one pass.** Phases 18–21, `25.4`, `26.9` and `T-029`'s ten steps, against `pnpm dev` on `:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the setup step the previous walk had not taken. Every tick records what was measured: the invitation row read before and after the resend, `platform_policy` read after the pause and after the resume, `users.last_active_organization_id` read at each of `T-029`'s steps, and `member/list` called 2.1 s after a switch to prove the cookie cache was invalidated. **Phase 21 needed a month that did not exist**, so one was manufactured through the product's own machinery — a June partition, one hot month set from the retention screen, a `partitions` job on the maintenance queue — and the page then rendered five rows that live only in S3. Two findings kept out of the ticks: a `platform_admin` is refused `/notifications`, which is the tier working and not a defect; and three buttons that read as dead under a synthetic mouse click fire under `element.click()`, checked with `elementFromPoint` before anything was filed |
+
 | 2026-09-21 | @sami | Section 8 down to one, and `23.13` closed. **A doc link that resolves nowhere is now a build failure** — §15 read backticked paths and not link targets, so resolving all 1 503 of them found nine broken: eight pages under `apps/*/docs/reference/` one `../` short of `packages/`, and one naming a doc `T-013` renamed. The assertion landed first, which is what made them nine failures rather than a list. It also found a link in the check's own fixture that passed §12 and was broken in a browser. **Assertion 28** is §24 from the other vocabulary: a permission the catalog declares that no procedure asserts, which is a checkbox in the role editor granting nothing. The property moved out of `procedure-permissions.spec.ts` rather than being checked twice, which closed `AWAITING_A_PROCEDURE` with it. **Three env defaults that disagreed** — `partitions.ts` read `S3_FORCE_PATH_STYLE !== "false"`, so its sweep defaulted to path-style against real S3; `clickhouse-migrate.ts` and `vitest.smoke.config.ts` guessed three different database-and-user pairs between them, none of them the pair both `env.ts` schemas enforce, and the guess that reached a live container did so because ClickHouse ships a `default` user with no password. And **five doc sentences** that were out of date: four describing the transactional outbox as a backlog item since Phase 10 shipped it, and one describing an English fallback layer `23.15` dropped |
 | 2026-09-20 | @sami | Created at `885e144` from a full read of `PLAN.md`, `OPEN.md`, `REVIEW.md`, `STUCK.md`, `TODO.md` and every file already in `archive/`. Every "still true" and "already resolved" claim in section 4 was re-read from the source tree rather than from the plan |
 | 2026-09-20 | @sami | Ten more review defects, all verified against the tree before being marked: `R.12` notification mail linked to relative paths, fixed in the renderer both templates share; `R.13` the digest footer printed a uuid, so `OrganizationReader` gained `nameOf`; `R.22` the inbox trapped a reader in `unread only`, **and its spec found the same trap one layer up** — the pending skeleton removed the toggle too, so toggling deleted the button on click; `R.27` CORS omitted `last-event-id`, so a cross-origin stream could never resume; `R.28` an eviction policy with no ceiling never evicts; `R.29` a placeholder secret that booted; `R.30` a doc naming a key the schema does not have; `R.31` assertion 7 never walked `apps/*`; `R.35` four keys that had been gated since phases 19 and 20; `R.44` a live button with no handler. `R.45` narrowed to the two bullets still true |
