@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, from every plan file, in one place
-updated: 2026-09-20
+updated: 2026-09-21
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -37,11 +37,11 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 21 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
-| 4 | Unfinished work buried inside ticked items | 7 |
+| 4 | Unfinished work buried inside ticked items | 6 |
 | 5 | Verification owed — browser, manual, or a scale not run | 9 |
 | 6 | Conditional work — "reopen when" | 11 |
 | 7 | `archive/TODO.md` ledger rows | 3 |
-| 8 | Doc housekeeping still owed | 6 |
+| 8 | Doc housekeeping still owed | 1 |
 
 Sections 1–3 are the work. Section 4 is work the ledgers say is done and is not. Sections 5–8
 are cheaper than the rest and are listed so nobody re-derives them.
@@ -737,9 +737,20 @@ the end so nobody chases them.
   so. About fifty minutes of creation and half an hour of cleanup. — `archive/PLAN.md:1352`
 - [ ] `26.8` **`FAN_OUT_SCALE=250000` was not run** — 10× of the largest §3 column, deferred to a
   machine that can afford a `users` row per recipient. Curves are linear across 1 000–25 000. — `archive/PLAN.md:4202`
-- [ ] `23.13` **The permissions counterpart of §24 is still not a `check-architecture`
-  assertion.** The property — every key in `CATALOG` named by a `PROCEDURE_PERMISSIONS` entry —
-  lives only in `procedure-permissions.spec.ts`, whose allowlist is stale (`R.35`). — `archive/PLAN.md:3570`
+- [x] `23.13` **The permissions counterpart of §24.** `done: 2026-09-21` — assertion **28**, the same
+  shape `23.13` named: every key in `CATALOG` a value of some `PROCEDURE_PERMISSIONS` entry.
+  - **The module is read off the entry, never off the key's first segment.**
+    `core.realtime.subscribe` *is* gated — `realtime.stream` asserts it — and `core.activity.write`
+    is not, because `CapabilitySet.can()` grants every `core` key to every resolved principal
+    rather than through a role. Splitting on the name exempts both and catches neither, and a
+    fixture case fails if anyone tries it.
+  - **The property moved rather than being checked twice**, which also closes section 8's
+    `AWAITING_A_PROCEDURE` entry: two allowlists for one property is how the spec's went stale for
+    two phases with four keys behind it. `procedure-permissions.spec.ts` keeps the two directions
+    that need the real router — every procedure gated, no entry naming a procedure that is gone.
+  - **Proved red on the tree**, not only in a fixture: an invented `member.badge.polish` fails the
+    assertion by name and the tree is green with it removed. §24's fragment resolver is now shared,
+    so a `...billingPermissions` added tomorrow is covered without editing either. — `archive/PLAN.md:3570`
 
 **Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
 open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
@@ -831,36 +842,45 @@ a feeling.
 
 ## 8. Doc housekeeping still owed
 
-Two real edits, both in shipped documentation rather than in a plan.
+**Five of the six closed on 2026-09-21.** What is left is the one that was never a doc edit:
+three env parsers that cannot be merged into a package, which wants its own decision.
 
-- [ ] **Four doc sentences describe the transactional outbox as a backlog item.** It shipped as
-  Phase 10 on 2026-09-12. The paths were repointed at `plans/archive/TODO.md` on 2026-09-20 so
-  §15 still passes, which fixed the link and not the tense:
-  `packages/composition/docs/index.md:134`,
-  `packages/composition/docs/reference/test-container.md:133`,
-  `docs/setup/17-composition-container.md:317`, `docs/setup/12-application-package.md:553`.
-  A fifth, `packages/content/docs/reference/namespace.md:122`, cites `T-035`, which is `23.15`.
-- [ ] **`AWAITING_A_PROCEDURE`** in `procedure-permissions.spec.ts` — the same stale list as
-  `R.35`, listed here too because it is a comment claiming "only shrinks" over a set that did not.
+- [x] **Four doc sentences describing the transactional outbox as a backlog item.**
+  `done: 2026-09-21` — all four now say it shipped, and say it shipped *whole*: a port, an adapter
+  and a `Container` line in one change, which is the shape the `EventBus` deletion argued for.
+  The fifth, `packages/content/docs/reference/namespace.md`, was wrong twice — it cited `T-035` as
+  an open trade-off and described an English fallback layer `23.15` has since dropped. Verified
+  against the tree before rewriting: `StaticContentSource` leaves `base` empty.
+- [x] **`AWAITING_A_PROCEDURE`** `done: 2026-09-21` — closed by `23.13` moving the property it
+  guarded. `R.35` had already cut the list to one key; the entry stayed open because one list in a
+  spec and one property is still the wrong number of places. Both now live in assertion 28.
 - [ ] **Three independent `DATABASE_SHARD_<n>_URL` parsers**, with two different contiguity
   algorithms — `apps/web/src/env.ts:143`, `apps/worker/src/env.ts:117` and
   `packages/infrastructure/shard-env.ts:14`. Found while unifying env on 2026-09-20 and left
   alone: the two `env.ts` copies cannot be merged into a package, which `docs/setup/25:144`
   forbids by name, so the fix is narrower than it looks and wants its own decision.
-- [ ] **Three disagreeing ClickHouse default sets.** `env.ts` defaults database and user to
-  `default` and then *rejects* that value when a URL is set; `clickhouse-migrate.ts` uses
-  `ratchet` and `default`; `vitest.smoke.config.ts` uses `ratchet` for both. Same session, same
-  reason for leaving it: it is a defaults decision, not a mechanical fix.
-- [ ] **`partitions.ts` defaults `S3_FORCE_PATH_STYLE` to true**, the opposite of both schemas,
-  by reading `!== "false"` where they read `=== "true"`.
-- [ ] **Nine broken relative links in the docs**, found 2026-09-20 by resolving all 1 503 of them.
-  Nothing in CI checks a link target: §15 checks a **backticked** path, so a `](…)` that resolves
-  nowhere passes. Eight are one `../` short in `apps/*/docs/reference/` — from there `packages/`
-  is `../../../../`, not `../../../`: `enforcement-surfaces.md`, `env.md` (web),
-  `consumers.md` ×2, `env.md`, `schedules.md` ×2, `shutdown.md` (worker). The ninth is
-  `docs/setup/12-application-package.md` naming `15-infrastructure-clickhouse.md`, which has been
-  `15-infrastructure-package.md` since `T-013`. **Worth doing with it:** widen §15 to resolve link
-  targets as well as backticked spans, which is the assertion that would have caught all nine.
+- [x] **Three disagreeing ClickHouse default sets.** `done: 2026-09-21` — and the decision it
+  needed was already made: both `env.ts` schemas reject `default` when `CLICKHOUSE_URL` is set,
+  because a default naming the project is a credential in shipped code and ClickHouse's own
+  `default` cannot reach the compose container. Neither script loads an `env.ts`, so each enforces
+  the same rule itself — an absent name throws rather than resolving to a guess. **Verified against
+  the running container**: `ch:migrate` reports `nothing to do, 1 applied`, and an empty
+  `CLICKHOUSE_DATABASE` throws by name. The `default` user is the trap — it exists with no
+  password, so the wrong guess fails by *connecting*.
+- [x] **`partitions.ts` defaulted `S3_FORCE_PATH_STYLE` to true** `done: 2026-09-21` — it reads
+  `=== "true"` now, the way both schemas do. The sweep it runs is the only caller, and it was
+  defaulting to path-style addressing against real S3, where addressing is by host.
+- [x] **Nine broken relative links in the docs** `done: 2026-09-21` — fixed, and **the assertion
+  that would have caught them landed first**, which is what made them nine failures rather than a
+  list to work through by hand. §15 now resolves a `](…)` as well as a backticked span and is
+  renamed to *every path the docs name exists*.
+  - **A target resolves against the page's own directory and nowhere else**, because that is what
+    a renderer does. §12 also treats a `docs/…` target as root-anchored — right for the root files
+    it was written for, wrong one directory down — and the spec's own fixture held a link of
+    exactly that shape: passing §12, broken in a browser. Fixed with the rest.
+  - A URL, a `mailto:`, an anchor-only `#jump` and a braced or globbed shape are left alone. The
+    three remaining hits in the tree are regex fragments inside fences, which `outsideFences`
+    already blanks.
 
 ### Do not fix these — they are frozen by design
 
@@ -900,6 +920,7 @@ work is finished, and nothing else records it.
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-21 | @sami | Section 8 down to one, and `23.13` closed. **A doc link that resolves nowhere is now a build failure** — §15 read backticked paths and not link targets, so resolving all 1 503 of them found nine broken: eight pages under `apps/*/docs/reference/` one `../` short of `packages/`, and one naming a doc `T-013` renamed. The assertion landed first, which is what made them nine failures rather than a list. It also found a link in the check's own fixture that passed §12 and was broken in a browser. **Assertion 28** is §24 from the other vocabulary: a permission the catalog declares that no procedure asserts, which is a checkbox in the role editor granting nothing. The property moved out of `procedure-permissions.spec.ts` rather than being checked twice, which closed `AWAITING_A_PROCEDURE` with it. **Three env defaults that disagreed** — `partitions.ts` read `S3_FORCE_PATH_STYLE !== "false"`, so its sweep defaulted to path-style against real S3; `clickhouse-migrate.ts` and `vitest.smoke.config.ts` guessed three different database-and-user pairs between them, none of them the pair both `env.ts` schemas enforce, and the guess that reached a live container did so because ClickHouse ships a `default` user with no password. And **five doc sentences** that were out of date: four describing the transactional outbox as a backlog item since Phase 10 shipped it, and one describing an English fallback layer `23.15` dropped |
 | 2026-09-20 | @sami | Created at `885e144` from a full read of `PLAN.md`, `OPEN.md`, `REVIEW.md`, `STUCK.md`, `TODO.md` and every file already in `archive/`. Every "still true" and "already resolved" claim in section 4 was re-read from the source tree rather than from the plan |
 | 2026-09-20 | @sami | Ten more review defects, all verified against the tree before being marked: `R.12` notification mail linked to relative paths, fixed in the renderer both templates share; `R.13` the digest footer printed a uuid, so `OrganizationReader` gained `nameOf`; `R.22` the inbox trapped a reader in `unread only`, **and its spec found the same trap one layer up** — the pending skeleton removed the toggle too, so toggling deleted the button on click; `R.27` CORS omitted `last-event-id`, so a cross-origin stream could never resume; `R.28` an eviction policy with no ceiling never evicts; `R.29` a placeholder secret that booted; `R.30` a doc naming a key the schema does not have; `R.31` assertion 7 never walked `apps/*`; `R.35` four keys that had been gated since phases 19 and 20; `R.44` a live button with no handler. `R.45` narrowed to the two bullets still true |
 | 2026-09-20 | @sami | `R.2` fixed, and it was less blocked than the entry said. Both cross-node passes were handed the catalog unit of work, which never reads `ShardScope`, so `eachShard` looped the nodes and every iteration wrote to node 0; `Container` now builds a third `local`-placed `PgUnitOfWork` for them. That exposed the second bug the review flagged under the same binding — `sweepExpired` deletes three catalog tables from a `local` gateway, and was correct only by the node-0 fallback — so it uses `catalogDb`, the sanctioned crossing. **Proved on two real nodes:** `24.1` gates only the outbox half, because that needs a row whose foreign key is the `23503`; a month partition needs no key, so the sharded smoke asserts the runway lands on node 1 and not on the catalog, and it fails on the old binding. All four High defects are now closed |
