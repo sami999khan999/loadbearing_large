@@ -50,6 +50,10 @@ export class MaintenanceConsumer {
   // not a minute more, which is the whole reason cold storage is not cascaded.
   private static readonly DELETED_TENANT_DAYS = 30;
 
+  // How long BullMQ holds this queue's lock without a renewal. Its own default is 30 s,
+  // which is a number for short jobs; a runway pass is minutes of paced DDL.
+  private static readonly LOCK_DURATION_MS = 300_000;
+
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
@@ -62,7 +66,16 @@ export class MaintenanceConsumer {
       async (job: Job) => this.handle(job),
       // Serial by default: these jobs take table-level locks and can deadlock on the
       // same partition.
-      { connection: this.connection, concurrency: this.concurrency },
+      {
+        connection: this.connection,
+        concurrency: this.concurrency,
+        // Five minutes, not BullMQ's 30 s. `partitions-boot` logs nothing for its first
+        // half-minute at 78 tenants, so the lock expired, the job was re-delivered and
+        // ──
+        // ran a second time. Idempotent, so it was waste rather than damage — but the
+        // default is sized for short jobs and these are the opposite.
+        lockDuration: MaintenanceConsumer.LOCK_DURATION_MS,
+      },
     );
 
     worker.on("failed", (job, error) => {

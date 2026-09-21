@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 26 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 24 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-six open boxes
+## 1. `archive/PLAN.md` — the twenty-four open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -218,18 +218,41 @@ which is also what let the optimistic window be observed rather than guessed at.
 
 **Found on 2026-09-20, filed rather than fixed.**
 
-- [ ] `23.20` **The shipped configuration warns about itself on every worker boot** —
-  `worker.pool.oversubscribed {concurrency: 20, poolMax: 10}` from `.env.example`'s own numbers.
-  **Recommended (a):** raise the shipped `DATABASE_POOL_MAX` to 20 in `.env.example` and both
-  `env.ts` defaults. (b) count only consumers that touch the database; (c) a separate
-  `WORKER_DATABASE_POOL_MAX`. A defaults decision; the number wants choosing beside `23.21`'s. — `archive/PLAN.md:3767`
-- [ ] `23.21` **The worker's first boot against a real stack is not clean.** Two things. (1)
-  `partitions-boot` logs nothing for 29.9 s, BullMQ's 30 s `lockDuration` expires, the job is
-  re-delivered and runs twice — at 78 tenants. **Recommended:** a `lockDuration` on the
-  maintenance `Worker` that matches its work (five minutes). (2) `AnalyticsConsumer.project`
-  places each tenant *outside* the per-tenant `try`, so an unplaceable tenant aborts the run
-  without `analytics.projection.failed`. **Recommended, one line:** move `withShard` inside the
-  `try`. The larger question — skip or fail an unplaceable tenant — is left open. — `archive/PLAN.md:3802`
+- [x] `23.20` **The shipped configuration warns about itself on every worker boot.**
+  `done: 2026-09-21` — **(a), the recommendation.** `DATABASE_POOL_MAX` is 20 in `.env.example`
+  and in both schema defaults, so the shipped numbers no longer disagree with themselves: six
+  consumers sum to exactly twenty — embedding 4, mail 4, event 8, notification 2, maintenance 1,
+  analytics 1.
+  - **Checked downstream before choosing the number**, because a pool ceiling that does not fit
+    is a stall rather than a warning. pgBouncer is `POOL_MODE: transaction` with
+    `DEFAULT_POOL_SIZE: 20` and `MAX_CLIENT_CONN: 1000`, so twenty per process is twenty *client*
+    connections multiplexed onto a shared twenty backend ones. Web and worker at twenty each is
+    forty clients against a ceiling of a thousand. The entry's "twenty is not twenty backend
+    connections" holds.
+  - **Verified on a real boot**, which is where it was found: the warning is gone and
+    `process.started {consumers: 6}` is the whole of the boot's own commentary.
+  - **(c) is still the honest model and is still open** — `DATABASE_POOL_MAX` remains one variable
+    read by two processes with unlike profiles, which is section 8's entry. This makes the default
+    correct; it does not make the coupling right. Worth taking when somebody has tuned them apart
+    in anger, which is what the entry said. — `archive/PLAN.md:3767`
+- [x] `23.21` **The worker's first boot against a real stack is not clean.** `done: 2026-09-21`
+  — both halves, both as recommended.
+  - **(1) `lockDuration: 300_000` on the maintenance `Worker`.** BullMQ's default is 30 s, which
+    is a number for short jobs; `partitions-boot` logged nothing for 29.9 s at 78 tenants, the
+    lock expired, and the job was re-delivered and ran a second time. Idempotent, so it was waste
+    rather than damage. The named constant says what the number is for, because five minutes
+    chosen silently reads as superstition.
+  - **(2) `withShard` moved inside `projectTenantOrReport`'s `try`.** A tenant with no
+    `shard_assignments` row threw past the per-tenant guard, so the run died reporting
+    `queue.job.failed` and the line a projection dashboard filters on was never emitted. The
+    checkpoint read in the `catch` stays *outside* the shard scope deliberately — it is
+    ClickHouse, one store for the deployment, not a routed table.
+  - **Proved red then green.** Two specs; the first fails on the old code with
+    `analytics.projection.failed` never emitted. The second asserts the run still fails, which is
+    the behaviour that was never in question and is the easy thing to break while fixing this.
+  - **The larger question is still open on purpose:** skip an unplaceable tenant, or fail the
+    run. Today it fails, now audibly. That is a decision about whether a derived store should
+    keep working for everyone else while somebody fixes a directory row.
   - **(2) is confirmed in the wild, 2026-09-20, and it is what stopped `S.2`'s clock.** One
     leftover tenant from an integration run had no `shard_assignments` row, and the 12:05 run
     logged `shard.resolution.failed` then `queue.job.failed` sixty milliseconds later — **not**
