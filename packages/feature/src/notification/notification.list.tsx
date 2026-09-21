@@ -80,7 +80,7 @@ export function NotificationList({ limit = 25 }: NotificationListProps) {
               variant="ghost"
               onClick={() => markRead.mutate({ id: row.id, createdAt: row.createdAt })}
             >
-              <StatusBadge tone="accent">{t("notification.inbox.unreadOnly")}</StatusBadge>
+              <StatusBadge tone="accent">{t("notification.inbox.markRead")}</StatusBadge>
             </Button>
           ),
       },

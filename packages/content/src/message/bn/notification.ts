@@ -23,6 +23,7 @@ export const notification = {
   "notification.inbox.loadMore": "পুরনোগুলো দেখুন",
   "notification.inbox.markAllRead": "সবগুলো পঠিত হিসেবে চিহ্নিত করুন",
   "notification.inbox.unreadOnly": "শুধু অপঠিত",
+  "notification.inbox.markRead": "পঠিত চিহ্নিত করুন",
   "notification.inbox.unreadCount": "{count}টি অপঠিত",
   "notification.inbox.open": "বিজ্ঞপ্তি খুলুন",
   "notification.peek.loading": "লোড হচ্ছে…",

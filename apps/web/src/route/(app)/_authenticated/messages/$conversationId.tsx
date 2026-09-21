@@ -7,6 +7,7 @@ import {
   useApiClient,
   useConversationStream,
   useMessages,
+  useSession,
 } from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
@@ -25,10 +26,11 @@ function Conversation() {
   const { conversationId } = Route.useParams();
   const { t } = useMessages("messaging");
   const client = useApiClient();
+  const { user } = useSession();
 
   // The second stream, open only while this page is. It owns the typing map and
   // invalidates this conversation's pages; the user stream keeps the inbox in order.
-  const { typing } = useConversationStream(client, conversationId);
+  const { typing } = useConversationStream(client, conversationId, user?.id);
 
   return (
     <main>

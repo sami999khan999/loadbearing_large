@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 24 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 23 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-four open boxes
+## 1. `archive/PLAN.md` — the twenty-three open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -264,24 +264,31 @@ which is also what let the optimistic window be observed rather than guessed at.
   - **(1) has a companion in the same boot:** `worker.pool.oversubscribed` is logged on every
     start, which is `23.20`. Two of the three things filed against the worker's first boot are
     therefore reproducible on demand rather than remembered.
-- [ ] `23.25` **The typing indicator names a uuid, and names you.** Two defects in one line.
-  `SignalTypingUseCase` publishes to the conversation channel, author included, and
-  `useConversationStream` adds every `typing` frame's `userId` with no check that it is the
-  reader — so typing in `/messages` renders "`01a0bea8-… is typing…`" **to the person typing**.
-  `TypingNotice` takes an optional `nameFor` and `messages/$conversationId.tsx` passes none, which
-  is the uuid half. Seen on 2026-09-20 walking `23.10` and `23.11`; both clauses still hold, this
-  is beside them. **Recommended:** filter the reader's own id in the hook, not on the server —
-  the frame is legitimately addressed to the whole channel — and pass `nameFor` from the
-  conversation's members. — found 2026-09-20
-- [ ] `23.26` **A notification row's unread badge is labelled with the filter's copy.**
-  `notification.list.tsx`'s `readAt` column renders
-  `<StatusBadge tone="accent">{t("notification.inbox.unreadOnly")}</StatusBadge>`, so the button
-  that marks **one** row read reads "Unread only" — the same words as the filter toggle directly
-  above it, which does something else entirely. A screen reader gets the same collision, because
-  it is the button's whole accessible name. Needs a key of its own in both locales.
-  **`tone="accent"` beside it is correct and is not part of this** — `accent` is one of
-  `BadgeTone`'s five semantic tones, which is exactly what `color.md` asks a component to take
-  instead of a colour. — found 2026-09-20
+- [x] `23.25` **The typing indicator named you.** `done: 2026-09-21` — the half that was a
+  defect. `useConversationStream` takes the reader's id and drops a `typing` frame carrying it,
+  so nobody is told they are typing. Filtered in the hook rather than at the publisher, because
+  the frame is legitimately addressed to the whole channel and every other member wants it. The
+  id rides a `useRef` for the same reason `queryClient` does — naming it as a dependency would
+  tear the stream down and reopen it the moment the session resolves, on every page load.
+  - **The spec caught itself first.** The obvious shape — yield the reader's own frame, assert
+    the list is empty — **passes on the unfixed code**, because empty is also the state before
+    any frame lands. It yields the reader's frame first and waits for a second one from somebody
+    else, so the assertion cannot be satisfied until both have been processed. That is `R.45`'s
+    failure mode, found in a spec written to close a different entry.
+- [ ] `23.26b` **The typing indicator names a uuid**, and it is not a one-line fix — the
+  recommendation in `23.25` was wrong about this and is corrected here. `TypingNotice` takes an
+  optional `nameFor` and nothing passes one, but there is nothing to pass: `ConversationContract.member`
+  is `{ userId, role, joinedAt, lastReadAt }` and carries **no name**. Nor is this local to the
+  indicator — **messaging resolves no names anywhere**: `conversation.list.tsx` titles a direct
+  conversation `t("messaging.inbox.direct")` rather than naming the other person, and
+  `message.list.tsx` renders no author at all. So this is a missing feature in the slice, not a
+  defect in one component, and it wants a name on the member DTO — which is a contract, a
+  repository read and a use-case. Filed at its real size. — found 2026-09-21
+- [x] `23.26` **A notification row's unread badge was labelled with the filter's copy.**
+  `done: 2026-09-21` — `notification.inbox.markRead` in both locales, so the control that marks
+  **one** row read no longer reads "Unread only" like the filter directly above it. That string
+  was the button's whole accessible name, so a screen reader heard the collision too. The Bengali
+  matches `notification.peek.markRead`, which is the same action one component over. — found 2026-09-20
 - [ ] `23.27` **`pnpm dev` races its own package watchers and the worker loses.** `dev` is
   `pnpm build:packages && pnpm -r --parallel run dev`, and the second half starts fifteen
   `tsup --watch` processes *and* both apps in one wave. Every one of those configs is

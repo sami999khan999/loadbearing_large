@@ -28,6 +28,9 @@ export const notification = {
   "notification.inbox.loadMore": "Load older",
   "notification.inbox.markAllRead": "Mark all as read",
   "notification.inbox.unreadOnly": "Unread only",
+  // The row control, not the filter above it. They read identically until you click
+  // one of them, which is how they came to share a key.
+  "notification.inbox.markRead": "Mark read",
   "notification.inbox.unreadCount": "{count} unread",
   "notification.inbox.open": "Open notifications",
   "notification.peek.loading": "Loading…",
