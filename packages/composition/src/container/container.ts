@@ -979,6 +979,7 @@ export class Container {
         this.clock,
         this.analyticsProjector ?? null,
         this.tenantRetentionPolicies,
+        this.shardResolver,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,

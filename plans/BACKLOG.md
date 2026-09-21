@@ -713,10 +713,18 @@ the end so nobody chases them.
     wrong heading.
   - **`tenant-retention.form.tsx` now keeps the same contract the table-wide form does**: the save
     waits for a preview of the value on screen. Six specs. — `archive/PLAN.md:2306`
-- [ ] `19.20` **`shards.invalidate(key)` is never called on a tenant delete.** The note said
-  Phase 22's resolver did not exist yet; it does now, `PgShardResolver` has `invalidate`, and
-  `delete-organization.use-case.ts` still calls only `capabilities.invalidateOrganization`
-  (still true). A deleted tenant's placement stays cached for up to 300 s. — `archive/PLAN.md:2330`
+- [x] `19.20` **`shards.invalidate(key)` is called on a tenant delete.** `done: 2026-09-21` —
+  beside the capability flush and, like it, **after the commit**: a cache cleared first is
+  refilled from rows the transaction has not removed yet, which is the stale entry it exists to
+  stop. The placement cache's TTL is deliberately long — the answer changes only on a move — so
+  nothing else was ever going to clear it, and a deleted tenant kept resolving to a node for up
+  to five minutes.
+  - **The `shard_assignments` row is left, and that is deliberate rather than missed.** Every
+    reader inner-joins `organizations` (`PgShardMapReader.tenantsOn`, `findByTerm`), so an
+    assignment with no tenant is invisible rather than stale. The *cache* was the problem,
+    because it answers from Redis without the join. Said here so nobody adds a delete later.
+  - Two specs, the first red on the old code. The second pins that a refused delete — a
+    mistyped slug — forgets nothing. — `archive/PLAN.md:2330`
 - [ ] `19.20` `concern:` **the archive runs inside the request.** For a large tenant that is minutes
   of streaming on a pooled connection; when it bites, make it a `tenant-delete` job the way
   `19.18` and `19.21` are. — `archive/PLAN.md:2340`
