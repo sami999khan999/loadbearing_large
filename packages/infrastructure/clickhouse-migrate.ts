@@ -89,6 +89,14 @@ export const migrationOf = (file: string, sql: string): Migration => {
   return { version: Number(match[1]), name: match[2], statements: statementsOf(sql) };
 };
 
+// Read here rather than through `env.ts`: this is a script above `src/`, the one
+// category allowed to read the environment directly.
+const named = (key: string): string => {
+  const value = process.env[key];
+  if (!value) throw new Error(`${key} is required when CLICKHOUSE_URL is set.`);
+  return value;
+};
+
 const main = async (): Promise<void> => {
   const url = process.env.CLICKHOUSE_URL;
   if (!url) {
@@ -99,8 +107,10 @@ const main = async (): Promise<void> => {
 
   const connection = new ClickHouseConnection({
     url,
-    database: process.env.CLICKHOUSE_DATABASE ?? "ratchet",
-    username: process.env.CLICKHOUSE_USER ?? "default",
+    // Named explicitly, the rule both `env.ts` schemas enforce: a default here is either
+    // a credential baked into shipped code or one that cannot reach the local container.
+    database: named("CLICKHOUSE_DATABASE"),
+    username: named("CLICKHOUSE_USER"),
     password: process.env.CLICKHOUSE_PASSWORD ?? "",
   });
 
