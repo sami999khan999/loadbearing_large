@@ -19,7 +19,7 @@
     "build": "pnpm -r run build",
     "build:packages": "pnpm --filter \"./packages/*\" run build",
     "build:changed": "pnpm -r --filter \"...[origin/main]\" run build",
-    "dev": "pnpm build:packages && pnpm -r --parallel run dev",
+    "dev": "pnpm build:packages && pnpm --filter \"./apps/*\" --parallel run dev",
     "dev:web": "pnpm build:packages && pnpm --filter @loadbearing/web run dev",
     "dev:worker": "pnpm build:packages && pnpm --filter @loadbearing/worker run dev",
     "typecheck": "pnpm -r run typecheck",

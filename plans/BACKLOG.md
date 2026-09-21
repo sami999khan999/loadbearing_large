@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 23 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 22 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-three open boxes
+## 1. `archive/PLAN.md` — the twenty-two open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -289,19 +289,20 @@ which is also what let the optimistic window be observed rather than guessed at.
   **one** row read no longer reads "Unread only" like the filter directly above it. That string
   was the button's whole accessible name, so a screen reader heard the collision too. The Bengali
   matches `notification.peek.markRead`, which is the same action one component over. — found 2026-09-20
-- [ ] `23.27` **`pnpm dev` races its own package watchers and the worker loses.** `dev` is
-  `pnpm build:packages && pnpm -r --parallel run dev`, and the second half starts fifteen
-  `tsup --watch` processes *and* both apps in one wave. Every one of those configs is
-  `clean: true`, so each watcher empties the `dist/` the build just filled while the apps are
-  already resolving against it. **Two failures in one run** on 2026-09-20: `apps/worker` died on
-  `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js`, and `packages/ui`'s DTS build
-  failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
-  directory from the other side. Running `pnpm dev:web` and `pnpm dev:worker` as two processes
-  works immediately, which is what the `S.1` walk used. **Recommended:** `dev` should run the two
-  apps' `dev` scripts only, since `build:packages` has already produced what they import; a
-  package watcher is a thing you start deliberately when editing that package.
-  **Note for whoever takes it:** `docs/ai/rules/workflow.md` documents `pnpm dev` as the entry
-  point, so the doc line moves with the fix. — found 2026-09-20
+- [x] `23.27` **`pnpm dev` raced its own package watchers and the worker lost.**
+  `done: 2026-09-21` — `dev` filters to `./apps/*`, so `build:packages` produces the `dist/`
+  the two apps import and nothing then empties it underneath them. Every package's `dev` is
+  `tsup --watch` over a `clean: true` config, and `-r --parallel` started all fifteen of them in
+  the same wave as the apps.
+  - **Verified by running it.** Before: `apps/worker` died on
+    `ERR_MODULE_NOT_FOUND … @loadbearing/application/dist/index.js` and `packages/ui`'s DTS build
+    failed on `TS7016 … no declaration file for '@loadbearing/permissions'` — the same emptied
+    directory seen from both sides. After: two dev scripts run and they are `apps/web` and
+    `apps/worker`, **zero** `tsup --watch` processes, web listening on 13000 and
+    `process.started {consumers: 6}`, with no module or build error in the whole run.
+  - **A package watcher is now something you start deliberately** when you are editing that
+    package, which is what `pnpm --filter @loadbearing/<pkg> run dev` is for and what the
+    workflow rules already tell you to prefer. — found 2026-09-20
 - [ ] `23.24` **`apps/web` has no smoke suite.** Nothing proves the system behaves as a system;
   one `curl` session (`archive/OPEN.md` "Proved end to end over HTTP") did it by hand. Shape:
   `apps/web/vitest.smoke.config.ts`, a `globalSetup` that spawns `.output/server/index.mjs` (extract

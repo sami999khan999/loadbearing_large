@@ -6,7 +6,7 @@ description: The commands, what to run before claiming a change is done, the com
 # Working in this repo
 
 ```bash
-pnpm dev                  # builds packages, then web + worker in parallel
+pnpm dev                  # builds packages once, then web + worker in parallel
 pnpm build                # topological, derived from workspace:* — no order declared anywhere
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
