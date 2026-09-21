@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 28 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 27 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-eight open boxes
+## 1. `archive/PLAN.md` — the twenty-seven open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -112,11 +112,11 @@ recommendation under the entry was measured, not argued.
   - **`staleTime` is what finishes the job.** `createQueryClient` sets 30 s, so hydrated data is
     fresh on mount. At the library default of 0 the render would come from cache and the refetch
     would go out anyway, which is the shape of this fix that looks like it works and does not.
-  - **`23.6` is still not ticked by this**, and now for its own single reason. — `archive/PLAN.md:3429`
+  - **`23.6` went with it**, once the loader had something to dehydrate. — `archive/PLAN.md:3429`
 
 **Exit clauses that needed a browser — walked on 2026-09-20.** The Claude in Chrome extension
-connects now, which is the whole of what `S.1` was waiting on. **Six of the seven observations
-hold; `23.6` does not, and for a reason the entry did not have.**
+connects now, which is the whole of what `S.1` was waiting on. **Six of the seven held on the
+day**; `23.6` needed `23.3` and a prefetch that did not exist, and closed on 2026-09-21.
 
 Two accounts, one browser profile. Ada is in Chrome; Grace acts over `/api/rpc` with her own
 cookie jar. The checklist asked for a second profile, and it does not need one: in every clause
@@ -132,13 +132,24 @@ which is also what let the optimistic window be observed rather than guessed at.
     that was already in flight.
   - The same mechanism moved something nobody asked it to: when Grace's sign-up enrolled her, the
     open tab grew her member row and dropped her invitation, live.
-- [ ] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.**
-  **Still open, and the entry names only half the reason.** `23.3` is real and was measured:
-  `/settings/roles` does `ensureQueryData(RoleQueries.list(…))` in its loader, and a cold load
-  still calls `role/list` from the browser. But `/notifications` **prefetches nothing at all** —
-  its loader is `context.messages.ensure(MESSAGES)` and no more, so there is no prefetch for
-  `23.3` to deliver. **Fixing `23.3` alone would not tick this**; the loader needs the two
-  `ensureQueryData` calls first, and those are the clause's actual subject. — `archive/PLAN.md:3523`
+- [x] `23.6` **The loader's prefetch of page 1 and the unread count reach the browser.**
+  `done: 2026-09-21` — and it took both halves, which is why it outlived `23.3`.
+  - **The prefetch did not exist.** The entry read as though the loader fetched and the payload
+    dropped it; in fact `/notifications` ensured the copy namespace and nothing else. Page one is
+    now `ensureInfiniteQueryData(NotificationQueries.list(…))` on the route, and the count is
+    `ensureQueryData(NotificationQueries.unreadCount(…))` on `_authenticated` — the layout, not
+    the page, because the bell renders on every route under it.
+  - **The count is gated the way the bell is.** `CapabilitySet.from(…).can("notification.inbox.read")`,
+    the same key `<Can>` checks, so a member without an inbox issues no query rather than one
+    the procedure refuses. `(shell)/index.tsx` already had this shape.
+  - **`PAGE` is shared with the component.** The query key is built from `limit` and
+    `unreadOnly`, and `NotificationList` defaulted `limit` itself — a loader prefetching 25 into
+    a key the component read at some other number would have looked exactly like this bug.
+  - **Measured on a cold load**, which is the clause: `notification/list` and
+    `notification/unreadCount` are both gone, the rows and the badge render from the payload.
+    What remains is `notification/archivedMonths`, which belongs to a different component behind
+    a different permission and prefetches nothing, and `realtime/stream`, which is a stream and
+    cannot be dehydrated at all. — `archive/PLAN.md:3523`
 - [x] `23.7` **The bell count moves on refocus.** `done: 2026-09-20` — Grace sent Ada a direct
   message; the badge went **1 → 2** in an already-open tab, with no reload and no refocus. Worth
   correcting the clause while it is being ticked: focus is not the mechanism. The stream

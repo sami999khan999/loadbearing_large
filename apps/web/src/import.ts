@@ -108,6 +108,7 @@ export {
   ApiKeyQueries,
   createQueryClient,
   MemberQueries,
+  NotificationQueries,
   PlatformQueries,
   RealtimeProvider,
   RoleQueries,
