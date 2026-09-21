@@ -139,7 +139,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(27);
+    expect(results).toHaveLength(28);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -1179,6 +1179,51 @@ describe("27 — every host port is stated once", () => {
   });
 
   it("skips a tree with no example to compare against", () => {
+    expect(entry(run(), NAME).status).toBe("○");
+  });
+});
+
+describe("28 — every permission in the catalog gates a procedure", () => {
+  const NAME = "every permission in the catalog gates a procedure";
+
+  const catalogs = (declared, gated) => ({
+    "packages/permissions/package.json": PKG("permissions"),
+    "packages/permissions/src/catalog/index.ts":
+      'import { memberPermissions } from "./member.permissions.js";\n' +
+      "export const CATALOG = { ...memberPermissions } as const;\n",
+    "packages/permissions/src/catalog/member.permissions.ts": `export const memberPermissions = {${declared}} as const;\n`,
+    "packages/contracts/package.json": PKG("contracts"),
+    "packages/contracts/src/catalog/index.ts":
+      'import { memberProcedurePermissions } from "./member.permissions.js";\n' +
+      "export const PROCEDURE_PERMISSIONS = { ...memberProcedurePermissions };\n",
+    "packages/contracts/src/catalog/member.permissions.ts": `export const memberProcedurePermissions = {${gated}} as const;\n`,
+  });
+
+  const INVITE = '"member.invite": { scope: "org", module: "member", label: "Invite" },';
+
+  it("catches a key no procedure asserts", () => {
+    fails(run(catalogs(INVITE, "")), NAME, "member.invite");
+  });
+
+  it("accepts one a procedure asserts", () => {
+    passes(run(catalogs(INVITE, '"member.invite": "member.invite",')), NAME);
+  });
+
+  // Held by every resolved principal in `CapabilitySet.can()` rather than through a role,
+  // so no procedure asserts it. Read off the entry, not off the key's first segment.
+  it("exempts a core key by its module, not by its name", () => {
+    passes(
+      run(catalogs('"member.audit": { scope: "org", module: "core", label: "Audit" },', "")),
+      NAME,
+    );
+    fails(
+      run(catalogs('"core.audit": { scope: "org", module: "member", label: "Audit" },', "")),
+      NAME,
+      "core.audit",
+    );
+  });
+
+  it("skips a tree with no permission catalog", () => {
     expect(entry(run(), NAME).status).toBe("○");
   });
 });

@@ -1336,18 +1336,17 @@ assert("only `DatabaseCluster` opens a pool inside `src/`", (failures) => {
 // forever, and an empty panel reads exactly like a healthy system. Eight of
 // twenty-four were in that state once; this is what keeps the drift from returning.
 
-assert("every event code in the catalog is emitted", (failures) => {
-  const catalogDir = join(ROOT, "packages/observability/src/catalog");
-  const barrel = join(catalogDir, "index.ts");
-  if (!existsSync(barrel)) return "packages/observability has no catalog barrel yet";
+// Every fragment a catalog barrel spreads, resolved through the barrel's own imports, so
+// a `...billingEvents` added tomorrow is covered without anyone editing this. `null` when
+// the barrel is not there; an empty list when it spreads nothing.
+function spreadFragments(dir) {
+  const barrel = join(dir, "index.ts");
+  if (!existsSync(barrel)) return null;
 
-  const barrelSource = readFileSync(barrel, "utf8");
-
-  // Every fragment `EVENT_CATALOG` spreads, resolved through the barrel's own imports, so
-  // a `...billingEvents` added tomorrow is covered without anyone editing this.
+  const source = readFileSync(barrel, "utf8");
   const sources = new Map();
 
-  for (const line of barrelSource.split("\n")) {
+  for (const line of source.split("\n")) {
     const imported = /^import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+"([^"]+)"/.exec(line);
     if (!imported) continue;
 
@@ -1359,11 +1358,20 @@ assert("every event code in the catalog is emitted", (failures) => {
 
   const fragments = [];
 
-  for (const spread of barrelSource.matchAll(/\.\.\.(\w+)/g)) {
+  for (const spread of source.matchAll(/\.\.\.(\w+)/g)) {
     const from = sources.get(spread[1]);
-    if (from) fragments.push(resolve(catalogDir, from.replace(/\.js$/, ".ts")));
+    if (from) fragments.push(resolve(dir, from.replace(/\.js$/, ".ts")));
   }
 
+  return { barrel, fragments };
+}
+
+assert("every event code in the catalog is emitted", (failures) => {
+  const catalogDir = join(ROOT, "packages/observability/src/catalog");
+  const spread = spreadFragments(catalogDir);
+  if (!spread) return "packages/observability has no catalog barrel yet";
+
+  const { barrel, fragments } = spread;
   if (fragments.length === 0) return "the catalog barrel spreads no fragment";
 
   const codes = new Set();
@@ -1605,6 +1613,64 @@ assert("every host port is stated once", (failures) => {
     if (existsSync(stray)) {
       failures.push(`${rel(stray)}: the only env file is the one at the root`);
     }
+  }
+});
+
+// ── 28 — every permission in the catalog gates a procedure ────────────────
+//
+// §24 from the other vocabulary. A key nothing asserts is a checkbox in the role editor
+// that grants nothing — an administrator ticks it, a member is told they have the right,
+// and every call still fails. Phase 5's own exit criterion, checked for the first time.
+
+// Registered ahead of the procedure that will assert it, so the seed grants it once
+// rather than per deploy. Each line names the item that removes it; the list only shrinks.
+const PERMISSION_AWAITING_A_PROCEDURE = new Set([
+  "platform.shards.manage", // 24.2
+]);
+
+assert("every permission in the catalog gates a procedure", (failures) => {
+  const declared = spreadFragments(join(ROOT, "packages/permissions/src/catalog"));
+  if (!declared) return "packages/permissions has no catalog barrel yet";
+  if (declared.fragments.length === 0) return "the permission barrel spreads no fragment";
+
+  const gates = spreadFragments(join(ROOT, "packages/contracts/src/catalog"));
+  if (!gates) return "packages/contracts has no procedure-permission barrel yet";
+
+  // The module comes off the entry rather than the key's first segment, because that is
+  // what `CapabilitySet.can()` reads: a `core` key is held by every resolved principal
+  // without a role granting it, so no procedure asserts it and none should.
+  const keys = new Map();
+
+  for (const fragment of declared.fragments) {
+    if (!existsSync(fragment)) {
+      failures.push(`${rel(declared.barrel)}: spreads a fragment that is not on disk`);
+      continue;
+    }
+
+    const source = withoutComments(readFileSync(fragment, "utf8"));
+    for (const [, key, body] of source.matchAll(/"([a-z0-9._]+)":\s*\{([^}]*)\}/g)) {
+      keys.set(key, /module:\s*"(\w+)"/.exec(body ?? "")?.[1] ?? "");
+    }
+  }
+
+  if (keys.size === 0) return `${rel(declared.barrel)} declares no permission`;
+
+  // Every value in `PROCEDURE_PERMISSIONS`. The keys are procedure paths, which is the
+  // direction `procedure-permissions.spec.ts` covers.
+  const gated = new Set();
+
+  for (const fragment of gates.fragments) {
+    if (!existsSync(fragment)) continue;
+    const source = withoutComments(readFileSync(fragment, "utf8"));
+    for (const [, key] of source.matchAll(/"[\w.]+":\s*"([a-z0-9._]+)"/g)) gated.add(key);
+  }
+
+  for (const [key, module] of [...keys].sort()) {
+    if (module === "core") continue;
+    if (PERMISSION_AWAITING_A_PROCEDURE.has(key)) continue;
+    if (gated.has(key)) continue;
+
+    failures.push(`${key}: declared in the catalog, asserted by no procedure`);
   }
 });
 
