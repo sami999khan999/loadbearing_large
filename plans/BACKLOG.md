@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 21 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 20 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 4 |
@@ -275,15 +275,37 @@ which is also what let the optimistic window be observed rather than guessed at.
     any frame lands. It yields the reader's frame first and waits for a second one from somebody
     else, so the assertion cannot be satisfied until both have been processed. That is `R.45`'s
     failure mode, found in a spec written to close a different entry.
-- [ ] `23.26b` **The typing indicator names a uuid**, and it is not a one-line fix — the
-  recommendation in `23.25` was wrong about this and is corrected here. `TypingNotice` takes an
-  optional `nameFor` and nothing passes one, but there is nothing to pass: `ConversationContract.member`
-  is `{ userId, role, joinedAt, lastReadAt }` and carries **no name**. Nor is this local to the
-  indicator — **messaging resolves no names anywhere**: `conversation.list.tsx` titles a direct
-  conversation `t("messaging.inbox.direct")` rather than naming the other person, and
-  `message.list.tsx` renders no author at all. So this is a missing feature in the slice, not a
-  defect in one component, and it wants a name on the member DTO — which is a contract, a
-  repository read and a use-case. Filed at its real size. — found 2026-09-21
+- [x] `23.26b` **Messaging resolves names now.** `done: 2026-09-21` — built at the size the entry
+  filed it at: a port, an adapter, a contract field, three use-cases and three components.
+  - **The name cannot be a join, and that is the whole shape of it.** `conversation_members` is
+    routed and `users` is catalog, so no repository may read both — §22 is the assertion.
+    `ConversationNaming` does it in the use-case, after the routed read returns: one statement
+    for a whole page, because twenty-five conversations of a hundred members each is two queries
+    that way and twenty-six the obvious way. Attached **by key, never zipped by index**, which a
+    spec pins with a reader that answers about somebody else.
+  - **`CreateConversationUseCase` names the row after the commit, not inside `unitOfWork.run`.**
+    A catalog read inside a routed transaction is the crossing `data.md` forbids and it is
+    invisible on one node, so the spec asserts the ordering rather than a reviewer noticing it —
+    red on the shape that reads more naturally, which is exactly where it would have been written.
+  - **Its own port rather than `NotificationRecipientReader`, and the first reason is the one that
+    matters.** `Recipient` carries an email address, and a use-case holding one is a spread away
+    from putting it on a member DTO. `users()` there also filters out deactivated memberships —
+    right for a recipient list, and for a thread it is how every message somebody wrote goes back
+    to rendering a uuid the day they leave. `namesOf` returns names and nothing else.
+  - **Nullable, because `24.1` will make it reachable.** Today `conversation_members` has a
+    foreign key to `users`; once the ones crossing to the catalog are dropped, a membership row
+    can outlive the row that named it. `null` reaches the client and `messaging.member.unknown`
+    renders — never the id, in any of the three components.
+  - **`ConversationEntity` answers all three questions**, rather than a second helper doing it
+    again. `otherMember(self)` was written for exactly this and had no caller; it returns the
+    member now, and `displayTitle` and `nameOf` are built on it. The entity is constructed once
+    per fetch rather than per render — `from` parses, and the typing map changes on every
+    keystroke somebody else makes.
+  - **Verified on the wire, not only in specs.** `conversation/create`, `conversation/get` and
+    `conversation/list` over `/api/rpc` against live Postgres all return
+    `"name":"Bob Example"` beside the id. Thirteen unit and component cases, six integration
+    cases for the tenant scope and the deactivated member, and the argument is in
+    `packages/application/docs/reference/messaging.md`. — found 2026-09-21
 - [x] `23.26` **A notification row's unread badge was labelled with the filter's copy.**
   `done: 2026-09-21` — `notification.inbox.markRead` in both locales, so the control that marks
   **one** row read no longer reads "Unread only" like the filter directly above it. That string
@@ -1019,6 +1041,7 @@ scratch tables are gone, and `retention_policy` holds no rows.
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-21 | @sami | `23.26b` built, at the size it was filed at. **A conversation member carries a name now**, and it cannot be a join: `conversation_members` is routed and `users` is catalog, so `ConversationNaming` resolves the page in one catalog statement after the routed read and attaches it by key. `CreateConversationUseCase` names the row it wrote **after** the commit rather than inside `unitOfWork.run` — a crossing that is invisible on one node, so a spec asserts the ordering and is red on the shape that reads more naturally. Its own narrow port rather than `NotificationRecipientReader`, because `Recipient` carries an email address and its `users()` hides deactivated members, which for a thread is how every message somebody wrote goes back to a uuid the day they leave. On the client `ConversationEntity` answers all three questions — its `otherMember` had been written for this and had no caller — so the typing notice, the inbox title and the author line come from one place, and none of them can print an id: `messaging.member.unknown` is the fallback. Proved over `/api/rpc` against live Postgres as well as in nineteen specs |
 | 2026-09-21 | @sami | **Section 5's seven browser clauses, walked in one pass.** Phases 18–21, `25.4`, `26.9` and `T-029`'s ten steps, against `pnpm dev` on `:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the setup step the previous walk had not taken. Every tick records what was measured: the invitation row read before and after the resend, `platform_policy` read after the pause and after the resume, `users.last_active_organization_id` read at each of `T-029`'s steps, and `member/list` called 2.1 s after a switch to prove the cookie cache was invalidated. **Phase 21 needed a month that did not exist**, so one was manufactured through the product's own machinery — a June partition, one hot month set from the retention screen, a `partitions` job on the maintenance queue — and the page then rendered five rows that live only in S3. Two findings kept out of the ticks: a `platform_admin` is refused `/notifications`, which is the tier working and not a defect; and three buttons that read as dead under a synthetic mouse click fire under `element.click()`, checked with `elementFromPoint` before anything was filed |
 
 | 2026-09-21 | @sami | Section 8 down to one, and `23.13` closed. **A doc link that resolves nowhere is now a build failure** — §15 read backticked paths and not link targets, so resolving all 1 503 of them found nine broken: eight pages under `apps/*/docs/reference/` one `../` short of `packages/`, and one naming a doc `T-013` renamed. The assertion landed first, which is what made them nine failures rather than a list. It also found a link in the check's own fixture that passed §12 and was broken in a browser. **Assertion 28** is §24 from the other vocabulary: a permission the catalog declares that no procedure asserts, which is a checkbox in the role editor granting nothing. The property moved out of `procedure-permissions.spec.ts` rather than being checked twice, which closed `AWAITING_A_PROCEDURE` with it. **Three env defaults that disagreed** — `partitions.ts` read `S3_FORCE_PATH_STYLE !== "false"`, so its sweep defaulted to path-style against real S3; `clickhouse-migrate.ts` and `vitest.smoke.config.ts` guessed three different database-and-user pairs between them, none of them the pair both `env.ts` schemas enforce, and the guess that reached a live container did so because ClickHouse ships a `default` user with no password. And **five doc sentences** that were out of date: four describing the transactional outbox as a backlog item since Phase 10 shipped it, and one describing an English fallback layer `23.15` dropped |
