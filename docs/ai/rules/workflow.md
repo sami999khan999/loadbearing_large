@@ -45,14 +45,15 @@ domain logging, `process.env` outside `env.ts`, `@orpc/*` version skew, a block 
 `await` in a barrel, a stray `"use client"`, server code in the client bundle, a table missing
 `organization_id`, the audit port renamed, a schema file missing from the drizzle barrel, these rule
 files drifting from `docs/opinions/`, a `docs/` folder with no `index.md`, a comment block over
-two lines, a backticked path in the docs that names nothing on disk, the two pnpm version
-declarations disagreeing, a unique index on a tenant table that does not lead with
-`organization_id`, a foreign key with no index leading with it, a partitioned table that the
-`PartitionedTable` allowlist does not name, a repository whose tables span two placements, a
-second place that opens a database pool, an event code the catalog declares that nothing emits,
-`.env.example` drifting from what an app actually requires, a runnable script above `src/` that
-nothing typechecks, and a host port stated twice — a `*_PORT` and the URL that dials it, or the
-compose default and the template — that no longer agree.
+two lines, a path in the docs that names nothing on disk — backticked, or the target of a
+link — the two pnpm version declarations disagreeing, a unique index on a tenant table that
+does not lead with `organization_id`, a foreign key with no index leading with it, a
+partitioned table that the `PartitionedTable` allowlist does not name, a repository whose
+tables span two placements, a second place that opens a database pool, an event code the
+catalog declares that nothing emits, `.env.example` drifting from what an app actually
+requires, a runnable script above `src/` that nothing typechecks, and a host port stated
+twice — a `*_PORT` and the URL that dials it, or the compose default and the template — that
+no longer agree.
 
 **On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
 `pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every

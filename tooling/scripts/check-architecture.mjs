@@ -757,7 +757,7 @@ assert("no comment block over two lines", (failures) => {
   }
 });
 
-// ── 15 — every backticked path in the docs exists ───────────────────────────
+// ── 15 — every path the docs name exists ────────────────────────────────────
 //
 // The cheapest class of documentation rot, and the one a reader trusts most: a path
 // in backticks reads as a fact about the tree. `docs/setup/15` sent readers to
@@ -765,6 +765,10 @@ assert("no comment block over two lines", (failures) => {
 //
 // Only paths are checked, and a path is recognised conservatively — see PATH_SHAPE.
 // A false positive here is worse than a miss: it teaches people to add exemptions.
+//
+// A `](target)` is checked too, and it is the half that rots silently: a backticked
+// path is read, a link is clicked. Eight pages under `apps/*/docs/reference/` were one
+// `../` short of `packages/` for months, and nothing in CI could see it.
 
 const DOC_ROOTS = ["docs", "README.md", "AGENTS.md", "CLAUDE.md"];
 
@@ -795,6 +799,10 @@ const PATH_EXEMPT = [
 // A trailing `:12` or `:12-40` is a line reference, not part of the filename.
 const stripLines = (path) => path.replace(/:\d+(?:[-,]\d+)*$/, "");
 
+// A link target this repository does not own: a URL, a protocol-relative host, or a
+// jump within the page. Everything else is a file somebody expects to be able to open.
+const LINK_ELSEWHERE = /^(?:[a-z][\w+.-]*:|\/\/|#)/i;
+
 function docFiles() {
   const out = [];
 
@@ -821,11 +829,25 @@ function ownerOf(file) {
   return null;
 }
 
-assert("every backticked path in the docs exists", (failures) => {
+assert("every path the docs name exists", (failures) => {
   for (const file of docFiles()) {
     const lines = outsideFences(readFileSync(file, "utf8"));
 
     lines.forEach((line, index) => {
+      // Resolved against the page's own directory and nowhere else, because that is
+      // what a renderer does. The backtick half below is looser on purpose — a span is
+      // prose about the tree, a link is a door somebody walks through.
+      for (const [, target] of line.matchAll(/\]\(([^)\s]+)\)/g)) {
+        const href = (target ?? "").split(/[#?]/)[0] ?? "";
+
+        if (!href) continue;
+        if (LINK_ELSEWHERE.test(href)) continue;
+        if (PATH_PLACEHOLDER.test(href)) continue;
+        if (existsSync(resolve(dirname(file), href))) continue;
+
+        failures.push(`${rel(file)}:${index + 1} links to ${href}, which does not exist`);
+      }
+
       for (const [, span] of line.matchAll(/`([^`\n]+)`/g)) {
         const candidate = stripLines(span.trim());
 

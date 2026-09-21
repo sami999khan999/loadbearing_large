@@ -42,7 +42,7 @@ lands has somewhere to run. Registering a schedule onto a queue with no consumer
 that is already detached and fail on *that* instead of on whatever actually broke, burying the real
 error. A tenant-month that fails is logged and the loop continues, and nothing it touched was
 dropped. See
-[`infrastructure/docs/reference/cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
+[`infrastructure/docs/reference/cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 **`projection`: the schedule is the retry.** A failed run leaves the checkpoint where it was, and the
 next tick five minutes later resumes from exactly the same place. A retry inside the job buys nothing
@@ -96,7 +96,7 @@ difference between retention and data loss.
 each tenant is before it stamps `partition_archive.projected_at`. A tenant the projection has not
 caught up with keeps a null stamp and gets an `analytics.projection.gap` line. The month is
 archived and dropped either way — a forgotten switch costs a known hole, never an unbounded table.
-See [`cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
+See [`cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 ## A schedule fires once; the job it enqueues walks every node
 

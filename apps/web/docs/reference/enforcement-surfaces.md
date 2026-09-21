@@ -29,7 +29,7 @@ which is the thing to notice rather than the surface to add.
 ## 1. `Authorizer.assert()`
 
 The only one that runs on every path. See
-[`application/docs/reference/authorizer.md`](../../../packages/application/docs/reference/authorizer.md).
+[`application/docs/reference/authorizer.md`](../../../../packages/application/docs/reference/authorizer.md).
 
 ## 2. `principalMiddleware`
 

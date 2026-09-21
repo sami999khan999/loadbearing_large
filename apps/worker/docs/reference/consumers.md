@@ -51,7 +51,7 @@ whenever the retry happened, and adding a partitioned table is one allowlist lin
 The archive loop is per table-month across every tenant, and it logs one line per table-month:
 a month with five thousand tenants must not be five thousand lines. A tenant whose upload fails is
 logged and skipped, and nothing of that tenant's was dropped. See
-[`cold-storage.md`](../../../packages/infrastructure/docs/reference/cold-storage.md).
+[`cold-storage.md`](../../../../packages/infrastructure/docs/reference/cold-storage.md).
 
 **`MONTHS_PER_RUN` counts partitions, not runway, and the two differ by one.** Three is the current
 month and the next two, so the job survives two consecutive missed runs and the third is a write
@@ -100,7 +100,7 @@ store that is not running looks identical to a working one.
 Read the checkpoint **out of the destination**, walk forward in keyset batches, stop when a batch
 comes back short. The checkpoint advances because rows landed, never because a batch was
 acknowledged, so a projector that failed mid-insert resumes from what is actually in the table. See
-[`infrastructure/docs/reference/clickhouse.md`](../../../packages/infrastructure/docs/reference/clickhouse.md).
+[`infrastructure/docs/reference/clickhouse.md`](../../../../packages/infrastructure/docs/reference/clickhouse.md).
 
 | Constant | Why |
 |---|---|
