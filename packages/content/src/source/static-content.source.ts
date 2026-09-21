@@ -16,22 +16,19 @@ export class StaticContentSource extends ContentSource {
     super();
   }
 
-  // English loads alongside the target locale, per namespace. That is the fallback
-  // layer, and it is what makes a `Partial<>` locale safe.
+  // One bundle, and `base` stays empty. English used to load beneath every locale as a
+  // fallback; `NamespaceBundle` is a total `Record`, so no shipped bundle can have the
+  // ──
+  // gap that layer covered, and a Bengali page carried 3 471 characters it could not read.
+  // A CMS source is free to fill `base` — that is what the port is for. See `23.15`.
   public override async messages(
     locale: Locale,
     namespaces: readonly Namespace[],
   ): Promise<MessageSnapshot> {
     const wanted = ContentSource.resolve(namespaces);
+    const overrides = await StaticContentSource.load(this.catalog[locale], wanted);
 
-    const [base, overrides] = await Promise.all([
-      StaticContentSource.load(this.catalog.en, wanted),
-      locale === "en"
-        ? Promise.resolve<MessageBundle>({})
-        : StaticContentSource.load(this.catalog[locale], wanted),
-    ]);
-
-    return { locale, namespaces: wanted, base, overrides };
+    return { locale, namespaces: wanted, base: {}, overrides };
   }
 
   public override async translator(

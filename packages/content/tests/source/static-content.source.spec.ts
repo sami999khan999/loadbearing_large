@@ -7,8 +7,8 @@ describe("StaticContentSource", () => {
     const snapshot = await new StaticContentSource().messages("en", []);
 
     expect(snapshot.namespaces).toEqual(["common", "error"]);
-    expect(snapshot.base["error.unexpected"]).toBe("Something went wrong. Please try again.");
-    expect(snapshot.base["action.save"]).toBe("Save");
+    expect(snapshot.overrides["error.unexpected"]).toBe("Something went wrong. Please try again.");
+    expect(snapshot.overrides["action.save"]).toBe("Save");
   });
 
   it("does not duplicate a namespace that was also requested", async () => {
@@ -17,19 +17,30 @@ describe("StaticContentSource", () => {
     expect(snapshot.namespaces).toEqual(["common", "error"]);
   });
 
-  it("leaves overrides empty for English", async () => {
+  // One layer, not two. English is the requested locale here like any other, so it
+  // arrives in `overrides` rather than underneath itself.
+  it("leaves the base layer empty for English", async () => {
     const snapshot = await new StaticContentSource().messages("en", []);
 
-    expect(snapshot.overrides).toEqual({});
+    expect(snapshot.base).toEqual({});
+    expect(snapshot.overrides["action.cancel"]).toBe("Cancel");
   });
 
-  // English always rides alongside, per namespace — two layers, not one merged map.
-  it("loads English as the fallback layer beneath another locale", async () => {
+  // `23.15`: English used to ride beneath every locale, and a Bengali page carried
+  // 3 471 characters of it that nothing could reach.
+  it("ships no English beneath another locale, and still resolves that locale's keys", async () => {
     const snapshot = await new StaticContentSource().messages("bn", []);
 
     expect(snapshot.locale).toBe("bn");
+    expect(snapshot.base).toEqual({});
     expect(snapshot.overrides["error.forbidden"]).toBe("এটি করার অনুমতি আপনার নেই।");
-    expect(snapshot.base["error.forbidden"]).toBe("You do not have permission to do that.");
+
+    // Every key the snapshot claims, answered from the one layer it has. This is what
+    // makes dropping the other one safe: `NamespaceBundle` is total, so there is no gap.
+    const bengali = await new StaticContentSource().translator("bn", []);
+    for (const key of Object.keys(snapshot.overrides)) {
+      expect(bengali.t(key as never)).not.toBe(key);
+    }
   });
 
   it("hands back a Translator over the same snapshot", async () => {
@@ -39,27 +50,12 @@ describe("StaticContentSource", () => {
     expect(t.t("error.forbidden")).toBe("এটি করার অনুমতি আপনার নেই।");
   });
 
-  // A fixture catalog, not the real `bn`: `NamespaceBundle` is total, so a shipped
-  // bundle cannot have the gap this needs.
-  it("falls back per key when a locale's bundle is missing one", async () => {
-    const partial = new StaticContentSource({
-      en: {
-        common: async () => ({ "action.save": "Save", "action.cancel": "Cancel" }),
-        error: async () => ({ "error.forbidden": "You do not have permission to do that." }),
-      },
-      bn: {
-        common: async () => ({ "action.save": "সংরক্ষণ" }),
-        error: async () => ({}),
-      },
-    });
+  // Unchanged by dropping the layer, and the reason the layer was not what made a
+  // partial load work: a key outside the loaded namespaces missed both layers before.
+  it("returns a key from an unloaded namespace verbatim", async () => {
+    const t = await new StaticContentSource().translator("bn", []);
 
-    const t = await partial.translator("bn", []);
-
-    expect(t.t("action.save")).toBe("সংরক্ষণ");
-    // Per key, not per namespace: the layer below still answers inside a bundle the
-    // locale did supply.
-    expect(t.t("action.cancel")).toBe("Cancel");
-    expect(t.t("error.forbidden")).toBe("You do not have permission to do that.");
+    expect(t.t("nav.signOut")).toBe("nav.signOut");
   });
 
   // A catalog with no loader for a namespace yields nothing rather than throwing.
@@ -69,6 +65,6 @@ describe("StaticContentSource", () => {
     const snapshot = await empty.messages("en", ["common"]);
 
     expect(snapshot.namespaces).toEqual(["common", "error"]);
-    expect(snapshot.base).toEqual({});
+    expect(snapshot.overrides).toEqual({});
   });
 });

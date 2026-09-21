@@ -34,7 +34,7 @@ lives — every entry below is a summary with a pointer — but nothing is ticke
 
 | Section | What | Open |
 |---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 27 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–26 | 26 |
 | 2 | `archive/REVIEW.md` defects | 0 |
 | 3 | `archive/STUCK.md` blockers | 2 |
 | 4 | Unfinished work buried inside ticked items | 7 |
@@ -68,7 +68,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the twenty-seven open boxes
+## 1. `archive/PLAN.md` — the twenty-six open boxes
 
 All in Phases 23–26. Phases 1–22 have no open box. Each line: what, where it stands, what it waits
 on, and the `archive/PLAN.md` line that holds the entry. Seven of the original thirty-five closed
@@ -186,11 +186,35 @@ which is also what let the optimistic window be observed rather than guessed at.
   against real data. Four decisions carry over (new port, read-only, resolved scope, ISO periods).
   Step one is done **and this time it is running** — the container is up, `CLICKHOUSE_URL` is set,
   and the projection has written rows rather than merely being able to (`S.2`). — `archive/PLAN.md:3586`
-- [ ] `23.15` **The English fallback layer is dead payload** `P3` `~3h`. A `bn` page carries
-  3 471 characters of English it can never read. **Recommended:** drop the base layer —
-  `StaticContentSource.messages` returns `base: {}`; `MessageSnapshot` keeps both fields for a CMS
-  source; two specs. Both reasons the entry gave for keeping it were checked and neither holds as
-  built. — `archive/PLAN.md:3610`
+- [x] `23.15` **The English fallback layer is dead payload** `done: 2026-09-21` — the first of
+  the two decisions the entry allowed, and the one it recommended: the base layer is dropped, and
+  `NamespaceBundle` stays total. **Not both**, which the entry was explicit about.
+  - **Verified before touching it, because this removes a safety net.** Every `en` bundle was
+    compared against its `bn` twin: 14 namespaces, 453 keys, **zero** missing and zero orphans.
+    And that is enforced rather than lucky — a `bn` bundle is typed `NamespaceBundle<"nav">`,
+    a total `Record`, so a key added to `en` without a translation fails `tsc`. The layer beneath
+    could not be reached by anything that ships.
+  - **Measured red then green**, off the source rather than out of the HTML, for the namespaces
+    `/sign-in` loads:
+
+    | locale | before | after |
+    |---|---|---|
+    | `en` | 3 707 chars | 3 707 |
+    | `bn` | 7 495 chars | **3 792** |
+
+    English is unchanged, because it was always one layer wearing two names — it now arrives in
+    `overrides` like every other locale. Bengali loses **3 703 characters, 49 %** of its message
+    payload. The page itself went 15 210 → 11 541 bytes.
+  - **What it gives up, and the entry said so first:** adding a third language is now
+    all-or-nothing at runtime as well as at compile time. It already was at compile time, and a
+    contributor landing a partial locale meets `tsc` long before they meet a page.
+  - **`Translator` keeps both layers** — `t`, `has`, `with` and `merge` are untouched, and
+    `translator.spec.ts` still proves an override beats a base. A CMS behind `ContentSource` is a
+    different implementation and is free to fill `base`; that is what the port is for.
+  - **Five specs moved with it**, four of them assertions that read the English out of `base` on
+    an `en` page — which was never the fallback doing anything. The one that proved a per-key
+    fallback used a hand-built partial catalog the type system forbids, and its own comment said
+    so; the mechanism it covered lives in `Translator` and is tested there. — `archive/PLAN.md:3610`
 
 **Found on 2026-09-20, filed rather than fixed.**
 
