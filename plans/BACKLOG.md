@@ -46,9 +46,9 @@ unchanged, and the changelog went with them. What is left here is the work.
 | 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 12 | 19 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
-| 4 | Unfinished work buried inside ticked items | 2 | 4 |
+| 4 | Unfinished work buried inside ticked items | 1 | 5 |
 | 5 | Verification owed — browser, manual, or a scale not run | 1 | 8 |
-| 6 | Conditional work — "reopen when" | 9 | — |
+| 6 | Conditional work — "reopen when" | 8 | — |
 | 7 | `archive/TODO.md` ledger rows | 1 | 2 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
 
@@ -205,9 +205,6 @@ Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `conc
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
 the end so nobody chases them.
 
-- [ ] `19.20` `concern:` **the archive runs inside the request.** For a large tenant that is minutes
-  of streaming on a pooled connection; when it bites, make it a `tenant-delete` job the way
-  `19.18` and `19.21` are. — `archive/PLAN.md:2340`
 - [ ] `16.12` **`TENANT_CEILING=2000 pnpm smoke` was not run** — 100 and 500 were; the page says
   so. About fifty minutes of creation and half an hour of cleanup. — `archive/PLAN.md:1352`
 
@@ -269,7 +266,6 @@ a feeling.
   flag returns only with a second implementation. — `archive/PLAN.md:3592`
 - `24.1` **user delete as a maintenance job** — at a few thousand tenants on a node, under either
   option. — `archive/PLAN.md:3968`
-- `19.20` **tenant delete as a job** — when a large tenant's in-request archive bites. — `archive/PLAN.md:2340`
 - `23.21` **skip versus fail an unplaceable tenant** in the projection — left open on purpose. — `archive/PLAN.md:3832`
 - **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
   onto `platform_policy` in an afternoon if an operator asks. — `archive/PLAN.md:1745`

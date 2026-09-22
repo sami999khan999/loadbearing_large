@@ -532,6 +532,29 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
   out to be unnecessary — the second account only ever has to act, so it acted over `/api/rpc`.
 ## 4. Unfinished work buried inside ticked items
 
+- [x] `19.20` `concern:` **the archive runs inside the request** `done: 2026-09-22` — it is a
+  `tenant-delete` job now, the way `19.18` and `19.21` are. The entry's own trigger was "when it
+  bites"; it was pulled forward because implementing `24.1` found a second and worse reason.
+  - **The delete was running on the wrong node.** `shardMiddleware` places every request on
+    `context.principal` — the *actor's* organization — and `DeleteOrganizationUseCase` contained
+    no placement of its own. A platform admin on node 0 deleting a tenant on node 1 therefore
+    called `dropTenantPartitions` on node 0, found nothing, and **reported success** while the
+    rows stayed. Same class as `R.2`, and invisible only because the admin and every test tenant
+    sit on node 0 today.
+  - **A job fixes it by construction**, which is why this was the answer rather than a new seam:
+    `withShard(container, organizationId, work)` places by organization id, where the middleware
+    places by principal. `application` has no way to enter a node's scope and inventing one for
+    this would have been an abstraction with a single caller.
+  - **The use-case splits on the request boundary.** `DeleteOrganizationUseCase` keeps all four
+    guards — the permission, the tenant, the tier, the slug — and queues; a spec pins that nothing
+    is queued until every one passes. `PurgeOrganizationUseCase` does the work and asserts no
+    permission, because a job has no actor; the actor rides in the payload so `tenant.deleted`
+    still names who asked. It returns early when the tenant is already gone, because jobs retry.
+  - **The wire changed with it.** `deleteTenant` answers a job id rather than a tally, which is
+    what `tenant-export` and `cold-restore` already do, and the panel says "queued as …".
+  - Nineteen specs across the two, plus the `outboxRows` count on `tenant.purge.completed` — a
+    zero there when the tenant had events is the shape of `24.1`'s sweep silently not running.
+    — `archive/PLAN.md:2340`
 - [x] `19.19` **`19.15`'s preview takes an optional `organizationId`.** `done: 2026-09-21` —
   the screen previewed the table's numbers while the operator was editing one tenant's override,
   which is a different set of partitions and usually a far larger one.
@@ -750,6 +773,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-22 | @sami | **`19.20` closed, and not for the reason it was filed.** The entry said to make the tenant delete a job "when a large tenant's in-request archive bites"; implementing `24.1` found that the delete was **running on the wrong node**. `shardMiddleware` places on the actor's principal and the use-case placed nothing of its own, so a platform admin on node 0 deleting a tenant on node 1 dropped partitions on node 0, found none and reported success. It is the same class as `R.2` and latent only while everything sits on node 0. A job fixes it by construction — `withShard` places by organization id — so `DeleteOrganizationUseCase` now keeps every guard and queues, and `PurgeOrganizationUseCase` does the work on the tenant's own node with no permission to assert and the actor carried in the payload. The wire answers a job id rather than a tally, matching `tenant-export` and `cold-restore` |
 | 2026-09-22 | @sami | **`REVIEW.md`'s own gap closed, and closing it found the thing it was most likely to miss.** The review ran without Docker, so its forty-five fixes landed with neither the integration specs nor the smoke suites re-run against them; both ran today — 278 integration tests, 31 smoke. **`LOKI_URL` was commented out in `.env` while Loki was up and answering,** so `observability.smoke.spec.ts` would have skipped silently and the run would have "passed" having proved nothing about the log read-back path. That is `S.2`'s ClickHouse trap in a second place, five days after the first. Uncommented, the file runs 5 cases. The three remaining skips — `routed`, `fan-out`, `tenant-ceiling` — are opt-in scale runs gated on env vars and are their own open items, named rather than counted |
 | 2026-09-22 | @sami | **`BACKLOG.md` was split in half and this file is the other half.** It held eighty-four closed entries against nineteen open ones — 106 KB you scroll four-fifths of to reach the work — so every ticked entry moved here with its proof, its ID and the changelog that explains it, and the backlog came out at 25 KB holding only what is open. Nothing was rewritten in the move and nothing was summarised: every moved line is here verbatim, checked line by line rather than trusted. Sections keep their numbers, so `R.7` and `23.15` resolve exactly as before, and the pointers into `archive/PLAN.md` still point where they did. Two prose repairs were needed where entries came out from under an intro that then introduced nothing — Phase 23's three headings and section 2's three severity bands — and both now say what closed and where it went. This is the first file in `archive/` that grows: the plans beside it are frozen records of one day, and `index.md` now names the difference rather than claiming nothing here is ever touched |
 | 2026-09-22 | @sami | **Phase 26 left this file whole**, for [`COMMUNICATION.md`](../COMMUNICATION.md) — all eight boxes, plus `26.4` from the same phase and `26.8` from section 4 and the two conditional entries in section 6. **Not one of them was blocked**: every item could have been built against the local stack the day it was filed, which is why the move is worth explaining. They share a requirement none of their entries carried — messaging, email and notifications must not slow the app down — and that is a performance and isolation design rather than eight features, so it gets a plan written against these as its input. The new file carries the decisions already reached so nobody pays for them twice: SMTP as a platform default plus a per-tenant override, `auth.*` always on the platform sender because a tenant must never be able to lock people out of signing in, tenant passwords encrypted under a new `MAIL_SECRET_KEY` rather than derived from `AUTH_SECRET`, web push whole or not at all as a third channel in the preference grid. It also carries three things the archived entries get wrong, each found by reading the tree: `26.1` assumes `messages` is unpartitioned and it is not, so a thread `parent_id` cannot reference `id` alone; `StorageGateway.presignUpload` already exists with an adapter, a fake and no production caller; and `26.5`'s stated blocker `R.27` was fixed on 2026-09-20. `T-036` now waits on that plan rather than on a section of this one, and `24.5`'s "4 passed" was corrected to the 5 `S.3` measured. Open boxes: 28 → 19 |
