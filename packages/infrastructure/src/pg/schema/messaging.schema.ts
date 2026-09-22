@@ -13,8 +13,6 @@ import {
   uniqueIndex,
   uuid,
 } from "../../import.js";
-import { users } from "./auth.schema.js";
-import { organizations } from "./rbac.schema.js";
 
 // Partitioned by tenant and by nothing else: it grows with the tenant's people rather
 // than with its activity, so a month level would be partitions holding nothing.
@@ -22,10 +20,9 @@ export const conversations = pgTable(
   "conversations",
   {
     id: uuid("id").$type<ConversationId>().notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+    // No foreign key to `organizations`: it is on the catalog and this table is routed,
+    // and Postgres enforces no key across two databases. See decision `24.1`.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
     kind: text("kind").notNull(),
     // Null for a direct conversation, which the client titles from the other member.
     title: text("title"),
@@ -62,18 +59,15 @@ export const conversationMembers = pgTable(
   "conversation_members",
   {
     id: uuid("id").notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+    // Routed, so no key to the catalog. The nightly orphan pass is what notices a row
+    // whose tenant is gone — see decision `24.1`.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
     // The foreign key is composite and declared below: `conversations` is partitioned by
     // tenant, so its primary key is the pair and a reference to it has to name both.
     conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
-    // Cascades: a membership is the person's, and it has no meaning without them.
-    userId: uuid("user_id")
-      .$type<UserId>()
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // No key to `users` either, and that one was the expensive half: the cascade issued
+    // a scan of every tenant partition on the node — see docs/reference/fan-out.md.
+    userId: uuid("user_id").$type<UserId>().notNull(),
     role: text("role").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     // The **only** unread state. There is no counter column: the count is computed from
@@ -84,8 +78,8 @@ export const conversationMembers = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.id, t.organizationId] }),
-    // NO ACTION rather than RESTRICT between siblings, so a tenant delete cascading
-    // from `organizations` is not rejected by this check on the way through.
+    // NO ACTION rather than RESTRICT between siblings, so dropping a tenant's partitions
+    // is not rejected by this check on the way through.
     foreignKey({
       columns: [t.conversationId, t.organizationId],
       foreignColumns: [conversations.id, conversations.organizationId],
@@ -105,10 +99,8 @@ export const messages = pgTable(
   "messages",
   {
     id: uuid("id").$type<MessageId>().notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+    // Routed, so no key to the catalog — decision `24.1`.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
     // Composite, declared below, for the reason `conversation_members` gives.
     conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
     // No foreign key. A message outlives its author's account the way the audit trail

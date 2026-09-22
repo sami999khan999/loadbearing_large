@@ -11,7 +11,6 @@ import {
   uuid,
   vector,
 } from "../../import.js";
-import { organizations } from "./rbac.schema.js";
 
 // Partitioned by tenant and by nothing else. One HNSW graph per tenant is the better
 // shape: `search()` carries the tenant, so a query walks one small graph.
@@ -19,12 +18,9 @@ export const documentChunks = pgTable(
   "document_chunks",
   {
     id: uuid("id").notNull(),
-    // The FK the other tenant tables have and this one did not, so a deleted tenant left
-    // its corpus behind — embeddings nothing can reach and nothing will remove.
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+    // Routed, so no key to the catalog — decision `24.1`. A deleted tenant loses its
+    // corpus with its partition, and the nightly orphan pass counts what is left.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
 
     // The domain row this chunk was derived from — a document, receipt, note.
     sourceId: uuid("source_id").notNull(),

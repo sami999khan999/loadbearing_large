@@ -246,6 +246,13 @@
       "when": 1790051542661,
       "tag": "0034_activity_archive_drop",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790057880715,
+      "tag": "0035_cross_shard_fk_drop",
+      "breakpoints": true
     }
   ]
 }
