@@ -135,6 +135,13 @@ export interface EventShape {
     readonly partitions: number;
     readonly outboxRows: number;
   };
+  // The ids, not just the count: with no foreign key left, this line is the only place
+  // a leaked tenant is named, and a number alone cannot be chased.
+  readonly "maintenance.orphans.found": {
+    readonly node: number;
+    readonly tenants: number;
+    readonly organizationIds: string;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

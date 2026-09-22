@@ -129,6 +129,8 @@ export class MaintenanceConsumer {
         return this.partitions();
       case "retention":
         return this.retention();
+      case "orphans":
+        return this.orphans();
       case "cold-restore":
         return this.restore(job.data as RestoreJob);
       case "tenant-export":
@@ -233,6 +235,23 @@ export class MaintenanceConsumer {
       archived: purged.archived,
       partitions: purged.partitions,
       outboxRows: purged.outboxRows,
+    });
+  }
+
+  // `24.1` moved this guarantee out of the database and into a job. Silence is the
+  // healthy answer; a line here is a tenant delete that did not finish.
+  private async orphans(): Promise<void> {
+    await this.container.eachShard(async (node) => {
+      const orphaned = await this.container.maintenance.orphanedTenants();
+      if (orphaned.length === 0) return;
+
+      // The ids, not just the count: with no foreign key left this is the only place a
+      // leaked tenant is named, and a number alone cannot be chased.
+      this.container.logger.emit("maintenance.orphans.found", {
+        node,
+        tenants: orphaned.length,
+        organizationIds: orphaned.join(","),
+      });
     });
   }
 

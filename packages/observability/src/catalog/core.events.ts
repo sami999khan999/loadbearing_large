@@ -63,6 +63,9 @@ export const coreEvents = {
   // The delete is a job now (`19.20`), so this is the only line that says it finished.
   // `outboxRows` is on it because `24.1` moved that sweep out of the database.
   "tenant.purge.completed": { level: "info" },
+  // `warn`, not `info`: a non-zero count is a tenant delete that did not finish, and
+  // since `24.1` the database will not say so on its own.
+  "maintenance.orphans.found": { level: "warn" },
   // One per tenant-month refilled from cold storage. Idempotent through the
   // `ReplacingMergeTree`, so a second run over the same month is a no-op.
   "cold.partition.reprojected": { level: "info" },

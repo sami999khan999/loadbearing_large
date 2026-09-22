@@ -379,6 +379,34 @@ describe("MaintenanceConsumer", () => {
   });
 });
 
+// `24.1` dropped the ten foreign keys that made a leaked row impossible, so the
+// guarantee moved from the database to this job. Silence is the healthy answer.
+describe("MaintenanceConsumer — the orphan count", () => {
+  it("says nothing when every tenant on the node is live", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.orphans = [];
+
+    await consumerFor(container).handle(job("orphans"));
+
+    expect(emitted(logger, "maintenance.orphans.found")).toEqual([]);
+  });
+
+  // The ids, not just the count: with no foreign key left this line is the only place
+  // a leaked tenant is named, and a number alone cannot be chased.
+  it("names the tenants it found, and the node they are on", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.orphans = [...TENANTS];
+
+    await consumerFor(container).handle(job("orphans"));
+
+    const found = emitted(logger, "maintenance.orphans.found");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.tenants).toBe(TENANTS.length);
+    expect(found[0]?.organizationIds).toBe(TENANTS.join(","));
+    expect(found[0]?.node).toBe(0);
+  });
+});
+
 // `19.11`: the daily converger. Neither store is written by the save alone — a bucket
 // call after the commit can fail, and a rule deleted in a console is drift.
 describe("MaintenanceConsumer — the retention job", () => {

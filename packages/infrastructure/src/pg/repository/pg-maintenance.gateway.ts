@@ -1,5 +1,6 @@
 import {
   InternalError,
+  inArray,
   lt,
   type MaintenanceGateway,
   type OrganizationId,
@@ -12,7 +13,7 @@ import {
   type UnitOfWork,
 } from "../../import.js";
 import { BaseRepository, type DatabaseCluster } from "../primitive/index.js";
-import { invitations, sessions, verifications } from "../schema/index.js";
+import { invitations, organizations, sessions, verifications } from "../schema/index.js";
 import { TenantPartitionSeed } from "../seed/index.js";
 import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
@@ -99,6 +100,69 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     });
 
     return dropped;
+  }
+
+  // **Two reads, never a join.** The candidates are on this node and `organizations` is
+  // on the catalog, which after the split is a different database entirely.
+  public async orphanedTenants(): Promise<readonly OrganizationId[]> {
+    const candidates = await this.tenantsWithRowsHere();
+    if (candidates.length === 0) return [];
+
+    // The second read, and the only one that may cross: this gateway is `local`, and
+    // `catalogDb` is the sanctioned crossing from `local`.
+    const live = await this.catalogDb
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(inArray(organizations.id, candidates as OrganizationId[]));
+
+    const present = new Set<string>(live.map((row) => row.id));
+    return candidates.filter((id) => !present.has(id)) as OrganizationId[];
+  }
+
+  // Partition names, not a scan: a tenant table is LIST-partitioned by tenant, so the
+  // catalog of children already answers "who has rows here" for the cost of a lookup.
+  private async tenantsWithRowsHere(): Promise<readonly string[]> {
+    // Inlined, not bound: drizzle sends a JS array as a row constructor and `= any($1)`
+    // then fails with "requires array on right side". Every name is from the allowlist.
+    const parents = PartitionedTable.TENANT_PARTITIONED.map((entry) => `'${entry.name}'`).join(
+      ", ",
+    );
+
+    const found = await this.db.execute<{ hex: string | null }>(
+      sql.raw(`
+        select distinct substring(c.relname from '_([0-9a-f]{32})$') as hex
+        from pg_inherits i
+        join pg_class c on c.oid = i.inhrelid
+        join pg_class p on p.oid = i.inhparent
+        where p.relname in (${parents})
+          and c.relname ~ '_[0-9a-f]{32}$'
+      `),
+    );
+
+    const fromPartitions = found.rows
+      .map((row) => row.hex)
+      .filter((hex): hex is string => hex !== null)
+      .map((hex) => PgMaintenanceGateway.uuidOf(hex));
+
+    // `outbox_event` has no tenant level, so no partition names it. Indexed, so the
+    // distinct is an index scan rather than a walk of every month.
+    const events = await this.db.execute<{ id: string }>(
+      sql`select distinct organization_id::text as id from outbox_event`,
+    );
+
+    return [...new Set([...fromPartitions, ...events.rows.map((row) => row.id)])];
+  }
+
+  // The partition suffix is the tenant id with its dashes stripped, which is what
+  // `TenantPartitionSeed.partitionName` writes. This is that, backwards.
+  private static uuidOf(hex: string): string {
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20),
+    ].join("-");
   }
 
   // `to_regclass` returns null rather than throwing, so a tenant whose partitions are

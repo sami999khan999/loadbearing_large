@@ -35,6 +35,10 @@ export abstract class MaintenanceGateway {
   // and a tenant move each need, and the one place that drop is written.
   public abstract dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]>;
 
+  // Tenants with rows on this node whose `organizations` row is gone. Since `24.1` no
+  // foreign key notices, so this is the nightly proof the delete path is keeping up.
+  public abstract orphanedTenants(): Promise<readonly OrganizationId[]>;
+
   // `months` counts partitions from the month `from` falls in, so three is the current
   // month and two of runway. `organizationId` is null only for a table with no tenant.
   public abstract ensureMonthlyPartitions(
