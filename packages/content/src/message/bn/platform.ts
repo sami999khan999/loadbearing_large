@@ -59,7 +59,7 @@ export const platform = {
   "platform.tenantDelete.slug": "নিশ্চিত করতে স্লাগ লিখুন",
   "platform.tenantDelete.slug.hint": "সার্ভারও এটি মিলিয়ে দেখে।",
   "platform.tenantDelete.action": "টেন্যান্ট মুছুন",
-  "platform.tenantDelete.done": "মোছা হয়েছে। {archived}টি অবজেক্ট আর্কাইভ, {partitions}টি পার্টিশন বাদ।",
+  "platform.tenantDelete.queued": "{jobId} হিসেবে কিউতে। পার্টিশন বাদ দেওয়ার আগে প্রতিটি মাস আর্কাইভ হয়।",
   "platform.gaps.title": "ফাঁক",
   "platform.gaps.none": "প্রতিটি আর্কাইভ করা মাস অ্যানালিটিক্স স্টোরে পৌঁছেছে।",
   "platform.gaps.row": "{period} — {tenants}টি আর্কাইভ অবজেক্ট কখনো প্রজেক্ট হয়নি।",

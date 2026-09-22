@@ -11,8 +11,6 @@ import {
   uniqueIndex,
   uuid,
 } from "../../import.js";
-import { users } from "./auth.schema.js";
-import { organizations } from "./rbac.schema.js";
 
 // Declared as an ordinary table so the query builder types it; the generated DDL is
 // hand-edited to two levels — `LIST (organization_id)`, then `RANGE (created_at)`.
@@ -20,16 +18,12 @@ export const notifications = pgTable(
   "notifications",
   {
     id: uuid("id").notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    // Cascades, unlike the audit trail's actor: an inbox is the person's own, and it
-    // has no reason to outlive the account.
-    userId: uuid("user_id")
-      .$type<UserId>()
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Routed, so no key to the catalog — decision `24.1`. A tenant delete drops this
+    // table's partitions, and the nightly orphan pass catches whatever that misses.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    // No key to `users` either. An inbox still has no reason to outlive the account,
+    // but nothing deletes a user today and the cascade scanned every partition.
+    userId: uuid("user_id").$type<UserId>().notNull(),
     // The outbox event that produced it. No foreign key: retention drops an event
     // months before it drops the notification, and a cascade would take the inbox too.
     eventId: uuid("event_id").notNull(),
@@ -80,14 +74,9 @@ export const notificationPreferences = pgTable(
   "notification_preferences",
   {
     id: uuid("id").notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .$type<UserId>()
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Neither key crosses to the catalog any more — decision `24.1`.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
     category: text("category").notNull(),
     channel: text("channel").notNull(),
     mode: text("mode").notNull(),

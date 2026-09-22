@@ -17,6 +17,9 @@ export interface ContainerConfig {
     // node. See packages/infrastructure/docs/reference/sharding.md.
     readonly shards?: readonly { readonly url: string; readonly directUrl: string }[];
     readonly statementTimeoutMs?: number;
+    // How long a moved tenant's rows stay on the node it left, when the operator has
+    // set no number on `platform_policy`. Days — decision `24.2`.
+    readonly moveGraceDays?: number;
   };
   readonly redis: {
     // Two instances, different durability. Neither is optional: a missing

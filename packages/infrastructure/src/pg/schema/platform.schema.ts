@@ -60,6 +60,9 @@ export const platformPolicy = pgTable(
     // Off by default, which is the safe direction: a replica read that is stale is a
     // correctness bug, and turning it on is a decision someone makes.
     replicaReadsEnabled: boolean("replica_reads_enabled").notNull().default(false),
+    // How long a moved tenant's rows stay on the node it left. **Null is not zero**: it
+    // means "use the deployment's own default", the way an absent retention row does.
+    moveGraceDays: smallint("move_grace_days"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("platform_policy_singleton_ck", sql`${t.id} = 1`)],

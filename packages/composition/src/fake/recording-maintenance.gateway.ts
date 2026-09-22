@@ -42,6 +42,9 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   private readonly tenantRuns: OrganizationId[] = [];
   private readonly tenantDrops: OrganizationId[] = [];
   private readonly attachments: Attachment[] = [];
+  // Seeded rather than recorded: a spec about the nightly count wants to say what the
+  // node holds, not to assert that the job asked.
+  public orphans: OrganizationId[] = [];
 
   public constructor(
     private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
@@ -70,6 +73,10 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   public override dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
     this.tenantDrops.push(organizationId);
     return Promise.resolve([]);
+  }
+
+  public override orphanedTenants(): Promise<readonly OrganizationId[]> {
+    return Promise.resolve(this.orphans);
   }
 
   public override ensureMonthlyPartitions(

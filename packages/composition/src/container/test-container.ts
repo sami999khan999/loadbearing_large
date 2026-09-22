@@ -14,6 +14,7 @@ import {
   InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
   InMemoryTenantMembershipReader,
+  InMemoryTenantMoveGateway,
   InMemoryUserReader,
   InMemoryVectorStore,
   RecordingActivityLogger,
@@ -64,6 +65,7 @@ import {
   type StorageGateway,
   type StoragePolicyGateway,
   type TenantMembershipReader,
+  type TenantMoveGateway,
   type UnitOfWork,
   type UserReader,
   type VectorStore,
@@ -98,6 +100,7 @@ export interface TestPorts {
   readonly sessions: SessionResolver;
   readonly shardAssignments: ShardAssignmentRepository;
   readonly shardResolver: ShardResolver;
+  readonly tenantMove: TenantMoveGateway;
   readonly sharding: ShardingStrategy;
   readonly storage: StorageGateway;
   readonly storagePolicy: StoragePolicyGateway;
@@ -166,6 +169,7 @@ export class TestContainer {
       sessions: overrides.sessions ?? new StubSessionResolver(),
       shardAssignments: overrides.shardAssignments ?? new InMemoryShardAssignmentRepository(),
       shardResolver: overrides.shardResolver ?? new InMemoryShardResolver(),
+      tenantMove: overrides.tenantMove ?? new InMemoryTenantMoveGateway(),
       sharding: overrides.sharding ?? new OrganizationShardingStrategy(),
       storage: overrides.storage ?? new InMemoryStorageGateway(),
       storagePolicy: overrides.storagePolicy ?? new InMemoryStoragePolicyGateway(),

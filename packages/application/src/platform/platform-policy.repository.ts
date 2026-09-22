@@ -7,6 +7,9 @@ export interface PlatformPolicyRecord {
   // Off by default, which is the safe direction: a stale replica read is a correctness
   // bug, and turning it on is a decision someone makes.
   readonly replicaReadsEnabled: boolean;
+  // **Null is not zero.** It means "use the deployment's own default", the way an
+  // absent `retention_policy` row means `PartitionedTable`'s value — decision `24.2`.
+  readonly moveGraceDays: number | null;
 }
 
 export abstract class PlatformPolicyRepository {

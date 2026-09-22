@@ -1,6 +1,7 @@
 import {
   type DomainEvent,
   type DomainEventName,
+  type OrganizationId,
   type OutboxGateway,
   type Placement,
   sql,
@@ -78,6 +79,18 @@ export class PgOutboxGateway extends BaseRepository implements OutboxGateway {
     // `string < Date` is false for every value, so the retention guard would never fire.
     const oldest = result.rows[0]?.occurred_at;
     return oldest ? new Date(oldest) : null;
+  }
+
+  // What `outbox_event_organization_id_organizations_id_fk` used to do before `24.1`
+  // dropped it. This table has no tenant level, so no partition drop reaches its rows.
+  public async deleteFor(organizationId: OrganizationId): Promise<number> {
+    // `this.db`, not `catalogDb`: the table is `local`, so the rows are on whichever
+    // node the caller is placed on — which for the purge job is the tenant's own.
+    const result = await this.db.execute(
+      sql`delete from outbox_event where organization_id = ${organizationId}`,
+    );
+
+    return result.rowCount ?? 0;
   }
 
   // Inlined because Postgres accepts no bind parameter for a row-constructor list of

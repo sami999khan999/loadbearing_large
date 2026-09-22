@@ -78,8 +78,10 @@ export const platform = {
   "platform.tenantDelete.slug": "Type the slug to confirm",
   "platform.tenantDelete.slug.hint": "The server compares this too.",
   "platform.tenantDelete.action": "Delete tenant",
-  "platform.tenantDelete.done":
-    "Deleted. {archived} objects archived, {partitions} partitions dropped.",
+  // A job id, not a tally: the delete archives every month before it drops anything,
+  // which for a large tenant is minutes the request no longer waits for.
+  "platform.tenantDelete.queued":
+    "Queued as {jobId}. Every month is archived before a partition is dropped.",
   "platform.gaps.title": "Gaps",
   "platform.gaps.none": "Every archived month reached the analytics store.",
   "platform.gaps.row": "{period} — {tenants} archived objects never projected.",

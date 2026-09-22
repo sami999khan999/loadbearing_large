@@ -369,9 +369,9 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-eight architectural assertions
+## Step 26.4 — The twenty-nine architectural assertions
 
-Types cannot express "this package must not import that one across a bundle boundary". Twenty-eight greps can.
+Types cannot express "this package must not import that one across a bundle boundary". Twenty-nine greps can.
 
 **`tooling/scripts/check-architecture.mjs`** — add `"check:architecture": "node tooling/scripts/check-architecture.mjs"` to the root scripts. Zero dependencies, plain Node, and it prints one line per assertion:
 
@@ -584,7 +584,7 @@ const TENANT_EXEMPT = new Set([
 >
 > `sessions` is on the list and `users` is not, and the two look alike. A session carries `active_organization_id` — which tenant it is *pointed at* — and a user carries `last_active_organization_id`. Neither is the tenant that owns the row, and neither table has one; the difference is only that §9 stopped matching the column as a substring, which is what surfaced `sessions` as never having been checked.
 >
-> **`activity_archive` and `partition_archive` are not on it.** Both lead with `organization_id`, which the cold-storage index does because one tenant's months have to be readable, sweepable and countable without touching another's ([cold storage](../../packages/infrastructure/docs/reference/cold-storage.md)).
+> **`partition_archive` is not on it.** It leads with `organization_id`, which the cold-storage index does because one tenant's months have to be readable, sweepable and countable without touching another's ([cold storage](../../packages/infrastructure/docs/reference/cold-storage.md)). `activity_archive` was the other, and `0034` dropped it.
 
 Note this cannot be a type-level rule. Drizzle table definitions are data, `pgTable` returns the same type whichever columns you pass, and there is no compile error available — which is precisely the category of rule this file exists for.
 
@@ -990,7 +990,8 @@ The assertion checks three things, all against `.env.example`, which is the comm
    coming back.
 
 > [!NOTE]
-> **It parses the example with `split(/?
+> **It parses the example with `split(/
+?
 /)`, and that is not cosmetic.** `.env.example` is CRLF
 > on a Windows checkout, JavaScript's `.` matches no carriage return, and a `$`-anchored value
 > therefore captures nothing at all. The first draft of this assertion passed on every tree because
@@ -1026,6 +1027,32 @@ procedure is gated, and no entry names a procedure that is gone — which need t
 Both catalogs are resolved through their barrel's spreads, the same way §24 resolves the event
 catalog, so a `...billingPermissions` added tomorrow is covered without anyone editing this.
 
+### 29 — The three shard readers run one algorithm
+
+```js
+// fail if `shardsFromEnv` in apps/web/src/env.ts, apps/worker/src/env.ts and
+// packages/infrastructure/shard-env.ts do not have the same body, comments and
+// signature aside
+```
+
+`DATABASE_SHARD_<n>_URL` is parsed in three places and cannot be parsed in one. Each deployable
+declares the environment it needs, which is why step 25.2 forbids extracting a shared schema; and
+the scripts above `packages/infrastructure/src` cannot import an app at all. A fourth package
+holding the parser would have to sit left of the server-only boundary to be reachable from
+`apps/web/src/env.ts`, which is a package invented for twenty lines.
+
+**So the copies stay and the rule does not.** They had already drifted: the two apps collected every
+`DATABASE_SHARD_<n>_URL`, sorted them and checked the indexes were contiguous, while the scripts
+walked upward from 1 and then scanned separately for an orphan. Two mechanisms, one property, and
+they disagreed — a name set to an empty value, which is what a commented-out line in `.env` leaves
+behind, was one node to the apps and to the scripts an error reading *"DATABASE_SHARD_1_URL has no
+shard 1 before it"*, an index named as its own missing predecessor.
+
+**The comparison is of the body, not the file.** `withoutComments` runs first, so each copy explains
+itself where it sits; the signature is dropped, because the infrastructure copy names its return
+type where the two apps inline it. What is left is the algorithm, and three copies of one algorithm
+is a duplication somebody can read. Two algorithms is a bug nobody can see.
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -1033,7 +1060,7 @@ pnpm check:contrast   # node tooling/scripts/check-contrast.mjs
 OK 117 pairings meet WCAG AA and 108 colours are inside sRGB, across every theme and mode.
 ```
 
-**Twenty-eight assertions above read source; this one computes.** It resolves the twelve colour names
+**Twenty-nine assertions above read source; this one computes.** It resolves the twelve colour names
 ([Opinions · Colour](../ai/rules/color.md)) for every theme in every mode, walks the pairings
 `packages/ui/src/theme/class/` actually produces, and fails on a contrast ratio under WCAG AA, a
 name a theme forgot to declare, or an `oklch()` value outside the sRGB gamut.
@@ -1087,10 +1114,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-eight
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-nine
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-five of the
-twenty-eight are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-six of the
+twenty-nine are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 

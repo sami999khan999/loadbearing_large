@@ -10,7 +10,6 @@ import {
   type UserId,
   uuid,
 } from "../../import.js";
-import { organizations } from "./rbac.schema.js";
 
 // Declared as an ordinary table so the query builder types it; the generated DDL is
 // hand-edited to `PARTITION BY RANGE (occurred_at)` before it is applied.
@@ -18,10 +17,9 @@ export const outboxEvent = pgTable(
   "outbox_event",
   {
     id: uuid("id").notNull(),
-    organizationId: uuid("organization_id")
-      .$type<OrganizationId>()
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
+    // The one key whose cascade was doing real work: this table is `local` and has no
+    // tenant level, so `DeleteOrganizationUseCase` sweeps it by hand — decision `24.1`.
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
     // Deliberately not a foreign key, for the reason `activity_log` gives: the fact
     // outlives the actor, and a cascade would erase it when it matters most.
     actorId: uuid("actor_id").$type<UserId>().notNull(),

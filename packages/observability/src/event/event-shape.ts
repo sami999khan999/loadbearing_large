@@ -127,6 +127,21 @@ export interface EventShape {
     readonly rows: number;
     readonly bytes: number;
   };
+  // `outboxRows` is here because `24.1` moved that sweep out of the database: a zero
+  // when the tenant had events is the shape of the sweep silently not running.
+  readonly "tenant.purge.completed": {
+    readonly organizationId: string;
+    readonly archived: number;
+    readonly partitions: number;
+    readonly outboxRows: number;
+  };
+  // The ids, not just the count: with no foreign key left, this line is the only place
+  // a leaked tenant is named, and a number alone cannot be chased.
+  readonly "maintenance.orphans.found": {
+    readonly node: number;
+    readonly tenants: number;
+    readonly organizationIds: string;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

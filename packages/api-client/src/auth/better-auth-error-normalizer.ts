@@ -40,7 +40,10 @@ export class BetterAuthErrorNormalizer {
   private constructor() {}
 
   public static normalize(error: BetterAuthError | null | undefined): AppError {
-    const mapped = error?.code ? BY_CODE[error.code] : undefined;
+    // `Object.hasOwn` before the index: their code is a string from outside, and
+    // `BY_CODE["toString"]` is a truthy function that returns no `AppError` when called.
+    const code = error?.code;
+    const mapped = code && Object.hasOwn(BY_CODE, code) ? BY_CODE[code] : undefined;
     if (mapped) return mapped();
 
     // The status, not the message: `error.message` is English prose that breaks on their

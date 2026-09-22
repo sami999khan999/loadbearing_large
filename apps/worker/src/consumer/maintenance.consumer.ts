@@ -13,6 +13,7 @@ import {
   type RetentionPolicyRecord,
   RetentionRules,
   type TenantRetentionPolicyRecord,
+  type UserId,
   Worker,
 } from "../import.js";
 
@@ -29,6 +30,13 @@ interface RestoreJob {
 interface ExportJob {
   readonly organizationId: OrganizationId;
   readonly day: string;
+}
+
+// What `tenant-delete` carries. The actor rides along because the job's own principal
+// is the system's, and the audit row for a delete has to name who asked for it.
+interface PurgeJob {
+  readonly organizationId: OrganizationId;
+  readonly actorId: UserId;
 }
 
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
@@ -121,10 +129,14 @@ export class MaintenanceConsumer {
         return this.partitions();
       case "retention":
         return this.retention();
+      case "orphans":
+        return this.orphans();
       case "cold-restore":
         return this.restore(job.data as RestoreJob);
       case "tenant-export":
         return this.export(job.data as ExportJob);
+      case "tenant-delete":
+        return this.purge(job.data as PurgeJob);
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }
@@ -206,6 +218,40 @@ export class MaintenanceConsumer {
       objects: exported.objects.length,
       rows: exported.objects.reduce((total, object) => total + object.rowCount, 0),
       bytes: exported.objects.reduce((total, object) => total + object.bytes, 0),
+    });
+  }
+
+  // `19.20`: this was the request path, and for a large tenant it is minutes of
+  // streaming to S3 on a pooled connection. It is also the only way to place it right.
+  private async purge(data: PurgeJob): Promise<void> {
+    // **Placed on the tenant's node, not the admin's.** `shardMiddleware` keys on the
+    // actor's organization, so in a request this dropped partitions on the wrong node.
+    const purged = await withShard(this.container, data.organizationId, () =>
+      this.container.platformAdmin.purgeOrganization.execute(data),
+    );
+
+    this.container.logger.emit("tenant.purge.completed", {
+      organizationId: data.organizationId,
+      archived: purged.archived,
+      partitions: purged.partitions,
+      outboxRows: purged.outboxRows,
+    });
+  }
+
+  // `24.1` moved this guarantee out of the database and into a job. Silence is the
+  // healthy answer; a line here is a tenant delete that did not finish.
+  private async orphans(): Promise<void> {
+    await this.container.eachShard(async (node) => {
+      const orphaned = await this.container.maintenance.orphanedTenants();
+      if (orphaned.length === 0) return;
+
+      // The ids, not just the count: with no foreign key left this is the only place a
+      // leaked tenant is named, and a number alone cannot be chased.
+      this.container.logger.emit("maintenance.orphans.found", {
+        node,
+        tenants: orphaned.length,
+        organizationIds: orphaned.join(","),
+      });
     });
   }
 

@@ -239,6 +239,27 @@
       "when": 1789893776993,
       "tag": "0033_conversation_keyset",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790051542661,
+      "tag": "0034_activity_archive_drop",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790057880715,
+      "tag": "0035_cross_shard_fk_drop",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790064818187,
+      "tag": "0036_tenant_move",
+      "breakpoints": true
     }
   ]
 }

@@ -111,13 +111,20 @@ const remaining = async () => {
       .from(invitations)
       .where(eq(invitations.organizationId, organizationId)),
     database.client.select().from(apiKeys).where(eq(apiKeys.organizationId, organizationId)),
-    database.client
-      .select()
-      .from(documentChunks)
-      .where(eq(documentChunks.organizationId, Identifiers.organizationId.parse(organizationId))),
   ]);
 
   return counts.map((rows) => rows.length);
+};
+
+// Routed, and counted apart since `24.1`: it is on a shard, the tenant row is on the
+// catalog, and no foreign key crosses between them any more.
+const remainingChunks = async (): Promise<number> => {
+  const rows = await database.client
+    .select()
+    .from(documentChunks)
+    .where(eq(documentChunks.organizationId, Identifiers.organizationId.parse(organizationId)));
+
+  return rows.length;
 };
 
 beforeAll(async () => {
@@ -137,13 +144,31 @@ afterAll(async () => {
 describe("deleting an organization", () => {
   // The regression guard: five tenant foreign keys were `no action` while three
   // cascaded, so this delete failed and a tenant could not be removed at all.
-  it("takes every tenant-owned row with it", async () => {
+  it("takes every catalog row with it", async () => {
     await seedTenant();
-    expect(await remaining()).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(await remaining()).toEqual([1, 1, 1, 1, 1, 1, 1]);
 
     await database.client.delete(organizations).where(eq(organizations.id, organizationId));
 
-    expect(await remaining()).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(await remaining()).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  // **And leaves the routed rows, which is `24.1` working rather than a leak.** A shard
+  // is a different database, so nothing here can reach across to delete them.
+  // ──
+  // `PurgeOrganizationUseCase` drops the tenant's partition instead, and the nightly
+  // orphan pass counts whatever that missed.
+  it("leaves a routed table's rows, because no key crosses to the catalog", async () => {
+    await seedTenant();
+    expect(await remainingChunks()).toBe(1);
+
+    await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+
+    expect(await remainingChunks()).toBe(1);
+
+    await database.client
+      .delete(documentChunks)
+      .where(eq(documentChunks.organizationId, Identifiers.organizationId.parse(organizationId)));
   });
 
   // `users.last_active_organization_id` has been `set null` since 0004 — for a delete

@@ -204,10 +204,10 @@ export class PlatformContract {
     url: z.string().min(1),
   });
 
-  public static readonly tenantDeleted = z.object({
-    // What it cost, so the screen can say what happened rather than "done".
-    archived: z.number().int(),
-    partitions: z.number().int(),
+  // A job id, not a tally. The delete archives every month and drops seven partitions
+  // per tenant, which is minutes for a large one — too long to hold a request open.
+  public static readonly deleteRequested = z.object({
+    jobId: z.string().min(1),
   });
 
   // Cold storage only, and the screen says so: a partition holds one tenant's rows,
@@ -335,7 +335,7 @@ export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUp
 export type TenantExportInput = z.infer<typeof PlatformContract.tenantExport>;
 export type ExportRequestedDto = z.infer<typeof PlatformContract.exportRequested>;
 export type TenantExportObjectDto = z.infer<typeof PlatformContract.tenantExportObject>;
-export type TenantDeletedDto = z.infer<typeof PlatformContract.tenantDeleted>;
+export type DeleteRequestedDto = z.infer<typeof PlatformContract.deleteRequested>;
 export type TenantStorageDto = z.infer<typeof PlatformContract.tenantStorage>;
 export type TenantStorageRowDto = z.infer<typeof PlatformContract.tenantStorageRow>;
 export type TenantStorageMonthDto = z.infer<typeof PlatformContract.tenantStorageMonth>;

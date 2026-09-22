@@ -53,9 +53,17 @@ export class ErrorCopy {
   public static field(translator: Translator, violation: FieldViolation): string {
     if (violation.field.length === 0) return translator.t("error.unexpected");
 
-    return translator.t(FIELD_RULE_COPY[violation.rule] ?? "error.unexpected", {
+    return translator.t(ErrorCopy.ruleKey(violation.rule), {
       field: violation.field,
       ...violation.params,
     });
+  }
+
+  // `Object.hasOwn` before the index, not `??` after it: a rule arrives in the envelope
+  // from outside, and `FIELD_RULE_COPY["toString"]` is a truthy function `??` never sees.
+  private static ruleKey(rule: string): ShellMessageKey {
+    const own = Object.hasOwn(FIELD_RULE_COPY, rule) ? FIELD_RULE_COPY[rule] : undefined;
+
+    return own ?? "error.unexpected";
   }
 }

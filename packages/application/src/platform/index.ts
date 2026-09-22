@@ -1,7 +1,7 @@
 export {
-  type DeletedOrganization,
   type DeleteOrganizationInput,
   DeleteOrganizationUseCase,
+  type DeleteRequested,
 } from "./delete-organization.use-case.js";
 export {
   type ExportOrganizationInput,
@@ -49,6 +49,11 @@ export {
   LocateTenantUseCase,
   type TenantLocation,
 } from "./locate-tenant.use-case.js";
+export {
+  type MoveRequested,
+  type MoveTenantInput,
+  MoveTenantUseCase,
+} from "./move-tenant.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
 export {
@@ -65,6 +70,16 @@ export {
   type ProjectionPolicyRecord,
   ProjectionPolicyRepository,
 } from "./projection-policy.repository.js";
+export {
+  type PurgedOrganization,
+  type PurgeOrganizationInput,
+  PurgeOrganizationUseCase,
+} from "./purge-organization.use-case.js";
+export {
+  type RelocatedTenant,
+  type RelocateTenantInput,
+  RelocateTenantUseCase,
+} from "./relocate-tenant.use-case.js";
 export {
   type ReprojectPartitionInput,
   ReprojectPartitionUseCase,

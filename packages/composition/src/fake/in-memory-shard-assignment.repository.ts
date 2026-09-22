@@ -15,7 +15,61 @@ export class InMemoryShardAssignmentRepository extends ShardAssignmentRepository
   }
 
   public override save(assignment: { key: ShardKey; node: number }): Promise<void> {
-    this.rows.set(assignment.key, { ...assignment, movedAt: null });
+    this.rows.set(assignment.key, {
+      ...assignment,
+      movedAt: null,
+      movingTo: null,
+      movedFrom: null,
+      sourceDroppableAt: null,
+    });
+    return Promise.resolve();
+  }
+
+  // False when one is already in flight, like the single `update ... where` the real
+  // one runs: a fake that always claimed would hide the double-start this guards.
+  public override beginMove(key: ShardKey, toNode: number): Promise<boolean> {
+    const row = this.rows.get(key);
+    if (!row || row.movingTo !== null || row.node === toNode) return Promise.resolve(false);
+
+    this.rows.set(key, { ...row, movingTo: toNode });
+    return Promise.resolve(true);
+  }
+
+  public override completeMove(key: ShardKey, droppableAt: Date): Promise<void> {
+    const row = this.rows.get(key);
+    if (!row || row.movingTo === null) return Promise.resolve();
+
+    this.rows.set(key, {
+      ...row,
+      node: row.movingTo,
+      movedFrom: row.node,
+      movingTo: null,
+      movedAt: new Date(),
+      sourceDroppableAt: droppableAt,
+    });
+    return Promise.resolve();
+  }
+
+  public override abandonMove(key: ShardKey): Promise<void> {
+    const row = this.rows.get(key);
+    if (row) this.rows.set(key, { ...row, movingTo: null });
+    return Promise.resolve();
+  }
+
+  public override droppableBefore(
+    cutoff: Date,
+    limit: number,
+  ): Promise<readonly ShardAssignment[]> {
+    const due = [...this.rows.values()]
+      .filter((row) => row.sourceDroppableAt !== null && row.sourceDroppableAt < cutoff)
+      .toSorted((left, right) => left.key.localeCompare(right.key));
+
+    return Promise.resolve(due.slice(0, limit));
+  }
+
+  public override forgetSource(key: ShardKey): Promise<void> {
+    const row = this.rows.get(key);
+    if (row) this.rows.set(key, { ...row, movedFrom: null, sourceDroppableAt: null });
     return Promise.resolve();
   }
 

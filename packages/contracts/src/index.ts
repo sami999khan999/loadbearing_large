@@ -75,6 +75,7 @@ export {
 } from "./notification/index.js";
 export {
   type ColdModeDto,
+  type DeleteRequestedDto,
   type ExportRequestedDto,
   PlatformContract,
   type PlatformHealthDto,
@@ -98,7 +99,6 @@ export {
   type ShardMovesDto,
   type ShardNodeDto,
   type ShardTenantDto,
-  type TenantDeletedDto,
   type TenantDeleteInput,
   type TenantExportInput,
   type TenantExportObjectDto,

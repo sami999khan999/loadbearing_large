@@ -1,4 +1,10 @@
-import { type DomainEvent, type DomainEventName, OutboxGateway, Uuid } from "../import.js";
+import {
+  type DomainEvent,
+  type DomainEventName,
+  type OrganizationId,
+  OutboxGateway,
+  Uuid,
+} from "../import.js";
 
 // Honours the relay contract rather than approximating it: rows are removed only when
 // `relay` resolves, so a spec can assert that a failing subscriber leaves work behind.
@@ -37,6 +43,17 @@ export class InMemoryOutboxGateway extends OutboxGateway {
       null,
     );
     return Promise.resolve(oldest);
+  }
+
+  // What the dropped foreign key used to do. A spec asserting the purge swept the
+  // outbox needs this to actually remove rows, not to report a number.
+  public override deleteFor(organizationId: OrganizationId): Promise<number> {
+    const before = this.pending.length;
+    for (let at = this.pending.length - 1; at >= 0; at -= 1) {
+      if (this.pending[at]?.organizationId === organizationId) this.pending.splice(at, 1);
+    }
+
+    return Promise.resolve(before - this.pending.length);
   }
 
   public remaining(): readonly DomainEvent[] {

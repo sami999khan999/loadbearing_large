@@ -68,10 +68,7 @@ export function DeleteTenantPanel() {
 
       {remove.isSuccess ? (
         <Callout tone="success">
-          {t("platform.tenantDelete.done", {
-            archived: remove.data.archived,
-            partitions: remove.data.partitions,
-          })}
+          {t("platform.tenantDelete.queued", { jobId: remove.data.jobId })}
         </Callout>
       ) : null}
       {remove.isError ? <Callout tone="danger">{describe(remove.error)?.message}</Callout> : null}

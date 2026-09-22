@@ -20,8 +20,7 @@ const CATALOG = Object.freeze([
   "api_keys",
   "shard_assignments",
   // The archive index is read before any shard is known, and `17.6`'s sweep reads one
-  // place. `activity_archive` goes with its drop migration.
-  "activity_archive",
+  // place.
   "partition_archive",
   // Deployment-wide policy, all four read by the worker before it knows a tenant.
   // Later than decision D14, which predates Phases 19 and 20.

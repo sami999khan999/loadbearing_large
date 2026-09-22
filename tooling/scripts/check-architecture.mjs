@@ -1674,6 +1674,74 @@ assert("every permission in the catalog gates a procedure", (failures) => {
   }
 });
 
+// ── 29 — the three shard readers run one algorithm ──────────────────────
+//
+// `DATABASE_SHARD_<n>_URL` is parsed in three places and cannot be parsed in one: each
+// app declares the environment it needs (docs/setup/25), and the scripts above
+// `packages/infrastructure/src` cannot import an app. So the copies stay and the rule
+// does not — two of them once disagreed about an empty value, and the odd one out threw
+// an error naming shard 1 as its own missing predecessor.
+
+const SHARD_READERS = [
+  "apps/web/src/env.ts",
+  "apps/worker/src/env.ts",
+  "packages/infrastructure/shard-env.ts",
+];
+
+// The body only. The infrastructure copy names its return type where the two apps inline
+// it, which is a difference in the signature and not in what the code does.
+function shardReaderBody(file) {
+  const path = join(ROOT, file);
+  if (!existsSync(path)) return null;
+
+  const source = withoutComments(readFileSync(path, "utf8"));
+  const start = source.indexOf("const shardsFromEnv =");
+  if (start < 0) return null;
+
+  const open = source.indexOf("=> {", start);
+  if (open < 0) return null;
+
+  const end = source.indexOf("\n};", open);
+  if (end < 0) return null;
+
+  return source
+    .slice(open + 4, end)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+assert("the three shard readers run one algorithm", (failures) => {
+  const bodies = new Map();
+  let present = 0;
+
+  for (const file of SHARD_READERS) {
+    if (!existsSync(join(ROOT, file))) continue;
+    present += 1;
+
+    // On disk and holding no reader: the copy was deleted or renamed, which is the other
+    // way this rule stops being checked.
+    const body = shardReaderBody(file);
+    if (body === null || body.length === 0) {
+      failures.push(`${file}: no \`shardsFromEnv\` to compare`);
+      continue;
+    }
+
+    bodies.set(file, body);
+  }
+
+  if (present === 0) return "no shard reader on disk";
+  if (bodies.size < 2) return "fewer than two shard readers to compare";
+
+  const [reference, ...rest] = [...bodies];
+  if (!reference) return;
+
+  for (const [file, body] of rest) {
+    if (body !== reference[1]) {
+      failures.push(`${file}: parses shards differently from ${reference[0]}`);
+    }
+  }
+});
+
 let failed = 0;
 let skippedCount = 0;
 

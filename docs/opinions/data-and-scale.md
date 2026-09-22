@@ -294,11 +294,20 @@ Three consequences that are easy to miss:
   cross-tenant leak rather than an empty result set.
 - **Spell it `organization`, not `organisation`.** The column name fixes the spelling; a codebase
   that uses both will resolve it inconsistently per file.
-- **Every tenant foreign key is `ON DELETE CASCADE`, and a tenant-owned table has one.** The column
-  is the sharding key; it is also the only handle a tenant delete has. A table where five keys are
-  `NO ACTION` and three cascade has no delete at all — the statement fails, and `SET NULL` on
-  `users.last_active_organization_id` sits there waiting for a case that cannot arise. A tenant
-  table with no key at all is worse: the delete succeeds and leaves rows nothing can reach.
+- **A routed table carries no foreign key to the catalog — and until `24.1` every tenant key
+  cascaded.** The reason the rule inverted is not taste: **Postgres enforces no foreign key across
+  two databases**, so the ten that crossed were impossible the day a shard became a separate
+  server. Keeping them was not the cautious choice, it was the choice to abandon the split.
+  - Nine were already doing nothing. The delete drops the tenant's partitions *before* it removes
+    the `organizations` row, so six found nothing left to take, and the three naming `users` never
+    fired — nothing deletes a user.
+  - `outbox_event` was the one doing real work, because it has no tenant level and no partition to
+    drop. `PurgeOrganizationUseCase` sweeps it explicitly.
+  - **What is given up is the database saying so.** A leaked row used to be impossible; it is now
+    rare, and the nightly `orphans` job is what notices. That is a guarantee moved, not dropped —
+    and moving it is what the physical split costs.
+  - Keys between siblings *on the same node* stay, and stay `NO ACTION` rather than `RESTRICT`, so
+    a partition detach is not rejected by its own check.
 
 ### 4.2 Partition the append-only tables
 

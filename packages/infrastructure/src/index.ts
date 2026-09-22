@@ -50,6 +50,7 @@ export {
   PgShardAssignmentRepository,
   PgShardMapReader,
   PgShardResolver,
+  PgTenantMoveGateway,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
