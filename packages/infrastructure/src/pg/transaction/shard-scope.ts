@@ -4,6 +4,9 @@ import { AsyncLocalStorage } from "../../import.js";
 // A key and the node it resolved to. **Both**, because the node is what a pool lookup
 // needs and the key is what a log line and a nested resolve need.
 export interface PlacedShard {
+  // Resolved with the node, never per query. A move freezes writes to the tenant's own
+  // rows; reads keep answering from `node`, which still holds them — decision `24.2`.
+  readonly frozen?: boolean;
   // `null` in a cross-tenant sweep, which is placed on a node without being placed on
   // a tenant — the outbox drain and the partition runway are every tenant on that node.
   readonly key: ShardKey | null;

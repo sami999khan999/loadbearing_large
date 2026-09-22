@@ -1286,7 +1286,11 @@ export class Container {
   // `BaseRepository.db` stays a property read — see the sharding reference.
   public async placed<T>(principal: Principal, work: () => Promise<T>): Promise<T> {
     const key = this.sharding.keyOf(principal);
-    return this.shards.within({ key, node: await this.shardResolver.resolve(key) }, work);
+    // The freeze rides with the node, resolved once here rather than per write: a move
+    // makes the tenant readable and unwritable, and `PgUnitOfWork` reads it off scope.
+    const placement = await this.shardResolver.placementOf(key);
+
+    return this.shards.within({ key, node: placement.node, frozen: placement.frozen }, work);
   }
 
   // **The one place a cross-tenant sweep is placed**, and it is per node rather than

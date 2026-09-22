@@ -3,6 +3,7 @@ import {
   InternalError,
   type Logger,
   type ShardKey,
+  type ShardPlacement,
   ShardResolver,
   sql,
 } from "../../import.js";
@@ -28,23 +29,30 @@ export class PgShardResolver extends ShardResolver {
   }
 
   public override async resolve(key: ShardKey): Promise<number> {
-    const cached = await this.cache().get<number>(keyOf(key));
+    return (await this.placementOf(key)).node;
+  }
+
+  // **Both facts in one cache entry**, because `PgUnitOfWork.run` reads the freeze on
+  // every write and a second round trip there would be a query per transaction.
+  public override async placementOf(key: ShardKey): Promise<ShardPlacement> {
+    const cached = await this.cache().get<ShardPlacement>(keyOf(key));
     if (cached !== null) return cached;
 
-    const rows = await this.catalog().client.execute<{ node: number }>(
-      sql`select node from shard_assignments where shard_key = ${key}`,
+    const rows = await this.catalog().client.execute<{ node: number; moving_to: number | null }>(
+      sql`select node, moving_to from shard_assignments where shard_key = ${key}`,
     );
 
-    const node = rows.rows[0]?.node;
+    const row = rows.rows[0];
     // A missing row is a tenant the founder never placed. Today every node is zero and
     // guessing would work; after a split it would put a tenant's rows somewhere else.
-    if (node === undefined) {
+    if (row === undefined) {
       this.logger().emit("shard.resolution.failed", { key });
       throw new InternalError(new Error(`No shard assignment for ${key}.`));
     }
 
-    await this.cache().set(keyOf(key), node, TTL_SECONDS);
-    return node;
+    const placement: ShardPlacement = { node: row.node, frozen: row.moving_to !== null };
+    await this.cache().set(keyOf(key), placement, TTL_SECONDS);
+    return placement;
   }
 
   public override async invalidate(key: ShardKey): Promise<void> {

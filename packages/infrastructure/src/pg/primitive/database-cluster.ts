@@ -11,6 +11,7 @@ export interface ShardConfig {
 // Node 0 for every key, which is what one node means.
 const NODE_ZERO = {
   resolve: () => Promise.resolve(0),
+  placementOf: () => Promise.resolve({ node: 0, frozen: false }),
   invalidate: () => Promise.resolve(),
 } as ShardResolver;
 

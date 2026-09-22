@@ -127,6 +127,7 @@ export {
   type ShardKey,
   type ShardMapReader,
   type ShardNode,
+  type ShardPlacement,
   ShardResolver,
   type ShardTenant,
   type ShardTenantPage,
@@ -187,6 +188,7 @@ export { type Clock, ServerOnly, Token, Uuid } from "@loadbearing/core";
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
 export {
   ConflictError,
+  ForbiddenError,
   InternalError,
   NotFoundError,
   RateLimitedError,
@@ -221,10 +223,12 @@ export {
   gt,
   gte,
   inArray,
+  isNotNull,
   isNull,
   type Logger as DrizzleLogger,
   lt,
   lte,
+  ne,
   not,
   or,
   type SQL,

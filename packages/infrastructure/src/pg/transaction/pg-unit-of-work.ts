@@ -1,4 +1,4 @@
-import { InternalError, type Placement, sql, UnitOfWork } from "../../import.js";
+import { ForbiddenError, InternalError, type Placement, sql, UnitOfWork } from "../../import.js";
 import type { DatabaseCluster, DrizzleClient } from "../primitive/index.js";
 import type { ShardScope } from "./shard-scope.js";
 import type { TransactionScope } from "./transaction-scope.js";
@@ -26,6 +26,12 @@ export class PgUnitOfWork extends UnitOfWork {
   // connection. Off the pool it is a second one, which cannot roll back with it.
   public override async run<T>(work: () => Promise<T>): Promise<T> {
     const open = this.scope.current();
+
+    // **The write freeze.** Only `routed` and `local` rows are copied by a move, so a
+    // catalog write cannot be lost by one and is never refused — decision `24.2`.
+    if (this.placement !== "catalog" && this.shards.current()?.frozen === true) {
+      throw new ForbiddenError("shard.move.inFlight");
+    }
 
     // A catalog use-case calling a routed one inside its transaction is precisely the
     // coupling a physical split cannot honour, so it fails here on one node.

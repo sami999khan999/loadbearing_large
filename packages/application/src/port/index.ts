@@ -44,7 +44,7 @@ export {
   type ResolvedSession,
   SessionResolver,
 } from "./session.resolver.js";
-export { ShardResolver } from "./shard.resolver.js";
+export { type ShardPlacement, ShardResolver } from "./shard.resolver.js";
 export {
   type ShardAssignment,
   ShardAssignmentRepository,
@@ -53,6 +53,7 @@ export { ShardingStrategy } from "./sharding.strategy.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
 export { type LifecycleRule, StoragePolicyGateway } from "./storage-policy.gateway.js";
 export { TenantMembershipReader } from "./tenant-membership.reader.js";
+export { type TableRowCount, TenantMoveGateway } from "./tenant-move.gateway.js";
 export { UnitOfWork } from "./unit-of-work.js";
 export { UserReader } from "./user.reader.js";
 export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";
