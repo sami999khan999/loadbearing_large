@@ -1,7 +1,7 @@
 export {
-  type DeletedOrganization,
   type DeleteOrganizationInput,
   DeleteOrganizationUseCase,
+  type DeleteRequested,
 } from "./delete-organization.use-case.js";
 export {
   type ExportOrganizationInput,
@@ -65,6 +65,11 @@ export {
   type ProjectionPolicyRecord,
   ProjectionPolicyRepository,
 } from "./projection-policy.repository.js";
+export {
+  type PurgedOrganization,
+  type PurgeOrganizationInput,
+  PurgeOrganizationUseCase,
+} from "./purge-organization.use-case.js";
 export {
   type ReprojectPartitionInput,
   ReprojectPartitionUseCase,

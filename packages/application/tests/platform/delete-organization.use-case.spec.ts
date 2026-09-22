@@ -5,96 +5,35 @@ import { describe, expect, it } from "vitest";
 import { DeleteOrganizationUseCase } from "../../src/platform/delete-organization.use-case.js";
 import type { PlatformReader } from "../../src/platform/platform.reader.js";
 import type { TenantRecord, TenantRepository } from "../../src/platform/tenant.repository.js";
-import type { TenantRetentionPolicyRepository } from "../../src/platform/tenant-retention-policy.repository.js";
-import type {
-  ActivityLogger,
-  AnalyticsProjector,
-  ArchivedPartition,
-  CapabilityInvalidator,
-  MaintenanceGateway,
-  PartitionArchiveGateway,
-  PartitionEstimate,
-  ShardResolver,
-  UnitOfWork,
-} from "../../src/port/index.js";
+import type { ActivityLogger, JobOptions, QueuePublisher } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
+import { QueueName } from "../../src/primitive/queue-name.js";
 
 const PLATFORM = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
 const TENANT = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
 const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
-const NOW = new Date("2026-08-15T00:00:00.000Z");
 
 const TENANT_ROW: TenantRecord = { id: TENANT, slug: "acme", name: "Acme", isPlatform: false };
 
 class FakeTenants implements TenantRepository {
-  public readonly deleted: string[] = [];
-
   public constructor(private readonly row: TenantRecord | null = TENANT_ROW) {}
 
   public findBy(): Promise<TenantRecord | null> {
     return Promise.resolve(this.row);
   }
 
-  public delete(organizationId: string): Promise<void> {
-    this.deleted.push(organizationId);
+  public delete(): Promise<void> {
+    return Promise.reject(new Error("the requester never deletes; the job does"));
+  }
+}
+
+class FakeQueue implements Partial<QueuePublisher> {
+  public readonly published: { queue: string; payload: unknown; options?: JobOptions }[] = [];
+
+  public publish(queue: string, payload: unknown, options?: JobOptions): Promise<void> {
+    this.published.push({ queue, payload, options });
     return Promise.resolve();
-  }
-}
-
-// `deleteFor` had no caller anywhere, and the schema has no foreign key on that table
-// precisely because the delete path is what sweeps it.
-class FakeTenantRetention {
-  public readonly swept: string[] = [];
-
-  public deleteFor(organizationId: string): Promise<void> {
-    this.swept.push(organizationId);
-    return Promise.resolve();
-  }
-}
-
-class FakeArchive implements Partial<PartitionArchiveGateway> {
-  public readonly calls: { table: string; period: string; organizationId?: string }[] = [];
-  public readonly tombstones: { organizationId: string; at: string }[] = [];
-
-  public markTenantDeleted(organizationId: string, at: Date): Promise<number> {
-    this.tombstones.push({ organizationId, at: at.toISOString() });
-    return Promise.resolve(1);
-  }
-
-  public archive(table: string, period: Date, organizationId?: string): Promise<ArchivedPartition> {
-    this.calls.push({ table, period: period.toISOString().slice(0, 10), organizationId });
-    return Promise.resolve({
-      table,
-      period: period.toISOString().slice(0, 10),
-      objects: [
-        { organizationId, key: "k", rowCount: 1, bytes: 1, checksum: "c", actionCounts: {} },
-      ],
-      dropped: [],
-    } as unknown as ArchivedPartition);
-  }
-}
-
-class FakeMaintenance implements Partial<MaintenanceGateway> {
-  public readonly cutoffs: { table: string; cutoff: string; organizationId?: string | null }[] = [];
-  public readonly drops: string[] = [];
-
-  public constructor(private readonly periods: readonly Date[] = []) {}
-
-  public partitionsBefore(
-    table: string,
-    cutoff: Date,
-    organizationId?: string | null,
-  ): Promise<readonly PartitionEstimate[]> {
-    this.cutoffs.push({ table, cutoff: cutoff.toISOString(), organizationId });
-    return Promise.resolve(
-      this.periods.map((period) => ({ name: `${table}_x`, period, estimatedRows: 0, bytes: 0 })),
-    );
-  }
-
-  public dropTenantPartitions(organizationId: string): Promise<readonly string[]> {
-    this.drops.push(organizationId);
-    return Promise.resolve(["a", "b", "c"]);
   }
 }
 
@@ -103,24 +42,6 @@ class FakeActivity implements ActivityLogger {
 
   public record(actor: Principal, action: string): Promise<void> {
     this.rows.push({ organizationId: actor.organizationId, action });
-    return Promise.resolve();
-  }
-}
-
-class FakeInvalidator implements Partial<CapabilityInvalidator> {
-  public readonly flushed: string[] = [];
-
-  public invalidateOrganization(organizationId: string): Promise<void> {
-    this.flushed.push(organizationId);
-    return Promise.resolve();
-  }
-}
-
-class FakeProjector implements Partial<AnalyticsProjector> {
-  public readonly forgotten: string[] = [];
-
-  public deleteTenant(organizationId: string): Promise<void> {
-    this.forgotten.push(organizationId);
     return Promise.resolve();
   }
 }
@@ -137,201 +58,100 @@ const actor = (...platform: readonly PermissionKey[]): Principal =>
     }),
   );
 
-// Records the keys it was asked to forget. The placement cache has a deliberately long
-// TTL, so "was it invalidated" is the whole behaviour and a double that shrugged would
-// ──
-// let a deleted tenant keep resolving to a node for minutes.
-class FakeShards {
-  public readonly invalidated: string[] = [];
-
-  public resolve(): Promise<number> {
-    return Promise.resolve(0);
-  }
-
-  public invalidate(key: string): Promise<void> {
-    this.invalidated.push(key);
-    return Promise.resolve();
-  }
-}
-
-interface Parts {
-  readonly tenants: FakeTenants;
-  readonly archive: FakeArchive;
-  readonly maintenance: FakeMaintenance;
-  readonly activity: FakeActivity;
-  readonly capabilities: FakeInvalidator;
-  readonly projector: FakeProjector | null;
-  readonly tenantRetention: FakeTenantRetention;
-  readonly shards: FakeShards;
-}
-
-const build = (overrides: Partial<Parts> = {}) => {
-  const parts: Parts = {
-    tenants: new FakeTenants(),
-    archive: new FakeArchive(),
-    maintenance: new FakeMaintenance(),
-    activity: new FakeActivity(),
-    capabilities: new FakeInvalidator(),
-    projector: new FakeProjector(),
-    tenantRetention: new FakeTenantRetention(),
-    shards: new FakeShards(),
-    ...overrides,
-  };
-
-  const unitOfWork = { run: (work: () => Promise<unknown>) => work() } as unknown as UnitOfWork;
+const build = (tenants: FakeTenants = new FakeTenants()) => {
+  const queue = new FakeQueue();
+  const activity = new FakeActivity();
   const platform = {
     organizationId: () => Promise.resolve(PLATFORM),
-    organization: () => Promise.resolve({ id: PLATFORM, slug: "platform", name: "Platform" }),
   } as unknown as PlatformReader;
 
   return {
-    parts,
+    queue,
+    activity,
     useCase: new DeleteOrganizationUseCase(
       new Authorizer(),
-      parts.tenants,
-      parts.archive as unknown as PartitionArchiveGateway,
-      parts.maintenance as unknown as MaintenanceGateway,
-      parts.capabilities as unknown as CapabilityInvalidator,
+      tenants,
+      queue as unknown as QueuePublisher,
       platform,
-      parts.activity,
-      unitOfWork,
-      { now: () => NOW },
-      parts.projector as unknown as AnalyticsProjector | null,
-      parts.tenantRetention as unknown as TenantRetentionPolicyRepository,
-      parts.shards as unknown as ShardResolver,
+      activity,
     ),
   };
 };
 
 const input = { organizationId: TENANT, slug: "acme" };
+const allowed = () => actor("platform.tenant.manage");
 
+// The request half. Every guard runs here rather than in the job, so a mistake is a
+// sentence on the screen rather than a worker failure nobody is watching.
 describe("DeleteOrganizationUseCase", () => {
   it("refuses an actor without the platform key", async () => {
     await expect(build().useCase.execute(actor(), input)).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("is NOT_FOUND for a tenant that is already gone", async () => {
-    const { useCase } = build({ tenants: new FakeTenants(null) });
-    await expect(useCase.execute(actor("platform.tenant.manage"), input)).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    const { useCase } = build(new FakeTenants(null));
+    await expect(useCase.execute(allowed(), input)).rejects.toBeInstanceOf(NotFoundError);
   });
 
   // The tier holds the platform roles every admin's capability comes from, this one
   // included: deleting it locks the deployment out of its own platform screens.
   it("refuses the platform organization", async () => {
     const tenants = new FakeTenants({ ...TENANT_ROW, isPlatform: true });
-    await expect(
-      build({ tenants }).useCase.execute(actor("platform.tenant.manage"), input),
-    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(build(tenants).useCase.execute(allowed(), input)).rejects.toBeInstanceOf(
+      ConflictError,
+    );
   });
 
   it("refuses a slug that does not match", async () => {
     await expect(
-      build().useCase.execute(actor("platform.tenant.manage"), {
-        organizationId: TENANT,
-        slug: "acme-inc",
-      }),
+      build().useCase.execute(allowed(), { organizationId: TENANT, slug: "acme-inc" }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
-  // The cutoff is the first of *next* month, not now: the partitions are about to be
-  // dropped, so a month left unarchived is rows nothing can hand back.
-  it("archives every month that exists, including the current one", async () => {
-    const maintenance = new FakeMaintenance([new Date(Date.UTC(2026, 7, 1))]);
-    const { parts, useCase } = build({ maintenance });
-
-    const result = await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(maintenance.cutoffs.every((call) => call.cutoff === "2026-09-01T00:00:00.000Z")).toBe(
-      true,
-    );
-    expect(maintenance.cutoffs.map((call) => call.table)).toEqual([
-      "activity_log",
-      "notifications",
-      "messages",
-    ]);
-    expect(parts.archive.calls.every((call) => call.organizationId === TENANT)).toBe(true);
-    expect(result.archived).toBe(3);
-  });
-
-  // The order is the behaviour: archive, then drop, then delete the row. A drop before
-  // the archive is the month gone with nothing to hand back.
-  it("drops the partitions before deleting the row", async () => {
-    const { parts, useCase } = build();
-    const result = await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.maintenance.drops).toEqual([TENANT]);
-    expect(parts.tenants.deleted).toEqual([TENANT]);
-    expect(result.partitions).toBe(3);
-  });
-
-  // The sweep reads the tombstone and nothing else, so a delete that skipped this
-  // leaves the objects in the bucket with nothing to end their window.
-  it("stamps the tombstone the recovery window is measured from", async () => {
-    const { parts, useCase } = build();
-    await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.archive.tombstones).toHaveLength(1);
-    expect(parts.archive.tombstones[0]?.organizationId).toBe(TENANT);
-  });
-
-  // Rebased onto the tier, which is the only reason the row survives the delete: under
-  // the tenant it would be a partition that no longer exists.
-  it("records the audit row under the platform organization", async () => {
-    const { parts, useCase } = build();
-    await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.activity.rows).toEqual([{ organizationId: PLATFORM, action: "tenant.deleted" }]);
-  });
-
-  it("flushes the capability cache and forgets the tenant in the derived store", async () => {
-    const { parts, useCase } = build();
-    await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.capabilities.flushed).toEqual([TENANT]);
-    expect(parts.projector?.forgotten).toEqual([TENANT]);
-  });
-
-  // Skipped rather than failed: with no analytics store there is no derived copy to
-  // forget, and a deployment running without one must still be able to delete a tenant.
-  it("completes with no analytics store configured", async () => {
-    const { useCase } = build({ projector: null });
-    await expect(useCase.execute(actor("platform.tenant.manage"), input)).resolves.toEqual({
-      archived: 0,
-      partitions: 3,
-    });
-  });
-  // No foreign key on that table, so nothing cascades. `deleteFor` had no caller at all,
-  // and an override outlived its tenant forever.
-  it("sweeps the tenant's retention overrides", async () => {
-    const { parts, useCase } = build();
-    await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.tenantRetention.swept).toEqual([TENANT]);
-  });
-});
-
-// `19.20`: the placement cache outlived the tenant. Its TTL is deliberately long —
-// the answer changes only on a move — so nothing else would have cleared it.
-describe("DeleteOrganizationUseCase and the placement cache", () => {
-  it("forgets the deleted tenant's placement", async () => {
-    const { parts, useCase } = build();
-
-    await useCase.execute(actor("platform.tenant.manage"), input);
-
-    expect(parts.shards.invalidated).toEqual([TENANT]);
-  });
-
-  // After the commit, like the capability flush beside it: a cache cleared first is
-  // refilled from rows the transaction has not removed yet.
-  it("does not forget it when the delete refuses", async () => {
-    const { parts, useCase } = build();
+  // Nothing is queued until every guard has passed, which is what makes a refusal cost
+  // no work at all rather than a job that starts and then finds out.
+  it("queues nothing when a guard refuses", async () => {
+    const { queue, useCase } = build();
 
     await expect(
-      useCase.execute(actor("platform.tenant.manage"), { ...input, slug: "not-the-slug" }),
+      useCase.execute(allowed(), { organizationId: TENANT, slug: "wrong" }),
     ).rejects.toThrow();
 
-    expect(parts.shards.invalidated).toEqual([]);
+    expect(queue.published).toEqual([]);
+  });
+
+  // The actor rides in the payload because the job's own principal is the system's.
+  // Without it the audit row for the delete would name nobody.
+  it("queues the purge on the maintenance queue, naming who asked", async () => {
+    const { queue, useCase } = build();
+
+    const result = await useCase.execute(allowed(), input);
+
+    expect(result.jobId).toBe(`tenant-delete.${TENANT}`);
+    expect(queue.published).toHaveLength(1);
+    expect(queue.published[0]?.queue).toBe(QueueName.MAINTENANCE);
+    expect(queue.published[0]?.payload).toEqual({ organizationId: TENANT, actorId: ACTOR });
+    expect(queue.published[0]?.options?.name).toBe("tenant-delete");
+  });
+
+  // BullMQ rejects a colon in a job id, and one id per tenant means a second click
+  // while the first is still queued is the same job rather than a second pass.
+  it("gives the job an id with no colon in it", async () => {
+    const { queue, useCase } = build();
+    await useCase.execute(allowed(), input);
+
+    expect(queue.published[0]?.options?.jobId).toBe(`tenant-delete.${TENANT}`);
+    expect(queue.published[0]?.options?.jobId).not.toContain(":");
+  });
+
+  // Rebased onto the tier, like `tenant.deleted` is: under the tenant it would be a
+  // partition the job is about to drop.
+  it("records the request under the platform organization", async () => {
+    const { activity, useCase } = build();
+    await useCase.execute(allowed(), input);
+
+    expect(activity.rows).toEqual([
+      { organizationId: PLATFORM, action: "tenant.delete_requested" },
+    ]);
   });
 });

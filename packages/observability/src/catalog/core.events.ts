@@ -60,6 +60,9 @@ export const coreEvents = {
   // One per export, not one per object: nine lines a run would be nine lines saying
   // the same thing, and the counts are what an operator reads.
   "cold.tenant.exported": { level: "info" },
+  // The delete is a job now (`19.20`), so this is the only line that says it finished.
+  // `outboxRows` is on it because `24.1` moved that sweep out of the database.
+  "tenant.purge.completed": { level: "info" },
   // One per tenant-month refilled from cold storage. Idempotent through the
   // `ReplacingMergeTree`, so a second run over the same month is a no-op.
   "cold.partition.reprojected": { level: "info" },

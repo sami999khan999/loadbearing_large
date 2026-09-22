@@ -127,6 +127,14 @@ export interface EventShape {
     readonly rows: number;
     readonly bytes: number;
   };
+  // `outboxRows` is here because `24.1` moved that sweep out of the database: a zero
+  // when the tenant had events is the shape of the sweep silently not running.
+  readonly "tenant.purge.completed": {
+    readonly organizationId: string;
+    readonly archived: number;
+    readonly partitions: number;
+    readonly outboxRows: number;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

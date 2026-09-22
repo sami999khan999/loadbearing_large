@@ -41,7 +41,7 @@ export class PlatformProcedures {
   public static readonly deleteTenant = oc
     .route({ method: "DELETE", path: "/platform/tenants" })
     .input(PlatformContract.tenantDelete)
-    .output(PlatformContract.tenantDeleted);
+    .output(PlatformContract.deleteRequested);
 
   // `POST` and a job id back: an export is a full read of seven tables streamed to
   // S3, and a request that waited for it would hold a connection open for minutes.

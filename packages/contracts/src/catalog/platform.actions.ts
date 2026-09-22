@@ -5,6 +5,9 @@ export const platformActions = {
   "platform.restore.requested": { label: "Restore requested" },
   "platform.reproject.requested": { label: "Re-projection requested" },
   "tenant.retention.changed": { label: "Tenant retention changed" },
+  // Two, because the delete is a job now: one says who asked and when, the other says
+  // what it cost. A failed job leaves the first without the second, which is the point.
+  "tenant.delete_requested": { label: "Tenant delete requested" },
   "tenant.deleted": { label: "Tenant deleted" },
   "tenant.export_requested": { label: "Tenant export requested" },
   // Not a platform admin's doing — enrolment writes it — but it is the tenant
