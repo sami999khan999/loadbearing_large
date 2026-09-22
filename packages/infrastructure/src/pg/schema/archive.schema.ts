@@ -13,21 +13,6 @@ import {
   uuid,
 } from "../../import.js";
 
-// Superseded by `partition_archive`, which covers every partitioned table rather than
-// this one. Kept until no deployment can still hold objects under the old key.
-export const activityArchive = pgTable(
-  "activity_archive",
-  {
-    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
-    period: date("period", { mode: "string" }).notNull(),
-    objectKey: text("object_key").notNull(),
-    rowCount: integer("row_count").notNull(),
-    checksum: text("checksum").notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.organizationId, t.period] })],
-);
-
 // The index a read of cold storage starts from: one row per tenant-month per table, and
 // the only place this system records what an archived object holds or costs.
 export const partitionArchive = pgTable(
