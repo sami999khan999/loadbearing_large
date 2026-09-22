@@ -124,6 +124,7 @@ import {
   type Principal,
   PrincipalBuilder,
   type ProjectionPolicyRepository,
+  PurgeOrganizationUseCase,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
   type RealtimePublisher,
@@ -390,6 +391,9 @@ export class Container {
   // "which organization is the tier" and the other is what an admin may do to it.
   public readonly platformAdmin: {
     readonly deleteOrganization: DeleteOrganizationUseCase;
+    // The job half of the delete. Reachable from the worker only — nothing on a
+    // request path may run it, which is the whole point of `19.20`.
+    readonly purgeOrganization: PurgeOrganizationUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
@@ -983,13 +987,20 @@ export class Container {
     );
 
     this.platformAdmin = {
-      // The projector is optional here for the reason it is on `listRetention`: with no
-      // analytics store there is no derived copy of the tenant to forget.
       deleteOrganization: new DeleteOrganizationUseCase(
         this.authorizer,
         new PgTenantRepository(this.cluster, this.transactions, this.shards),
+        this.queuePublisher,
+        this.platform,
+        this.activity,
+      ),
+      // The projector is optional here for the reason it is on `listRetention`: with no
+      // analytics store there is no derived copy of the tenant to forget.
+      purgeOrganization: new PurgeOrganizationUseCase(
+        new PgTenantRepository(this.cluster, this.transactions, this.shards),
         this.partitionArchive,
         this.maintenance,
+        this.outbox,
         this.capabilities,
         this.platform,
         this.activity,

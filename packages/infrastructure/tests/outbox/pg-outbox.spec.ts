@@ -42,6 +42,16 @@ beforeAll(async () => {
     CapabilitySet.from({ wildcard: false, org: { grants: [], denies: [] }, goals: {} }),
   );
 
+  // **`drain` is node-wide**, so every pending row on this database lands in this
+  // spec's batch. Since `24.1` a tenant another spec deleted leaves its events behind.
+  // ──
+  // The same predicate the nightly orphan pass uses, and the same one `orphan-sweep.ts`
+  // runs at teardown — which is too late for rows that existed before this file ran.
+  await database.client.execute(sql`
+    delete from outbox_event e
+    where not exists (select 1 from organizations o where o.id = e.organization_id)
+  `);
+
   // The month this spec writes into has to exist: no DEFAULT partition, on purpose.
   await new PgMaintenanceGateway(
     DatabaseCluster.single(database),

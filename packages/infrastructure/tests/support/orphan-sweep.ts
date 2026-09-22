@@ -10,8 +10,8 @@ const BATCH = 50;
 // spec founded and deleted — and a backlog larger than this clears over several runs.
 const BUDGET = 500;
 
-// A tenant partition whose organization row is gone. Nothing can reach it again, and
-// nothing will drop it: the rows left by cascade, but a partition is DDL.
+// A tenant partition whose organization row is gone. Nothing can reach it again and
+// nothing will drop it — a partition is DDL, and since `24.1` no cascade runs at all.
 const orphansOf = async (database: Database, table: string): Promise<readonly string[]> => {
   const found = await database.client.execute<{ child: string }>(sql`
     select c.relname as child
@@ -85,6 +85,15 @@ export const teardown = async (): Promise<void> => {
     `);
 
     if (swept.rowCount) console.log(`[orphan-sweep] swept ${swept.rowCount} directory rows`);
+
+    // The same leak once more, and the newest: `24.1` dropped the key that took these,
+    // and `outbox_event` has no tenant partition for the loop above to drop.
+    const events = await database.client.execute(sql`
+      delete from outbox_event e
+      where not exists (select 1 from organizations o where o.id = e.organization_id)
+    `);
+
+    if (events.rowCount) console.log(`[orphan-sweep] swept ${events.rowCount} outbox rows`);
   } catch (error) {
     // Housekeeping must not fail a green run, but it must not fail quietly either:
     // the cost of it silently stopping is the lock ceiling coming back months later.

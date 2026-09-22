@@ -99,6 +99,7 @@ export {
   type ProjectionGap,
   type ProjectionPolicyRecord,
   ProjectionPolicyRepository,
+  PurgeOrganizationUseCase,
   QueueDocumentIndexUseCase,
   QueueName,
   QueuePublisher,

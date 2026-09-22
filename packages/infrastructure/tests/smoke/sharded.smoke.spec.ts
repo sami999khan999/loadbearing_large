@@ -1,4 +1,4 @@
-import { PartitionedTable, Shard, TablePlacement } from "@loadbearing/application";
+import { PartitionedTable, Shard } from "@loadbearing/application";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import {
   CacheStore,
@@ -24,26 +24,6 @@ import type {} from "./support/stack.js";
 
 const stack = inject("stack");
 const shard1 = stack.shard1;
-
-// Postgres' own class for a foreign key that has nothing to point at. Asserted by code
-// rather than by message, which is localised and reworded between server versions.
-const FOREIGN_KEY_VIOLATION = "23503";
-
-interface PgFailure {
-  readonly code?: string;
-  readonly constraint?: string;
-}
-
-// Drizzle wraps the driver error and puts the query in `message`, so the constraint is
-// one `cause` down. Walked rather than read at a fixed depth: the wrapping is not ours.
-const pgFailure = (error: unknown): PgFailure => {
-  for (let at: unknown = error; at instanceof Error; at = at.cause) {
-    const failure = at as Error & PgFailure;
-    if (failure.code) return { code: failure.code, constraint: failure.constraint };
-  }
-
-  return {};
-};
 
 // A spec's own double, which is what keeps this rehearsal about the routing seam:
 // `RedisCacheStore` would put a second service between it and the thing it rehearses.
@@ -198,6 +178,13 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
     return Number(found.rows[0]?.count ?? 0);
   };
 
+  const conversationRowsOn = async (database: Database, conversationId: ConversationId) => {
+    const found = await database.client.execute<{ count: string }>(
+      sql`select count(*)::text as count from conversations where id = ${conversationId}::uuid`,
+    );
+    return Number(found.rows[0]?.count ?? 0);
+  };
+
   // Both cross-node passes opened their transaction through the **catalog** unit of
   // work, which never reads `ShardScope` — so the loop ran and every node got node 0.
   // ──
@@ -276,34 +263,35 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
     expect(await messageRowsOn(node1, messageId)).toBe(0);
   });
 
-  // **The split's first real cost, asserted rather than discovered.** Ten foreign keys
-  // cross to the catalog — nine routed, one on local `outbox_event` — and `24.1` decides.
-  it("fails on a foreign key naming a catalog table when the tenant is on node 1", async () => {
-    const thrown = await placedOn(onNodeOne, () =>
-      conversations
-        .save({
-          organizationId: onNodeOne,
-          kind: "channel",
-          title: "rehearsal",
-          directKey: null,
-          createdBy: author,
-          memberIds: [author],
-        })
-        .then(
-          () => null,
-          (error: unknown) => error,
-        ),
+  // **The split's first real cost, paid.** This case used to assert the `23503`: ten
+  // foreign keys crossed to the catalog and a routed insert on node 1 could not land.
+  // ──
+  // `24.1` dropped them, so the assertion inverts — the write succeeds, on node 1, with
+  // the catalog untouched. It fails on the old schema, which is the point of keeping it.
+  it("writes a routed row on node 1 with no key reaching back to the catalog", async () => {
+    const conversationId = await placedOn(onNodeOne, () =>
+      conversations.save({
+        organizationId: onNodeOne,
+        kind: "channel",
+        title: "rehearsal",
+        directKey: null,
+        createdBy: author,
+        memberIds: [author],
+      }),
     );
 
-    const failure = pgFailure(thrown);
-    expect(failure.code).toBe(FOREIGN_KEY_VIOLATION);
+    expect(conversationId).toBeDefined();
+    expect(await conversationRowsOn(node1, conversationId)).toBe(1);
+    expect(await conversationRowsOn(catalog, conversationId)).toBe(0);
+  });
 
-    // Which constraint trips first depends on insert order, so this names the class and
-    // not a constraint: a foreign key on shard 1 pointing at a table only the catalog has.
-    const referenced = TablePlacement.CATALOG.find((table) =>
-      (failure.constraint ?? "").includes(`_${table}_`),
+  // The other half of the same decision: `author` is a `users` row that exists only on
+  // the catalog, and the write above accepted it precisely because nothing checks.
+  it("accepts an author the shard has never heard of", async () => {
+    const strangers = await node1.client.execute<{ count: string }>(
+      sql`select count(*)::text as count from users where id = ${author}`,
     );
 
-    expect(referenced, `${failure.constraint} names no catalog table`).toBeDefined();
+    expect(Number(strangers.rows[0]?.count ?? "0")).toBe(0);
   });
 });
