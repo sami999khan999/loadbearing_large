@@ -9,6 +9,8 @@ import type { DatabaseCluster } from "../primitive/index.js";
 import { TenantPartitionSeed } from "../seed/index.js";
 import type { ShardScope, TransactionScope } from "../transaction/index.js";
 
+// Annotated at the call site as well, because `cursor` is assigned out of the page and
+// the inference would otherwise be circular.
 interface PageRow extends Record<string, unknown> {
   readonly id: string;
   readonly row: Record<string, unknown>;
@@ -65,8 +67,6 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
       let rows = 0;
 
       for (;;) {
-        // Annotated, because `cursor` is assigned from `page` below and the inference
-        // would otherwise be circular.
         // `to_jsonb(t)` rather than a column list: the copy is column-agnostic, so a
         // migration that adds one does not silently stop copying it.
         const page: PageResult = await source.execute<PageRow>(sql`

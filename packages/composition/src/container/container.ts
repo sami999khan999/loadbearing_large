@@ -76,6 +76,7 @@ import {
   type MembershipEnroller,
   type MembershipReader,
   MessagingRealtimeSubscriber,
+  MoveTenantUseCase,
   NotificationSubscriber,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
@@ -112,6 +113,7 @@ import {
   PgShardAssignmentRepository,
   PgShardMapReader,
   PgShardResolver,
+  PgTenantMoveGateway,
   PgTenantRepository,
   PgTenantRetentionPolicyRepository,
   PgTenantStorageReader,
@@ -133,6 +135,7 @@ import {
   RedisConnection,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
   ReprojectPartitionUseCase,
@@ -164,6 +167,7 @@ import {
   SubscriberRegistry,
   SystemClock,
   type TenantMembershipReader,
+  type TenantMoveGateway,
   type TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,
   TransactionScope,
@@ -247,6 +251,10 @@ export class Container {
   // system that legitimately runs this long, and it holds one connection to do it.
   private static readonly DIRECT_STATEMENT_TIMEOUT_MS = 1_800_000;
 
+  // The fallback behind the fallback: `platform_policy` overrides this, and the worker
+  // passes its own from the environment. This is what a container built without one gets.
+  private static readonly DEFAULT_MOVE_GRACE_DAYS = 7;
+
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
   private readonly poolProbe: ReturnType<typeof setInterval>;
@@ -303,6 +311,7 @@ export class Container {
   // consumer holds the gateway and the registry directly.
   public readonly eventPublisher: DomainEventPublisher;
   public readonly outbox: OutboxGateway;
+  public readonly tenantMove: TenantMoveGateway;
   public readonly realtime: RealtimePublisher;
   // Public because the web router holds it directly: a stream is the one thing a
   // procedure reads from a port rather than from a use-case.
@@ -394,6 +403,8 @@ export class Container {
     // The job half of the delete. Reachable from the worker only — nothing on a
     // request path may run it, which is the whole point of `19.20`.
     readonly purgeOrganization: PurgeOrganizationUseCase;
+    readonly moveTenant: MoveTenantUseCase;
+    readonly relocateTenant: RelocateTenantUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
@@ -635,6 +646,7 @@ export class Container {
       this.shards,
       this.clock,
     );
+    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards);
     this.outbox = new PgOutboxGateway(
       this.cluster,
       this.transactions,
@@ -1010,6 +1022,26 @@ export class Container {
         this.tenantRetentionPolicies,
         this.shardResolver,
       ),
+      moveTenant: new MoveTenantUseCase(
+        this.authorizer,
+        new PgTenantRepository(this.cluster, this.transactions, this.shards),
+        this.shardAssignments,
+        this.queuePublisher,
+        this.platform,
+        this.activity,
+        this.cluster.size,
+      ),
+      // The job half. Reachable from the worker only — nothing on a request path may
+      // run it, which is what makes the placement correct by construction.
+      relocateTenant: new RelocateTenantUseCase(
+        this.shardAssignments,
+        this.tenantMove,
+        this.platformPolicy,
+        this.platform,
+        this.activity,
+        this.clock,
+        config.database.moveGraceDays ?? Container.DEFAULT_MOVE_GRACE_DAYS,
+      ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,
         new PgTenantRepository(this.cluster, this.transactions, this.shards),
@@ -1267,10 +1299,13 @@ export class Container {
     return this.analyticsProjector !== undefined;
   }
 
-  // A constant until `24.2` registers the move job. The seam is here rather than on the
-  // screen because the retrofit otherwise touches the contract, the use-case and the panel.
+  // **Read while the constructor runs**, so it is derived from the cluster rather than
+  // assigned later — a field set after this point would be `undefined` at the call site.
+  // ──
+  // One node is nowhere to move a tenant to, so the screen says "unavailable" rather
+  // than offering a button whose every press is a `ConflictError`.
   public get hasShardMoves(): boolean {
-    return false;
+    return this.cluster.size > 1;
   }
 
   public get logs(): LogReader {
