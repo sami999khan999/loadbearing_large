@@ -36,6 +36,15 @@ describe("BetterAuthErrorNormalizer — mapped codes", () => {
   it("prefers the code over the status when both are present", () => {
     expect(codeOf({ code: "USER_ALREADY_EXISTS", status: 400 })).toBe("CONFLICT");
   });
+
+  // Their code is a string from outside, and the lookup was a bare index: `BY_CODE`
+  // inherits `toString`, which is truthy and returns no `AppError` when called.
+  it.each(["toString", "constructor", "valueOf"])(
+    "does not mistake the inherited name %s for a mapped code",
+    (code) => {
+      expect(codeOf({ code, status: 429 })).toBe("RATE_LIMITED");
+    },
+  );
 });
 
 describe("BetterAuthErrorNormalizer — status fallback", () => {
