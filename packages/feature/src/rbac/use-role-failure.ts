@@ -31,7 +31,11 @@ export function useRoleFailure() {
 
       if (code === "CONFLICT") {
         const reason = String(context.reason);
-        if (reason in CONFLICT_COPY) return t(CONFLICT_COPY[reason as keyof typeof CONFLICT_COPY]);
+        // `Object.hasOwn`, not `in`, for the reason `AppError.isKnownCode` gives: `in`
+        // walks the prototype chain, and `t(Object.prototype.toString)` renders nothing.
+        if (Object.hasOwn(CONFLICT_COPY, reason)) {
+          return t(CONFLICT_COPY[reason as keyof typeof CONFLICT_COPY]);
+        }
       }
 
       if (code === "FORBIDDEN" && !GATE_KEYS.has(String(context.permission))) {
