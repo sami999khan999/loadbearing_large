@@ -108,6 +108,18 @@ describe("ErrorCopy", () => {
     expect(rendered).toBe("Something went wrong. Please try again.");
   });
 
+  // A rule arrives in the envelope from outside, and the fallback was an index and a
+  // `??`: `FIELD_RULE_COPY["toString"]` is a truthy function, so this rendered nothing.
+  it.each(["toString", "constructor", "valueOf", "hasOwnProperty"])(
+    "falls back for the inherited name %s rather than rendering an empty sentence",
+    async (rule) => {
+      const t = await translator();
+      const rendered = ErrorCopy.field(t, { field: "email", rule });
+
+      expect(rendered).toBe("Something went wrong. Please try again.");
+    },
+  );
+
   it("returns no field sentences for an error that has no violations", async () => {
     const t = await translator();
 
