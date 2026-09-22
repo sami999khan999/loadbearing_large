@@ -1,9 +1,14 @@
 # Archived plans
 
-**Nothing here is edited.** Every file is the record of what was planned, decided and believed at
-the time it was written. A line that has since gone stale stays stale: correcting it would make the
-record worse, not better. The open ledger is [`../BACKLOG.md`](../BACKLOG.md), and that is the only
-file in `plans/` where a box is ticked.
+**Nothing here is edited — with one exception, named below.** Every other file is the record of
+what was planned, decided and believed at the time it was written. A line that has since gone
+stale stays stale: correcting it would make the record worse, not better. The open ledger is
+[`../BACKLOG.md`](../BACKLOG.md), and that is the only file in `plans/` where a box is ticked.
+
+**The exception is [`DONE.md`](DONE.md), and it is appended to rather than edited.** It is the
+closed half of `BACKLOG.md`, split out on 2026-09-22 when eighty-four closed entries were crowding
+nineteen open ones. When something closes, its entry moves there with its ID and its proof. That is
+growth, not revision: no line already in it is rewritten.
 
 **One exception, and it is not content: a link broken by the move itself is repaired.** A file one
 folder deeper needs `../../docs/` where it wrote `../docs/`, and leaving that would make the record
@@ -16,6 +21,7 @@ a summary.
 
 | File | What it holds | Moved |
 |---|---|---|
+| [`DONE.md`](DONE.md) | **The only file here that grows.** Every entry `BACKLOG.md` has closed — 84 of them — with the proof each was ticked on, and that file's changelog | 2026-09-22 |
 | [`PLAN.md`](PLAN.md) | The whole project in build order — 26 phases, items `<phase>.<item>`, decisions `D1`–`D50`, and the **Where the old IDs went** table that resolves every ID below | 2026-09-20 |
 | [`REVIEW.md`](REVIEW.md) | Forty-five defects a green build does not catch, found by a full read at `d98c9f3`, ranked, none fixed | 2026-09-20 |
 | [`OPEN.md`](OPEN.md) | The 2026-09-19 review's ten findings, what closed on 2026-09-20, and section D — what changed on the developer's machine and how to undo each piece | 2026-09-20 |
@@ -31,8 +37,10 @@ a summary.
 `C6.3`, `P8.3` — and `PLAN.md` renumbered every one of them. Its **Where the old IDs went** table
 maps all of them, and decisions map by `C-n` → `Dn`, `S-n` → `D(9+n)`, `A-n` → `D(29+n)`.
 
-**Why two moves.** On 2026-09-17 the four original plans were consolidated into `PLAN.md` and moved
+**Why three moves.** On 2026-09-17 the four original plans were consolidated into `PLAN.md` and moved
 here. On 2026-09-20 `PLAN.md` itself, with the four ledgers that had grown around it, was compiled
 into `BACKLOG.md` and followed them. The 2026-09-17 note said every still-open item had been carried
 into `PLAN.md` text-unchanged; the same is true of `BACKLOG.md`, except that it summarises rather
-than copies, which is why these files are kept rather than deleted.
+than copies, which is why these files are kept rather than deleted. On 2026-09-22 `BACKLOG.md`
+was split in half and its closed entries became `DONE.md` — the first file here that is a live
+ledger's other half rather than a finished plan.
