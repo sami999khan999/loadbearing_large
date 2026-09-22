@@ -1,7 +1,7 @@
 // Each assertion run against a tree that violates it, and against one that does not.
 //
 // The script derives ROOT from its own location, so a fixture is a temporary tree with a
-// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-six
+// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-nine
 // assertions, and the thing under test is the file the repository actually runs.
 
 // @ts-check
@@ -139,7 +139,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(28);
+    expect(results).toHaveLength(29);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -1224,6 +1224,67 @@ describe("28 — every permission in the catalog gates a procedure", () => {
   });
 
   it("skips a tree with no permission catalog", () => {
+    expect(entry(run(), NAME).status).toBe("○");
+  });
+});
+
+describe("29 — the three shard readers run one algorithm", () => {
+  const NAME = "the three shard readers run one algorithm";
+
+  // The rule all three carry, written once here. A fixture varies one copy of it.
+  const reader = (guard) =>
+    [
+      "const shardsFromEnv = () => {",
+      "  const found = [];",
+      "  for (const [name, value] of Object.entries(process.env)) {",
+      "    const match = /^DATABASE_SHARD_(d+)_URL$/.exec(name);",
+      "    if (!match?.[1] || !value) continue;",
+      "    const index = Number(match[1]);",
+      `    if (index < ${guard}) continue;`,
+      "    found.push({ index, url: value });",
+      "  }",
+      "  return found.toSorted((left, right) => left.index - right.index);",
+      "};",
+      "",
+    ].join("\n");
+
+  const trees = (web, worker, script) => ({
+    "apps/web/package.json": PKG("web"),
+    "apps/web/src/env.ts": reader(web),
+    "apps/worker/package.json": PKG("worker"),
+    "apps/worker/src/env.ts": reader(worker),
+    "packages/infrastructure/package.json": PKG("infrastructure"),
+    "packages/infrastructure/shard-env.ts": reader(script),
+  });
+
+  it("accepts three copies of one rule", () => {
+    passes(run(trees(1, 1, 1)), NAME);
+  });
+
+  // The drift that happened: the scripts' copy and the apps' copies disagreed about an
+  // empty value, and the odd one out threw naming shard 1 as its own predecessor.
+  it("catches one copy that parses differently", () => {
+    fails(run(trees(1, 1, 0)), NAME, "packages/infrastructure/shard-env.ts");
+  });
+
+  // A comment is not a difference. `withoutComments` runs first, which is what lets each
+  // copy explain itself where it sits.
+  it("ignores a comment one copy carries and the others do not", () => {
+    const tree = trees(1, 1, 1);
+    tree["apps/web/src/env.ts"] = reader(1).replace(
+      "  const found = [];",
+      "  // Node 0 is `DATABASE_URL`.\n  const found = [];",
+    );
+    passes(run(tree), NAME);
+  });
+
+  it("catches a copy that no longer holds the reader at all", () => {
+    const tree = trees(1, 1, 1);
+    tree["apps/worker/src/env.ts"] = "export const Env = {};\n";
+    fails(run(tree), NAME, "apps/worker/src/env.ts");
+  });
+
+  it("skips a tree with no shard reader on it", () => {
     expect(entry(run(), NAME).status).toBe("○");
   });
 });
