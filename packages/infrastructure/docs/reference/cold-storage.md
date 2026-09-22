@@ -97,13 +97,13 @@ partition_archive (organization_id, table_name, period) primary key
 
 Leading with the tenant is not cosmetic: it is what lets one tenant's cold months be read, swept
 and totalled without touching another's, and it is why this table needs no `TENANT_EXEMPT` line
-where `activity_archive` needed one.
+where `activity_archive` needed one until `0034` dropped it.
 
 `organization_id` is deliberately **not** a foreign key to `organizations`, for the reason the
 audit trail already gives about its actor: an archive record outlives the tenant it names, and a
 cascade would erase it. That is also why the sweep below exists rather than a cascade.
 
-Three columns beyond what `activity_archive` carried, and each has one reader:
+Three columns beyond what `activity_archive` carried before it, and each has one reader:
 
 - **`bytes`**, from `StoredObject.size`. Nothing else in this repository records what an object
   costs, so a per-tenant storage total had nowhere to read from.
@@ -285,12 +285,18 @@ The count is taken **after** the detach. Detaching first is what makes the expor
 counting first would count a different set from the one uploaded: rows written in between would be
 streamed to S3 and missing from `row_count`, and that drift is permanent and silent.
 
-## What `activity_archive` is still doing here
+## What happened to `activity_archive`
 
-`0025` copies every row of it into `partition_archive` under `table_name = 'activity_log'`, keeping
-the object key it already names — the object is where it is, and rewriting the key would point the
-index at nothing. The table itself stays until no deployment can still hold objects under the old
-`activity-archive/` prefix; a later migration drops it and its `TENANT_EXEMPT` line together.
+`0025` copied every row of it into `partition_archive` under `table_name = 'activity_log'`, keeping
+the object key it already named — the object is where it is, and rewriting the key would have
+pointed the index at nothing. The table itself then stayed, on one condition it wrote down: until
+no deployment could still hold objects under the old `activity-archive/` prefix.
+
+**`0034` drops it, because that condition is met.** There is no deployment — CI builds and tests
+and does not deploy, there are no tags and no releases, and the only bucket this system has ever
+written to holds `cold/` and `export/`. No object under the old prefix exists anywhere to orphan.
+`shard.ts` no longer names the table, so the catalog exemption that stood in for a `TENANT_EXEMPT`
+line went with it.
 
 ## The key does not carry the shard, and the index does not grow a column
 
