@@ -52,9 +52,11 @@ and the ones that grow *with activity* `PARTITION BY RANGE` again underneath, be
 later is a rewrite with downtime — the parents are the migration's, every child is
 `TenantPartitionSeed`'s, and a table that grows with the calendar rather than with the work, like
 `partition_archive`, takes no month level · query-count assertions in integration tests for anything that loops ·
-**every tenant foreign key `ON DELETE CASCADE`**, because that column is the only handle a tenant
-delete has, and `NO ACTION` — never `RESTRICT` — between siblings, so the cascade is not rejected
-by its own check. The audit trail is the one table that names no actor by foreign key.
+**no tenant foreign key from a routed table to the catalog** — decision `24.1` dropped the ten
+that existed, because Postgres enforces no key across two databases and a shard is one. A tenant
+delete drops the tenant's partitions instead, sweeps `outbox_event` by hand because it has no
+tenant level, and a nightly pass counts what leaked. `NO ACTION` — never `RESTRICT` — between
+siblings on the same node. The audit trail names no actor by foreign key either.
 
 - **Every application connection goes through pgBouncer in transaction mode, and that changes what
   a timeout is.** `pg` sends `statement_timeout` as a startup parameter; the pooler drops it, and
