@@ -1,7 +1,5 @@
 import { afterAll, describe, expect, inject, it } from "vitest";
 import {
-  asc,
-  eq,
   Identifiers,
   migrate,
   type OrganizationId,
@@ -23,6 +21,10 @@ const stack = inject("stack");
 
 // What decision D29 claimed without measuring: "a few hundred tenants per node is
 // comfortable". This is the measurement, and `partitions.md` carries its numbers.
+
+// Fifty names to one `drop table`, matching `tests/support/orphan-sweep.ts`: the parent's
+// lock is taken once per batch rather than once per partition.
+const DROP_BATCH = 50;
 
 // Direct, never pooled: every statement here is DDL.
 const database = new Database({ url: stack.database.directUrl });
@@ -140,12 +142,39 @@ const dropOrphans = async (): Promise<number> => {
     .map((entry) => entry.name);
   const sorted = [...rows.rows].sort((a, b) => order.indexOf(a.parent) - order.indexOf(b.parent));
 
-  for (const { parent, child } of sorted) {
-    await database.client.execute(sql.raw(`alter table ${parent} detach partition ${child}`));
-    await database.client.execute(sql.raw(`drop table ${child}`));
+  // **Fifty names to one `drop table`**, which takes the parent's lock once instead of
+  // fifty times — the same reason `tests/support/orphan-sweep.ts` batches.
+  for (const parent of order) {
+    const children = sorted.filter((row) => row.parent === parent).map((row) => row.child);
+    if (children.length === 0) continue;
+
+    // Detached one at a time, and only where it is needed: `ALTER TABLE ... DETACH` takes
+    // one partition, and a parent nothing references can be dropped from without it.
+    if (await isReferenced(parent)) {
+      for (const child of children) {
+        await database.client.execute(sql.raw(`alter table ${parent} detach partition ${child}`));
+      }
+    }
+
+    for (let at = 0; at < children.length; at += DROP_BATCH) {
+      const batch = children.slice(at, at + DROP_BATCH);
+      await database.client.execute(sql.raw(`drop table ${batch.join(", ")}`));
+    }
   }
 
   return sorted.length;
+};
+
+// A key on a partitioned table hangs off every one of its partitions, so a referenced
+// parent's children cannot be dropped without detaching first. Only `conversations` is.
+const isReferenced = async (parent: string): Promise<boolean> => {
+  const found = await database.client.execute<{ referenced: boolean }>(sql`
+    select exists (
+      select 1 from pg_constraint where contype = 'f' and confrelid = ${parent}::regclass
+    ) as referenced
+  `);
+
+  return Boolean(found.rows[0]?.referenced);
 };
 
 afterAll(
@@ -158,26 +187,20 @@ afterAll(
     // and the row delete after it another, so a dying process commits the second alone.
     await dropOrphans();
 
-    // Every synthetic tenant, found by slug rather than from the list above: a run that
-    // died half way through still has to be cleanable by running this again.
-    for (;;) {
-      const page = await database.client
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(sql`${organizations.slug} like ${`${SLUG}%`}`)
-        .orderBy(asc(organizations.id))
-        .limit(200);
+    // **Rows first, partitions second**, which is backwards from how it reads and is the
+    // whole of why this is minutes rather than hours. Since `24.1` no key crosses from a
+    // ──
+    // partition to `organizations`, so this delete is one statement rather than a cascade
+    // per tenant — and it makes every partition an orphan, which `dropOrphans` batches.
+    await database.client
+      .delete(organizations)
+      .where(sql`${organizations.slug} like ${`${SLUG}%`}`);
 
-      if (page.length === 0) break;
-      for (const { id } of page) {
-        await maintenance.dropTenantPartitions(id);
-        await database.client.delete(organizations).where(eq(organizations.id, id));
-      }
-    }
+    await dropOrphans();
 
     await database.close();
-    // The cleanup drops as many partitions as the run created, so it is the hook that needs
-    // the hour rather than the test.
+    // Measured at two thousand tenants: 11 611 partitions in 1m42s batched, against a
+    // projected fourteen hours one at a time. See docs/reference/partitions.md.
   },
   60 * 60 * 1_000,
 );
