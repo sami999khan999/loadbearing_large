@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 12 | 19 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 11 | 20 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 1 | 5 |
@@ -101,17 +101,9 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-Filed until a second node is provisioned. One compose container is enough to *run* the smoke and
-not enough to *decide* `24.1` (`S.3`).
+**`24.1` is decided and built** — [`archive/DONE.md`](archive/DONE.md) §1. The rest still waits on
+a second node being provisioned rather than on a decision.
 
-- [ ] `24.1` **The foreign-key decision.** Ten `cascade` FKs cross from a shard to the catalog —
-  nine on routed tables, one on local `outbox_event`, referencing only `organizations` and
-  `users`. **Recommended (a):** drop them, sweep routed rows by `organization_id` per shard, count
-  orphans nightly. The measurement behind it: a `users` delete already costs a
-  `conversation_members` scan per tenant partition (300 users exceeded a 30 s `statement_timeout`
-  at 82 tenants); (b) would fire that on every node, (a) prunes a tenant delete to one partition.
-  Carry into whichever lands: a *user* delete becomes a maintenance job at a few thousand tenants.
-  `R.2` is gated on this. — `archive/PLAN.md:3907`
 - [ ] `24.2` **Tenant move** as a `MaintenanceConsumer` job — `shard_assignments.moving_to`,
   `ensureTenantPartitions` on the target, keyset copy, verify counts, flip `node`,
   `resolver.invalidate`, drop the source after a grace period; write freeze as a `ForbiddenError`
@@ -127,8 +119,8 @@ not enough to *decide* `24.1` (`S.3`).
   load with no lost writes, waits on `24.2`. — `archive/PLAN.md:3987`
 - [ ] `24.6` **Load test the routed paths at 10×** — half ran (`tests/smoke/routed.smoke.spec.ts`,
   `ROUTED_SCALE=1`): a warm placement resolve is 679 µs, a miss 2 568 µs, the cross-node walk is
-  serial. **The write half cannot run**: a routed insert on node 1 is a `23503` before it can be
-  timed, which is `24.1`. — `archive/PLAN.md:3997`
+  serial. **The write half is unblocked** since `24.1` dropped the keys — a routed insert on node 1
+  lands now, and `sharded.smoke.spec.ts` proves it. What is left is running the load test. — `archive/PLAN.md:3997`
 - [ ] `24.7` **A pooled partition for the long tail** — small tenants share one `<table>_pool`
   list partition and graduate on a size line. Not built until `16.12`'s number says so (section 6). — `archive/PLAN.md:4015`
 
@@ -165,9 +157,9 @@ with **no unit test**, because `session.fn.ts` calls `createServerFn` at module 
 under vitest. And `R.24` changed no behaviour at all, only comments that were untrue — the
 behaviour behind it was `23.1`'s decision to take, and it was taken.
 
-**One thing is still owed out of `R.2`**, and it is section 1's blocker rather than this one's:
-with two nodes, a spec that drains node 1's outbox. The binding that fixes it landed; the proof
-waits on `24.1`.
+**One thing is still owed out of `R.2`**: with two nodes, a spec that drains node 1's outbox. The
+binding landed long ago and `24.1` removed the `23503` that blocked the proof, so this is now a
+spec nobody has written rather than a thing that cannot be written.
 
 ---
 

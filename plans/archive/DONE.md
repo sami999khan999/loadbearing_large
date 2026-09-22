@@ -22,6 +22,35 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `24.1` **The foreign-key decision** `done: 2026-09-22` — **(a), as recommended: dropped.**
+  Ten `cascade` keys crossed from a shard to the catalog. Postgres enforces no foreign key across
+  two databases, so every one was impossible the day a shard becomes a separate server — keeping
+  them was not the cautious choice, it was the choice to abandon the split.
+  - **Nine were already doing nothing, and that is what sized the change.**
+    `DeleteOrganizationUseCase` calls `dropTenantPartitions` *before* it removes the
+    `organizations` row, so six found no rows left to take. The three naming `users` never fired
+    at all: there is no user-delete path in `src/`.
+  - **`outbox_event` was the one doing real work.** It has `tenantKey: null`, so no partition drop
+    reaches it and this cascade was its only reaper. `PurgeOrganizationUseCase` sweeps it by hand
+    now — and the leak proved itself immediately: the global orphan sweep took **16 real rows** on
+    its first run after the migration, left by specs that had been relying on the cascade.
+  - **Migration `0035`, one `DROP CONSTRAINT` per breakpoint.** Each takes `ACCESS EXCLUSIVE` on
+    the parent *and* every partition under it, so ten in one transaction is a lock storm. Applied
+    to both nodes and verified on each: zero keys remain from those seven tables.
+  - **The smoke case inverted rather than being deleted.** It used to assert the `23503`; it now
+    asserts a routed write landing on node 1 with the catalog untouched, and a second case pins
+    that the author is a `users` row the shard has never heard of. The red-then-green is clean by
+    construction — the old assertion passed before the migration, the new one after, and the
+    migration is the only change. `sharded.smoke.spec.ts` is **6 passed**.
+  - **The guarantee moved rather than being dropped.** A nightly `orphans` job at 04:00 names any
+    tenant with rows on a node whose `organizations` row is gone — two reads, never a join, with
+    the candidates coming from partition names rather than a scan. It logs at `warn` and carries
+    the ids, because with no key left this is the only place a leaked tenant is named.
+  - **It also found `19.20`.** The delete was placed on the admin's node rather than the tenant's,
+    so on two nodes it dropped nothing and reported success. See that entry.
+  - `tenant-cascade.spec.ts` now asserts the two halves apart: catalog rows still go with the
+    tenant, routed rows do not and say why. `data.md` and `data-and-scale.md` both stated the old
+    rule and both were rewritten. — `archive/PLAN.md:3907`
 ### Phase 23 — Loose ends, no gate
 
 - [x] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.**
@@ -773,6 +802,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-22 | @sami | **`24.1` decided and built — the ten cross-shard foreign keys are gone.** The entry had been filed for two phases as "a decision about what a production catalog and a production shard do to each other", and the decision was (a): drop them. Mapping it first is what made it small — **nine of the ten were already doing nothing**, because the tenant delete drops partitions before it removes the `organizations` row, and nothing in `src/` deletes a user. `outbox_event` was the exception and the only real change; the leak proved itself when the orphan sweep took 16 real rows on its first run after the migration. The guarantee moved from the database to a nightly job that names the tenants rather than counting them. The smoke case that asserted the `23503` now asserts the write succeeding, which makes the pair a clean red-then-green across the migration, and `sharded.smoke.spec.ts` is 6 passed. Two rule pages stated "every tenant foreign key `ON DELETE CASCADE`" and both were rewritten to say why the rule inverted |
 | 2026-09-22 | @sami | **`19.20` closed, and not for the reason it was filed.** The entry said to make the tenant delete a job "when a large tenant's in-request archive bites"; implementing `24.1` found that the delete was **running on the wrong node**. `shardMiddleware` places on the actor's principal and the use-case placed nothing of its own, so a platform admin on node 0 deleting a tenant on node 1 dropped partitions on node 0, found none and reported success. It is the same class as `R.2` and latent only while everything sits on node 0. A job fixes it by construction — `withShard` places by organization id — so `DeleteOrganizationUseCase` now keeps every guard and queues, and `PurgeOrganizationUseCase` does the work on the tenant's own node with no permission to assert and the actor carried in the payload. The wire answers a job id rather than a tally, matching `tenant-export` and `cold-restore` |
 | 2026-09-22 | @sami | **`REVIEW.md`'s own gap closed, and closing it found the thing it was most likely to miss.** The review ran without Docker, so its forty-five fixes landed with neither the integration specs nor the smoke suites re-run against them; both ran today — 278 integration tests, 31 smoke. **`LOKI_URL` was commented out in `.env` while Loki was up and answering,** so `observability.smoke.spec.ts` would have skipped silently and the run would have "passed" having proved nothing about the log read-back path. That is `S.2`'s ClickHouse trap in a second place, five days after the first. Uncommented, the file runs 5 cases. The three remaining skips — `routed`, `fan-out`, `tenant-ceiling` — are opt-in scale runs gated on env vars and are their own open items, named rather than counted |
 | 2026-09-22 | @sami | **`BACKLOG.md` was split in half and this file is the other half.** It held eighty-four closed entries against nineteen open ones — 106 KB you scroll four-fifths of to reach the work — so every ticked entry moved here with its proof, its ID and the changelog that explains it, and the backlog came out at 25 KB holding only what is open. Nothing was rewritten in the move and nothing was summarised: every moved line is here verbatim, checked line by line rather than trusted. Sections keep their numbers, so `R.7` and `23.15` resolve exactly as before, and the pointers into `archive/PLAN.md` still point where they did. Two prose repairs were needed where entries came out from under an intro that then introduced nothing — Phase 23's three headings and section 2's three severity bands — and both now say what closed and where it went. This is the first file in `archive/` that grows: the plans beside it are frozen records of one day, and `index.md` now names the difference rather than claiming nothing here is ever touched |
