@@ -13,6 +13,7 @@ import {
   type RetentionPolicyRecord,
   RetentionRules,
   type TenantRetentionPolicyRecord,
+  type UserId,
   Worker,
 } from "../import.js";
 
@@ -29,6 +30,13 @@ interface RestoreJob {
 interface ExportJob {
   readonly organizationId: OrganizationId;
   readonly day: string;
+}
+
+// What `tenant-delete` carries. The actor rides along because the job's own principal
+// is the system's, and the audit row for a delete has to name who asked for it.
+interface PurgeJob {
+  readonly organizationId: OrganizationId;
+  readonly actorId: UserId;
 }
 
 // The consumer whose absence meant `cleanup-daily` registered every boot and never ran,
@@ -125,6 +133,8 @@ export class MaintenanceConsumer {
         return this.restore(job.data as RestoreJob);
       case "tenant-export":
         return this.export(job.data as ExportJob);
+      case "tenant-delete":
+        return this.purge(job.data as PurgeJob);
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }
@@ -206,6 +216,23 @@ export class MaintenanceConsumer {
       objects: exported.objects.length,
       rows: exported.objects.reduce((total, object) => total + object.rowCount, 0),
       bytes: exported.objects.reduce((total, object) => total + object.bytes, 0),
+    });
+  }
+
+  // `19.20`: this was the request path, and for a large tenant it is minutes of
+  // streaming to S3 on a pooled connection. It is also the only way to place it right.
+  private async purge(data: PurgeJob): Promise<void> {
+    // **Placed on the tenant's node, not the admin's.** `shardMiddleware` keys on the
+    // actor's organization, so in a request this dropped partitions on the wrong node.
+    const purged = await withShard(this.container, data.organizationId, () =>
+      this.container.platformAdmin.purgeOrganization.execute(data),
+    );
+
+    this.container.logger.emit("tenant.purge.completed", {
+      organizationId: data.organizationId,
+      archived: purged.archived,
+      partitions: purged.partitions,
+      outboxRows: purged.outboxRows,
     });
   }
 
