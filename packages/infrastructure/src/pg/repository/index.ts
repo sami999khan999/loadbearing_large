@@ -30,6 +30,7 @@ export { PgShardResolver } from "./pg-shard.resolver.js";
 export { PgShardAssignmentRepository } from "./pg-shard-assignment.repository.js";
 export { PgShardMapReader } from "./pg-shard-map.reader.js";
 export { PgTenantRepository } from "./pg-tenant.repository.js";
+export { PgTenantMoveGateway } from "./pg-tenant-move.gateway.js";
 export { PgTenantRetentionPolicyRepository } from "./pg-tenant-retention-policy.repository.js";
 export { PgTenantStorageReader } from "./pg-tenant-storage.reader.js";
 export { PgUserReader } from "./pg-user.reader.js";

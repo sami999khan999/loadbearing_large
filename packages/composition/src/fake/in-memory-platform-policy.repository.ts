@@ -7,7 +7,12 @@ export class InMemoryPlatformPolicyRepository extends PlatformPolicyRepository {
 
   public constructor(record: Partial<PlatformPolicyRecord> = {}) {
     super();
-    this.record = { projectionEnabled: true, replicaReadsEnabled: false, ...record };
+    this.record = {
+      projectionEnabled: true,
+      replicaReadsEnabled: false,
+      moveGraceDays: null,
+      ...record,
+    };
   }
 
   public override get(): Promise<PlatformPolicyRecord> {

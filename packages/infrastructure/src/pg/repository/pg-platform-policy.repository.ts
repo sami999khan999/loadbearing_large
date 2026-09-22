@@ -6,7 +6,13 @@ import { platformPolicy } from "../schema/index.js";
 // `order by` correct rather than lucky.
 const ROW = 1;
 
-const DEFAULTS: PlatformPolicyRecord = { projectionEnabled: true, replicaReadsEnabled: false };
+// `moveGraceDays: null` is the shipped answer, not a placeholder: unset means the
+// deployment's own default, which the operator overrides from the platform screen.
+const DEFAULTS: PlatformPolicyRecord = {
+  projectionEnabled: true,
+  replicaReadsEnabled: false,
+  moveGraceDays: null,
+};
 
 export class PgPlatformPolicyRepository extends BaseRepository implements PlatformPolicyRepository {
   // Deployment-wide policy.
@@ -17,6 +23,7 @@ export class PgPlatformPolicyRepository extends BaseRepository implements Platfo
       .select({
         projectionEnabled: platformPolicy.projectionEnabled,
         replicaReadsEnabled: platformPolicy.replicaReadsEnabled,
+        moveGraceDays: platformPolicy.moveGraceDays,
       })
       .from(platformPolicy)
       .limit(1);

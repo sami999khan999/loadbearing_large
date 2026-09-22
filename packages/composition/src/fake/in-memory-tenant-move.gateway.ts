@@ -10,6 +10,7 @@ export class InMemoryTenantMoveGateway extends TenantMoveGateway {
   private readonly rows: Rows = new Map();
   private readonly copies: { organizationId: string; fromNode: number; toNode: number }[] = [];
   private readonly drops: { organizationId: string; node: number }[] = [];
+  private readonly prepares: { organizationId: string; node: number }[] = [];
 
   // Seeds what a node holds. Without it every count is zero and a move "verifies"
   // against nothing, which is the failure this fake exists to be able to show.
@@ -17,6 +18,13 @@ export class InMemoryTenantMoveGateway extends TenantMoveGateway {
     const forNode = this.rows.get(node) ?? new Map<string, number>();
     forNode.set(table, rows);
     this.rows.set(node, forNode);
+  }
+
+  // Recorded, because "was the target prepared before the copy" is the ordering a move
+  // gets wrong: inserting into a table with no partition is an error, not a no-op.
+  public override prepare(organizationId: OrganizationId, node: number): Promise<void> {
+    this.prepares.push({ organizationId, node });
+    return Promise.resolve();
   }
 
   public override copy(
@@ -54,5 +62,9 @@ export class InMemoryTenantMoveGateway extends TenantMoveGateway {
 
   public dropped(): readonly { organizationId: string; node: number }[] {
     return this.drops;
+  }
+
+  public prepared(): readonly { organizationId: string; node: number }[] {
+    return this.prepares;
   }
 }

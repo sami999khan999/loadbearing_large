@@ -8,6 +8,10 @@ export interface TableRowCount {
 // **The one seam that addresses two nodes at once**, which is why it is not a
 // `BaseRepository`: a repository reads tables of one placement, on one node.
 export abstract class TenantMoveGateway {
+  // The target's partitions, before anything is copied into them. Separate from `copy`
+  // so a retried move re-runs DDL that is already idempotent rather than re-deciding.
+  public abstract prepare(organizationId: OrganizationId, node: number): Promise<void>;
+
   // Page in, page out. Portable over a managed Postgres, where `postgres_fdw` and a
   // node-to-node credential are not — decision `24.2`.
   public abstract copy(
