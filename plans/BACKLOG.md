@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, from every plan file, in one place
-updated: 2026-09-24
+updated: 2026-09-25
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
