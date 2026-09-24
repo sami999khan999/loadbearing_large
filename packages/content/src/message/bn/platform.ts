@@ -133,7 +133,15 @@ export const platform = {
   "platform.shards.overrides.default": "ডিফল্ট",
   "platform.shards.overrides.count": "{count}টি বদলানো",
   "platform.shards.move": "সরান",
-  "platform.shards.move.unavailable": "টেন্যান্ট সরাতে ফিজিক্যাল স্প্লিট লাগে — ফেজ ২৪।",
+  "platform.shards.move.unavailable":
+    "টেন্যান্ট সরাতে দ্বিতীয় একটি ডেটাবেস নোড লাগে — একটি নোডে সরানোর কোনো জায়গা নেই।",
+  "platform.shards.move.title": "{name} সরান",
+  "platform.shards.move.warning":
+    "{name} নোড {node}-এ আছে। সব সারি কপি না হওয়া পর্যন্ত এর লেখা প্রত্যাখ্যাত হবে, আর পুরনো কপিটি গ্রেস পিরিয়ড পর্যন্ত রাখা হবে যাতে সরানোটা ফিরিয়ে নেওয়া যায়।",
+  "platform.shards.move.to": "নোড {node}-এ সরান",
+  "platform.shards.move.cancel": "বাতিল",
+  "platform.shards.move.queued":
+    "{jobId} হিসেবে সারিতে রাখা হয়েছে। ওয়ার্কার সব সারি কপি করার পর টেন্যান্টটি নতুন নোডে দেখা যাবে।",
   "platform.shards.manage": "স্টোরেজ ও মুছে ফেলা",
   "platform.shards.page": "{total}-এর মধ্যে {from}–{to}",
   "platform.shards.page.previous": "আগের",
