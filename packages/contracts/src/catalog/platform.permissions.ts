@@ -1,7 +1,7 @@
 import type { PermissionKey } from "../import.js";
 
-// One entry per path in `PlatformProcedures`. The rest of the platform scope is
-// registered ahead of the screens that assert it — see `AWAITING_A_PROCEDURE`.
+// One entry per path in `PlatformProcedures`, and every platform key is asserted by one
+// of them — `check-architecture.mjs` §28 fails the build on a key nothing asserts.
 export const platformProcedurePermissions = {
   "platform.status": "platform.status.read",
   // Read and manage split, because they are not the same risk: seeing how long data is
@@ -29,4 +29,6 @@ export const platformProcedurePermissions = {
   // and gating that behind the right to perform one means nobody checks first.
   "platform.shardMap": "platform.shards.read",
   "platform.locateTenant": "platform.shards.read",
+  // Manage: a move freezes the tenant's writes for as long as the copy takes.
+  "platform.moveTenant": "platform.shards.manage",
 } as const satisfies Record<string, PermissionKey>;

@@ -300,6 +300,17 @@ export class PlatformContract {
     moves: PlatformContract.shardMoves,
   });
 
+  // A node by index, bounded above by the server: the contract cannot know how many
+  // nodes this deployment has, and the use-case refuses one it does not.
+  public static readonly tenantMove = z.object({
+    organizationId: Identifiers.organizationId,
+    toNode: z.number().int().nonnegative(),
+  });
+
+  public static readonly moveRequested = z.object({
+    jobId: z.string().min(1),
+  });
+
   // An id or a slug, whichever the operator is holding. Trimmed and bounded, because
   // an empty term is a request for the whole directory wearing a search box.
   public static readonly tenantLookup = z.object({
@@ -348,3 +359,5 @@ export type ShardMapQuery = z.infer<typeof PlatformContract.shardMapQuery>;
 export type ShardMovesDto = z.infer<typeof PlatformContract.shardMoves>;
 export type TenantLookupInput = z.infer<typeof PlatformContract.tenantLookup>;
 export type TenantLocationDto = z.infer<typeof PlatformContract.tenantLocation>;
+export type TenantMoveInput = z.infer<typeof PlatformContract.tenantMove>;
+export type MoveRequestedDto = z.infer<typeof PlatformContract.moveRequested>;
