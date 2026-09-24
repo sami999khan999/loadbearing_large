@@ -499,6 +499,47 @@ describe("MaintenanceConsumer — the orphan count", () => {
     expect(found[0]?.tenants).toBe(TENANTS.length);
     expect(found[0]?.organizationIds).toBe(TENANTS.join(","));
     expect(found[0]?.node).toBe(0);
+    expect(found[0]?.members).toBe(0);
+  });
+
+  // `PF.1`: the keys into `conversations` are gone, so a leaked member or message is
+  // reported here even on a node where every tenant is live.
+  it("reports a conversation that members or messages name and nothing holds", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.orphans = [];
+    maintenance.dangling = { members: 1, messages: 2 };
+
+    await consumerFor(container).handle(job("orphans"));
+
+    const found = emitted(logger, "maintenance.orphans.found");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.tenants).toBe(0);
+    expect(found[0]?.members).toBe(1);
+    expect(found[0]?.messages).toBe(2);
+  });
+});
+
+// `PF.3`: the pool of pre-seeded tenants the founder claims from.
+describe("MaintenanceConsumer — the spare pool", () => {
+  it("tops the pool up and says how many it made", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.spares = 15;
+
+    await consumerFor(container).handle(job("spares"));
+
+    expect(maintenance.topUps).toEqual([5]);
+    const replenished = emitted(logger, "tenant.spares.replenished");
+    expect(replenished).toHaveLength(1);
+    expect(replenished[0]?.created).toBe(5);
+  });
+
+  it("says nothing when the pool is already full", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.spares = 20;
+
+    await consumerFor(container).handle(job("spares"));
+
+    expect(emitted(logger, "tenant.spares.replenished")).toEqual([]);
   });
 });
 

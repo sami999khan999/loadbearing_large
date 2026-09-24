@@ -17,6 +17,7 @@ import {
   ProjectionSchedule,
   ReconcileSchedule,
   RetentionSchedule,
+  SparesSchedule,
 } from "../schedule/index.js";
 
 export class WorkerBootstrap {
@@ -94,6 +95,7 @@ export class WorkerBootstrap {
     await new CleanupSchedule(this.container, this.redis.queueClient()).register();
     await new RetentionSchedule(this.container, this.redis.queueClient()).register();
     await new OrphansSchedule(this.container, this.redis.queueClient()).register();
+    await new SparesSchedule(this.container, this.redis.queueClient()).register();
 
     if (this.container.hasProjector) {
       await new ProjectionSchedule(this.container, this.redis.queueClient()).register();

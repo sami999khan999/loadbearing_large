@@ -18,6 +18,7 @@ export {
   type RetentionPolicyRecord,
   RetentionRules,
   type TenantRetentionPolicyRecord,
+  type TenantRunway,
 } from "@loadbearing/application";
 
 // ── @loadbearing/composition ─────────────────────────────────────────────────
