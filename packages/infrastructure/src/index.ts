@@ -59,6 +59,7 @@ export {
   PgUserReader,
   PgVectorStore,
   type PlacedShard,
+  type ReplicaHealth,
   type ShardConfig,
   ShardScope,
   TransactionScope,

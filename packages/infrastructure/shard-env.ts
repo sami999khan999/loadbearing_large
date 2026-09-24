@@ -6,12 +6,14 @@
 export interface ShardUrls {
   readonly url: string;
   readonly directUrl: string;
+  // Read so the three copies stay one algorithm; no script dials a standby.
+  readonly replicaUrl?: string;
 }
 
-// `DATABASE_SHARD_<n>_URL` in index order, each with an optional `_DIRECT_URL` beside
-// it. Absent is one node, which is every deployment until the split.
+// `DATABASE_SHARD_<n>_URL` in index order, each with an optional `_DIRECT_URL` and
+// `_REPLICA_URL` beside it. Absent is one node, which is every deployment until the split.
 const shardsFromEnv = (): readonly ShardUrls[] => {
-  const found: { index: number; url: string; directUrl: string }[] = [];
+  const found: { index: number; url: string; directUrl: string; replicaUrl?: string }[] = [];
 
   for (const [name, value] of Object.entries(process.env)) {
     const match = /^DATABASE_SHARD_(\d+)_URL$/.exec(name);
@@ -26,6 +28,8 @@ const shardsFromEnv = (): readonly ShardUrls[] => {
       index,
       url: value,
       directUrl: process.env[`DATABASE_SHARD_${index}_DIRECT_URL`] ?? value,
+      // `||`, not `??`: an empty value is "no standby", the way `.env.example` shows one.
+      replicaUrl: process.env[`DATABASE_SHARD_${index}_REPLICA_URL`] || undefined,
     });
   }
 
@@ -38,7 +42,7 @@ const shardsFromEnv = (): readonly ShardUrls[] => {
     }
   });
 
-  return sorted.map(({ url, directUrl }) => ({ url, directUrl }));
+  return sorted.map(({ url, directUrl, replicaUrl }) => ({ url, directUrl, replicaUrl }));
 };
 
 // Node 0 is `DATABASE_URL` and is on the front of this list, where each app's `Env`

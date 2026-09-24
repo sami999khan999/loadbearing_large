@@ -5,5 +5,5 @@ export {
   type DatabaseStats,
   type DrizzleClient,
 } from "./database.js";
-export { DatabaseCluster, type ShardConfig } from "./database-cluster.js";
+export { DatabaseCluster, type ReplicaHealth, type ShardConfig } from "./database-cluster.js";
 export { KeysetCursor } from "./keyset-cursor.js";

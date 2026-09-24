@@ -28,6 +28,7 @@ const fanOut = numbers("FAN_OUT_SCALE");
 const routed = numbers("ROUTED_SCALE");
 
 const shard1Url = optional("DATABASE_SHARD_1_URL");
+const replicaUrl = optional("DATABASE_REPLICA_URL");
 const lokiUrl = optional("LOKI_URL");
 const clickhouseUrl = optional("CLICKHOUSE_URL");
 
@@ -61,6 +62,7 @@ export default defineConfig({
               },
             }
           : {}),
+        ...(replicaUrl ? { replica: { url: replicaUrl } } : {}),
         redis: {
           cacheUrl: required("REDIS_CACHE_URL"),
           queueUrl: required("REDIS_QUEUE_URL"),

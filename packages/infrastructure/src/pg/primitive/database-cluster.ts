@@ -3,6 +3,7 @@ import {
   type ShardKey,
   type ShardPlacement,
   type ShardResolver,
+  sql,
 } from "../../import.js";
 import { Database, type DatabaseConfig } from "./database.js";
 
@@ -11,6 +12,17 @@ import { Database, type DatabaseConfig } from "./database.js";
 export interface ShardConfig {
   readonly pooled: DatabaseConfig;
   readonly direct: DatabaseConfig;
+  // A streaming standby of this node, for the reads that tolerate being routed off the
+  // primary — `24.3`. Absent is every read on the primary, which is every deployment today.
+  readonly replica?: DatabaseConfig;
+}
+
+// One node's standby as the status panel reads it. `lagSeconds` is null when the
+// replica cannot be asked, which is what `healthy: false` means.
+export interface ReplicaHealth {
+  readonly node: number;
+  readonly healthy: boolean;
+  readonly lagSeconds: number | null;
 }
 
 // Node 0 for every key, which is what one node means.
@@ -26,6 +38,7 @@ export class DatabaseCluster {
   private constructor(
     private readonly nodes: readonly Database[],
     private readonly directNodes: readonly Database[],
+    private readonly replicas: readonly (Database | undefined)[],
     private readonly resolver: ShardResolver,
   ) {}
 
@@ -36,6 +49,7 @@ export class DatabaseCluster {
       shards.map((shard) => ({
         pooled: new Database(shard.pooled),
         direct: new Database(shard.direct),
+        replica: shard.replica ? new Database(shard.replica) : undefined,
       })),
       resolver,
     );
@@ -44,7 +58,11 @@ export class DatabaseCluster {
   // Already-open pools, shared rather than reopened, which keeps `close()` honest. The
   // one factory that reaches the constructor: what a node carries is declared once.
   public static of(
-    nodes: readonly { readonly pooled: Database; readonly direct: Database }[],
+    nodes: readonly {
+      readonly pooled: Database;
+      readonly direct: Database;
+      readonly replica?: Database | undefined;
+    }[],
     resolver: ShardResolver,
   ): DatabaseCluster {
     if (nodes.length === 0) throw new InternalError(new Error("A cluster needs one shard."));
@@ -52,6 +70,7 @@ export class DatabaseCluster {
     return new DatabaseCluster(
       nodes.map((node) => node.pooled),
       nodes.map((node) => node.direct),
+      nodes.map((node) => node.replica),
       resolver,
     );
   }
@@ -105,6 +124,61 @@ export class DatabaseCluster {
     return this.nodes.length;
   }
 
+  // **The replica only once it has replayed everything the primary had when the read
+  // began**, the primary otherwise, so no caller reasons about lag — see sharding.md.
+  public async readerAt(node: number): Promise<Database> {
+    const primary = this.at(node);
+    const replica = this.replicas[node];
+    if (!replica) return primary;
+
+    try {
+      const head = await primary.client.execute<{ lsn: string }>(
+        sql`select pg_current_wal_lsn()::text as lsn`,
+      );
+      const lsn = head.rows[0]?.lsn;
+      if (!lsn) return primary;
+
+      const replayed = await replica.client.execute<{ caught: boolean }>(
+        sql`select coalesce(pg_last_wal_replay_lsn() >= ${lsn}::pg_lsn, false) as caught`,
+      );
+      return replayed.rows[0]?.caught === true ? replica : primary;
+    } catch {
+      // A standby that is down is a slower read, never a failed one. The status panel
+      // is where an unreachable replica shows, not the job that happened to ask.
+      return primary;
+    }
+  }
+
+  public async reader(key: ShardKey): Promise<Database> {
+    return this.readerAt(await this.resolver.resolve(key));
+  }
+
+  public get hasReplicas(): boolean {
+    return this.replicas.some((replica) => replica !== undefined);
+  }
+
+  // Lag as the time since the last replayed commit, **zero when nothing is waiting**:
+  // an idle primary sends nothing, and a replay timestamp alone would read as lag.
+  public async replicaHealth(): Promise<readonly ReplicaHealth[]> {
+    const probes = this.replicas.map(async (replica, node) => {
+      if (!replica) return null;
+      try {
+        const found = await replica.client.execute<{ lag: number | null }>(sql`
+          select case
+            when pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn() then 0
+            else extract(epoch from now() - pg_last_xact_replay_timestamp())
+          end::float8 as lag
+        `);
+        const lag = found.rows[0]?.lag ?? null;
+        return { node, healthy: true, lagSeconds: lag === null ? null : Math.max(0, lag) };
+      } catch {
+        return { node, healthy: false, lagSeconds: null };
+      }
+    });
+
+    return (await Promise.all(probes)).filter((probe) => probe !== null);
+  }
+
   // Per shard rather than one boolean: "the database is down" is a different page from
   // "shard 2 is down", and a single flag cannot tell them apart.
   public async isHealthy(): Promise<Readonly<Record<number, boolean>>> {
@@ -113,7 +187,8 @@ export class DatabaseCluster {
   }
 
   public async close(): Promise<void> {
-    const pools = new Set([...this.nodes, ...this.directNodes]);
+    const standbys = this.replicas.filter((replica) => replica !== undefined);
+    const pools = new Set([...this.nodes, ...this.directNodes, ...standbys]);
     await Promise.all([...pools].map((node) => node.close()));
   }
 

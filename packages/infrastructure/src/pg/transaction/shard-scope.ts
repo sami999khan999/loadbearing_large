@@ -14,6 +14,9 @@ export interface PlacedShard {
   // A job's placement outlives the move's settle, so its every transaction re-reads
   // it; a request's does not, because the settle covers it — decision `24.2b`.
   readonly recheck?: boolean;
+  // The operator's switch, `platform_policy.replica_reads_enabled`, as the job read it
+  // when it started. Only `BaseRepository.reader` looks, and only outside a transaction.
+  readonly replica?: boolean;
 }
 
 // Which shard the ambient work belongs to. Established once per request in the web

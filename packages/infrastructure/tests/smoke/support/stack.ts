@@ -7,6 +7,9 @@ export interface Stack {
   // Node 1, present only under the `sharded` profile with the two `.env.example` lines
   // uncommented. Its absence is what the rehearsal skips on, and this is the only door.
   readonly shard1?: { readonly url: string; readonly directUrl: string };
+  // Node 0's standby, under the `replica` profile with `DATABASE_REPLICA_URL` set. Absent
+  // is what `replica.smoke.spec.ts` skips on.
+  readonly replica?: { readonly url: string };
   readonly redis: { readonly cacheUrl: string; readonly queueUrl: string };
   readonly storage: {
     readonly endpoint: string;

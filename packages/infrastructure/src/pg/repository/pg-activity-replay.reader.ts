@@ -51,7 +51,9 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
           )
         : undefined;
 
-    const rows = await this.db
+    // A standby when the job allows one: the projection is the first read `24.3` moves.
+    const reader = await this.reader();
+    const rows = await reader
       .select({
         id: activityLog.id,
         organizationId: activityLog.organizationId,
@@ -95,7 +97,8 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     to: Date,
     excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
-    const rows = await this.db
+    const reader = await this.reader();
+    const rows = await reader
       .select({
         day: sql<string>`to_char(date_trunc('day', ${activityLog.occurredAt}), 'YYYY-MM-DD')`.as(
           "day",

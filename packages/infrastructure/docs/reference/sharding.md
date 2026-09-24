@@ -312,6 +312,45 @@ not a foreign key, precisely so a fork can put a region code in it without a mig
 the generator and the seed read the alias rather than spelling the column, so neither is a fifth
 place.
 
+## Read replicas
+
+A read replica is a second copy of a node that follows the primary and answers reads. **The
+problem with one is staleness.** It replays the primary's changes a moment late, so a row
+committed on the primary may not be on the replica yet. A job that writes a row and then reads it
+back from the replica would not find it.
+
+**So a read uses the replica only once it has caught up — `DatabaseCluster.readerAt`.** Before
+the read, it asks the primary for its current write position (`pg_current_wal_lsn()`), then asks
+the replica whether it has replayed that far (`pg_last_wal_replay_lsn()`). If it has, the replica
+holds everything the primary held when the read began, and it answers. If it has not, or cannot
+be reached, the primary answers. No caller reasons about lag, because the read is never staler
+than the primary it stands in for. `replica.smoke.spec.ts` proves it against a live standby. A
+row inserted on the primary is found by the read straight after it, and again by the first read
+the replica is chosen for. With the check removed, the first read misses the row.
+
+| | cost |
+|---|---|
+| no replica configured, or the switch off | nothing — the same pool as before |
+| a replica read | two round trips before the query, neither touching a table |
+| a replica that is behind or down | those two, then the primary |
+
+**Three things decide whether a read goes there.** A replica must be configured for the node:
+`DATABASE_REPLICA_URL` for node 0, `DATABASE_SHARD_<n>_REPLICA_URL` for node n. The work must be
+placed with `replica: true`, which `withShard` passes from `platform_policy.replica_reads_enabled`,
+read once per run. And the repository must ask for it, through `BaseRepository.reader()` rather
+than `db`. Inside a transaction `reader()` is the transaction, because a transaction reads its own
+writes.
+
+**What reads there today is the analytics projection**, `PgActivityReplayReader.since` and
+`dailyCounts`. It is the worker's biggest batch read, and it already tolerates reading 30 s
+behind. The web app reads nothing there. It opens the replica pool only for the status panel's
+lag, which is `now() - pg_last_xact_replay_timestamp()`, and zero when the replica has replayed
+everything it has received. An idle primary sends nothing, so the timestamp alone would read as
+growing lag on a replica that is fully caught up.
+
+`pnpm infra:up:replica` starts node 0's standby. See
+[compose](../../../../docs/infra/reference/compose.md) for how it clones itself.
+
 ## Rehearsing the split
 
 `pnpm infra:up:sharded` starts a second Postgres and its pooler; uncomment the two
