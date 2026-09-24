@@ -51,6 +51,52 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
   - `tenant-cascade.spec.ts` now asserts the two halves apart: catalog rows still go with the
     tenant, routed rows do not and say why. `data.md` and `data-and-scale.md` both stated the old
     rule and both were rewritten. — `archive/PLAN.md:3907`
+
+- [x] `24.2` **Tenant move** `done: 2026-09-24` — a `tenant-move` job on `QueueName.MAINTENANCE`,
+  and the three commits before it (`d545a47`, `815f595`, `261e3ee`) had built half of it: the
+  columns, the freeze in `PgUnitOfWork.run`, the gateway, both use-cases and the wiring. What was
+  missing was the job, the reclaim, the procedure and every spec — and finishing it found **two
+  defects in the half that existed**, either of which made the move unusable or unsafe:
+  - **No established tenant could have moved.** `prepare` ran `TenantPartitionSeed`, which creates
+    the current month and the next two. A tenant with one message from last year needs last year's
+    partition on the target, so the copy would have failed with "no partition of relation found
+    for row" and rolled back — safely, every time. `prepare` now reads the source's months out of
+    `pg_inherits` and creates each with the same bounds.
+  - **A retry kept stale rows.** An abandoned attempt left its copy on the target, and the next one
+    wrote `on conflict do nothing` over it — so a row updated or deleted between the attempts came
+    back in its old state, and `verify` (target ≥ source) could not see it. `prepare` now empties
+    the target's routed rows first.
+  - **And the freeze had a gap nothing closed.** A request places itself once, so one that resolved
+    a moment before `beginMove` could still write to the source while the copy ran, and the flip
+    lost the row. `quiesce` closes it in two halves: a settle (`moveSettleMs`, 60 s) for writers
+    that have not opened a transaction, then a `SHARE` lock on the tenant's partitions for those
+    that have. **It does not cover a job placed before the freeze and still opening transactions
+    after the settle** — `sharding.md` says so, and `24.2b` carries it.
+  - `ReclaimMoveSourcesUseCase` is the grace sweep, run from the nightly cleanup rather than a
+    schedule of its own. A move onward while a source copy is on a third node is refused with
+    `sourcePending`, in `MoveTenantUseCase` and in `beginMove`'s `where`: the flip would overwrite
+    `moved_from`, the only column naming that copy. A move *back* to `moved_from` is allowed.
+  - **The copy paged on `id::text`**, which no index serves, so every page sorted the tenant's whole
+    partition. Native `uuid` order now; every key here leads with `id`.
+  - Measured by: 26 application specs (the request, the job, the sweep), 3 worker cases, and
+    `tenant-move.smoke.spec.ts` on two live nodes — 4 passed, three runs out of three. — `archive/PLAN.md:3971`
+- [x] `24.5` **Two-node proof** `done: 2026-09-24` — the second clause, a tenant move under load
+  with no lost writes. `tenant-move.smoke.spec.ts`: four writers place themselves per write, the
+  way a request does, and a straggler holds its transaction open for 1.5 s across the start of
+  the move. Every acknowledged write is on node 1 afterwards, and some writes were refused, so the
+  freeze demonstrably engaged. **The spec was checked against a sabotaged `quiesce`** — made a
+  no-op, it lost the straggler on three runs out of three. Before the straggler it caught the loss
+  one run in three, because `prepare`'s DDL happened to outlast a short write; the straggler is
+  what makes the proof deterministic. The first clause was already green
+  (`sharded.smoke.spec.ts`, 6 passed). — `archive/PLAN.md:3987`
+- [x] `25.5` **The move button** `done: 2026-09-24` — `platform.moveTenant` (`POST
+  /platform/shards/move`, `platform.shards.manage`), its router handler, `useMoveTenant`, and a
+  confirmation on `/platform/shards`: the row's button opens it rather than moving, the warning
+  names the freeze before the buttons, and the targets are the other nodes by name — never a
+  number typed into a field. `PERMISSION_AWAITING_A_PROCEDURE` is empty. `R.44`'s concern had
+  already been met — the button was disabled without a handler — so this replaced the `onMove`
+  prop with the mutation rather than wiring it. Measured by: `shard-map.panel.spec.tsx`, 7 passed,
+  two of them new. — `archive/PLAN.md:4114`
 ### Phase 23 — Loose ends, no gate
 
 - [x] `23.1` **The `jobId` duplicate-suppression window is ~5 s, not 86 400 s.**
@@ -802,6 +848,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-24 | @sami | **`24.2`, `24.5` and `25.5` closed — a tenant can be moved, and the proof is under load.** Half the move had been built across three commits and the backlog still listed it open. Finishing it found two defects in that half: `prepare` seeded only the runway months, so **no tenant with older rows could ever have moved**; and a retry wrote `on conflict do nothing` over a failed attempt's copy, so a row changed between attempts came back stale and the count check could not see it. And the freeze had a gap: a request places itself once, so one that resolved just before the freeze wrote to the source during the copy. `quiesce` closes it — a settle, then a `SHARE` lock — and the smoke proves it with a straggler holding its transaction across the move, which a sabotaged `quiesce` loses three runs out of three. **Two things found and filed rather than fixed:** `24.2a` — a catalog transaction writes a tenant's audit row and event on node 0 wherever the tenant lives, so after a move node 0's runway stops covering that tenant's `activity_log` and invitations for it fail within two months; and `24.2b`, the settle window does not cover a long job |
 | 2026-09-22 | @sami | **Section 9 added: a performance plan for the tenant/partition layer, eight boxes `PF.0`–`PF.7`.** Nothing closed; this is new open work, filed from what the `16.12` run found rather than reasoned. Three live measurements shape it. Signup's ~1.05 s of DDL is not round trips — 60 807 probes at 0.075 ms — but five `ATTACH PARTITION` statements on the two tables still carrying a foreign key to `conversations`, at 158 and 215 ms each against 5–23 ms for the rest; each of those attaches takes `ShareRowExclusive` on `conversations` and blocks every write there for its duration; and dropping tenants was quadratic, 2 a minute at 11 700 partitions. Two decisions taken: the sibling keys are dropped (conversations are never deleted, every insert path already `assertMember`s, and a nightly count catches what leaks), and signup is to pay no DDL at all, so warm spares follow. A Plan agent corrected three things on the way and they are kept: round trips are 2–5% so there is no `DO $$` block; the archive detaches from the tenant partition, not the root, so it does not bite first; and the keyset fix is a redundant range *beside* the row constructor, never instead of it. `16.12` now points at `PF.0`, which it becomes; `24.7`'s triggers were measuring the wrong thing and are re-stated as relation count |
 | 2026-09-22 | @sami | **`24.1` decided and built — the ten cross-shard foreign keys are gone.** The entry had been filed for two phases as "a decision about what a production catalog and a production shard do to each other", and the decision was (a): drop them. Mapping it first is what made it small — **nine of the ten were already doing nothing**, because the tenant delete drops partitions before it removes the `organizations` row, and nothing in `src/` deletes a user. `outbox_event` was the exception and the only real change; the leak proved itself when the orphan sweep took 16 real rows on its first run after the migration. The guarantee moved from the database to a nightly job that names the tenants rather than counting them. The smoke case that asserted the `23503` now asserts the write succeeding, which makes the pair a clean red-then-green across the migration, and `sharded.smoke.spec.ts` is 6 passed. Two rule pages stated "every tenant foreign key `ON DELETE CASCADE`" and both were rewritten to say why the rule inverted |
 | 2026-09-22 | @sami | **`19.20` closed, and not for the reason it was filed.** The entry said to make the tenant delete a job "when a large tenant's in-request archive bites"; implementing `24.1` found that the delete was **running on the wrong node**. `shardMiddleware` places on the actor's principal and the use-case placed nothing of its own, so a platform admin on node 0 deleting a tenant on node 1 dropped partitions on node 0, found none and reported success. It is the same class as `R.2` and latent only while everything sits on node 0. A job fixes it by construction — `withShard` places by organization id — so `DeleteOrganizationUseCase` now keeps every guard and queues, and `PurgeOrganizationUseCase` does the work on the tenant's own node with no permission to assert and the actor carried in the payload. The wire answers a job id rather than a tally, matching `tenant-export` and `cold-restore` |

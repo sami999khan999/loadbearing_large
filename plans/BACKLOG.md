@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, from every plan file, in one place
-updated: 2026-09-22
+updated: 2026-09-24
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 11 | 20 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 10 | 23 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 1 | 5 |
@@ -81,7 +81,7 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the eleven open boxes
+## 1. `archive/PLAN.md` — the ten open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -102,22 +102,38 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-**`24.1` is decided and built** — [`archive/DONE.md`](archive/DONE.md) §1. The rest still waits on
-a second node being provisioned rather than on a decision.
+**`24.1`, `24.2` and `24.5` are built** — [`archive/DONE.md`](archive/DONE.md) §1. A tenant can be
+moved, and a move under load loses no acknowledged write. Two things finishing `24.2` found are
+filed here as `24.2a` and `24.2b`.
 
-- [ ] `24.2` **Tenant move** as a `MaintenanceConsumer` job — `shard_assignments.moving_to`,
-  `ensureTenantPartitions` on the target, keyset copy, verify counts, flip `node`,
-  `resolver.invalidate`, drop the source after a grace period; write freeze as a `ForbiddenError`
-  from `shardMiddleware`. Lands with `25.5`'s procedure and flips `Container.hasShardMoves`. — `archive/PLAN.md:3971`
+- [ ] `24.2a` **A moved tenant's catalog-written rows on node 0** `P2` — found 2026-09-24. A
+  catalog transaction (an invitation, a role change, an API key) writes the tenant's `activity_log`
+  row and `outbox_event` on **node 0**, wherever the tenant lives. Three consequences once a tenant
+  is off node 0, and the move makes that possible for the first time:
+  - **The runway stops.** `MaintenanceConsumer.ensure` pages tenants *placed on* the node, so node
+    0 never extends the moved tenant's `activity_log` months. Within two months a catalog write for
+    it has no partition, and inviting a member to that tenant fails.
+  - **Two archives, one key.** Node 0 and the tenant's node both hold that tenant's `activity_log`
+    rows for a month, and the cold key is `cold/<table>/<yyyy>/<mm>/<organization_id>` — no node in
+    it. Pruning both would write one object over the other.
+  - **The projection misses them.** `AnalyticsConsumer` reads `activity_log` on the tenant's node,
+    so a catalog-written audit row for a moved tenant never reaches ClickHouse.
+  All three are read from the code, not yet reproduced. The move itself is careful not to make
+  this worse — it copies both `local` tables, never empties
+  them, and never drops them on node 0 — but the three above need a decision about where a
+  catalog transaction's audit row belongs. Nothing is on node 1 in production yet, so this blocks
+  the first real move rather than anything running today.
+- [ ] `24.2b` **The move's settle does not cover a long job** `P3` — `quiesce` waits `moveSettleMs`
+  (60 s) for writers that placed themselves before the freeze. A worker job placed on the tenant
+  earlier, and still opening transactions after that, can land a row on the source after its page
+  was read. The count check catches a late insert, not a late update. Closing it means the job
+  re-reading the freeze per transaction, or the move refusing while such a job is active for the
+  tenant. `sharding.md`, "The tenant move", states the gap.
 - [ ] `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
   dashboard and analytics reads moved onto it. `25.1`, `25.2` and the `platform.replica.manage`
   key wait on this. — `archive/PLAN.md:3979`
 - [ ] `24.4` **The catalog is the last single primary** — measure first; a replica for its reads
   if it hurts. — `archive/PLAN.md:3983`
-- [ ] `24.5` **Two-node proof** — half done: `sharded.smoke.spec.ts` is **5 passed** with the
-  `sharded` profile and the two `DATABASE_SHARD_1_*` lines — `S.3` re-measured it on 2026-09-20
-  and the fifth is `R.2`'s runway assertion; this line said 4 until 2026-09-22. The second clause, a tenant move under
-  load with no lost writes, waits on `24.2`. — `archive/PLAN.md:3987`
 - [ ] `24.6` **Load test the routed paths at 10×** — half ran (`tests/smoke/routed.smoke.spec.ts`,
   `ROUTED_SCALE=1`): a warm placement resolve is 679 µs, a miss 2 568 µs, the cross-node walk is
   serial. **The write half is unblocked** since `24.1` dropped the keys — a routed insert on node 1
@@ -136,9 +152,6 @@ a second node being provisioned rather than on a decision.
   `24.3`. — `archive/PLAN.md:4040`
 - [ ] `25.3` **Colder storage class** — `transitionAfterDays` and a storage class on
   `LifecycleRule`, once someone pays for Glacier; MinIO needs a configured tier. — `archive/PLAN.md:4046`
-- [ ] `25.5` **The move button** — rendered and disabled today; `move-tenant.use-case.ts`
-  (`platform.shards.manage`) and the `shards.move` procedure land with `24.2`. `R.44` notes the
-  button has no `onClick`, so it goes live and does nothing the day `hasShardMoves` flips. — `archive/PLAN.md:4114`
 
 ### Phase 26 — Communication follow-ups → moved
 
@@ -342,8 +355,11 @@ stage produces its numbers. Each closed box moves to `archive/DONE.md` with its 
   rather than one for all seven (never relied on — the purge runs it before its own transaction,
   and it is idempotent); after `PF.1` nothing is referenced, so no detach at all. A batch variant
   `dropTenantPartitionsFor(ids)`, fifty names per `drop table`; `pg-tenant-move.gateway.ts`'s
-  `dropOn` delegates rather than carrying its own copy of the loop. **Measured by:** ceiling
-  `dropMs`; a spec that an open `select` on one table does not block the drop of the other six.
+  `dropOn` delegates rather than carrying its own copy of the loop — keeping its one rule, that a
+  `local` partition on node 0 is never dropped (`24.2`). The reclaim in `tenant-move.smoke.spec.ts`
+  took **15.9 s** for six detaches on the catalog node, which is this entry's cost showing up in a
+  second caller. **Measured by:** ceiling `dropMs`; a spec that an open `select` on one table does
+  not block the drop of the other six.
 - [ ] `PF.3` **Warm spares: signup pays no DDL.** Catalog table `spare_tenants(id, node,
   created_at)`, migration `0038`. The `partitions` job tops each node up to `SPARES` (20) under
   `eachShard`; `PgOrganizationFounder.found` claims one with `delete … for update skip locked
