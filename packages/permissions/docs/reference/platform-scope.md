@@ -103,6 +103,6 @@ both system principals carry an empty platform axis.
 3. Its procedure, its `catalog/platform.permissions.ts` entry in `contracts`, and its router
    handler, in one commit.
 
-Until step 3, the key is in `AWAITING_A_PROCEDURE` in
-[`procedure-permissions.spec.ts`](../../../contracts/src/registry/procedure-permissions.ts) — a key
-nothing asserts grants nothing, and that list only ever shrinks.
+Until step 3, the key is in `PERMISSION_AWAITING_A_PROCEDURE` in
+[`check-architecture.mjs`](../../../../tooling/scripts/check-architecture.mjs) §28 — a key nothing
+asserts grants nothing, and that list only ever shrinks. It has been empty since `24.2`.
