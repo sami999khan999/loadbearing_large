@@ -218,6 +218,7 @@ export {
   CapabilityInvalidator,
   ColdArchiveReader,
   type ColdPage,
+  type ColdTier,
   type DailyCount,
   type DanglingConversations,
   type DeletedTenantSweep,

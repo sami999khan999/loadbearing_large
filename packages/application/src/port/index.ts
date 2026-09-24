@@ -54,7 +54,11 @@ export {
 } from "./shard-assignment.repository.js";
 export { ShardingStrategy } from "./sharding.strategy.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
-export { type LifecycleRule, StoragePolicyGateway } from "./storage-policy.gateway.js";
+export {
+  type ColdTier,
+  type LifecycleRule,
+  StoragePolicyGateway,
+} from "./storage-policy.gateway.js";
 export { TenantMembershipReader } from "./tenant-membership.reader.js";
 export { type TableRowCount, TenantMoveGateway } from "./tenant-move.gateway.js";
 export { UnitOfWork } from "./unit-of-work.js";

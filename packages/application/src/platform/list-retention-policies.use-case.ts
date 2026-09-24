@@ -62,7 +62,7 @@ export class ListRetentionPoliciesUseCase {
       rows.filter((row) => row.store === "postgres").map((row) => [row.tableName, row]),
     );
 
-    const expected = RetentionRules.lifecycleFor(rows);
+    const expected = RetentionRules.lifecycleFor(rows, this.storagePolicy.coldTier());
     const [applied, clickhouse] = await Promise.all([
       this.storagePolicy.lifecycle(),
       this.clickhouseFor(rows),
@@ -74,10 +74,10 @@ export class ListRetentionPoliciesUseCase {
       ),
       clickhouse,
       lifecycle: {
-        expected: expected.map((rule) => `${rule.prefix}=${rule.expireAfterDays}`),
+        expected: expected.map((rule) => RetentionRules.describe(rule)),
         applied: [...applied]
           .sort((left, right) => left.prefix.localeCompare(right.prefix))
-          .map((rule) => `${rule.prefix}=${rule.expireAfterDays}`),
+          .map((rule) => RetentionRules.describe(rule)),
       },
     };
   }

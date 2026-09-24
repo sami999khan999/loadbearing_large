@@ -167,3 +167,45 @@ describe("RetentionRules.lifecycleMatches", () => {
     expect(RetentionRules.lifecycleMatches([], [])).toBe(true);
   });
 });
+
+// `25.3`. A colder class for every cold prefix, never for an export, and never one that
+// would land after the object is already gone.
+describe("RetentionRules.lifecycleFor — a cold tier", () => {
+  const TIER = { storageClass: "COLD", afterDays: 30 };
+
+  it("moves every cold prefix to the tier and leaves the export rule alone", () => {
+    expect(
+      RetentionRules.lifecycleFor([row(), row({ tableName: "messages", coldMonths: 12 })], TIER),
+    ).toEqual([
+      { prefix: "cold/activity_log/", expireAfterDays: 731, transition: TIER },
+      { prefix: "cold/messages/", expireAfterDays: 366, transition: TIER },
+      EXPORT_RULE,
+    ]);
+  });
+
+  // S3 rejects a transition that is not earlier than the expiry, and the whole
+  // configuration with it — one short window would take every other rule down.
+  it("writes no transition that would land on or after the expiry", () => {
+    expect(
+      RetentionRules.lifecycleFor([row({ coldMonths: 1 })], { ...TIER, afterDays: 31 }),
+    ).toEqual([{ prefix: "cold/activity_log/", expireAfterDays: 31 }, EXPORT_RULE]);
+  });
+
+  it("is today's configuration exactly when there is no tier", () => {
+    expect(RetentionRules.lifecycleFor([row()], null)).toEqual(
+      RetentionRules.lifecycleFor([row()]),
+    );
+  });
+
+  // A bucket that lost its transition by hand is drift, or the nightly job never puts
+  // it back — the comparison has to see the class, not only the expiry.
+  it("reads a missing transition as drift", () => {
+    const expected = RetentionRules.lifecycleFor([row()], TIER);
+    const stripped = expected.map(({ prefix, expireAfterDays }) => ({ prefix, expireAfterDays }));
+
+    expect(RetentionRules.lifecycleMatches(expected, stripped)).toBe(false);
+    expect(RetentionRules.describe(expected[0] ?? EXPORT_RULE)).toBe(
+      "cold/activity_log/=731>COLD@30",
+    );
+  });
+});
