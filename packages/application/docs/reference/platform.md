@@ -82,6 +82,10 @@ files beside it, every one.
 `PlatformHealth` narrows `HealthReport`: it drops `pool`, because a screen showing a pool gauge
 would be showing one process's, which is not the deployment's.
 
+`replica()` is its second method, added by `25.1`: every node's standby folded into one reading,
+or `null` when there is none. It is kept out of `report()` on purpose. A standby that falls behind
+slows the batch reads and takes nothing down, so it must not turn `healthy` false.
+
 ## `TenantStorageReader` — a slice port, and why cold only
 
 Beside `PlatformHealthReader`, and a slice port for the same reason: one caller, one screen, and
@@ -220,6 +224,27 @@ The screen quotes its deadline from the **retention rows**, not from a constant 
 shows is the same `activity_log` hot window the retention screen shows, so the two cannot
 disagree about how long a pause stays recoverable.
 
+## The replica switch sits on the status page, beside the lag it governs
+
+`platform_policy.replica_reads_enabled` existed from Phase 20 and nothing read it. `24.3` gave it a
+reader: `AnalyticsConsumer` reads it once per run and places every tenant with it, and
+`PgActivityReplayReader` then uses the standby when the switch allows and the standby has caught
+up. `ToggleReplicaReadsUseCase`, under `platform.replica.manage`, is the write.
+
+**It lives on `/platform/status`, not on the analytics page.** The status DTO carries
+`replica: { healthy, lagSeconds, readsEnabled } | null`. The operator deciding whether reads go
+through a standby is looking at how far behind that standby is, on the same screen. And the
+switch then needs only `platform.status.read` to render, rather than the analytics read key.
+
+**`null` is "this deployment runs no standby", and the switch refuses it** with
+`ConflictError("replica", "not_configured")`, as the projection switch does for a missing store.
+Saving it would leave a setting already on the day a standby is added, and nobody would have
+decided that. The panel renders nothing at all, since the table already says "Not configured".
+
+**On is safe by construction.** It does not trade correctness for load: a read uses the replica
+only once it has replayed everything the primary had when the read began. So the switch is a
+capacity decision, and the default of off is the deploy before the switch existed.
+
 ## What lands here next
 
 | Phase | Files |
@@ -228,5 +253,6 @@ disagree about how long a pause stays recoverable.
 | 20 | `projection-policy.repository.ts`, `platform-policy.repository.ts`, `list-projection-policies`, `update-projection-policy`, `toggle-projection`, `reproject-partition` |
 | 25 | `shard-map.reader.ts`, `inspect-shard-map`, `locate-tenant` |
 | 24 | `move-tenant` |
+| 25 | `toggle-replica-reads` |
 
 Every one asserts a `platform.*` key, and every write rebases its audit row.

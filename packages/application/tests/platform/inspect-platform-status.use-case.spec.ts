@@ -7,7 +7,12 @@ import type { PlatformOrganization, PlatformReader } from "../../src/platform/pl
 import type {
   PlatformHealth,
   PlatformHealthReader,
+  ReplicaHealthReport,
 } from "../../src/platform/platform-health.reader.js";
+import type {
+  PlatformPolicyRecord,
+  PlatformPolicyRepository,
+} from "../../src/platform/platform-policy.repository.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
 
@@ -36,10 +41,26 @@ class StubPlatformReader implements PlatformReader {
 }
 
 class StubHealthReader implements PlatformHealthReader {
+  public constructor(private readonly standby: ReplicaHealthReport | null = null) {}
+
   public report(): Promise<PlatformHealth> {
     return Promise.resolve(HEALTH);
   }
+
+  public replica(): Promise<ReplicaHealthReport | null> {
+    return Promise.resolve(this.standby);
+  }
 }
+
+const policy = (replicaReadsEnabled: boolean) =>
+  ({
+    get: () =>
+      Promise.resolve({
+        projectionEnabled: true,
+        replicaReadsEnabled,
+        moveGraceDays: null,
+      } satisfies PlatformPolicyRecord),
+  }) as unknown as PlatformPolicyRepository;
 
 // The actor's *active* tenant is a customer one throughout: a platform admin switched
 // into a customer tenant is still a platform admin, and that is the case worth pinning.
@@ -56,11 +77,12 @@ function actor(platform: readonly PermissionKey[]): Principal {
   );
 }
 
-const useCase = () =>
+const useCase = (standby: ReplicaHealthReport | null = null, readsEnabled = false) =>
   new InspectPlatformStatusUseCase(
     new Authorizer(),
     new StubPlatformReader(),
-    new StubHealthReader(),
+    new StubHealthReader(standby),
+    policy(readsEnabled),
   );
 
 describe("InspectPlatformStatusUseCase", () => {
@@ -69,6 +91,18 @@ describe("InspectPlatformStatusUseCase", () => {
 
     expect(status.organization.slug).toBe("loadbearing");
     expect(status.health).toEqual(HEALTH);
+    // No standby is not a failing one: the page shows nothing rather than "down".
+    expect(status.replica).toBeNull();
+  });
+
+  // `25.1`: the reading and the switch beside it, so the page showing the lag is the
+  // one that decides whether anything reads through it.
+  it("reports a standby with its lag and whether reads go through it", async () => {
+    const status = await useCase({ healthy: true, lagSeconds: 0.4 }, true).execute(
+      actor(["platform.status.read"]),
+    );
+
+    expect(status.replica).toEqual({ healthy: true, lagSeconds: 0.4, readsEnabled: true });
   });
 
   // Decision D31 arriving at a call site: `wildcard` is every tenant owner's, and if it
