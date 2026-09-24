@@ -306,8 +306,12 @@ Three consequences that are easy to miss:
   - **What is given up is the database saying so.** A leaked row used to be impossible; it is now
     rare, and the nightly `orphans` job is what notices. That is a guarantee moved, not dropped —
     and moving it is what the physical split costs.
-  - Keys between siblings *on the same node* stay, and stay `NO ACTION` rather than `RESTRICT`, so
-    a partition detach is not rejected by its own check.
+  - Keys between siblings *on the catalog* stay, and stay `NO ACTION` rather than `RESTRICT`.
+    **Keys into a tenant-partitioned table do not** — `PF.1` dropped `messages` and
+    `conversation_members` into `conversations`. Attaching a partition validates every key the
+    parent carries, and that validation takes `SHARE ROW EXCLUSIVE` on the table referenced, so each
+    signup blocked every conversation insert on the node five times. The code already refused the
+    write the key refused, and the nightly `orphans` job counts what leaks.
 
 ### 4.2 Partition the append-only tables
 

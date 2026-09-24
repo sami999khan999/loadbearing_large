@@ -55,8 +55,10 @@ later is a rewrite with downtime — the parents are the migration's, every chil
 **no tenant foreign key from a routed table to the catalog** — decision `24.1` dropped the ten
 that existed, because Postgres enforces no key across two databases and a shard is one. A tenant
 delete drops the tenant's partitions instead, sweeps `outbox_event` by hand because it has no
-tenant level, and a nightly pass counts what leaked. `NO ACTION` — never `RESTRICT` — between
-siblings on the same node. The audit trail names no actor by foreign key either.
+tenant level, and a nightly pass counts what leaked. **No foreign key into a tenant-partitioned
+table either** — `PF.1` dropped the last two, because every signup's attach validated them under a
+lock on the target. Between catalog siblings, `NO ACTION`, never `RESTRICT`. The audit trail names
+no actor by foreign key either.
 
 - **Every application connection goes through pgBouncer in transaction mode, and that changes what
   a timeout is.** `pg` sends `statement_timeout` as a startup parameter; the pooler drops it, and
