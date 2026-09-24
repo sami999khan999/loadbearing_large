@@ -100,6 +100,7 @@ export {
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
   type ProjectionSwitchPanelProps,
+  ReplicaSwitchPanel,
   RestorePartitionPanel,
   type RestorePartitionPanelProps,
   RetentionPolicyForm,

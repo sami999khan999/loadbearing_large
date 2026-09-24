@@ -41,6 +41,7 @@ export function PlatformStatusPanel() {
   const rows = useMemo<readonly DependencyRow[]>(() => {
     const health = status.data?.health;
     if (!health) return [];
+    const replica = status.data?.replica ?? null;
 
     return [
       { id: "database", label: t("platform.health.database"), state: health.database },
@@ -48,6 +49,9 @@ export function PlatformStatusPanel() {
       { id: "queue", label: t("platform.health.queue"), state: health.queue },
       { id: "analytics", label: t("platform.health.analytics"), state: health.analytics },
       { id: "realtime", label: t("platform.health.realtime"), state: health.realtime },
+      // Not in `healthy`: a standby that falls behind slows the batch reads, it
+      // takes nothing down, so it reports beside the dependencies rather than among them.
+      { id: "replica", label: t("platform.health.replica"), state: replica?.healthy ?? null },
     ];
   }, [status.data, t]);
 
@@ -72,6 +76,7 @@ export function PlatformStatusPanel() {
   if (status.isError) return <Callout tone="danger">{t("platform.health.degraded")}</Callout>;
 
   const organization = status.data.organization;
+  const lagSeconds = status.data.replica?.lagSeconds ?? null;
 
   return (
     <>
@@ -86,6 +91,9 @@ export function PlatformStatusPanel() {
         {t(status.data.health.healthy ? "platform.health.healthy" : "platform.health.degraded")}
       </StatusBadge>
       <DataTable columns={columns} rows={rows} caption={t("platform.health.title")} />
+      {lagSeconds === null ? null : (
+        <p>{t("platform.replica.lag", { seconds: lagSeconds.toFixed(1) })}</p>
+      )}
     </>
   );
 }
