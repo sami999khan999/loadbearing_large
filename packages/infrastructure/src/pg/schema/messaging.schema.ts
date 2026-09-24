@@ -1,6 +1,5 @@
 import {
   type ConversationId,
-  foreignKey,
   index,
   type MessageId,
   type OrganizationId,
@@ -62,8 +61,8 @@ export const conversationMembers = pgTable(
     // Routed, so no key to the catalog. The nightly orphan pass is what notices a row
     // whose tenant is gone — see decision `24.1`.
     organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
-    // The foreign key is composite and declared below: `conversations` is partitioned by
-    // tenant, so its primary key is the pair and a reference to it has to name both.
+    // No key to `conversations` since `PF.1`: every insert runs `assertMember` first, and
+    // the key made each signup's attach lock `conversations` — see docs/reference/partitions.md.
     conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
     // No key to `users` either, and that one was the expensive half: the cascade issued
     // a scan of every tenant partition on the node — see docs/reference/fan-out.md.
@@ -78,13 +77,6 @@ export const conversationMembers = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.id, t.organizationId] }),
-    // NO ACTION rather than RESTRICT between siblings, so dropping a tenant's partitions
-    // is not rejected by this check on the way through.
-    foreignKey({
-      columns: [t.conversationId, t.organizationId],
-      foreignColumns: [conversations.id, conversations.organizationId],
-      name: "conversation_members_conversation_fk",
-    }).onDelete("no action"),
     uniqueIndex("conversation_members_uq").on(t.organizationId, t.conversationId, t.userId),
     // "Which conversations am I in", which is the list query's driving side.
     index("conversation_members_mine_idx").on(t.organizationId, t.userId, t.lastReadAt),
@@ -101,7 +93,7 @@ export const messages = pgTable(
     id: uuid("id").$type<MessageId>().notNull(),
     // Routed, so no key to the catalog — decision `24.1`.
     organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
-    // Composite, declared below, for the reason `conversation_members` gives.
+    // No key, for the reason `conversation_members` gives. The nightly orphan pass counts.
     conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
     // No foreign key. A message outlives its author's account the way the audit trail
     // outlives its actor: deleting a person must not rewrite a conversation.
@@ -121,11 +113,6 @@ export const messages = pgTable(
   (t) => [
     // Both partition keys, and `id` first so the key still reads as the row's identity.
     primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
-    foreignKey({
-      columns: [t.conversationId, t.organizationId],
-      foreignColumns: [conversations.id, conversations.organizationId],
-      name: "messages_conversation_fk",
-    }).onDelete("no action"),
     // The keyset, in the exact order the backwards page asks for.
     index("messages_keyset_idx").on(
       t.organizationId,

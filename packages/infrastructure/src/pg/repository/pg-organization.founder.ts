@@ -8,6 +8,7 @@ import {
   type OrganizationId,
   type Placement,
   Principal,
+  sql,
   type UserId,
   Uuid,
 } from "../../import.js";
@@ -50,7 +51,9 @@ export class PgOrganizationFounder extends BaseRepository {
   public async found(userId: UserId, name: string, slug?: string): Promise<OrganizationId> {
     const founded = await this.db.transaction(async (tx) =>
       this.scope.within(tx, "catalog", async () => {
-        const organizationId = Uuid.v7() as OrganizationId;
+        // A spare when there is one — its partitions exist, so `run` below finds nothing
+        // to make. Rolled back with the rest, so a failed signup returns it to the pool.
+        const organizationId = (await this.claimSpare()) ?? (Uuid.v7() as OrganizationId);
 
         await this.db.insert(organizations).values({
           id: organizationId,
@@ -68,7 +71,9 @@ export class PgOrganizationFounder extends BaseRepository {
           .onConflictDoNothing();
 
         // Before anything writes a tenant-owned row: `activity.record` below writes into
-        // one of those partitioned tables inside this same transaction.
+        // one of those partitioned tables inside this same transaction. One read for a
+        // ──
+        // spare, which still needs it: a spare made last month may be a month short.
         await this.partitions.run(organizationId);
 
         // Reused, not reimplemented, so an organization created here holds exactly the
@@ -105,5 +110,22 @@ export class PgOrganizationFounder extends BaseRepository {
     // a line saying a tenant was placed on a node it never reached.
     this.logger.emit("shard.assignment.created", { key: founded, node: 0 });
     return founded;
+  }
+
+  // The oldest spare, and never one another signup holds: `SKIP LOCKED` makes a busy
+  // pool fall through to the inline seed rather than queue two signups behind one row.
+  private async claimSpare(): Promise<OrganizationId | null> {
+    const claimed = await this.db.execute<{ id: OrganizationId }>(sql`
+      delete from spare_tenants
+      where id = (
+        select id from spare_tenants
+        order by created_at
+        limit 1
+        for update skip locked
+      )
+      returning id::text as id
+    `);
+
+    return claimed.rows[0]?.id ?? null;
   }
 }

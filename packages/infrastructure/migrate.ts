@@ -52,16 +52,17 @@ for (const [index, node] of nodes.entries()) {
 
     if (page.rows.length === 0) break;
 
-    // One transaction per tenant, not one for the page: a tenant's seven partitions are
-    // useful on their own, and a long DDL transaction holds locks the whole time.
-    for (const { id } of page.rows) {
+    // One read for the page, then a transaction per tenant that is short of something:
+    // a long DDL transaction holds locks the whole time, and most deploys need none.
+    const short = await partitions.missing(page.rows.map((row) => row.id));
+    for (const id of short) {
       await node.client.transaction(async (tx) =>
         scope.within(tx, "catalog", async () => {
           created += (await partitions.run(id)).length;
         }),
       );
-      tenants += 1;
     }
+    tenants += page.rows.length;
 
     after = page.rows[page.rows.length - 1]?.id ?? null;
     if (page.rows.length < PAGE) break;

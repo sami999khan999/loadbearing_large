@@ -58,6 +58,8 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
           before
             ? sql`(${messages.createdAt}, ${messages.id}) < (${before.at}, ${before.id}::uuid)`
             : undefined,
+          // The month ceiling, for the reason `PgNotificationRepository.list` gives.
+          before ? sql`${messages.createdAt} <= ${before.at}` : undefined,
         ),
       )
       .orderBy(desc(messages.createdAt), desc(messages.id))

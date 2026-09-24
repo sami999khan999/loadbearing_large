@@ -188,27 +188,22 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
     return counts;
   }
 
-  // Detach-then-drop for the partitioned tables, for the reason `dropTenantPartitions`
-  // gives; a delete for `outbox_event`, which has no partition to detach.
+  // The same drop `dropTenantPartitions` runs, on a named node; a delete for
+  // `outbox_event`, which has no tenant partition to drop.
   public override async dropOn(
     organizationId: OrganizationId,
     node: number,
   ): Promise<readonly string[]> {
     const client = this.cluster.at(node).client;
-    const dropped: string[] = [];
 
-    for (const entry of [...PartitionedTable.TENANT_PARTITIONED].reverse()) {
-      // On the catalog node a `local` partition is still being written: every catalog
-      // transaction for this tenant records its audit row there, moved or not.
-      if (node === CATALOG_NODE && TablePlacement.of(entry.name) === "local") continue;
+    // On the catalog node a `local` partition is still being written: every catalog
+    // transaction for this tenant records its audit row there, moved or not.
+    const tables = [...PartitionedTable.TENANT_PARTITIONED]
+      .reverse()
+      .filter((entry) => node !== CATALOG_NODE || TablePlacement.of(entry.name) !== "local")
+      .map((entry) => entry.name);
 
-      const name = TenantPartitionSeed.partitionName(entry.name, organizationId);
-      if (!(await this.exists(client, name))) continue;
-
-      await client.execute(sql.raw(`alter table ${entry.name} detach partition ${name}`));
-      await client.execute(sql.raw(`drop table ${name}`));
-      dropped.push(name);
-    }
+    const dropped = await TenantPartitionSeed.drop(client, [organizationId], tables);
 
     // Published rows only, and never on the catalog node, for the reason above. An
     // unpublished row is an event the drain on this node still owes somebody.

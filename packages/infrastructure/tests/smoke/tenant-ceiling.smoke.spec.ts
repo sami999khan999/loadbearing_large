@@ -28,6 +28,12 @@ const DROP_BATCH = 50;
 
 // Direct, never pooled: every statement here is DDL.
 const database = new Database({ url: stack.database.directUrl });
+// A second pool, so the samplers below watch the work rather than queue behind it.
+const observer = new Database({ url: stack.database.directUrl });
+
+// Signups measured statement by statement at each ceiling. Twenty is enough to average
+// out one slow attach and few enough that `pg_stat_statements` evicts nothing.
+const SAMPLE = 20;
 const scope = new TransactionScope();
 const seed = new TenantPartitionSeed(DatabaseCluster.single(database), scope, shards);
 const maintenance = new PgMaintenanceGateway(
@@ -47,6 +53,15 @@ interface Reading {
   readonly tenants: number;
   readonly partitions: number;
   readonly createMs: number;
+  // One signup's DDL, split by statement kind, from `pg_stat_statements`.
+  readonly probeMs: number;
+  readonly tableMs: number;
+  readonly attachMs: number;
+  // Every lock mode another backend held on `conversations` while those signups ran.
+  readonly conversationsLocks: string;
+  // One fresh tenant dropped at this ceiling, and what its backend waited on meanwhile.
+  readonly dropMs: number;
+  readonly dropWaits: string;
   readonly planMs: number;
   readonly execMs: number;
   readonly runwayMs: number;
@@ -54,6 +69,9 @@ interface Reading {
 }
 
 const readings: Reading[] = [];
+
+// Mean milliseconds per attach, by parent — the table that says which key costs what.
+const attaches: { tenants: number; parent: string; calls: number; meanMs: number }[] = [];
 
 const timed = async <T>(work: () => Promise<T>): Promise<[T, number]> => {
   const started = performance.now();
@@ -88,18 +106,117 @@ const explain = async (organizationId: OrganizationId) => {
   return { planMs: plan[0]["Planning Time"], execMs: plan[0]["Execution Time"] };
 };
 
-// Every tenant's runway for every month-partitioned table — what the monthly schedule and
-// `pnpm db:partitions` both do, and the cost that bounds tenants per node.
+// Polls `query` until `work` settles and counts every key it saw. A sample, not a trace:
+// a lock held for less than one poll can be missed, and a mode seen once was really held.
+const sampled = async <T>(
+  query: ReturnType<typeof sql>,
+  work: () => Promise<T>,
+): Promise<[T, string]> => {
+  const seen = new Map<string, number>();
+  let done = false;
+
+  const poll = (async () => {
+    while (!done) {
+      const rows = await observer.client.execute<{ key: string }>(query);
+      for (const row of rows.rows) seen.set(row.key, (seen.get(row.key) ?? 0) + 1);
+    }
+  })();
+
+  try {
+    return [await work(), [...seen].map(([key, n]) => `${key}:${n}`).join(" ") || "none"];
+  } finally {
+    done = true;
+    await poll;
+  }
+};
+
+// `SAMPLE` signups with the statistics reset first, so every number below is theirs.
+const signups = async (target: number) => {
+  await database.client.execute(sql`select pg_stat_statements_reset()`);
+
+  const [, conversationsLocks] = await sampled(
+    sql`
+      select l.mode as key from pg_locks l
+      join pg_class c on c.oid = l.relation
+      where c.relname = 'conversations' and l.pid <> pg_backend_pid()
+    `,
+    async () => {
+      for (let n = 0; n < SAMPLE; n += 1) await mint();
+    },
+  );
+
+  const rows = await database.client.execute<{ query: string; calls: string; total: number }>(sql`
+    select query, calls::text as calls, total_exec_time as total
+    from pg_stat_statements
+    where query ~* '^(select to_regclass|create table|alter table [^ ]+ attach partition)'
+  `);
+
+  let probe = 0;
+  let table = 0;
+  let attach = 0;
+  const byParent = new Map<string, { calls: number; total: number }>();
+
+  for (const row of rows.rows) {
+    const text = row.query.toLowerCase();
+    if (text.startsWith("select to_regclass")) probe += row.total;
+    else if (text.startsWith("create table")) table += row.total;
+    else {
+      attach += row.total;
+      // A month attach names the tenant partition as its parent; fold those into one row.
+      const parent = (/^alter table (\S+)/.exec(text)?.[1] ?? "?").replace(
+        /_[0-9a-f]{32}$/,
+        " (month)",
+      );
+      const entry = byParent.get(parent) ?? { calls: 0, total: 0 };
+      byParent.set(parent, {
+        calls: entry.calls + Number(row.calls),
+        total: entry.total + row.total,
+      });
+    }
+  }
+
+  for (const [parent, entry] of byParent) {
+    attaches.push({
+      tenants: target,
+      parent,
+      calls: entry.calls,
+      meanMs: Math.round((entry.total / entry.calls) * 10) / 10,
+    });
+  }
+
+  const per = (total: number) => Math.round(total / SAMPLE);
+  return { probeMs: per(probe), tableMs: per(table), attachMs: per(attach), conversationsLocks };
+};
+
+// One tenant founded and dropped by the production path, timed, with its backend's
+// wait events sampled: `Lock` there is the drop queueing behind someone else's read.
+const drop = async () => {
+  const id = await mint();
+  created.splice(created.indexOf(id), 1);
+
+  const [[, dropMs], dropWaits] = await sampled(
+    sql`
+      select coalesce(wait_event_type, 'CPU') as key from pg_stat_activity
+      where pid <> pg_backend_pid() and state = 'active'
+        and (query ilike 'alter table%detach partition%' or query ilike 'drop table%')
+    `,
+    () => timed(() => maintenance.dropTenantPartitions(id)),
+  );
+
+  await database.client.delete(organizations).where(sql`${organizations.id} = ${id}`);
+  return { dropMs, dropWaits };
+};
+
+// Every tenant's runway for every month-partitioned table, paged the way
+// `MaintenanceConsumer.ensure` pages it — so this times what the worker runs.
+const RUNWAY_PAGE = 200;
+
 const runway = async (): Promise<void> => {
-  for (const id of created) {
-    for (const entry of [
-      { name: "activity_log" },
-      { name: "notifications" },
-      { name: "messages" },
-    ]) {
-      await maintenance.ensureMonthlyPartitions(
-        entry.name as Parameters<typeof maintenance.ensureMonthlyPartitions>[0],
-        id,
+  for (const name of ["activity_log", "notifications", "messages"] as const) {
+    for (let at = 0; at < created.length; at += RUNWAY_PAGE) {
+      await maintenance.ensureMonthlyPartitionsFor(
+        name,
+        created.slice(at, at + RUNWAY_PAGE),
         new Date(),
         3,
       );
@@ -132,6 +249,10 @@ const dropOrphans = async (): Promise<number> => {
       and not exists (
         select 1 from organizations o
         where child.relname = parent.relname || '_' || replace(o.id::text, '-', '')
+      )
+      and not exists (
+        select 1 from spare_tenants s
+        where child.relname = parent.relname || '_' || replace(s.id::text, '-', '')
       )
   `);
 
@@ -182,6 +303,7 @@ afterAll(
     // Printed before the cleanup, never after: dropping tens of thousands of partitions is
     // the slowest thing here, and a run whose numbers died with it measured nothing.
     if (readings.length > 0) console.table(readings);
+    if (attaches.length > 0) console.table(attaches);
 
     // Any tenant partition whose organization is gone, first: the drop is one transaction
     // and the row delete after it another, so a dying process commits the second alone.
@@ -199,6 +321,7 @@ afterAll(
     await dropOrphans();
 
     await database.close();
+    await observer.close();
     // Measured at two thousand tenants: 11 611 partitions in 1m42s batched, against a
     // projected fourteen hours one at a time. See docs/reference/partitions.md.
   },
@@ -217,8 +340,10 @@ describe.skipIf(!stack.tenantCeiling)("the tenant ceiling", () => {
         // mid-cleanup leaves partitions behind, and they would be counted as this one's.
         await dropOrphans();
 
-        const [, createMs] = await timed(async () => {
-          while (created.length < target) await mint();
+        // The last `SAMPLE` are the measured signups, so they are the ones at the ceiling.
+        const [cost, createMs] = await timed(async () => {
+          while (created.length < target - SAMPLE) await mint();
+          return signups(target);
         });
 
         const probe = created[0];
@@ -233,10 +358,14 @@ describe.skipIf(!stack.tenantCeiling)("the tenant ceiling", () => {
           migrate(database.client, { migrationsFolder: "./migrations" }),
         );
 
+        const dropped = await drop();
+
         readings.push({
           tenants: created.length,
           partitions: await partitionCount(),
           createMs,
+          ...cost,
+          ...dropped,
           planMs,
           execMs,
           runwayMs,

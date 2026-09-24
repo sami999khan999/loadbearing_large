@@ -1,6 +1,6 @@
 import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
@@ -11,8 +11,10 @@ import {
   memberships,
   organizations,
   roles,
+  spareTenants,
   users,
 } from "../../src/pg/schema/index.js";
+import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 import { RecordingLogger } from "../support/recording.logger.js";
@@ -68,6 +70,70 @@ afterAll(async () => {
     }
   }
   await database.close();
+});
+
+// One spare made by hand, the way the worker's top-up makes one: row and partitions.
+const makeSpare = async (): Promise<OrganizationId> => {
+  const id = Identifiers.organizationId.parse(Uuid.v7());
+  await database.client.insert(spareTenants).values({ id });
+  await new TenantPartitionSeed(
+    DatabaseCluster.single(database),
+    new TransactionScope(),
+    shards,
+  ).run(id);
+  return id;
+};
+
+const spareIds = async (): Promise<readonly string[]> =>
+  (await database.client.select({ id: spareTenants.id }).from(spareTenants)).map((row) => row.id);
+
+// `PF.3`. The pool is shared, and a running worker may hold spares of its own, so each
+// case compares against what was there rather than assuming it was empty.
+describe("PgOrganizationFounder, the spare pool", () => {
+  it("founds the tenant on a spare, and the pool no longer holds it", async () => {
+    await makeSpare();
+    const before = await spareIds();
+
+    const organizationId = await founder().found(await makeUser(), "Spare Co");
+
+    expect(before).toContain(organizationId);
+    expect(await spareIds()).not.toContain(organizationId);
+  });
+
+  // `SKIP LOCKED` falls through rather than queueing, so a pool somebody else holds is
+  // an empty pool — and an empty pool seeds inline, exactly as before spares existed.
+  it("seeds inline when every spare is held by another signup", async () => {
+    await makeSpare();
+    const holder = openDatabase();
+    let release = (): void => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked = (): void => {};
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+
+    const held = holder.client.transaction(async (tx) => {
+      await tx.execute(sql`select id from spare_tenants for update`);
+      locked();
+      await released;
+    });
+
+    try {
+      await holding;
+      const before = await spareIds();
+
+      const organizationId = await founder().found(await makeUser(), "Inline Co");
+
+      expect(before).not.toContain(organizationId);
+      expect(await spareIds()).toEqual(before);
+    } finally {
+      release();
+      await held;
+      await holder.close();
+    }
+  });
 });
 
 describe("PgOrganizationFounder", () => {
