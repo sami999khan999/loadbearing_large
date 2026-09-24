@@ -194,11 +194,18 @@ opened its transaction, the second half catches it: a `SHARE` lock on the tenant
 which cannot be granted while any writer holds `ROW EXCLUSIVE`. If it has not opened one yet, the
 first half does: a settle of `moveSettleMs`, sixty seconds by default, before the lock is taken.
 
-**What the settle does not cover.** A worker job placed on the tenant before the freeze, and
-still opening new transactions more than sixty seconds later, can land a row on the source after
-its page was read. A long notification fan-out is the realistic shape of it. The count check
-catches a late *insert*, because the source then holds more rows than the target. It does not
-catch a late update. Raising `moveSettleMs` narrows the window, and nothing here closes it.
+**A job re-reads its placement at every transaction — `24.2b`.** The settle covers a request,
+which places itself once and finishes in seconds. It does not cover a worker job. A job placed on
+the tenant before the freeze can still be opening new transactions long after sixty seconds. A long
+notification fan-out is the realistic shape of it. Such a write would land on the source after its
+page was read. The count check catches a late *insert*, but not a late *update*. So `withShard`
+places a job with `recheck`, and `PgUnitOfWork.run` re-reads the placement each time it opens a
+transaction. If the tenant is frozen, or its node has changed, it throws
+`ForbiddenError("shard.move.inFlight")` and the job is retried. `beginMove` invalidates the cached
+placement, so the next transaction sees the freeze at once. A savepoint does not re-read. Neither
+does a catalog transaction, because a move copies no catalog row. A transaction already open is
+what the quiesce's `SHARE` lock waits out. The cost is one cached resolve per job transaction, a
+cache read in the same place a request already does one.
 
 **`prepare` mirrors the source's months, not the seed's runway.** The seed creates the current
 month and the next two. A tenant with a message from last year needs last year's partition on the

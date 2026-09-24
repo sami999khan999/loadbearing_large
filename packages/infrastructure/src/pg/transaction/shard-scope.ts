@@ -11,6 +11,9 @@ export interface PlacedShard {
   // a tenant — the outbox drain and the partition runway are every tenant on that node.
   readonly key: ShardKey | null;
   readonly node: number;
+  // A job's placement outlives the move's settle, so its every transaction re-reads
+  // it; a request's does not, because the settle covers it — decision `24.2b`.
+  readonly recheck?: boolean;
 }
 
 // Which shard the ambient work belongs to. Established once per request in the web

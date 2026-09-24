@@ -1,4 +1,9 @@
-import { InternalError, type ShardKey, type ShardResolver } from "../../import.js";
+import {
+  InternalError,
+  type ShardKey,
+  type ShardPlacement,
+  type ShardResolver,
+} from "../../import.js";
 import { Database, type DatabaseConfig } from "./database.js";
 
 // One physical Postgres, pooled twice: through the pooler for everything, and directly
@@ -70,6 +75,12 @@ export class DatabaseCluster {
   // The node a key's rows are on — `forKey`'s answer before it picks the pool.
   public async nodeOf(key: ShardKey): Promise<number> {
     return this.resolver.resolve(key);
+  }
+
+  // The node and the freeze, cached beside each other — what a rechecked job
+  // transaction compares its placement against.
+  public async placementOf(key: ShardKey): Promise<ShardPlacement> {
+    return this.resolver.placementOf(key);
   }
 
   public async forKey(key: ShardKey): Promise<Database> {

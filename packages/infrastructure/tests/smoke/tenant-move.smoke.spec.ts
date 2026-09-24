@@ -268,12 +268,41 @@ describe.skipIf(!shard1)("a tenant move between two nodes", () => {
 
     const writers = [0, 1, 2, 3].map((name) => writer(name));
 
+    // **`24.2b`.** A job placed on node 0 before the move and writing only after the flip,
+    // long past the settle. Placed the way `withShard` places one: with `recheck`.
+    let flipped: () => void = () => undefined;
+    const afterFlip = new Promise<void>((resolve) => {
+      flipped = resolve;
+    });
+    const lateJobId = Uuid.v7() as MessageId;
+    const before = await resolver.placementOf(key);
+    const lateJob = shards.within({ key, node: before.node, recheck: true }, async () => {
+      await afterFlip;
+      return routed
+        .run(() =>
+          messages.save({
+            id: lateJobId,
+            createdAt: new Date(),
+            organizationId: tenant,
+            conversationId,
+            authorId: author,
+            clientId: Uuid.v7(),
+            body: "late job",
+          }),
+        )
+        .then(
+          () => "wrote",
+          (error: unknown) => error,
+        );
+    });
+
     // **The deterministic half.** A write already inside its transaction when the move
     // starts, and still uncommitted when the copy would read its page without the lock.
     const straggler = write("straggler", new Date(), 0, 1500);
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     const moved = await relocate.execute({ organizationId: tenant, toNode: 1, actorId: author });
+    flipped();
 
     // Keep writing after the flip: those land on node 1 directly, through the fresh
     // placement the flip's invalidation forces.
@@ -293,6 +322,14 @@ describe.skipIf(!shard1)("a tenant move between two nodes", () => {
     expect(Number(landed.rows[0]?.count)).toBe(acknowledged.length);
 
     expect(await assignments.findByKey(key)).toMatchObject({ node: 1, movedFrom: 0 });
+
+    // Refused, and so on neither node: without the recheck it lands on node 0, after its
+    // page was copied, and the reclaim drops it.
+    const late = await lateJob;
+    expect(late).toBeInstanceOf(ForbiddenError);
+    for (const database of [catalog, node1]) {
+      expect(await count(database, "messages", sql`and id = ${lateJobId}::uuid`)).toBe(0);
+    }
   });
 
   it("carries a month the target's runway never had", async () => {

@@ -33,6 +33,9 @@ export class PgUnitOfWork extends UnitOfWork {
       throw new ForbiddenError("shard.move.inFlight");
     }
 
+    // Only when opening one: a transaction already open is the quiesce's lock to wait for.
+    if (!open) await this.recheck();
+
     // A catalog use-case calling a routed one inside its transaction is precisely the
     // coupling a physical split cannot honour, so it fails here on one node.
     if (open && open.placement !== this.placement) {
@@ -45,6 +48,16 @@ export class PgUnitOfWork extends UnitOfWork {
       await this.applyStatementTimeout(tx);
       return this.scope.within(tx, this.placement, work);
     });
+  }
+
+  // A job placed before a freeze can outlive the settle, so it asks again per transaction:
+  // one cached resolve. A node that changed means the move completed under it.
+  private async recheck(): Promise<void> {
+    const placed = this.shards.current();
+    if (this.placement === "catalog" || !placed?.recheck || placed.key === null) return;
+
+    const now = await this.cluster.placementOf(placed.key);
+    if (now.frozen || now.node !== placed.node) throw new ForbiddenError("shard.move.inFlight");
   }
 
   // `SET LOCAL`, never `SET`: it dies with the transaction, so it survives a transaction
