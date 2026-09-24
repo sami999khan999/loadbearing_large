@@ -47,6 +47,7 @@ export {
   RecordingPartitionArchiveGateway,
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
+  RecordingRelayedActivityStore,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubSessionResolver,

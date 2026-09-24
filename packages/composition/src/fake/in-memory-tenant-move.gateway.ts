@@ -4,7 +4,7 @@ import { type OrganizationId, type TableRowCount, TenantMoveGateway } from "../i
 // the counts and the order of the steps, never what a message body said.
 type Rows = Map<number, Map<string, number>>;
 
-export type TenantMoveStep = "quiesce" | "prepare" | "copy" | "drop";
+export type TenantMoveStep = "quiesce" | "prepare" | "copy" | "carry" | "drop";
 
 // The one seam that addresses two nodes, so its fake has to model two. A double that
 // reported the same counts on both sides would pass a copy that never ran.
@@ -60,6 +60,15 @@ export class InMemoryTenantMoveGateway extends TenantMoveGateway {
   ): Promise<readonly TableRowCount[]> {
     const forNode = this.rows.get(node) ?? new Map<string, number>();
     return Promise.resolve([...forNode].map(([table, rows]) => ({ table, rows })));
+  }
+
+  public override async carryAudit(
+    organizationId: OrganizationId,
+    _fromNode: number,
+    toNode: number,
+  ): Promise<number> {
+    await this.record("carry", organizationId, toNode);
+    return 0;
   }
 
   public override async dropOn(

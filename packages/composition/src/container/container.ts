@@ -1,5 +1,6 @@
 import {
   type ActivityLogger,
+  ActivityRelaySubscriber,
   type ActivityReplayReader,
   AddConversationMemberUseCase,
   type AnalyticsProjector,
@@ -136,6 +137,7 @@ import {
   RedisConnection,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  type RelayedActivityStore,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
@@ -295,6 +297,8 @@ export class Container {
   public readonly vectors: VectorStore;
   public readonly embeddings: EmbeddingProvider;
   public readonly activity: ActivityLogger;
+  // The same adapter as `activity`, seen through the port the relay subscriber writes to.
+  private readonly relayedActivity: RelayedActivityStore;
   // RBAC, members, API keys, the enrollers and the platform screens. The catalog is
   // the last single primary, so this one is always node 0.
   public readonly catalogUnitOfWork: UnitOfWork;
@@ -645,7 +649,9 @@ export class Container {
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
-    this.activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    this.activity = activity;
+    this.relayedActivity = activity;
     this.eventPublisher = new PgOutboxPublisher(
       this.cluster,
       this.transactions,
@@ -848,6 +854,8 @@ export class Container {
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
     this.subscribers = new SubscriberRegistry([
+      // `24.2a`: the logger is also where a relayed audit row is written, on its node.
+      new ActivityRelaySubscriber(this.relayedActivity),
       new MemberRealtimeSubscriber(this.realtime),
       new NotificationSubscriber(this.notification.deliver),
       new MessagingRealtimeSubscriber(this.realtime, conversations),

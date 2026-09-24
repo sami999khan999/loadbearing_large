@@ -5,6 +5,7 @@
 export {
   ActivityLogger,
   type ActivityRecord,
+  ActivityRelaySubscriber,
   ActivityReplayReader,
   AddConversationMemberUseCase,
   AnalyticsProjector,
@@ -110,6 +111,8 @@ export {
   RealtimePublisher,
   RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
+  type RelayedActivity,
+  RelayedActivityStore,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
