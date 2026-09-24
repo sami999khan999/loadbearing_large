@@ -1624,9 +1624,10 @@ assert("every host port is stated once", (failures) => {
 
 // Registered ahead of the procedure that will assert it, so the seed grants it once
 // rather than per deploy. Each line names the item that removes it; the list only shrinks.
-const PERMISSION_AWAITING_A_PROCEDURE = new Set([
-  "platform.shards.manage", // 24.2
-]);
+// ──
+// **Empty since `24.2`**, which landed the procedure for `platform.shards.manage`.
+/** @type {ReadonlySet<string>} */
+const PERMISSION_AWAITING_A_PROCEDURE = new Set();
 
 assert("every permission in the catalog gates a procedure", (failures) => {
   const declared = spreadFragments(join(ROOT, "packages/permissions/src/catalog"));
