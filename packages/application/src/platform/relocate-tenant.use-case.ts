@@ -52,9 +52,13 @@ export class RelocateTenantUseCase {
     const fromNode = assignment?.node ?? 0;
 
     try {
+      // Before the copy reads a row: a writer placed before the freeze would otherwise
+      // land a row on the source after its page was read, and the flip would lose it.
+      await this.move.quiesce(input.organizationId, fromNode);
+
       // DDL first: inserting into a partitioned table with no partition for the tenant
       // is an error rather than a no-op, so the target is prepared before anything moves.
-      await this.move.prepare(input.organizationId, input.toNode);
+      await this.move.prepare(input.organizationId, fromNode, input.toNode);
       const copied = await this.move.copy(input.organizationId, fromNode, input.toNode);
 
       await this.verify(input.organizationId, fromNode, input.toNode);
@@ -90,8 +94,8 @@ export class RelocateTenantUseCase {
     );
 
     for (const entry of source) {
-      // Greater is fine and less is not: a retried move writes `on conflict do nothing`,
-      // and the target may hold rows a previous attempt copied and the source has since lost.
+      // Greater is fine and less is not. `prepare` empties the target, so greater is a
+      // source month the retention pass archived mid-copy — never a stale earlier attempt.
       if ((target.get(entry.table) ?? 0) < entry.rows) {
         throw new ConflictError("shard", "rowCount");
       }

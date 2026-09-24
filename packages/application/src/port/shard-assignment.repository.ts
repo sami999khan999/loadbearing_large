@@ -26,8 +26,8 @@ export abstract class ShardAssignmentRepository {
   // `String(offset)` compared as text made page two every key after `"25"`.
   public abstract all(after: ShardKey | null, limit: number): Promise<readonly ShardAssignment[]>;
 
-  // **Claims the move**, and answers false when one is already in flight. A check that
-  // read first and wrote second would let two operators start the same move twice.
+  // **Claims the move**, and answers false when one is already in flight or an earlier
+  // move's source copy is on a node other than `toNode`. The `where` is the lock.
   public abstract beginMove(key: ShardKey, toNode: number): Promise<boolean>;
 
   // The flip. One statement: the node changes, `moving_to` clears and the way back is
@@ -38,7 +38,8 @@ export abstract class ShardAssignmentRepository {
   // has to lift the freeze.
   public abstract abandonMove(key: ShardKey): Promise<void>;
 
-  // What the grace sweep reclaims: moves whose source copy is past its window.
+  // What the grace sweep reclaims: moves whose source copy is past its window. Never a
+  // tenant mid-move, whose way-back node may be the one it is being copied onto.
   public abstract droppableBefore(cutoff: Date, limit: number): Promise<readonly ShardAssignment[]>;
 
   // Called once the source rows are gone, so the row stops offering a way back that

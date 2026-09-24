@@ -49,6 +49,11 @@ export class MoveTenantUseCase {
     // so the operator reads why rather than watching a job claim nothing.
     if (assignment.movingTo !== null) throw new ConflictError("shard", "moving");
     if (assignment.node === input.toNode) throw new ConflictError("shard", "sameNode");
+    // The last move's source copy is still on disk, and `moved_from` is the only thing
+    // naming it. Moving back reuses that node; moving onward would orphan the copy.
+    if (assignment.movedFrom !== null && assignment.movedFrom !== input.toNode) {
+      throw new ConflictError("shard", "sourcePending");
+    }
 
     // **No `:`** — BullMQ rejects a colon in a job id. One per tenant, so a second click
     // while the first is queued is the same job rather than a second copy.

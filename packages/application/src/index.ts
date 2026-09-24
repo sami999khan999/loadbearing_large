@@ -159,6 +159,8 @@ export {
   type PurgedOrganization,
   type PurgeOrganizationInput,
   PurgeOrganizationUseCase,
+  type ReclaimedSources,
+  ReclaimMoveSourcesUseCase,
   type RelocatedTenant,
   type RelocateTenantInput,
   RelocateTenantUseCase,
