@@ -1341,13 +1341,22 @@ export class Container {
 
   // **The one place a request or a job is placed.** Both run once, here, so
   // `BaseRepository.db` stays a property read — see the sharding reference.
-  public async placed<T>(principal: Principal, work: () => Promise<T>): Promise<T> {
+  // ──
+  // `recheck` is the worker's: a job can outlive the move's settle — decision `24.2b`.
+  public async placed<T>(
+    principal: Principal,
+    work: () => Promise<T>,
+    options: { readonly recheck?: boolean } = {},
+  ): Promise<T> {
     const key = this.sharding.keyOf(principal);
     // The freeze rides with the node, resolved once here rather than per write: a move
     // makes the tenant readable and unwritable, and `PgUnitOfWork` reads it off scope.
     const placement = await this.shardResolver.placementOf(key);
 
-    return this.shards.within({ key, node: placement.node, frozen: placement.frozen }, work);
+    return this.shards.within(
+      { key, node: placement.node, frozen: placement.frozen, recheck: options.recheck },
+      work,
+    );
   }
 
   // **The one place a cross-tenant sweep is placed**, and it is per node rather than
