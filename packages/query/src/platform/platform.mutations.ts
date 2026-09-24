@@ -5,6 +5,7 @@ import type {
   MoveRequestedDto,
   ProjectionToggleInput,
   ProjectionUpdateInput,
+  ReplicaToggleInput,
   ReprojectInput,
   ReprojectRequestedDto,
   RestoreInput,
@@ -81,6 +82,15 @@ export class PlatformMutations {
     return useAppMutation<{ ok: true }, ProjectionToggleInput>({
       mutationFn: (input) => client.platform.updateProjectionSwitch(input),
       invalidates: [QueryKeys.platform.policy(), QueryKeys.platform.projection()],
+    });
+  }
+
+  // The status key, because that is where the switch is read: the page showing the lag
+  // is the one that says whether anything reads through it.
+  public static useToggleReplicaReads(client: ApiClient) {
+    return useAppMutation<{ ok: true }, ReplicaToggleInput>({
+      mutationFn: (input) => client.platform.updateReplicaSwitch(input),
+      invalidates: [QueryKeys.platform.status(), QueryKeys.platform.policy()],
     });
   }
 
