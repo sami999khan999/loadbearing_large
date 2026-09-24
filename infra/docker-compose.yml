@@ -6,10 +6,10 @@ services:
     restart: unless-stopped
     # pg_stat_statements is the measurement that answers "which query" before any move on
     # the scaling ladder. max_connections is sized for the pooler, not for the apps.
-    # max_locks_per_transaction is raised off the default 64 because every tenant is a
-    # partition: deleting a user cascades to `conversation_members` with no partition key,
-    # so the planner locks every tenant's partition to do it. At the default, a dev
-    # database with a few hundred tenants fails that delete with `53200`.
+    # max_locks_per_transaction is raised off the default 64 because every tenant is
+    # partitions: a statement the planner cannot prune by tenant locks every leaf and its
+    # indexes, ~112 per tenant for `notifications` at full retention. 1024 x 200 slots is
+    # one such read at ~1 800 tenants. See packages/infrastructure/docs/reference/partitions.md.
     command:
       [
         "postgres",
