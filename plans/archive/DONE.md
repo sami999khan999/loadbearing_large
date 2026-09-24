@@ -22,6 +22,32 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `24.6` **Load test the routed paths at 10×** `done: 2026-09-25` — the write half, which
+  `24.1` unblocked. `routed.smoke.spec.ts` gains "routed writes under load". Eight tenants, four
+  per node. Each write is a placement read through the real Redis cache, then a routed
+  transaction inserting a message. Pools of 20 per node. 1× is 4 writers and 10× is 40, 1 000
+  writes each (`ROUTED_SCALE=1000`). Run twice, and both runs agree:
+
+  | Level | Writes/s | p50 | p95 | p99 | Errors |
+  |---|---|---|---|---|---|
+  | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
+  | 10× | 142 / 159 | 265 / 238 ms | 498 / 397 ms | 577 / 417 ms | 0 |
+
+  Every acknowledged row is on its tenant's node and none is on the other. **Routing is under 1 ms of a
+  150 ms write.** The rest is the commit's `fsync` on Docker Desktop, about 100 ms by itself. 10×
+  the writers buys ~6× the throughput, and p50 grows less than 2×. The stale third case, a routed
+  insert on node 1 asserted to *fail*, is gone: since `24.1` it only failed because its tenant had
+  no partitions. The numbers are one machine's disk; a provisioned node's are `S.3`'s.
+- [x] `24.4` **The catalog is the last single primary — measure first** `done: 2026-09-25` —
+  measured, and it does not hurt, so nothing was built. Reads of the six catalog-only tables around
+  the 2 000 routed writes above: `shard_assignments` +17, `organizations` +16, `roles`,
+  `role_permissions`, `memberships` and `users` +7 each. The eight tenants' first resolves and
+  their own setup and teardown account for the first two. **Zero catalog reads per write** once the
+  placement is warm, which it stays for five minutes per key. The catalog's writes are sign-ups
+  and role edits, and `PF.0` measured a whole founding transaction at 21 ms. **If it ever hurts,
+  the replica already exists**: node 0 is the catalog, `24.3` gave it a standby, and a catalog
+  read that tolerates it moves with `BaseRepository.reader()` and nothing else.
+
 - [x] `25.3` **Colder storage class** `done: 2026-09-25` — built with a MinIO tier, as decided.
   `LifecycleRule` gains an optional `transition: { storageClass, afterDays }`, and
   `StoragePolicyGateway.coldTier()` answers the deployment's from `S3_COLD_STORAGE_CLASS` and

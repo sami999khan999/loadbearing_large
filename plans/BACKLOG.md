@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 4 | 29 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 2 | 31 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
@@ -96,7 +96,7 @@ After it, in order:
 
 ---
 
-## 1. `archive/PLAN.md` — the four open boxes
+## 1. `archive/PLAN.md` — the two open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -117,18 +117,12 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-**`24.1`, `24.2`, `24.2a`, `24.2b`, `24.3` and `24.5` are built** —
+**`24.1`–`24.6` are built, and `24.7` waits on a relation count no node has reached** —
 [`archive/DONE.md`](archive/DONE.md) §1. A tenant can be moved, a move under load loses no
 acknowledged write, a moved tenant's catalog audit rows reach its own node through the outbox, a
 job still writing after the settle is refused rather than landing on the source, and the
 projection reads from a standby once it has caught up.
 
-- [ ] `24.4` **The catalog is the last single primary** — measure first; a replica for its reads
-  if it hurts. — `archive/PLAN.md:3983`
-- [ ] `24.6` **Load test the routed paths at 10×** — half ran (`tests/smoke/routed.smoke.spec.ts`,
-  `ROUTED_SCALE=1`): a warm placement resolve is 679 µs, a miss 2 568 µs, the cross-node walk is
-  serial. **The write half is unblocked** since `24.1` dropped the keys — a routed insert on node 1
-  lands now, and `sharded.smoke.spec.ts` proves it. What is left is running the load test. — `archive/PLAN.md:3997`
 - [ ] `24.7` **A pooled partition for the long tail** — small tenants share one `<table>_pool`
   list partition and graduate on a size line. **Its gate is relation count now, measured by
   `PF.0`**: a tenant-level attach grows with siblings (~3 ms at 100 tenants, ~27 ms at 2 000), and
