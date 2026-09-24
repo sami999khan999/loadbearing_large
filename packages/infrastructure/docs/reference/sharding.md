@@ -255,7 +255,7 @@ target afterwards. With `quiesce` made a no-op, the same spec loses the straggle
 
 ```bash
 pnpm infra:up:sharded          # plus the two DATABASE_SHARD_1_* lines in .env
-ROUTED_SCALE=1 pnpm smoke
+ROUTED_SCALE=1000 pnpm smoke
 ```
 
 `tests/smoke/routed.smoke.spec.ts`, averaged over a thousand resolutions against the two-node
@@ -281,11 +281,29 @@ so this is the whole of what routing adds.
 after the other. That is `Container.eachShard`, and a pass that fanned out would hold a connection
 open on every node at once.
 
-> [!IMPORTANT]
-> **The write half of `24.6` cannot run, and that is `24.1`.** A routed insert on node 1 is a
-> `23503` before it is a measurement, because every routed table carries a foreign key to a
-> catalog one. The spec asserts that rather than pretending, and `sharded.smoke.spec.ts` names the
-> constraint class. There is no routed throughput number until the foreign-key decision is made.
+### Writes under load — `24.6`
+
+`24.1` dropped the keys that made a routed insert on node 1 fail, so the write half runs now.
+Eight tenants, four per node. Each write is the path a request takes: a placement read through the
+real Redis cache, then a routed transaction inserting one message. Each node's pool is 20, the
+shipped `DATABASE_POOL_MAX`. 1× is four writers at once and 10× is forty, 1 000 writes each,
+`ROUTED_SCALE=1000`:
+
+| Level | Writers | Writes/s | p50 | p95 | p99 | Errors |
+|---|---|---|---|---|---|---|
+| 1× | 4 | 23 | 151 ms | 324 ms | 467 ms | 0 |
+| 10× | 40 | 142 | 265 ms | 498 ms | 577 ms | 0 |
+
+**Routing is not where the time goes.** The warm resolve above is under 1 ms of a write's 150. The
+rest is the commit's `fsync`, and on Docker Desktop on Windows that alone is about 100 ms. It is
+also why a crashed catalog container spends minutes in recovery here. Ten times the writers buys six
+times the throughput, because concurrent commits share a flush. Latency grows by less than 2×.
+
+**What the test asserts is not the numbers.** They are this machine's disk. The assertions are
+that no write fails at either level, and that every acknowledged row is on its tenant's node and
+none is on the other. A routing slip under load would be a row that reads back from nowhere. A
+node that is *provisioned*, rather than a second container on one machine, is `S.3`'s remaining
+half, and its numbers are the ones a capacity plan should use.
 
 ## Sharding by something else: four edits, and nothing else
 
