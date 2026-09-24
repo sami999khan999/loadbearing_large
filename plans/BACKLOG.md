@@ -49,7 +49,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
 | 5 | Verification owed — browser, manual, or a scale not run | 1 | 8 |
 | 6 | Conditional work — "reopen when" | 7 | — |
-| 7 | `archive/TODO.md` ledger rows | 1 | 2 |
+| 7 | `archive/TODO.md` ledger rows | 0 | 3 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
 | 9 | Performance — the tenant/partition layer | 0 | 8 |
 
@@ -267,20 +267,9 @@ a feeling.
 
 ## 7. `archive/TODO.md` — the three ledger rows
 
-`archive/TODO.md` is history since 2026-09-17 and this is its only open line. `T-037` and `T-038`
-closed on 2026-09-21, once section 5's browser clauses made their Exit lines true rather than
-merely claimed — both are in [`archive/DONE.md`](archive/DONE.md) §7.
-
-- [ ] `T-036` **Communication plan** `P1`. Done when Phases 9–13 **and 26** are closed, plus
-  `23.1`–`23.3` and `23.5`–`23.12`. **Every clause but one is now met** — Phases 9–13 are done,
-  `23.1`–`23.3` closed on 2026-09-21 and `23.5`–`23.12` on the walk.
-  - **It stays open, and the clause it waits on left this file.** Phase 26 moved to
-    [`COMMUNICATION.md`](COMMUNICATION.md) on 2026-09-22, so the row now closes when that plan
-    does. The alternative, decided against the same day, was narrowing the "Done when" to the
-    walk — which `23.12` says closes it. Eight items are genuinely unbuilt, and a `P1` row
-    reading "done" above them is a worse record than one reading "open"; the row blocks nothing,
-    so narrowing it buys only a tick. Reverse it in one line if the count matters more than the
-    claim. — `archive/TODO.md:140`
+**Empty.** `T-036` closed on 2026-09-25 with its "Done when" narrowed as decided, so Phase 26
+lives in [`COMMUNICATION.md`](COMMUNICATION.md) rather than on this row. `T-037` and `T-038`
+closed on 2026-09-21. All three are in [`archive/DONE.md`](archive/DONE.md) §7.
 
 ---
 

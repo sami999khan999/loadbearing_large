@@ -909,6 +909,16 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
   — `archive/TODO.md:228–241`
 ## 7. `archive/TODO.md` — the three ledger rows
 
+- [x] `T-036` **Communication plan** `P1`. `done: 2026-09-25` — **its "Done when" narrowed, as
+  decided, and this supersedes the 2026-09-22 note** that kept the row open. The row now closes on
+  Phases 9–13, `23.1`–`23.3` and `23.5`–`23.12`, and every one of those is closed: Phases 9–13
+  before this ledger existed, `23.1`–`23.3` on 2026-09-21, and `23.5`–`23.12` on the browser walk.
+  Phase 26 is not dropped. It moved whole to [`COMMUNICATION.md`](../COMMUNICATION.md) on
+  2026-09-22 as the input to a performance and isolation plan not yet written, and that plan will
+  carry its own row. The 2026-09-22 note's objection still stands, and it is now true: a `P1` row
+  reading "done" sits above eight unbuilt items. That is the trade the decision accepted. The
+  items are recorded in `COMMUNICATION.md`, not here. — `archive/TODO.md:140`
+
 - [x] `T-037` **Database scaling plan** `P1`. `done: 2026-09-21` — Phases 14–17, 21 and 22 all
   report their Exit lines true and Phase 24 is filed. It was **not** ticked on the file's own
   say-so: Phase 21's Exit carried a "not verified through a browser" note, which section 5 closed
