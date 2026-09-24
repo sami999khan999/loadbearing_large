@@ -820,6 +820,21 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 5. Verification owed — browser, manual, or a scale not run
 
+- [x] **The whole-plan verification** `done: 2026-09-25` — `archive/PLAN.md`'s closing section,
+  both halves. **The command block** ran end to end in one pass: `build:packages`, the web and
+  worker builds, `check:architecture` 29 of 29 with none skipped, `typecheck`, `lint`, `test` (205
+  files), `db:migrate`, `db:seed`, `ch:migrate` and `smoke` (9 files, 3 skipped by opt-in).
+  **The Exit lines were read by hand**, all 26, and each was checked against the tree. Phases 1–15
+  are true in the tree. 11–13 and 18–21 are true by their recorded walks. Phases 23, 24 and 26
+  have no Exit line: their ledgers say all closed except `23.14` and the conditional `24.7`, and
+  Phase 26 went to `COMMUNICATION.md`. **One clause is false, and on purpose.** Phase 22's
+  "`sharded.spec.ts` fails on exactly the foreign-key constraint `24.1` names" was true when
+  written. `24.1` dropped those keys, and the spec now asserts the write *succeeding*
+  (`sharded.smoke.spec.ts:319`). The rest is stale wording in a frozen file: assertion counts of
+  20, 21 and 23 against 29; `TENANT_EXEMPT`, which is `shard.ts`'s `CATALOG` list now;
+  `sharded.spec.ts` for `sharded.smoke.spec.ts`; `/health` for `/api/health`; "nine platform
+  keys" for ten. Listed in `BACKLOG.md`'s "do not fix" table rather than edited.
+
 - [x] **`archive/REVIEW.md`'s own gap** `done: 2026-09-22` — the review session had no Docker, so
   neither the `infrastructure` integration specs nor the smoke suites ran against it, and the
   forty-five fixes then landed without either being re-run. Both have now run on the tree that

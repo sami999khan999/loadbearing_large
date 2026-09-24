@@ -47,7 +47,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
-| 5 | Verification owed — browser, manual, or a scale not run | 1 | 8 |
+| 5 | Verification owed — browser, manual, or a scale not run | 0 | 9 |
 | 6 | Conditional work — "reopen when" | 7 | — |
 | 7 | `archive/TODO.md` ledger rows | 0 | 3 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
@@ -80,19 +80,29 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## Where work stopped — 2026-09-24
+## Where work stopped — 2026-09-25
 
-**Stopped at a clean point on request.** Everything is committed and green: build, typecheck,
-lint, all 29 architecture assertions with none skipped, and the full test suite. The next item
-is **`24.2b`**, half built and reverted, with its design and what is left in its entry below.
-After it, in order:
+**Every item on the 2026-09-24 list is done except one**, and that one is skipped with its reasons
+in its entry. Everything is committed on `dev` and **not pushed**. Build, typecheck, lint, all 29
+architecture assertions with none skipped, the full test suite and the smoke suite are green. What
+closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
 
-1. `24.3` — the read replica in compose (decided: run it in compose), which unblocks `25.1`
-   and `25.2`.
-2. `25.3` — the colder storage class, with a MinIO tier (decided: build it).
-3. `23.14` — the analytics reader, on ClickHouse (decided).
-4. `24.6` — the 10× load test; `24.4` — measure the catalog.
-5. `T-036` — narrow its "Done when" (decided); then the whole-plan verification last.
+| ID | What | Proof |
+|---|---|---|
+| `24.2b` | a job re-reads its placement per transaction | red without it, twice: a spec and a live move |
+| `24.3` | read replica per node, used only once caught up | live standby; red without the caught-up check |
+| `25.1` · `25.2` | replica status and the switch, on `/platform/status` | over the API; standby +42 vs +0 scans per run |
+| `25.3` | colder storage class, a MinIO tier | the live bucket takes a `COLD` transition and refuses an unknown one |
+| `24.6` | routed writes at 1× and 10× across two nodes | 0 errors, no misplaced row, 142–159 writes/s at 10× |
+| `24.4` | the catalog, measured | zero catalog reads per warm routed write; nothing built |
+| `T-036` | the communication row | "Done when" narrowed, as decided |
+
+**Skipped: `23.14`**, the analytics reader. Its gate is not met and its first query is a product
+choice. See the entry.
+
+**What is left is not a session's to do.** `S.2` waits for real traffic. `S.3` waits for a node
+that is provisioned rather than a second container. Section 6 is triggers, none fired. The
+whole-plan verification's reading pass was done on 2026-09-25 and is in section 5.
 
 ---
 
@@ -114,6 +124,19 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
   against real data. Four decisions carry over (new port, read-only, resolved scope, ISO periods).
   Step one is done **and this time it is running** — the container is up, `CLICKHOUSE_URL` is set,
   and the projection has written rows rather than merely being able to (`S.2`). — `archive/PLAN.md:3586`
+  - **Skipped 2026-09-25, and not because of the store.** The order was ClickHouse, decided. Two
+    things block it, and neither is the kind a session should settle alone:
+    1. **The gate is not met.** On the machine this session ran on, ClickHouse held **242 rows
+       across 3 days**. Most of them are spec debris: `test.commit.*`, `test.kept.*`, and
+       `organization.created` for 73 integration tenants. The entry's order is "let it fill and
+       reconcile for days, *then* write the reader against real data", and there is none to write
+       it against.
+    2. **The first dashboard is a product choice.** "A dashboard with a real query" names no
+       question. Which aggregate the first screen answers — actions per day, members joined, time
+       to first message — decides the port's first method. A guessed one is the shape `5.12`
+       deleted for having no caller.
+  - **To unblock:** name the first dashboard's question, and run the worker somewhere it sees real
+    use for a few days. The four carried decisions stand.
 
 ### Phase 24 — The physical split 📁
 
@@ -234,11 +257,8 @@ than burying in a tick, because the next walk needs them:
   itself, so it was the input path and not an `R.44`-shaped missing handler. Worth knowing before
   the next walk files a defect against a button that works.
 
-- [ ] **The whole-plan verification** — `archive/PLAN.md`'s own closing section: the command block,
-  then each phase's Exit line by hand. **The clause it says cannot be automated is done**: a tenant
-  owner — bob, owner of Bob Co — typed `/platform/retention` into the address bar on 2026-09-21
-  and landed on `/forbidden`. What is left is the by-hand pass over every phase's Exit line, which
-  is a reading job rather than a browser one. — `archive/PLAN.md:4284`
+**The whole-plan verification closed on 2026-09-25**, both halves — the command block and all 26
+Exit lines by hand. [`archive/DONE.md`](archive/DONE.md) §5 has what was found.
 
 ---
 
@@ -304,17 +324,20 @@ the application issues one. `max_locks_per_transaction` stays 1 024 until a node
 
 ### Do not fix these — they are frozen by design
 
-Six lines inside `archive/` were stale the day the files moved. **They are not tasks.** A file in
+Six lines inside `archive/` were stale the day the files moved, and the 2026-09-25 verification
+added two rows. **They are not tasks.** A file in
 `archive/` records what was believed when it was written, and correcting one would make it a worse
 record, not a better one. Listed so nobody reads them as current on the way to an entry's body.
 
 | Where | What it says | What is true |
 |---|---|---|
 | `archive/PLAN.md:34–81` | eighteen phases built, "start at Phase 19" | twenty-two built; the queue is Phase 23 |
-| `archive/PLAN.md:87` | `check:architecture` "21/21 today; 23 after Phase 22" | 26 |
+| `archive/PLAN.md:87` | `check:architecture` "21/21 today; 23 after Phase 22" | 29 |
 | `archive/PLAN.md:3347` | Phase 23 is "three fixes, eight clauses, three from `TODO.md`, and `23.16`" | `23.16` is done; `23.17`–`23.24` came later |
 | `archive/OPEN.md:763` | "45 commits on `main`, nothing pushed" | merged as PR #18; `origin/main..HEAD` is empty |
 | `archive/OPEN.md:544` | section B line numbers, taken 2026-09-19 | drifted by that night's edits; the IDs are right |
+| Phase 22's Exit | "`sharded.spec.ts` fails on exactly the foreign-key constraint `24.1` names" | `24.1` dropped the keys; the spec asserts the write succeeding |
+| Phases 17–22's Exits | 20, 21 or 23 assertions; `TENANT_EXEMPT`; `/health`; nine platform keys | 29; `shard.ts`'s `CATALOG`; `/api/health`; ten |
 | `archive/REVIEW.md` | line numbers as of `d98c9f3` | one commit behind `885e144`; accurate until the first fix |
 
 **One of them is not stale and is still owed:** `archive/OPEN.md` section D's table of what changed
