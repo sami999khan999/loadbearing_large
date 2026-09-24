@@ -155,15 +155,78 @@ Every node's tenants at once is the whole directory, which is the one read this 
 make; the expansion is paginated and ordered by name then id, so an offset means the same thing
 on the second page as it did on the first.
 
-**The move button is rendered and disabled.** `Container.hasShardMoves` is a getter returning a
-constant `false` until `24.2` registers the move job, and the use-case turns it into
-`moves: "unavailable" | "available"` on the wire. A screen that simply omitted the control would
-say nothing about what is missing; one that showed an enabled control would lie. The disabled
-one carries the reason as text — "tenant moves need the physical split".
+**The move button is live only when there is somewhere to move to.** `Container.hasShardMoves`
+is `cluster.size > 1`, and the use-case turns it into `moves: "unavailable" | "available"` on the
+wire. On one node the button is disabled and the reason is printed beside it, because a screen
+that omitted the control would say nothing about what is missing. On two it opens a confirmation
+naming the freeze, with one button per other node — never a number typed into a field.
 
 The tenant lookup takes an organization id **or** a slug and compares
 `organizations.id::text = $1`. Never `$1::uuid`: a slug cast to a uuid is a `22P02` from the
 database rather than the empty answer a typed search should get.
+
+## The tenant move
+
+A move copies one tenant's rows to another node, then flips its directory row. **Between the
+copy and the flip the rows exist twice**, and a write that lands on the source in that window is
+lost the moment the flip points every reader at the target. Everything below exists to close
+that window.
+
+| Step | Where | What it does |
+|---|---|---|
+| request | `MoveTenantUseCase` | every guard, then a `tenant-move` job on `QueueName.MAINTENANCE` |
+| freeze | `beginMove` | sets `moving_to` in one `update … where`, then invalidates the cached placement |
+| quiesce | `PgTenantMoveGateway.quiesce` | waits out writers that placed themselves before the freeze |
+| prepare | `PgTenantMoveGateway.prepare` | the target's partitions, then its copy of the tenant's routed rows emptied |
+| copy | `PgTenantMoveGateway.copy` | pages of 500 by `id`, `to_jsonb` out and `jsonb_populate_recordset` in |
+| verify | `RelocateTenantUseCase` | counts both nodes; a target short of the source fails the move |
+| flip | `completeMove` | node, `moved_from` and `source_droppable_at` in one statement, then invalidate |
+| reclaim | `ReclaimMoveSourcesUseCase` | the nightly cleanup drops the source once the grace period ends |
+
+**The freeze is a refusal, not a queue.** While `moving_to` is set, `PgUnitOfWork.run` throws
+`ForbiddenError("shard.move.inFlight")` for any `routed` or `local` write, and reads keep
+answering from the source, which still holds every row. A catalog write is never refused: a move
+copies no catalog row, so it cannot lose one.
+
+**The quiesce has two halves, because a request places itself once.** A request that resolved
+its placement a moment before the freeze still believes the tenant is writable. If it has already
+opened its transaction, the second half catches it: a `SHARE` lock on the tenant's partitions,
+which cannot be granted while any writer holds `ROW EXCLUSIVE`. If it has not opened one yet, the
+first half does: a settle of `moveSettleMs`, sixty seconds by default, before the lock is taken.
+
+**What the settle does not cover.** A worker job placed on the tenant before the freeze, and
+still opening new transactions more than sixty seconds later, can land a row on the source after
+its page was read. A long notification fan-out is the realistic shape of it. The count check
+catches a late *insert*, because the source then holds more rows than the target. It does not
+catch a late update. Raising `moveSettleMs` narrows the window, and nothing here closes it.
+
+**`prepare` mirrors the source's months, not the seed's runway.** The seed creates the current
+month and the next two. A tenant with a message from last year needs last year's partition on the
+target, or the insert has nowhere to land. `prepare` reads the source's month partitions out of
+`pg_inherits` and creates each one on the target with the same bounds.
+
+**A failed move is retried from nothing.** Any failure lifts the freeze and leaves the tenant
+where it was. `prepare` then empties the target's routed rows before the next copy, so the retry
+never keeps a stale copy of a row the tenant has since changed or deleted. That is also why
+`verify` can trust a target that holds *at least* the source's count.
+
+**The two `local` tables are copied, never emptied, and never dropped on node 0.** A catalog
+transaction — an invitation, a role change, an API key — writes the tenant's audit row and outbox
+event on node 0, whichever node the tenant is on. So node 0 holds rows for a moved tenant that
+exist nowhere else. The copy carries them with `on conflict do nothing`; `prepare` does not empty
+them; and the reclaim leaves the tenant's `activity_log` partition on node 0 in place, because
+catalog transactions keep writing to it after the move.
+
+**The way back is the grace period.** The flip stamps `moved_from` and `source_droppable_at`, and
+the source copy stays until then — seven days, or `platform_policy.move_grace_days` when an
+operator has set it. A move back to `moved_from` is allowed, and `prepare` empties the stale copy
+before refilling it. A move to a *third* node is refused with `sourcePending`: the flip would
+overwrite `moved_from`, the only column naming the old copy, and nothing would ever drop it.
+
+**Proved under load**, by `tests/smoke/tenant-move.smoke.spec.ts` with the `sharded` profile up.
+Four writers place themselves per write, the way a request does, and one straggler holds its
+transaction open for 1.5 s across the start of the move. Every acknowledged write is on the
+target afterwards. With `quiesce` made a no-op, the same spec loses the straggler on every run.
 
 ## What routing costs a request, measured
 
@@ -234,28 +297,21 @@ both. `tests/smoke/sharded.smoke.spec.ts` is what runs against it — gated on
 `Stack.shard1`, provided by `vitest.smoke.config.ts`, because `check-architecture` §3 walks
 `tests/` for `process.env` and that injection is the only door.
 
-It creates two tenants, writes their directory rows naming node 0 and node 1, and asserts four
-things:
+It creates two tenants, writes their directory rows naming node 0 and node 1, and asserts:
 
 - each key resolves to the node its row names;
 - `shard_assignments` exists on the catalog and **not** on shard 1;
 - a message written under a tenant placed on node 0 lands on node 0 and on no other node;
-- a write under the tenant on node 1 fails with `23503` on a constraint naming a **catalog**
-  table — matched against `TablePlacement.CATALOG` rather than one constraint's name.
+- a routed write under the tenant on node 1 lands on node 1, with no key reaching back to the
+  catalog.
 
-**That last one is the point.** It is not a bug to fix now; it is the split's first real cost,
-made visible before anyone pays it. Ten foreign keys cross from a shard to the catalog, every one
-`ON DELETE CASCADE`. Nine are on routed tables: `notifications` → `organizations`, `users`;
-`notification_preferences` → `organizations`, `users`; `conversations` → `organizations`;
-`conversation_members` → `organizations`, `users`; `messages` → `organizations`; `document_chunks`
-→ `organizations`. The tenth is on a **local** table — `outbox_event` → `organizations` — and it
-matters more, not less: a local table exists on every node, so every node's outbox carries it, and
-the first routed transaction on node 1 that publishes a domain event is what trips it.
-Which of them trips first depends on insert order, which is why the expectation names the class.
-Phase 24 decides what happens to all ten.
+**That last one used to assert the opposite.** Ten foreign keys crossed from a shard to the
+catalog, and a routed insert on node 1 failed with `23503` before it could land. Decision `24.1`
+dropped all ten, so the case inverted — and it still fails on the old schema, which is the point
+of keeping it.
 
-Asserted by SQLSTATE and constraint rather than by message: the message is localised and reworded
-between server versions, and drizzle wraps the driver error so the constraint is one `cause` down.
+`tests/smoke/tenant-move.smoke.spec.ts` runs against the same profile and proves the move — see
+[The tenant move](#the-tenant-move).
 
 ## What is not built, and why it is not
 

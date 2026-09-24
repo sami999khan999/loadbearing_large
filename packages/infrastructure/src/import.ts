@@ -135,6 +135,8 @@ export {
   StoragePolicyGateway,
   type StoredObject,
   type SweepOutcome,
+  // A value: the move gateway treats a `local` table differently from a routed one.
+  TablePlacement,
   type TableRowCount,
   type TenantExport,
   TenantMoveGateway,
