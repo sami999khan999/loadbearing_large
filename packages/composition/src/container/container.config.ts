@@ -8,6 +8,9 @@ export interface ContainerConfig {
     // cannot survive a transaction pooler uses — migrations, the seed, the archive.
     readonly url: string;
     readonly directUrl?: string;
+    // Node 0's streaming standby, from `DATABASE_REPLICA_URL`. Absent is every read on
+    // the primary; present, it is used only while `platform_policy` allows it — `24.3`.
+    readonly replicaUrl?: string;
     // All optional, and the defaults are stated once, in `Database`. A second copy here
     // is the one that drifts from the pool that actually reads them.
     readonly poolMax?: number;
@@ -15,7 +18,11 @@ export interface ContainerConfig {
     readonly poolConnectTimeoutMs?: number;
     // Nodes 1 and up, from `DATABASE_SHARD_<n>_URL`, in index order; absent is one
     // node. See packages/infrastructure/docs/reference/sharding.md.
-    readonly shards?: readonly { readonly url: string; readonly directUrl: string }[];
+    readonly shards?: readonly {
+      readonly url: string;
+      readonly directUrl: string;
+      readonly replicaUrl?: string;
+    }[];
     readonly statementTimeoutMs?: number;
     // How long a moved tenant's rows stay on the node it left, when the operator has
     // set no number on `platform_policy`. Days — decision `24.2`.

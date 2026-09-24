@@ -141,6 +141,7 @@ import {
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
+  type ReplicaHealth,
   ReprojectPartitionUseCase,
   ResendInvitationUseCase,
   RestorePartitionUseCase,
@@ -159,6 +160,7 @@ import {
   type SessionResolver,
   SetMemberActiveUseCase,
   type ShardAssignmentRepository,
+  type ShardConfig,
   type ShardingStrategy,
   type ShardResolver,
   ShardScope,
@@ -173,6 +175,7 @@ import {
   type TenantMoveGateway,
   type TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,
+  ToggleReplicaReadsUseCase,
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
@@ -430,6 +433,7 @@ export class Container {
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
     readonly reprojectPartition: ReprojectPartitionUseCase;
     readonly toggleProjection: ToggleProjectionUseCase;
+    readonly toggleReplicaReads: ToggleReplicaReadsUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
@@ -509,6 +513,7 @@ export class Container {
             onError: (error: Error) =>
               this.logger.emit("database.pool.error", { message: error.message }),
           },
+          replica: this.replicaPool(config, config.database.replicaUrl),
         },
         // Nodes 1 and up. Same pool settings as node 0, because a shard is the same
         // database with a different set of tenants on it.
@@ -531,6 +536,7 @@ export class Container {
             onError: (error: Error) =>
               this.logger.emit("database.pool.error", { message: error.message }),
           },
+          replica: this.replicaPool(config, shard.replicaUrl),
         })),
       ],
       this.shardResolver,
@@ -1089,6 +1095,7 @@ export class Container {
         this.authorizer,
         this.platform,
         new ContainerHealthReader(this),
+        this.platformPolicy,
       ),
       getPolicy: new GetPlatformPolicyUseCase(
         this.authorizer,
@@ -1111,6 +1118,14 @@ export class Container {
         this.activity,
       ),
       toggleProjection: new ToggleProjectionUseCase(
+        this.authorizer,
+        this.platformPolicy,
+        new ContainerHealthReader(this),
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      toggleReplicaReads: new ToggleReplicaReadsUseCase(
         this.authorizer,
         this.platformPolicy,
         new ContainerHealthReader(this),
@@ -1346,7 +1361,7 @@ export class Container {
   public async placed<T>(
     principal: Principal,
     work: () => Promise<T>,
-    options: { readonly recheck?: boolean } = {},
+    options: { readonly recheck?: boolean; readonly replica?: boolean } = {},
   ): Promise<T> {
     const key = this.sharding.keyOf(principal);
     // The freeze rides with the node, resolved once here rather than per write: a move
@@ -1354,9 +1369,24 @@ export class Container {
     const placement = await this.shardResolver.placementOf(key);
 
     return this.shards.within(
-      { key, node: placement.node, frozen: placement.frozen, recheck: options.recheck },
+      {
+        key,
+        node: placement.node,
+        frozen: placement.frozen,
+        recheck: options.recheck,
+        replica: options.replica,
+      },
       work,
     );
+  }
+
+  // Every node's standby, empty when none is configured — what the status panel reads.
+  public async replicaHealth(): Promise<readonly ReplicaHealth[]> {
+    return this.cluster.replicaHealth();
+  }
+
+  public get hasReplicas(): boolean {
+    return this.cluster.hasReplicas;
   }
 
   // **The one place a cross-tenant sweep is placed**, and it is per node rather than
@@ -1421,6 +1451,22 @@ export class Container {
       max: pool.max,
       forMs: this.poolWaitingTicks * this.poolProbeMs,
     });
+  }
+
+  // A node's standby pool, sized like its primary: what moves onto it is the reads that
+  // would otherwise have held a primary connection for the same time.
+  private replicaPool(config: ContainerConfig, url: string | undefined): ShardConfig["replica"] {
+    if (!url) return undefined;
+    return {
+      url,
+      maxConnections: config.database.poolMax,
+      statementTimeoutMs: config.database.statementTimeoutMs,
+      idleTimeoutMs: config.database.poolIdleTimeoutMs,
+      connectionTimeoutMs: config.database.poolConnectTimeoutMs,
+      applicationName: `${config.logging.app}-replica`,
+      onError: (error: Error) =>
+        this.logger.emit("database.pool.error", { message: error.message }),
+    };
   }
 
   // `Database`'s own default when the config omits one, because the two numbers have to
