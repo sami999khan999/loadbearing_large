@@ -95,6 +95,12 @@ export class PlatformRouter {
     context.container.platformAdmin.locateTenant.execute(context.principal, input),
   );
 
+  // Queues, never runs: the move is placed on nothing and names both nodes itself, and
+  // the request is placed on the admin's tenant, which is neither of them.
+  public static readonly moveTenant = authed.platform.moveTenant.handler(({ input, context }) =>
+    context.container.platformAdmin.moveTenant.execute(context.principal, input),
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring
   // `PlatformProcedures.all`.
   public static readonly all = {
@@ -116,5 +122,6 @@ export class PlatformRouter {
     updateRetention: PlatformRouter.updateRetention,
     shardMap: PlatformRouter.shardMap,
     locateTenant: PlatformRouter.locateTenant,
+    moveTenant: PlatformRouter.moveTenant,
   } as const;
 }
