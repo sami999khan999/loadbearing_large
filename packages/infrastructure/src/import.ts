@@ -21,6 +21,7 @@ export {
   PutBucketLifecycleConfigurationCommand,
   PutObjectCommand,
   S3Client,
+  type TransitionStorageClass,
 } from "@aws-sdk/client-s3";
 
 // ── @aws-sdk/lib-storage ─────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ export {
   type CapabilityRepository,
   ColdArchiveReader,
   type ColdPage,
+  type ColdTier,
   type ConversationMemberRecord,
   type ConversationPage,
   type ConversationRecord,

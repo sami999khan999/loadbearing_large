@@ -1,5 +1,6 @@
 import {
   Buffer,
+  type ColdTier,
   createHash,
   DeleteObjectCommand,
   GetObjectCommand,
@@ -23,6 +24,8 @@ export interface S3Config {
   readonly secretKey: string;
   // true for MinIO, false for AWS.
   readonly forcePathStyle: boolean;
+  // Absent is no colder class, which is every deployment until someone pays for one.
+  readonly coldTier?: ColdTier;
 }
 
 interface Digest {

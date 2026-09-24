@@ -81,11 +81,39 @@ The policy is written in months and S3 counts days, so one of the two has to giv
 expires an object inside the window an operator asked for, and that is the direction that loses
 data. The screen says "about", which is the honest word for it.
 
+## A colder class, and only one that reads back at once — `25.3`
+
+An archived month is rarely read. So a bucket can move it to a cheaper, colder storage class
+after a while and still expire it on time. `S3_COLD_STORAGE_CLASS` and `S3_COLD_TRANSITION_DAYS`
+name the class and the days, both or neither. The gateway answers them as `coldTier()`, and
+`RetentionRules.lifecycleFor(rows, tier)` gives every `cold/<table>/` rule a `Transition` beside
+its `Expiration`.
+
+- **Never the `export/` rule.** An export is a download for seven days. One that must be
+  restored first is not a download.
+- **Never a transition on or after the expiry.** S3 rejects a rule whose transition is not
+  earlier than its expiration, and it rejects the whole configuration with it. So one short
+  cold window would take every other table's rule down. That table simply gets no transition.
+- **The transition is part of the comparison.** `RetentionRules.describe` spells a rule
+  `cold/messages/=366>COLD@30`, and the nightly job compares that. A bucket that lost its
+  transition by hand is drift, and the next run puts it back.
+
+**Only a class that `GetObject` reads at once.** `restore()` and the re-projection read a cold
+object directly. `GLACIER` and `DEEP_ARCHIVE` answer that with `InvalidObjectState` until an
+asynchronous restore, hours long, has run. So both apps refuse those two at boot and name the three
+that work: `STANDARD_IA`, `ONEZONE_IA`, `GLACIER_IR`. Supporting the other two means a restore
+flow that waits, which is a different feature from the one `restore()` provides.
+
+**MinIO has no classes, only remote tiers.** A transition on MinIO names a tier: another object
+store the object moves to, and that MinIO reads through transparently. The `cold-tier` compose
+profile runs a second MinIO and registers it as `COLD` — see
+[compose](../../../../docs/infra/reference/compose.md). MinIO checks the name, so a class nobody
+registered fails the write. `lifecycle.smoke.spec.ts` proves both: a transition to `COLD` is
+written and read back equal, and one to an unregistered name is refused.
+
 ## What is not here
 
-**Storage classes.** Moving an object to Glacier is a `Transition` rather than an `Expiration`, and
-nothing in this system reads a Glacier object back yet — a restore would have to wait hours, which
-is a different feature from the one `restore()` provides. Filed, not built.
+**Classes that need a restore.** `GLACIER` and `DEEP_ARCHIVE`, for the reason above.
 
 **Per-tenant expiry.** Lifecycle rules match a prefix and are capped at 1,000 per bucket, so a rule
 per tenant-month is not available at any tenant count worth having. The per-table rule is the
