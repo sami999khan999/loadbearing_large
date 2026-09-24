@@ -95,7 +95,7 @@ export class FakeAssignments extends ShardAssignmentRepository {
   }
 }
 
-export type MoveStep = "quiesce" | "prepare" | "copy" | "drop";
+export type MoveStep = "quiesce" | "prepare" | "copy" | "carry" | "drop";
 
 // Rows per node per table. `copy` can be told to lose some, which is the failure the
 // verify step exists to catch: a copy that reports success and delivered less.
@@ -151,6 +151,15 @@ export class FakeMoveGateway extends TenantMoveGateway {
   ): Promise<readonly TableRowCount[]> {
     const forNode = this.rows.get(node) ?? new Map<string, number>();
     return Promise.resolve([...forNode].map(([table, rows]) => ({ table, rows })));
+  }
+
+  public override async carryAudit(
+    _organizationId: OrganizationId,
+    _fromNode: number,
+    toNode: number,
+  ): Promise<number> {
+    await this.record("carry", toNode);
+    return 0;
   }
 
   public override async dropOn(

@@ -37,7 +37,11 @@ describe("ReclaimMoveSourcesUseCase", () => {
 
     const reclaimed = await useCase.execute();
 
-    expect(move.steps).toEqual([{ step: "drop", node: 0 }]);
+    // `24.2a`: late audit rows go to the node it is on, then the source goes.
+    expect(move.steps).toEqual([
+      { step: "carry", node: 1 },
+      { step: "drop", node: 0 },
+    ]);
     expect(reclaimed).toEqual({ tenants: 1, partitions: 1 });
     expect(await assignments.findByKey(Shard.keyOf(tenant(1)))).toMatchObject({
       node: 1,
@@ -69,6 +73,6 @@ describe("ReclaimMoveSourcesUseCase", () => {
     const { move, useCase } = build(rows);
 
     expect((await useCase.execute()).tenants).toBe(120);
-    expect(move.steps).toHaveLength(120);
+    expect(move.steps.filter((entry) => entry.step === "drop")).toHaveLength(120);
   });
 });

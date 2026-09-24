@@ -6,6 +6,10 @@ export interface ReclaimedSources {
   readonly partitions: number;
 }
 
+// How far before the flip the carry starts reading. The gap it closes is the verify and
+// the flip, milliseconds apart; an hour is a margin, and a repeat row is `do nothing`.
+const CARRY_MARGIN_MS = 60 * 60 * 1000;
+
 // Assignments per read. Each one is forgotten as it is reclaimed, so the next read is
 // the next batch rather than an offset into a list that is shrinking under it.
 const BATCH = 50;
@@ -33,6 +37,14 @@ export class ReclaimMoveSourcesUseCase {
         // The shard key is the organization id, decision D28 — branded apart only so a
         // table name cannot be passed where a key is wanted.
         const organizationId = assignment.key as string as OrganizationId;
+        // Before the drop, since nothing will carry them after it — `24.2a`.
+        const flippedAt = assignment.movedAt ?? now;
+        await this.move.carryAudit(
+          organizationId,
+          assignment.movedFrom,
+          assignment.node,
+          new Date(flippedAt.getTime() - CARRY_MARGIN_MS),
+        );
         const dropped = await this.move.dropOn(organizationId, assignment.movedFrom);
 
         // After the drop, never before: a failure between the two leaves a pointer to

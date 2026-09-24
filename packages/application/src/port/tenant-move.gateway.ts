@@ -35,7 +35,16 @@ export abstract class TenantMoveGateway {
     node: number,
   ): Promise<readonly TableRowCount[]>;
 
-  // The source rows, once the grace period is over. Detach-then-drop, never `CASCADE`,
-  // for the reason `dropTenantPartitions` gives.
+  // Audit rows the source took after `since`, onto the target, before the source goes.
+  // A catalog write between the verify and the flip lands on node 0 and nowhere else.
+  public abstract carryAudit(
+    organizationId: OrganizationId,
+    fromNode: number,
+    toNode: number,
+    since: Date,
+  ): Promise<number>;
+
+  // The source rows, once the grace period is over. One statement per table and never
+  // `CASCADE`, for the reason `dropTenantPartitions` gives.
   public abstract dropOn(organizationId: OrganizationId, node: number): Promise<readonly string[]>;
 }

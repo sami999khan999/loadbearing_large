@@ -243,6 +243,8 @@ export {
   QueuePublisher,
   RealtimePublisher,
   RealtimeSubscriber,
+  type RelayedActivity,
+  RelayedActivityStore,
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
@@ -306,4 +308,8 @@ export {
   type UpdateRoleInput,
   UpdateRoleUseCase,
 } from "./rbac/index.js";
-export { EventSubscriber, SubscriberRegistry } from "./subscriber/index.js";
+export {
+  ActivityRelaySubscriber,
+  EventSubscriber,
+  SubscriberRegistry,
+} from "./subscriber/index.js";

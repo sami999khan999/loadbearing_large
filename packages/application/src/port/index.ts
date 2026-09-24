@@ -41,6 +41,7 @@ export {
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber } from "./realtime.subscriber.js";
+export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
 export {
   type RequestHeaders,
   type ResolvedSession,
