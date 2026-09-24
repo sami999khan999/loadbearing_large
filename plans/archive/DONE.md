@@ -22,6 +22,26 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `24.2b` **The move's settle does not cover a long job** `done: 2026-09-25` — built as the
+  entry's recorded design: **a job re-reads its placement at the start of every transaction; a
+  request does not**, because the settle covers it. `PlacedShard.recheck`; `DatabaseCluster.placementOf`,
+  the resolver's cached `{ node, frozen }`; `PgUnitOfWork.run` re-reads it when it *opens* a
+  non-catalog transaction with `recheck` set, and throws `ForbiddenError("shard.move.inFlight")`
+  if the tenant is frozen or its node changed. `Container.placed` takes `{ recheck }` and the
+  worker's `withShard` passes `true`, so every consumer job gets it and no request does.
+  - **Proved twice, and red both times without it.** `pg-unit-of-work.spec.ts` gains four
+    cases: frozen, moved to another node, one resolve per transaction and none per savepoint,
+    and a request and a catalog transaction left unchecked. With the call removed, three fail.
+    `tenant-move.smoke.spec.ts` on two live nodes gains a job placed on node 0 before the move
+    and writing only after the flip. It is refused and its row is on neither node. With
+    `recheck: false` the same write **lands on node 0**, after its page was copied, which is
+    the gap reproduced rather than argued. The file is 6 passed.
+  - **The cost is one cached resolve per job transaction:** 979 µs on this machine, a Redis
+    `GET` averaged over 2 000, against the 914 µs `S.3` recorded for a warm resolve. A savepoint
+    and a catalog transaction pay nothing.
+  - `sharding.md`'s "What the settle does not cover" is now "A job re-reads its placement at
+    every transaction".
+
 - [x] `24.2a` **A moved tenant's catalog-written rows** `done: 2026-09-24` — decided with the user
   as a **third option** to the two filed: the audit row goes through node 0's outbox. A catalog
   transaction is on node 0 whatever the tenant, so `PgActivityLogger` asks the directory. For a

@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 9 | 24 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 8 | 25 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
@@ -96,7 +96,7 @@ After it, in order:
 
 ---
 
-## 1. `archive/PLAN.md` — the nine open boxes
+## 1. `archive/PLAN.md` — the eight open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -117,29 +117,11 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-**`24.1`, `24.2`, `24.2a` and `24.5` are built** — [`archive/DONE.md`](archive/DONE.md) §1. A
-tenant can be moved, a move under load loses no acknowledged write, and a moved tenant's catalog
-audit rows reach its own node through the outbox.
+**`24.1`, `24.2`, `24.2a`, `24.2b` and `24.5` are built** — [`archive/DONE.md`](archive/DONE.md)
+§1. A tenant can be moved, a move under load loses no acknowledged write, a moved tenant's catalog
+audit rows reach its own node through the outbox, and a job still writing after the settle is
+refused rather than landing on the source.
 
-- [ ] `24.2b` **The move's settle does not cover a long job** `P3` — `quiesce` waits `moveSettleMs`
-  (60 s) for writers that placed themselves before the freeze. A worker job placed on the tenant
-  earlier, and still opening transactions after that, can land a row on the source after its page
-  was read. The count check catches a late insert, not a late update. Closing it means the job
-  re-reading the freeze per transaction, or the move refusing while such a job is active for the
-  tenant. `sharding.md`, "The tenant move", states the gap.
-  - **Where work stopped, 2026-09-24 — half built, reverted, nothing committed.** The chosen fix is
-    the first: a *job* re-reads its placement at the start of every transaction; a request does
-    not, because the settle covers it. Four pieces, all written and then reverted to stop at a
-    clean point: `PlacedShard.recheck?: boolean`; `DatabaseCluster.placementOf(key)`, the
-    resolver's cached `{ node, frozen }`; in `PgUnitOfWork.run`, for any non-catalog placement
-    with `recheck` set, re-read it and throw `ForbiddenError("shard.move.inFlight")` if the tenant
-    is frozen or its node changed; and `Container.placed(principal, work, { recheck })`, which
-    `apps/worker`'s `withShard` passes `true`. `beginMove` already invalidates the cached
-    placement, so the re-read sees the freeze at once; a transaction already open is the
-    quiesce's `SHARE` lock's to wait for. **Still to do:** a spec in
-    `tests/transaction/pg-unit-of-work.spec.ts` with a resolver that answers frozen, and one that
-    answers a different node; the cost measured, one cached resolve per job transaction; then
-    the `sharding.md` paragraph turned from "the gap" into the fix.
 - [ ] `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
   dashboard and analytics reads moved onto it. `25.1`, `25.2` and the `platform.replica.manage`
   key wait on this. — `archive/PLAN.md:3979`
