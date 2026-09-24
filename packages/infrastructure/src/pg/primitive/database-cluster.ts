@@ -67,6 +67,11 @@ export class DatabaseCluster {
     return this.directAt(0);
   }
 
+  // The node a key's rows are on — `forKey`'s answer before it picks the pool.
+  public async nodeOf(key: ShardKey): Promise<number> {
+    return this.resolver.resolve(key);
+  }
+
   public async forKey(key: ShardKey): Promise<Database> {
     return this.at(await this.resolver.resolve(key));
   }

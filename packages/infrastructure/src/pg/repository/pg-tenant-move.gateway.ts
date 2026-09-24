@@ -188,6 +188,42 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
     return counts;
   }
 
+  // The time-partitioned `local` tables only, and only rows since `since`. Never the
+  // whole tenant again: that would bring back rows the target has since deleted or archived.
+  public override async carryAudit(
+    organizationId: OrganizationId,
+    fromNode: number,
+    toNode: number,
+    since: Date,
+  ): Promise<number> {
+    const source = this.cluster.at(fromNode).client;
+    const target = this.cluster.at(toNode).client;
+    let carried = 0;
+
+    for (const entry of PartitionedTable.TENANT_PARTITIONED) {
+      if (TablePlacement.of(entry.name) !== "local" || !entry.column) continue;
+
+      const found = await source.execute<{ row: unknown }>(sql`
+        select to_jsonb(t) as row from ${sql.raw(entry.name)} t
+        where t.organization_id = ${organizationId}
+          and t.${sql.raw(entry.column)} >= ${since.toISOString()}
+      `);
+      if (found.rows.length === 0) continue;
+
+      const inserted = await target.execute(sql`
+        insert into ${sql.raw(entry.name)}
+        select * from jsonb_populate_recordset(
+          null::${sql.raw(entry.name)},
+          ${JSON.stringify(found.rows.map((entry) => entry.row))}::jsonb
+        )
+        on conflict do nothing
+      `);
+      carried += inserted.rowCount ?? 0;
+    }
+
+    return carried;
+  }
+
   // The same drop `dropTenantPartitions` runs, on a named node; a delete for
   // `outbox_event`, which has no tenant partition to drop.
   public override async dropOn(
@@ -196,17 +232,14 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
   ): Promise<readonly string[]> {
     const client = this.cluster.at(node).client;
 
-    // On the catalog node a `local` partition is still being written: every catalog
-    // transaction for this tenant records its audit row there, moved or not.
-    const tables = [...PartitionedTable.TENANT_PARTITIONED]
-      .reverse()
-      .filter((entry) => node !== CATALOG_NODE || TablePlacement.of(entry.name) !== "local")
-      .map((entry) => entry.name);
+    // Every table, the catalog node's `activity_log` included: since `24.2a` a catalog
+    // write for a moved tenant goes through the outbox, and `carryAudit` ran first.
+    const tables = [...PartitionedTable.TENANT_PARTITIONED].reverse().map((entry) => entry.name);
 
     const dropped = await TenantPartitionSeed.drop(client, [organizationId], tables);
 
-    // Published rows only, and never on the catalog node, for the reason above. An
-    // unpublished row is an event the drain on this node still owes somebody.
+    // Published rows only, and never on the catalog node: its outbox carries every catalog
+    // event for the tenant, moved or not. An unpublished row is an event still owed.
     if (node !== CATALOG_NODE) {
       await client.execute(sql`
         delete from outbox_event

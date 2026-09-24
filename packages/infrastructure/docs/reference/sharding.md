@@ -210,12 +210,28 @@ where it was. `prepare` then empties the target's routed rows before the next co
 never keeps a stale copy of a row the tenant has since changed or deleted. That is also why
 `verify` can trust a target that holds *at least* the source's count.
 
-**The two `local` tables are copied, never emptied, and never dropped on node 0.** A catalog
-transaction — an invitation, a role change, an API key — writes the tenant's audit row and outbox
-event on node 0, whichever node the tenant is on. So node 0 holds rows for a moved tenant that
-exist nowhere else. The copy carries them with `on conflict do nothing`; `prepare` does not empty
-them; and the reclaim leaves the tenant's `activity_log` partition on node 0 in place, because
-catalog transactions keep writing to it after the move.
+**A catalog transaction's audit row goes through the outbox for a tenant off node 0 — `24.2a`.**
+An invitation, a role change or an API key is a catalog transaction, and a catalog transaction is
+on node 0 whichever node the tenant is on. Written straight into `activity_log` there, a moved
+tenant's row would sit where its runway, its archive and the projection never look. So
+`PgActivityLogger` asks the directory where the tenant is. For a tenant off node 0 it publishes
+`activity.recorded` into node 0's outbox instead, in the same transaction, so the row is still saved
+with the action. The drain delivers it to `ActivityRelaySubscriber`, placed on the tenant, which
+writes it on the tenant's node with the event's id and time and `on conflict do nothing`. A tenant
+on node 0 is unchanged. The row arrives about a second later; with the worker down it waits in the
+outbox and is never dropped. The projection reads 30 s behind, so it sees the row. If the drain was
+down longer than that, the nightly reconciliation reports the gap.
+
+**The two `local` tables are copied, never emptied, and dropped from node 0 only at reclaim.** Node
+0 holds the tenant's audit rows from before the move, so the copy carries them with `on conflict do
+nothing` and `prepare` does not empty them. A catalog write during the copy lands on node 0: before
+its page is read it is copied, and after, the count check catches it and the move is retried. The
+one gap is between the verify and the flip. The reclaim closes it, carrying every node-0 audit row
+newer than an hour before the flip before it drops node 0's partition. `outbox_event` has no tenant
+partition, and node 0's is never swept for the tenant: every catalog event for it is still written
+there. During the grace week, a month that ages out can be archived by both nodes to the same key.
+The rows are identical and the archive index upserts, so the second write replaces the first with
+the same content.
 
 **The way back is the grace period.** The flip stamps `moved_from` and `source_droppable_at`, and
 the source copy stays until then — seven days, or `platform_policy.move_grace_days` when an

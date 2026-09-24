@@ -1,4 +1,5 @@
 import {
+  ActivityRelaySubscriber,
   PartitionedTable,
   type PlatformPolicyRepository,
   type PlatformReader,
@@ -6,21 +7,25 @@ import {
   RelocateTenantUseCase,
   Shard,
 } from "@loadbearing/application";
+import { DomainEvents } from "@loadbearing/contracts";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import {
   type ActivityLogger,
   CacheStore,
+  CapabilitySet,
   type ConversationId,
   ForbiddenError,
   type MessageId,
   migrate,
   type OrganizationId,
+  Principal,
   sql,
   type UserId,
   Uuid,
 } from "../../src/import.js";
 import { Database, DatabaseCluster } from "../../src/pg/primitive/index.js";
 import {
+  PgActivityLogger,
   PgConversationRepository,
   PgMaintenanceGateway,
   PgMessageRepository,
@@ -299,9 +304,56 @@ describe.skipIf(!shard1)("a tenant move between two nodes", () => {
     expect(await count(node1, "activity_log")).toBe(1);
   });
 
-  // The grace period ends: the routed copy on node 0 goes, and the audit partition on
-  // the catalog node stays, because catalog transactions still write this tenant's rows.
-  it("reclaims the source, keeping the catalog node's audit partition", async () => {
+  // `24.2a`. A catalog transaction runs on node 0; for a tenant that now lives on node 1
+  // its audit row is saved in node 0's outbox in that transaction, never in node 0's log.
+  const audit = new PgActivityLogger(cluster, scope, shards, { now: () => new Date() });
+  const catalogWork = new PgUnitOfWork(cluster, scope, shards, "catalog");
+  const relay = new ActivityRelaySubscriber(audit);
+  const actor = new Principal(tenant, author, CapabilitySet.empty());
+
+  const relayedOnNodeZero = async () =>
+    catalogDirect.client.execute<Record<string, unknown>>(sql`
+      select id::text as id, organization_id::text as "organizationId", name,
+             actor_id::text as "actorId", payload, occurred_at as "occurredAt"
+      from outbox_event
+      where organization_id = ${tenant} and name = 'activity.recorded'
+    `);
+
+  it("sends a catalog write's audit row for a moved tenant through node 0's outbox", async () => {
+    const before = await count(catalog, "activity_log");
+
+    await placed(() =>
+      catalogWork.run(() => audit.record(actor, "member.invited", { email: "late@example.test" })),
+    );
+
+    expect(await count(catalog, "activity_log")).toBe(before);
+    expect((await relayedOnNodeZero()).rows).toHaveLength(1);
+  });
+
+  it("writes the relayed row on the tenant's node, once however often it arrives", async () => {
+    const before = await count(node1, "activity_log");
+    const [row] = (await relayedOnNodeZero()).rows;
+    const event = DomainEvents.parse(row);
+
+    // Twice, because the outbox is at-least-once and a redelivery is the normal case.
+    await placed(() => relay.handle(event));
+    await placed(() => relay.handle(event));
+
+    expect(await count(node1, "activity_log")).toBe(before + 1);
+    expect(
+      await count(node1, "activity_log", sql`and payload ->> 'email' = 'late@example.test'`),
+    ).toBe(1);
+  });
+
+  // The grace period ends and the whole source goes, the catalog node's audit partition
+  // included — after a row that landed there between the verify and the flip is carried.
+  it("reclaims the source, carrying a late audit row before it drops node 0's copy", async () => {
+    const stray = Uuid.v7();
+    await catalogDirect.client.execute(sql`
+      insert into activity_log (id, organization_id, actor_id, action, payload, occurred_at)
+      values (${stray}::uuid, ${tenant}::uuid, ${author}::uuid, 'member.invited', '{}', now())
+    `);
+
     const reclaim = new ReclaimMoveSourcesUseCase(assignments, move, {
       now: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
@@ -312,7 +364,8 @@ describe.skipIf(!shard1)("a tenant move between two nodes", () => {
     const auditPartition = TenantPartitionSeed.partitionName(PartitionedTable.ACTIVITY_LOG, tenant);
 
     expect(await exists(catalogDirect, messagesPartition)).toBe(false);
-    expect(await exists(catalogDirect, auditPartition)).toBe(true);
+    expect(await exists(catalogDirect, auditPartition)).toBe(false);
+    expect(await count(node1, "activity_log", sql`and id = ${stray}::uuid`)).toBe(1);
     expect(await count(node1, "messages")).toBeGreaterThan(20);
     expect(await assignments.findByKey(key)).toMatchObject({ node: 1, movedFrom: null });
   });
