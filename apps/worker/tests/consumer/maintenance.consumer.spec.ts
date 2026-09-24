@@ -298,7 +298,11 @@ describe("MaintenanceConsumer", () => {
 
     await consumerFor(h.container).handle(job("cleanup"));
 
-    expect(h.move.steps()).toEqual([{ step: "drop", organizationId: FIRST, node: 0 }]);
+    // `24.2a`: the late audit rows go to the tenant's node first, then the source goes.
+    expect(h.move.steps()).toEqual([
+      { step: "carry", organizationId: FIRST, node: 1 },
+      { step: "drop", organizationId: FIRST, node: 0 },
+    ]);
     expect((await assignments.findByKey(Shard.keyOf(FIRST)))?.movedFrom).toBeNull();
     expect((await assignments.findByKey(Shard.keyOf(SECOND)))?.movedFrom).toBe(0);
     expect(emitted(h.logger, "tenant.source.reclaimed")).toEqual([{ tenants: 1, partitions: 1 }]);
