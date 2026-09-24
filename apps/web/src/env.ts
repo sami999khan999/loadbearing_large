@@ -11,6 +11,9 @@ const Schema = z
     // The same server without the pooler. Defaults to `DATABASE_URL`, which is correct
     // only while nothing is pooling — see docs/reference/env.md.
     DATABASE_DIRECT_URL: z.url().optional(),
+    // Node 0's streaming standby — `24.3`. Reads move onto it only while
+    // `platform_policy.replica_reads_enabled` is on, and only once it has caught up.
+    DATABASE_REPLICA_URL: z.url().optional(),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
     DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
     // Today an unreachable Postgres hangs the request for the OS default, which is
@@ -138,10 +141,10 @@ const Schema = z
     }
   });
 
-// `DATABASE_SHARD_<n>_URL` in index order, each with an optional `_DIRECT_URL` beside
-// it. Absent is one node, which is every deployment until the split.
-const shardsFromEnv = (): readonly { url: string; directUrl: string }[] => {
-  const found: { index: number; url: string; directUrl: string }[] = [];
+// `DATABASE_SHARD_<n>_URL` in index order, each with an optional `_DIRECT_URL` and
+// `_REPLICA_URL` beside it. Absent is one node, which is every deployment until the split.
+const shardsFromEnv = (): readonly { url: string; directUrl: string; replicaUrl?: string }[] => {
+  const found: { index: number; url: string; directUrl: string; replicaUrl?: string }[] = [];
 
   for (const [name, value] of Object.entries(process.env)) {
     const match = /^DATABASE_SHARD_(\d+)_URL$/.exec(name);
@@ -156,6 +159,8 @@ const shardsFromEnv = (): readonly { url: string; directUrl: string }[] => {
       index,
       url: value,
       directUrl: process.env[`DATABASE_SHARD_${index}_DIRECT_URL`] ?? value,
+      // `||`, not `??`: an empty value is "no standby", the way `.env.example` shows one.
+      replicaUrl: process.env[`DATABASE_SHARD_${index}_REPLICA_URL`] || undefined,
     });
   }
 
@@ -168,7 +173,7 @@ const shardsFromEnv = (): readonly { url: string; directUrl: string }[] => {
     }
   });
 
-  return sorted.map(({ url, directUrl }) => ({ url, directUrl }));
+  return sorted.map(({ url, directUrl, replicaUrl }) => ({ url, directUrl, replicaUrl }));
 };
 
 export class Env {
@@ -207,6 +212,7 @@ export class Env {
       database: {
         url: e.DATABASE_URL,
         directUrl: e.DATABASE_DIRECT_URL ?? e.DATABASE_URL,
+        replicaUrl: e.DATABASE_REPLICA_URL,
         poolMax: e.DATABASE_POOL_MAX,
         poolIdleTimeoutMs: e.DATABASE_POOL_IDLE_TIMEOUT_MS,
         poolConnectTimeoutMs: e.DATABASE_POOL_CONNECT_TIMEOUT_MS,

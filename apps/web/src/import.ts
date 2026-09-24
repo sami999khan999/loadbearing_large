@@ -66,6 +66,7 @@ export {
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  ReplicaSwitchPanel,
   ResetPasswordForm,
   RestorePartitionPanel,
   RetentionPolicyForm,
