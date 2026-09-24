@@ -108,6 +108,7 @@ export {
   RealtimeChannels,
   RealtimePublisher,
   RealtimeSubscriber,
+  ReclaimMoveSourcesUseCase,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,

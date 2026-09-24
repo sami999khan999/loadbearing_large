@@ -30,6 +30,7 @@ export class InMemoryShardAssignmentRepository extends ShardAssignmentRepository
   public override beginMove(key: ShardKey, toNode: number): Promise<boolean> {
     const row = this.rows.get(key);
     if (!row || row.movingTo !== null || row.node === toNode) return Promise.resolve(false);
+    if (row.movedFrom !== null && row.movedFrom !== toNode) return Promise.resolve(false);
 
     this.rows.set(key, { ...row, movingTo: toNode });
     return Promise.resolve(true);
@@ -62,6 +63,7 @@ export class InMemoryShardAssignmentRepository extends ShardAssignmentRepository
   ): Promise<readonly ShardAssignment[]> {
     const due = [...this.rows.values()]
       .filter((row) => row.sourceDroppableAt !== null && row.sourceDroppableAt < cutoff)
+      .filter((row) => row.movedFrom !== null && row.movingTo === null)
       .toSorted((left, right) => left.key.localeCompare(right.key));
 
     return Promise.resolve(due.slice(0, limit));

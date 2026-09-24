@@ -131,6 +131,7 @@ import {
   type QueuePublisher,
   type RealtimePublisher,
   type RealtimeSubscriber,
+  ReclaimMoveSourcesUseCase,
   RedisCacheStore,
   RedisConnection,
   RedisRealtimePublisher,
@@ -254,6 +255,10 @@ export class Container {
   // The fallback behind the fallback: `platform_policy` overrides this, and the worker
   // passes its own from the environment. This is what a container built without one gets.
   private static readonly DEFAULT_MOVE_GRACE_DAYS = 7;
+
+  // A minute, against requests that finish in seconds. A job placed before the freeze
+  // and still opening transactions after it is the case this does not cover.
+  private static readonly DEFAULT_MOVE_SETTLE_MS = 60_000;
 
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
@@ -405,6 +410,7 @@ export class Container {
     readonly purgeOrganization: PurgeOrganizationUseCase;
     readonly moveTenant: MoveTenantUseCase;
     readonly relocateTenant: RelocateTenantUseCase;
+    readonly reclaimMoveSources: ReclaimMoveSourcesUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
@@ -646,7 +652,9 @@ export class Container {
       this.shards,
       this.clock,
     );
-    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards);
+    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards, {
+      settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS,
+    });
     this.outbox = new PgOutboxGateway(
       this.cluster,
       this.transactions,
@@ -1041,6 +1049,12 @@ export class Container {
         this.activity,
         this.clock,
         config.database.moveGraceDays ?? Container.DEFAULT_MOVE_GRACE_DAYS,
+      ),
+      // Worker-only as well: the nightly cleanup is its one caller.
+      reclaimMoveSources: new ReclaimMoveSourcesUseCase(
+        this.shardAssignments,
+        this.tenantMove,
+        this.clock,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,
