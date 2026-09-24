@@ -18,6 +18,7 @@ export {
   ChangeMemberRoleUseCase,
   ColdArchiveReader,
   type ColdPage,
+  type ColdTier,
   ConversationAccess,
   ConversationNaming,
   CountUnreadNotificationsUseCase,
