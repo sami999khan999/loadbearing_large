@@ -15,6 +15,16 @@ export const platform = {
   "platform.health.queue": "Redis — queue",
   "platform.health.analytics": "ClickHouse",
   "platform.health.realtime": "Realtime fan-out",
+  "platform.health.replica": "Postgres — replica",
+  "platform.replica.lag": "Replica lag: {seconds} s",
+  "platform.replica.title": "Replica reads",
+  "platform.replica.on": "On",
+  "platform.replica.off": "Off",
+  "platform.replica.enable": "Route batch reads to the replica",
+  "platform.replica.disable": "Read from the primary only",
+  // The guarantee, stated, because "read from a replica" otherwise reads as "stale".
+  "platform.replica.detail":
+    "When on, the worker's batch reads — the analytics projection and its nightly reconciliation — use the replica. A read uses it only once it has caught up with the primary, and uses the primary otherwise.",
   "platform.state.up": "Up",
   "platform.state.down": "Down",
   // The third state, and the one that matters: absent is neither passing nor failing,
