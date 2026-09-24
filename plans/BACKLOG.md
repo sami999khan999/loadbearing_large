@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 8 | 25 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 5 | 28 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
@@ -96,7 +96,7 @@ After it, in order:
 
 ---
 
-## 1. `archive/PLAN.md` — the eight open boxes
+## 1. `archive/PLAN.md` — the five open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -117,14 +117,12 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-**`24.1`, `24.2`, `24.2a`, `24.2b` and `24.5` are built** — [`archive/DONE.md`](archive/DONE.md)
-§1. A tenant can be moved, a move under load loses no acknowledged write, a moved tenant's catalog
-audit rows reach its own node through the outbox, and a job still writing after the settle is
-refused rather than landing on the source.
+**`24.1`, `24.2`, `24.2a`, `24.2b`, `24.3` and `24.5` are built** —
+[`archive/DONE.md`](archive/DONE.md) §1. A tenant can be moved, a move under load loses no
+acknowledged write, a moved tenant's catalog audit rows reach its own node through the outbox, a
+job still writing after the settle is refused rather than landing on the source, and the
+projection reads from a standby once it has caught up.
 
-- [ ] `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
-  dashboard and analytics reads moved onto it. `25.1`, `25.2` and the `platform.replica.manage`
-  key wait on this. — `archive/PLAN.md:3979`
 - [ ] `24.4` **The catalog is the last single primary** — measure first; a replica for its reads
   if it hurts. — `archive/PLAN.md:3983`
 - [ ] `24.6` **Load test the routed paths at 10×** — half ran (`tests/smoke/routed.smoke.spec.ts`,
@@ -140,11 +138,8 @@ refused rather than landing on the source.
 
 ### Phase 25 — The replica panel and the shard map 📁
 
-- [ ] `25.1` **Status** — `InspectPlatformStatusUseCase` grows `replica: { healthy, lagSeconds } | null`.
-  Waits on `24.3`. — `archive/PLAN.md:4036`
-- [ ] `25.2` **The switch** — `platform_policy.replica_reads_enabled` exists since `20.8` and is
-  read by nothing; `toggle-replica-reads.use-case.ts` under `platform.replica.manage` lands with
-  `24.3`. — `archive/PLAN.md:4040`
+**`25.1` and `25.2` closed with `24.3`** on 2026-09-25 — [`archive/DONE.md`](archive/DONE.md) §1.
+
 - [ ] `25.3` **Colder storage class** — `transitionAfterDays` and a storage class on
   `LifecycleRule`, once someone pays for Glacier; MinIO needs a configured tier. — `archive/PLAN.md:4046`
 
@@ -377,6 +372,20 @@ part. What was debris was removed — the two `*_2026_06_restore` scratch tables
 | What | Where | Why it is there |
 |---|---|---|
 | `LOKI_URL` uncommented | root `.env` | `observability.smoke.spec.ts` gates on it and skips silently without it, so the suite reported nothing about the log read-back path while Loki was up and answering. **Leave it**: it builds a `LogReader` and changes nothing about writing — `JsonLogger` goes to stdout and Alloy tails it either way |
+
+**Added on 2026-09-25, on a second machine.** This checkout had been synced from the remote with
+a `.env` and a database from before the 2026-09-20 renumbering, so the stack started on the old
+ports and the schema was behind. What was changed to run it:
+
+| What | Where | Why it is there |
+|---|---|---|
+| every port renumbered, the `*_PORT` block appended | root `.env` | it still dialled `5432`; the old file is `.env.backup-2026-09-25` beside it |
+| `POSTGRES_REPLICA_PORT`, `DATABASE_REPLICA_URL` | root `.env` | `24.3`. **Leave it**: with the switch off, nothing reads through it but the status panel |
+| `pnpm db:migrate`, `pnpm db:seed` | both nodes | the schema was behind; the seed gave `platform_admin` `platform.replica.manage` |
+| `replica` profile up, `pgreplicadata` volume | compose | `24.3`'s standby. The primary was recreated once to take `hba_file` |
+| four leftover integration tenants placed on node 0 | `shard_assignments` | `other-…`, `drop-…` and two `pruning-…`, from 2026-09-19. Each aborted every projection run: `23.21`, still undecided |
+| `replica-e2e@example.test`, `platform_admin` | `users`, `memberships` in `loadbearing` | the throwaway admin `25.2` was flipped with; verified by SQL, not by mail |
+| four `platform.replica.*` audit rows, switch back **off** | `activity_log`, `platform_policy` | the end-to-end check: on, off, on, off |
 
 Not left behind, and worth saying so: `platform_policy.projection_enabled` is `t` again, the two
 scratch tables are gone, `retention_policy` holds no rows, and the `.env` copy taken before the

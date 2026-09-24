@@ -22,6 +22,45 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `24.3` **Read replica per shard** `done: 2026-09-25` — built as filed, with one design
+  choice the entry did not make: **a read uses the replica only once it has caught up.**
+  `DatabaseCluster.readerAt(node)` asks the primary for `pg_current_wal_lsn()` and the replica
+  whether it has replayed that far. It uses the replica if so, and the primary if not or if the
+  replica cannot be reached. So no caller reasons about lag. `DATABASE_REPLICA_URL` and
+  `DATABASE_SHARD_<n>_REPLICA_URL`, read by all three shard readers (assertion 29 still holds);
+  `BaseRepository.reader()`, the transaction inside one; `PlacedShard.replica`, which `withShard`
+  passes from the platform switch. **What moved onto it is the analytics projection**,
+  `PgActivityReplayReader.since` and `dailyCounts`: the worker's biggest batch read, as `25.2`
+  said. The web app reads nothing there.
+  - **Compose:** `postgres-replica` under a `replica` profile, `pnpm infra:up:replica`. It clones
+    itself with `pg_basebackup -R` on an empty volume. The primary now starts with `hba_file` on
+    `infra/pg_hba.conf`: the image's rules plus replication from the network.
+  - **Proved on a live standby.** `replica.smoke.spec.ts`, 4 passed. Fifty rows, each found by
+    the read straight after its insert and again by the first read the replica is chosen for.
+    **Red with the caught-up check removed**: the first read after the first insert missed its
+    row. `database-cluster.spec.ts` covers no replica, an unreachable one, and a primary
+    configured as its own replica.
+  - **And end to end, with the worker running.** Scans of `activity_log` partitions over one
+    projection run: switch off, standby +0 and primary +81; switch on, standby +42 and primary +0.
+  - **One trap found and fixed on the way.** A failing `toBe` on a `Database` makes vitest print
+    a live `pg` pool, and the whole smoke run died out of heap. The committed tree was run
+    to confirm the new spec was the cause. The assertions compare booleans now; 42 passed.
+- [x] `25.1` **Status** `done: 2026-09-25` — `InspectPlatformStatusUseCase` returns
+  `replica: { healthy, lagSeconds, readsEnabled } | null`, from `PlatformHealthReader.replica()`,
+  every node's standby folded into one reading. Kept out of `healthy` on purpose: a standby that
+  falls behind slows batch reads and takes nothing down. Lag is `now() -
+  pg_last_xact_replay_timestamp()`, and **zero when replay has reached receive**, because an idle
+  primary sends nothing and the timestamp alone would read as growing lag. Rendered on
+  `/platform/status` as a row and a lag line. Read over the live API: `{"healthy":true,"lagSeconds":0,"readsEnabled":false}`.
+- [x] `25.2` **The switch** `done: 2026-09-25` — `toggle-replica-reads.use-case.ts` under a new
+  `platform.replica.manage` key; procedure `platform.updateReplicaSwitch`, `PUT
+  /platform/policy/replica`; `ReplicaSwitchPanel` on `/platform/status`, beside the lag it
+  governs. It refuses `ConflictError("replica", "not_configured")` with no standby, as the
+  projection switch does. Audited on the platform tenant as `platform.replica.enabled` /
+  `disabled`. `pnpm db:seed` gave `platform_admin` the key, 10 platform keys now. Flipped over
+  the API with a throwaway platform admin: the row saved and the audit row landed. It is back
+  **off**, the default.
+
 - [x] `24.2b` **The move's settle does not cover a long job** `done: 2026-09-25` — built as the
   entry's recorded design: **a job re-reads its placement at the start of every transaction; a
   request does not**, because the settle covers it. `PlacedShard.recheck`; `DatabaseCluster.placementOf`,
