@@ -31,6 +31,10 @@ const Schema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    // Both or neither — `25.3`. A class the bucket has, and the days before an archived
+    // month moves to it. On MinIO the class is a configured tier's name.
+    S3_COLD_STORAGE_CLASS: z.string().min(1).optional(),
+    S3_COLD_TRANSITION_DAYS: z.coerce.number().int().min(1).optional(),
 
     // In both processes because both build a `Container`, which treats mail as required
     // rather than optional.
@@ -102,9 +106,27 @@ const Schema = z
 
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   })
-  // The one cross-field rule here: the compose container is `ratchet/ratchet` and these
-  // default to ClickHouse's own `default/default`, which cannot authenticate against it.
+  // Two cross-field rules: the compose container is `ratchet/ratchet` and these default
+  // to ClickHouse's own `default/default`, and a cold tier is two keys or none.
   .superRefine((env, ctx) => {
+    // One without the other is a transition that silently never happens.
+    if (!env.S3_COLD_STORAGE_CLASS !== !env.S3_COLD_TRANSITION_DAYS) {
+      ctx.addIssue({
+        code: "custom",
+        path: [env.S3_COLD_STORAGE_CLASS ? "S3_COLD_TRANSITION_DAYS" : "S3_COLD_STORAGE_CLASS"],
+        message: "Set S3_COLD_STORAGE_CLASS and S3_COLD_TRANSITION_DAYS together.",
+      });
+    }
+
+    // Unreadable without an hours-long restore, and a cold restore reads with `GetObject`.
+    if (env.S3_COLD_STORAGE_CLASS === "GLACIER" || env.S3_COLD_STORAGE_CLASS === "DEEP_ARCHIVE") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["S3_COLD_STORAGE_CLASS"],
+        message: "Use a class read without a restore: STANDARD_IA, ONEZONE_IA or GLACIER_IR.",
+      });
+    }
+
     if (!env.CLICKHOUSE_URL) return;
 
     for (const key of ["CLICKHOUSE_DATABASE", "CLICKHOUSE_USER"] as const) {
@@ -232,6 +254,10 @@ export class Env {
         accessKey: e.S3_ACCESS_KEY,
         secretKey: e.S3_SECRET_KEY,
         forcePathStyle: e.S3_FORCE_PATH_STYLE,
+        coldTier:
+          e.S3_COLD_STORAGE_CLASS && e.S3_COLD_TRANSITION_DAYS
+            ? { storageClass: e.S3_COLD_STORAGE_CLASS, afterDays: e.S3_COLD_TRANSITION_DAYS }
+            : undefined,
       },
       email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {

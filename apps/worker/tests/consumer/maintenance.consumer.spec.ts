@@ -603,6 +603,35 @@ describe("MaintenanceConsumer — the retention job", () => {
     expect(emitted(logger, "retention.lifecycle.applied")).toEqual([{ rules: 1 }]);
   });
 
+  // `25.3`. The tier is the gateway's, so the converger composes with it, and a bucket
+  // that lost its transition by hand is put back rather than read as settled.
+  it("writes the cold tier's transition, and restores one removed by hand", async () => {
+    const tier = { storageClass: "COLD", afterDays: 30 };
+    const storagePolicy = new InMemoryStoragePolicyGateway(tier);
+    const { container, logger } = harness({
+      policies: [cold("activity_log", 24)],
+      lifecycle: storagePolicy,
+    });
+
+    await consumerFor(container).handle(job("retention"));
+    expect(await storagePolicy.lifecycle()).toEqual([
+      { prefix: "cold/activity_log/", expireAfterDays: 731, transition: tier },
+      { prefix: "export/", expireAfterDays: 7 },
+    ]);
+
+    await storagePolicy.applyLifecycle([
+      { prefix: "cold/activity_log/", expireAfterDays: 731 },
+      { prefix: "export/", expireAfterDays: 7 },
+    ]);
+    await consumerFor(container).handle(job("retention"));
+
+    expect(storagePolicy.applied()).toHaveLength(3);
+    expect(emitted(logger, "retention.lifecycle.drifted")[1]).toMatchObject({
+      expected: "cold/activity_log/=731>COLD@30|export/=7",
+      actual: "cold/activity_log/=731|export/=7",
+    });
+  });
+
   // The rows only. The bucket's own rule deleted the object; a row still pointing at one
   // is a `NotFoundError` on a read that should have been an empty list.
   it("forgets an archive row past its hot plus cold window", async () => {

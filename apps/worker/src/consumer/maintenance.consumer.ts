@@ -343,7 +343,7 @@ export class MaintenanceConsumer {
   }
 
   private async convergeLifecycle(rows: readonly RetentionPolicyRecord[]): Promise<void> {
-    const expected = RetentionRules.lifecycleFor(rows);
+    const expected = RetentionRules.lifecycleFor(rows, this.container.storagePolicy.coldTier());
     const actual = await this.container.storagePolicy.lifecycle();
     if (RetentionRules.lifecycleMatches(expected, actual)) return;
 
@@ -419,10 +419,12 @@ export class MaintenanceConsumer {
     return (PartitionedTable.NAMES as readonly string[]).includes(table);
   }
 
-  private static serialise(rules: readonly { prefix: string; expireAfterDays: number }[]): string {
+  // The comparison's own spelling, transitions included: a drift line that left them out
+  // would print two identical strings for a bucket that lost its colder class.
+  private static serialise(rules: Parameters<typeof RetentionRules.lifecycleMatches>[0]): string {
     return [...rules]
       .sort((left, right) => left.prefix.localeCompare(right.prefix))
-      .map((rule) => `${rule.prefix}=${rule.expireAfterDays}`)
+      .map((rule) => RetentionRules.describe(rule))
       .join("|");
   }
 
