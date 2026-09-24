@@ -87,6 +87,8 @@ export {
   type ProjectionGapDto,
   type ProjectionToggleInput,
   type ProjectionUpdateInput,
+  type ReplicaDto,
+  type ReplicaToggleInput,
   type ReprojectInput,
   type ReprojectRequestedDto,
   type RestoreInput,

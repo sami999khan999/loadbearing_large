@@ -23,9 +23,18 @@ export class PlatformContract {
     name: z.string().min(1),
   });
 
+  // Node standbys folded into one reading, `null` when the deployment runs none — `25.1`.
+  // `lagSeconds` is null exactly when a standby could not be asked.
+  public static readonly replica = z.object({
+    healthy: z.boolean(),
+    lagSeconds: z.number().nullable(),
+    readsEnabled: z.boolean(),
+  });
+
   public static readonly status = z.object({
     organization: PlatformContract.organization,
     health: PlatformContract.health,
+    replica: PlatformContract.replica.nullable(),
   });
 
   // `archive` drops the month behind a verified object; `drop` destroys it. Two words
@@ -157,6 +166,8 @@ export class PlatformContract {
   });
 
   public static readonly projectionToggle = z.object({ enabled: z.boolean() });
+
+  public static readonly replicaToggle = z.object({ enabled: z.boolean() });
 
   public static readonly projectionEntry = z.object({
     action: z.string().min(1),
@@ -340,6 +351,8 @@ export type ProjectionGapDto = z.infer<typeof PlatformContract.projectionGap>;
 export type ReprojectInput = z.infer<typeof PlatformContract.reproject>;
 export type ReprojectRequestedDto = z.infer<typeof PlatformContract.reprojectRequested>;
 export type ProjectionToggleInput = z.infer<typeof PlatformContract.projectionToggle>;
+export type ReplicaDto = z.infer<typeof PlatformContract.replica>;
+export type ReplicaToggleInput = z.infer<typeof PlatformContract.replicaToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
 export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;
