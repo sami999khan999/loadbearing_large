@@ -1,6 +1,6 @@
 ---
 title: docker-compose.yml
-description: Thirteen services, four profiles, seven volumes and one network — what every block does and which parts are load-bearing.
+description: Fifteen services, five profiles, eight volumes and one network — what every block does and which parts are load-bearing.
 ---
 
 # `docker-compose.yml`
@@ -112,6 +112,21 @@ written into the volume, so an existing volume gets the rule too.
 Which reads use it, and why a read never sees less than the primary had, is in
 [sharding](../../../packages/infrastructure/docs/reference/sharding.md#read-replicas).
 
+### The colder tier, profile `cold-tier`
+
+`minio-cold` and `minio-cold-init`, for `25.3`. **MinIO has no storage classes of its own.** A
+lifecycle transition on MinIO names a *remote tier*, another object store that MinIO moves the
+object to. So the rehearsal is a second MinIO. `minio-cold-init` creates its `tier` bucket and
+registers it on `minio` as `COLD`, the value `S3_COLD_STORAGE_CLASS` names.
+
+**`tier ls | grep`, never `tier info`, decides whether to add it.** `mc ilm tier info` exits 0
+for a tier that does not exist, so a check built on it never adds one. The first version of this
+service did exactly that, and printed "cold tier ready" over a bucket with no tier.
+
+It publishes no port. Nothing outside the network dials it: the application writes a rule
+naming `COLD`, and MinIO does the moving. See
+[storage policy](../../../packages/infrastructure/docs/reference/storage-policy.md).
+
 ---
 
 ## Profiles
@@ -125,6 +140,7 @@ docker compose ... --profile observability up -d          # 8
 docker compose ... --profile observability --profile analytics up -d   # 9
 docker compose ... --profile observability --profile sharded up -d     # 10
 docker compose ... --profile observability --profile replica up -d     # 9
+docker compose ... --profile observability --profile cold-tier up -d   # 10
 ```
 
 The `pnpm infra:*` scripts wrap those, with `observability` on by default.
@@ -137,7 +153,7 @@ The `pnpm infra:*` scripts wrap those, with `observability` on by default.
 
 ## Volumes
 
-Seven named volumes, and which are disposable is the whole point.
+Eight named volumes, and which are disposable is the whole point.
 
 | Volume | Service | Rebuildable from |
 |---|---|---|
@@ -146,13 +162,14 @@ Seven named volumes, and which are disposable is the whole point.
 | `pgreplicadata` | postgres-replica | the primary — it is a copy, re-cloned on an empty volume |
 | `redisqueuedata` | redis-queue | **nothing** |
 | `miniodata` | minio | uploads are a second source of truth; Loki chunks are not |
+| `miniocolddata` | minio-cold | **nothing** — a transitioned object lives only here |
 | `lokidata` | loki | index only — chunks live in MinIO |
 | `clickhousedata` | clickhouse | replaying the activity log |
 
 **`redis-cache` has no volume, on purpose.** A named volume for something explicitly disposable
 invites the next person to treat it as durable.
 
-`pnpm infra:reset` destroys all seven. Locally that is fine — it is a scratch database. The habit is
+`pnpm infra:reset` destroys all eight. Locally that is fine — it is a scratch database. The habit is
 what matters: in any environment with real pending work, clearing the cache and clearing the queue
 are different operations, and the two-instance split is what makes it possible to do one without the
 other.
