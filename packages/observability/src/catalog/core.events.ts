@@ -68,6 +68,8 @@ export const coreEvents = {
   "tenant.move.completed": { level: "info" },
   // The end of a grace period. Silent on a night with nothing due.
   "tenant.source.reclaimed": { level: "info" },
+  // The spare pool refilled after signups drew on it. Silent when it was already full.
+  "tenant.spares.replenished": { level: "info" },
   // `warn`, not `info`: a non-zero count is a tenant delete that did not finish, and
   // since `24.1` the database will not say so on its own.
   "maintenance.orphans.found": { level: "warn" },
