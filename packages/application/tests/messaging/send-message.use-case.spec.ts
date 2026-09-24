@@ -157,6 +157,20 @@ describe("SendMessageUseCase", () => {
     expect(harness.messages.saved).toEqual([]);
   });
 
+  // `PF.1` dropped the key into `conversations`, so this refusal is now the only one:
+  // nothing below the use-case would reject a message for a conversation that is gone.
+  it("refuses a conversation that does not exist, before anything is written", async () => {
+    const conversations = new Conversations();
+    conversations.findById = () =>
+      Promise.resolve(null as unknown as ReturnType<typeof conversation>);
+    const harness = build(conversations);
+
+    await expect(harness.useCase.execute(principal(), input)).rejects.toThrow("FORBIDDEN");
+    expect(harness.messages.saved).toEqual([]);
+    expect(harness.events.published).toEqual([]);
+    expect(harness.cache.entries.size).toBe(0);
+  });
+
   it("refuses a member who cannot send", async () => {
     const harness = build();
     const reader = principal(GRACE, ["messaging.conversation.read"]);

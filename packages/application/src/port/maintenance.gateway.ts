@@ -9,6 +9,21 @@ export interface SweepOutcome {
   readonly invitations: number;
 }
 
+// Conversation ids that `messages` or `conversation_members` name and `conversations` does
+// not hold — distinct ids, not rows. Zero on a healthy node.
+export interface DanglingConversations {
+  readonly members: number;
+  readonly messages: number;
+}
+
+// One tenant's line of a runway pass. `monthsAhead` is read *before* anything is created,
+// because afterwards the run has fixed what it found and there is nothing to report.
+export interface TenantRunway {
+  readonly organizationId: OrganizationId;
+  readonly monthsAhead: number;
+  readonly created: readonly string[];
+}
+
 // What the retention preview reads. `estimatedRows` is the planner's number and the
 // screen says "about"; `bytes` is exact.
 export interface PartitionEstimate {
@@ -31,6 +46,10 @@ export abstract class MaintenanceGateway {
     organizationId: OrganizationId,
   ): Promise<readonly string[]>;
 
+  // Tops the pool of pre-seeded tenants up to `target` and returns how many it made.
+  // `PF.3`: the founder claims one, so a signup's transaction holds no partition DDL.
+  public abstract topUpSpareTenants(target: number): Promise<number>;
+
   // The whole tenant level for one organization, months included. What a tenant delete
   // and a tenant move each need, and the one place that drop is written.
   public abstract dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]>;
@@ -38,6 +57,10 @@ export abstract class MaintenanceGateway {
   // Tenants with rows on this node whose `organizations` row is gone. Since `24.1` no
   // foreign key notices, so this is the nightly proof the delete path is keeping up.
   public abstract orphanedTenants(): Promise<readonly OrganizationId[]>;
+
+  // The same guarantee one level down: `PF.1` dropped the two keys into `conversations`,
+  // so this count is what notices a row whose conversation is gone.
+  public abstract danglingConversations(): Promise<DanglingConversations>;
 
   // `months` counts partitions from the month `from` falls in, so three is the current
   // month and two of runway. `organizationId` is null only for a table with no tenant.
@@ -47,6 +70,15 @@ export abstract class MaintenanceGateway {
     from: Date,
     months: number,
   ): Promise<readonly string[]>;
+
+  // A page of tenants in one read and one transaction — `PF.5`. Per tenant it was eight
+  // statements per table and a lock taken each time; at 2 000 tenants, 48 000 of them.
+  public abstract ensureMonthlyPartitionsFor(
+    table: PartitionedTableName,
+    organizationIds: readonly OrganizationId[],
+    from: Date,
+    months: number,
+  ): Promise<readonly TenantRunway[]>;
 
   // Partitions for months strictly after the one `from` falls in. A runway check has to
   // ask what *exists*, because a run that created nothing is healthy or starved alike.
