@@ -37,6 +37,7 @@
     "infra:up": "node tooling/scripts/compose.mjs --profile observability up -d",
     "infra:up:analytics": "node tooling/scripts/compose.mjs --profile observability --profile analytics up -d",
     "infra:up:sharded": "node tooling/scripts/compose.mjs --profile observability --profile sharded up -d",
+    "infra:up:replica": "node tooling/scripts/compose.mjs --profile observability --profile replica up -d",
     "infra:core": "node tooling/scripts/compose.mjs up -d",
     "infra:down": "node tooling/scripts/compose.mjs --profile \"*\" down",
     "infra:reset": "node tooling/scripts/compose.mjs --profile \"*\" down -v",

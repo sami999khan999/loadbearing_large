@@ -1,6 +1,6 @@
 ---
 title: docker-compose.yml
-description: Nine services, two profiles, six volumes and one network — what every block does and which parts are load-bearing.
+description: Thirteen services, four profiles, seven volumes and one network — what every block does and which parts are load-bearing.
 ---
 
 # `docker-compose.yml`
@@ -90,6 +90,28 @@ There is no range or key configuration beside them. `shard_assignments` on the c
 node, one row per tenant, so a second node is two URLs and nothing else — see
 [sharding](../../../packages/infrastructure/docs/reference/sharding.md).
 
+### Node 0's standby, profile `replica`
+
+`postgres-replica`, a streaming hot standby of `postgres`. `pnpm infra:up:replica` starts it, and
+`DATABASE_REPLICA_URL` in `.env.example` points at `:15434`. It has no pooler in front: nothing
+writes to it, and the reads that use it are the worker's batch reads, a handful of connections.
+
+**It clones itself on an empty volume.** The entrypoint runs `pg_basebackup -R` against the
+primary when `$PGDATA` holds no `PG_VERSION`. `-R` writes `standby.signal` and the connection
+string, so the image's own entrypoint then finds a data directory and starts a standby rather
+than running `initdb`. To re-clone, remove the `pgreplicadata` volume and start it again.
+
+**The primary needed one line for it.** The image's `pg_hba.conf` allows replication from
+localhost only. `infra/pg_hba.conf` restates the image's rules and adds `host replication all all
+scram-sha-256`, and the primary is started with `hba_file` pointing at it. Mounted rather than
+written into the volume, so an existing volume gets the rule too.
+
+**It carries the primary's settings.** A hot standby refuses to start with a lower
+`max_connections` or `max_locks_per_transaction` than its primary.
+
+Which reads use it, and why a read never sees less than the primary had, is in
+[sharding](../../../packages/infrastructure/docs/reference/sharding.md#read-replicas).
+
 ---
 
 ## Profiles
@@ -102,6 +124,7 @@ docker compose ... up -d                                  # 5 services
 docker compose ... --profile observability up -d          # 8
 docker compose ... --profile observability --profile analytics up -d   # 9
 docker compose ... --profile observability --profile sharded up -d     # 10
+docker compose ... --profile observability --profile replica up -d     # 9
 ```
 
 The `pnpm infra:*` scripts wrap those, with `observability` on by default.
@@ -120,6 +143,7 @@ Seven named volumes, and which are disposable is the whole point.
 |---|---|---|
 | `pgdata` | postgres | migrations + seeds |
 | `pgshard1data` | postgres-shard-1 | migrations + the tenants the directory places there |
+| `pgreplicadata` | postgres-replica | the primary — it is a copy, re-cloned on an empty volume |
 | `redisqueuedata` | redis-queue | **nothing** |
 | `miniodata` | minio | uploads are a second source of truth; Loki chunks are not |
 | `lokidata` | loki | index only — chunks live in MinIO |
@@ -140,6 +164,7 @@ Every config file is mounted individually, read-only:
 ```yaml
 - ./loki.config.yml:/etc/loki/config.yml:ro
 - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+- ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
 ```
 
 Docker creates the target's parent directories if they do not exist, so a single file can be placed
@@ -192,6 +217,8 @@ missing file, compose has no `-if-exists` form, and CI runs the stack with no `.
 | `REDIS_QUEUE_PORT` | 16380 | `SMTP_PORT` | 11025 |
 | `S3_PORT` | 19000 | `CLICKHOUSE_HTTP_PORT` | 18123 |
 | `MINIO_CONSOLE_PORT` | 19001 | `CLICKHOUSE_NATIVE_PORT` | 19002 |
+| `POSTGRES_SHARD_1_PORT` | 15433 | `PGBOUNCER_SHARD_1_PORT` | 16433 |
+| `POSTGRES_REPLICA_PORT` | 15434 | | |
 
 These defaults are what a checkout with no `.env` gets, which is exactly what CI is, so
 `check:architecture` §27 asserts each one equals the value `.env.example` documents. It also pairs
