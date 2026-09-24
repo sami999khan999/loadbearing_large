@@ -43,7 +43,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 5 | 28 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 4 | 29 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
@@ -96,7 +96,7 @@ After it, in order:
 
 ---
 
-## 1. `archive/PLAN.md` — the five open boxes
+## 1. `archive/PLAN.md` — the four open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -138,10 +138,9 @@ projection reads from a standby once it has caught up.
 
 ### Phase 25 — The replica panel and the shard map 📁
 
-**`25.1` and `25.2` closed with `24.3`** on 2026-09-25 — [`archive/DONE.md`](archive/DONE.md) §1.
+**Empty.** `25.1` and `25.2` closed with `24.3` on 2026-09-25, and `25.3` the same day —
+[`archive/DONE.md`](archive/DONE.md) §1.
 
-- [ ] `25.3` **Colder storage class** — `transitionAfterDays` and a storage class on
-  `LifecycleRule`, once someone pays for Glacier; MinIO needs a configured tier. — `archive/PLAN.md:4046`
 
 ### Phase 26 — Communication follow-ups → moved
 
@@ -385,6 +384,8 @@ ports and the schema was behind. What was changed to run it:
 | `replica` profile up, `pgreplicadata` volume | compose | `24.3`'s standby. The primary was recreated once to take `hba_file` |
 | four leftover integration tenants placed on node 0 | `shard_assignments` | `other-…`, `drop-…` and two `pruning-…`, from 2026-09-19. Each aborted every projection run: `23.21`, still undecided |
 | `replica-e2e@example.test`, `platform_admin` | `users`, `memberships` in `loadbearing` | the throwaway admin `25.2` was flipped with; verified by SQL, not by mail |
+| `S3_COLD_STORAGE_CLASS=COLD`, `S3_COLD_TRANSITION_DAYS=30` | root `.env` | `25.3`. Harmless with `retention_policy` empty: the only rule is `export/`, which never transitions |
+| `cold-tier` profile up, `miniocolddata` volume, tier `COLD` on `minio` | compose | `25.3`'s tier |
 | four `platform.replica.*` audit rows, switch back **off** | `activity_log`, `platform_policy` | the end-to-end check: on, off, on, off |
 
 Not left behind, and worth saying so: `platform_policy.projection_enabled` is `t` again, the two

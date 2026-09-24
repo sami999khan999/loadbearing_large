@@ -22,6 +22,30 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `25.3` **Colder storage class** `done: 2026-09-25` — built with a MinIO tier, as decided.
+  `LifecycleRule` gains an optional `transition: { storageClass, afterDays }`, and
+  `StoragePolicyGateway.coldTier()` answers the deployment's from `S3_COLD_STORAGE_CLASS` and
+  `S3_COLD_TRANSITION_DAYS`, both or neither. The gateway holds it because the class is the
+  bucket's, so no use case gained a constructor argument. `RetentionRules.lifecycleFor(rows, tier)`
+  gives every `cold/<table>/` rule the transition. The `export/` rule never gets one, and neither
+  does a rule whose transition would land on or after its expiry, since S3 rejects the whole
+  configuration for one of those. `RetentionRules.describe` spells a rule `…=731>COLD@30`. The
+  screen, the save and the nightly converger all compare that, so a bucket that lost its
+  transition is drift and gets put back.
+  - **One refusal the entry did not foresee.** `restore()` and the re-projection read a cold object
+    with `GetObject`. `GLACIER` and `DEEP_ARCHIVE` answer that with `InvalidObjectState` until an
+    hours-long restore has run. So both apps refuse those two at boot and name the three that read
+    at once. The entry's "once someone pays for Glacier" means `GLACIER_IR`.
+  - **Compose:** `minio-cold` and `minio-cold-init` under a `cold-tier` profile, registering a
+    second MinIO on `minio` as tier `COLD`. The first version never registered it:
+    `mc ilm tier info` exits 0 for a missing tier, so the `||` never ran. It uses `tier ls | grep`
+    now, and was run twice to prove it is idempotent.
+  - **Proved:** `lifecycle.smoke.spec.ts`, 3 passed against the live bucket. A transition to `COLD`
+    is written and read back equal, an unregistered class is refused, and the bucket's own
+    configuration is put back afterwards (checked with `mc ilm rule ls`: `export/` only).
+    `retention.rules.spec.ts` +4 and `maintenance.consumer.spec.ts` +1. The latter shows the
+    nightly job restoring a transition removed by hand, and its drift line naming the class.
+
 - [x] `24.3` **Read replica per shard** `done: 2026-09-25` — built as filed, with one design
   choice the entry did not make: **a read uses the replica only once it has caught up.**
   `DatabaseCluster.readerAt(node)` asks the primary for `pg_current_wal_lsn()` and the replica
