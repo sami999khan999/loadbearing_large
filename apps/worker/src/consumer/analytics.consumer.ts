@@ -168,7 +168,8 @@ export class AnalyticsConsumer {
   private async project(): Promise<void> {
     // No batches, no lag computation, and **no log line**: 288 lines a day saying
     // "paused" is noise, and the status screen already shows the state.
-    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+    const policy = await this.container.platformPolicy.get();
+    if (!policy.projectionEnabled) return;
 
     const startedAt = this.container.clock.now();
     // Once per run, not per tenant: it is one small table and every tenant's walk
@@ -193,6 +194,7 @@ export class AnalyticsConsumer {
           organizationId,
           AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
           excluding,
+          policy.replicaReadsEnabled,
         );
         projected += outcome.projected;
         batches += outcome.batches;
@@ -241,6 +243,7 @@ export class AnalyticsConsumer {
     organizationId: OrganizationId,
     budget: number,
     excluding: readonly ActivityAction[],
+    replica: boolean,
   ): Promise<{ projected: number; batches: number; lagMs: number }> {
     try {
       // Placed *inside* the guard. Outside it a tenant with no `shard_assignments` row
@@ -248,8 +251,11 @@ export class AnalyticsConsumer {
       // ──
       // projection dashboard filters on was never emitted. Per tenant rather than per
       // node: the read side is routed `activity_log`, the write side one ClickHouse.
-      return await withShard(this.container, organizationId, () =>
-        this.projectTenant(organizationId, budget, excluding),
+      return await withShard(
+        this.container,
+        organizationId,
+        () => this.projectTenant(organizationId, budget, excluding),
+        { replica },
       );
     } catch (error: unknown) {
       // Read after the throw rather than before it, so the failure line names where the
@@ -343,7 +349,8 @@ export class AnalyticsConsumer {
   private async reconcile(): Promise<void> {
     // Paused, so there is nothing to reconcile against: every day in the window would
     // report drift, which is an alert that says only what the switch already says.
-    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+    const policy = await this.container.platformPolicy.get();
+    if (!policy.projectionEnabled) return;
 
     const now = this.container.clock.now();
     const excluding = await this.excluded();
@@ -359,8 +366,11 @@ export class AnalyticsConsumer {
       if (page.length === 0) break;
 
       for (const organizationId of page) {
-        const outcome = await withShard(this.container, organizationId, () =>
-          this.reconcileTenant(organizationId, from, to, excluding),
+        const outcome = await withShard(
+          this.container,
+          organizationId,
+          () => this.reconcileTenant(organizationId, from, to, excluding),
+          { replica: policy.replicaReadsEnabled },
         );
         days += outcome.days;
         drifted += outcome.drifted;

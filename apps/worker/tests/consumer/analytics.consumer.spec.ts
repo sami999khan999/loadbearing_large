@@ -445,3 +445,51 @@ describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
     await expect(consumer.handle(job("project"))).rejects.toThrow();
   });
 });
+
+// `24.3`. The switch is read once per run and rides on every tenant's placement; the
+// repository decides what to do with it. Every job is placed with `recheck` — `24.2b`.
+describe("AnalyticsConsumer — the replica switch", () => {
+  function switched(replicaReadsEnabled: boolean) {
+    const placements: { recheck?: boolean; replica?: boolean }[] = [];
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([record("a", minutesBefore(5))]),
+        analyticsProjector,
+        organizations: new InMemoryOrganizationReader(TENANTS),
+      }),
+      projector: analyticsProjector,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ replicaReadsEnabled }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger: { emit: vi.fn(), failure: vi.fn() },
+      placed: <T>(
+        _principal: unknown,
+        work: () => Promise<T>,
+        options: { recheck?: boolean; replica?: boolean } = {},
+      ) => {
+        placements.push(options);
+        return work();
+      },
+    } as unknown as Container;
+
+    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), placements };
+  }
+
+  it.each([true, false])("places the projection with the switch %s", async (enabled) => {
+    const { consumer, placements } = switched(enabled);
+
+    await consumer.handle(job("project"));
+
+    expect(placements).toEqual([{ recheck: true, replica: enabled }]);
+  });
+
+  it("places the reconciliation with the switch too", async () => {
+    const { consumer, placements } = switched(true);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(placements).toEqual([{ recheck: true, replica: true }]);
+  });
+});
