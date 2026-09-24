@@ -73,39 +73,53 @@ that drifts from it the first time the shape changes.
 `ACCESS EXCLUSIVE` lock on the parent for the rest of the transaction, which would stall every read
 on all seven tables for the length of a signup. `ALTER TABLE … ATTACH PARTITION` takes
 `SHARE UPDATE EXCLUSIVE`, which blocks nothing a request does, and an empty child attaches with no
-validation scan.
+validation scan — **as long as no foreign key points out of the parent into another partitioned
+table.** One that does is validated on every attach and locks its target; see below.
 
 Partition names are `<table>_<32hex>` and `<table>_<32hex>_<yyyy>_<mm>` — the tenant uuid with its
 hyphens stripped, validated against `^[0-9a-f]{32}$` before it reaches `sql.raw`. The longest is
 `notification_preferences_<32>` at 57 of Postgres's 63 characters.
 
-## Dropping a tenant: detach, then drop, and never `CASCADE`
+## No foreign key points into a tenant-partitioned table
 
-`dropTenantPartitions` takes a tenant's whole subtree, and two things about it are not obvious.
+**`PF.1` dropped the last two**, `messages` and `conversation_members` into `conversations`, and
+`tests/maintenance/tenant-partition.spec.ts` fails if one comes back. Each one cost three things,
+all measured rather than reasoned (the ceiling table below has the numbers):
 
-**`DROP TABLE … CASCADE` on a partition of a *referenced* table destroys the foreign key.** A key
-that references a partitioned table is a constraint on the **parent**, so cascading from one
-partition takes it with it — for every tenant, permanently, with nothing but a `NOTICE` to say so.
-Measured: after one `DROP … CASCADE` of one tenant's `conversations` partition, both
-`conversation_members_conversation_fk` and `messages_conversation_fk` were gone from
-`pg_constraint`, and every later write to either table was unchecked.
+- **Every signup's attach validated it.** Attaching a partition to a table that carries a key
+  checks that key, so the two referencing tables were the two slowest attaches in the seed.
+- **That check took `SHARE ROW EXCLUSIVE` on `conversations`** — sampled from `pg_locks` during
+  the run — which blocks every insert and update there. Five attaches per signup meant five
+  windows in which nobody on the node could start a conversation.
+- **A drop had to detach first.** Postgres will not drop a partition something references, and
+  detaching is one `ALTER TABLE` per partition; dropping the ceiling run's 1 658 leftover tenants
+  spent 60 of its 142 seconds detaching `conversations` alone.
 
-`ALTER TABLE <parent> DETACH PARTITION <child>` then a plain `DROP TABLE <child>` leaves the
-constraint alone, and dropping a tenant partition takes its month children with it — so `CASCADE`
-buys nothing and costs that.
+What they checked, the code already had: every insert into either table runs
+`ConversationAccess.assertMember` first, and nothing deletes a conversation, so `NO ACTION` never
+fired. The nightly `orphans` job counts conversation ids that a member or a message names and
+`conversations` does not hold, as it has counted tenants since `24.1`.
 
-**The order is the reverse of the allowlist, and that is why the allowlist is ordered.** Postgres
-refuses to detach a referenced partition while rows still point into it:
+## Dropping a tenant: one statement per table, and never `CASCADE`
 
-```
-ERROR: removing partition "conversations_<32hex>" violates foreign key constraint
-DETAIL: Key (conversation_id, organization_id)=(…) is still referenced from table "conversation_members".
-```
+`TenantPartitionSeed.drop` is the one implementation. `dropTenantPartitions` (a tenant delete) and
+`PgTenantMoveGateway.dropOn` (the move's reclaim) both call it.
 
-So `PartitionedTable.ALL` lists a table **ahead of** the tables that reference it, and the drop walks
-it backwards. `conversations` sits above `conversation_members` and `messages` for exactly that
-reason, and `tests/maintenance/tenant-partition.spec.ts` drops a populated tenant and reads
-`pg_constraint` back, which is what catches the order being broken.
+- **No transaction around it.** Each `drop table` commits on its own, so a parent's
+  `ACCESS EXCLUSIVE` lasts one statement. In one transaction, a single reader on one table kept the
+  other six parents locked until it let go. The spec holds a reader open on one table and watches the
+  other six drop.
+- **Fifty names to a statement**, so the parent's lock is taken once per batch. One at a time, the
+  test teardown dropped two tenants a minute at 11 700 partitions; batched, 11 611 partitions took
+  1 m 42 s (`4f45294`).
+- **One probe for every name**, a single `pg_class` read, rather than a `to_regclass` each. A tenant
+  already gone is `[]`, so a retry after a partial drop finishes the job.
+- **Never `CASCADE`.** It buys nothing, since dropping a tenant partition takes its month children
+  with it. And if a key into a partitioned table ever returns, a cascade from one partition drops
+  that key from the parent, for every tenant, with nothing but a `NOTICE` to say so.
+
+The drop still walks the allowlist backwards, which costs nothing and keeps the order right if a
+key between siblings is ever reintroduced on purpose.
 
 ## Two mechanics that are not optional
 
@@ -165,49 +179,91 @@ outage. It reads the runway *before* ensuring and emits `partition.runway.low` w
 months lie ahead; read after, it could never fire, because the run that just fixed the runway has
 nothing to report.
 
-**The DDL per month is tenants × three tables**, one statement each. The loop pages tenants from the
-catalog and takes them a page at a time, so a month's worth of tenant DDL is a slow background
-trickle rather than one lock storm on the first.
+**One read and one transaction per page of tenants** — `ensureMonthlyPartitionsFor`, since `PF.5`.
+The loop pages 200 tenants from the catalog; for each page it takes the table's advisory lock, reads
+every child of all 200 tenant partitions in one `pg_inherits` query, works out the missing months in
+memory, and creates only those. The runway each tenant had comes off the same read, before anything
+is created, so `partition.runway.low` still reports what the run found rather than what it left.
 
-`ensureMonthlyPartitions` holds one advisory lock per table for the whole probe-and-create, because
-that is two statements: two replicas booting together both probe absent and one gets `42P07`.
+The lock is taken **before** the read, because read-then-create is two statements: two replicas
+booting together would both read a month as absent and one would get `42P07`. Per tenant, the old
+loop was eight statements per table and the lock taken each time — 48 000 statements at 2 000
+tenants. The prune pass reads every tenant's months of a table in one query for the same reason.
 
 ## What a node carrying tenants actually costs
 
 Measured by `tests/smoke/tenant-ceiling.smoke.spec.ts`, which creates synthetic tenants through
-`TenantPartitionSeed` and times three things. **Postgres 17, 2026-09-18**, on a developer machine
-(Docker Desktop on Windows), against an otherwise idle database:
+`TenantPartitionSeed`. **Postgres 17, 2026-09-24**, on a developer machine (Docker Desktop on
+Windows) that was **not idle** — builds ran beside both runs — so read a number that moved by less
+than twice with suspicion. Sixteen partitions per tenant: seven at the tenant level, plus three
+months under each of the three tables that carry a month level.
 
-| tenants | partitions | create | plan | exec | runway | migrate no-op |
-| --- | --- | --- | --- | --- | --- | --- |
-| 100 | 1,622 | 142 s | 0.60 ms | 0.08 ms | 1.5 s | 14 ms |
-| 500 | 8,022 | 709 s | 0.21 ms | 0.03 ms | 6.5 s | 11 ms |
+**Before and after section 9's `PF.1`–`PF.5`**, same machine, same day:
 
-Sixteen partitions per tenant: seven at the tenant level, plus three months under each of the three
-tables that carry a month level.
+| tenants | signup DDL | drop one tenant | runway pass | plan |
+| --- | --- | --- | --- | --- |
+| 100 | 378 → 111 ms | 706 → 43 ms | 3.2 s → 70 ms | 0.58 → 0.30 ms |
+| 500 | 645 → 150 ms | 228 → 88 ms | 11.6 s → 0.27 s | 0.67 → 0.36 ms |
+| 2 000 | 354 → 377 ms | 127 → 42 ms | 35.6 s → 1.6 s | 0.31 → 0.21 ms |
+
+Signup DDL is one tenant's probe, create and attach, from `pg_stat_statements` over twenty signups.
+The first run's 2 000 row was taken after the smoke's own migrate step had applied `0037`, so its
+signup number is already without the keys. That is why it barely moves.
+
+**What the keys cost, read within one run.** The honest comparison is between tables in the same
+run, since the machine's load moved both:
+
+| attach, mean ms, 500 tenants | with the keys | without |
+| --- | --- | --- |
+| `conversation_members` | **116.1** | 6.7 |
+| `messages`, a month | **108.6** | 2.4 |
+| `notifications`, no key either way | 9.6 | 6.4 |
+
+`SHARE ROW EXCLUSIVE` on `conversations` was sampled 2 227 times during twenty signups with the keys
+and **zero** times without them, at every tenant count.
 
 **Planning time does not grow with the tenant count, and that is the whole point of the tenant
-level.** The predicate prunes to one list partition before the planner considers a month, so a read
-costs what one tenant's subtree costs however many neighbours there are. The two readings differ by
-less than half a millisecond and the larger one is the *smaller* count — that is measurement noise
-on a sub-millisecond number, not a trend.
+level.** 0.2–0.7 ms at every count in both runs. The predicate prunes to one list partition before
+the planner considers a month, so a read costs one tenant's subtree however many neighbours there
+are. `D29`'s "a few hundred tenants per node" is replaced by these numbers.
 
-**The runway is linear and cheap**: ~13 ms per tenant per run, so 6.5 s at 500 and about half a
-minute at 2,000. Ten minutes — the point `24.7` says to reopen at — is somewhere near fifty thousand
-tenants on this hardware, which no single node will reach first for other reasons.
+**What does grow is a tenant-level attach**, ~3 ms at 100 tenants and ~27 ms at 2 000, on every
+table alike. Attaching checks the new bound against every sibling's. That is the signup DDL left
+at 2 000, and it is why `PF.3` keeps **warm spares**: the founder claims a tenant whose partitions
+already exist, and the signup pays one read. See `enrollers.md`.
 
-**The cost that actually binds is signup.** Creating one tenant's sixteen partitions took 1.4–1.8 s,
-and that is paid inside the transaction that creates the organization. It is per tenant rather than
-per node — it does not get worse as a node fills — but it is a second of DDL on the signup path, and
-a deployment where signups are frequent should measure it against its own hardware before assuming
-the number above.
+**The runway is ~0.8 ms per tenant per table** after `PF.5`, so 1.6 s at 2 000. Ten minutes would
+be several hundred thousand tenants.
 
-**Two thousand was not run.** At the rate above it is about fifty minutes of creation and half an
-hour of cleanup, and nothing in the two readings suggests the shape changes. Run it with
-`TENANT_CEILING=2000 pnpm smoke` before trusting a node with that many.
+**`24.7`'s pooled partition should be judged on relation count, not on those two numbers.** Plan
+time is flat by design and the runway is fixed, so its old triggers would never fire. What grows
+with tenants is the attach above and the lock arithmetic below.
 
-**Reopen [`24.7`] when** a pruned read's planning time passes 5 ms, or a runway run passes ten
-minutes, at a tenant count a deployment could plausibly reach.
+## The lock table bounds an unpruned read
+
+`max_locks_per_transaction` is 1 024 and `max_connections` 200, so the server has **204 800** lock
+slots, shared by every backend. A statement the planner cannot prune by tenant locks every relation
+under the root: each leaf and the tenant partition, each with all its indexes. Measured with
+`pg_locks` after one `select count(*)` of the root:
+
+| table | indexes | locks per tenant | at full retention | one such read fails at |
+| --- | --- | --- | --- | --- |
+| `notifications` | 6 | (months + 1) × 7 | 12 hot + runway ≈ 15 months → 112 | **~1 800 tenants** |
+| `activity_log` | 3 | (months + 1) × 4 | 13 + runway ≈ 16 months → 68 | ~3 000 tenants |
+| `messages` | 3 | (months + 1) × 4 | no retention; 24 months → 100 | ~2 000 tenants, falling |
+
+Nothing in the application issues such a read. Every repository query carries the tenant, and
+`pg` sends unnamed statements, so each is planned with its values and pruned at plan time. Two
+things would issue one:
+
+- **A query typed by hand**, or a tool browsing a root table. It fails with `53200`, and for as
+  long as it holds the slots, so does every other backend that needs a new lock.
+- **A named prepared statement against a partitioned parent.** A generic plan cannot prune at plan
+  time, and the executor locks every partition before it prunes any. So a named prepared
+  statement against a partitioned parent is never allowed.
+
+The setting stays 1 024. Raising it costs shared memory; a node heading past ~1 800 tenants
+should decide that with these numbers, or move tenants off with `24.2`.
 
 **`pnpm db:partitions` is the same routine from a shell**, for the operator whose worker was down on
 the first of the month. It prints a row per table per tenant:
@@ -238,24 +294,33 @@ of three things per query, and **which one is the finding**:
 | **One tenant partition** | every tenant-scoped read | The tenant predicate — the neighbour's subtree is not in the plan |
 | **Exactly one month** | `markRead`, `findById`, the activity daily rollup | An equality or a closed range on the time column |
 | **The retention tail is pruned** | `listUnreadSince`, the projection walk | A floor — nothing older than it is in the plan |
-| **Pinned at every month of the tenant** | `list`, `countUnread`, `existsUnread`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
+| **Bounded by the cursor's month** | the inbox's and a conversation's later pages | A ceiling — nothing newer than the cursor is in the plan, and the cursor is still an index condition |
+| **Pinned at every month of the tenant** | a first page, `countUnread`, `existsUnread`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
 
 The first row is the one the tenant level bought, and the spec proves it against a second tenant
 that also holds rows in both months — otherwise it would pass on a database with one tenant in it
 whatever the predicate said.
 
-**A row-constructor cursor does not prune.** `(created_at, id) < (at, id)` is the keyset every inbox
-page uses, and the partition pruner does not decompose it — measured at plan time and again with
-`EXPLAIN (ANALYZE, FORMAT JSON)` against real parameters, where `Subplans Removed` was `0` on every
-row. A paged read therefore *widens* rather than narrows: the cursor did not prune the newer
-partitions either.
+**A row-constructor cursor does not prune, so a later page carries a second, redundant bound.**
+`(created_at, id) < (at, id)` is the keyset every inbox and conversation page uses, and the partition
+pruner does not decompose it — measured at plan time and again with `EXPLAIN (ANALYZE, FORMAT JSON)`
+against real parameters, where `Subplans Removed` was `0` on every row. So since `PF.6` those pages
+also say `created_at <= at`, which the pruner does read, and every month newer than the cursor
+leaves the plan.
+
+**Beside the row constructor, never instead of it.** Rewritten as
+`created_at < at or (created_at = at and id < $id)` the predicate prunes too, but the planner stops
+keeping the cursor in the index: measured with `EXPLAIN`, the scan keeps only the tenant and user
+as its `Index Cond`, on a different index, and checks the cursor row by row as a `Filter`. The spec
+asserts the row constructor is still an `Index Cond` on the one leaf left, so a later edit cannot
+trade the index for the pruning.
 
 **A floor cannot prune a future month.** Rows can legitimately land in one, so `created_at >= x`
 against the fifteen-partition steady state scans four — the current month, the one before it, and
 the two months of runway ahead. "Exactly one" is reachable only with a floor *and* a ceiling, which
 a "newest first" read does not have.
 
-So the third row asserts what the system does today on purpose. It catches nothing on its own; it is
+So the last row asserts what the system does today on purpose. It catches nothing on its own; it is
 the change detector. A bound added later fails that assertion and is lowered deliberately, with the
 numbers re-measured — rather than arriving as a badge that has quietly stopped counting old rows.
 
