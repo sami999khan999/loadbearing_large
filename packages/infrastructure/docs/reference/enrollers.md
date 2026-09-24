@@ -106,6 +106,34 @@ The file also restates `OrganizationFounder` as an interface, for the same reaso
 this package. `PgPersonalOrganizationEnroller` takes that shape rather than the concrete class, so
 `Container` can pass its port field and stay the one place a class is named.
 
+### Warm spares: the founder claims a tenant that already has its partitions
+
+Since `PF.3`, a signup pays no partition DDL. The worker's `spares` job runs every five minutes and
+tops `spare_tenants` up to twenty. Each spare is a tenant id whose sixteen partitions exist on node 0
+and whose `organizations` row does not. Each is made in one transaction, row and partitions
+together, so a crash never leaves partitions that nothing names.
+
+`found` claims the oldest spare with `delete … for update skip locked limit 1 returning id`, inside
+its own transaction, and uses that id as the organization's:
+
+- **A failed signup gives the spare back.** The delete rolls back with the rest.
+- **A busy pool is an empty pool.** `SKIP LOCKED` falls through instead of queueing two signups
+  behind one row.
+- **An empty pool seeds inline**, exactly as before spares existed. The pool changes how fast a
+  signup is, never whether it succeeds.
+- **`TenantPartitionSeed.run` still runs** on a claimed spare, because a spare made last month
+  may be a runway month short. For one that is not, it is a single read.
+
+Measured on 2026-09-24 with the real founder, ten foundings each way on a node holding a handful of
+tenants: the whole founding transaction took a median **126 ms seeding inline and 21 ms on a
+spare**. The inline half grows with the node, because a tenant-level attach checks its bound against
+every sibling's: its DDL alone was 377 ms at 2 000 tenants (`partitions.md`). The spare half does
+not grow.
+
+Node 0 alone, because the founder places every tenant there and node 0 is the catalog's own
+database. That is what lets one transaction hold both the claim and the partitions. The nightly
+orphan count and both test sweeps treat a spare as live.
+
 ## `PgBootstrapMembershipEnroller` takes its slug in the constructor
 
 It used to take it from `withOrganizationSlug`, a setter returning `this`. An enroller between

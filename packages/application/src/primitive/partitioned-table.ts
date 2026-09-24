@@ -24,8 +24,8 @@ export interface PartitionedTableEntry {
   readonly retentionMonths: number | null;
 }
 
-// **A table is listed after the tables it references**, because `dropTenantPartitions`
-// walks this backwards — see packages/infrastructure/docs/reference/partitions.md.
+// A table is listed after the tables it would reference. No key does since `PF.1`, and the
+// drop walks this backwards anyway — see packages/infrastructure/docs/reference/partitions.md.
 
 // Frozen at module load for the reason `QueueName` gives: `static readonly` freezes the
 // binding and not the array.

@@ -2,6 +2,7 @@ import type {
   ApiClient,
   DeleteRequestedDto,
   ExportRequestedDto,
+  MoveRequestedDto,
   ProjectionToggleInput,
   ProjectionUpdateInput,
   ReprojectInput,
@@ -11,6 +12,7 @@ import type {
   RetentionUpdateInput,
   TenantDeleteInput,
   TenantExportInput,
+  TenantMoveInput,
   TenantRetentionUpdateInput,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
@@ -43,6 +45,15 @@ export class PlatformMutations {
     return useAppMutation<DeleteRequestedDto, TenantDeleteInput>({
       mutationFn: (input) => client.platform.deleteTenant(input),
       invalidates: [QueryKeys.platform.all()],
+    });
+  }
+
+  // Invalidates nothing: the job has only been queued, and the map changes when the
+  // worker flips the node — refetching now would show the tenant where it still is.
+  public static useMoveTenant(client: ApiClient) {
+    return useAppMutation<MoveRequestedDto, TenantMoveInput>({
+      mutationFn: (input) => client.platform.moveTenant(input),
+      invalidates: [],
     });
   }
 

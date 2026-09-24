@@ -178,7 +178,17 @@ export const platform = {
   "platform.shards.move": "Move",
   // Spelled out rather than hidden in a tooltip. The button is here so the screen is
   // honest about what is missing, and a reason nobody can read is not honest.
-  "platform.shards.move.unavailable": "Tenant moves need the physical split — Phase 24.",
+  "platform.shards.move.unavailable":
+    "Tenant moves need a second database node — with one, there is nowhere to move a tenant to.",
+  "platform.shards.move.title": "Move {name}",
+  // The two costs of pressing the button, in the order the operator pays them.
+  "platform.shards.move.warning":
+    "{name} is on node {node}. Its writes are refused until every row is copied, and the old copy is kept for the grace period so the move can be undone.",
+  "platform.shards.move.to": "Move to node {node}",
+  "platform.shards.move.cancel": "Cancel",
+  // Queued, not moved: the map still shows the old node until the worker flips it.
+  "platform.shards.move.queued":
+    "Queued as {jobId}. The tenant shows on its new node once the worker has copied every row.",
   "platform.shards.manage": "Storage and delete",
   "platform.shards.page": "{from}–{to} of {total}",
   "platform.shards.page.previous": "Previous",

@@ -31,10 +31,6 @@ let gateway: PgMaintenanceGateway;
 let seed: TenantPartitionSeed;
 let author: UserId;
 
-// The two composite foreign keys `0023` introduced. They are constraints on the *parent*
-// tables, so there is exactly one row each however many partitions exist under them.
-const PARENT_KEYS = ["conversation_members_conversation_fk", "messages_conversation_fk"];
-
 const tenant = async (): Promise<OrganizationId> => {
   const organizationId = Identifiers.organizationId.parse(Uuid.v7());
   await database.client
@@ -44,8 +40,8 @@ const tenant = async (): Promise<OrganizationId> => {
   return organizationId;
 };
 
-// Rows in the referencing tables, because an empty tenant cannot show the failure: what
-// Postgres refuses is detaching a partition something still points into.
+// Rows in all three conversation tables, so the drop is proved on a tenant holding data:
+// with a key between them, detaching a partition something points into is refused.
 const populate = async (organizationId: OrganizationId): Promise<void> => {
   const conversationId = Identifiers.conversationId.parse(Uuid.v7());
 
@@ -70,15 +66,15 @@ const populate = async (organizationId: OrganizationId): Promise<void> => {
 const quoted = (values: readonly string[]) =>
   sql.raw(values.map((value) => `'${value}'`).join(", "));
 
-// Read from the catalog rather than counted: a constraint whose parent row is gone is
-// gone for every tenant at once, which is the whole point of this file.
-const parentForeignKeys = async (): Promise<readonly string[]> => {
+// Every key that points into a tenant-partitioned table. Any one of them makes each
+// signup's attach lock its target, and makes the drop detach before it can drop.
+const keysIntoPartitionedTables = async (): Promise<readonly string[]> => {
+  const parents = PartitionedTable.TENANT_PARTITIONED.map((entry) => entry.name);
   const rows = await database.client.execute<{ conname: string }>(sql`
     select conname
     from pg_constraint
     where contype = 'f'
-      and conrelid in ('conversation_members'::regclass, 'messages'::regclass)
-      and conname in (${quoted(PARENT_KEYS)})
+      and confrelid in (select oid from pg_class where relname in (${quoted(parents)}))
     order by conname
   `);
 
@@ -95,6 +91,20 @@ const partitionsOf = async (organizationId: OrganizationId): Promise<readonly st
   `);
 
   return rows.rows.map((row) => row.name);
+};
+
+// One of the tenant's runway months under `notifications`, by name from the catalog.
+const runwayMonthOf = async (organizationId: OrganizationId): Promise<string> => {
+  const parent = TenantPartitionSeed.partitionName("notifications", organizationId);
+  const rows = await database.client.execute<{ name: string }>(sql`
+    select c.relname as name from pg_inherits i
+    join pg_class c on c.oid = i.inhrelid
+    join pg_class p on p.oid = i.inhparent
+    where p.relname = ${parent}
+    order by c.relname desc
+    limit 1
+  `);
+  return rows.rows[0]?.name ?? "";
 };
 
 beforeAll(async () => {
@@ -133,6 +143,28 @@ describe("TenantPartitionSeed", () => {
     } finally {
       await gateway.dropTenantPartitions(organizationId);
       await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+    }
+  });
+
+  // `PF.4`: what `migrate.ts` asks per page, so a deploy seeds only who is short.
+  it("names only the tenants that are short of a partition", async () => {
+    const whole = await tenant();
+    const short = await tenant();
+    const none = Identifiers.organizationId.parse(Uuid.v7());
+    // A runway month gone is short too: the next insert past month end would fail.
+    const month = await runwayMonthOf(short);
+
+    try {
+      await database.client.execute(sql.raw(`drop table ${month}`));
+
+      expect(await seed.missing([whole, short, none])).toEqual([short, none]);
+      await seed.run(short);
+      expect(await seed.missing([whole, short])).toEqual([]);
+    } finally {
+      for (const id of [whole, short]) {
+        await gateway.dropTenantPartitions(id);
+        await database.client.delete(organizations).where(eq(organizations.id, id));
+      }
     }
   });
 });
@@ -190,17 +222,63 @@ describe("PgMaintenanceGateway.dropTenantPartitions", () => {
     await database.client.delete(organizations).where(eq(organizations.id, organizationId));
   });
 
-  // The regression this file exists for: `DROP TABLE … CASCADE` on a partition of a
-  // referenced table takes the parent's foreign key with it, for every tenant.
-  it("leaves the composite foreign keys on the parents alone", async () => {
-    expect(await parentForeignKeys()).toEqual(PARENT_KEYS);
+  // `PF.1` dropped the last two, `messages` and `conversation_members` into
+  // `conversations`. A new one brings back the attach lock — docs/reference/partitions.md.
+  it("has no foreign key into any tenant-partitioned table, before or after a drop", async () => {
+    expect(await keysIntoPartitionedTables()).toEqual([]);
 
     const organizationId = await tenant();
     await populate(organizationId);
     await gateway.dropTenantPartitions(organizationId);
     await database.client.delete(organizations).where(eq(organizations.id, organizationId));
 
-    expect(await parentForeignKeys()).toEqual(PARENT_KEYS);
+    expect(await keysIntoPartitionedTables()).toEqual([]);
+  });
+
+  // `PF.2`: one statement per table and no transaction around them. In one transaction,
+  // a reader on one table held the other six parents' ACCESS EXCLUSIVE until it let go.
+  it("drops the other tables while a reader holds one of them", async () => {
+    const organizationId = await tenant();
+    const reader = openDatabase();
+    // The allowlist's first table, which the reverse walk drops last.
+    const held = PartitionedTable.TENANT_PARTITIONED[0]?.name ?? "";
+
+    let release = (): void => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let opened = (): void => {};
+    const open = new Promise<void>((resolve) => {
+      opened = resolve;
+    });
+
+    const reading = reader.client.transaction(async (tx) => {
+      await tx.execute(
+        sql.raw(`select 1 from ${held} where organization_id = '${organizationId}' limit 1`),
+      );
+      opened();
+      await released;
+    });
+
+    try {
+      await open;
+      const dropping = gateway.dropTenantPartitions(organizationId);
+
+      // Committed and visible from outside while the drop still waits on `held`.
+      await expect
+        .poll(async () => (await partitionsOf(organizationId)).length, { timeout: 15_000 })
+        .toBe(1);
+
+      release();
+      await reading;
+      await dropping;
+      expect(await partitionsOf(organizationId)).toEqual([]);
+    } finally {
+      release();
+      await reading.catch(() => undefined);
+      await reader.close();
+      await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+    }
   });
 
   it("is a no-op for a tenant whose partitions are already gone", async () => {

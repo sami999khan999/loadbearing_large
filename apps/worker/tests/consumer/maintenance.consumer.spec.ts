@@ -6,7 +6,13 @@ import type {
   RetentionPolicyRecord,
   TenantRetentionPolicyRecord,
 } from "@loadbearing/application";
-import { PartitionedTable } from "@loadbearing/application";
+import {
+  PartitionedTable,
+  type PlatformReader,
+  ReclaimMoveSourcesUseCase,
+  RelocateTenantUseCase,
+  Shard,
+} from "@loadbearing/application";
 import type { Container } from "@loadbearing/composition";
 import {
   FixedClock,
@@ -16,8 +22,11 @@ import {
   InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
+  InMemoryShardAssignmentRepository,
   InMemoryStoragePolicyGateway,
+  InMemoryTenantMoveGateway,
   InMemoryTenantRetentionPolicyRepository,
+  RecordingActivityLogger,
   RecordingMaintenanceGateway,
   RecordingPartitionArchiveGateway,
   TestContainer,
@@ -34,6 +43,24 @@ const NOW = new Date("2026-08-15T00:00:00Z");
 const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
 const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
 const TENANTS = [FIRST, SECOND] as const;
+const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000099");
+
+// A directory row nothing has moved. Spread under a key and a node.
+const UNMOVED = {
+  movedAt: null,
+  movingTo: null,
+  movedFrom: null,
+  sourceDroppableAt: null,
+} as const;
+
+// Moved off node 0 onto node 1, with the source copy still there.
+const movedAway = (organizationId: OrganizationId) => ({
+  ...UNMOVED,
+  key: Shard.keyOf(organizationId),
+  node: 1,
+  movedAt: NOW,
+  movedFrom: 0,
+});
 
 // Every month-partitioned table, per tenant where it has a tenant level. Derived rather
 // than counted, so the next partitioned table is one allowlist line here too.
@@ -92,6 +119,8 @@ function harness(
     // running, and asking for a checkpoint while paused answers nothing.
     projectionEnabled?: boolean;
     lifecycle?: InMemoryStoragePolicyGateway;
+    // The directory the move jobs read. Empty by default: nothing has ever moved.
+    assignments?: InMemoryShardAssignmentRepository;
   } = {},
 ) {
   const maintenance = new RecordingMaintenanceGateway(
@@ -117,6 +146,27 @@ function harness(
   // work and records nothing, so an unplaced job is invisible to every other assertion.
   const placements: string[] = [];
 
+  // The real use-cases over fakes, so a dispatch case asserts what the job did rather
+  // than that a mock was called with the payload it was handed.
+  const assignments = options.assignments ?? new InMemoryShardAssignmentRepository();
+  const move = new InMemoryTenantMoveGateway();
+  const clock = new FixedClock(NOW);
+  const platform = {
+    organizationId: () => Promise.resolve(FIRST),
+  } as unknown as PlatformReader;
+  const platformAdmin = {
+    relocateTenant: new RelocateTenantUseCase(
+      assignments,
+      move,
+      platformPolicy,
+      platform,
+      new RecordingActivityLogger(),
+      clock,
+      7,
+    ),
+    reclaimMoveSources: new ReclaimMoveSourcesUseCase(assignments, move, clock),
+  };
+
   const container = {
     ...TestContainer.build({
       maintenance,
@@ -125,7 +175,8 @@ function harness(
       organizations: new InMemoryOrganizationReader(TENANTS),
     }),
     // The harness fixes its own epoch; this spec asserts against a later month.
-    clock: new FixedClock(NOW),
+    clock,
+    platformAdmin,
     retentionPolicies,
     projectionPolicies,
     platformPolicy,
@@ -147,6 +198,8 @@ function harness(
 
   return {
     container,
+    assignments,
+    move,
     maintenance,
     partitionArchive,
     outbox,
@@ -214,6 +267,52 @@ describe("MaintenanceConsumer", () => {
     await consumerFor(container).handle(job("cleanup"));
 
     expect(maintenance.swept()).toEqual([NOW]);
+  });
+
+  it("runs a queued tenant move and says where the tenant went", async () => {
+    const assignments = new InMemoryShardAssignmentRepository([
+      { key: Shard.keyOf(SECOND), node: 0, ...UNMOVED },
+    ]);
+    const h = harness({ assignments });
+    h.move.seed(0, "messages", 3);
+
+    await consumerFor(h.container).handle(
+      job("tenant-move", { organizationId: SECOND, toNode: 1, actorId: ACTOR }),
+    );
+
+    expect((await assignments.findByKey(Shard.keyOf(SECOND)))?.node).toBe(1);
+    expect(emitted(h.logger, "tenant.move.completed")).toEqual([
+      { organizationId: SECOND, fromNode: 0, toNode: 1, rows: 3 },
+    ]);
+  });
+
+  // Keyed on the window, not on the move: the tenant whose window is still open keeps
+  // its way back, which is the whole point of having one.
+  it("reclaims a moved tenant's source copy only once its grace period is over", async () => {
+    const assignments = new InMemoryShardAssignmentRepository([
+      { ...movedAway(FIRST), sourceDroppableAt: new Date(NOW.getTime() - 1) },
+      { ...movedAway(SECOND), sourceDroppableAt: new Date(NOW.getTime() + 1) },
+    ]);
+    const h = harness({ assignments });
+    h.move.seed(0, "messages", 2);
+
+    await consumerFor(h.container).handle(job("cleanup"));
+
+    // `24.2a`: the late audit rows go to the tenant's node first, then the source goes.
+    expect(h.move.steps()).toEqual([
+      { step: "carry", organizationId: FIRST, node: 1 },
+      { step: "drop", organizationId: FIRST, node: 0 },
+    ]);
+    expect((await assignments.findByKey(Shard.keyOf(FIRST)))?.movedFrom).toBeNull();
+    expect((await assignments.findByKey(Shard.keyOf(SECOND)))?.movedFrom).toBe(0);
+    expect(emitted(h.logger, "tenant.source.reclaimed")).toEqual([{ tenants: 1, partitions: 1 }]);
+  });
+
+  it("says nothing about reclaiming on a night when no source is due", async () => {
+    const h = harness();
+    await consumerFor(h.container).handle(job("cleanup"));
+
+    expect(emitted(h.logger, "tenant.source.reclaimed")).toEqual([]);
   });
 
   it("keeps several months of partitions ahead of today", async () => {
@@ -404,6 +503,47 @@ describe("MaintenanceConsumer — the orphan count", () => {
     expect(found[0]?.tenants).toBe(TENANTS.length);
     expect(found[0]?.organizationIds).toBe(TENANTS.join(","));
     expect(found[0]?.node).toBe(0);
+    expect(found[0]?.members).toBe(0);
+  });
+
+  // `PF.1`: the keys into `conversations` are gone, so a leaked member or message is
+  // reported here even on a node where every tenant is live.
+  it("reports a conversation that members or messages name and nothing holds", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.orphans = [];
+    maintenance.dangling = { members: 1, messages: 2 };
+
+    await consumerFor(container).handle(job("orphans"));
+
+    const found = emitted(logger, "maintenance.orphans.found");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.tenants).toBe(0);
+    expect(found[0]?.members).toBe(1);
+    expect(found[0]?.messages).toBe(2);
+  });
+});
+
+// `PF.3`: the pool of pre-seeded tenants the founder claims from.
+describe("MaintenanceConsumer — the spare pool", () => {
+  it("tops the pool up and says how many it made", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.spares = 15;
+
+    await consumerFor(container).handle(job("spares"));
+
+    expect(maintenance.topUps).toEqual([5]);
+    const replenished = emitted(logger, "tenant.spares.replenished");
+    expect(replenished).toHaveLength(1);
+    expect(replenished[0]?.created).toBe(5);
+  });
+
+  it("says nothing when the pool is already full", async () => {
+    const { container, logger, maintenance } = harness();
+    maintenance.spares = 20;
+
+    await consumerFor(container).handle(job("spares"));
+
+    expect(emitted(logger, "tenant.spares.replenished")).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
 import {
   type ActivityLogger,
+  ActivityRelaySubscriber,
   type ActivityReplayReader,
   AddConversationMemberUseCase,
   type AnalyticsProjector,
@@ -131,10 +132,12 @@ import {
   type QueuePublisher,
   type RealtimePublisher,
   type RealtimeSubscriber,
+  ReclaimMoveSourcesUseCase,
   RedisCacheStore,
   RedisConnection,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  type RelayedActivityStore,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
@@ -255,6 +258,10 @@ export class Container {
   // passes its own from the environment. This is what a container built without one gets.
   private static readonly DEFAULT_MOVE_GRACE_DAYS = 7;
 
+  // A minute, against requests that finish in seconds. A job placed before the freeze
+  // and still opening transactions after it is the case this does not cover.
+  private static readonly DEFAULT_MOVE_SETTLE_MS = 60_000;
+
   // ── infrastructure, private ───────────────────────────────
   private readonly database: Database;
   private readonly poolProbe: ReturnType<typeof setInterval>;
@@ -290,6 +297,8 @@ export class Container {
   public readonly vectors: VectorStore;
   public readonly embeddings: EmbeddingProvider;
   public readonly activity: ActivityLogger;
+  // The same adapter as `activity`, seen through the port the relay subscriber writes to.
+  private readonly relayedActivity: RelayedActivityStore;
   // RBAC, members, API keys, the enrollers and the platform screens. The catalog is
   // the last single primary, so this one is always node 0.
   public readonly catalogUnitOfWork: UnitOfWork;
@@ -405,6 +414,7 @@ export class Container {
     readonly purgeOrganization: PurgeOrganizationUseCase;
     readonly moveTenant: MoveTenantUseCase;
     readonly relocateTenant: RelocateTenantUseCase;
+    readonly reclaimMoveSources: ReclaimMoveSourcesUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
@@ -639,14 +649,18 @@ export class Container {
 
     // Shares the transaction scope, which is what makes the audit row commit with the
     // state change rather than beside it.
-    this.activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    const activity = new PgActivityLogger(this.cluster, this.transactions, this.shards, this.clock);
+    this.activity = activity;
+    this.relayedActivity = activity;
     this.eventPublisher = new PgOutboxPublisher(
       this.cluster,
       this.transactions,
       this.shards,
       this.clock,
     );
-    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards);
+    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards, {
+      settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS,
+    });
     this.outbox = new PgOutboxGateway(
       this.cluster,
       this.transactions,
@@ -840,6 +854,8 @@ export class Container {
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
     this.subscribers = new SubscriberRegistry([
+      // `24.2a`: the logger is also where a relayed audit row is written, on its node.
+      new ActivityRelaySubscriber(this.relayedActivity),
       new MemberRealtimeSubscriber(this.realtime),
       new NotificationSubscriber(this.notification.deliver),
       new MessagingRealtimeSubscriber(this.realtime, conversations),
@@ -1041,6 +1057,12 @@ export class Container {
         this.activity,
         this.clock,
         config.database.moveGraceDays ?? Container.DEFAULT_MOVE_GRACE_DAYS,
+      ),
+      // Worker-only as well: the nightly cleanup is its one caller.
+      reclaimMoveSources: new ReclaimMoveSourcesUseCase(
+        this.shardAssignments,
+        this.tenantMove,
+        this.clock,
       ),
       exportOrganization: new ExportOrganizationUseCase(
         this.authorizer,

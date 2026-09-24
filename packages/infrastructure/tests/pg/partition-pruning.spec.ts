@@ -587,8 +587,76 @@ describe("the retention tail is pruned, for the reads that carry a floor", () =>
   });
 });
 
-// Today's behaviour, asserted on purpose. A row-constructor cursor is not decomposed by
-// the pruner, so these read every month there is — see docs/reference/partitions.md.
+// `PF.6`: a later page carries `created_at <= at` beside its row-constructor cursor. The
+// pruner does not decompose the row constructor; it does read the bare comparison.
+describe("bounded by the cursor's month, for the pages after the first", () => {
+  // Every `Index Cond` in the plan. The cursor must stay inside one: rewritten as an
+  // `OR` it prunes too, but falls out of the index into a row-by-row `Filter`.
+  const conditions = async (statement: { query: string; params: unknown[] }) => {
+    const explained = await explain.query(
+      `explain (format json) ${statement.query}`,
+      statement.params,
+    );
+    const root: unknown = explained.rows[0]?.["QUERY PLAN"];
+    const plans: unknown = typeof root === "string" ? JSON.parse(root) : root;
+
+    const nodes: string[] = [];
+    const walk = (node: unknown): void => {
+      if (typeof node !== "object" || node === null) return;
+      const plan = node as Record<string, unknown>;
+      if (typeof plan["Index Cond"] === "string") nodes.push(plan["Index Cond"]);
+      walk(plan.Plan);
+      if (Array.isArray(plan.Plans)) for (const child of plan.Plans) walk(child);
+    };
+    if (Array.isArray(plans)) for (const entry of plans) walk(entry);
+    return nodes;
+  };
+
+  it("the inbox's next page drops every month newer than its cursor", async () => {
+    const next = await capture(
+      () =>
+        inbox.list(organizationId, reader, {
+          limit: 20,
+          unreadOnly: false,
+          cursor: KeysetCursor.encode(FIRST, written.id),
+        }),
+      /from "notifications"/i,
+    );
+
+    const leaves = await scanned(next, PartitionedTable.NOTIFICATIONS);
+    oneTenant(leaves, "notifications");
+    expect(leaves.map((leaf) => leaf.month)).toContain(monthIndex(FIRST));
+    expect(leaves.map((leaf) => leaf.month)).not.toContain(monthIndex(SECOND));
+    expect(leaves.every((leaf) => (leaf.month ?? 0) <= monthIndex(FIRST))).toBe(true);
+
+    const cursorIn = await conditions(next);
+    expect(cursorIn).toHaveLength(leaves.length);
+    for (const condition of cursorIn) expect(condition).toContain("ROW(created_at, id) <");
+  });
+
+  it("the conversation's older page drops every month newer than its cursor", async () => {
+    const older = await capture(
+      () =>
+        chat.list(organizationId, {
+          conversationId,
+          limit: 20,
+          before: KeysetCursor.encode(FIRST, sent.id),
+        }),
+      /from "messages"/i,
+    );
+
+    const leaves = await scanned(older, PartitionedTable.MESSAGES);
+    oneTenant(leaves, "messages");
+    expect(leaves.map((leaf) => leaf.month)).not.toContain(monthIndex(SECOND));
+    expect(leaves.every((leaf) => (leaf.month ?? 0) <= monthIndex(FIRST))).toBe(true);
+    const cursorIn = await conditions(older);
+    expect(cursorIn).toHaveLength(leaves.length);
+    for (const condition of cursorIn) expect(condition).toContain("ROW(created_at, id) <");
+  });
+});
+
+// Today's behaviour, asserted on purpose: a first page has no cursor, so nothing bounds
+// it and these read every month there is — see docs/reference/partitions.md.
 describe("pinned at every month of the tenant, for the reads that carry no bound", () => {
   const pinned = async (
     statement: { query: string; params: unknown[] },
@@ -598,29 +666,15 @@ describe("pinned at every month of the tenant, for the reads that carry no bound
     expect(leaves.map((leaf) => leaf.name)).toEqual(await everyMonthOf(table));
   };
 
-  it("the inbox page reads every month, cursor or no cursor", async () => {
+  it("the inbox's first page reads every month", async () => {
     const first = await capture(
       () => inbox.list(organizationId, reader, { limit: 20, unreadOnly: false }),
       /from "notifications"/i,
     );
     await pinned(first, PartitionedTable.NOTIFICATIONS);
-
-    const next = await capture(
-      () =>
-        inbox.list(organizationId, reader, {
-          limit: 20,
-          unreadOnly: false,
-          cursor: KeysetCursor.encode(SECOND, written.id),
-        }),
-      /from "notifications"/i,
-    );
-
-    // The cursor did not narrow the *newer* months either, which is the finding this
-    // assertion exists to keep from being reversed without the numbers re-measured.
-    await pinned(next, PartitionedTable.NOTIFICATIONS);
   });
 
-  it("the conversation page reads every month of the tenant", async () => {
+  it("the conversation's first page reads every month of the tenant", async () => {
     const statement = await capture(
       () => chat.list(organizationId, { conversationId, limit: 20 }),
       /from "messages"/i,

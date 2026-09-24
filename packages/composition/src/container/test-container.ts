@@ -26,6 +26,7 @@ import {
   RecordingPartitionArchiveGateway,
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
+  RecordingRelayedActivityStore,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubSessionResolver,
@@ -55,6 +56,7 @@ import {
   type QueuePublisher,
   type RealtimePublisher,
   type RealtimeSubscriber,
+  type RelayedActivityStore,
   SERVER_CATALOG,
   type SessionResolver,
   type ShardAssignmentRepository,
@@ -77,6 +79,7 @@ import { OrganizationShardingStrategy } from "../shard/index.js";
 export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityReplay: ActivityReplayReader;
+  readonly relayedActivity: RelayedActivityStore;
   // Present even though the real container leaves them absent: a test has no opinion
   // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
@@ -143,6 +146,7 @@ export class TestContainer {
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
+      relayedActivity: overrides.relayedActivity ?? new RecordingRelayedActivityStore(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
       capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),

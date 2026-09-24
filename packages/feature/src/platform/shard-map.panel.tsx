@@ -8,6 +8,7 @@ import {
   EmptyState,
   Field,
   Input,
+  PlatformMutations,
   PlatformQueries,
   type ShardMovesDto,
   type ShardNodeDto,
@@ -23,9 +24,6 @@ export interface ShardMapPanelProps {
   // `feature` may not import routing, so the destination arrives as a string. It is
   // `ROUTES.platform.storage`, which is where a tenant is exported and deleted.
   readonly storageHref: string;
-  // Arrives with `25.5`, which lands the `shards.move` procedure alongside `24.2`.
-  // Absent keeps the button disabled however the server answers `moves`.
-  readonly onMove?: (organizationId: string) => void;
   readonly limit?: number;
 }
 
@@ -41,7 +39,7 @@ interface TenantRow extends ShardTenantDto {
 // rather than asking the server about every keystroke.
 const LOOKUP_FLOOR = 3;
 
-export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanelProps) {
+export function ShardMapPanel({ storageHref, limit = 25 }: ShardMapPanelProps) {
   const { t } = useMessages("platform");
   const describe = useErrorMessage();
   const client = useApiClient();
@@ -49,6 +47,10 @@ export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanel
   const [expanded, setExpanded] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [term, setTerm] = useState("");
+  // The tenant whose move is being confirmed. A row click opens it rather than moving,
+  // because a move freezes the tenant's writes and a stray click must not do that.
+  const [moving, setMoving] = useState<TenantRow | null>(null);
+  const move = PlatformMutations.useMoveTenant(client);
 
   const map = useAppQuery(
     PlatformQueries.shardMap(client, {
@@ -80,7 +82,13 @@ export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanel
   // first page rather than at the page number the previous node happened to be on.
   const show = (node: number) => {
     setOffset(0);
+    setMoving(null);
     setExpanded((current) => (current === node ? null : node));
+  };
+
+  const confirm = (row: TenantRow) => {
+    move.reset();
+    setMoving(row);
   };
 
   const nodeColumns = useMemo<readonly TableColumn<NodeRow>[]>(
@@ -147,13 +155,9 @@ export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanel
         header: t("platform.shards.column.actions"),
         // A link rather than a second delete form. The delete panel asks for the slug
         // to be typed back, and two places to get that confirmation wrong is one too many.
-        cell: () => (
+        cell: (row) => (
           <>
-            {
-              // Disabled without a handler as well as on `moves`: `25.5` supplies both,
-              // and until it does this goes live when `hasShardMoves` flips and does nothing.
-            }
-            <Button variant="ghost" disabled={moves === "unavailable" || onMove === undefined}>
+            <Button variant="ghost" disabled={moves === "unavailable"} onClick={() => confirm(row)}>
               {t("platform.shards.move")}
             </Button>
             <a href={storageHref}>{t("platform.shards.manage")}</a>
@@ -161,8 +165,12 @@ export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanel
         ),
       },
     ],
-    [t, moves, onMove, storageHref],
+    [t, moves, storageHref],
   );
+
+  // Every node but the one the tenant is on. The map lists them all, so the choice is
+  // never a number typed into a field that the server then has to refuse.
+  const targets = moving ? nodes.filter((row) => row.node !== moving.node) : [];
 
   const total = map.data?.total ?? 0;
   const from = total === 0 ? 0 : offset + 1;
@@ -219,6 +227,42 @@ export function ShardMapPanel({ storageHref, onMove, limit = 25 }: ShardMapPanel
           {moves === "unavailable" ? (
             <Callout tone="warning">{t("platform.shards.move.unavailable")}</Callout>
           ) : null}
+        </section>
+      ) : null}
+
+      {moving !== null ? (
+        <section>
+          <h3>{t("platform.shards.move.title", { name: moving.name })}</h3>
+          {
+            // Before the buttons: the freeze is the cost of pressing one, and a warning
+            // read after the click is a warning nobody read.
+          }
+          <Callout tone="warning">
+            {t("platform.shards.move.warning", { name: moving.name, node: moving.node })}
+          </Callout>
+          <p>
+            {targets.map((target) => (
+              <Button
+                key={target.id}
+                variant="secondary"
+                disabled={move.isPending || move.isSuccess}
+                onClick={() =>
+                  move.mutate({ organizationId: moving.organizationId, toNode: target.node })
+                }
+              >
+                {t("platform.shards.move.to", { node: target.node })}
+              </Button>
+            ))}
+            <Button variant="ghost" onClick={() => setMoving(null)}>
+              {t("platform.shards.move.cancel")}
+            </Button>
+          </p>
+          {move.isSuccess ? (
+            <Callout tone="success">
+              {t("platform.shards.move.queued", { jobId: move.data.jobId })}
+            </Callout>
+          ) : null}
+          {move.isError ? <Callout tone="danger">{describe(move.error)?.message}</Callout> : null}
         </section>
       ) : null}
 

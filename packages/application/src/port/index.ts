@@ -20,9 +20,11 @@ export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MailPublisher, type MailRequest } from "./mail.publisher.js";
 export { MailRenderer, type RenderedMail } from "./mail.renderer.js";
 export {
+  type DanglingConversations,
   MaintenanceGateway,
   type PartitionEstimate,
   type SweepOutcome,
+  type TenantRunway,
 } from "./maintenance.gateway.js";
 export { OrganizationReader } from "./organization.reader.js";
 export { OutboxGateway } from "./outbox.gateway.js";
@@ -39,6 +41,7 @@ export {
 export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber } from "./realtime.subscriber.js";
+export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
 export {
   type RequestHeaders,
   type ResolvedSession,

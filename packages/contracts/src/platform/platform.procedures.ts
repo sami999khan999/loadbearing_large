@@ -111,6 +111,13 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantLookup)
     .output(PlatformContract.tenantLocation);
 
+  // `POST` and a job id back: a move freezes the tenant, waits out its writers and
+  // copies every row, which is minutes of work no request should hold a connection for.
+  public static readonly moveTenant = oc
+    .route({ method: "POST", path: "/platform/shards/move" })
+    .input(PlatformContract.tenantMove)
+    .output(PlatformContract.moveRequested);
+
   // The object the merge point in `procedure/index.ts` mounts. One place to add a
   // procedure to, rather than two.
   public static readonly all = {
@@ -132,5 +139,6 @@ export class PlatformProcedures {
     updateRetention: PlatformProcedures.updateRetention,
     shardMap: PlatformProcedures.shardMap,
     locateTenant: PlatformProcedures.locateTenant,
+    moveTenant: PlatformProcedures.moveTenant,
   } as const;
 }

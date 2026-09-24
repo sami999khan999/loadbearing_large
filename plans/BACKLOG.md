@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, from every plan file, in one place
-updated: 2026-09-22
+updated: 2026-09-24
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -43,15 +43,15 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 11 | 20 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 9 | 24 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
-| 4 | Unfinished work buried inside ticked items | 1 | 5 |
+| 4 | Unfinished work buried inside ticked items | 0 | 6 |
 | 5 | Verification owed — browser, manual, or a scale not run | 1 | 8 |
-| 6 | Conditional work — "reopen when" | 8 | — |
+| 6 | Conditional work — "reopen when" | 7 | — |
 | 7 | `archive/TODO.md` ledger rows | 1 | 2 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
-| 9 | Performance — the tenant/partition layer | 8 | 0 |
+| 9 | Performance — the tenant/partition layer | 0 | 8 |
 
 The closed column is [`archive/DONE.md`](archive/DONE.md), section for section. Section 6 holds no
 boxes: it is triggers, not tasks.
@@ -68,9 +68,8 @@ are cheaper than the rest and are listed so nobody re-derives them.
 > disagree. The infrastructure suite is 35 files and 236 tests green; `composition` is green.
 >
 > **A second node runs too**, under `pnpm infra:up:sharded` with the two `DATABASE_SHARD_1_*`
-> lines in `.env`. That is what proved half of `R.2`. What still needs a decision rather than a
-> container is `24.1`, the foreign-key call, and the items behind it — `24.2` and the outbox half
-> of `R.2`'s proof. An entry that is blocked says so.
+> lines in `.env`. That is what proved half of `R.2`, and `24.1`, `24.2` and `24.5` were built and
+> proved against it. An entry that is blocked says so.
 
 **Every archived plan was checked and carries nothing of its own.** Every `[ ]` in
 `archive/COMMUNICATION-PLAN.md`, `DB-SCALING-PLAN.md`, `PLATFORM-ADMIN-PLAN.md` and
@@ -81,7 +80,23 @@ delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done
 
 ---
 
-## 1. `archive/PLAN.md` — the eleven open boxes
+## Where work stopped — 2026-09-24
+
+**Stopped at a clean point on request.** Everything is committed and green: build, typecheck,
+lint, all 29 architecture assertions with none skipped, and the full test suite. The next item
+is **`24.2b`**, half built and reverted, with its design and what is left in its entry below.
+After it, in order:
+
+1. `24.3` — the read replica in compose (decided: run it in compose), which unblocks `25.1`
+   and `25.2`.
+2. `25.3` — the colder storage class, with a MinIO tier (decided: build it).
+3. `23.14` — the analytics reader, on ClickHouse (decided).
+4. `24.6` — the 10× load test; `24.4` — measure the catalog.
+5. `T-036` — narrow its "Done when" (decided); then the whole-plan verification last.
+
+---
+
+## 1. `archive/PLAN.md` — the nine open boxes
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -102,30 +117,44 @@ found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 
 ### Phase 24 — The physical split 📁
 
-**`24.1` is decided and built** — [`archive/DONE.md`](archive/DONE.md) §1. The rest still waits on
-a second node being provisioned rather than on a decision.
+**`24.1`, `24.2`, `24.2a` and `24.5` are built** — [`archive/DONE.md`](archive/DONE.md) §1. A
+tenant can be moved, a move under load loses no acknowledged write, and a moved tenant's catalog
+audit rows reach its own node through the outbox.
 
-- [ ] `24.2` **Tenant move** as a `MaintenanceConsumer` job — `shard_assignments.moving_to`,
-  `ensureTenantPartitions` on the target, keyset copy, verify counts, flip `node`,
-  `resolver.invalidate`, drop the source after a grace period; write freeze as a `ForbiddenError`
-  from `shardMiddleware`. Lands with `25.5`'s procedure and flips `Container.hasShardMoves`. — `archive/PLAN.md:3971`
+- [ ] `24.2b` **The move's settle does not cover a long job** `P3` — `quiesce` waits `moveSettleMs`
+  (60 s) for writers that placed themselves before the freeze. A worker job placed on the tenant
+  earlier, and still opening transactions after that, can land a row on the source after its page
+  was read. The count check catches a late insert, not a late update. Closing it means the job
+  re-reading the freeze per transaction, or the move refusing while such a job is active for the
+  tenant. `sharding.md`, "The tenant move", states the gap.
+  - **Where work stopped, 2026-09-24 — half built, reverted, nothing committed.** The chosen fix is
+    the first: a *job* re-reads its placement at the start of every transaction; a request does
+    not, because the settle covers it. Four pieces, all written and then reverted to stop at a
+    clean point: `PlacedShard.recheck?: boolean`; `DatabaseCluster.placementOf(key)`, the
+    resolver's cached `{ node, frozen }`; in `PgUnitOfWork.run`, for any non-catalog placement
+    with `recheck` set, re-read it and throw `ForbiddenError("shard.move.inFlight")` if the tenant
+    is frozen or its node changed; and `Container.placed(principal, work, { recheck })`, which
+    `apps/worker`'s `withShard` passes `true`. `beginMove` already invalidates the cached
+    placement, so the re-read sees the freeze at once; a transaction already open is the
+    quiesce's `SHARE` lock's to wait for. **Still to do:** a spec in
+    `tests/transaction/pg-unit-of-work.spec.ts` with a resolver that answers frozen, and one that
+    answers a different node; the cost measured, one cached resolve per job transaction; then
+    the `sharding.md` paragraph turned from "the gap" into the fix.
 - [ ] `24.3` **Read replica per shard** — `DATABASE_SHARD_<n>_REPLICA_URL`, `cluster.reader(key)`,
   dashboard and analytics reads moved onto it. `25.1`, `25.2` and the `platform.replica.manage`
   key wait on this. — `archive/PLAN.md:3979`
 - [ ] `24.4` **The catalog is the last single primary** — measure first; a replica for its reads
   if it hurts. — `archive/PLAN.md:3983`
-- [ ] `24.5` **Two-node proof** — half done: `sharded.smoke.spec.ts` is **5 passed** with the
-  `sharded` profile and the two `DATABASE_SHARD_1_*` lines — `S.3` re-measured it on 2026-09-20
-  and the fifth is `R.2`'s runway assertion; this line said 4 until 2026-09-22. The second clause, a tenant move under
-  load with no lost writes, waits on `24.2`. — `archive/PLAN.md:3987`
 - [ ] `24.6` **Load test the routed paths at 10×** — half ran (`tests/smoke/routed.smoke.spec.ts`,
   `ROUTED_SCALE=1`): a warm placement resolve is 679 µs, a miss 2 568 µs, the cross-node walk is
   serial. **The write half is unblocked** since `24.1` dropped the keys — a routed insert on node 1
   lands now, and `sharded.smoke.spec.ts` proves it. What is left is running the load test. — `archive/PLAN.md:3997`
 - [ ] `24.7` **A pooled partition for the long tail** — small tenants share one `<table>_pool`
-  list partition and graduate on a size line. **Its stated triggers measure the wrong thing** —
-  plan time is flat by design and the runway is fixed by `PF.5` — so `PF.0` re-states the gate as
-  relation count: the drop-cost-vs-siblings reading and `PF.7`'s lock arithmetic (section 9). — `archive/PLAN.md:4015`
+  list partition and graduate on a size line. **Its gate is relation count now, measured by
+  `PF.0`**: a tenant-level attach grows with siblings (~3 ms at 100 tenants, ~27 ms at 2 000), and
+  one unpruned read of `notifications` at full retention exhausts the lock table at ~1 800 tenants
+  (`PF.7`). Plan time is flat and the runway is 1.6 s at 2 000, so the old triggers would never
+  fire. — `archive/PLAN.md:4015`
 
 ### Phase 25 — The replica panel and the shard map 📁
 
@@ -136,9 +165,6 @@ a second node being provisioned rather than on a decision.
   `24.3`. — `archive/PLAN.md:4040`
 - [ ] `25.3` **Colder storage class** — `transitionAfterDays` and a storage class on
   `LifecycleRule`, once someone pays for Glacier; MinIO needs a configured tier. — `archive/PLAN.md:4046`
-- [ ] `25.5` **The move button** — rendered and disabled today; `move-tenant.use-case.ts`
-  (`platform.shards.manage`) and the `shards.move` procedure land with `24.2`. `R.44` notes the
-  button has no `onClick`, so it goes live and does nothing the day `hasShardMoves` flips. — `archive/PLAN.md:4114`
 
 ### Phase 26 — Communication follow-ups → moved
 
@@ -160,9 +186,9 @@ with **no unit test**, because `session.fn.ts` calls `createServerFn` at module 
 under vitest. And `R.24` changed no behaviour at all, only comments that were untrue — the
 behaviour behind it was `23.1`'s decision to take, and it was taken.
 
-**One thing is still owed out of `R.2`**: with two nodes, a spec that drains node 1's outbox. The
-binding landed long ago and `24.1` removed the `23503` that blocked the proof, so this is now a
-spec nobody has written rather than a thing that cannot be written.
+**`R.2`'s last owed spec was written on 2026-09-24**: `sharded.smoke.spec.ts` publishes an event
+for a tenant on node 1 and drains it from node 1's outbox, and it is red with the catalog unit of
+work `R.2` fixed. The file is 7 passed.
 
 ---
 
@@ -189,8 +215,10 @@ spec nobody has written rather than a thing that cannot be written.
   assertion — and a warm placement resolve is **914 µs** against the 679 µs recorded, a miss
   **3 576 µs** against 2 568 µs. The third routed case still passes for the reason it exists: a
   routed insert on node 1 is a `23503` before it can be timed. **The blocker is unchanged and is
-  not a tool.** `24.1` is a decision about what a production catalog and a production shard do to
-  each other under a tenant delete, and it is deliberately filed until that node exists.
+  not a tool.** ~~`24.1` is deliberately filed until that node exists~~ — **superseded
+  2026-09-22**: `24.1` was decided and built, the routed insert on node 1 lands, and
+  `sharded.smoke.spec.ts` is 6 passed. What is left of this entry is a node that is *provisioned*
+  rather than a second container on one machine, which is `24.6`'s load test and a deploy.
 
 ---
 
@@ -198,12 +226,8 @@ spec nobody has written rather than a thing that cannot be written.
 
 Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `concern:` or `corrected:` note.
 Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
-the end so nobody chases them.
-
-- [ ] `16.12` **`TENANT_CEILING=2000 pnpm smoke` was not run** — 100 and 500 were; the page says
-  so. **Running now, and it is `PF.0`'s first deliverable** (section 9). The first attempt on
-  2026-09-22 found the teardown quadratic — 2 tenants a minute, a fourteen-hour projection —
-  and was killed; batched, 11 611 partitions dropped in 1 m 42 s (`4f45294`). — `archive/PLAN.md:1352`
+the end so nobody chases them. **None is open**: `16.12`, the last, closed with `PF.0` on
+2026-09-24 — [`archive/DONE.md`](archive/DONE.md) §4.
 
 **Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
 open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
@@ -253,8 +277,10 @@ than burying in a tick, because the next walk needs them:
 Not open today. Each is a trigger written into a ticked item so the next person does not decide on
 a feeling.
 
-- `24.7` **pooled partition** — when the pruned read's planning time passes 5 ms or the runway run
-  passes ten minutes at a plausible tenant count (`16.12`). — `archive/PLAN.md:1349`
+- `24.7` **pooled partition** — ~~when planning passes 5 ms or the runway passes ten minutes~~;
+  **re-stated 2026-09-24**: when a node heads past ~1 800 tenants, the point where one unpruned
+  read exhausts the lock table, or a tenant-level attach passes ~50 ms. Section 1 has the numbers.
+  — `archive/PLAN.md:1349`
 - `21.1` **per-user object layout for `notifications`** — when p95 on the archived view passes
   500 ms; every page turn gunzips the whole tenant-month object today. — `archive/PLAN.md:2691`
 - `16.7` **`unreadCounts` pruning assertion** — reopen if the read changes; its floor is
@@ -266,8 +292,6 @@ a feeling.
 - `23.21` **skip versus fail an unplaceable tenant** in the projection — left open on purpose. — `archive/PLAN.md:3832`
 - **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
   onto `platform_policy` in an afternoon if an operator asks. — `archive/PLAN.md:1745`
-- `D29` — "a few hundred tenants per node" was replaced by `16.12`'s numbers; two thousand stays
-  unmeasured (section 4).
 
 ---
 
@@ -301,80 +325,19 @@ held together by assertion 29.
 
 ## 9. Performance — the tenant/partition layer
 
-Added 2026-09-22 from what the `16.12` run found. Every tenant is sixteen partitions, reads prune
-to one and plan time is flat — that half works. What does not scale is **DDL against the
-partitioned parents**, three ways, all measured live rather than reasoned:
+**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](archive/DONE.md) §9, each
+with its before and after. The short version, at 2 000 tenants on one node:
 
-- **Signup pays ~1.05 s of DDL** inside the organization-creation transaction — and not in round
-  trips: 60 807 `to_regclass` probes cost 0.075 ms each. It is five `ATTACH PARTITION` statements
-  on the two tables that still carry a foreign key to `conversations`: `messages` at **158 ms**
-  per attach, `conversation_members` at **215 ms**, against 5–23 ms for the five tables without
-  one. ~850 ms of the ~1.05 s is those two keys.
-- **Each of those attaches takes `ShareRowExclusive` on `conversations`** (sampled from `pg_locks`
-  during the run), which blocks every insert and update there for the attach's duration. A signup
-  stalls "start a conversation" for everyone on the node, five times.
-- **Dropping tenants was quadratic**: each `DETACH` locks the parent, and the parent had 11 700
-  children. Fixed in the test teardown (`4f45294`); the production path `dropTenantPartitions`
-  has the same shape and holds `ACCESS EXCLUSIVE` on all seven roots for one transaction.
+| | before | after |
+| --- | --- | --- |
+| a signup, whole founding transaction | ~126 ms inline, and its DDL grows with the node | **21 ms** on a spare |
+| `SHARE ROW EXCLUSIVE` on `conversations` per 20 signups | 2 227 samples | **0** |
+| the monthly runway pass | 35.6 s | **1.6 s** |
+| dropping one tenant | one transaction over seven parents | one statement per table |
 
-**Two decisions, taken 2026-09-22.** The two sibling keys are **dropped** — conversations are never
-deleted so `NO ACTION` never fires, and every insert path calls `assertMember` first; the keys
-re-check what the code checked, and a nightly count catches what leaks, as `24.1` did one level
-up. And the signup budget is **as low as possible**: drop the keys *and* build warm spares.
-
-The argument for each stage lands in `packages/infrastructure/docs/reference/partitions.md` as the
-stage produces its numbers. Each closed box moves to `archive/DONE.md` with its before and after.
-
-- [ ] `PF.0` **Measure, and land the 2 000 row.** Extend `tenant-ceiling.smoke.spec.ts`'s
-  `Reading`: `seedMs` split into probe / create / attach from `pg_stat_statements`; `dropMs` for one
-  fresh tenant at T; a `wait_event_type` sample during the drop. Record the attach-by-parent table
-  and the `ShareRowExclusive` finding in `partitions.md` beside the 2 000 row. **Closes `16.12`,
-  settles `D29`, re-states `24.7`'s gate.** Measured by: the run itself.
-- [ ] `PF.1` **Drop the two sibling foreign keys.** `messaging.schema.ts` loses
-  `conversation_members_conversation_fk` and `messages_conversation_fk` (their indexes stay — the
-  keyset reads use them); migration `0037`, one `DROP CONSTRAINT` per breakpoint, both nodes.
-  `tenant-partition.spec.ts`'s `PARENT_KEYS` assertion inverts. The nightly `orphans` job grows a
-  second check — rows whose `conversation_id` has no row — one query per node, same placement.
-  A `send-message` case pins that a missing conversation is refused by `assertMember`, never by
-  the database. **Measured by:** attach means for the two tables falling into the 5–23 ms band;
-  signup DDL ~1.05 s → ~0.25 s; no `ShareRowExclusive` on `conversations` in the lock sample.
-- [ ] `PF.2` **Bound the drop's lock window.** `dropTenantPartitions`: one transaction per table
-  rather than one for all seven (never relied on — the purge runs it before its own transaction,
-  and it is idempotent); after `PF.1` nothing is referenced, so no detach at all. A batch variant
-  `dropTenantPartitionsFor(ids)`, fifty names per `drop table`; `pg-tenant-move.gateway.ts`'s
-  `dropOn` delegates rather than carrying its own copy of the loop. **Measured by:** ceiling
-  `dropMs`; a spec that an open `select` on one table does not block the drop of the other six.
-- [ ] `PF.3` **Warm spares: signup pays no DDL.** Catalog table `spare_tenants(id, node,
-  created_at)`, migration `0038`. The `partitions` job tops each node up to `SPARES` (20) under
-  `eachShard`; `PgOrganizationFounder.found` claims one with `delete … for update skip locked
-  limit 1 returning id` and skips the seed, or seeds inline when the pool is empty — no new
-  failure mode. `orphanedTenants` and `orphan-sweep.ts` treat a spare as live. **Gate:** `PF.1`
-  first, so spares are cheap to make. **Measured by:** the founder's transaction in the ceiling
-  smoke — target, one row delete.
-- [ ] `PF.4` **Sixteen probes become one query.** `TenantPartitionSeed`'s 16 `to_regclass` probes
-  → one `pg_class` read; `missing(ids)` as `orphansOf` inverted. `migrate.ts` and `seed.ts` seed
-  only what `missing` returns: deploy no-op from 16·T probes to one query per 500 tenants.
-  **Measured by:** the idempotence case at `tenant-partition.spec.ts:123`, plus a `missing` case.
-- [ ] `PF.5` **Runway and prune: one read and one transaction per page.** The runway pass is
-  ~24·T statements serialized on four table-scoped advisory locks (~48 000 at 2 000 tenants), and
-  `prune()` adds an undocumented 3·(T+2) catalog reads. `ensureMonthlyPartitionsFor(table, ids,
-  …)`: one two-level `pg_inherits` read per page, missing months computed in memory, one
-  transaction and one lock per page; `monthsAheadBefore` off the same read so
-  `partition.runway.low` keeps read-before-ensure. `partitionsBefore` / `dropMonthlyPartitionsBefore`
-  → one query when unscoped. Also measures the archive per tenant-month, split detach / count /
-  upload / drop. **Measured by:** ceiling `runwayMs` — 6.5 s at 500 → < 1 s; ~30 s at 2 000 → < 3 s.
-- [ ] `PF.6` **The month-level ceiling on cursor pages.** The row-constructor keyset does not
-  prune the month level (pinned in `partition-pruning.spec.ts:592`). Keep the row constructor and
-  **add** `created_at <= $at` beside it — replacing it would turn the index walk into a sort. The
-  two cursor cases move out of "pinned at every month" (red first) and assert the plan is still
-  `Index Scan Backward` on `notifications_inbox_idx`. **Measured by:** the spec's leaf lists.
-- [ ] `PF.7` **`max_locks_per_transaction`: keep 1 024, write the arithmetic.** The `users` cascade
-  that motivated it is gone (`24.1`); the reason to keep it is stronger. Locks are per relation
-  *including indexes* and the table is shared — 1 024 × 200 = 204 800 slots. One unpruned scan of
-  a root parent at full retention takes ~40 per tenant per month-partitioned table, so it exhausts
-  the table at ~5 000 tenants. Document beside the ceiling table; fix the compose comment that
-  still cites the deleted cascade; add the rule "never a named prepared statement against a
-  partitioned parent". No config change.
+**One finding is not a task and needs a decision**: one unpruned read of `notifications` at full
+retention exhausts the lock table at ~1 800 tenants, not the ~5 000 the plan estimated. Nothing in
+the application issues one. `max_locks_per_transaction` stays 1 024 until a node heads there.
 
 ---
 

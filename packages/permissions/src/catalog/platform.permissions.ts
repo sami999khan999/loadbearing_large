@@ -38,8 +38,6 @@ export const platformPermissions = {
     module: "platform",
     label: "View the shard map",
   },
-  // Registered now so the seed grants it; the procedure it guards arrives with the
-  // physical split. A key with no procedure grants nothing.
   "platform.shards.manage": {
     scope: "platform",
     module: "platform",

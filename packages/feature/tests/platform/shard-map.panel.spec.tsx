@@ -81,7 +81,9 @@ describe("ShardMapPanel", () => {
     const move = await screen.findByRole("button", { name: "Move" });
     expect(move.hasAttribute("disabled")).toBe(true);
     expect(
-      await screen.findByText("Tenant moves need the physical split — Phase 24."),
+      await screen.findByText(
+        "Tenant moves need a second database node — with one, there is nowhere to move a tenant to.",
+      ),
     ).toBeTruthy();
   });
 
@@ -105,10 +107,10 @@ describe("ShardMapPanel", () => {
 
     expect(await screen.findByText("No tenant answers to that.")).toBeTruthy();
   });
-  // It was `disabled={moves === "unavailable"}` alone, so the day `hasShardMoves` flips
-  // it would render live and do nothing. The server saying "available" is not enough.
-  it("keeps the move button disabled while no handler is wired", async () => {
-    await renderWithFakes(
+  // Two nodes and `moves: "available"`: the sharded compose profile, which is the only
+  // state in which a move can be asked for at all.
+  const twoNodes = (moved: { organizationId: string; toNode: number }[]) =>
+    renderWithFakes(
       <ShardMapPanel storageHref="/platform/storage" />,
       capabilitiesWith([]),
       undefined,
@@ -116,15 +118,54 @@ describe("ShardMapPanel", () => {
       ApiClient.inProcess({
         platform: {
           shardMap: (input: { node?: number }) =>
-            Promise.resolve({ ...map(input.node), moves: "available" as const }),
+            Promise.resolve({
+              ...map(input.node),
+              nodes: [NODE, { ...NODE, node: 1, tenants: 0 }],
+              moves: "available" as const,
+            }),
           locateTenant: () => Promise.resolve({ tenant: null, moves: "available" }),
+          moveTenant: (input: { organizationId: string; toNode: number }) => {
+            moved.push(input);
+            return Promise.resolve({ jobId: `tenant-move.${input.organizationId}` });
+          },
         },
       } as unknown as AppClient),
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Show tenants" }));
+  // A move freezes the tenant's writes, so the row's button asks first. The targets are
+  // the other nodes by name, never a number typed into a field.
+  it("asks before moving, offering every other node", async () => {
+    const moved: { organizationId: string; toNode: number }[] = [];
+    await twoNodes(moved);
 
-    const move = await screen.findByRole("button", { name: "Move" });
-    expect(move.hasAttribute("disabled")).toBe(true);
+    const [first] = await screen.findAllByRole("button", { name: "Show tenants" });
+    fireEvent.click(first as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Move" }));
+
+    expect(await screen.findByRole("heading", { name: "Move Loadbearing" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Move to node 0" })).toBeNull();
+    expect(moved).toEqual([]);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move to node 1" }));
+
+    expect(
+      await screen.findByText(
+        `Queued as tenant-move.${TENANT.organizationId}. The tenant shows on its new node once the worker has copied every row.`,
+      ),
+    ).toBeTruthy();
+    expect(moved).toEqual([{ organizationId: TENANT.organizationId, toNode: 1 }]);
+  });
+
+  it("closes the confirmation without moving anything", async () => {
+    const moved: { organizationId: string; toNode: number }[] = [];
+    await twoNodes(moved);
+
+    const [first] = await screen.findAllByRole("button", { name: "Show tenants" });
+    fireEvent.click(first as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Move" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("heading", { name: "Move Loadbearing" })).toBeNull();
+    expect(moved).toEqual([]);
   });
 });

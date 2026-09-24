@@ -159,6 +159,8 @@ export {
   type PurgedOrganization,
   type PurgeOrganizationInput,
   PurgeOrganizationUseCase,
+  type ReclaimedSources,
+  ReclaimMoveSourcesUseCase,
   type RelocatedTenant,
   type RelocateTenantInput,
   RelocateTenantUseCase,
@@ -213,6 +215,7 @@ export {
   ColdArchiveReader,
   type ColdPage,
   type DailyCount,
+  type DanglingConversations,
   type DeletedTenantSweep,
   type DocumentChunk,
   DomainEventPublisher,
@@ -240,6 +243,8 @@ export {
   QueuePublisher,
   RealtimePublisher,
   RealtimeSubscriber,
+  type RelayedActivity,
+  RelayedActivityStore,
   type RenderedMail,
   type RequestHeaders,
   type ResolvedSession,
@@ -259,6 +264,7 @@ export {
   type TenantExport,
   TenantMembershipReader,
   TenantMoveGateway,
+  type TenantRunway,
   UnitOfWork,
   UserReader,
   VectorStore,
@@ -302,4 +308,8 @@ export {
   type UpdateRoleInput,
   UpdateRoleUseCase,
 } from "./rbac/index.js";
-export { EventSubscriber, SubscriberRegistry } from "./subscriber/index.js";
+export {
+  ActivityRelaySubscriber,
+  EventSubscriber,
+  SubscriberRegistry,
+} from "./subscriber/index.js";

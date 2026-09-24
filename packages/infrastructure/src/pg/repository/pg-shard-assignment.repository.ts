@@ -7,6 +7,7 @@ import {
   isNull,
   lt,
   ne,
+  or,
   type Placement,
   type ShardAssignment,
   type ShardAssignmentRepository,
@@ -86,6 +87,9 @@ export class PgShardAssignmentRepository
           eq(shardAssignments.shardKey, key),
           isNull(shardAssignments.movingTo),
           ne(shardAssignments.node, toNode),
+          // A source copy elsewhere would be orphaned by the flip, which overwrites the
+          // only column naming it. The same node is the way back, and `prepare` empties it.
+          or(isNull(shardAssignments.movedFrom), eq(shardAssignments.movedFrom, toNode)),
         ),
       )
       .returning({ key: shardAssignments.shardKey });
@@ -130,7 +134,10 @@ export class PgShardAssignmentRepository
       .where(
         and(
           isNotNull(shardAssignments.sourceDroppableAt),
+          isNotNull(shardAssignments.movedFrom),
           lt(shardAssignments.sourceDroppableAt, cutoff),
+          // A move back is copying onto the node this would drop.
+          isNull(shardAssignments.movingTo),
         ),
       )
       .orderBy(asc(shardAssignments.shardKey))

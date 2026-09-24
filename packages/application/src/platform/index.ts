@@ -76,6 +76,10 @@ export {
   PurgeOrganizationUseCase,
 } from "./purge-organization.use-case.js";
 export {
+  type ReclaimedSources,
+  ReclaimMoveSourcesUseCase,
+} from "./reclaim-move-sources.use-case.js";
+export {
   type RelocatedTenant,
   type RelocateTenantInput,
   RelocateTenantUseCase,

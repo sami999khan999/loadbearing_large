@@ -19,6 +19,8 @@ const CATALOG = Object.freeze([
   "invitations",
   "api_keys",
   "shard_assignments",
+  // Claimed inside the founder's catalog transaction, so it lives where that runs.
+  "spare_tenants",
   // The archive index is read before any shard is known, and `17.6`'s sweep reads one
   // place.
   "partition_archive",

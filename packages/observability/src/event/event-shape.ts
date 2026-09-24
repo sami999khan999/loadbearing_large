@@ -135,12 +135,29 @@ export interface EventShape {
     readonly partitions: number;
     readonly outboxRows: number;
   };
+  readonly "tenant.move.completed": {
+    readonly organizationId: string;
+    readonly fromNode: number;
+    readonly toNode: number;
+    readonly rows: number;
+  };
+  readonly "tenant.source.reclaimed": {
+    readonly tenants: number;
+    readonly partitions: number;
+  };
+  readonly "tenant.spares.replenished": {
+    readonly created: number;
+    readonly target: number;
+  };
   // The ids, not just the count: with no foreign key left, this line is the only place
   // a leaked tenant is named, and a number alone cannot be chased.
   readonly "maintenance.orphans.found": {
     readonly node: number;
     readonly tenants: number;
     readonly organizationIds: string;
+    // Conversation ids named by a member or a message and missing — `PF.1`'s half.
+    readonly members: number;
+    readonly messages: number;
   };
   readonly "cold.partition.restored": {
     readonly table: string;

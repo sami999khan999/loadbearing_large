@@ -24,6 +24,11 @@ const orphansOf = async (database: Database, table: string): Promise<readonly st
         select 1 from organizations o
         where replace(o.id::text, '-', '') = substring(c.relname from '_([0-9a-f]{32})$')
       )
+      -- A spare has partitions and no organization on purpose, until it is claimed.
+      and not exists (
+        select 1 from spare_tenants s
+        where replace(s.id::text, '-', '') = substring(c.relname from '_([0-9a-f]{32})$')
+      )
     order by c.relname
   `);
 

@@ -1,9 +1,11 @@
 import {
+  type DanglingConversations,
   MaintenanceGateway,
   type OrganizationId,
   type PartitionEstimate,
   type PartitionedTableName,
   type SweepOutcome,
+  type TenantRunway,
 } from "../import.js";
 
 export interface EnsuredPartitions {
@@ -45,6 +47,10 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   // Seeded rather than recorded: a spec about the nightly count wants to say what the
   // node holds, not to assert that the job asked.
   public orphans: OrganizationId[] = [];
+  public dangling: DanglingConversations = { members: 0, messages: 0 };
+  // How many spares the pool already holds; a top-up makes the difference and records it.
+  public spares = 0;
+  public readonly topUps: number[] = [];
 
   public constructor(
     private readonly outcome: SweepOutcome = { sessions: 0, verifications: 0, invitations: 0 },
@@ -70,6 +76,13 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
     return Promise.resolve([]);
   }
 
+  public override topUpSpareTenants(target: number): Promise<number> {
+    const made = Math.max(0, target - this.spares);
+    this.spares += made;
+    this.topUps.push(made);
+    return Promise.resolve(made);
+  }
+
   public override dropTenantPartitions(organizationId: OrganizationId): Promise<readonly string[]> {
     this.tenantDrops.push(organizationId);
     return Promise.resolve([]);
@@ -77,6 +90,10 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
 
   public override orphanedTenants(): Promise<readonly OrganizationId[]> {
     return Promise.resolve(this.orphans);
+  }
+
+  public override danglingConversations(): Promise<DanglingConversations> {
+    return Promise.resolve(this.dangling);
   }
 
   public override ensureMonthlyPartitions(
@@ -87,6 +104,23 @@ export class RecordingMaintenanceGateway extends MaintenanceGateway {
   ): Promise<readonly string[]> {
     this.partitionRuns.push({ table, organizationId, from, months });
     return Promise.resolve([]);
+  }
+
+  // Recorded as the two calls it replaces, so a spec about the runway reads the same
+  // whichever path the consumer took.
+  public override ensureMonthlyPartitionsFor(
+    table: PartitionedTableName,
+    organizationIds: readonly OrganizationId[],
+    from: Date,
+    months: number,
+  ): Promise<readonly TenantRunway[]> {
+    return Promise.resolve(
+      organizationIds.map((organizationId) => {
+        this.runwayChecks.push({ table, organizationId, from });
+        this.partitionRuns.push({ table, organizationId, from, months });
+        return { organizationId, monthsAhead: this.monthsAhead, created: [] };
+      }),
+    );
   }
 
   public override monthlyPartitionsAfter(

@@ -1,4 +1,13 @@
-import { index, pgTable, smallint, sql, text, timestamp } from "../../import.js";
+import {
+  index,
+  type OrganizationId,
+  pgTable,
+  smallint,
+  sql,
+  text,
+  timestamp,
+  uuid,
+} from "../../import.js";
 
 // The directory: which physical node holds a key's rows. A **catalog** table — it is
 // read before any shard is known, which is what makes it the one place that can say.
@@ -33,4 +42,19 @@ export const shardAssignments = pgTable(
       .on(t.sourceDroppableAt)
       .where(sql`source_droppable_at is not null`),
   ],
+);
+
+// Tenants whose sixteen partitions exist and whose organization does not yet — `PF.3`.
+// The founder claims one, so a signup pays no DDL. Catalog, and seeded on node 0 alone:
+// ──
+// the founder places every tenant there, and node 0 is the catalog's own database.
+export const spareTenants = pgTable(
+  "spare_tenants",
+  {
+    // Becomes `organizations.id` when claimed. Minted when the spare is made.
+    id: uuid("id").$type<OrganizationId>().primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Oldest first, so a spare whose runway has aged is the next one used.
+  (t) => [index("spare_tenants_created_idx").on(t.createdAt)],
 );

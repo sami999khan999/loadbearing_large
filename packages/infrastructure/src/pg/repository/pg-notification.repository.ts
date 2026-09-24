@@ -51,6 +51,9 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
           after
             ? sql`(${notifications.createdAt}, ${notifications.id}) < (${after.at}, ${after.id}::uuid)`
             : undefined,
+          // Redundant, and the only part the pruner reads: it does not decompose a row
+          // constructor, so without this a page three months back plans every newer month.
+          after ? sql`${notifications.createdAt} <= ${after.at}` : undefined,
         ),
       )
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
