@@ -2,10 +2,12 @@ import { PartitionedTable, Shard } from "@loadbearing/application";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import {
   CacheStore,
+  CapabilitySet,
   type ConversationId,
   type MessageId,
   migrate,
   type OrganizationId,
+  Principal,
   sql,
   type UserId,
   Uuid,
@@ -15,6 +17,8 @@ import {
   PgConversationRepository,
   PgMaintenanceGateway,
   PgMessageRepository,
+  PgOutboxGateway,
+  PgOutboxPublisher,
   PgShardResolver,
 } from "../../src/pg/repository/index.js";
 import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
@@ -214,6 +218,55 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
 
     await node1Direct.client.execute(sql.raw(`drop table if exists ${child}`));
     await catalogDirect.client.execute(sql.raw(`drop table if exists ${child}`));
+  });
+
+  // `R.2`'s other half, owed since `24.1` removed the `23503` that blocked it. The drain
+  // walks nodes with the `local` unit of work, so node 1's events are drained from node 1.
+  it("drains a tenant's event from the outbox on the node it was written to", async () => {
+    const localWork = new PgUnitOfWork(cluster, scope, shards, "local");
+    const routedWork = new PgUnitOfWork(cluster, scope, shards, "routed");
+    const publisher = new PgOutboxPublisher(cluster, scope, shards, { now: () => new Date() });
+    const outbox = new PgOutboxGateway(cluster, scope, shards, localWork);
+    const conversationId = Uuid.v7() as ConversationId;
+    const actor = new Principal(onNodeOne, author, CapabilitySet.empty());
+
+    await placedOn(onNodeOne, () =>
+      routedWork.run(() =>
+        publisher.publish(actor, {
+          name: "conversation.created",
+          payload: { conversationId, kind: "channel" },
+        }),
+      ),
+    );
+
+    const pendingOn = async (database: Database) => {
+      const found = await database.client.execute<{ published: boolean }>(sql`
+        select published_at is not null as published from outbox_event
+        where organization_id = ${onNodeOne}::uuid
+          and payload ->> 'conversationId' = ${conversationId}
+      `);
+      return found.rows;
+    };
+
+    expect(await pendingOn(node1Direct)).toEqual([{ published: false }]);
+    expect(await pendingOn(catalogDirect)).toEqual([]);
+
+    const relayed: string[] = [];
+    await shards.atNode(1, () =>
+      outbox.drain(100, async (events) => {
+        for (const event of events) {
+          const payload = event.payload as { conversationId?: string };
+          if (payload.conversationId) relayed.push(payload.conversationId);
+        }
+      }),
+    );
+
+    expect(relayed).toContain(conversationId);
+    expect(await pendingOn(node1Direct)).toEqual([{ published: true }]);
+
+    await node1Direct.client.execute(
+      sql`delete from outbox_event where organization_id = ${onNodeOne}::uuid`,
+    );
   });
 
   it("resolves each tenant to the node its directory row names", async () => {
