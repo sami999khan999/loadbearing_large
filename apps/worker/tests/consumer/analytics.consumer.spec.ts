@@ -391,13 +391,13 @@ describe("AnalyticsConsumer project — the settle horizon", () => {
   });
 });
 
-// `23.21` (2). A tenant in `organizations` with no `shard_assignments` row throws out of
-// `PgShardResolver`, and the placement used to sit outside the per-tenant guard.
-describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
+// `23.21`, decided 2026-09-25: **skip**. A tenant in `organizations` with no
+// `shard_assignments` row is passed over and named; every other tenant still projects.
+describe("AnalyticsConsumer — a tenant that cannot be placed", () => {
   const SECOND = "018f8c00-0000-7000-8000-000000000020";
 
-  function unplaceable() {
-    const activityReplay = new InMemoryActivityReplayReader([record("a", minutesBefore(1))]);
+  function unplaceable(directory: "missing" | "down" = "missing") {
+    const activityReplay = new InMemoryActivityReplayReader([record("a", minutesBefore(5))]);
     const analyticsProjector = new InMemoryAnalyticsProjector();
     const logger = { emit: vi.fn(), failure: vi.fn() };
 
@@ -405,9 +405,10 @@ describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
       ...TestContainer.build({
         activityReplay,
         analyticsProjector,
+        // The unplaceable tenant first, so a skip that stopped the walk would show.
         organizations: new InMemoryOrganizationReader([
-          Identifiers.organizationId.parse(ORG),
           Identifiers.organizationId.parse(SECOND),
+          Identifiers.organizationId.parse(ORG),
         ]),
       }),
       projector: analyticsProjector,
@@ -422,27 +423,59 @@ describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
         }
         return work();
       },
+      // `down` is the catalog failing, which must still fail the run rather than skip.
+      shardAssignments: {
+        findByKey: (key: string) => {
+          if (directory === "down") return Promise.reject(new Error("catalog unreachable"));
+          return Promise.resolve(key === SECOND ? null : { key, node: 0 });
+        },
+      },
     } as unknown as Container;
 
-    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), logger };
+    return {
+      consumer: new AnalyticsConsumer(container, undefined as never, 1),
+      logger,
+      projected: analyticsProjector,
+    };
   }
 
-  it("reports the failure in the projection's own vocabulary", async () => {
-    const { consumer, logger } = unplaceable();
+  it("skips it, names it, and projects every other tenant", async () => {
+    const { consumer, logger, projected } = unplaceable();
 
-    await expect(consumer.handle(job("project"))).rejects.toThrow("No shard assignment");
+    await consumer.handle(job("project"));
 
-    // The defect: this was empty, because the throw escaped `projectTenantOrReport`'s
-    // `try` and only `queue.job.failed` named the run at all.
-    expect(emitted(logger, "analytics.projection.failed")[0]).toMatchObject({
-      organizationId: SECOND,
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([
+      { organizationId: SECOND, job: "project" },
+    ]);
+    expect(emitted(logger, "analytics.projection.failed")).toEqual([]);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({
+      tenants: 2,
+      skipped: 1,
+      events: 1,
+    });
+    expect(await projected.checkpoint(Identifiers.organizationId.parse(ORG))).toMatchObject({
+      lastId: "a",
     });
   });
 
-  it("still fails the run, which is the behaviour that was not in question", async () => {
-    const { consumer } = unplaceable();
+  it("skips it in the reconciliation too", async () => {
+    const { consumer, logger } = unplaceable();
 
-    await expect(consumer.handle(job("project"))).rejects.toThrow();
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([
+      { organizationId: SECOND, job: "reconcile" },
+    ]);
+    expect(emitted(logger, "analytics.reconciliation.completed")).toHaveLength(1);
+  });
+
+  // The skip is for a missing row, never for a failure to ask: a catalog outage that
+  // skipped every tenant would read as a quiet, successful run.
+  it("still fails the run when the directory cannot be asked", async () => {
+    const { consumer, logger } = unplaceable("down");
+
+    await expect(consumer.handle(job("project"))).rejects.toThrow("catalog unreachable");
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([]);
   });
 });
 

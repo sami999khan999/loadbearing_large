@@ -10,6 +10,7 @@ import {
   type ProjectionCheckpoint,
   QueueName,
   type Redis,
+  Shard,
   Worker,
 } from "../import.js";
 
@@ -180,6 +181,7 @@ export class AnalyticsConsumer {
     let batches = 0;
     let lagMs = 0;
     let tenants = 0;
+    let skipped = 0;
     let after: OrganizationId | null = null;
 
     for (;;) {
@@ -196,6 +198,10 @@ export class AnalyticsConsumer {
           excluding,
           policy.replicaReadsEnabled,
         );
+        if (outcome === null) {
+          skipped += 1;
+          continue;
+        }
         projected += outcome.projected;
         batches += outcome.batches;
         // The max over tenants, not the last one's: the run is as far behind as its
@@ -216,6 +222,7 @@ export class AnalyticsConsumer {
       events: projected,
       durationMs: now.getTime() - startedAt.getTime(),
       lagSeconds,
+      skipped,
       capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
     });
 
@@ -239,12 +246,14 @@ export class AnalyticsConsumer {
 
   // Rethrows: BullMQ's retry is driven by rejection. Per tenant, because the checkpoint
   // is — there is no global "where the replay resumes" left to report.
+  // ──
+  // `null` is a tenant skipped for having no directory row — `23.21`, decided 2026-09-25.
   private async projectTenantOrReport(
     organizationId: OrganizationId,
     budget: number,
     excluding: readonly ActivityAction[],
     replica: boolean,
-  ): Promise<{ projected: number; batches: number; lagMs: number }> {
+  ): Promise<{ projected: number; batches: number; lagMs: number } | null> {
     try {
       // Placed *inside* the guard. Outside it a tenant with no `shard_assignments` row
       // threw past this catch, so the run died on `queue.job.failed` and the line a
@@ -258,6 +267,8 @@ export class AnalyticsConsumer {
         { replica },
       );
     } catch (error: unknown) {
+      if (await this.skippedUnplaced(organizationId, "project")) return null;
+
       // Read after the throw rather than before it, so the failure line names where the
       // destination actually stands rather than where this run hoped to start. Outside
       // ──
@@ -270,6 +281,18 @@ export class AnalyticsConsumer {
       });
       throw error;
     }
+  }
+
+  // **Skipped only when the directory has no row**, asked after the throw. Any other
+  // failure — the catalog down, a query timing out — still fails the run and retries.
+  // ──
+  // One tenant in the wrong state must not stop a rebuildable store for everyone else.
+  private async skippedUnplaced(organizationId: OrganizationId, job: string): Promise<boolean> {
+    const assignment = await this.container.shardAssignments.findByKey(Shard.keyOf(organizationId));
+    if (assignment !== null) return false;
+
+    this.container.logger.emit("analytics.tenant.skipped", { organizationId, job });
+    return true;
   }
 
   // One tenant's walk, bounded by what is left of the run's batch budget. The checkpoint
@@ -371,7 +394,11 @@ export class AnalyticsConsumer {
           organizationId,
           () => this.reconcileTenant(organizationId, from, to, excluding),
           { replica: policy.replicaReadsEnabled },
-        );
+        ).catch(async (error: unknown) => {
+          if (await this.skippedUnplaced(organizationId, "reconcile")) return null;
+          throw error;
+        });
+        if (outcome === null) continue;
         days += outcome.days;
         drifted += outcome.drifted;
       }

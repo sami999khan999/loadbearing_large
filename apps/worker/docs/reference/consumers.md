@@ -146,6 +146,14 @@ lag computation, no drift comparison, and **no log line** — 288 lines a day sa
 noise the one line that matters would be lost in. The `retention` job's `applyRetention` still
 runs: the connection exists, and a TTL edit is not a projection.
 
+**A tenant with no directory row is skipped, not fatal — `23.21`, decided 2026-09-25.** A tenant
+in `organizations` with no `shard_assignments` row cannot be placed. It used to fail the whole
+run, so one stray row stopped analytics for every tenant. Now both jobs skip it and emit
+`analytics.tenant.skipped` at `error`, naming the tenant and the job. The completed line counts
+it in `skipped`. The skip is decided by asking the directory *after* the throw. Only a missing
+row skips. A catalog that cannot be asked still fails the run and retries, because a catalog
+outage that skipped every tenant would look like a quiet, successful run.
+
 ### `reconcile`
 
 Counts per day on both sides and a diff. **Neither store reaches into the other** — each answers the
