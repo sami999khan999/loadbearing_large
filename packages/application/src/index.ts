@@ -1,3 +1,11 @@
+export {
+  type ActivityCount,
+  type ActivityTrend,
+  AnalyticsReader,
+  type GetActivityTrendInput,
+  GetActivityTrendUseCase,
+} from "./analytics/index.js";
+
 import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/application");
