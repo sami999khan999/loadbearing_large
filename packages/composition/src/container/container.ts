@@ -14,6 +14,7 @@ import {
   CapabilityCache,
   ChangeMemberRoleUseCase,
   ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
   ClickHouseConnection,
   type Clock,
   type ColdArchiveReader,
@@ -36,6 +37,7 @@ import {
   type EmailSender,
   type EmbeddingProvider,
   ExportOrganizationUseCase,
+  GetActivityTrendUseCase,
   GetConversationUseCase,
   GetNotificationPreferencesUseCase,
   GetPlatformPolicyUseCase,
@@ -378,6 +380,10 @@ export class Container {
   public readonly mail: { readonly send: SendMailUseCase };
   // In every process: the worker delivers and digests, the web tier reads. Neither
   // half needs an auth config, which is why this sits outside that branch too.
+  public readonly analytics: {
+    readonly activity: GetActivityTrendUseCase;
+  };
+
   public readonly notification: {
     readonly list: ListNotificationsUseCase;
     readonly archived: ListArchivedNotificationsUseCase;
@@ -627,10 +633,20 @@ export class Container {
       : undefined;
 
     // The projector follows the connection and nothing else. There is no read driver to
-    // flip: the store is written and reconciled, and no feature reads it yet.
+    // flip: one store is written and reconciled, and the dashboard reads the same one.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
       : undefined;
+
+    // `23.14`. Null without ClickHouse, which the use-case answers as "not configured"
+    // rather than as a tenant that did nothing.
+    this.analytics = {
+      activity: new GetActivityTrendUseCase(
+        this.authorizer,
+        this.clickhouse ? new ClickHouseAnalyticsReader(this.clickhouse) : null,
+        this.clock,
+      ),
+    };
 
     // Its absence changes nothing about what is written: `JsonLogger` goes to stdout
     // either way.

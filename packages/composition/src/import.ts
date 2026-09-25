@@ -42,6 +42,7 @@ export {
   EventSubscriber,
   type ExportedObject,
   ExportOrganizationUseCase,
+  GetActivityTrendUseCase,
   GetConversationUseCase,
   GetNotificationPreferencesUseCase,
   GetPlatformPolicyUseCase,
@@ -230,6 +231,7 @@ export { ConflictError, NotFoundError } from "@loadbearing/errors";
 export {
   BullMqQueuePublisher,
   ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
   ClickHouseConnection,
   Database,
   DatabaseCluster,
