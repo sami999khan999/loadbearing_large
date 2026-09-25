@@ -23,6 +23,7 @@ export const nav = {
   "nav.documents": "Documents",
   "nav.messages": "Messages",
   "nav.notifications": "Notifications",
+  "nav.analytics": "Activity",
   "nav.platform": "Platform",
 
   // ── the home page ──

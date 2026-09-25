@@ -1,4 +1,5 @@
 import type { account } from "./en/account.js";
+import type { analytics } from "./en/analytics.js";
 import type { apikey } from "./en/apikey.js";
 import type { auth } from "./en/auth.js";
 import type { common } from "./en/common.js";
@@ -28,6 +29,7 @@ interface NamespaceShape {
   readonly document: typeof document;
   readonly messaging: typeof messaging;
   readonly notification: typeof notification;
+  readonly analytics: typeof analytics;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -47,6 +49,7 @@ export type ClientNamespace =
   | "messaging"
   | "notification"
   | "document"
+  | "analytics"
   | "platform";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
@@ -83,5 +86,6 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "document",
   "messaging",
   "notification",
+  "analytics",
   "platform",
 ];
