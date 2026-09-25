@@ -22,6 +22,11 @@ export class QueryKeys {
 
   // The bell's count is its own key rather than a field on the list: it is read on
   // every page and the list on one, so they cannot share a lifetime.
+  public static readonly analytics = {
+    all: () => ["analytics"] as const,
+    activity: (days: number) => ["analytics", "activity", days] as const,
+  };
+
   public static readonly notification = {
     all: () => ["notification"] as const,
     // The cursor is *not* in the key. It lives in the page data, and a key that carried
