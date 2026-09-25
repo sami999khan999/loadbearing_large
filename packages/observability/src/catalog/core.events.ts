@@ -117,6 +117,9 @@ export const coreEvents = {
   "analytics.projection.completed": { level: "debug" },
   "analytics.projection.failed": { level: "error" },
   "analytics.projection.lagged": { level: "warn" },
+  // A tenant with no directory row, passed over so every other tenant still projects —
+  // `23.21`. Error, because the row should not exist and somebody has to fix it.
+  "analytics.tenant.skipped": { level: "error" },
   // A tenant-month that left Postgres without reaching ClickHouse. Recorded rather than
   // blocking the drop: a forgotten switch costs a known hole, never an unbounded table.
   "analytics.projection.gap": { level: "warn" },

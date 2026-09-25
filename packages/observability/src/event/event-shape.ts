@@ -216,6 +216,9 @@ export interface EventShape {
     // On the success line, not only the warning one: a field that appears only when
     // something is wrong has no baseline to be wrong against.
     readonly lagSeconds: number;
+    // Tenants passed over for having no directory row. Zero on the success line too, so
+    // a dashboard has a baseline the day it is not.
+    readonly skipped: number;
     // True when the run stopped at its batch ceiling rather than because it caught up —
     // which separates "behind and closing" from "behind every run for a week".
     readonly capped: boolean;
@@ -233,6 +236,11 @@ export interface EventShape {
     // The threshold that fired, so the line explains itself without the reader having
     // to find the constant.
     readonly thresholdSeconds: number;
+  };
+  readonly "analytics.tenant.skipped": {
+    readonly organizationId: string;
+    // `project` or `reconcile`: both walk every tenant, and both skip the same way.
+    readonly job: string;
   };
   readonly "analytics.projection.gap": {
     readonly period: string;
