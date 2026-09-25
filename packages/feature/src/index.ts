@@ -16,6 +16,7 @@ export {
   TwoFactorSetup,
   type TwoFactorSetupProps,
 } from "./account/index.js";
+export { ActivityTrendPanel } from "./analytics/index.js";
 export {
   ApiKeyList,
   type ApiKeyListProps,
