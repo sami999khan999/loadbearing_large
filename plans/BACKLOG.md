@@ -29,13 +29,16 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 1 | `archive/PLAN.md` boxes, Phases 23–25 | 1 | 32 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
+| 10 | Code review of 2026-09-25 — [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md) | 49 | 0 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
 same numbers.
 
-**Nothing below can be closed by writing code today.** `24.7` and the triggers wait for a number
-no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
+**Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
+a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
+**Section 10 can, and it is the work**: forty-nine findings from the 2026-09-25 review, three of
+them security defects already shipped.
 
 ---
 
@@ -84,6 +87,26 @@ a feeling.
 **`max_locks_per_transaction` stays 1 024** until a node heads toward `24.7`'s ~1 800 tenants. Past
 that, one unpruned read of `notifications` at full retention exhausts the lock table. Nothing in the
 application issues one. — `PF.7`, `archive/DONE.md` §9
+
+---
+
+## 10. Code review of 2026-09-25 — forty-nine findings
+
+Every finding's body is in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), by ID, with its
+`file:line`, scenario, fix direction and how sure it is. It is that file's to hold the boxes, the
+way `archive/REVIEW.md` held the forty-five before. Tick them there, and move a section here when
+it closes. **Start with its "Read these first" table:**
+
+- [ ] `CR.1` **an admin can invite anyone as `owner`** — security, shipped
+- [ ] `CR.2` **a deactivated member's API keys keep working** — security, shipped
+- [ ] `CR.3` **a key can mint a permanent key** — security, shipped
+- [ ] `CR.13` **job retries last seconds**; a 40 s outage drops mail and events for good
+- [ ] `CR.14` **one down node stops every node after it** in the outbox, runway and digest passes
+- [ ] `CR.21` · `CR.22` **two cross-tenant scans run out of locks** at ~1 860 and ~5 800 tenants
+- [ ] `CR.37` · `CR.38` · `CR.39` **realtime**: streams die at 30 min, retry storms, and a
+  refetch per page per member per message
+- [ ] `CR.4`–`CR.12`, `CR.15`–`CR.20`, `CR.23`–`CR.36`, `CR.40`–`CR.49` — the rest, by section in
+  the review file
 
 ---
 
