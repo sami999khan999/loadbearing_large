@@ -34,6 +34,7 @@ export { ConversationEntity } from "@loadbearing/contracts";
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   ActiveSessionList,
+  ActivityTrendPanel,
   ApiKeyList,
   ArchivedNotificationList,
   ChangeEmailForm,
@@ -105,6 +106,7 @@ export {
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
 export {
+  AnalyticsQueries,
   ApiClientProvider,
   ApiKeyQueries,
   createQueryClient,

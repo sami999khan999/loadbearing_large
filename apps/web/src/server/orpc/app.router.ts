@@ -1,3 +1,4 @@
+import { AnalyticsRouter } from "./analytics.router.js";
 import { ApiKeyRouter } from "./api-key.router.js";
 import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
@@ -20,4 +21,5 @@ export const appRouter = {
   conversation: ConversationRouter.all,
   message: MessageRouter.all,
   platform: PlatformRouter.all,
+  analytics: AnalyticsRouter.all,
 };
