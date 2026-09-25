@@ -43,12 +43,12 @@ unchanged, and the changelog went with them. What is left here is the work.
 
 | Section | What | Open | Closed |
 |---|---|---|---|
-| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 2 | 31 |
+| 1 | `archive/PLAN.md` unchecked boxes, Phases 23–25 | 1 | 32 |
 | 2 | `archive/REVIEW.md` defects | 0 | 45 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
 | 5 | Verification owed — browser, manual, or a scale not run | 0 | 9 |
-| 6 | Conditional work — "reopen when" | 6 | — |
+| 6 | Conditional work — "reopen when" | 5 | — |
 | 7 | `archive/TODO.md` ledger rows | 0 | 3 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
 | 9 | Performance — the tenant/partition layer | 0 | 8 |
@@ -97,8 +97,9 @@ closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
 | `24.4` | the catalog, measured | zero catalog reads per warm routed write; nothing built |
 | `T-036` | the communication row | "Done when" narrowed, as decided |
 
-**Skipped: `23.14`**, the analytics reader. Its gate is not met and its first query is a product
-choice. See the entry.
+**`23.14` and `23.21` closed later the same day, decided with the user.** Doing `23.14`
+end to end found a sign-up regression from `24.2a`, and that is fixed too — see
+[`archive/DONE.md`](archive/DONE.md) §1.
 
 **What is left is not a session's to do.** `S.2` waits for real traffic. `S.3` waits for a node
 that is provisioned rather than a second container. Section 6 is triggers, none fired. The
@@ -106,7 +107,7 @@ whole-plan verification's reading pass was done on 2026-09-25 and is in section 
 
 ---
 
-## 1. `archive/PLAN.md` — the two open boxes
+## 1. `archive/PLAN.md` — the one open box
 
 All in Phases 23–25; Phase 26 moved out on 2026-09-22 and Phases 1–22 have no open box. Each line:
 what, where it stands, what it waits on, and the `archive/PLAN.md` line that holds the entry. Seven
@@ -119,24 +120,8 @@ of the original thirty-five closed on 2026-09-20 with the browser walk; `23.25`,
 found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
 [`archive/DONE.md`](archive/DONE.md) §1 with what each was measured against.
 
-- [ ] `23.14` **Bring back an analytics reader, with the first dashboard** `P3` `~8h`. Gated on
-  its own order: let the projection fill and reconcile for days first, then write the reader
-  against real data. Four decisions carry over (new port, read-only, resolved scope, ISO periods).
-  Step one is done **and this time it is running** — the container is up, `CLICKHOUSE_URL` is set,
-  and the projection has written rows rather than merely being able to (`S.2`). — `archive/PLAN.md:3586`
-  - **Skipped 2026-09-25, and not because of the store.** The order was ClickHouse, decided. Two
-    things block it, and neither is the kind a session should settle alone:
-    1. **The gate is not met.** On the machine this session ran on, ClickHouse held **242 rows
-       across 3 days**. Most of them are spec debris: `test.commit.*`, `test.kept.*`, and
-       `organization.created` for 73 integration tenants. The entry's order is "let it fill and
-       reconcile for days, *then* write the reader against real data", and there is none to write
-       it against.
-    2. **The first dashboard is a product choice.** "A dashboard with a real query" names no
-       question. Which aggregate the first screen answers — actions per day, members joined, time
-       to first message — decides the port's first method. A guessed one is the shape `5.12`
-       deleted for having no caller.
-  - **To unblock:** name the first dashboard's question, and run the worker somewhere it sees real
-    use for a few days. The four carried decisions stand.
+**Empty.** `23.14` closed on 2026-09-25, decided with the user — see
+[`archive/DONE.md`](archive/DONE.md) §1.
 
 ### Phase 24 — The physical split 📁
 
@@ -188,6 +173,9 @@ work `R.2` fixed. The file is 7 passed.
 ## 3. `archive/STUCK.md` — what a session could not do, and exactly why
 
 - [ ] `S.2` **`23.14`, the analytics reader, is gated on data that does not exist yet.**
+  - **Narrowed 2026-09-25.** The reader was built against seeded data, decided with the user, so
+    nothing waits on this any more. What is left is the check: run the worker on real traffic for
+    a few days, let the reconciliation come back clean, and look at `/analytics` against it.
   **Step one was not in the state this file recorded, and now is.** On 2026-09-20 the ClickHouse
   container was `Exited (137)` five days old and `CLICKHOUSE_URL` was commented out in `.env` —
   so the projection had been writing **nowhere**, and the wait for "a few days of data" had never
@@ -275,8 +263,6 @@ a feeling.
   500 ms; every page turn gunzips the whole tenant-month object today. — `archive/PLAN.md:2691`
 - `16.7` **`unreadCounts` pruning assertion** — reopen if the read changes; its floor is
   `last_read_at`, a correlated subquery. — `archive/PLAN.md:1235`
-- `23.14` **analytics reader** — when somebody wants an aggregate nobody precomputed. A driver
-  flag returns only with a second implementation. — `archive/PLAN.md:3592`
 - `24.1` **user delete as a maintenance job** — at a few thousand tenants on a node, under either
   option. — `archive/PLAN.md:3968`
 - **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
@@ -391,6 +377,8 @@ ports and the schema was behind. What was changed to run it:
 | `replica-e2e@example.test`, `platform_admin` | `users`, `memberships` in `loadbearing` | the throwaway admin `25.2` was flipped with; verified by SQL, not by mail |
 | `S3_COLD_STORAGE_CLASS=COLD`, `S3_COLD_TRANSITION_DAYS=30` | root `.env` | `25.3`. Harmless with `retention_policy` empty: the only rule is `export/`, which never transitions |
 | `cold-tier` profile up, `miniocolddata` volume, tier `COLD` on `minio` | compose | `25.3`'s tier |
+| `analytics-e2e@example.test`, owner of its personal organization `01a0d7aa-…` | `users`, `organizations`, `memberships` | `23.14`'s end-to-end owner. Its ClickHouse seed rows were deleted afterwards |
+| migration `0039` | both nodes | `analytics.activity.read` backfilled to 74 `owner` and 74 `admin` roles |
 | four `platform.replica.*` audit rows, switch back **off** | `activity_log`, `platform_policy` | the end-to-end check: on, off, on, off |
 
 Not left behind, and worth saying so: `platform_policy.projection_enabled` is `t` again, the two

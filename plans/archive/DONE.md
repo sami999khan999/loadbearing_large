@@ -22,6 +22,41 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
 
+- [x] `23.14` **An analytics reader, with the first dashboard** `done: 2026-09-25` — **decided
+  with the user the same day**: the first dashboard is *activity over time*, and it was built
+  against seeded data rather than waiting days for real traffic. `/analytics` shows a tenant's
+  events per UTC day and per action over the last 30 or 90 days, gated on a new org-scoped
+  `analytics.activity.read`. `owner` and `admin` hold it: the seed grants it, and migration
+  `0039` backfilled 74 of each. The four carried decisions hold, as built. `AnalyticsReader` is a
+  new port in `application/src/analytics/` with no write method. `GetActivityTrendUseCase` hands
+  it the principal's tenant. The days are ISO strings. `ClickHouseAnalyticsReader` reads
+  `FINAL`. Without ClickHouse the answer is `configured: false`, and the screen says so. There is
+  no driver flag. The screen is two tables rather than a chart, because `ui` has no chart
+  primitive and a table is what a chart needs beside it for a screen reader.
+  - **Proved at every layer.** A use case spec (4) covers the window arithmetic, which is whole
+    UTC days with today included. `analytics-reader.smoke.spec.ts` (2) runs on the live store,
+    fed by the real projector. It covers day boundaries at both edges, another tenant's rows, and
+    a redelivered row counted once; **with `FINAL` removed that row counts twice.** The panel
+    spec (4) covers the two tables, the period switch reaching the procedure, the
+    not-configured state and the empty state.
+  - **End to end on the running app, with seeded ClickHouse rows** that were deleted afterwards.
+    For the owner: 30 days returned 4 rows, and 90 days included a 60-day-old one. 7 days is a
+    400. A platform admin with no tenant key got a 403 from the API and `/forbidden` from the
+    page. The server-rendered page showed `Events: 4`, both tables, and the nav entry active.
+  - **What the wait was for still holds, and is `S.2`'s:** the projection and the nightly
+    reconciliation should run on real traffic for a few days. The reader can be checked against
+    that data then. It no longer has to wait for it.
+- [x] **Found while doing it: every sign-up failed on more than one node** `fixed: 2026-09-25` —
+  a defect `24.2a` introduced on 2026-09-24. With two nodes configured, `PgActivityLogger` asks
+  the directory where a catalog transaction's tenant lives. The founder writes the directory row
+  and then `organization.created` in one transaction. The resolver reads through its own pool,
+  cannot see the uncommitted row, and threw "No shard assignment". The sign-in that enrols a
+  personal organization returned 500. Single-node specs could not see it. **The fix:** a placement
+  already in scope for the tenant is the answer, and the founder records the audit row placed on
+  node 0, which is where it just put the tenant. `pg-organization.founder.spec.ts` gains a case on a
+  two-node cluster. It failed with the production error before the fix and passes after it. The
+  same sign-in then returned 200 on the live stack.
+
 - [x] `24.6` **Load test the routed paths at 10×** `done: 2026-09-25` — the write half, which
   `24.1` unblocked. `routed.smoke.spec.ts` gains "routed writes under load". Eight tenants, four
   per node. Each write is a placement read through the real Redis cache, then a routed
@@ -1065,6 +1100,7 @@ comparisons that carry weight are the ones inside one run, or ones far larger th
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-25 | @sami | **`23.14` and `23.21` decided with the user and built, and a sign-up defect found by doing it.** The first dashboard is *activity over time*, and it was built against seeded data rather than waiting for real traffic. An unplaceable tenant is now skipped and logged rather than failing the run. It is skipped only when the directory has no row; a catalog that cannot be asked still fails the run. **Walking the dashboard end to end found that every sign-up failed on a two-node stack**, a regression `24.2a` introduced a day earlier: the audit logger resolved an uncommitted directory row through another connection. It is fixed and proved on two nodes. One migration run failed once and succeeded on the retry. Its output was not captured, so its cause is not known. Also: `orphaned-tenants.spec.ts`'s `danglingConversations` case timed out once at 30 s in the full run and passed four times alone. It is a cross-tenant scan that runs close to its budget on this disk, and nothing changed today touches it. `S.2` and `S.3` remain, and neither can be closed in a session |
 | 2026-09-25 | @sami | **The 2026-09-24 list, worked through: nine closed, one skipped with its reasons.** `24.2b` first, because it was half built: a job now re-reads its placement at every transaction, and a live move shows the gap before the fix — a late job's write landed on the source. `24.3` added a streaming standby in compose and a read path that uses it only once it has caught up with the primary, so a lagging replica is a slower read and never a stale one. Removing that check made the first read after a write miss its row. `25.1` and `25.2` put the lag and the switch on `/platform/status`. Turning the switch on moved the projection's reads onto the standby (+42 scans vs +0). `25.3` gave the `cold/` prefixes a transition to a MinIO tier, and refuses `GLACIER` and `DEEP_ARCHIVE`, because a restore reads with `GetObject`. `24.6` ran the routed writes at 1× and 10×: 0 errors, and no row on the wrong node. `24.4` measured zero catalog reads per warm write and built nothing. `T-036` closed on its narrowed "done when", and the whole-plan verification ran both halves. **`23.14` was skipped**: ClickHouse held 242 rows over 3 days, mostly spec debris, and its first dashboard is a product choice. **Three things found on the way:** the checkout's `.env` predated the port renumbering and its database the last 104 commits. `mc ilm tier info` exits 0 for a missing tier. And a failing `toBe` on a `pg` pool ran the smoke suite out of heap. Nothing is pushed |
 | 2026-09-24 | @sami | **`24.2a` closed, `R.2`'s owed spec written, and work stopped at a clean point on request.** `24.2a` was filed with two options, and asking produced a third that beat both: a moved tenant's catalog audit row goes through node 0's outbox and is written on its own node by a relay. It is saved with the action, so nothing can be lost, and it lives in one place, so the runway, the archive and the projection all look where it is. The reclaim carries late rows before it drops node 0's copy, which retires the old rule that node 0's audit partition is never dropped. `R.2`'s last spec drains node 1's outbox from node 1 and is red on the catalog binding; running that red check drained node 0's real outbox with a relay that delivers nothing, so it was checked afterwards: nothing was pending and nothing was marked. `24.2b` was half built and **reverted rather than committed untested**; its entry records the design and what is left |
 | 2026-09-24 | @sami | **Section 9 closed, all eight, and `16.12` with it.** Measured twice at 100, 500 and 2 000 tenants, before and after. **Signup:** the two keys into `conversations` made their tables attach twelve times slower than their neighbours and took `SHARE ROW EXCLUSIVE` on `conversations` 2 227 times in twenty signups; dropped in `0037`, it is zero, and warm spares take the whole founding transaction from 126 ms to 21 ms. **The runway** is 35.6 s → 1.6 s at 2 000, one read and one transaction per page of 200. **The drop** runs a statement per table with no transaction, and its spec is red on the old code. **Three corrections, all found by measuring:** the first run's 2 000 row was taken without the keys, because the smoke's own migrate step applied `0037` mid-run; `PF.6`'s "no `Sort`" assertion was wrong, because the old query sorts too on tables this small, and what the `OR` rewrite actually loses is the index condition; and `PF.7`'s lock ceiling is ~1 800 tenants, not ~5 000, because a lock is per relation *and* per index. **Also closed here:** `24.2`'s work had been left uncommitted by the last session and was verified green and committed first, thirteen commits by layer. The four stale lines in `BACKLOG.md` are fixed: the preamble and `S.3` both said `24.1` was undecided, and `24.7`'s trigger is re-stated from the numbers |
