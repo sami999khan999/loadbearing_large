@@ -1,3 +1,4 @@
+import { AnalyticsProcedures } from "../analytics/index.js";
 import { ApiKeyProcedures } from "../apikey/index.js";
 import { DocumentProcedures } from "../document/index.js";
 import type { AnyContractRouter } from "../import.js";
@@ -20,6 +21,7 @@ export const contract = {
   message: MessageProcedures.all,
   realtime: RealtimeProcedures.all,
   platform: PlatformProcedures.all,
+  analytics: AnalyticsProcedures.all,
 } as const satisfies AnyContractRouter;
 
 export type AppContract = typeof contract;
