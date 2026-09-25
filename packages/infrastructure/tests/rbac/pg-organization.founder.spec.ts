@@ -2,10 +2,12 @@ import { Identifiers, type OrganizationId, type UserId } from "@loadbearing/cont
 import { SystemClock, Uuid } from "@loadbearing/core";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { CacheStore } from "../../src/import.js";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
+import { PgShardResolver } from "../../src/pg/repository/pg-shard.resolver.js";
 import {
   activityLog,
   memberships,
@@ -227,5 +229,74 @@ describe("PgOrganizationFounder", () => {
       .where(eq(organizations.id, organizationId));
 
     expect(rows).toHaveLength(0);
+  });
+});
+
+// The resolver's cache, in memory. The defect below is the resolver reading a directory
+// row through its own pool, so the cache only has to exist, not to be Redis.
+class MapCache extends CacheStore {
+  private readonly held = new Map<string, unknown>();
+
+  public override async get<T>(key: string): Promise<T | null> {
+    return (this.held.get(key) as T) ?? null;
+  }
+
+  public override async set<T>(key: string, value: T): Promise<void> {
+    this.held.set(key, value);
+  }
+
+  public override async setIfAbsent<T>(key: string, value: T): Promise<boolean> {
+    if (this.held.has(key)) return false;
+    this.held.set(key, value);
+    return true;
+  }
+
+  public override async delete(key: string): Promise<void> {
+    this.held.delete(key);
+  }
+
+  public override async deletePrefix(prefix: string): Promise<void> {
+    for (const key of [...this.held.keys()]) if (key.startsWith(prefix)) this.held.delete(key);
+  }
+}
+
+// **Found by signing up against the two-node stack, 2026-09-25.** On more than one node the
+// audit row asks where its tenant lives, and the resolver reads the directory through
+// ──
+// its own pool — which cannot see the row this uncommitted transaction just wrote. Every
+// signup failed with "No shard assignment". One physical database, indexed twice, is two.
+describe("PgOrganizationFounder on a cluster of more than one node", () => {
+  const twoNodes = () =>
+    DatabaseCluster.of(
+      [
+        { pooled: database, direct: database },
+        { pooled: database, direct: database },
+      ],
+      new PgShardResolver(
+        () => database,
+        () => new MapCache(),
+        () => new RecordingLogger(),
+      ),
+    );
+
+  it("founds a tenant and writes its audit row in the founding transaction", async () => {
+    const userId = await makeUser("Grace");
+    const scope = new TransactionScope();
+    const cluster = twoNodes();
+    const subject = new PgOrganizationFounder(
+      cluster,
+      scope,
+      shards,
+      new PgActivityLogger(cluster, scope, shards, new SystemClock()),
+      new RecordingLogger(),
+    );
+
+    const organizationId = await subject.found(userId, "Two nodes");
+
+    const audit = await database.client
+      .select({ action: activityLog.action })
+      .from(activityLog)
+      .where(eq(activityLog.organizationId, organizationId));
+    expect(audit).toEqual([{ action: "organization.created" }]);
   });
 });
