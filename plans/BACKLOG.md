@@ -48,7 +48,7 @@ unchanged, and the changelog went with them. What is left here is the work.
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 4 | Unfinished work buried inside ticked items | 0 | 6 |
 | 5 | Verification owed — browser, manual, or a scale not run | 0 | 9 |
-| 6 | Conditional work — "reopen when" | 7 | — |
+| 6 | Conditional work — "reopen when" | 6 | — |
 | 7 | `archive/TODO.md` ledger rows | 0 | 3 |
 | 8 | Doc housekeeping still owed | 0 | 6 |
 | 9 | Performance — the tenant/partition layer | 0 | 8 |
@@ -279,7 +279,6 @@ a feeling.
   flag returns only with a second implementation. — `archive/PLAN.md:3592`
 - `24.1` **user delete as a maintenance job** — at a few thousand tenants on a node, under either
   option. — `archive/PLAN.md:3968`
-- `23.21` **skip versus fail an unplaceable tenant** in the projection — left open on purpose. — `archive/PLAN.md:3832`
 - **Two policy-shaped constants** — the two-month runway and the thirty-day cold grace could move
   onto `platform_policy` in an afternoon if an operator asks. — `archive/PLAN.md:1745`
 
@@ -388,7 +387,7 @@ ports and the schema was behind. What was changed to run it:
 | `POSTGRES_REPLICA_PORT`, `DATABASE_REPLICA_URL` | root `.env` | `24.3`. **Leave it**: with the switch off, nothing reads through it but the status panel |
 | `pnpm db:migrate`, `pnpm db:seed` | both nodes | the schema was behind; the seed gave `platform_admin` `platform.replica.manage` |
 | `replica` profile up, `pgreplicadata` volume | compose | `24.3`'s standby. The primary was recreated once to take `hba_file` |
-| four leftover integration tenants placed on node 0 | `shard_assignments` | `other-…`, `drop-…` and two `pruning-…`, from 2026-09-19. Each aborted every projection run: `23.21`, still undecided |
+| four leftover integration tenants placed on node 0 | `shard_assignments` | `other-…`, `drop-…` and two `pruning-…`, from 2026-09-19. Each aborted every projection run. `23.21` is decided now, skip, so a new one is logged and passed over |
 | `replica-e2e@example.test`, `platform_admin` | `users`, `memberships` in `loadbearing` | the throwaway admin `25.2` was flipped with; verified by SQL, not by mail |
 | `S3_COLD_STORAGE_CLASS=COLD`, `S3_COLD_TRANSITION_DAYS=30` | root `.env` | `25.3`. Harmless with `retention_policy` empty: the only rule is `export/`, which never transitions |
 | `cold-tier` profile up, `miniocolddata` volume, tier `COLD` on `minio` | compose | `25.3`'s tier |
