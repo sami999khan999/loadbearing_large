@@ -7,6 +7,7 @@ ServerOnly.assert("@loadbearing/infrastructure");
 export { BullMqQueuePublisher } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";

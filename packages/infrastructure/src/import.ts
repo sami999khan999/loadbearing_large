@@ -32,11 +32,13 @@ export { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // ── @loadbearing/application ─────────────────────────────────────────────────
 export {
+  type ActivityCount,
   type ActivityLogger,
   type ActivityRecord,
   type ActivityReplayReader,
   ActivitySubject,
   type AnalyticsProjector,
+  type AnalyticsReader,
   type ApiKeyPage,
   type ApiKeyRecord,
   type ApiKeyRepository,

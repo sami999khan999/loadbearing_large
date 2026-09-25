@@ -225,7 +225,11 @@ tenant's row would sit where its runway, its archive and the projection never lo
 `activity.recorded` into node 0's outbox instead, in the same transaction, so the row is still saved
 with the action. The drain delivers it to `ActivityRelaySubscriber`, placed on the tenant, which
 writes it on the tenant's node with the event's id and time and `on conflict do nothing`. A tenant
-on node 0 is unchanged. The row arrives about a second later; with the worker down it waits in the
+on node 0 is unchanged. **A placement already in scope for the tenant is the answer, and the
+resolver is asked only without one.** The founder depends on that. Its directory row is uncommitted
+when it writes `organization.created`, the resolver reads through its own pool, and on two nodes
+every sign-up failed with "No shard assignment" until the founder placed the audit on node 0
+itself. That ran from `24.2a` on 2026-09-24 until it was found by signing up on 2026-09-25. The row arrives about a second later; with the worker down it waits in the
 outbox and is never dropped. The projection reads 30 s behind, so it sees the row. If the drain was
 down longer than that, the nightly reconciliation reports the gap.
 

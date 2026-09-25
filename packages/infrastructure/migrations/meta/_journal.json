@@ -274,6 +274,13 @@
       "when": 1790245708255,
       "tag": "0038_spare_tenants",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790322623825,
+      "tag": "0039_analytics_grants",
+      "breakpoints": true
     }
   ]
 }

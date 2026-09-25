@@ -55,6 +55,8 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       ...NOTIFICATION,
       ...MESSAGING,
       "messaging.conversation.manage",
+      // The tenant's own activity is an administrator's view, not a member's.
+      "analytics.activity.read",
     ],
   },
   {

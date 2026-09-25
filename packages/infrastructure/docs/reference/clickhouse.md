@@ -63,10 +63,21 @@ offending row.
 
 ---
 
-## One adapter, and it only writes
+## Two adapters: one writes, and one only reads
 
-`ClickHouseAnalyticsProjector` writes, and is reachable only from the worker's schedules. Nothing in
-a request path can reach ClickHouse at all.
+`ClickHouseAnalyticsProjector` writes, and is reachable only from the worker's schedules.
+`ClickHouseAnalyticsReader` only reads, and is what a request path reaches — `23.14`.
+
+**The reader came back with a caller this time.** `/analytics` shows a tenant what happened in it,
+per day and per action, over 30 or 90 days. `GetActivityTrendUseCase` asserts
+`analytics.activity.read`, which `owner` and `admin` hold, and hands the reader the principal's
+tenant. The four decisions the entry carried hold. It is a new port, `AnalyticsReader`, in
+`application/src/analytics/`. It has no write method. The tenant arrives resolved. Days are ISO
+`YYYY-MM-DD` in UTC. **It reads `FINAL`**, as the reconciliation does: the projection is
+at-least-once and the table is a `ReplacingMergeTree`, so an unmerged redelivery counts twice
+without it. `analytics-reader.smoke.spec.ts` proves that on the running store. Without ClickHouse
+the use case answers `configured: false`, and the screen says so rather than drawing an empty
+chart. There is still no driver flag: one implementation, and a flag comes back only with a second.
 
 There used to be a second adapter. `ClickHouseAnalyticsReader` answered two dashboard questions
 beside a Postgres twin, behind an `AnalyticsReader` port, with `ANALYTICS_DRIVER` choosing between
@@ -233,10 +244,10 @@ made.
 
 ## What is not wired, and is not meant to be
 
-**The policy is wired; the read driver is not.** `projection_policy` decides which actions reach
-this store and for how long, the screen edits it, the consumer honours it on both sides of the
-reconciliation, and the nightly job converges the TTL to it. What is still absent is a reader:
-the projection fills `activity_events` and the reconciliation checks it, and nothing queries it.
+**The policy is wired, and since `23.14` so is one reader.** `projection_policy` decides which
+actions reach this store and for how long. The screen edits it, the consumer honours it on both
+sides of the reconciliation, and the nightly job converges the TTL to it. The reader answers one
+question, activity over time, and nothing else. No rollup, no second store, no driver flag.
 
 That ordering is deliberate rather than an accident of what got built first. The policy is the
 part with a consequence that accumulates — an action excluded today is a gap that cannot be
