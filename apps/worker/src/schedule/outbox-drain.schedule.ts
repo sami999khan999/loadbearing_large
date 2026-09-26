@@ -27,7 +27,9 @@ export class OutboxDrainSchedule {
           // Ahead of the deliveries it creates. A backlog of `deliver` jobs must not
           // starve the drain, or the outbox grows while the worker looks busy.
           priority: 1,
-          removeOnComplete: 10,
+          // `true`, never a count: a count trims the queue's whole completed set every second,
+          // which was the delivery jobs' dedupe window shrinking to seconds.
+          removeOnComplete: true,
           removeOnFail: 100,
         },
       );

@@ -123,7 +123,9 @@ export class OutboxConsumer {
             priority: 10,
             // No `:` — BullMQ keys on this and rejects the job at publish time.
             jobId: `${subscriber}_${event.id}`,
-            attempts: 5,
+            // About three hours of doubling retries. The row is already marked published, so
+            // a delivery that runs out of attempts is only recoverable by replay.
+            attempts: 12,
             removeOnCompleteAgeSeconds: DELIVERY_RETENTION_SECONDS,
           },
         );

@@ -227,14 +227,21 @@ would still do its work again on every retry.
 drops the duplicates — which is why `removeOnCompleteAgeSeconds` on this queue asks for 24 hours
 rather than the default hour.
 
-**The window it actually gets is seconds, and that is not a bug to fix here.** BullMQ trims a
-queue's completed set on *every* completion, by whichever of age and count bites first. The
-publisher sets `count: 1_000`, and the drain's own repeat job — on this same queue, once a second —
-sets `removeOnComplete: 10`. So the set holds roughly the last ten completions, and the 24 hours
-never applies. **Nothing depends on it**: the subscribers are idempotent on `event.id`, which is a
-stated requirement rather than a hope, and the id dedupe is a cheap first line rather than the
-guarantee. Giving the drain a queue of its own would restore the long window; that is a decision
-with a cost, and it is filed rather than taken.
+**The window is the last thousand deliveries or 24 hours, whichever is shorter.** BullMQ trims a
+queue's completed set on every completion, by whichever of age and count bites first. It used to be
+seconds: the drain's own repeat job, on this same queue once a second, set `removeOnComplete: 10`,
+which trimmed the *shared* set to ten. It sets `true` now, which removes only itself. **Nothing
+depends on the window even so**: the subscribers are idempotent on `event.id`, which is a stated
+requirement rather than a hope, and the id dedupe is a cheap first line rather than the guarantee.
+
+**A delivery gets twelve attempts, doubling from five seconds — about three hours.** Its outbox row
+is already marked published, so a delivery that runs out is recoverable only by replay: it stays in
+the failed set for a week (`pnpm queue:replay event deliver`). Every other job defaults to eight,
+about ten minutes. Three from two seconds, the old default, gave up inside a Postgres failover.
+
+**A pass over every node goes on past a node that fails.** `Container.eachShard` catches each
+node's error, logs `shard.sweep.failed { node }`, runs the rest, and rethrows the first at the end so
+the job still fails and still retries. Before, node 2 down meant node 3's outbox was never drained.
 
 **An event nobody listens for still gets marked published.** Leaving it pending would make the
 outbox grow forever on a name whose subscriber was deleted.
@@ -268,14 +275,16 @@ that fires twice, or a fan-out that is redelivered after a crash, produces the s
 sends one morning's digest. The day comes from `container.clock` in UTC rather than from the job
 payload, so a retry covers the day it was for and not the day it ran.
 
-**The fan-out is capped at 5 000 tenants** and the emitted `notification.digest.completed` carries
-the unclipped count, so a deployment that has outgrown one page of tenants says so in a line rather
-than by quietly dropping the tail. Paging the fan-out itself is the fix when that line appears.
+**The fan-out pages each node's tenants from the catalog**, five hundred at a time, inside
+`container.eachShard`, and enqueues each page's digest jobs in one `addBulk`. It used to ask
+`notifications` which tenants had anything unread — one `SELECT DISTINCT` over every tenant's
+partitions, which locks two runway months per tenant and ran out of lock slots near 5 800 tenants.
+A tenant with nothing unread now costs its digest job one pruned query and no mail. There is no cap.
 
-`digestOrganizations` is asked **per node**, inside `container.eachShard`, because
-`notification_preferences` is routed: which tenants have anyone to write to is a question each node
-answers about the tenants it holds. The per-tenant `digest` job then places itself with
-`withShard`.
+**The digest itself is four queries and one enqueue per page of two hundred people**: the
+candidates, their addresses, their stored modes, and every one's unread rows at once through a
+window function. The window is the day before, half-open, so a row lands in one digest only. The
+per-tenant `digest` job places itself with `withShard`.
 
 ## Every cross-tenant pass loops the cluster, and the loop is over nodes
 
@@ -292,7 +301,7 @@ changes.
 | `OutboxConsumer.reportLag` | `oldestPendingAt`, per node | the line — one a run, from the **worst** node |
 | `MaintenanceConsumer.partitions` | the runway and the prune, per node | `retentionPolicies`, read once for the run |
 | `AnalyticsConsumer` project / reconcile | **per tenant**, not per node | the checkpoint: one ClickHouse, keyed by tenant |
-| `NotificationConsumer.fanOut` | `digestOrganizations`, per node | the queue, and the per-tenant `digest` job |
+| `NotificationConsumer.fanOut` | the catalog's tenants, per node, a page at a time | the queue, and the per-tenant `digest` job |
 
 **The projection is the one that loops tenants rather than nodes**, and that is not an
 inconsistency. The other four are physical — a partition, an outbox row and a `SKIP LOCKED` claim

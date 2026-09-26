@@ -7,7 +7,7 @@ import {
   OutboxConsumer,
 } from "../consumer/index.js";
 import { Env } from "../env.js";
-import type { Container, RedisConnection, Worker } from "../import.js";
+import { type Container, QueueName, type RedisConnection, type Worker } from "../import.js";
 import {
   CleanupSchedule,
   DigestSchedule,
@@ -115,11 +115,11 @@ export class WorkerBootstrap {
   // Off the workers that actually started, never the consumers in the tree: without a
   // ClickHouse config the analytics consumer is not running and must not be counted.
   private warnIfOversubscribed(): void {
-    // `?? 1` is BullMQ's own default, and every consumer here passes a number anyway.
-    const concurrency = this.workers.reduce(
-      (sum, worker) => sum + (worker.opts.concurrency ?? 1),
-      0,
-    );
+    // `?? 1` is BullMQ's own default. Mail is left out: a send holds an SMTP socket, never
+    // a database connection, and counting it made the defaults sum to the pool exactly.
+    const concurrency = this.workers
+      .filter((worker) => worker.name !== QueueName.MAIL)
+      .reduce((sum, worker) => sum + (worker.opts.concurrency ?? 1), 0);
     const poolMax = Env.databasePoolMax;
     if (concurrency <= poolMax) return;
 
