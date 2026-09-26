@@ -20,8 +20,6 @@ export class QueryKeys {
     sessions: () => ["account", "session", "list"] as const,
   };
 
-  // The bell's count is its own key rather than a field on the list: it is read on
-  // every page and the list on one, so they cannot share a lifetime.
   public static readonly analytics = {
     all: () => ["analytics"] as const,
     activity: (days: number) => ["analytics", "activity", days] as const,
@@ -32,8 +30,12 @@ export class QueryKeys {
     // The cursor is *not* in the key. It lives in the page data, and a key that carried
     // it would make every page a separate cache entry nothing could invalidate together.
     list: (params: unknown) => ["notification", "list", params] as const,
+    // Every list at once, whatever its filter: what a new notification can change.
+    lists: () => ["notification", "list"] as const,
     archived: (params: unknown) => ["notification", "archived", params] as const,
     archivedMonths: () => ["notification", "archived", "month"] as const,
+    // The bell's count is its own key rather than a field on the list: it is read on
+    // every page and the list on one, so they cannot share a lifetime.
     unreadCount: () => ["notification", "unreadCount"] as const,
     preferences: () => ["notification", "preferences"] as const,
   };
@@ -43,6 +45,7 @@ export class QueryKeys {
   public static readonly conversation = {
     all: () => ["conversation"] as const,
     list: (params: unknown) => ["conversation", "list", params] as const,
+    lists: () => ["conversation", "list"] as const,
     get: (conversationId: string) => ["conversation", "get", conversationId] as const,
   };
 

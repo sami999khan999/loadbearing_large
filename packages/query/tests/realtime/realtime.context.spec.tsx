@@ -1,5 +1,6 @@
 import type { ApiClient } from "@loadbearing/api-client";
 import type { RealtimeMessage } from "@loadbearing/contracts";
+import { UnauthorizedError } from "@loadbearing/errors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -68,7 +69,7 @@ describe("RealtimeProvider", () => {
     const { invalidate } = mount(clientYielding([frame("notification.created")]));
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.notification.all() }),
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.notification.unreadCount() }),
     );
   });
 
@@ -80,7 +81,7 @@ describe("RealtimeProvider", () => {
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.member.all() });
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.notification.all() });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.conversation.all() });
     });
   });
 
@@ -90,8 +91,8 @@ describe("RealtimeProvider", () => {
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("on"));
   });
 
-  // A stream that fails to open is the retry plugin's business, not a rendered error:
-  // the tab keeps working and refetches on focus meanwhile.
+  // A stream that fails to open is retried with backoff, never a rendered error: the tab
+  // keeps working meanwhile.
   it("stays mounted and disconnected when the stream cannot open", async () => {
     const stream = vi.fn(() => Promise.reject(new Error("UNAVAILABLE")));
     const { view } = mount({ realtime: { stream } } as unknown as ApiClient);
@@ -104,24 +105,24 @@ describe("RealtimeProvider", () => {
     expect(view.getByTestId("state")).toBeTruthy();
   });
 
-  // The transition the case above cannot show: connected, then the stream drops. Without
-  // it "disconnected" is indistinguishable from "never connected".
-  it("returns to disconnected when an open stream ends", async () => {
+  // The transition the case above cannot show: connected, then the stream ends. It is
+  // reopened, which is `CR.37`; here the reopen is refused, so the tab settles on "off".
+  it("reopens a stream that ended, and stops when the reopen is refused", async () => {
     let end: (() => void) | undefined;
-    const client = {
-      realtime: {
-        stream: () =>
-          Promise.resolve(
-            (async function* (): AsyncGenerator<RealtimeMessage> {
-              await new Promise<void>((resolve) => {
-                end = resolve;
-              });
-            })(),
-          ),
-      },
-    } as unknown as ApiClient;
+    const stream = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          (async function* (): AsyncGenerator<RealtimeMessage> {
+            await new Promise<void>((resolve) => {
+              end = resolve;
+            });
+          })(),
+        ),
+      )
+      .mockImplementation(() => Promise.reject(new UnauthorizedError()));
 
-    const { view } = mount(client);
+    const { view } = mount({ realtime: { stream } } as unknown as ApiClient);
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("on"));
 
     await act(async () => {
@@ -129,7 +130,11 @@ describe("RealtimeProvider", () => {
       await Promise.resolve();
     });
 
+    await waitFor(() => expect(stream).toHaveBeenCalledTimes(2), { timeout: 3_000 });
     await waitFor(() => expect(view.getByTestId("state").textContent).toBe("off"));
+    // Signed out is an answer: nothing asks again.
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(stream).toHaveBeenCalledTimes(2);
   });
   // The server builds the channel from the principal when the stream opens, so a switch
   // that does not reopen leaves the tab reading the tenant it just left.

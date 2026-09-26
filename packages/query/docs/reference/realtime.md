@@ -1,6 +1,6 @@
 ---
 title: Realtime
-description: One stream per tab, a total routing table, and why every frame invalidates rather than patches — including what a resync is and why there is no replay.
+description: One stream per tab, a total routing table, why every frame refetches rather than patches, how a burst is coalesced, and how a stream reopens — including what a resync is and why there is no replay.
 ---
 
 # Realtime
@@ -8,19 +8,37 @@ description: One stream per tab, a total routing table, and why every frame inva
 `RealtimeProvider` opens one server-sent stream per tab and routes each frame to a cache
 invalidation. That is the whole of the client half, and each of the three nouns in it is a decision.
 
-## Invalidate, never patch
+## Refetch, never patch from a payload
 
-A frame says *what changed*, not what it changed to. `RealtimeRoutes` maps an event name to an
-`invalidateQueries` call and nothing else — no `setQueryData`, no payload read.
+A frame says *what changed*, not what it changed to. `RealtimeRoutes` maps an event name to the
+query keys to refetch and nothing else. A frame's `payload` carries ids, and ids only narrow
+**which** keys: `conversationId` turns "every conversation" into "the lists and this one", and
+`messageId` lets the client drop the second copy of a send.
 
 The alternative is tempting and wrong. A frame carrying enough to patch the cache carries a copy of
 the server's shaping rules: which fields the list returns, how it sorts, what the DTO omits. That
 copy drifts, and it drifts silently, because a patched cache looks right until the next refetch
-replaces it with something different. Invalidating costs one request and cannot be wrong.
+replaces it with something different.
+
+**Splicing a page the server just returned is not patching.** A send answers with
+`MessagingQueries.refreshNewest`: fetch the newest page once and splice it into page 0, replacing
+an optimistic row by its `clientId`. The server shaped every row in it. If the fresh page does not
+overlap the cached one, more than a page arrived and the cache starts again from the fresh page.
+What it replaces is refetching every loaded page, for every member, on every message.
 
 It also means a frame needs no permission check on arrival. The refetch it triggers goes through the
 same procedure, the same `principalMiddleware` and the same permission as any other read, so a frame
 about something you may not see produces a request that returns what you may see.
+
+## A burst is two refetches, not twenty
+
+`RealtimeRefetch` is single-flight per key with one trailing run, at least a second apart, and only
+for queries a screen is showing. A busy room sends frames faster than a page loads; the first frame
+refetches now, every frame that lands meanwhile collapses into one more refetch after it. One
+instance per stream, disposed with it.
+
+Every send arrives twice — the request's fast-path frame and the outbox's durable one — and
+`useConversationStream` remembers the last 256 `name:messageId` keys, so the second is dropped.
 
 ## The table is total, and the resync sweep is derived from it
 
@@ -29,8 +47,8 @@ here rather than arriving at runtime and doing nothing. `RealtimeRoutes.resync` 
 rather than a second list, which is what stops the two drifting the first time somebody adds a route
 and forgets the sweep.
 
-**A `resync` invalidates everything the table names.** The frame carries no name — that is the point
-of it: it means frames were lost, and any of them could have been any name.
+**A `resync` refetches everything the table names, with no ids.** The frame carries no name —
+that is the point of it: it means frames were lost, and any of them could have been any name.
 
 ## Why there is no replay
 
@@ -56,16 +74,31 @@ is already open.
 **Not during SSR.** The effect returns early when there is no `window`. A stream opened on the server
 holds a request open for the life of a render that has already finished.
 
-## Retry is opted into, once
+## Reconnecting is `RealtimeStream`'s, not the retry plugin's
 
 `ClientRetryPlugin` is on the link with **no default**, so `retry` is 0 for every call — a mutation
-that retried itself would submit twice, and a `FORBIDDEN` retried with backoff turns an instant
-answer into a three-second wait for the same one.
+that retried itself would submit twice. The plugin only reconnects on a throw, and a stream that
+reaches its maximum age ends **cleanly**, so a tab left open went silent after thirty minutes.
 
-The stream opts in at its call site with `context: { retry: Number.POSITIVE_INFINITY }`. Its delay
-comes from the plugin's own default, `lastEventRetry ?? 2000`, which reads the `retry` the server
-wrote with `withEventMeta` — so the reconnect interval is the server's to change.
+`RealtimeStream.run` is the one loop both streams use:
 
-A stream that cannot open is not a rendered error. `connected` goes false, the plugin keeps trying,
-and the tab keeps working on `staleTime` and refetch-on-focus, which is exactly how it worked before
-any of this existed.
+- **A clean end** — the server's maximum age, or its shutdown drain — reopens within a second,
+  sending `lastEventId`, so the server answers `resync` and the tab refetches what it shows. With
+  no frame seen yet, any valid id does: the server only reads that one was sent.
+- **An error the catalog calls expected and not retryable** — signed out, forbidden, gone — stops.
+  Asking again every few seconds gets the same answer and costs a principal resolution each time.
+- **Anything else** backs off with full jitter, doubling from one second to thirty, never under
+  thirty after `RATE_LIMITED`. A stream that stayed up a minute starts again from one second.
+
+The jitter is the point. A deploy drops every tab at once; without it they all come back in the
+same instant, which is a load test nobody scheduled.
+
+A stream that cannot open is not a rendered error. `connected` goes false, the loop keeps trying,
+and the tab keeps working on `staleTime`, which is exactly how it worked before any of this existed.
+
+## The streams are held by their own process
+
+Both streams are `realtime.*` procedures, and `ApiClient` sends that namespace to `/api/realtime`
+— the stream process, `apps/realtime`, behind the web app's own origin. Nothing in this package
+knows that: the hooks call `client.realtime.stream` and `client.realtime.conversation`, and where
+the request goes is the transport's business. See `apps/realtime/docs/index.md`.

@@ -1,15 +1,19 @@
 import {
   type ApiClient,
   createContext,
+  type QueryKey,
   type ReactNode,
   type RealtimeMessage,
   useContext,
   useEffect,
+  useMemo,
   useQueryClient,
   useRef,
   useState,
 } from "../import.js";
+import { RealtimeRefetch } from "./realtime-refetch.js";
 import { RealtimeRoutes } from "./realtime-route.js";
+import { RealtimeStream } from "./realtime-stream.js";
 
 export interface RealtimeState {
   readonly connected: boolean;
@@ -49,46 +53,37 @@ export function RealtimeProvider({
     if (organizationId === null) return;
 
     const controller = new AbortController();
-    let cancelled = false;
+    const refetch = new RealtimeRefetch(cache.current);
+    const request = (queryKey: QueryKey) => refetch.request(queryKey);
 
-    const run = async () => {
-      // Infinite retries, opted in here. The plugin's default is 0, which is what keeps
-      // every ordinary call from retrying itself.
-      const stream = await client.realtime.stream(undefined, {
-        signal: controller.signal,
-        context: { retry: Number.POSITIVE_INFINITY },
-      });
-
-      setConnected(true);
-
-      for await (const message of stream) {
-        if (cancelled) break;
+    void RealtimeStream.run<RealtimeMessage>({
+      open: (signal, lastEventId) => client.realtime.stream(undefined, { signal, lastEventId }),
+      onConnected: (value) => {
+        if (!controller.signal.aborted) setConnected(value);
+      },
+      onFrame: (message) => {
         // A resync means frames were lost, so everything the table names is suspect. A
         // typing frame invalidates nothing and expires on its own — it goes to listeners.
-        if (message.kind === "resync") RealtimeRoutes.resync(cache.current);
-        else if (message.kind === "event") RealtimeRoutes.apply(cache.current, message.name);
+        if (message.kind === "resync") RealtimeRoutes.resync(request);
+        else if (message.kind === "event")
+          RealtimeRoutes.apply(request, message.name, message.payload);
 
         for (const listener of listeners) listener(message);
-      }
-    };
-
-    run()
-      .catch(() => {
-        // The retry plugin owns reconnection. Reaching here means it gave up or the
-        // component unmounted, and neither is something to surface as an error state.
-      })
-      .finally(() => {
-        if (!cancelled) setConnected(false);
-      });
+      },
+      signal: controller.signal,
+    });
 
     return () => {
-      cancelled = true;
       setConnected(false);
+      refetch.dispose();
       controller.abort();
     };
   }, [client, organizationId]);
 
-  return <RealtimeContext.Provider value={{ connected }}>{children}</RealtimeContext.Provider>;
+  // Memoised, or every render hands each consumer a new object and re-renders all of them.
+  const value = useMemo(() => ({ connected }), [connected]);
+
+  return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;
 }
 
 export function useRealtime(): RealtimeState {

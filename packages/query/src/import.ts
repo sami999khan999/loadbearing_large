@@ -99,4 +99,12 @@ export {
 } from "@tanstack/react-query";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
+export {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
