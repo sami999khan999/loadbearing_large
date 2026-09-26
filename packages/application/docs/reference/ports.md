@@ -274,10 +274,11 @@ would silently never run.
 
 ## `RealtimePublisher` is fire-and-forget, and says so
 
-A frame published to a channel nobody is listening on is gone. That is not a defect to be fixed with
-a buffer — it is why the client refetches what it subscribes to rather than trusting a replay, and
-why a reconnect yields a `resync` frame rather than a gap fill. Pub/sub cannot replay, and a contract
-that pretended otherwise would be a lie the first time a tab slept.
+A frame published to a channel nobody is listening on is kept only as long as the adapter's
+replay log keeps it — the last two hundred per channel, for an hour (`26.5`). A resume inside that
+is replayed what it missed; one outside it is handed a `resync` and refetches what it subscribes
+to. The `resync` variant stays in the contract because the log is short by design, and a contract
+that promised a full replay would be a lie the first time a tab slept for a day.
 
 Channels are **tenant-leading, always**: `org:<organizationId>:user:<userId>`. Sharded pub/sub
 (`SPUBLISH`), Redis Streams and a broker partitioner can all key on a prefix, and none of them can

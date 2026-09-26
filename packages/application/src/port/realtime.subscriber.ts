@@ -5,10 +5,13 @@ export interface SubscribeOptions {
   // Whose stream this is, for the per-person cap: the user channel of the principal that
   // opened it. Without it only user channels count, and conversation streams go uncapped.
   readonly owner?: RealtimeChannel;
+  // The last frame id the client saw, on a resume. What came after it is replayed when the
+  // adapter still holds it, and a `resync` says it does not — `26.5`.
+  readonly after?: string;
 }
 
-// The stream ends when `signal` aborts or the maximum age elapses, and it never buffers
-// history: what a reconnecting client missed is gone, so it refetches instead.
+// The stream ends when `signal` aborts or the maximum age elapses. A resume replays what
+// the adapter still holds and resyncs past it; a first open replays nothing.
 export abstract class RealtimeSubscriber {
   public abstract subscribe(
     channels: readonly RealtimeChannel[],
