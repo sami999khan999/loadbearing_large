@@ -39,6 +39,7 @@ export {
   type TenantExport,
 } from "./partition-archive.gateway.js";
 export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
+export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber, type SubscribeOptions } from "./realtime.subscriber.js";
 export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";

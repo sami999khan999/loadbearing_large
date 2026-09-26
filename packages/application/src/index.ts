@@ -257,6 +257,7 @@ export {
   type ProjectionGap,
   type QueuedJob,
   QueuePublisher,
+  RateLimitStore,
   RealtimePublisher,
   RealtimeSubscriber,
   type RelayedActivity,

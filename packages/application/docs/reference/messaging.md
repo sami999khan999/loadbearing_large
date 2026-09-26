@@ -20,6 +20,18 @@ caller has a member row — and it is what send, edit, delete, list, mark-read a
 it. Loading every member to answer "is this person in the room" cost a 5 000-member channel five
 thousand rows on every send.
 
+**A conversation stream asks `WatchConversationUseCase`**, which is `assertParticipant` behind the
+read permission, when it opens and every minute it stays open (`CR.4`). It used to open with
+`getConversation`, which loads the roster, the unread count and every name.
+
+**The list carries a sample of each row's members, not the roster** (`CR.26`). A row needs a name —
+an untitled channel is named after someone in it, a direct conversation after the other person —
+and a page of twenty channels of five thousand members was a hundred thousand member rows. The list
+brings at most five per conversation, the reader always among them, read off
+`conversation_members_uq` with a `limit` per conversation. A direct conversation has two members, so
+it always comes back whole. `conversation.get` still returns the whole roster, because that page
+names every author and every person typing.
+
 The two are different questions and giving them one mechanism is the way into a stranger's DM.
 That is why the check is a shared object rather than a line copied into thirteen use-cases: a
 copy that got missed would be silent, and it would be silent in the direction that leaks.
