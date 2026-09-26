@@ -28,7 +28,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 1 | `archive/PLAN.md` boxes, Phases 23–25 | 1 | 32 |
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
-| 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 3 | 46 |
+| 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 2 | 7 |
 
@@ -38,7 +38,7 @@ same numbers.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
-**Section 10 is down to three narrowed remainders** of the 2026-09-25 review; the other forty-six,
+**Section 10 is down to two narrowed remainders** of the 2026-09-25 review; the other forty-seven,
 the shipped security defects among them, are closed. **Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Section 12 is measurement and hand checks** a session without a person at the browser cannot do.
@@ -95,14 +95,10 @@ application issues one. — `PF.7`, `archive/DONE.md` §9
 
 ## 10. Code review of 2026-09-25 — what is left of it
 
-Forty-six of the forty-nine findings are closed and in [`archive/DONE.md`](archive/DONE.md) §10,
-each with its proof. These three were fixed in their main part and each keeps a smaller one; the
+Forty-seven of the forty-nine findings are closed and in [`archive/DONE.md`](archive/DONE.md) §10,
+each with its proof. These two were fixed in their main part and each keeps a smaller one; the
 bodies are in [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) at the line given.
 
-- [~] `CR.16` **The archived-notifications page still reads a tenant-month whole.** Restore and
-  re-projection stream now, verified, a batch at a time. The page is the one reader left holding a
-  month in memory: capped at 50 MB compressed, on the request path, to filter one user's rows.
-  The fix direction was a cached per-user slice. — `archive/REVIEW-2026-09-25.md:134`
 - [~] `CR.20` **A caught-up tenant still costs the projection three round trips.** The run now
   rotates its start, passes a failing tenant and stops paging once its budget is spent, so no
   tenant starves. What is left is that a run is O(tenants) for tenants with nothing to project.

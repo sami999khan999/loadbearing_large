@@ -1103,8 +1103,9 @@ comparisons that carry weight are the ones inside one run, or ones far larger th
 Bodies in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), at the line each backlog entry gave.
 Twenty closed with the communication performance plan, pushed as `14d49db..45633e6` and listed
 in that plan's changelog; twenty-six more closed on 2026-09-26 in the per-layer commits after
-`e265714`, three of them the rest of what the plan had closed in part. Three stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.16`,
-`CR.20` and `CR.33`. **Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
+`e265714`, three of them the rest of what the plan had closed in part, and `CR.16` later that day.
+Two stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.20` and `CR.33`.
+**Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
 unless it says otherwise.
 
 ### 10.A Security and tenant isolation
@@ -1167,6 +1168,11 @@ unless it says otherwise.
   months: detach-pending children are finalized, standalone month tables attached again, and each
   one is a `cold.partition.recovered` line. `pg-partition-archive.gateway.spec.ts` recovers a
   detached month, archives it, and leaves a `_restore` scratch table alone.
+- [x] `CR.16` **Cold restore and re-projection loaded a whole month into memory**
+  `done: 2026-09-26` — restore streams into its scratch table, hashing and counting as it goes and
+  dropping the table on a mismatch; re-projection reads `ColdArchiveReader.batches`, verified in a
+  first pass; and the archived-notifications page keeps only the page it returns, verified before
+  it returns. `s3-cold-archive.reader.spec.ts` feeds the object three bytes a chunk.
 - [x] `CR.17` **One failed boot run switched off the boot runway** `done: 2026-09-26` —
   `removeOnFail: true` on `partitions-boot`.
 - [x] `CR.18` **Fixed job ids swallowed repeat admin requests** `done: 2026-09-26` — the four
