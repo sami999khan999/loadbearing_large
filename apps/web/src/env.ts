@@ -120,6 +120,10 @@ const Schema = z
     ENV: z.string().default("development"),
 
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+
+    // srvx's own variable, in seconds: how long Nitro's Node server lets in-flight requests
+    // finish after SIGTERM. Read here so the container is disposed only once that is over.
+    SERVER_SHUTDOWN_TIMEOUT: z.coerce.number().int().positive().default(5),
   })
   // Three cross-field rules, and each earns the exception: `bootstrap` with no slug
   // enrols nobody, ClickHouse's defaults cannot reach its container, a tier needs both keys.
@@ -227,6 +231,11 @@ export class Env {
   // has to decide whether to render a Google button and cannot see this schema.
   public static get googleEnabled(): boolean {
     return Boolean(Env.parsed.GOOGLE_CLIENT_ID && Env.parsed.GOOGLE_CLIENT_SECRET);
+  }
+
+  // srvx's window and a second more, so the last request it let finish has returned.
+  public static get shutdownGraceMs(): number {
+    return (Env.parsed.SERVER_SHUTDOWN_TIMEOUT + 1) * 1_000;
   }
 
   // The boundary where environment becomes `ContainerConfig` (17).
