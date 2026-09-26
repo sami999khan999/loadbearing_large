@@ -1,6 +1,6 @@
 ---
 title: Realtime
-description: One stream per tab, a total routing table, why every frame refetches rather than patches, how a burst is coalesced, and how a stream reopens — including what a resync is and why there is no replay.
+description: One stream per tab, a total routing table, why every frame refetches rather than patches, how a burst is coalesced, and how a stream reopens — including the short replay and the resync past it.
 ---
 
 # Realtime
@@ -50,12 +50,14 @@ and forgets the sweep.
 **A `resync` refetches everything the table names, with no ids.** The frame carries no name —
 that is the point of it: it means frames were lost, and any of them could have been any name.
 
-## Why there is no replay
+## The replay is short, and the resync is what lies past it
 
-Redis pub/sub does not have one. A client that reconnects with `Last-Event-ID` gets a `resync` and
-refetches; it never gets the frames it missed. Saying so in the contract, as a wire variant, is what
-keeps every reader honest — a transport that pretended to replay would be a lie the first time a
-laptop lid closed.
+A client that reconnects with `Last-Event-ID` is replayed the frames it missed, if the server's log
+still holds the last one it saw — about two hundred frames per channel, kept for an hour
+(`26.5`). Past that it gets a `resync` and refetches. The client does nothing different for either:
+a replayed frame routes like a live one, and a `resync` walks the table. Saying so in the contract,
+as a wire variant, is what keeps every reader honest — a transport that promised a full replay
+would be a lie the first time a laptop lid closed overnight.
 
 That is also why a frame is safe to lose. Everything the stream carries is an invalidation of
 something the client can fetch, so the worst case of a dropped frame is data as stale as it would
@@ -83,8 +85,8 @@ reaches its maximum age ends **cleanly**, so a tab left open went silent after t
 `RealtimeStream.run` is the one loop both streams use:
 
 - **A clean end** — the server's maximum age, or its shutdown drain — reopens within a second,
-  sending `lastEventId`, so the server answers `resync` and the tab refetches what it shows. With
-  no frame seen yet, any valid id does: the server only reads that one was sent.
+  sending `lastEventId`, so the server replays what came after it, or answers `resync` when its log
+  no longer reaches back. With no frame seen yet the id matches nothing, and a `resync` is right.
 - **An error the catalog calls expected and not retryable** — signed out, forbidden, gone — stops.
   Asking again every few seconds gets the same answer and costs a principal resolution each time.
 - **Anything else** backs off with full jitter, doubling from one second to thirty, never under
