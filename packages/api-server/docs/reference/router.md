@@ -7,15 +7,42 @@ description: The authed chain's order, why a stream is wrapped once for the shar
 
 ## `authed`, in order
 
-`implement(contract)` with four middlewares, and the order is the design:
+`implement(contract)` with five middlewares, and the order is the design:
 
 1. **Correlation** first, so a failure to resolve a principal is already correlated.
 2. **Errors** second, so every failure after it — including the principal's — is logged once and
    leaves as the wire envelope, with a `traceId` and a request-scoped logger to hand.
 3. **Principal** third. It fails **closed**: a procedure with no permission mapping is denied.
-4. **Shard** last, because the key comes off the principal.
+4. **Rate limit** fourth, because the count is per principal.
+5. **Shard** last, because the key comes off the principal.
 
 A router builds on `authed` and cannot forget any of them.
+
+## The rate limit names its procedures
+
+Until `CR.6` nothing on this surface was limited but the stream cap. `member.invite` and
+`resendInvitation` could mail any address from the product's domain as fast as a script could call
+them, and `document.search` and `document.index` are each a paid embedding call. Better Auth limits
+`/api/auth/*` and nothing else.
+
+`RateLimitPolicy` lists the procedures that cost someone something, each with a limit and a window:
+
+| Procedure | Limit |
+|---|---|
+| `member.invite`, `member.resendInvitation` | 30 an hour |
+| `document.search` | 60 a minute |
+| `document.index`, `conversation.create` | 30 a minute |
+| `message.send` | 60 a minute |
+
+The count is per principal and procedure — `rate:<procedure>:<organization>:<user>` — in a fixed
+window in the **cache** Redis, `SET NX EX` then `INCR` in one `MULTI`. Past the limit the call is a
+`RATE_LIMITED`, a 429, and the catalog marks it retryable.
+
+**There is no default for every other path**, deliberately. A limit on everything is a Redis round
+trip on every request to protect procedures that cost nothing; this is one only on the six that do.
+A spec asserts every name in the policy is a real procedure, because a limit keyed on a renamed path
+limits nothing and says nothing. **And the limit fails open**: a counter that cannot be reached lets
+the call through, since a cache blip that refused every invitation is an outage the limit caused.
 
 ## A stream is wrapped twice
 

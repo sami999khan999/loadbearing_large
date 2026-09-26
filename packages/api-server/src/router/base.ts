@@ -11,10 +11,12 @@ import {
   os,
   type Principal,
   ProcedurePermissions,
+  RateLimitedError,
   type TraceId,
   UnauthorizedError,
 } from "../import.js";
 import { ErrorInterceptor } from "./error.interceptor.js";
+import { RateLimitPolicy } from "./rate-limit.policy.js";
 
 // Initial context: environment-shaped, injected once by the adapter.
 export const base = os.$context<{ container: Container; headers: Headers }>();
@@ -43,6 +45,24 @@ export const principalMiddleware = base.middleware(async ({ context, next, path 
 
   return next({ context: { principal } });
 });
+
+// After `principalMiddleware`: the count is per principal and procedure, so one person
+// hammering one path is refused and nobody else notices (`CR.6`).
+export const rateLimitMiddleware = os
+  .$context<{ container: Container; principal: Principal }>()
+  .middleware(async ({ context, next, path }) => {
+    const procedure = path.join(".");
+    const policy = RateLimitPolicy.for(procedure);
+    if (!policy) return next();
+
+    const { organizationId, userId } = context.principal;
+    const key = `rate:${procedure}:${organizationId}:${userId}`;
+    // Open when the counter is down: a cache blip must not refuse every limited call.
+    const count = await context.container.rateLimits.hit(key, policy.windowSeconds).catch(() => 0);
+    if (count > policy.limit) throw new RateLimitedError(procedure);
+
+    return next();
+  });
 
 // After `principalMiddleware`, because the key comes off the principal. One resolve per
 // request, which is what lets every repository read its pool synchronously.
@@ -157,4 +177,5 @@ export const authed = implement(contract)
   .use(correlationMiddleware)
   .use(errorMiddleware)
   .use(principalMiddleware)
+  .use(rateLimitMiddleware)
   .use(shardMiddleware);

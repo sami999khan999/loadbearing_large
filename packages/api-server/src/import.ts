@@ -25,6 +25,7 @@ export {
   ErrorNormalizer,
   ForbiddenError,
   HTTP_STATUS,
+  RateLimitedError,
   UnauthorizedError,
 } from "@loadbearing/errors";
 

@@ -4,6 +4,7 @@ export {
   correlationMiddleware,
   errorMiddleware,
   principalMiddleware,
+  rateLimitMiddleware,
   shardMiddleware,
 } from "./base.js";
 export { ErrorInterceptor } from "./error.interceptor.js";

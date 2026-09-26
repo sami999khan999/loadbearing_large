@@ -6,5 +6,6 @@ export {
   errorMiddleware,
   principalMiddleware,
   RealtimeRouter,
+  rateLimitMiddleware,
   shardMiddleware,
 } from "./router/index.js";
