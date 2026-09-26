@@ -185,6 +185,7 @@ import {
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
   type VectorStore,
+  WatchConversationUseCase,
 } from "../import.js";
 import {
   ContentMailRenderer,
@@ -407,6 +408,7 @@ export class Container {
     readonly edit: EditMessageUseCase;
     readonly remove: DeleteMessageUseCase;
     readonly typing: SignalTypingUseCase;
+    readonly watch: WatchConversationUseCase;
   };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
@@ -678,9 +680,13 @@ export class Container {
       this.shards,
       this.clock,
     );
-    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards, {
-      settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS,
-    });
+    this.tenantMove = new PgTenantMoveGateway(
+      this.cluster,
+      this.transactions,
+      this.shards,
+      this.shardResolver,
+      { settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS },
+    );
     this.outbox = new PgOutboxGateway(this.cluster, this.transactions, this.shards);
     this.realtime = new RedisRealtimePublisher(this.redis.realtimeClient(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
@@ -784,6 +790,7 @@ export class Container {
         messages,
         conversationNaming,
       ),
+      watch: new WatchConversationUseCase(this.authorizer, conversationAccess),
       getConversation: new GetConversationUseCase(
         this.authorizer,
         conversationAccess,

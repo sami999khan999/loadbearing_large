@@ -172,6 +172,7 @@ export {
   UpdateTenantRetentionUseCase,
   UserReader,
   VectorStore,
+  WatchConversationUseCase,
 } from "@loadbearing/application";
 
 // ── @loadbearing/auth ────────────────────────────────────────────────────────

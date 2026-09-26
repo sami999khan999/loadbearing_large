@@ -24,6 +24,10 @@ export class InMemoryStorageGateway extends StorageGateway {
 
   // Collects the stream and stores it like any other body, so a test can assert on the
   // bytes a caller streamed without standing up S3.
+  public override async *getStream(key: string): AsyncGenerator<Uint8Array> {
+    yield await this.get(key);
+  }
+
   public override async putStream(
     key: string,
     body: AsyncIterable<Uint8Array>,
