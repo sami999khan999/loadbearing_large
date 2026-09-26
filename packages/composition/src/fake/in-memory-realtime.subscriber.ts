@@ -3,6 +3,8 @@ import {
   type RealtimeChannel,
   type RealtimeMessage,
   RealtimeSubscriber,
+  type SubscribeOptions,
+  Uuid,
 } from "../import.js";
 import type { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 
@@ -29,11 +31,15 @@ export class InMemoryRealtimeSubscriber extends RealtimeSubscriber {
     return streams;
   }
 
+  // No log: a resume is always a resync here, which is the adapter's answer when its log
+  // no longer reaches back far enough.
   public override async *subscribe(
     channels: readonly RealtimeChannel[],
     signal: CancellationSignal,
+    options?: SubscribeOptions,
   ): AsyncIterable<RealtimeMessage> {
-    const queue: RealtimeMessage[] = [];
+    const queue: RealtimeMessage[] =
+      options?.after === undefined ? [] : [{ kind: "resync", id: Uuid.v7() }];
     let wake: (() => void) | null = null;
 
     const push = (message: RealtimeMessage) => {

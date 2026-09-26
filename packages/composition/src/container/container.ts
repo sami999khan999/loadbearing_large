@@ -697,11 +697,15 @@ export class Container {
     this.realtime = new RedisRealtimePublisher(this.redis.realtimeClient(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
     // one — which is what makes `health().realtime` honestly `null`.
-    this.realtimeSubscriber = new RedisRealtimeSubscriber(() => this.redis.subscriberClient(), {
-      maxStreamsPerUser: config.realtime.maxStreamsPerUser,
-      maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
-      queueSize: Container.REALTIME_QUEUE_SIZE,
-    });
+    this.realtimeSubscriber = new RedisRealtimeSubscriber(
+      () => this.redis.subscriberClient(),
+      {
+        maxStreamsPerUser: config.realtime.maxStreamsPerUser,
+        maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
+        queueSize: Container.REALTIME_QUEUE_SIZE,
+      },
+      () => this.redis.realtimeClient(),
+    );
 
     const notifications = new PgNotificationRepository(
       this.cluster,

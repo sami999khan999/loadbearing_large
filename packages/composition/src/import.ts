@@ -154,6 +154,7 @@ export {
   StorageGateway,
   StoragePolicyGateway,
   type StoredObject,
+  type SubscribeOptions,
   SubscriberRegistry,
   type SweepOutcome,
   type TableRowCount,
