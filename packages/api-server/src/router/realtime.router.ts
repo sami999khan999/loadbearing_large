@@ -1,4 +1,9 @@
-import { ForbiddenError, RealtimeChannels, withEventMeta } from "../import.js";
+import {
+  ForbiddenError,
+  RealtimeChannels,
+  type RealtimeMessage,
+  withEventMeta,
+} from "../import.js";
 import { authed } from "./base.js";
 import { StreamRevalidation } from "./stream-revalidation.js";
 
@@ -14,6 +19,14 @@ const REVALIDATE_MS = 60_000;
 // router and the browser sends every `realtime.*` path to it.
 export class RealtimeRouter {
   private constructor() {}
+
+  // A typing frame carries no SSE id, so it never becomes the point a client resumes from:
+  // it is never logged, and a resume from it could only ever be a resync.
+  private static framed(message: RealtimeMessage) {
+    return message.kind === "typing"
+      ? withEventMeta(message, { retry: RETRY_MS })
+      : withEventMeta(message, { id: message.id, retry: RETRY_MS });
+  }
 
   // The channel is built from the principal, never from input. That is the whole of the
   // authorisation: you cannot ask for a stream that is not yours.
@@ -42,19 +55,15 @@ export class RealtimeRouter {
     );
 
     try {
-      // Pub/sub cannot replay, so a resume is a resync rather than a gap fill. Sent
-      // before anything else, so the client refetches and then reads live frames.
-      if (lastEventId !== undefined) {
-        yield withEventMeta({ kind: "resync" as const, id: lastEventId }, { retry: RETRY_MS });
-      }
-
       for await (const message of context.container.realtimeSubscriber.subscribe(
         [channel],
         watched.signal,
-        { owner: channel },
+        // The resume point, when there is one: the subscriber replays what came after it,
+        // or yields a `resync` when its log no longer reaches back that far (`26.5`).
+        { owner: channel, ...(lastEventId === undefined ? {} : { after: lastEventId }) },
       )) {
         frames += 1;
-        yield withEventMeta(message, { id: message.id, retry: RETRY_MS });
+        yield RealtimeRouter.framed(message);
       }
     } finally {
       watched.stop();
@@ -97,20 +106,17 @@ export class RealtimeRouter {
     );
 
     try {
-      if (lastEventId !== undefined) {
-        yield withEventMeta({ kind: "resync" as const, id: lastEventId }, { retry: RETRY_MS });
-      }
-
       for await (const message of context.container.realtimeSubscriber.subscribe(
         [channel],
         watched.signal,
         // The person's cap, not the room's: every stream a tab opens counts against it.
         {
           owner: RealtimeChannels.user(context.principal.organizationId, context.principal.userId),
+          ...(lastEventId === undefined ? {} : { after: lastEventId }),
         },
       )) {
         frames += 1;
-        yield withEventMeta(message, { id: message.id, retry: RETRY_MS });
+        yield RealtimeRouter.framed(message);
       }
     } finally {
       watched.stop();
