@@ -210,7 +210,7 @@ export interface EventShape {
 
   readonly "analytics.projection.completed": {
     readonly projection: string;
-    // How many tenants the run walked. The projection is per tenant since `0023`, so a
+    // How many tenants the run reached before its budget ran out. Per tenant since `0023`, so a
     // count of events alone cannot say whether the loop reached the end.
     readonly tenants: number;
     readonly events: number;
@@ -221,6 +221,9 @@ export interface EventShape {
     // Tenants passed over for having no directory row. Zero on the success line too, so
     // a dashboard has a baseline the day it is not.
     readonly skipped: number;
+    // Tenants whose walk threw. Each has its own `analytics.projection.failed` line, and
+    // the run still fails after the others have had their turn.
+    readonly failed: number;
     // True when the run stopped at its batch ceiling rather than because it caught up —
     // which separates "behind and closing" from "behind every run for a week".
     readonly capped: boolean;
