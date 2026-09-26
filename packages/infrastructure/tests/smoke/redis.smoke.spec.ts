@@ -163,6 +163,29 @@ describe("QueuePublisher against the running queue instance", () => {
     }
   });
 
+  // `CR.18`. An operator's request is one job while one is queued or running, and a new
+  // one after: a fixed `jobId` swallowed a retry for as long as the failed job was kept.
+  it("dedupes an in-flight id only while a job holding it is on the queue", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+    const waiting = async () =>
+      (await reader.getJobs(["waiting"])).filter((job) => job.data.inFlight);
+
+    try {
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 1 }, { inFlightId: "smoke-in-flight" });
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 2 }, { inFlightId: "smoke-in-flight" });
+      expect((await waiting()).map((job) => job.data.inFlight)).toEqual([1]);
+
+      for (const job of await waiting()) await job.remove();
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 3 }, { inFlightId: "smoke-in-flight" });
+      expect((await waiting()).map((job) => job.data.inFlight)).toEqual([3]);
+    } finally {
+      for (const job of await waiting()) await job.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
   // The deduplication key is a business rule the port carries, not queue configuration:
   // "enqueue OCR for this receipt, once" has to mean once.
   it("does not enqueue a second job under an id already on the queue", async () => {

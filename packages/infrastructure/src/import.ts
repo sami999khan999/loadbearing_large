@@ -66,6 +66,7 @@ export {
   EmailSender,
   EmbeddingProvider,
   type ExportedObject,
+  type IndexedSource,
   type InvitationPage,
   type InvitationRecord,
   type InvitationRepository,

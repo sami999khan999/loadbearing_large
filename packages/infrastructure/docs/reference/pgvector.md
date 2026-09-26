@@ -44,6 +44,23 @@ the actor cannot.
 The tenant predicate is on every method, `deleteBySource` included — a delete keyed only on a
 caller-supplied `sourceId` is a cross-tenant write, and nothing about the result looks wrong.
 
+## `sourceOf` — where a document sits, and which request wrote it
+
+One row off `document_chunks_source_idx`: the source's `goal_id`, and `metadata->>'version'`. Every
+chunk of a source is written in one transaction with one goal and one version, so any one answers.
+
+Two callers, two findings. `QueueDocumentIndexUseCase` asks the goal a document is in *now* and
+asserts `ai.embedding.write` for it, as well as for the goal the request names (`CR.8`) — before, a
+writer could replace any document in the tenant by id, goals they could not read included. And
+`IndexDocumentUseCase` compares versions (`CR.33`): a job carries the time its request was made,
+and one older than what is indexed is skipped, before the paid embedding call and again inside the
+transaction. The same version is the job's own retry and goes through. A chunk written before
+versions reads `null` and never blocks anything.
+
+Both keys are org-scoped today, so the goal assertion passes for anyone holding the key at all. It
+is written for the day a downstream app makes `ai.embedding.write` goal-scoped, the same reason
+`goalsWith` is on the search path already.
+
 ## The score floor
 
 ```ts

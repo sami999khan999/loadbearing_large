@@ -4,10 +4,11 @@ import {
   GetBucketLifecycleConfigurationCommand,
   type LifecycleRule,
   PutBucketLifecycleConfigurationCommand,
-  S3Client,
+  type S3Client,
   StoragePolicyGateway,
   type TransitionStorageClass,
 } from "../import.js";
+import { S3ClientFactory } from "./s3-client.factory.js";
 import type { S3Config } from "./s3-storage.gateway.js";
 
 // What S3 answers for a bucket with no configuration. An **error code**, not an empty
@@ -21,12 +22,7 @@ export class S3StoragePolicyGateway extends StoragePolicyGateway {
 
   public constructor(private readonly config: S3Config) {
     super();
-    this.s3 = new S3Client({
-      endpoint: config.endpoint,
-      region: config.region,
-      forcePathStyle: config.forcePathStyle,
-      credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey },
-    });
+    this.s3 = S3ClientFactory.create(config);
   }
 
   public async lifecycle(): Promise<readonly LifecycleRule[]> {

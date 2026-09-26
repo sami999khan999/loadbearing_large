@@ -5,6 +5,9 @@ export interface OpenAiEmbeddingConfig {
   readonly model: string;
   readonly dimensions: number;
   readonly endpoint?: string;
+  // Per batch. `document.search` embeds on the request path, and undici's own default
+  // is about five minutes of a held request.
+  readonly timeoutMs?: number;
 }
 
 interface EmbeddingResponse {
@@ -13,6 +16,10 @@ interface EmbeddingResponse {
 
 export class OpenAiEmbeddingProvider extends EmbeddingProvider {
   private static readonly MAX_BATCH = 96;
+
+  // Long enough for a full batch of 96 on a slow day, short enough that a search fails
+  // while the person is still looking at the page.
+  private static readonly DEFAULT_TIMEOUT_MS = 20_000;
 
   public override readonly dimensions: number;
 
@@ -33,21 +40,7 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
 
     for (let i = 0; i < texts.length; i += OpenAiEmbeddingProvider.MAX_BATCH) {
       const batch = texts.slice(i, i + OpenAiEmbeddingProvider.MAX_BATCH);
-      const response = await fetch(
-        `${this.config.endpoint ?? "https://api.openai.com/v1"}/embeddings`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${this.config.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: this.config.model,
-            dimensions: this.config.dimensions,
-            input: batch,
-          }),
-        },
-      );
+      const response = await this.request(batch);
 
       // UNAVAILABLE, not INTERNAL: the catalog marks it retryable, which is what
       // lets the embedding consumer try again instead of dead-lettering a blip.
@@ -73,6 +66,31 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
     }
 
     return out;
+  }
+
+  // A reset, a DNS failure or the timeout is a `TypeError` or an `AbortError`, which the
+  // catalog reads as INTERNAL and the consumer never retries. Retryable, like a 503.
+  private async request(batch: readonly string[]): Promise<Response> {
+    try {
+      return await fetch(`${this.config.endpoint ?? "https://api.openai.com/v1"}/embeddings`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          dimensions: this.config.dimensions,
+          input: batch,
+        }),
+        signal: AbortSignal.timeout(
+          this.config.timeoutMs ?? OpenAiEmbeddingProvider.DEFAULT_TIMEOUT_MS,
+        ),
+      });
+    } catch {
+      this.fail(batch.length);
+      throw new UnavailableError("openai.embeddings");
+    }
   }
 
   // The batch size, not the whole call: a run that fails on its fourth batch has

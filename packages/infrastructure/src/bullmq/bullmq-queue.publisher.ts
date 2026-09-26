@@ -52,6 +52,9 @@ export class BullMqQueuePublisher extends QueuePublisher {
       // The deduplication key, from the port: "enqueue OCR for this receipt, once"
       // is a business rule, not queue configuration.
       jobId: options?.jobId,
+      // BullMQ's simple mode: the key is released when the job completes or fails, so a
+      // repeat request after the first has finished is a new job rather than a no-op.
+      ...(options?.inFlightId === undefined ? {} : { deduplication: { id: options.inFlightId } }),
       // Jittered, so the jobs one outage failed together do not all retry together.
       backoff: { ...BACKOFF },
       // Mandatory, not tuning. BullMQ keeps completed jobs forever by default, and

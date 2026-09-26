@@ -254,7 +254,9 @@ under the root: each leaf and the tenant partition, each with all its indexes. M
 
 The digest's fan-out used to issue one: a `SELECT DISTINCT organization_id` over `notifications`
 with no tenant, once a day per node (`CR.22`). It pages the catalog's tenants instead now. The
-nightly orphan check is the other (`CR.21`, still open). Otherwise every repository query carries the tenant, and
+nightly orphan check was the other (`CR.21`): a `select distinct` over every `messages` row on the
+node. It runs one statement per tenant now, each pruned to that tenant's partitions and committed on
+its own, so it holds one tenant's locks at a time. Otherwise every repository query carries the tenant, and
 `pg` sends unnamed statements, so each is planned with its values and pruned at plan time. Two
 things would issue one:
 

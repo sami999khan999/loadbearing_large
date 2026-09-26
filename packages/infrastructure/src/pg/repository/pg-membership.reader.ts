@@ -37,12 +37,15 @@ export class PgMembershipReader extends BaseRepository {
 
   // Once per sign-in, not per request. Last switched to while still a member, oldest
   // membership otherwise — so the answer is stable rather than planner-dependent.
+  // ──
+  // Active only (`CR.7`): pinned to a tenant that deactivated them, every request
+  // answered anonymous and the loop never reached the switcher to leave it.
   public async activeOrganizationFor(userId: UserId): Promise<OrganizationId | null> {
     const [row] = await this.db
       .select({ organizationId: memberships.organizationId })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(eq(memberships.userId, userId))
+      .where(and(eq(memberships.userId, userId), isNull(memberships.deactivatedAt)))
       // `true` sorts first under `desc`. A user with no preference compares as null on
       // every row, and `nulls last` makes that a tie rather than a winner.
       .orderBy(
@@ -52,17 +55,6 @@ export class PgMembershipReader extends BaseRepository {
       .limit(1);
 
     return (row?.organizationId as OrganizationId | undefined) ?? null;
-  }
-
-  // The switch endpoint's whole authorization. Indexed by `memberships_uq`.
-  public async isMember(userId: UserId, organizationId: OrganizationId): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: memberships.id })
-      .from(memberships)
-      .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
-      .limit(1);
-
-    return row !== undefined;
   }
 
   // `application`'s side of the same question, tenant first like every port there.
@@ -122,7 +114,8 @@ export class PgMembershipReader extends BaseRepository {
       .from(memberships)
       .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
       .innerJoin(roles, eq(roles.id, memberships.roleId))
-      .where(eq(memberships.userId, userId))
+      // A tenant that deactivated this person is not one they can switch to.
+      .where(and(eq(memberships.userId, userId), isNull(memberships.deactivatedAt)))
       .orderBy(asc(memberships.createdAt))
       .limit(PgMembershipReader.MAX_ORGANIZATIONS);
 

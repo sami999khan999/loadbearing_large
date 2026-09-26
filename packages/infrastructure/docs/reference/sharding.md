@@ -190,6 +190,15 @@ that window.
 answering from the source, which still holds every row. A catalog write is never refused: a move
 copies no catalog row, so it cannot lose one.
 
+**So every routed write goes through `run`, including a single statement** (`CR.11`). The freeze is
+checked there and nowhere else — `BaseRepository.db` cannot tell a read from a write, and refusing
+reads would take the tenant down for the whole move. Six use-cases wrote a routed row with no
+transaction open: marking one notification or all of them read, a notification preference, a
+conversation's read position, `DeliverNotification`'s `saveMany` — the very job the recheck below
+was built for — and the audit row a document search writes. Each of those landed on the source
+during a move, and an *update* is invisible to the count check, so it was lost at the flip. They
+each open a unit of work now. A new routed write that does not is the same bug again.
+
 **The quiesce has two halves, because a request places itself once.** A request that resolved
 its placement a moment before the freeze still believes the tenant is writable. If it has already
 opened its transaction, the second half catches it: a `SHARE` lock on the tenant's partitions,

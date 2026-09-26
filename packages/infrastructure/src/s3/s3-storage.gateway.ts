@@ -10,11 +10,12 @@ import {
   NotFoundError,
   PutObjectCommand,
   Readable,
-  S3Client,
+  type S3Client,
   StorageGateway,
   type StoredObject,
   Upload,
 } from "../import.js";
+import { S3ClientFactory } from "./s3-client.factory.js";
 
 export interface S3Config {
   readonly endpoint: string;
@@ -38,12 +39,7 @@ export class S3StorageGateway extends StorageGateway {
 
   public constructor(private readonly config: S3Config) {
     super();
-    this.s3 = new S3Client({
-      endpoint: config.endpoint,
-      region: config.region,
-      forcePathStyle: config.forcePathStyle,
-      credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey },
-    });
+    this.s3 = S3ClientFactory.create(config);
   }
 
   public override async put(
