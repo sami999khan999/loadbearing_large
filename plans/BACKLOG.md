@@ -30,7 +30,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 3 | 46 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
-| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 3 | 6 |
+| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 2 | 7 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -161,8 +161,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 Built on 2026-09-26 and archived; every body is on its item in
 [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md), by ID and line.
 
-- [ ] `CP4.9` **Measure the worker's fan-out** — a seeded 500-member channel, drain and delivery
-  `durationMs` before and after. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:390`
 - [~] `CP7.9` **Web stops serving streams** — the second release: drop `realtime.*` from web's
   handler and point the stream smoke spec at `apps/realtime`. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:525`
 

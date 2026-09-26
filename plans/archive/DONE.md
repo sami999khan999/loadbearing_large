@@ -1307,6 +1307,22 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
   just before the next frame arrived. It now holds its busy window for the rest of a second, as
   `RealtimeRefetch` does. The same burst then cost each tab **2** calls, 1.8 s apart, with all
   twenty messages rendered in both. `use-conversation-stream.spec.tsx` fails without the floor.
+- [x] `CP4.9` **The worker's fan-out** `done: 2026-09-26` — **after only.** A channel seeded to 501
+  members, five sends, one worker at `debug`:
+
+  | job | duration |
+  |---|---|
+  | outbox drain — claim, relay, mark | 149–209 ms |
+  | `messaging-realtime` — the paged member fan-out | 87–139 ms |
+  | `notification` — a channel message notifies nobody | 3–10 ms |
+
+  There is no *before*: the pre-plan code was not run beside it, and a number from memory is not a
+  measurement. Two things the measurement needed and did not have. **The event queue logged no
+  completion timings**, unlike every other queue; it does now (`outbox.consumer.ts`). And **stray dev
+  workers from earlier `pnpm dev` runs were splitting the queue**, so the first two attempts
+  timed a fraction of the jobs — Windows leaves a `tsx watch` child running when its parent is killed.
+  On the way it found the analytics flood fixed in the same commits: with ClickHouse down, `CR.20`'s
+  keep-going walk logged a failure per tenant per run; three in a row now stop it.
 
 ---
 
@@ -1542,6 +1558,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-26 | @sami | **`CP1.9` and `CP4.9` measured, and each measurement changed code.** Two tabs showed a conversation refetching once per message rather than once a second, so `refreshNewest` got the floor `RealtimeRefetch` already had. The fan-out could not be timed because the event queue logged no completions, and a stack without ClickHouse showed the projection flooding the log once per tenant; both fixed. Section 12 is down to `CP7.5`, which wants Linux, and `CP7.9`, which wants a later release |
 | 2026-09-26 | @sami | **Four of section 12's hand checks done in a running app**: mail through an outage and past its retries with `queue:replay`, a separate realtime Redis, a stream held thirty minutes, and the dev proxy in a Chrome tab plus two hundred streams with the web p95 unchanged. `CP7.5` still wants Linux; `CP1.9` and `CP4.9` are measurements still to make |
 | 2026-09-26 | @sami | **`26.5` built: a resume is replayed what it missed.** A short log per channel beside the pub/sub, read on a resume after attaching, with a `resync` past it. The first of section 11's communication features, and the one that needed no product decision: the client already sent its last event id |
 | 2026-09-26 | @sami | **Section 10 closed but for three, and `CP7.8` with it.** Twenty of the forty-nine review findings closed with the communication performance plan (`14d49db..45633e6`) and twenty-six more on 2026-09-26 in per-layer commits after `e265714`, every one with a spec except `CR.24`, checked by `EXPLAIN`, and `CR.34`, checked by build. Three shipped security defects first: an admin could invite an owner, a deactivated member's keys kept working, and a key could mint a permanent key. Then a stream that re-asks every minute, a rate limit on the six procedures that cost someone else something, the move freeze on every routed write, archive recovery, streamed cold reads, and a web process that disposes once srvx has finished. `CP7.8` was not blocked on where a Nitro plugin lives: srvx fires no Nitro hook on `SIGTERM` at all. `CR.16`, `CR.20` and `CR.33` stay open, narrowed to what is left of each |
