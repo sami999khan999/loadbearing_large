@@ -7,14 +7,12 @@ import {
   asc,
   type DailyCount,
   eq,
-  gt,
   gte,
   inArray,
   lt,
   lte,
   not,
   type OrganizationId,
-  or,
   type Placement,
   type ProjectionCheckpoint,
   type SQL,
@@ -40,14 +38,13 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     // row for a caller that has not been told the horizon exists.
     until: Date = new Date(8.64e15),
   ): Promise<readonly ActivityRecord[]> {
+    // The row constructor, plus a redundant bound on the leading column (`CR.29`). The `OR`
+    // form loses the index condition, so every page re-filtered from the month's start.
     const after =
       checkpoint.lastOccurredAt && checkpoint.lastId
-        ? or(
-            gt(activityLog.occurredAt, checkpoint.lastOccurredAt),
-            and(
-              sql`${activityLog.occurredAt} = ${checkpoint.lastOccurredAt}`,
-              gt(activityLog.id, checkpoint.lastId),
-            ),
+        ? and(
+            gte(activityLog.occurredAt, checkpoint.lastOccurredAt),
+            sql`(${activityLog.occurredAt}, ${activityLog.id}) > (${checkpoint.lastOccurredAt}, ${checkpoint.lastId}::uuid)`,
           )
         : undefined;
 

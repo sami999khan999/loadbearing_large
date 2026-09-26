@@ -2,6 +2,8 @@ import {
   InternalError,
   type OrganizationId,
   PartitionedTable,
+  Shard,
+  type ShardResolver,
   sql,
   TablePlacement,
   type TableRowCount,
@@ -60,6 +62,7 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
     private readonly cluster: DatabaseCluster,
     private readonly scope: TransactionScope,
     private readonly shards: ShardScope,
+    private readonly resolver: ShardResolver,
     private readonly config: PgTenantMoveGatewayConfig = { settleMs: 0 },
   ) {
     super();
@@ -71,6 +74,10 @@ export class PgTenantMoveGateway extends TenantMoveGateway {
     if (this.config.settleMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.config.settleMs));
     }
+
+    // Dropped again after the wait (`CR.10`): a read-through that read the row before the
+    // freeze committed could re-cache `frozen: false` after `beginMove` invalidated.
+    await this.resolver.invalidate(Shard.keyOf(organizationId));
 
     const client = this.cluster.at(node).client;
     const names: string[] = [];

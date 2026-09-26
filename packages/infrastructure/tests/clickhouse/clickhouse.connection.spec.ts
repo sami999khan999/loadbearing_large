@@ -6,7 +6,20 @@ import { RecordingLogger } from "../support/recording.logger.js";
 const failWith = (status: number, body: string) =>
   vi.fn().mockResolvedValue({ ok: false, status, text: () => Promise.resolve(body) });
 
-const ok = () => vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("") });
+const ok = () => vi.fn().mockResolvedValue(new Response(""));
+
+// A body delivered in the pieces given, so a row can be split across two of them.
+const streaming = (...pieces: readonly string[]) =>
+  vi.fn().mockResolvedValue(
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          for (const piece of pieces) controller.enqueue(new TextEncoder().encode(piece));
+          controller.close();
+        },
+      }),
+    ),
+  );
 
 // The URL `send()` built, read back through `URLSearchParams` so the assertion is about
 // the value ClickHouse receives rather than about percent-encoding.
@@ -26,6 +39,18 @@ afterEach(() => {
 });
 
 describe("ClickHouseConnection", () => {
+  // `CR.41`. Parsed as the lines arrive, so a row split across two chunks has to be joined
+  // rather than parsed in halves, and a last line with no newline still counts.
+  it("parses rows split across chunks, and a last row with no newline", async () => {
+    vi.stubGlobal("fetch", streaming('{"n":1}\n{"n"', ':2}\n{"n":3}'));
+
+    expect(await connection().query<{ n: number }>("SELECT n")).toEqual([
+      { n: 1 },
+      { n: 2 },
+      { n: 3 },
+    ]);
+  });
+
   // The regression guard: the body was interpolated into the error message, and
   // `AppError.toJSON()` serialises the context straight to the client.
   it("keeps the response body out of the thrown error", async () => {

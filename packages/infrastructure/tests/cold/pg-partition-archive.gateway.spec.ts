@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Readable } from "node:stream";
 import { PartitionArchiveGateway, PartitionedTable } from "@loadbearing/application";
 import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
@@ -60,13 +61,19 @@ class FakeStorage implements Partial<StorageGateway> {
     }
 
     this.objects.set(key, joined);
-    return { key, checksum: `sha-${size}`, size, contentType: "application/x-ndjson+gzip" };
+    // The real digest: a restore verifies the object against it now (`CR.16`).
+    const checksum = createHash("sha256").update(joined).digest("hex");
+    return { key, checksum, size, contentType: "application/x-ndjson+gzip" };
   }
 
   public get(key: string): Promise<Uint8Array> {
     const body = this.objects.get(key);
     if (!body) return Promise.reject(new Error(`no object: ${key}`));
     return Promise.resolve(body);
+  }
+
+  public async *getStream(key: string): AsyncGenerator<Uint8Array> {
+    yield await this.get(key);
   }
 
   public delete(key: string): Promise<void> {
@@ -297,6 +304,38 @@ describe("PgPartitionArchiveGateway.archive", () => {
     await expect(gateway(storage).archive(TABLE, PERIOD)).rejects.toThrow("3 bytes, expected");
 
     expect(await isAttached(first)).toBe(true);
+  });
+});
+
+// `CR.15`. A run cut off between the detach and the drop left a standalone table that no
+// query could read and no later run could find, so the month was gone for good.
+describe("PgPartitionArchiveGateway.recover", () => {
+  it("attaches a month a cut-off run left standalone, and names it", async () => {
+    await freshPartitions();
+    await write(first, "task.reactivated", 2);
+    const child = monthPartition(first);
+    const parent = TenantPartitionSeed.partitionName(TABLE, first);
+    await database.client.execute(sql.raw(`alter table ${parent} detach partition ${child}`));
+    expect(await isAttached(first)).toBe(false);
+
+    const recovered = await gateway(new FakeStorage()).recover(TABLE);
+
+    expect(recovered).toContain(child);
+    expect(await isAttached(first)).toBe(true);
+    // And it is a month like any other again: the next run archives it.
+    const result = await gateway(new FakeStorage()).archive(TABLE, PERIOD, first);
+    expect(result.objects.map((object) => object.rowCount)).toEqual([2]);
+  });
+
+  it("leaves a restore's scratch table alone", async () => {
+    await freshPartitions();
+    const scratch = `${monthPartition(first)}_restore`;
+    await database.client.execute(sql.raw(`create table ${scratch} (like ${TABLE} including all)`));
+
+    const recovered = await gateway(new FakeStorage()).recover(TABLE);
+
+    expect(recovered).not.toContain(scratch);
+    expect(await exists(scratch)).toBe(true);
   });
 });
 

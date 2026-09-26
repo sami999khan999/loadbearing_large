@@ -1,55 +1,69 @@
 import {
-  Buffer,
   ColdArchiveReader,
   type ColdPage,
   ConflictError,
-  createGunzip,
   createHash,
   type PartitionArchiveEntry,
-  pipeline,
-  Readable,
   type StorageGateway,
   type UserId,
 } from "../import.js";
+import { NdjsonLines } from "./ndjson-lines.js";
 import { OrdinalCursor } from "./ordinal-cursor.js";
 
 // The bound `21.1` states, with headroom. Past it the object is refused rather than
 // read into memory: "it was slow" is a worse failure than "it said no".
 const MAX_BYTES = 50 * 1024 * 1024;
 
-// NDJSON is newline-delimited by definition, so the separator is data rather than
-// formatting.
-const NEWLINE = "\n";
+// Rows parsed per step of that whole read. Any size works; it only bounds one push.
+const MAX_BATCH = 5_000;
 
 export class S3ColdArchiveReader extends ColdArchiveReader {
   public constructor(private readonly storage: StorageGateway) {
     super();
   }
 
-  public async rows(
+  // Two passes over the object: the first proves it, the second parses it. One pass would
+  // hand out rows from an object found to be corrupt only at its end.
+  public async *batches(
+    entry: PartitionArchiveEntry,
+    size: number,
+  ): AsyncGenerator<readonly Readonly<Record<string, unknown>>[]> {
+    await this.verify(entry);
+
+    let batch: Readonly<Record<string, unknown>>[] = [];
+    for await (const line of NdjsonLines.of(this.storage.getStream(entry.objectKey))) {
+      batch.push(JSON.parse(line) as Readonly<Record<string, unknown>>);
+      if (batch.length < size) continue;
+      yield batch;
+      batch = [];
+    }
+    if (batch.length > 0) yield batch;
+  }
+
+  // **Against the compressed bytes**, because that is what the gateway hashed on the way
+  // up. The count is the other half: a clean rewrite that is short hashes as itself.
+  private async verify(entry: PartitionArchiveEntry): Promise<void> {
+    const hash = createHash("sha256");
+    let count = 0;
+    for await (const _ of NdjsonLines.of(this.storage.getStream(entry.objectKey), hash)) {
+      count += 1;
+    }
+
+    if (hash.digest("hex") !== entry.checksum) throw new ConflictError("cold", "checksum");
+    if (count !== entry.rowCount) throw new ConflictError("cold", "row-count");
+  }
+
+  // Whole, and capped: the request path's read, one user's slice of a tenant-month.
+  private async rows(
     entry: PartitionArchiveEntry,
   ): Promise<readonly Readonly<Record<string, unknown>>[]> {
     if (entry.bytes > MAX_BYTES) {
       throw new ConflictError("cold", "too-large");
     }
 
-    const body = await this.storage.get(entry.objectKey);
-
-    // **Against the compressed bytes**, because that is what the gateway hashed on the
-    // way up: `StoredObject.checksum` is computed over the stream as it passes.
-    const digest = createHash("sha256").update(body).digest("hex");
-    if (digest !== entry.checksum) throw new ConflictError("cold", "checksum");
-
-    const lines = (await S3ColdArchiveReader.gunzip(body))
-      .toString("utf8")
-      .split(NEWLINE)
-      .filter((line) => line.length > 0);
-
-    // The second half of the same check. A truncated object can hash differently *and*
-    // be short; one that was rewritten cleanly is short and nothing else would notice.
-    if (lines.length !== entry.rowCount) throw new ConflictError("cold", "row-count");
-
-    return lines.map((line) => JSON.parse(line) as Readonly<Record<string, unknown>>);
+    const rows: Readonly<Record<string, unknown>>[] = [];
+    for await (const batch of this.batches(entry, MAX_BATCH)) rows.push(...batch);
+    return rows;
   }
 
   // Reads and gunzips the **whole** tenant-month to serve one user's slice, because the
@@ -67,13 +81,5 @@ export class S3ColdArchiveReader extends ColdArchiveReader {
     const next = from + items.length;
 
     return { items, nextCursor: next < mine.length ? OrdinalCursor.encode(next) : null };
-  }
-
-  private static async gunzip(body: Uint8Array): Promise<Buffer> {
-    const chunks: Uint8Array[] = [];
-    const out = createGunzip();
-    out.on("data", (chunk: Uint8Array) => chunks.push(chunk));
-    await pipeline(Readable.from([body]), out);
-    return Buffer.concat(chunks);
   }
 }

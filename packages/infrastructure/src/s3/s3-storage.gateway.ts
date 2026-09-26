@@ -109,6 +109,16 @@ export class S3StorageGateway extends StorageGateway {
     return new Uint8Array(await result.Body.transformToByteArray());
   }
 
+  // The SDK's body is a Node `Readable` on this runtime, which is an async iterable of
+  // chunks — so the object is never assembled here.
+  public override async *getStream(key: string): AsyncGenerator<Uint8Array> {
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+    );
+    if (!result.Body) throw new NotFoundError("storage.object", key);
+    yield* result.Body as unknown as AsyncIterable<Uint8Array>;
+  }
+
   public override async delete(key: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }));
   }

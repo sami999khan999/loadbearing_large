@@ -149,8 +149,8 @@ as tenants and not the same as partitions dropped.
 
 ## Restore, and why it never re-attaches
 
-`restore(table, period, organizationId)` reads the object, gunzips it, and inserts into a **scratch
-table** named `<child>_restore` — never straight back into the live parent. A restore that
+`restore(table, period, organizationId)` streams the object, gunzips it as it arrives, and inserts
+into a **scratch table** named `<child>_restore` — never straight back into the live parent. A restore that
 re-attaches silently puts archived rows back in the hot database and leaves the retention job
 arguing with itself about them.
 
@@ -161,6 +161,20 @@ only thing that makes the difference checkable rather than asserted.
 
 The rows are handed to Postgres as one JSON array per batch through
 `json_populate_recordset(null::<scratch>, …)`, so the lines never become objects in this process.
+
+**And the month is never whole in memory on the way back either** (`CR.16`). The restore gunzipped
+the whole object, turned it into one string and split it: a large month OOMed the worker or passed
+V8's string limit, and the synchronous parse held the event loop past the other queues' locks, so
+their jobs were redelivered and sent twice. `StorageGateway.getStream` hands the object over by the
+chunk, `NdjsonLines` gunzips and splits it as it arrives, and the insert takes a batch at a time.
+The compressed bytes are hashed on the way through and the lines counted; a mismatch with the
+`partition_archive` row drops the scratch table and throws. The restore had no check at all before.
+
+`ColdArchiveReader.batches` is the same read for the re-projection, with one difference: it proves
+the object in a **first pass** and parses it in a second. Rows handed to the projector from an
+object found corrupt only at its end would already be in ClickHouse. The archived-notifications
+page is the one reader still holding a tenant-month whole — capped at 50 MB compressed, on the
+request path, filtering one user's rows out of it.
 The scratch table is dropped and recreated rather than appended to: a previous restore of the same
 month is evidence of that restore, and two runs merged into one table are evidence of neither.
 
@@ -236,7 +250,7 @@ not composed from a retention row — see
 
 ## A failure between detach and drop re-attaches
 
-Everything from the detach to the drop runs inside a `try`. If `putStream`, the insert or the
+Everything from the detach to the drop runs inside a `try`, **the detach included** (`CR.15`). If `putStream`, the insert or the
 verification throws, the child is put back where it was and the original error is rethrown.
 
 Without that, a failed run left the partition **neither attached nor archived**: its rows invisible
@@ -258,6 +272,15 @@ A cancelled `detach … concurrently` leaves the partition *detach-pending*: sti
 The re-attach swallows its own failure on purpose: the caller needs the error that started the
 unwind, and a partition that will not go back is an operator's problem either way.
 
+**A run that is killed never reaches the unwind** — a `SIGTERM` past the drain, an OOM. It left the
+month either detach-pending, which made every later run throw before its `try`, or a standalone
+table that `childrenOf` never finds again: rows invisible to the app, never archived and never
+dropped. So the retention pass calls `recover(table)` on each node **before** it lists months. It
+finalizes every detach-pending child, then attaches every table named as a month of this one —
+`<parent>_<yyyy>_<mm>` — that is nobody's partition, and emits `cold.partition.recovered` for each.
+The month is readable again, and listed, so the same pass archives it. A `_restore` scratch table
+does not end in a month and is never matched.
+
 ## The unwind stops the stream first, and waits for it
 
 `Readable.from` starts pulling the moment it is piped, so by the time `putStream` rejects the
@@ -277,7 +300,16 @@ trip. The separator is named as a constant because in NDJSON a newline is **data
 formatting**, and naming it keeps a formatter from ever treating it as the latter.
 
 Keyset pagination on `(<partition column>, id)`, so a month that does not fit in memory never has
-to. `OFFSET` would re-scan everything it already returned. The predicate is built as a variable
+to. `OFFSET` would re-scan everything it already returned.
+
+**The keyset needs an index to walk, and only `activity_log` had one** (`CR.23`). `notifications`
+indexes lead with the tenant, and `outbox_event`'s only such index is partial on unpublished rows,
+which an archived month has none of. Every page was a scan of the month with a top-N sort: a
+30-million-row outbox month is three thousand of them, pages reached the statement timeout, and
+retention never finished. A month of more than one page now gets `<child>_walk` on
+`(<partition column>, id)`, built on the detached table through the direct pool — one sort instead
+of three thousand, and dropped with the table. The unwind and `recover` drop it before attaching, so
+a month that goes back carries no index its siblings lack. The predicate is built as a variable
 rather than inline: a ternary between two `sql` templates makes the row type infer through `after`,
 which `after` is then assigned from — a cycle the compiler reports as an implicit `any`.
 

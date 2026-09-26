@@ -112,7 +112,7 @@ describe.skipIf(!shard1)("a tenant move between two nodes", () => {
   const messages = new PgMessageRepository(cluster, scope, shards);
   const routed = new PgUnitOfWork(cluster, scope, shards, "routed");
   const assignments = new PgShardAssignmentRepository(cluster, scope, shards, resolver);
-  const move = new PgTenantMoveGateway(cluster, scope, shards, { settleMs: 300 });
+  const move = new PgTenantMoveGateway(cluster, scope, shards, resolver, { settleMs: 300 });
 
   const policy = {
     get: () => Promise.resolve({ moveGraceDays: null }),

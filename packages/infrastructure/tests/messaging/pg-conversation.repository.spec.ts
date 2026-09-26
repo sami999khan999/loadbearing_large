@@ -5,7 +5,7 @@ import {
   type UserId,
 } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
-import { eq, type Logger } from "drizzle-orm";
+import { eq, type Logger, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
@@ -247,5 +247,19 @@ describe("PgConversationRepository.touch", () => {
     const after = await repository.findById(organizationId, id);
     expect(after?.lastMessageAt).toEqual(before?.lastMessageAt);
     expect(after?.lastMessageId).toEqual(before?.lastMessageId);
+  });
+});
+
+// `CR.31`. `KeysetCursor` encodes milliseconds, and a microsecond sort key made a page
+// ending on a message-less conversation skip the rows in the truncated window.
+describe("conversations.created_at", () => {
+  it("is stored to the millisecond, the precision the cursor carries", async () => {
+    const found = await database.client.execute<{ precision: number }>(sql`
+      select datetime_precision as precision from information_schema.columns
+      where table_name = 'conversations' and column_name = 'created_at'
+      limit 1
+    `);
+
+    expect(Number(found.rows[0]?.precision)).toBe(3);
   });
 });

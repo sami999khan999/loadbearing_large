@@ -199,6 +199,12 @@ was built for — and the audit row a document search writes. Each of those land
 during a move, and an *update* is invisible to the count check, so it was lost at the flip. They
 each open a unit of work now. A new routed write that does not is the same bug again.
 
+**The cached placement is dropped twice** (`CR.10`). `beginMove` invalidates it as it sets
+`moving_to`, but a read-through that read the row just *before* that commit can write
+`frozen: false` back just *after* the invalidation, for the cache's five minutes — long past the
+settle, so a request placed then writes to the source and the flip loses it. `quiesce` invalidates
+again once the settle is over: every read from then on sees `moving_to`.
+
 **The quiesce has two halves, because a request places itself once.** A request that resolved
 its placement a moment before the freeze still believes the tenant is writable. If it has already
 opened its transaction, the second half catches it: a `SHARE` lock on the tenant's partitions,

@@ -21,21 +21,30 @@ export class ClickHouseConnection {
     private readonly logger?: Logger,
   ) {}
 
-  // `JSONEachRow` rather than `JSON`: one object per line, so a large result streams.
+  // `JSONEachRow` rather than `JSON`: one object per line, so each row is parsed as its
+  // line arrives. The rows are still returned whole; what never exists is the whole text.
   public async query<T>(sql: string, params: Readonly<Record<string, unknown>> = {}): Promise<T[]> {
-    const body = await this.send(`${sql}\nFORMAT JSONEachRow`, params);
-    if (body.length === 0) return [];
+    const response = await this.send(`${sql}\nFORMAT JSONEachRow`, params);
+    if (!response.body) return [];
+    const rows: T[] = [];
+    let pending = "";
 
-    return body
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as T);
+    // `CR.41`: this was `text()` then `split`, the body and its lines held at once under a
+    // comment that said it streamed.
+    for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
+      const lines = (pending + chunk).split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) if (line.length > 0) rows.push(JSON.parse(line) as T);
+    }
+    if (pending.length > 0) rows.push(JSON.parse(pending) as T);
+
+    return rows;
   }
 
   // Nothing is returned, and nothing should be: a caller that reads an insert's response
   // is treating the derived store as authoritative.
   public async command(sql: string, params: Readonly<Record<string, unknown>> = {}): Promise<void> {
-    await this.send(sql, params);
+    await (await this.send(sql, params)).body?.cancel();
   }
 
   // Batched, because ClickHouse merges on write: a thousand single-row inserts create a
@@ -47,7 +56,10 @@ export class ClickHouseConnection {
     if (rows.length === 0) return;
 
     const payload = rows.map((row) => JSON.stringify(row)).join("\n");
-    await this.send(`INSERT INTO ${this.qualified(table)} FORMAT JSONEachRow\n${payload}`);
+    const response = await this.send(
+      `INSERT INTO ${this.qualified(table)} FORMAT JSONEachRow\n${payload}`,
+    );
+    await response.body?.cancel();
   }
 
   public async healthy(): Promise<boolean> {
@@ -69,7 +81,11 @@ export class ClickHouseConnection {
     return table.includes(".") ? table : `${this.config.database}.${table}`;
   }
 
-  private async send(sql: string, params: Readonly<Record<string, unknown>> = {}): Promise<string> {
+  // The response, unread: `query` decodes it line by line, and the other two discard it.
+  private async send(
+    sql: string,
+    params: Readonly<Record<string, unknown>> = {},
+  ): Promise<Response> {
     const url = new URL(this.config.url);
     url.searchParams.set("database", this.config.database);
     // Server-side bound parameters, never interpolation: this store holds every tenant's
@@ -101,7 +117,7 @@ export class ClickHouseConnection {
       throw new UnavailableError("clickhouse", response.status);
     }
 
-    return response.text();
+    return response;
   }
 
   // `DateTime64(3)`: ClickHouse rejects the `T` and `Z` of an ISO string with a 400,
