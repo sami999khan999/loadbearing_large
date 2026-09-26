@@ -1,8 +1,9 @@
 # loadbearing
 
-A pnpm-workspace starter kit: a TanStack Start web app and a standalone worker over a layered,
-port-and-adapter package graph. Postgres + pgvector, two Redis instances (cache and queue,
-deliberately separate), S3, stdout → Loki, ClickHouse behind a driver flag.
+A pnpm-workspace starter kit: a TanStack Start web app, a standalone worker and a stream process
+that holds every open browser stream, over a layered, port-and-adapter package graph. Postgres +
+pgvector, two Redis instances (cache and queue, deliberately separate), S3, stdout → Loki,
+ClickHouse behind a driver flag.
 
 **Start at [`docs/ai/index.md`](docs/ai/index.md).** It is a table, one row per thing you might be
 about to do, naming the one or two rule files that answer it. The whole rulebook is
