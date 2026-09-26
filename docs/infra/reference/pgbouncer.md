@@ -122,7 +122,7 @@ stack, and asserted by `tests/smoke/pooled.smoke.spec.ts`:
 |---|---|
 | Savepoints — a nested `run()` | fine |
 | `pg_advisory_xact_lock` | fine, serialises across connections |
-| `FOR UPDATE SKIP LOCKED` — the outbox drain | fine, claims stay disjoint |
+| `FOR UPDATE SKIP LOCKED` — the outbox drain's one-statement claim | fine, claims stay disjoint |
 | Better Auth's `drizzleAdapter` | fine — it opens no transaction of its own |
 | `ALTER TABLE … DETACH PARTITION … CONCURRENTLY` | fine **as a single statement** |
 

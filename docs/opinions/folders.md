@@ -135,6 +135,7 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `container/` | the DI root and the config shape it takes | `composition` |
 | `fake/` | test doubles for ports, one per port, never on the barrel | `composition` |
 | `client/` | the outbound transport and the typed client over it | `api-client` |
+| `router/` | the inbound transport's router half — the middleware chain and the routers two apps share | `api-server` |
 | `key/` | the cache-key vocabulary every slice's queries name | `query` |
 | `runtime/` | what an app constructs and every slice consumes | `query` |
 | `i18n/` | the React binding for the message catalog | `feature` |
@@ -201,7 +202,7 @@ Subject folders repeat across packages by design: `contracts/task/`, `applicatio
 `pg/schema/task.schema.ts` and `pg/repository/pg-task.repository.ts`, for the tooling reason above.
 
 **Which packages are which.** `core`, `errors`, `permissions`, `observability`, `content`,
-`composition`, `api-client` are role-organised — they hold one of each thing. `application`, `query`,
+`composition`, `api-client`, `api-server` are role-organised — they hold one of each thing. `application`, `query`,
 `feature` are subject-organised — they hold one of each thing per slice. `ui` is the third kind: one
 folder per exported component.
 

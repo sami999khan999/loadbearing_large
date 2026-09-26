@@ -429,7 +429,8 @@ Count those pools across replicas rather than per process. Forty web instances a
 
 ## Step 24.4 — The oRPC base and principal middleware
 
-**`apps/web/src/server/orpc/base.ts`**
+**`packages/api-server/src/router/base.ts`** — it began in `apps/web/src/server/orpc/` and moved
+to its own package once a second app mounted the same chain; see `packages/api-server/docs/index.md`.
 
 ```ts
 import type { Principal } from "@loadbearing/application";
@@ -533,7 +534,7 @@ wraps the iterable's `next`, `return` and `throw` in the restored scope. See
 
 ## Step 24.5 — The error interceptor
 
-**`apps/web/src/server/orpc/error.interceptor.ts`**
+**`packages/api-server/src/router/error.interceptor.ts`**, moved with the chain above.
 
 ```ts
 import { ErrorNormalizer, HTTP_STATUS } from "@loadbearing/errors";
@@ -574,7 +575,7 @@ export class ErrorInterceptor {
 **`apps/web/src/server/orpc/task.router.ts`** — illustrative. The kit ships two real routers built exactly this way, `role.router.ts` and `member.router.ts` ([27](27-verification-and-first-feature.md) Step 27.4).
 
 ```ts
-import { authed } from "./base.js";
+import { authed } from "../import.js"; // `@loadbearing/api-server`, re-exported
 
 export class TaskRouter {
   private constructor() {}

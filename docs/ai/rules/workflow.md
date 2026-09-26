@@ -6,7 +6,7 @@ description: The commands, what to run before claiming a change is done, the com
 # Working in this repo
 
 ```bash
-pnpm dev                  # builds packages once, then web + worker in parallel
+pnpm dev                  # builds packages once, then web + worker + realtime in parallel
 pnpm build                # topological, derived from workspace:* — no order declared anywhere
 pnpm typecheck
 pnpm lint                 # biome check . && eslint .
@@ -20,6 +20,7 @@ pnpm infra:up             # postgres, pgbouncer, 2x redis, minio, mailpit, loki 
 pnpm infra:up:analytics   # the same, plus ClickHouse
 pnpm smoke                # the wiring check, against live containers
 pnpm platform:grant <email>  # the first platform admin; every later one is invited
+pnpm queue:replay <queue> [job]  # put a queue's failed jobs back; they are kept a week
 pnpm db:generate          # drizzle-kit, then partition-ddl.ts writes the PARTITION BY clause
 pnpm db:migrate | db:seed | db:studio
 pnpm db:partitions        # the runway, by hand: what the worker does monthly, for when it did not
@@ -54,7 +55,7 @@ catalog declares that nothing emits, `.env.example` drifting from what an app ac
 requires, a runnable script above `src/` that nothing typechecks, and a host port stated
 twice — a `*_PORT` and the URL that dials it, or the compose default and the template — that
 no longer agree, a permission the catalog declares that no procedure asserts, and one of the
-three copies of the `DATABASE_SHARD_<n>_URL` reader parsing differently from the other two.
+four copies of the `DATABASE_SHARD_<n>_URL` reader parsing differently from the other three.
 
 **On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
 `pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every

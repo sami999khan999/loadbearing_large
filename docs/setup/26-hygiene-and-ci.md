@@ -1027,15 +1027,16 @@ procedure is gated, and no entry names a procedure that is gone — which need t
 Both catalogs are resolved through their barrel's spreads, the same way §24 resolves the event
 catalog, so a `...billingPermissions` added tomorrow is covered without anyone editing this.
 
-### 29 — The three shard readers run one algorithm
+### 29 — The four shard readers run one algorithm
 
 ```js
-// fail if `shardsFromEnv` in apps/web/src/env.ts, apps/worker/src/env.ts and
-// packages/infrastructure/shard-env.ts do not have the same body, comments and
-// signature aside
+// fail if `shardsFromEnv` in apps/web/src/env.ts, apps/worker/src/env.ts,
+// apps/realtime/src/env.ts and packages/infrastructure/shard-env.ts do not have the
+// same body, comments and signature aside
 ```
 
-`DATABASE_SHARD_<n>_URL` is parsed in three places and cannot be parsed in one. Each deployable
+`DATABASE_SHARD_<n>_URL` is parsed in four places and cannot be parsed in one — the stream
+process, `apps/realtime`, is the fourth. Each deployable
 declares the environment it needs, which is why step 25.2 forbids extracting a shared schema; and
 the scripts above `packages/infrastructure/src` cannot import an app at all. A fourth package
 holding the parser would have to sit left of the server-only boundary to be reachable from
@@ -1050,7 +1051,7 @@ shard 1 before it"*, an index named as its own missing predecessor.
 
 **The comparison is of the body, not the file.** `withoutComments` runs first, so each copy explains
 itself where it sits; the signature is dropped, because the infrastructure copy names its return
-type where the two apps inline it. What is left is the algorithm, and three copies of one algorithm
+type where the two apps inline it. What is left is the algorithm, and four copies of one algorithm
 is a duplication somebody can read. Two algorithms is a bug nobody can see.
 
 ## Step 26.4b — `check:contrast`, the gate that is not a grep

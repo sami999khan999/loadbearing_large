@@ -75,6 +75,11 @@ makes the volume meaningful.
 deleting something. Loud and recoverable beats silent and lossy: a failed `enqueue` surfaces as a
 failed request, where a silently evicted job surfaces as a customer asking why nothing happened.
 
+**That is why both job sets are capped.** A completed job is kept an hour and at most a thousand
+per queue; a failed one a week and at most ten thousand. The failed set is the dead letter —
+`pnpm queue:replay <queue>` puts its jobs back — and the cap is what stops a day-long failure storm
+filling a `noeviction` instance, which would then refuse every enqueue.
+
 > **AOF covers a crash. It does not cover `FLUSHALL`.** That is why the queue also wants a nightly
 > sweep that re-enqueues unprocessed work, reconciling against Postgres rather than against BullMQ's
 > own job records — which age out after an hour ([15](../../setup/15-infrastructure-package.md)).
@@ -87,8 +92,10 @@ failed request, where a silently evicted job surfaces as a customer asking why n
 ([15](../../setup/15-infrastructure-package.md)):
 
 ```ts
-redis.client()       // cacheUrl  — prefixed, for RedisCacheStore
-redis.queueClient()  // queueUrl  — maxRetriesPerRequest: null, for BullMQ
+redis.client()           // cacheUrl    — prefixed, for RedisCacheStore
+redis.queueClient()      // queueUrl    — maxRetriesPerRequest: null, for BullMQ
+redis.realtimeClient()   // realtimeUrl — live frames; the cache client itself when unset
+redis.subscriberClient() // realtimeUrl — subscriber mode, opened by the first stream
 ```
 
 **One class taking two URLs rather than two classes**, because which connection a consumer gets
@@ -109,6 +116,17 @@ manages itself.
 > **Anything reached through `CacheStore` is on the instance that evicts** — including Better Auth's
 > secondary storage. That is exactly why sessions stay in Postgres and Redis is only a read-through
 > in front of them. An evicted session must be a cache miss, never a sign-out.
+
+### A third instance for live frames, when fan-out gets heavy
+
+`REDIS_REALTIME_URL` is optional. Unset, or equal to `REDIS_CACHE_URL`, live frames ride the cache
+instance and `realtimeClient()` **is** the cache client — no extra socket. Set it apart once a large
+room's fan-out competes with every request's session and permission reads: one message to a 25 000
+member room is 25 000 publishes, on the instance a sign-in is waiting on.
+
+Pub/sub keeps nothing, so that instance needs no persistence and no eviction policy. What it does
+need is attention to `client-output-buffer-limit pubsub`: a subscriber that falls behind is
+**disconnected** at the limit, and every stream on that process then ends and resyncs at once.
 
 ---
 
