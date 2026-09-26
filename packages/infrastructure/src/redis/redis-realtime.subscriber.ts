@@ -10,6 +10,7 @@ import {
   type SubscribeOptions,
   Uuid,
 } from "../import.js";
+import { RealtimeLog } from "./realtime-log.js";
 
 export interface RedisRealtimeConfig {
   readonly maxStreamsPerUser: number;
@@ -37,6 +38,9 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
   public constructor(
     private readonly connection: () => Redis,
     private readonly config: RedisRealtimeConfig,
+    // A client not in subscriber mode, for reading the log on a resume. Without one every
+    // resume is a resync, which is what it was before the log existed.
+    private readonly log?: () => Redis,
   ) {
     super();
   }
@@ -89,6 +93,9 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
 
     try {
       await this.attach(channels, push);
+      // After the attach, so nothing published between the read and the subscribe is lost;
+      // a frame both read and heard is dropped from the live queue by its id.
+      if (options?.after !== undefined) await this.resume(channels, options.after, queue);
 
       while (!signal.aborted && Date.now() < deadline) {
         if (dropped) {
@@ -128,6 +135,29 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
 
     await settled;
     return streams;
+  }
+
+  // What the stream missed, ahead of anything heard live; a resync when the log cannot
+  // answer. One channel only: two logs share no order a single `lastEventId` could name.
+  private async resume(
+    channels: readonly RealtimeChannel[],
+    after: string,
+    queue: RealtimeMessage[],
+  ): Promise<void> {
+    const [channel] = channels;
+    const missed =
+      channel !== undefined && channels.length === 1 && this.log
+        ? await RealtimeLog.since(this.log(), channel, after).catch(() => null)
+        : null;
+
+    if (missed === null) {
+      queue.unshift({ kind: "resync", id: Uuid.v7() });
+      return;
+    }
+
+    const replayed = new Set(missed.map((message) => message.id));
+    const live = queue.splice(0).filter((message) => !replayed.has(message.id));
+    queue.push(...missed, ...live);
   }
 
   private assertUnderCap(channels: readonly RealtimeChannel[]): void {

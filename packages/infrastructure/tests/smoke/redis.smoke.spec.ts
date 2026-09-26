@@ -94,6 +94,50 @@ describe("realtime against the running cache instance", () => {
     expect(received.map((message) => message.id)).toEqual(["00000000-0000-7000-8000-00000000000a"]);
   });
 
+  // `26.5`. The frames a tab missed while it was away are in the log, in order, and a
+  // resume from the first of them is handed the rest before anything live.
+  it("replays a resumed stream from the log the publisher wrote", async () => {
+    const channel = RealtimeChannels.user(ORG, "00000000-0000-7000-8000-0000000000e1");
+    const publisher = new RedisRealtimePublisher(redis.client());
+    const subscriber = new RedisRealtimeSubscriber(
+      () => redis.subscriberClient(),
+      { maxStreamsPerUser: 8, maxAgeMs: 5_000, queueSize: 256 },
+      () => redis.client(),
+    );
+    const ids = [
+      "00000000-0000-7000-8000-0000000000f1",
+      "00000000-0000-7000-8000-0000000000f2",
+      "00000000-0000-7000-8000-0000000000f3",
+    ];
+
+    try {
+      for (const id of ids) {
+        await publisher.publish(channel, {
+          kind: "event",
+          id,
+          name: "member.changed",
+          at: new Date("2026-01-01T00:00:00Z"),
+          payload: {},
+        });
+      }
+
+      const controller = new AbortController();
+      const received: string[] = [];
+      for await (const message of subscriber.subscribe([channel], controller.signal, {
+        after: ids[0],
+      })) {
+        received.push(message.id);
+        if (received.length === 2) break;
+      }
+      controller.abort();
+
+      expect(received).toEqual(ids.slice(1));
+      expect(await redis.client().ttl(`realtime:log:${channel}`)).toBeGreaterThan(0);
+    } finally {
+      await redis.client().del(`realtime:log:${channel}`);
+    }
+  });
+
   // PING is one of the eight commands valid in subscriber mode, and it answers
   // `["pong", ""]` there rather than the simple string the other connections answer.
   it("answers healthy on a connection that is in subscriber mode", async () => {
