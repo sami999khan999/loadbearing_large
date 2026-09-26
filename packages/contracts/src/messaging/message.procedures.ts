@@ -1,7 +1,5 @@
-import { eventIterator, oc } from "../import.js";
+import { oc } from "../import.js";
 import { Envelope } from "../primitive/index.js";
-import { RealtimeContract } from "../realtime/realtime.contract.js";
-import { ConversationContract } from "./conversation.contract.js";
 import { MessageContract } from "./message.contract.js";
 
 export class MessageProcedures {
@@ -34,19 +32,11 @@ export class MessageProcedures {
     .input(MessageContract.typing)
     .output(Envelope.acknowledged);
 
-  // The second stream. Opened only while a conversation is on screen, which is what
-  // keeps a tab to two connections rather than one per conversation it has ever seen.
-  public static readonly stream = oc
-    .route({ method: "GET", path: "/messages/stream" })
-    .input(ConversationContract.get)
-    .output(eventIterator(RealtimeContract.message));
-
   public static readonly all = {
     list: MessageProcedures.list,
     send: MessageProcedures.send,
     edit: MessageProcedures.edit,
     remove: MessageProcedures.remove,
     typing: MessageProcedures.typing,
-    stream: MessageProcedures.stream,
   } as const;
 }
