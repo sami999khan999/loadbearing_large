@@ -182,6 +182,7 @@ in a reconnect loop opening streams faster than it closes them — is local to t
 happening on. Behind a load balancer the effective per-person total is the cap times the replica
 count, which is the right order of magnitude for a limit whose job is to bound one bug.
 
-The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
-error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+The age limit is what releases a channel nobody is reading. The server spreads it by ±10 % so tabs
+opened together do not all end together. A stream ended by the server is not an error: the
+client's `RealtimeStream` reopens it within a second, is handed a `resync`, and refetches. That path is exercised on every
 deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.

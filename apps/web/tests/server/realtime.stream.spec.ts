@@ -8,7 +8,7 @@ import { CapabilitySet } from "@loadbearing/permissions";
 import { RPCHandler } from "@orpc/server/fetch";
 import { describe, expect, it } from "vitest";
 import { Cors } from "../../src/server/cors.js";
-import { RealtimeRouter } from "../../src/server/orpc/realtime.router.js";
+import { RealtimeRouter } from "../../src/server/import.js";
 
 const ORG = "00000000-0000-7000-8000-000000000001" as OrganizationId;
 const USER = "00000000-0000-7000-8000-000000000002" as UserId;

@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // The proof page's one handler. `ProcedurePermissions` gates the path before this runs
 // and the use-case asserts again — the two are deliberate, not redundant.

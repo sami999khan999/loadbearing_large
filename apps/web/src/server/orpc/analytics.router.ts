@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // The tenant is the principal's. Nothing in the input names one, so a caller cannot
 // read another tenant's activity by asking for it.

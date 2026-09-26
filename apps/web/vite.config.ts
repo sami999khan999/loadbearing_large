@@ -1,7 +1,51 @@
+import { type IncomingMessage, request, type ServerResponse } from "node:http";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
-import { defaultClientConditions, defaultServerConditions, defineConfig } from "vite";
+import {
+  type Connect,
+  defaultClientConditions,
+  defaultServerConditions,
+  defineConfig,
+  type Plugin,
+} from "vite";
+
+// `/api/realtime` to the stream process, apps/realtime. Not `server.proxy`: Start's
+// middleware answers every path before Vite's proxy runs, so the proxy never saw a request.
+// Registered by the first plugin, it runs first. The response is piped, never buffered, so
+// an event stream reaches the tab as it is written. Production does this in the proxy.
+function realtimeProxy(target: string): Plugin {
+  const forward = (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+    if (!req.url?.startsWith("/api/realtime")) return next();
+
+    const upstream = request(
+      `${target}${req.url}`,
+      { method: req.method, headers: req.headers },
+      (answer) => {
+        res.writeHead(answer.statusCode ?? 502, answer.headers);
+        answer.pipe(res);
+      },
+    );
+    upstream.on("error", () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+    // A tab that closes its stream closes the upstream one, or the stream process keeps a
+    // subscription open for a reader that has gone.
+    res.on("close", () => upstream.destroy());
+    req.pipe(upstream);
+  };
+
+  return {
+    name: "loadbearing:realtime-proxy",
+    configureServer: (server) => {
+      server.middlewares.use(forward);
+    },
+    configurePreviewServer: (server) => {
+      server.middlewares.use(forward);
+    },
+  };
+}
 
 // A function config, because one line of it has to differ between `vite dev` and
 // `vite build` and there is no condition token that expresses it.
@@ -33,6 +77,10 @@ export default defineConfig(({ command }) => {
   // the production bundle. `server` and `preview` are dev-only anyway.
   const port = Number(process.env.WEB_PORT ?? 13000);
 
+  // The stream process, behind this origin so the session cookie rides along. In production
+  // the reverse proxy does the same split — see docs/infra/deployment.md.
+  const realtime = `http://localhost:${process.env.REALTIME_PORT ?? 13001}`;
+
   return {
     server: { port },
     preview: { port },
@@ -47,6 +95,8 @@ export default defineConfig(({ command }) => {
       noExternal: [/^@loadbearing\//],
     },
     plugins: [
+      // First, so its middleware runs before Start's.
+      realtimeProxy(realtime),
       // The Start plugin owns route generation and must come before `viteReact()`. Two
       // things about this block are easy to get wrong and cost a confusing build failure:
       //

@@ -24,6 +24,8 @@ const Schema = z
     DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1).default(30_000),
     REDIS_CACHE_URL: z.url(),
     REDIS_QUEUE_URL: z.url(),
+    // Live frames; the cache instance when unset. See docs/infra/reference/redis.md.
+    REDIS_REALTIME_URL: z.url().optional(),
 
     S3_ENDPOINT: z.url(),
     S3_REGION: z.string().min(1),
@@ -241,7 +243,11 @@ export class Env {
         statementTimeoutMs: e.DATABASE_STATEMENT_TIMEOUT_MS,
         shards: shardsFromEnv(),
       },
-      redis: { cacheUrl: e.REDIS_CACHE_URL, queueUrl: e.REDIS_QUEUE_URL },
+      redis: {
+        cacheUrl: e.REDIS_CACHE_URL,
+        queueUrl: e.REDIS_QUEUE_URL,
+        ...(e.REDIS_REALTIME_URL ? { realtimeUrl: e.REDIS_REALTIME_URL } : {}),
+      },
       storage: {
         endpoint: e.S3_ENDPOINT,
         region: e.S3_REGION,

@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Three lines per procedure, as `RoleRouter`. `revokeInvitation` is the exception: its
 // `{ ok: true }` is the transport's word, not the domain's.
