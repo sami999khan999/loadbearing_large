@@ -17,7 +17,9 @@ export const Route = createFileRoute("/(app)/_authenticated/analytics")({
   loader: ({ context }) =>
     Promise.all([
       context.messages.ensure(MESSAGES),
-      context.queryClient.ensureQueryData(AnalyticsQueries.activity(context.api, 30)),
+      // Prefetched, never ensured: an unreachable store failed the loader, and the route's
+      // error screen replaced the panel's own "could not be loaded" (`CR.45`).
+      context.queryClient.prefetchQuery(AnalyticsQueries.activity(context.api, 30)),
     ]),
   component: Analytics,
 });
