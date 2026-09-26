@@ -1,9 +1,11 @@
 import {
   ConflictError,
+  ForbiddenError,
   type PermissionKey,
   PermissionRegistry,
   ValidationError,
 } from "../import.js";
+import type { Principal } from "../primitive/index.js";
 import type { RoleRecord } from "./role.repository.js";
 
 // Frozen at module load rather than a `static readonly`, which freezes the binding and
@@ -49,5 +51,14 @@ export class RoleRules {
       throw new ValidationError([{ field: "permission", rule: "unknown" }]);
     }
     return permission;
+  }
+
+  // No escalation by assignment: a role may go only to someone the actor could have granted
+  // every key of it to. `owner` holds them all, so only an owner hands out `owner`.
+  public static assertAssignableBy(actor: Principal, role: RoleRecord): void {
+    for (const permission of role.permissions) {
+      if (!PermissionRegistry.instance.isKnown(permission)) continue;
+      if (!actor.canTenantWide(permission)) throw new ForbiddenError(permission);
+    }
   }
 }

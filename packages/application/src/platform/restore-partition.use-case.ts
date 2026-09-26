@@ -70,11 +70,11 @@ export class RestorePartitionUseCase {
     });
 
     // The dedupe id is the request: a double click is one job, and a second request for
-    // the same month while the first is running is the same job.
+    // the same month while the first is running is the same job. After, a new one.
     await this.queue.publish(
       QueueName.MAINTENANCE,
       { table, period: input.period, organizationId: input.organizationId ?? null },
-      { jobId, name: "cold-restore" },
+      { inFlightId: jobId, name: "cold-restore" },
     );
 
     return { jobId, objects: entries.length };

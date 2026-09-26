@@ -232,6 +232,7 @@ const build = (
     mail,
     realtime,
     cache,
+    { run: (work: () => Promise<unknown>) => work() } as never,
   );
 };
 

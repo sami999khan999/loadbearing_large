@@ -247,6 +247,16 @@ describe("InviteMemberUseCase", () => {
     expect(h.mailer.sent).toEqual([]);
   });
 
+  // `CR.1`: `admin` holds `member.invite`, and an invitation onto `owner` was a takeover.
+  it("refuses a role granting a key the actor does not hold, and saves nothing", async () => {
+    const h = harness();
+
+    await expect(
+      h.useCase.execute(actorHolding("member.invite"), { email: "b@example.test", roleId: ROLE }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(h.invitations.saved).toEqual([]);
+  });
+
   // A role id from another organization parses just as well; the lookup under the
   // actor's tenant is what stops it being handed out.
   it("refuses a role that belongs to another tenant", async () => {
@@ -261,14 +271,17 @@ describe("InviteMemberUseCase", () => {
     const h = harness({ existing: ["b@example.test"] });
 
     await expect(
-      h.useCase.execute(actorHolding("member.invite"), { email: "B@Example.test", roleId: ROLE }),
+      h.useCase.execute(actorHolding("member.invite", "member.read"), {
+        email: "B@Example.test",
+        roleId: ROLE,
+      }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
   it("saves a lowercased row expiring in seven days, audits it, then mails the link", async () => {
     const h = harness();
 
-    const result = await h.useCase.execute(actorHolding("member.invite"), {
+    const result = await h.useCase.execute(actorHolding("member.invite", "member.read"), {
       email: "  B@Example.test ",
       roleId: ROLE,
     });
@@ -332,7 +345,10 @@ describe("InviteMemberUseCase", () => {
     const h = harness({ unitOfWork: new FailingUnitOfWork() });
 
     await expect(
-      h.useCase.execute(actorHolding("member.invite"), { email: "b@example.test", roleId: ROLE }),
+      h.useCase.execute(actorHolding("member.invite", "member.read"), {
+        email: "b@example.test",
+        roleId: ROLE,
+      }),
     ).rejects.toThrow("commit failed");
 
     expect(h.mailer.sent).toEqual([]);
@@ -344,7 +360,7 @@ describe("InviteMemberUseCase", () => {
     const h = harness();
     h.mailer.failing = true;
 
-    const result = await h.useCase.execute(actorHolding("member.invite"), {
+    const result = await h.useCase.execute(actorHolding("member.invite", "member.read"), {
       email: "b@example.test",
       roleId: ROLE,
     });

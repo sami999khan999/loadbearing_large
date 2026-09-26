@@ -6,7 +6,7 @@ import {
   type UserId,
   Uuid,
 } from "../import.js";
-import type { CacheStore, MailPublisher, RealtimePublisher } from "../port/index.js";
+import type { CacheStore, MailPublisher, RealtimePublisher, UnitOfWork } from "../port/index.js";
 import { type Principal, RealtimeChannels } from "../primitive/index.js";
 import { CountUnreadNotificationsUseCase } from "./count-unread-notifications.use-case.js";
 import { NotificationPolicy, type PolicyRow } from "./notification.policy.js";
@@ -35,6 +35,7 @@ export class DeliverNotificationUseCase {
     private readonly mail: MailPublisher,
     private readonly realtime: RealtimePublisher,
     private readonly cache: CacheStore,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(actor: Principal, event: DomainEvent): Promise<void> {
@@ -48,8 +49,13 @@ export class DeliverNotificationUseCase {
 
     // One statement for N recipients, and idempotent on `(event_id, user_id, kind)`.
     // The rows it reports as new are the ones nobody has been told about yet.
-    const written = await this.notifications.saveMany(
-      audience.map((recipient) => DeliverNotificationUseCase.rowFor(event, row, recipient)),
+    // ──
+    // In a unit of work because it is routed and this is the job `24.2b`'s recheck was
+    // built for: the freeze and the recheck both live in `run` (`CR.11`).
+    const written = await this.unitOfWork.run(() =>
+      this.notifications.saveMany(
+        audience.map((recipient) => DeliverNotificationUseCase.rowFor(event, row, recipient)),
+      ),
     );
     if (written.length === 0) return;
 

@@ -4,6 +4,9 @@ export interface JobOptions {
   // Idempotency is a domain rule ("enqueue OCR for this receipt, once"), not queue
   // configuration. **No `:`** — BullMQ keys on it and rejects the job at publish time.
   readonly jobId?: string;
+  // One job per id **while one is waiting or running**, and free again once it finishes.
+  // An operator's request wants this: `jobId` swallowed a retry for a day (`CR.18`).
+  readonly inFlightId?: string;
   // Lower runs first. A queue is a priority boundary, so this orders work *within* one
   // queue — a mail nobody can sign up without, ahead of a digest nobody is waiting on.
   readonly priority?: number;

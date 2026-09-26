@@ -39,6 +39,7 @@ export class ChangeMemberRoleUseCase {
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
     RoleRules.assertMembershipScope(role);
+    RoleRules.assertAssignableBy(actor, role);
 
     if (member.roleId === role.id) return member;
 

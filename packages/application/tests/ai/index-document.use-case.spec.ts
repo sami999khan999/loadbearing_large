@@ -46,6 +46,13 @@ class RecordingVectorStore implements VectorStore {
   public search(): Promise<readonly never[]> {
     return Promise.resolve([]);
   }
+
+  // What is "already indexed" for the version tests; nothing, unless a test says so.
+  public indexed: { goalId: string | null; version: number | null } | null = null;
+
+  public sourceOf(): Promise<{ goalId: string | null; version: number | null } | null> {
+    return Promise.resolve(this.indexed);
+  }
 }
 
 class StubEmbeddingProvider implements EmbeddingProvider {
@@ -203,5 +210,53 @@ describe("IndexDocumentUseCase", () => {
 
     expect(embedded).toBe(false);
     expect(vectors.calls).toEqual([]);
+  });
+});
+
+// `CR.33`. Two edits are two jobs; a retried older one landing after the newer one
+// replaced its chunks with the stale text, and nothing said so.
+describe("IndexDocumentUseCase — versions", () => {
+  const actor = actorHolding(...grants);
+  const one = new StubEmbeddingProvider((texts) => texts.length);
+
+  it("skips a job older than what is indexed, before the provider is called", async () => {
+    const vectors = new RecordingVectorStore();
+    vectors.indexed = { goalId: null, version: 200 };
+    let called = false;
+    const { useCase } = build(
+      new StubEmbeddingProvider((texts) => {
+        called = true;
+        return texts.length;
+      }),
+      vectors,
+    );
+
+    const result = await useCase.execute(actor, {
+      documentId: DOCUMENT,
+      text: "old",
+      version: 100,
+    });
+
+    expect(result.chunks).toBe(0);
+    expect(called).toBe(false);
+    expect(vectors.calls).toEqual([]);
+  });
+
+  it("indexes its own retry, and anything newer, and stamps the version", async () => {
+    const vectors = new RecordingVectorStore();
+    vectors.indexed = { goalId: null, version: 100 };
+    const { useCase } = build(one, vectors);
+
+    const result = await useCase.execute(actor, {
+      documentId: DOCUMENT,
+      text: "new",
+      version: 100,
+    });
+
+    expect(result.chunks).toBe(1);
+    expect(vectors.calls).toEqual(["delete", "upsert"]);
+    expect((vectors.upserted[0] as unknown as { metadata: unknown }).metadata).toMatchObject({
+      version: 100,
+    });
   });
 });

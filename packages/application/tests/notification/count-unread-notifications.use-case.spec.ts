@@ -108,9 +108,13 @@ describe("CountUnreadNotificationsUseCase", () => {
     const repository = new Counting();
     const cache = new Memory();
     const count = new CountUnreadNotificationsUseCase(new Authorizer(), repository, cache);
-    const markAll = new MarkAllNotificationsReadUseCase(new Authorizer(), repository, cache, {
-      now: () => new Date("2026-08-15T00:00:00Z"),
-    });
+    const markAll = new MarkAllNotificationsReadUseCase(
+      new Authorizer(),
+      repository,
+      cache,
+      { now: () => new Date("2026-08-15T00:00:00Z") },
+      { run: (work: () => Promise<unknown>) => work() } as never,
+    );
     const actor = actorHolding("notification.inbox.read", "notification.inbox.update");
 
     await count.execute(actor);

@@ -30,4 +30,8 @@ export class Principal {
   public can(permission: PermissionKey, goalId?: string): boolean {
     return this.capabilities.can(permission, goalId);
   }
+
+  public canTenantWide(permission: PermissionKey): boolean {
+    return this.capabilities.canTenantWide(permission);
+  }
 }

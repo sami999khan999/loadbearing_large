@@ -8,6 +8,8 @@ export interface IndexDocumentInput {
   // Null means the document is org-wide within this organization, never across them.
   readonly goalId?: string | null;
   readonly sourceType?: string;
+  // The request's time. Absent for a caller that is not racing anything.
+  readonly version?: number;
 }
 
 export interface IndexDocumentResult {
@@ -39,6 +41,10 @@ export class IndexDocumentUseCase {
       throw new ValidationError([{ field: "text", rule: "required" }]);
     }
 
+    // Before the paid call. Two edits are two jobs, and a retried older one landing last
+    // replaced the newer chunks with stale text (`CR.33`).
+    if (await this.superseded(actor, input)) return { documentId: input.documentId, chunks: 0 };
+
     // One round trip for the whole document. A per-chunk call is what turns a
     // re-index into a rate-limit incident.
     const vectors = await this.embeddings.embed(texts);
@@ -58,21 +64,32 @@ export class IndexDocumentUseCase {
       metadata: {
         sourceType: input.sourceType ?? "document",
         chunkIndex: index,
+        ...(input.version === undefined ? {} : { version: input.version }),
       },
     }));
 
     // Replace rather than merge, in one transaction: a re-index of shortened text must
     // not leave the chunks it no longer has.
-    await this.unitOfWork.run(async () => {
+    const replaced = await this.unitOfWork.run(async () => {
+      // Again inside, since the embedding took a while and a newer job may have landed.
+      if (await this.superseded(actor, input)) return false;
       await this.vectors.deleteBySource(actor.organizationId, input.documentId);
       await this.vectors.upsert(actor.organizationId, chunks);
       await this.activity.record(actor, "ai.document.indexed", {
         documentId: input.documentId,
         chunks: chunks.length,
       });
+      return true;
     });
 
-    return { documentId: input.documentId, chunks: chunks.length };
+    return { documentId: input.documentId, chunks: replaced ? chunks.length : 0 };
+  }
+
+  // Strictly newer only: the same version is this job's own retry, and it may finish.
+  private async superseded(actor: Principal, input: IndexDocumentInput): Promise<boolean> {
+    if (input.version === undefined) return false;
+    const indexed = await this.vectors.sourceOf(actor.organizationId, input.documentId);
+    return indexed?.version != null && indexed.version > input.version;
   }
 
   // Fixed-width windows with an overlap, so a sentence straddling a boundary is

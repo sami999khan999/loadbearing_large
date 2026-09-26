@@ -237,6 +237,7 @@ export {
   EmailSender,
   EmbeddingProvider,
   type ExportedObject,
+  type IndexedSource,
   type JobOptions,
   type LifecycleRule,
   type LogEntry,

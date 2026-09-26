@@ -40,8 +40,8 @@ export class DeleteOrganizationUseCase {
     if (tenant.isPlatform) throw new ConflictError("organization", "platform");
     if (tenant.slug !== input.slug) throw new ConflictError("organization", "slug");
 
-    // **No `:`** — BullMQ rejects a colon in a job id. One per tenant, so a second
-    // click while the first is still queued is the same job rather than a second pass.
+    // **No `:`** — BullMQ rejects a colon in a job id. One per tenant *in flight*: a
+    // double click is one job, and a retry after a failure is a new one (`CR.18`).
     const jobId = `tenant-delete.${input.organizationId}`;
 
     const auditor = new Principal(
@@ -59,7 +59,7 @@ export class DeleteOrganizationUseCase {
     await this.queue.publish(
       QueueName.MAINTENANCE,
       { organizationId: input.organizationId, actorId: actor.userId },
-      { jobId, name: "tenant-delete" },
+      { inFlightId: jobId, name: "tenant-delete" },
     );
 
     return { jobId };

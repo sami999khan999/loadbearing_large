@@ -138,7 +138,7 @@ describe("MoveTenantUseCase", () => {
       {
         queue: QueueName.MAINTENANCE,
         payload: { organizationId: TENANT, toNode: 1, actorId: ACTOR },
-        options: { jobId: `tenant-move.${TENANT}`, name: "tenant-move" },
+        options: { inFlightId: `tenant-move.${TENANT}`, name: "tenant-move" },
       },
     ]);
   });
