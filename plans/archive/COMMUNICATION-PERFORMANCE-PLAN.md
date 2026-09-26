@@ -10,6 +10,9 @@ source: tree at 14d49db (dev), 2026-09-26; three read-only surveys of the client
 
 ## Resume here
 
+**Archived 2026-09-26. The open items and the unverified hand checks below are boxes in
+`BACKLOG.md` §12; tick them there, not here.**
+
 **All seven phases are built, in the working tree, uncommitted.** At the end: `pnpm typecheck`,
 `pnpm lint`, `pnpm test` (twenty packages and apps) and `check:architecture` 29/29, all green; the
 web, worker and realtime builds pass; the realtime app boots and serves; and a signed-in stream

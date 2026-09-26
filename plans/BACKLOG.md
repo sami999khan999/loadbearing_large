@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-09-25
+updated: 2026-09-26
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -9,8 +9,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 # Backlog
 
 **This is the only open ledger, and it holds only what is open.** What has closed is in
-[`archive/DONE.md`](archive/DONE.md). Messaging, email and notifications, deferred whole, are in
-[`COMMUNICATION.md`](COMMUNICATION.md). What sessions left on a developer machine is in
+[`archive/DONE.md`](archive/DONE.md). What sessions left on a developer machine is in
 [`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history.
 
 > **How to use this file**
@@ -30,6 +29,8 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 49 | 0 |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 9 | — |
+| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 8 | — |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -38,7 +39,8 @@ same numbers.
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
 **Section 10 can, and it is the work**: forty-nine findings from the 2026-09-25 review, three of
-them security defects already shipped.
+them security defects already shipped. **Section 11 is the next work after it**: the communication
+features, which waited on the performance plan and are built on top of it now.
 
 ---
 
@@ -188,6 +190,83 @@ holds only the bodies.
   (`CR.16`, `CR.21`, `CR.22`, `CR.37`, `CR.39`), never before. — `archive/REVIEW-2026-09-25.md:303`
 - [ ] `CR.49` **the retry comment says "roughly a minute"**; it is about 30 s. Fixed with `CR.13`.
   — `archive/REVIEW-2026-09-25.md:308`
+
+---
+
+## 11. Communication features — `archive/COMMUNICATION.md`
+
+Deferred whole on 2026-09-22 because they shared one unstated requirement — messaging, email and
+notifications must not slow the app down. That requirement is the performance plan, and it is
+built; what it changed for each item is on the item. The decisions reached for them are
+`archive/COMMUNICATION.md:51`, and three things their older entries get wrong are `:71`.
+The full original text is in `archive/PLAN.md` under the same IDs.
+
+### Messaging
+
+- [ ] `26.1` **Threads, reactions, attachments.** `messages` is partitioned, so a thread's
+  `parent_id` cannot reference `id` alone; `StorageGateway.presignUpload` already exists with no
+  caller. Thread reads should take the first page's `upTo` bound (`CP2.2`). — `archive/COMMUNICATION.md:25`
+- [ ] `26.5` **Replay on reconnect** — Redis Streams behind `RealtimeSubscriber`, so a resume is a
+  real replay rather than a resync. The client already sends `lastEventId` on every reopen
+  (`CP1.4`), so this is a server-side change only. — `archive/COMMUNICATION.md:26`
+- [ ] `26.6` **A cluster-wide stream cap, and presence from open streams.** The per-person cap now
+  counts every stream a tab opens (`CP7.4`), per process; presence lives naturally in
+  `apps/realtime`. — `archive/COMMUNICATION.md:28`
+- [ ] `26.4` **Old `messages` partitions archived to S3.** Parked pending a discussion: it reopens
+  decision D47. The reads that grew with it are bounded now (`CP2.2`, `CP2.3`), which weakens the
+  case. — `archive/COMMUNICATION.md:29`
+- [ ] `26.8` **The 250 000-recipient fan-out load test.** Needs a machine that can hold a `users`
+  row per recipient. Measures the paged fan-out and batched suppression from `CP4.3`, `CP4.6`.
+  — `archive/COMMUNICATION.md:32`
+
+### Email
+
+- [ ] `26.11` **SMTP configurable from the dashboard** — a platform default plus a per-tenant
+  override, `auth.*` always on the platform sender, passwords under `MAIL_SECRET_KEY`. The pooled
+  sender (`CP4.7`) becomes one pool per sender. — `archive/COMMUNICATION.md:37`
+- [ ] `26.10` **A delivery log.** Today the record is the log lines, and a failed send is kept a
+  week in the queue's failed set with `pnpm queue:replay` (`CP3.1`, `CP3.7`). The trigger is still
+  "was this sent?" becoming unanswerable — tenant SMTP makes it likely. — `archive/COMMUNICATION.md:39`
+
+### Notifications
+
+- [ ] `26.3` **Web push** — whole or not at all, a third channel in the preference grid.
+  — `archive/COMMUNICATION.md:45`
+- [ ] `26.7` **Per-tenant digest hour, channel mentions, grouping**, plus the recipient list, count
+  and opt-out `23.4` called product work. The digest fan-out is per tenant now (`CP4.5`), which is
+  the shape a per-tenant hour needs. — `archive/COMMUNICATION.md:46`
+
+---
+
+## 12. Communication performance plan — what is left
+
+Built on 2026-09-26 and archived; every body is on its item in
+[`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md), by ID and line.
+
+- [ ] `CP1.9` **Measure the client's refetch load** — two browser tabs, twenty quick messages,
+  single-page `message.list` calls at about one a second. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:246`
+- [ ] `CP4.9` **Measure the worker's fan-out** — a seeded 500-member channel, drain and delivery
+  `durationMs` before and after. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:390`
+- [!] `CP7.8` **The web process's SIGTERM dispose** — wants Nitro's `close` hook, not a second
+  signal listener beside Nitro's own graceful shutdown. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:521`
+- [~] `CP7.9` **Web stops serving streams** — the second release: drop `realtime.*` from web's
+  handler and point the stream smoke spec at `apps/realtime`. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:525`
+
+**Checked by spec, not yet by hand.** Each item below is built and its specs pass; what is missing is
+the walk-through in a running app, which the unattended build could not do.
+
+- [ ] `CP3.1` **Mail survives an outage** — stop Mailpit three minutes, invite a member, restart it:
+  the invitation arrives. Then force a failure past its attempts and `pnpm queue:replay mail`.
+  — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:309`, Exit `:338`
+- [ ] `CP5.1` **A separate realtime Redis** — `REDIS_REALTIME_URL` at the queue instance: frames
+  still reach two tabs, and `redis-cli -p 16380 PUBSUB CHANNELS` lists them. — Exit `archive/COMMUNICATION-PERFORMANCE-PLAN.md:422`
+- [ ] `CP7.3` **A stream held thirty minutes** through Node's `http` timeouts, and `CORSPlugin` on
+  an event stream from the desktop shell once one exists. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:497`
+- [ ] `CP7.5` **A real SIGTERM on Linux** — streams end inside the window, clients reopen, the
+  process exits 0. Windows terminates instead of signalling; CI's boot smoke covers it on Linux.
+  — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:507`, Exit `:544`
+- [ ] `CP7.7` **The dev proxy in a browser tab** — proven with `curl -N`, not in a tab; and two
+  hundred open streams leave web's `/api/rpc` p95 where it was. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:517`, Exit `:544`
 
 ---
 

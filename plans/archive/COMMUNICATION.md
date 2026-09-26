@@ -88,6 +88,6 @@ a policy decision far more than it is a pipeline.
 ---
 
 The full original text of every item is in
-[`archive/PLAN.md`](archive/PLAN.md) under the same IDs, and in
-[`archive/COMMUNICATION-PLAN.md`](archive/COMMUNICATION-PLAN.md) under `C6.1`–`C6.11`. Neither is
+[`archive/PLAN.md`](PLAN.md) under the same IDs, and in
+[`archive/COMMUNICATION-PLAN.md`](COMMUNICATION-PLAN.md) under `C6.1`–`C6.11`. Neither is
 edited: a file in `archive/` records what was believed when it was written.
