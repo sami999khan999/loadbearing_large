@@ -30,7 +30,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 3 | 46 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
-| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 7 | 1 |
+| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 4 | 5 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -171,20 +171,11 @@ Built on 2026-09-26 and archived; every body is on its item in
 **Checked by spec, not yet by hand.** Each item below is built and its specs pass; what is missing is
 the walk-through in a running app, which the unattended build could not do.
 
-- [ ] `CP3.1` **Mail survives an outage** — stop Mailpit three minutes, invite a member, restart it:
-  the invitation arrives. Then force a failure past its attempts and `pnpm queue:replay mail`.
-  — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:309`, Exit `:338`
-- [ ] `CP5.1` **A separate realtime Redis** — `REDIS_REALTIME_URL` at the queue instance: frames
-  still reach two tabs, and `redis-cli -p 16380 PUBSUB CHANNELS` lists them. — Exit `archive/COMMUNICATION-PERFORMANCE-PLAN.md:422`
-- [ ] `CP7.3` **A stream held thirty minutes** through Node's `http` timeouts, and `CORSPlugin` on
-  an event stream from the desktop shell once one exists. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:497`
 - [ ] `CP7.5` **A real SIGTERM on Linux** — streams end inside the window, clients reopen, the
   process exits 0. Windows terminates instead of signalling; CI's boot smoke covers it on Linux.
   The same walk now covers the web process too: it disposes its container
   `SERVER_SHUTDOWN_TIMEOUT` plus a second after the signal, and should exit 0 on its own (`CR.34`).
   — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:507`, Exit `:544`
-- [ ] `CP7.7` **The dev proxy in a browser tab** — proven with `curl -N`, not in a tab; and two
-  hundred open streams leave web's `/api/rpc` p95 where it was. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:517`, Exit `:544`
 
 ---
 

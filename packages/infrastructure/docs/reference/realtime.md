@@ -61,8 +61,9 @@ the reader is handed a `resync` before anything else. Two halves are load-bearin
 ## A resume is replayed from a short log (`26.5`)
 
 The publisher writes every `event` frame twice, in one `MULTI`: `XADD` to the channel's log —
-`realtime:log:<channel>`, a Redis Stream trimmed to about two hundred entries and expiring an
-hour after its last write — then `PUBLISH`. Logged first, so a frame a client has seen is always a
+`realtime:log:<channel>` behind the client's key prefix (`app:realtime:log:…` on the wire; ioredis
+prefixes keys and never pub/sub channels), a Redis Stream trimmed to about two hundred entries
+and expiring an hour after its last write — then `PUBLISH`. Logged first, so a frame a client has seen is always a
 frame the log holds. Typing frames are neither logged nor given an SSE id, so they are never the
 point a client resumes from.
 

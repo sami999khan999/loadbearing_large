@@ -1263,6 +1263,43 @@ unless it says otherwise.
   through srvx, whose shutdown fires no Nitro `close` hook and does not exit. The container is
   disposed from `server/container.ts` once srvx's window is over. `CR.34` above.
 
+**Checked by hand on 2026-09-26**, with web, worker and realtime running in dev on one Windows
+machine. The scripts were throwaway and are not in the repository; the accounts they made are
+`hand-*`, `owner-*`, `outage-*`, `exhaust-*` and `split-*` at `example.test`.
+
+- [x] `CP3.1` **Mail survives an outage** `done: 2026-09-26` — Mailpit stopped at 13:50:53 and a
+  member invited in the same second; Mailpit back at 13:53:55; the invitation arrived at 13:55:46,
+  through the retries. Then past them: stopped at 13:56:44 and invited, back at 14:09:45, **nothing
+  arrived by 14:10:15** — the job had failed for good — and `pnpm queue:replay mail` answered "1
+  failed mail job(s) queued again" at 14:10:20, when the invitation arrived.
+- [x] `CP5.1` **A separate realtime Redis** `done: 2026-09-26` — the whole stack started with
+  `REDIS_REALTIME_URL` at the queue instance. With a stream open, `PUBSUB CHANNELS` listed one
+  channel on the queue instance and none on the cache; an invitation's `member.changed` frame
+  reached the stream; and `26.5`'s replay log was written there too. **The log key carries the
+  client's `app:` prefix**, which pub/sub channels do not — a scan for `realtime:log:*` finds
+  nothing. The reference page says so now.
+- [x] `CP7.3` **A stream held thirty minutes** `done: 2026-09-26` — through the dev proxy and
+  the stream process: `200 text/event-stream`, held 31.5 minutes — inside the age's ±10 % — and
+  ended cleanly with `done`, after 128 chunks of keep-alive. Nothing in Node's `http` timeouts cut
+  it early. `CORSPlugin` on an event stream from a desktop shell stays unchecked, because there is
+  no desktop shell.
+- [x] `CP7.7` **The dev proxy in a tab, and two hundred streams** `done: 2026-09-26` — in Chrome, a
+  signed-in tab's `fetch` to `/api/realtime/realtime/stream` answered `200 text/event-stream` and
+  its first frame arrived 39 ms later, while the stream stayed open: the proxy passes it through,
+  unbuffered. Two hundred streams held in the stream process, with its per-person cap raised for
+  the run, left the web app's `/api/rpc` where it was — `notification.unreadCount` over 300
+  calls:
+
+  | | p50 | p95 | max |
+  |---|---|---|---|
+  | no streams | 16.1 ms | 31.1 ms | 68.0 ms |
+  | 200 streams | 16.0 ms | 29.9 ms | 55.7 ms |
+
+  None of the stream requests reached the web app's log; all went to the stream process.
+  **One dev-only finding:** two hundred opens fired in the same tick through the Vite proxy failed
+  with `fetch failed` on the client, where batches of twenty all opened. Production puts a real
+  proxy there, and a browser opens one or two streams a tab, so it is recorded and not filed.
+
 ---
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
@@ -1497,6 +1534,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-26 | @sami | **Four of section 12's hand checks done in a running app**: mail through an outage and past its retries with `queue:replay`, a separate realtime Redis, a stream held thirty minutes, and the dev proxy in a Chrome tab plus two hundred streams with the web p95 unchanged. `CP7.5` still wants Linux; `CP1.9` and `CP4.9` are measurements still to make |
 | 2026-09-26 | @sami | **`26.5` built: a resume is replayed what it missed.** A short log per channel beside the pub/sub, read on a resume after attaching, with a `resync` past it. The first of section 11's communication features, and the one that needed no product decision: the client already sent its last event id |
 | 2026-09-26 | @sami | **Section 10 closed but for three, and `CP7.8` with it.** Twenty of the forty-nine review findings closed with the communication performance plan (`14d49db..45633e6`) and twenty-six more on 2026-09-26 in per-layer commits after `e265714`, every one with a spec except `CR.24`, checked by `EXPLAIN`, and `CR.34`, checked by build. Three shipped security defects first: an admin could invite an owner, a deactivated member's keys kept working, and a key could mint a permanent key. Then a stream that re-asks every minute, a rate limit on the six procedures that cost someone else something, the move freeze on every routed write, archive recovery, streamed cold reads, and a web process that disposes once srvx has finished. `CP7.8` was not blocked on where a Nitro plugin lives: srvx fires no Nitro hook on `SIGTERM` at all. `CR.16`, `CR.20` and `CR.33` stay open, narrowed to what is left of each |
 | 2026-09-25 | @sami | **`BACKLOG.md` cut to the open work: 393 lines to 93.** Three items were open (`24.7`, `S.2`, `S.3`) and five triggers, under about three hundred lines of closed-section notes, history, walk findings and machine state. The prose moved verbatim to this file's new section, "Moved out of `BACKLOG.md`", under the same section numbers, so every ID still resolves. The machine-state tables moved to [`STATE.md`](STATE.md): they record what to undo, and they are not done work. `S.2`'s title now says what is left, which is checking against real traffic rather than waiting to build |
