@@ -121,7 +121,9 @@ tenants the run *reached*.
 
 **One tenant's failure does not stop the others.** It emits `analytics.projection.failed` and the walk
 moves on; the run still throws the first error once everyone else has had a turn, so BullMQ counts it
-failed. The directory lookup and the checkpoint read that follow a failure are both guarded
+failed. **Three failures in a row do stop it**, because that is the store and not the tenants: a dev
+stack with `CLICKHOUSE_URL` set and ClickHouse not running wrote a failure line for every tenant every
+five minutes, 180 of them in one sitting, until this rule. The cursor still advances past the three. The directory lookup and the checkpoint read that follow a failure are both guarded
 (`CR.44`): either one throwing used to replace the error it followed, and the failure line was never
 emitted. A checkpoint that could not be read reports `eventId: "unknown"`, not `"none"`.
 

@@ -57,6 +57,10 @@ export class AnalyticsConsumer {
   private static readonly CURSOR_KEY = "analytics:project:cursor";
   private static readonly CURSOR_TTL_SECONDS = 24 * 60 * 60;
 
+  // Consecutive tenant failures after which the run stops. The cursor still advances, so
+  // a tenant that alone keeps failing is passed on the next run rather than retried first.
+  private static readonly FAILURES_BEFORE_STOPPING = 3;
+
   public constructor(
     private readonly container: Container,
     private readonly connection: Redis,
@@ -189,6 +193,7 @@ export class AnalyticsConsumer {
     let tenants = 0;
     let skipped = 0;
     let failed = 0;
+    let failingInARow = 0;
     let failure: Error | null = null;
     let last: OrganizationId | null = null;
 
@@ -216,8 +221,13 @@ export class AnalyticsConsumer {
       } catch (error: unknown) {
         failed += 1;
         failure ??= error instanceof Error ? error : new Error(String(error));
+        // Three in a row is the store, not the tenants: an unreachable ClickHouse wrote a
+        // failure line for every tenant every five minutes until the run stopped here.
+        failingInARow += 1;
+        if (failingInARow >= AnalyticsConsumer.FAILURES_BEFORE_STOPPING) break;
         continue;
       }
+      failingInARow = 0;
       if (outcome === null) {
         skipped += 1;
         continue;

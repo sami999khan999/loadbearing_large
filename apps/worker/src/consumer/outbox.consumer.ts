@@ -63,6 +63,16 @@ export class OutboxConsumer {
       });
     });
 
+    // The drain and each delivery with how long it took, as every other queue reports. A
+    // fan-out cannot be measured without it, and `CP4.9` found it missing.
+    worker.on("completed", (job) => {
+      this.container.logger.emit("queue.job.completed", {
+        queue: QueueName.EVENT,
+        jobId: job.id ?? "unknown",
+        durationMs: Math.max(0, (job.finishedOn ?? 0) - (job.processedOn ?? 0)),
+      });
+    });
+
     worker.on("stalled", (jobId) => {
       this.container.logger.emit("queue.job.stalled", { queue: QueueName.EVENT, jobId });
     });

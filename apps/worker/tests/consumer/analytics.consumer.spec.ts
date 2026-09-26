@@ -582,6 +582,33 @@ describe("AnalyticsConsumer — where a run starts", () => {
     expect(await cache.get("analytics:project:cursor")).toBe(SECOND);
   });
 
+  // The store down is every tenant failing, and a line each for every tenant every five
+  // minutes was the flood a dev stack without ClickHouse produced. Three, then stop.
+  it("stops after three failures in a row, which is the store rather than a tenant", async () => {
+    const tenants = Array.from({ length: 6 }, (_, index) =>
+      Identifiers.organizationId.parse(`018f8c00-0000-7000-8000-00000000003${index}`),
+    );
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([]),
+        organizations: new InMemoryOrganizationReader(tenants),
+      }),
+      projector: new InMemoryAnalyticsProjector(),
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      placed: () => Promise.reject(new Error("clickhouse unreachable")),
+      shardAssignments: { findByKey: (key: string) => Promise.resolve({ key, node: 0 }) },
+    } as unknown as Container;
+
+    await expect(
+      new AnalyticsConsumer(container, undefined as never, 1).handle(job("project")),
+    ).rejects.toThrow("clickhouse unreachable");
+    expect(emitted(logger, "analytics.projection.failed")).toHaveLength(3);
+  });
+
   it("starts at the first tenant when there is no cursor", async () => {
     const { consumer, visited } = rotating();
 
