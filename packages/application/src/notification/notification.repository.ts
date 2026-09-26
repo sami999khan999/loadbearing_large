@@ -64,14 +64,14 @@ export abstract class NotificationRepository {
   // Returns how many rows were new, which is what tells the caller whom to notify.
   public abstract saveMany(records: readonly NewNotification[]): Promise<readonly UserId[]>;
 
-  // "Is there already an unread one of these about this thing." One indexed query, and
-  // what keeps a burst of ten messages to one bell item rather than ten.
-  public abstract existsUnread(
+  // Which of these people already hold an unread one of these about this thing. One indexed
+  // query for the whole audience — what keeps a burst of ten messages to one bell item.
+  public abstract unreadSubjectHolders(
     organizationId: OrganizationId,
-    userId: UserId,
+    userIds: readonly UserId[],
     kind: NotificationKind,
     subjectId: string,
-  ): Promise<boolean>;
+  ): Promise<ReadonlySet<UserId>>;
 
   // `createdAt` is the partition hint. Without it Postgres has to look in every month.
   public abstract markRead(
@@ -88,26 +88,25 @@ export abstract class NotificationRepository {
     at: Date,
   ): Promise<void>;
 
-  // For the digest, which asks "what has this person not read since the last one".
-  public abstract listUnreadSince(
+  // The digest's page: each person's unread rows in `[since, until)`, newest first and at
+  // most `perUser` each, in one query. Half-open, so a row is in exactly one day's digest.
+  public abstract listUnreadBetween(
     organizationId: OrganizationId,
-    userId: UserId,
+    userIds: readonly UserId[],
     since: Date,
-    limit: number,
-  ): Promise<readonly NotificationRecord[]>;
+    until: Date,
+    perUser: number,
+  ): Promise<ReadonlyMap<UserId, readonly NotificationRecord[]>>;
 
   // The digest's candidate list, keyset on the user id. Driven by unread rows rather
   // than by stored preferences: a reader on the policy default has no row to be found by.
-  public abstract recipientsWithUnreadSince(
+  public abstract recipientsWithUnreadBetween(
     organizationId: OrganizationId,
     since: Date,
+    until: Date,
     limit: number,
     afterUserId: UserId | null,
   ): Promise<readonly UserId[]>;
-
-  // Which tenants have anything to digest at all, for the worker's fan-out. Cross-tenant
-  // by construction, looped per shard by the consumer, and read once a day.
-  public abstract organizationsWithUnreadSince(since: Date): Promise<readonly OrganizationId[]>;
 }
 
 export type { NotificationDto };

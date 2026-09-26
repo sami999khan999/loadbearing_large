@@ -33,6 +33,13 @@ class RecordingQueue implements QueuePublisher {
     this.published.push({ queue, payload, options });
     return Promise.resolve();
   }
+
+  public async publishMany<T>(
+    queue: string,
+    jobs: readonly { payload: T; options?: JobOptions }[],
+  ): Promise<void> {
+    for (const job of jobs) await this.publish(queue, job.payload, job.options);
+  }
 }
 
 class StubEmbeddings implements EmbeddingProvider {

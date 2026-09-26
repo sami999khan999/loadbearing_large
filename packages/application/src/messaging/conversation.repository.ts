@@ -15,7 +15,8 @@ export interface ConversationMemberRecord {
   readonly lastReadAt: Date | null;
 }
 
-export interface ConversationRecord {
+// Everything but the roster, which is what a check that the caller is in the room returns.
+export interface ConversationHeader {
   readonly id: ConversationId;
   readonly kind: ConversationKind;
   readonly title: string | null;
@@ -23,6 +24,9 @@ export interface ConversationRecord {
   readonly createdAt: Date;
   readonly lastMessageAt: Date | null;
   readonly lastMessageId: MessageId | null;
+}
+
+export interface ConversationRecord extends ConversationHeader {
   readonly members: readonly ConversationMemberRecord[];
 }
 
@@ -54,6 +58,14 @@ export abstract class ConversationRepository {
     conversationId: ConversationId,
   ): Promise<ConversationRecord | null>;
 
+  // The header when `userId` is a member; null when they are not, or it does not exist. One
+  // join, where `findById` also reads every member row — a large channel on every send.
+  public abstract findMembership(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    userId: UserId,
+  ): Promise<ConversationHeader | null>;
+
   public abstract findByDirectKey(
     organizationId: OrganizationId,
     directKey: string,
@@ -69,12 +81,13 @@ export abstract class ConversationRepository {
     userId: UserId,
   ): Promise<boolean>;
 
-  // Ordered by user id, and `limit` caps a fan-out rather than paging one: the
-  // recipient read takes the routed half here and resolves it on the catalog.
+  // Ordered by user id. `limit` with no `after` caps a fan-out, as the recipient read does;
+  // with `after` it is a keyset page, which is how the realtime fan-out walks a big room.
   public abstract memberIds(
     organizationId: OrganizationId,
     conversationId: ConversationId,
     limit?: number,
+    after?: UserId | null,
   ): Promise<readonly UserId[]>;
 
   public abstract saveMember(
@@ -106,6 +119,8 @@ export abstract class ConversationRepository {
     at: Date,
   ): Promise<void>;
 
+  // Only ever forward: two sends committing out of order must not leave the older one as
+  // the conversation's latest.
   public abstract touch(
     organizationId: OrganizationId,
     conversationId: ConversationId,

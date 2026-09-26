@@ -38,9 +38,9 @@ export {
   type RestoredMonth,
   type TenantExport,
 } from "./partition-archive.gateway.js";
-export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
+export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
-export { RealtimeSubscriber } from "./realtime.subscriber.js";
+export { RealtimeSubscriber, type SubscribeOptions } from "./realtime.subscriber.js";
 export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
 export {
   type RequestHeaders,

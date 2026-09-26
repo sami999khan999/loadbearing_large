@@ -11,8 +11,14 @@ expensively.
 ## A permission is necessary and never sufficient
 
 `messaging.conversation.read` says this person may read conversations. It does not say
-*which*. Every use-case in the slice also calls `ConversationAccess.assertMember`, and a third
-member of the organization gets `FORBIDDEN` on `message.list` rather than an empty page.
+*which*. Every use-case in the slice also calls `ConversationAccess`, and a third member of the
+organization gets `FORBIDDEN` on `message.list` rather than an empty page.
+
+**Two checks, one question.** `assertParticipant` is one join — the conversation's header where the
+caller has a member row — and it is what send, edit, delete, list, mark-read and typing call.
+`assertMember` also loads the roster, and only the use-cases that read or change membership call
+it. Loading every member to answer "is this person in the room" cost a 5 000-member channel five
+thousand rows on every send.
 
 The two are different questions and giving them one mechanism is the way into a stranger's DM.
 That is why the check is a shared object rather than a line copied into thirteen use-cases: a
@@ -76,6 +82,13 @@ the count is a `LATERAL` per row of the conversation page, **capped at a hundred
   A mark that arrives late for an older message cannot move the reader backwards.
 - **The cap bounds the worst case.** A channel nobody has opened in a year costs a hundred index
   entries, and the badge says "99+" — which is what a person reads anyway.
+- **So does a floor.** Only the last ninety days count, passed as a bound parameter so the planner
+  prunes every older month before it runs. `messages` is never retired, so without it every render
+  of the conversation list read every month the tenant has ever had.
+
+**The first page of a room is bounded too.** `message.list` passes the conversation's
+`lastMessageAt` as the page's ceiling, so a room opened reads the months up to its newest message
+rather than the runway above it, and a room with no messages answers without a query.
 
 The 100k move is `unreadCounts` behind a Redis `HINCRBY` adapter with `last_read_at` still the
 record. That is a swap of one method, which is the point of it being one method.
@@ -106,8 +119,9 @@ commit** — the fast path. `MessagingRealtimeSubscriber` publishes the same fra
 - The durable path is what makes it appear *at all* if the web process dies between the commit
   and the publish.
 
-The client dedupes by message id, so a duplicate costs a refetch nobody sees and a lost fast-path
-frame costs nothing. Neither path is allowed to be the only one.
+Both frames carry `messageId`, and the client drops the second one it hears, so a duplicate costs
+nothing and a lost fast-path frame costs a second of latency. Neither path is allowed to be the
+only one.
 
 Typing rides the conversation channel and stores nothing. It is a separate wire variant rather
 than an `event`, because it invalidates no cache and expires on its own — a routing table that had
@@ -195,6 +209,7 @@ with a table attached.
 The row also declares a **subject** — the conversation id — and `DeliverNotificationUseCase` drops
 any recipient who already has an unread notification of that kind about that subject. So a burst
 of ten messages is one bell item, one frame and one digest line, and the eleventh arrives only
-after the reader has cleared the first. The check is one indexed query against
-`notifications_subject_idx`, which is partial on `read_at IS NULL AND subject_id IS NOT NULL` so
-it holds only rows the check can ever match.
+after the reader has cleared the first. The check is **one** indexed query for the whole audience
+— `unreadSubjectHolders`, `user_id = any(…)` — against `notifications_subject_idx`, which is partial
+on `read_at IS NULL AND subject_id IS NOT NULL` so it holds only rows the check can ever match. It
+used to be one query per recipient: five hundred round trips for one channel message.

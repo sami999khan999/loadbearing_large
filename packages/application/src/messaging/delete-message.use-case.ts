@@ -18,7 +18,7 @@ export class DeleteMessageUseCase {
 
   public async execute(actor: Principal, input: DeleteMessageInput): Promise<void> {
     this.authorizer.assert(actor, "messaging.message.update");
-    await this.access.assertMember(actor, input.conversationId);
+    await this.access.assertParticipant(actor, input.conversationId);
 
     const existing = await this.messages.findById(
       actor.organizationId,

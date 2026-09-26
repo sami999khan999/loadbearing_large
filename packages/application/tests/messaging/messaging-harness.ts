@@ -150,3 +150,12 @@ export const naming = (users = new RecordingUserReader()) => ({
   users,
   instance: new ConversationNaming(users),
 });
+
+// `findMembership` answered from a fake's `findById`, so a spec that swaps the row it
+// returns — absent, or without the caller — changes both reads at once.
+export const membershipFrom =
+  (find: () => Promise<ConversationRecord | null>) =>
+  async (_organizationId: unknown, _conversationId: unknown, userId: string) => {
+    const row = await find();
+    return row?.members.some((member) => member.userId === userId) ? row : null;
+  };

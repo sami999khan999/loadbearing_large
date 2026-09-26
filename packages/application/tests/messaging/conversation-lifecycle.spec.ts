@@ -60,6 +60,13 @@ class Memberships extends TenantMembershipReader {
   ): Promise<boolean> {
     return Promise.resolve(!this.absent.includes(userId));
   }
+
+  public override activeMemberIds(
+    _organizationId: OrganizationId,
+    userIds: readonly UserId[],
+  ): Promise<ReadonlySet<UserId>> {
+    return Promise.resolve(new Set(userIds.filter((userId) => !this.absent.includes(userId))));
+  }
 }
 
 const creator = (existing: ConversationRecord | null) => {

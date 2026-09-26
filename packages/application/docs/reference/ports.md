@@ -230,14 +230,18 @@ reader in the UI; the other has a schema, a `published_at`, and subscribers.
 
 ## `OutboxGateway` hands out claimed work, and marks it only on success
 
-`drain(limit, relay)` selects a batch, calls `relay`, and marks the rows published **only if `relay`
-resolves**. A throw rolls the claim back and the same rows come round on the next tick. That is what
+`drain(limit, relay)` claims a batch, calls `relay`, and marks the rows published **only if `relay`
+resolves**. A throw releases the claim and the same rows come round on the next tick. That is what
 makes the whole pipeline at-least-once rather than at-most-once, and it is why the in-memory fake
 honours the same ordering — a fake that removed rows first would let a spec prove a guarantee the
 adapter does not have.
 
-The batch is claimed with `FOR UPDATE SKIP LOCKED`, so two worker replicas share the drain with no
-coordinator and no leader election.
+**No transaction is open across the relay.** The claim is one auto-committed statement — `FOR UPDATE
+SKIP LOCKED` inside an `UPDATE` that stamps `claimed_until` sixty seconds out — so two worker
+replicas still share the drain with no coordinator, and the relay's Redis round trips hold no row
+lock and no snapshot. It used to run inside one transaction, which held the node's xmin for the
+whole batch every second, and a slow queue Redis stalled vacuum node-wide. A drain that dies
+between relay and mark frees its rows when the lease passes; the relayed jobs dedupe by id.
 
 `oldestPendingAt()` returns `null` when nothing is pending. That is the *healthy* answer, not a
 missing one, and an alert keyed on lag has to treat the two differently.

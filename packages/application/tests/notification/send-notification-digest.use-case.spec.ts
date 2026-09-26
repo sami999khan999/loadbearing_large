@@ -55,8 +55,8 @@ class Notifications implements NotificationRepository {
     return Promise.resolve([]);
   }
 
-  public existsUnread(): Promise<boolean> {
-    return Promise.resolve(false);
+  public unreadSubjectHolders(): Promise<ReadonlySet<never>> {
+    return Promise.resolve(new Set());
   }
 
   public markRead(): Promise<void> {
@@ -67,23 +67,28 @@ class Notifications implements NotificationRepository {
     return Promise.resolve();
   }
 
-  public listUnreadSince(): Promise<readonly NotificationRecord[]> {
-    return Promise.resolve(this.rows);
+  public windows: { since: Date; until: Date }[] = [];
+
+  public listUnreadBetween(
+    _organizationId: typeof ORG,
+    _userIds: readonly (typeof USER)[],
+    since: Date,
+    until: Date,
+  ): Promise<ReadonlyMap<typeof USER, readonly NotificationRecord[]>> {
+    this.windows.push({ since, until });
+    return Promise.resolve(new Map(this.rows.length > 0 ? [[USER, this.rows]] : []));
   }
 
   // The candidate list, which used to come from the preference table and so was empty
   // for everyone on the shipped defaults.
-  public recipientsWithUnreadSince(
+  public recipientsWithUnreadBetween(
     _organizationId: typeof ORG,
     _since: Date,
+    _until: Date,
     _limit: number,
     afterUserId: typeof USER | null,
   ): Promise<readonly (typeof USER)[]> {
     return Promise.resolve(afterUserId === null && this.rows.length > 0 ? [USER] : []);
-  }
-
-  public organizationsWithUnreadSince(): Promise<readonly (typeof ORG)[]> {
-    return Promise.resolve([ORG]);
   }
 }
 
@@ -137,8 +142,16 @@ class Organizations implements Partial<OrganizationReader> {
 class Mail implements MailPublisher {
   public readonly published: MailRequest[] = [];
 
+  public batches = 0;
+
   public publish(request: MailRequest): Promise<void> {
     this.published.push(request);
+    return Promise.resolve();
+  }
+
+  public publishMany(requests: readonly MailRequest[]): Promise<void> {
+    this.batches += 1;
+    this.published.push(...requests);
     return Promise.resolve();
   }
 }
@@ -245,5 +258,26 @@ describe("SendNotificationDigestUseCase", () => {
 
     expect(published).toHaveLength(1);
     expect(published[0]?.params).toMatchObject({ count: 1 });
+  });
+
+  // `CP4.4`: the day before, half-open, so a row is in exactly one morning's digest — and
+  // the page's mail leaves as one batch rather than one enqueue per person.
+  it("reads a half-open day and sends the page as one batch", async () => {
+    const notifications = new Notifications([unread("message.received", "messaging")]);
+    const mail = new Mail();
+
+    await new SendNotificationDigestUseCase(
+      notifications,
+      new Preferences(),
+      new Recipients(),
+      mail,
+      new Organizations() as unknown as OrganizationReader,
+    ).execute(ACTOR, { organizationId: ORG, day: DAY });
+
+    const until = new Date(`${DAY}T00:00:00.000Z`);
+    expect(notifications.windows).toEqual([
+      { since: new Date(until.getTime() - 86_400_000), until },
+    ]);
+    expect(mail.batches).toBe(1);
   });
 });

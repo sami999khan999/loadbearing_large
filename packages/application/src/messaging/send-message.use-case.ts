@@ -47,7 +47,7 @@ export class SendMessageUseCase {
 
   public async execute(actor: Principal, input: SendMessageInput): Promise<MessageRecord> {
     this.authorizer.assert(actor, "messaging.message.send");
-    const conversation = await this.access.assertMember(actor, input.conversationId);
+    const conversation = await this.access.assertParticipant(actor, input.conversationId);
 
     // Generated here, not in the repository: the dedupe key holds them, which is what
     // lets a retry be handed the row the first attempt wrote.

@@ -15,6 +15,17 @@ export interface JobOptions {
   readonly removeOnCompleteAgeSeconds?: number;
 }
 
+export interface QueuedJob<T> {
+  readonly payload: T;
+  readonly options?: JobOptions;
+}
+
 export abstract class QueuePublisher {
   public abstract publish<T>(queue: string, payload: T, options?: JobOptions): Promise<void>;
+
+  // Many jobs for one queue. The default is one publish each; an adapter that can send
+  // them in one round trip overrides it, which is the whole reason a fan-out calls this.
+  public async publishMany<T>(queue: string, jobs: readonly QueuedJob<T>[]): Promise<void> {
+    for (const job of jobs) await this.publish(queue, job.payload, job.options);
+  }
 }

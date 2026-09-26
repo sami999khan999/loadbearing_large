@@ -14,7 +14,7 @@ export class MarkConversationReadUseCase {
 
   public async execute(actor: Principal, input: MarkConversationReadInput): Promise<void> {
     this.authorizer.assert(actor, "messaging.conversation.read");
-    await this.access.assertMember(actor, input.conversationId);
+    await this.access.assertParticipant(actor, input.conversationId);
 
     // Idempotent in the repository — `GREATEST(last_read_at, ?)` — so a late mark for an
     // older message cannot move the position backwards.

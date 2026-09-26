@@ -20,6 +20,8 @@ export interface MessageQuery {
   readonly conversationId: ConversationId;
   readonly limit: number;
   readonly before?: string | undefined;
+  // The newest row's `created_at`, if known: an upper bound the first page can prune by.
+  readonly upTo?: Date | undefined;
 }
 
 export interface NewMessage {

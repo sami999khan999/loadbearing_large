@@ -1,5 +1,6 @@
 export { AddConversationMemberUseCase } from "./add-conversation-member.use-case.js";
 export {
+  type ConversationHeader,
   type ConversationMemberRecord,
   type ConversationPage,
   type ConversationRecord,

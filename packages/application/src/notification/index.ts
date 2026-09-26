@@ -9,7 +9,6 @@ export {
   type ListArchivedNotificationsInput,
   ListArchivedNotificationsUseCase,
 } from "./list-archived-notifications.use-case.js";
-export { ListDigestOrganizationsUseCase } from "./list-digest-organizations.use-case.js";
 export { ListNotificationsUseCase } from "./list-notifications.use-case.js";
 export { MarkAllNotificationsReadUseCase } from "./mark-all-notifications-read.use-case.js";
 export { MarkNotificationReadUseCase } from "./mark-notification-read.use-case.js";
