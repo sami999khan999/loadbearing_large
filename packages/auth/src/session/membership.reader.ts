@@ -17,15 +17,11 @@ export abstract class MembershipReader {
   // Prefers `last_active_organization_id` while still a member, oldest membership after.
   public abstract activeOrganizationFor(userId: UserId): Promise<OrganizationId | null>;
 
-  // The switch endpoint's entire authorization: a session may only be rebound to a
-  // tenant this user holds a membership in.
-  public abstract isMember(userId: UserId, organizationId: OrganizationId): Promise<boolean>;
-
   // Every tenant the user may switch to, oldest first. Read once per SSR pass.
   public abstract organizationsFor(userId: UserId): Promise<readonly OrganizationSummary[]>;
 
   // False for a deactivated membership *and* for no membership at all, because the
-  // answer `PrincipalBuilder` needs is the same either way: do not issue a principal.
+  // answer is the same either way: no principal, and no switching the session there.
   public abstract isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean>;
 
   // How many tenants this person owns. A count rather than `organizationsFor().length`:

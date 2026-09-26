@@ -43,8 +43,8 @@ export class OrganizationPlugin {
             const organizationId = ctx.body.organizationId as OrganizationId;
 
             // The whole authorization. A session may only be rebound to a tenant this
-            // person holds a membership in, and `isMember` is one indexed lookup.
-            if (!(await memberships.isMember(user.id as UserId, organizationId))) {
+            // person holds an *active* membership in; a deactivated one answers anonymous.
+            if (!(await memberships.isActive(user.id as UserId, organizationId))) {
               throw new APIError("FORBIDDEN", {
                 code: "NOT_A_MEMBER",
                 message: "Not a member of that organization.",

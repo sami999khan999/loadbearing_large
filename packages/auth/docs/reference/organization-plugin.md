@@ -9,7 +9,7 @@ Three `POST` endpoints mounted on Better Auth:
 
 | Path | Body | Authorization |
 |---|---|---|
-| `/organization/switch` | `{ organizationId }` | `MembershipReader.isMember` — one indexed lookup |
+| `/organization/switch` | `{ organizationId }` | `MembershipReader.isActive` — one indexed lookup |
 | `/organization/create` | `{ name }` | a session, the rate limit, and a cap on tenants owned |
 | `/invitation/accept` | `{ token }` | `InvitationClaimer.claimByToken` decides |
 
@@ -49,9 +49,11 @@ nothing written here needs to be undone when a member is removed.
 
 ## Refusals
 
-`switchOrganization` throws `FORBIDDEN` / `NOT_A_MEMBER` when `isMember` says no. That check is the
-whole authorization: a session may only be rebound to a tenant this person already holds a
-membership in.
+`switchOrganization` throws `FORBIDDEN` / `NOT_A_MEMBER` when `isActive` says no. That check is the
+whole authorization: a session may only be rebound to a tenant this person holds an **active**
+membership in. It was `isMember` until `CR.7`, which let a session switch into a tenant that had
+deactivated the person and then answered every request anonymous. Sign-in's default tenant and the
+switcher's list skip a deactivated membership for the same reason.
 
 `acceptInvitation` throws `NOT_FOUND` / `INVITATION_NOT_CLAIMABLE` on a `null` from the claimer, and
 `null` covers every refusal at once — unknown token, expired, revoked, sent to a different address,

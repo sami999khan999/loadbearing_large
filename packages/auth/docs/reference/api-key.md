@@ -78,6 +78,11 @@ managing roles — and nobody notices, because the key still works. Re-intersect
 person narrows their keys with them, in the same request, through the same
 [`CapabilityCache`](capability-cache.md) that gates their browser session.
 
+**And the issuer's membership is checked alongside it**, `MembershipReader.isActive`, in parallel with
+the capability read. The session path makes that check and this one did not (`CR.2`), so a
+deactivated member's keys kept working — the grants narrowed by the cache's minute, and `core` keys
+not at all, because an intersection keeps them on both sides.
+
 The scopes are also filtered through `PermissionRegistry.isKnown()` first. A row written before a
 permission was renamed is a stale string, not a grant — and it must not throw either, because a stale
 key is a 401, never a 500.
@@ -109,6 +114,11 @@ Three use-cases in `application/src/apikey/`, gated on `apikey.read` and `apikey
 such a scope would grant nothing — until the issuer is promoted, at which point the key silently
 widens. Refusing at creation is the difference between a key that means what it says and one that
 means whatever its issuer means later.
+
+**A key cannot issue a key** (`CR.3`). The child is the *issuer's*, not the parent's, and nothing ties
+the two — so a leaked short-lived key holding `apikey.manage` could mint a permanent sibling that
+survived its own revocation. `CreateApiKeyUseCase` refuses any `api_key` principal outright: keys are
+made by a person, signed in.
 
 **Revocation is a timestamp and the row stays.** A key that authenticated something last week is part
 of the audit trail, and a deleted row answers no question about it. Re-revoking is idempotent and
