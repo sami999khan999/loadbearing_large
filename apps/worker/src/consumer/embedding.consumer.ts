@@ -7,6 +7,8 @@ interface EmbeddingJobData {
   readonly text: string;
   readonly goalId?: string | null;
   readonly sourceType?: string;
+  // Absent on a job queued before `CR.33`, which then indexes unconditionally.
+  readonly version?: number;
 }
 
 // A thin adapter, exactly like an oRPC router. Everything worth testing lives in
@@ -72,6 +74,7 @@ export class EmbeddingConsumer {
         text: job.data.text,
         goalId: job.data.goalId ?? null,
         sourceType: job.data.sourceType ?? "document",
+        ...(job.data.version === undefined ? {} : { version: job.data.version }),
       }),
     );
   }

@@ -111,6 +111,20 @@ acknowledged, so a projector that failed mid-insert resumes from what is actuall
 A short batch means the replay has caught up — continuing would issue one more query to learn what
 the length already said.
 
+**A run starts where the last one stopped, and wraps round** (`CR.20`). The budget is shared across
+tenants, and when every run started at the first tenant in id order, one tenant with a large backlog
+early in that order spent it every time and nobody after it was reached — unmeasured, because the
+lag line is the maximum and that tenant was the maximum. The cursor is the last tenant a run reached,
+kept in the cache for a day: losing it costs one run that starts at the beginning again. Once the
+budget is spent the walk stops paging the catalog too, so `tenants` on the completion line counts the
+tenants the run *reached*.
+
+**One tenant's failure does not stop the others.** It emits `analytics.projection.failed` and the walk
+moves on; the run still throws the first error once everyone else has had a turn, so BullMQ counts it
+failed. The directory lookup and the checkpoint read that follow a failure are both guarded
+(`CR.44`): either one throwing used to replace the error it followed, and the failure line was never
+emitted. A checkpoint that could not be read reports `eventId: "unknown"`, not `"none"`.
+
 **The walk stops thirty seconds behind the clock, and that bound is not tuning.** `occurred_at` is
 stamped when a transaction *starts*, and transactions commit in whatever order they finish. A slow
 write that stamped an early timestamp becomes visible after a fast one that stamped a later one, so

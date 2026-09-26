@@ -27,7 +27,9 @@ export class PartitionsSchedule {
         {
           jobId: PartitionsSchedule.BOOT_JOB_ID,
           removeOnComplete: true,
-          removeOnFail: 100,
+          // `true`, never a count: BullMQ ignores an `add` whose id is still in the failed
+          // set, so one boot with Postgres down disabled the recovery for good (`CR.17`).
+          removeOnFail: true,
         },
       );
     } finally {

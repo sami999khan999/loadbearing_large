@@ -4,6 +4,7 @@ import {
   FixedClock,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryCacheStore,
   InMemoryColdArchiveReader,
   InMemoryOrganizationReader,
   InMemoryPlatformPolicyRepository,
@@ -471,11 +472,21 @@ describe("AnalyticsConsumer — a tenant that cannot be placed", () => {
 
   // The skip is for a missing row, never for a failure to ask: a catalog outage that
   // skipped every tenant would read as a quiet, successful run.
-  it("still fails the run when the directory cannot be asked", async () => {
-    const { consumer, logger } = unplaceable("down");
+  // ──
+  // `CR.44`: and the lookup's own error must not replace the one it follows, or the
+  // failure line is never emitted. `CR.20`: the tenants after it still project.
+  it("still fails the run when the directory cannot be asked, with the original error", async () => {
+    const { consumer, logger, projected } = unplaceable("down");
 
-    await expect(consumer.handle(job("project"))).rejects.toThrow("catalog unreachable");
+    await expect(consumer.handle(job("project"))).rejects.toThrow("No shard assignment");
     expect(emitted(logger, "analytics.tenant.skipped")).toEqual([]);
+    expect(emitted(logger, "analytics.projection.failed")).toEqual([
+      { projection: "activity_events", organizationId: SECOND, eventId: "none" },
+    ]);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({ failed: 1 });
+    expect(await projected.checkpoint(Identifiers.organizationId.parse(ORG))).toMatchObject({
+      lastId: "a",
+    });
   });
 });
 
@@ -524,5 +535,58 @@ describe("AnalyticsConsumer — the replica switch", () => {
     await consumer.handle(job("reconcile"));
 
     expect(placements).toEqual([{ recheck: true, replica: true }]);
+  });
+});
+
+// `CR.20`. Every run started at the first tenant and spent the budget first come, first
+// served, so a large backlog early in id order starved everyone after it, unmeasured.
+describe("AnalyticsConsumer — where a run starts", () => {
+  const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
+  const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
+  const THIRD = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000003");
+
+  function rotating() {
+    const visited: string[] = [];
+    const cache = new InMemoryCacheStore();
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([]),
+        analyticsProjector,
+        cache,
+        organizations: new InMemoryOrganizationReader([FIRST, SECOND, THIRD]),
+      }),
+      projector: analyticsProjector,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      placed: <T>(principal: { organizationId: string }, work: () => Promise<T>) => {
+        visited.push(principal.organizationId);
+        return work();
+      },
+    } as unknown as Container;
+
+    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), cache, visited };
+  }
+
+  it("starts after the tenant the last run stopped at, and wraps round to it", async () => {
+    const { consumer, cache, visited } = rotating();
+    await cache.set("analytics:project:cursor", SECOND, 60);
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([THIRD, FIRST, SECOND]);
+    expect(await cache.get("analytics:project:cursor")).toBe(SECOND);
+  });
+
+  it("starts at the first tenant when there is no cursor", async () => {
+    const { consumer, visited } = rotating();
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([FIRST, SECOND, THIRD]);
   });
 });
