@@ -22,6 +22,8 @@ export const platformProcedurePermissions = {
   "platform.updateProjectionSwitch": "platform.analytics.manage",
   "platform.listProjection": "platform.analytics.read",
   "platform.updateProjection": "platform.analytics.manage",
+  // Manage: routing a read off the primary is a change to what every batch job sees.
+  "platform.updateReplicaSwitch": "platform.replica.manage",
   "platform.deleteTenant": "platform.tenant.manage",
   "platform.exportTenant": "platform.tenant.manage",
   "platform.listExports": "platform.tenant.manage",

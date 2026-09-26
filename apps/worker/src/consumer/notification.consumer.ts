@@ -13,9 +13,8 @@ interface DigestJobData {
   readonly day: string;
 }
 
-// One page of tenants per fan-out. A deployment with more than this many digesting
-// organizations wants the fan-out itself paged, and that is a `[!]` worth seeing.
-const MAX_ORGANIZATIONS = 5_000;
+// Tenants per catalog page, and per batch of digest jobs enqueued in one round trip.
+const TENANT_PAGE = 500;
 
 export class NotificationConsumer {
   public constructor(
@@ -65,39 +64,40 @@ export class NotificationConsumer {
   // One job per tenant rather than one job doing every tenant: a digest that fails for
   // one organization must not stop the other four thousand.
   private async fanOut(): Promise<void> {
-    const now = this.container.clock.now();
-    const day = NotificationConsumer.dayOf(now);
-    const organizations: OrganizationId[] = [];
+    const day = NotificationConsumer.dayOf(this.container.clock.now());
+    let organizations = 0;
 
-    // `notifications` is routed, so "which tenants have anything to send" is a question
-    // each node answers about the tenants it holds.
-    await this.container.eachShard(async () => {
-      organizations.push(
-        ...(await this.container.notification.digestOrganizations.execute(
-          SystemPrincipal.platform(),
-          now,
-        )),
-      );
+    // Each node's tenants from the catalog, a page at a time. The old question — which
+    // tenants have unread rows — scanned every tenant's partitions and ran out of locks.
+    await this.container.eachShard(async (node) => {
+      let after: OrganizationId | null = null;
+
+      for (;;) {
+        const page = await this.container.organizations.page(after, TENANT_PAGE, node);
+        if (page.length === 0) break;
+
+        // A tenant with nothing unread costs its digest job one pruned query and no mail.
+        await this.container.queue.publishMany(
+          QueueName.NOTIFICATION,
+          page.map((organizationId) => ({
+            payload: { organizationId, day },
+            options: {
+              name: "digest",
+              // Tenant plus day. A schedule that fires twice, or a redelivered fan-out,
+              // produces the same id and BullMQ sends one morning's digest.
+              jobId: `digest_${organizationId}_${day}`,
+              attempts: 3,
+            },
+          })),
+        );
+        organizations += page.length;
+
+        after = page.at(-1) ?? null;
+        if (page.length < TENANT_PAGE) break;
+      }
     });
 
-    for (const organizationId of organizations.slice(0, MAX_ORGANIZATIONS)) {
-      await this.container.queue.publish(
-        QueueName.NOTIFICATION,
-        { organizationId, day },
-        {
-          name: "digest",
-          // Tenant plus day. A schedule that fires twice, or a redelivered fan-out,
-          // produces the same id and BullMQ sends one morning's digest.
-          jobId: `digest_${organizationId}_${day}`,
-          attempts: 3,
-        },
-      );
-    }
-
-    this.container.logger.emit("notification.digest.completed", {
-      organizations: organizations.length,
-      day,
-    });
+    this.container.logger.emit("notification.digest.completed", { organizations, day });
   }
 
   private async digest(data: DigestJobData): Promise<void> {

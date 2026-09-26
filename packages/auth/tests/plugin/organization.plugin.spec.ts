@@ -20,7 +20,7 @@ const recorder = () => ({
 });
 
 interface Behaviour {
-  readonly isMember?: boolean;
+  readonly isActive?: boolean;
   readonly ownedCount?: number;
   readonly claimed?: string | null;
   readonly sessionUpdated?: boolean;
@@ -32,7 +32,7 @@ const build = (behaviour: Behaviour = {}) => {
 
   const plugin = OrganizationPlugin.create(
     {
-      isMember: () => Promise.resolve(behaviour.isMember ?? true),
+      isActive: () => Promise.resolve(behaviour.isActive ?? true),
       ownedCount: () => Promise.resolve(behaviour.ownedCount ?? 0),
     } as never,
     { claimByToken: () => Promise.resolve(behaviour.claimed ?? null) } as never,
@@ -99,8 +99,11 @@ describe("OrganizationPlugin — mounted shape", () => {
 describe("OrganizationPlugin — switch", () => {
   // The whole authorization for a tenant switch. Without it, a session rebinds to any
   // organization id a caller can name.
-  it("refuses a tenant the caller holds no membership in", async () => {
-    const { call, recorded } = build({ isMember: false });
+  // ──
+  // `CR.7`: a deactivated membership too — the session would land in a tenant that
+  // answers every request anonymous.
+  it("refuses a tenant the caller holds no active membership in", async () => {
+    const { call, recorded } = build({ isActive: false });
 
     await expect(call("switchOrganization", { organizationId: OTHER_ORG })).rejects.toMatchObject({
       body: { code: "NOT_A_MEMBER" },
@@ -109,7 +112,7 @@ describe("OrganizationPlugin — switch", () => {
   });
 
   it("rebinds the session, the user's last-active tenant, and the cookie", async () => {
-    const { call, recorded } = build({ isMember: true });
+    const { call, recorded } = build({ isActive: true });
 
     await expect(call("switchOrganization", { organizationId: ORG })).resolves.toEqual({
       organizationId: ORG,

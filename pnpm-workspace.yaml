@@ -105,9 +105,9 @@ catalog:
   # React-scoped group, and `check-architecture.mjs` asserts it (docs/setup/26).
   # ════════════════════════════════════════════════════════════════════════════
 
-  # ── the transport seam — apps/*/src/server/ only ──
-  #    Ships fetch, node, and Nest adapters. This is the file that changes when
-  #    the backend framework does; nothing above it moves.
+  # ── the transport seam — packages/api-server and apps/*/src/server/ only ──
+  #    Ships fetch, node, and Nest adapters. The adapters stay in the apps; the
+  #    router half is `api-server`, so two apps can mount one chain.
   #
   #    ⚠ All four @orpc/* entries must stay on one version line, here and in
   #    Tier 2. They pin @orpc/shared **exactly** rather than with a caret, so a

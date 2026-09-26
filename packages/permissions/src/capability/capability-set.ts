@@ -131,6 +131,15 @@ export class CapabilitySet {
     return this.allowsAtOrg(permission);
   }
 
+  // Held for every goal at once: the org level, which a goal-scoped key also reads. What a
+  // role hands out is judged by this, since a role is not assigned inside one goal.
+  public canTenantWide(permission: PermissionKey): boolean {
+    const scope = PermissionRegistry.instance.scopeOf(permission);
+    if (!scope) return false;
+    if (scope === "platform") return this.can(permission);
+    return this.allowsAtOrg(permission);
+  }
+
   public canAll(permissions: readonly PermissionKey[], goalId?: string): boolean {
     return permissions.every((permission) => this.can(permission, goalId));
   }

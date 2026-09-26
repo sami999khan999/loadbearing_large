@@ -4,7 +4,11 @@ import {
   desc,
   eq,
   gt,
+  gte,
+  inArray,
   isNull,
+  lt,
+  lte,
   type NewNotification,
   type NotificationId,
   type NotificationKind,
@@ -124,29 +128,30 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
     return written;
   }
 
-  // One indexed query against `notifications_subject_idx`, and what keeps a burst of ten
-  // messages to one bell item rather than ten.
-  public async existsUnread(
+  // One indexed query against `notifications_subject_idx` for the whole audience, and
+  // what keeps a burst of ten messages to one bell item rather than ten.
+  public async unreadSubjectHolders(
     organizationId: OrganizationId,
-    userId: UserId,
+    userIds: readonly UserId[],
     kind: NotificationKind,
     subjectId: string,
-  ): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: notifications.id })
+  ): Promise<ReadonlySet<UserId>> {
+    if (userIds.length === 0) return new Set();
+
+    const rows = await this.db
+      .selectDistinct({ userId: notifications.userId })
       .from(notifications)
       .where(
         and(
           eq(notifications.organizationId, organizationId),
-          eq(notifications.userId, userId),
+          inArray(notifications.userId, [...userIds]),
           eq(notifications.kind, kind),
           eq(notifications.subjectId, subjectId),
           isNull(notifications.readAt),
         ),
-      )
-      .limit(1);
+      );
 
-    return row !== undefined;
+    return new Set(rows.map((row) => row.userId));
   }
 
   // `createdAt` in the predicate is the partition hint. Without it Postgres has to look
@@ -189,34 +194,66 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
       );
   }
 
-  public async listUnreadSince(
+  // One statement for a page of people: a window function keeps each person's newest
+  // `perUser`, where a query per person was fifty thousand for a large tenant's digest.
+  public async listUnreadBetween(
     organizationId: OrganizationId,
-    userId: UserId,
+    userIds: readonly UserId[],
     since: Date,
-    limit: number,
-  ): Promise<readonly NotificationRecord[]> {
-    const rows = await this.db
-      .select()
+    until: Date,
+    perUser: number,
+  ): Promise<ReadonlyMap<UserId, readonly NotificationRecord[]>> {
+    const grouped = new Map<UserId, NotificationRecord[]>();
+    if (userIds.length === 0) return grouped;
+
+    const ranked = this.db
+      .select({
+        id: notifications.id,
+        userId: notifications.userId,
+        kind: notifications.kind,
+        category: notifications.category,
+        params: notifications.params,
+        link: notifications.link,
+        readAt: notifications.readAt,
+        createdAt: notifications.createdAt,
+        rank: sql<number>`row_number() over (
+          partition by ${notifications.userId}
+          order by ${notifications.createdAt} desc, ${notifications.id} desc
+        )`.as("rank"),
+      })
       .from(notifications)
       .where(
         and(
           eq(notifications.organizationId, organizationId),
-          eq(notifications.userId, userId),
+          inArray(notifications.userId, [...userIds]),
           isNull(notifications.readAt),
-          gt(notifications.createdAt, since),
+          gte(notifications.createdAt, since),
+          lt(notifications.createdAt, until),
         ),
       )
-      .orderBy(desc(notifications.createdAt), desc(notifications.id))
-      .limit(limit);
+      .as("ranked");
 
-    return rows.map((row) => PgNotificationRepository.toRecord(row));
+    const rows = await this.db
+      .select()
+      .from(ranked)
+      .where(lte(ranked.rank, perUser))
+      .orderBy(asc(ranked.userId), desc(ranked.createdAt), desc(ranked.id));
+
+    for (const row of rows) {
+      const records = grouped.get(row.userId) ?? [];
+      records.push(PgNotificationRepository.toRecord(row));
+      grouped.set(row.userId, records);
+    }
+
+    return grouped;
   }
 
   // Keyset on the user id, which is the only stable order this page has. It prunes to
-  // the tenant partition on `organization_id` and to the months `since` reaches.
-  public async recipientsWithUnreadSince(
+  // the tenant partition on `organization_id` and to the months the window reaches.
+  public async recipientsWithUnreadBetween(
     organizationId: OrganizationId,
     since: Date,
+    until: Date,
     limit: number,
     afterUserId: UserId | null,
   ): Promise<readonly UserId[]> {
@@ -227,7 +264,8 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
         and(
           eq(notifications.organizationId, organizationId),
           isNull(notifications.readAt),
-          gt(notifications.createdAt, since),
+          gte(notifications.createdAt, since),
+          lt(notifications.createdAt, until),
           afterUserId ? gt(notifications.userId, afterUserId) : undefined,
         ),
       )
@@ -237,18 +275,12 @@ export class PgNotificationRepository extends BaseRepository implements Notifica
     return rows.map((row) => row.userId);
   }
 
-  // Cross-tenant by design and reachable only from the worker's digest fan-out, which
-  // loops the shards. `since` is what keeps it off every month this table holds.
-  public async organizationsWithUnreadSince(since: Date): Promise<readonly OrganizationId[]> {
-    const rows = await this.db
-      .selectDistinct({ organizationId: notifications.organizationId })
-      .from(notifications)
-      .where(and(isNull(notifications.readAt), gt(notifications.createdAt, since)));
-
-    return rows.map((row) => row.organizationId);
-  }
-
-  private static toRecord(row: typeof notifications.$inferSelect): NotificationRecord {
+  private static toRecord(
+    row: Pick<
+      typeof notifications.$inferSelect,
+      "id" | "kind" | "category" | "params" | "link" | "readAt" | "createdAt"
+    >,
+  ): NotificationRecord {
     return {
       id: row.id as NotificationId,
       kind: row.kind as NotificationRecord["kind"],

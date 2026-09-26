@@ -1,5 +1,5 @@
-import { Uuid, ValidationError } from "../import.js";
-import type { QueuePublisher } from "../port/index.js";
+import { type Clock, Uuid, ValidationError } from "../import.js";
+import type { QueuePublisher, VectorStore } from "../port/index.js";
 import { type Authorizer, JobKey, type Principal, QueueName } from "../primitive/index.js";
 
 export interface QueueDocumentIndexInput {
@@ -21,6 +21,8 @@ export class QueueDocumentIndexUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
     private readonly queue: QueuePublisher,
+    private readonly vectors: VectorStore,
+    private readonly clock: Clock,
   ) {}
 
   public async execute(
@@ -29,13 +31,20 @@ export class QueueDocumentIndexUseCase {
   ): Promise<QueuedDocumentIndex> {
     // The same key `IndexDocumentUseCase` asserts when the consumer runs it. Checked
     // here too: a job that will be refused should never reach the queue.
-    this.authorizer.assert(actor, "ai.embedding.write");
+    // ──
+    // For the goal it is going into, and below for the goal it is in now: a writer could
+    // replace any document in the tenant by id, goals they cannot read included (`CR.8`).
+    this.authorizer.assert(actor, "ai.embedding.write", input.goalId ?? undefined);
 
     if (input.text.trim().length === 0) {
       throw new ValidationError([{ field: "text", rule: "required" }]);
     }
 
     const documentId = input.documentId ?? Uuid.v7();
+    if (input.documentId !== undefined) {
+      const indexed = await this.vectors.sourceOf(actor.organizationId, input.documentId);
+      if (indexed?.goalId) this.authorizer.assert(actor, "ai.embedding.write", indexed.goalId);
+    }
 
     await this.queue.publish(
       QueueName.EMBEDDING,
@@ -45,6 +54,9 @@ export class QueueDocumentIndexUseCase {
         text: input.text,
         goalId: input.goalId ?? null,
         sourceType: input.sourceType ?? "document",
+        // When the request was made, so a retried older job landing after a newer one
+        // is skipped rather than serving the stale text (`CR.33`).
+        version: this.clock.now().getTime(),
       },
       // Keyed on the tenant *and* the document: two organizations re-indexing documents
       // that happen to share an id must not collapse into one job. `_`, never `:`.

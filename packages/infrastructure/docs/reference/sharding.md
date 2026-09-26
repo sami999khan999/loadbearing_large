@@ -89,6 +89,8 @@ records a rule rather than guarding one.
 `ShardScope.atNode` is what the outbox drain, the partition runway and the digest fan-out run
 inside, through `Container.eachShard`. Serial, not `Promise.all` — these are DDL and drain passes,
 and running them against every node at once multiplies this process's pool by the shard count.
+A node that throws is logged as `shard.sweep.failed` and skipped; the rest still run, and the first
+error is rethrown at the end, so one node down delays only its own work.
 
 Inside a node-only scope a `local` table resolves to that node's pool rather than the catalog's,
 which is the whole point: `outbox_event` and `activity_log` exist on every node and the row you
@@ -188,17 +190,39 @@ that window.
 answering from the source, which still holds every row. A catalog write is never refused: a move
 copies no catalog row, so it cannot lose one.
 
+**So every routed write goes through `run`, including a single statement** (`CR.11`). The freeze is
+checked there and nowhere else — `BaseRepository.db` cannot tell a read from a write, and refusing
+reads would take the tenant down for the whole move. Six use-cases wrote a routed row with no
+transaction open: marking one notification or all of them read, a notification preference, a
+conversation's read position, `DeliverNotification`'s `saveMany` — the very job the recheck below
+was built for — and the audit row a document search writes. Each of those landed on the source
+during a move, and an *update* is invisible to the count check, so it was lost at the flip. They
+each open a unit of work now. A new routed write that does not is the same bug again.
+
+**The cached placement is dropped twice** (`CR.10`). `beginMove` invalidates it as it sets
+`moving_to`, but a read-through that read the row just *before* that commit can write
+`frozen: false` back just *after* the invalidation, for the cache's five minutes — long past the
+settle, so a request placed then writes to the source and the flip loses it. `quiesce` invalidates
+again once the settle is over: every read from then on sees `moving_to`.
+
 **The quiesce has two halves, because a request places itself once.** A request that resolved
 its placement a moment before the freeze still believes the tenant is writable. If it has already
 opened its transaction, the second half catches it: a `SHARE` lock on the tenant's partitions,
 which cannot be granted while any writer holds `ROW EXCLUSIVE`. If it has not opened one yet, the
 first half does: a settle of `moveSettleMs`, sixty seconds by default, before the lock is taken.
 
-**What the settle does not cover.** A worker job placed on the tenant before the freeze, and
-still opening new transactions more than sixty seconds later, can land a row on the source after
-its page was read. A long notification fan-out is the realistic shape of it. The count check
-catches a late *insert*, because the source then holds more rows than the target. It does not
-catch a late update. Raising `moveSettleMs` narrows the window, and nothing here closes it.
+**A job re-reads its placement at every transaction — `24.2b`.** The settle covers a request,
+which places itself once and finishes in seconds. It does not cover a worker job. A job placed on
+the tenant before the freeze can still be opening new transactions long after sixty seconds. A long
+notification fan-out is the realistic shape of it. Such a write would land on the source after its
+page was read. The count check catches a late *insert*, but not a late *update*. So `withShard`
+places a job with `recheck`, and `PgUnitOfWork.run` re-reads the placement each time it opens a
+transaction. If the tenant is frozen, or its node has changed, it throws
+`ForbiddenError("shard.move.inFlight")` and the job is retried. `beginMove` invalidates the cached
+placement, so the next transaction sees the freeze at once. A savepoint does not re-read. Neither
+does a catalog transaction, because a move copies no catalog row. A transaction already open is
+what the quiesce's `SHARE` lock waits out. The cost is one cached resolve per job transaction, a
+cache read in the same place a request already does one.
 
 **`prepare` mirrors the source's months, not the seed's runway.** The seed creates the current
 month and the next two. A tenant with a message from last year needs last year's partition on the
@@ -218,7 +242,11 @@ tenant's row would sit where its runway, its archive and the projection never lo
 `activity.recorded` into node 0's outbox instead, in the same transaction, so the row is still saved
 with the action. The drain delivers it to `ActivityRelaySubscriber`, placed on the tenant, which
 writes it on the tenant's node with the event's id and time and `on conflict do nothing`. A tenant
-on node 0 is unchanged. The row arrives about a second later; with the worker down it waits in the
+on node 0 is unchanged. **A placement already in scope for the tenant is the answer, and the
+resolver is asked only without one.** The founder depends on that. Its directory row is uncommitted
+when it writes `organization.created`, the resolver reads through its own pool, and on two nodes
+every sign-up failed with "No shard assignment" until the founder placed the audit on node 0
+itself. That ran from `24.2a` on 2026-09-24 until it was found by signing up on 2026-09-25. The row arrives about a second later; with the worker down it waits in the
 outbox and is never dropped. The projection reads 30 s behind, so it sees the row. If the drain was
 down longer than that, the nightly reconciliation reports the gap.
 
@@ -248,7 +276,7 @@ target afterwards. With `quiesce` made a no-op, the same spec loses the straggle
 
 ```bash
 pnpm infra:up:sharded          # plus the two DATABASE_SHARD_1_* lines in .env
-ROUTED_SCALE=1 pnpm smoke
+ROUTED_SCALE=1000 pnpm smoke
 ```
 
 `tests/smoke/routed.smoke.spec.ts`, averaged over a thousand resolutions against the two-node
@@ -274,11 +302,29 @@ so this is the whole of what routing adds.
 after the other. That is `Container.eachShard`, and a pass that fanned out would hold a connection
 open on every node at once.
 
-> [!IMPORTANT]
-> **The write half of `24.6` cannot run, and that is `24.1`.** A routed insert on node 1 is a
-> `23503` before it is a measurement, because every routed table carries a foreign key to a
-> catalog one. The spec asserts that rather than pretending, and `sharded.smoke.spec.ts` names the
-> constraint class. There is no routed throughput number until the foreign-key decision is made.
+### Writes under load — `24.6`
+
+`24.1` dropped the keys that made a routed insert on node 1 fail, so the write half runs now.
+Eight tenants, four per node. Each write is the path a request takes: a placement read through the
+real Redis cache, then a routed transaction inserting one message. Each node's pool is 20, the
+shipped `DATABASE_POOL_MAX`. 1× is four writers at once and 10× is forty, 1 000 writes each,
+`ROUTED_SCALE=1000`:
+
+| Level | Writers | Writes/s | p50 | p95 | p99 | Errors |
+|---|---|---|---|---|---|---|
+| 1× | 4 | 23 | 151 ms | 324 ms | 467 ms | 0 |
+| 10× | 40 | 142 | 265 ms | 498 ms | 577 ms | 0 |
+
+**Routing is not where the time goes.** The warm resolve above is under 1 ms of a write's 150. The
+rest is the commit's `fsync`, and on Docker Desktop on Windows that alone is about 100 ms. It is
+also why a crashed catalog container spends minutes in recovery here. Ten times the writers buys six
+times the throughput, because concurrent commits share a flush. Latency grows by less than 2×.
+
+**What the test asserts is not the numbers.** They are this machine's disk. The assertions are
+that no write fails at either level, and that every acknowledged row is on its tenant's node and
+none is on the other. A routing slip under load would be a row that reads back from nowhere. A
+node that is *provisioned*, rather than a second container on one machine, is `S.3`'s remaining
+half, and its numbers are the ones a capacity plan should use.
 
 ## Sharding by something else: four edits, and nothing else
 
@@ -304,6 +350,45 @@ exists to have.
 not a foreign key, precisely so a fork can put a region code in it without a migration. And both
 the generator and the seed read the alias rather than spelling the column, so neither is a fifth
 place.
+
+## Read replicas
+
+A read replica is a second copy of a node that follows the primary and answers reads. **The
+problem with one is staleness.** It replays the primary's changes a moment late, so a row
+committed on the primary may not be on the replica yet. A job that writes a row and then reads it
+back from the replica would not find it.
+
+**So a read uses the replica only once it has caught up — `DatabaseCluster.readerAt`.** Before
+the read, it asks the primary for its current write position (`pg_current_wal_lsn()`), then asks
+the replica whether it has replayed that far (`pg_last_wal_replay_lsn()`). If it has, the replica
+holds everything the primary held when the read began, and it answers. If it has not, or cannot
+be reached, the primary answers. No caller reasons about lag, because the read is never staler
+than the primary it stands in for. `replica.smoke.spec.ts` proves it against a live standby. A
+row inserted on the primary is found by the read straight after it, and again by the first read
+the replica is chosen for. With the check removed, the first read misses the row.
+
+| | cost |
+|---|---|
+| no replica configured, or the switch off | nothing — the same pool as before |
+| a replica read | two round trips before the query, neither touching a table |
+| a replica that is behind or down | those two, then the primary |
+
+**Three things decide whether a read goes there.** A replica must be configured for the node:
+`DATABASE_REPLICA_URL` for node 0, `DATABASE_SHARD_<n>_REPLICA_URL` for node n. The work must be
+placed with `replica: true`, which `withShard` passes from `platform_policy.replica_reads_enabled`,
+read once per run. And the repository must ask for it, through `BaseRepository.reader()` rather
+than `db`. Inside a transaction `reader()` is the transaction, because a transaction reads its own
+writes.
+
+**What reads there today is the analytics projection**, `PgActivityReplayReader.since` and
+`dailyCounts`. It is the worker's biggest batch read, and it already tolerates reading 30 s
+behind. The web app reads nothing there. It opens the replica pool only for the status panel's
+lag, which is `now() - pg_last_xact_replay_timestamp()`, and zero when the replica has replayed
+everything it has received. An idle primary sends nothing, so the timestamp alone would read as
+growing lag on a replica that is fully caught up.
+
+`pnpm infra:up:replica` starts node 0's standby. See
+[compose](../../../../docs/infra/reference/compose.md) for how it clones itself.
 
 ## Rehearsing the split
 

@@ -37,10 +37,6 @@ class StubMemberships extends MembershipReader {
     return Promise.resolve(ORG);
   }
 
-  public override isMember(): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-
   public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return Promise.resolve([]);
   }
@@ -102,11 +98,12 @@ async function build(options: {
   );
 
   const keyRepository = new StubApiKeyRepository(options.keys ?? []);
+  const memberships = new StubMemberships(options.active ?? true);
   const builder = new PrincipalBuilder(
     sessions,
-    new ApiKeyResolver(keyRepository, capabilities),
+    new ApiKeyResolver(keyRepository, capabilities, memberships),
     capabilities,
-    new StubMemberships(options.active ?? true),
+    memberships,
   );
 
   return { builder, sessions, keyRepository };

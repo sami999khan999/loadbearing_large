@@ -82,6 +82,7 @@ class FakeProjector implements Partial<AnalyticsProjector> {
 const storagePolicy = {
   lifecycle: () => Promise.resolve([]),
   applyLifecycle: () => Promise.resolve(),
+  coldTier: () => null,
 } as unknown as StoragePolicyGateway;
 
 const activity = { record: () => Promise.resolve() } as unknown as ActivityLogger;

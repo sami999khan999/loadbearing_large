@@ -1,6 +1,6 @@
 ---
 title: Backlog — closed
-updated: 2026-09-24
+updated: 2026-09-26
 owner: sami
 schema: backlog/v1
 source: split out of plans/BACKLOG.md on 2026-09-22
@@ -21,6 +21,150 @@ Nothing was rewritten in the move. IDs are unchanged — `R.7`, `23.15`, `S.1`, 
 resolve — and every pointer into `archive/PLAN.md` and the rest still points where it did.
 
 ## 1. `archive/PLAN.md` — Phase 23, closed
+
+- [x] `23.14` **An analytics reader, with the first dashboard** `done: 2026-09-25` — **decided
+  with the user the same day**: the first dashboard is *activity over time*, and it was built
+  against seeded data rather than waiting days for real traffic. `/analytics` shows a tenant's
+  events per UTC day and per action over the last 30 or 90 days, gated on a new org-scoped
+  `analytics.activity.read`. `owner` and `admin` hold it: the seed grants it, and migration
+  `0039` backfilled 74 of each. The four carried decisions hold, as built. `AnalyticsReader` is a
+  new port in `application/src/analytics/` with no write method. `GetActivityTrendUseCase` hands
+  it the principal's tenant. The days are ISO strings. `ClickHouseAnalyticsReader` reads
+  `FINAL`. Without ClickHouse the answer is `configured: false`, and the screen says so. There is
+  no driver flag. The screen is two tables rather than a chart, because `ui` has no chart
+  primitive and a table is what a chart needs beside it for a screen reader.
+  - **Proved at every layer.** A use case spec (4) covers the window arithmetic, which is whole
+    UTC days with today included. `analytics-reader.smoke.spec.ts` (2) runs on the live store,
+    fed by the real projector. It covers day boundaries at both edges, another tenant's rows, and
+    a redelivered row counted once; **with `FINAL` removed that row counts twice.** The panel
+    spec (4) covers the two tables, the period switch reaching the procedure, the
+    not-configured state and the empty state.
+  - **End to end on the running app, with seeded ClickHouse rows** that were deleted afterwards.
+    For the owner: 30 days returned 4 rows, and 90 days included a 60-day-old one. 7 days is a
+    400. A platform admin with no tenant key got a 403 from the API and `/forbidden` from the
+    page. The server-rendered page showed `Events: 4`, both tables, and the nav entry active.
+  - **What the wait was for still holds, and is `S.2`'s:** the projection and the nightly
+    reconciliation should run on real traffic for a few days. The reader can be checked against
+    that data then. It no longer has to wait for it.
+- [x] **Found while doing it: every sign-up failed on more than one node** `fixed: 2026-09-25` —
+  a defect `24.2a` introduced on 2026-09-24. With two nodes configured, `PgActivityLogger` asks
+  the directory where a catalog transaction's tenant lives. The founder writes the directory row
+  and then `organization.created` in one transaction. The resolver reads through its own pool,
+  cannot see the uncommitted row, and threw "No shard assignment". The sign-in that enrols a
+  personal organization returned 500. Single-node specs could not see it. **The fix:** a placement
+  already in scope for the tenant is the answer, and the founder records the audit row placed on
+  node 0, which is where it just put the tenant. `pg-organization.founder.spec.ts` gains a case on a
+  two-node cluster. It failed with the production error before the fix and passes after it. The
+  same sign-in then returned 200 on the live stack.
+
+- [x] `24.6` **Load test the routed paths at 10×** `done: 2026-09-25` — the write half, which
+  `24.1` unblocked. `routed.smoke.spec.ts` gains "routed writes under load". Eight tenants, four
+  per node. Each write is a placement read through the real Redis cache, then a routed
+  transaction inserting a message. Pools of 20 per node. 1× is 4 writers and 10× is 40, 1 000
+  writes each (`ROUTED_SCALE=1000`). Run twice, and both runs agree:
+
+  | Level | Writes/s | p50 | p95 | p99 | Errors |
+  |---|---|---|---|---|---|
+  | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
+  | 10× | 142 / 159 | 265 / 238 ms | 498 / 397 ms | 577 / 417 ms | 0 |
+
+  Every acknowledged row is on its tenant's node and none is on the other. **Routing is under 1 ms of a
+  150 ms write.** The rest is the commit's `fsync` on Docker Desktop, about 100 ms by itself. 10×
+  the writers buys ~6× the throughput, and p50 grows less than 2×. The stale third case, a routed
+  insert on node 1 asserted to *fail*, is gone: since `24.1` it only failed because its tenant had
+  no partitions. The numbers are one machine's disk; a provisioned node's are `S.3`'s.
+- [x] `24.4` **The catalog is the last single primary — measure first** `done: 2026-09-25` —
+  measured, and it does not hurt, so nothing was built. Reads of the six catalog-only tables around
+  the 2 000 routed writes above: `shard_assignments` +17, `organizations` +16, `roles`,
+  `role_permissions`, `memberships` and `users` +7 each. The eight tenants' first resolves and
+  their own setup and teardown account for the first two. **Zero catalog reads per write** once the
+  placement is warm, which it stays for five minutes per key. The catalog's writes are sign-ups
+  and role edits, and `PF.0` measured a whole founding transaction at 21 ms. **If it ever hurts,
+  the replica already exists**: node 0 is the catalog, `24.3` gave it a standby, and a catalog
+  read that tolerates it moves with `BaseRepository.reader()` and nothing else.
+
+- [x] `25.3` **Colder storage class** `done: 2026-09-25` — built with a MinIO tier, as decided.
+  `LifecycleRule` gains an optional `transition: { storageClass, afterDays }`, and
+  `StoragePolicyGateway.coldTier()` answers the deployment's from `S3_COLD_STORAGE_CLASS` and
+  `S3_COLD_TRANSITION_DAYS`, both or neither. The gateway holds it because the class is the
+  bucket's, so no use case gained a constructor argument. `RetentionRules.lifecycleFor(rows, tier)`
+  gives every `cold/<table>/` rule the transition. The `export/` rule never gets one, and neither
+  does a rule whose transition would land on or after its expiry, since S3 rejects the whole
+  configuration for one of those. `RetentionRules.describe` spells a rule `…=731>COLD@30`. The
+  screen, the save and the nightly converger all compare that, so a bucket that lost its
+  transition is drift and gets put back.
+  - **One refusal the entry did not foresee.** `restore()` and the re-projection read a cold object
+    with `GetObject`. `GLACIER` and `DEEP_ARCHIVE` answer that with `InvalidObjectState` until an
+    hours-long restore has run. So both apps refuse those two at boot and name the three that read
+    at once. The entry's "once someone pays for Glacier" means `GLACIER_IR`.
+  - **Compose:** `minio-cold` and `minio-cold-init` under a `cold-tier` profile, registering a
+    second MinIO on `minio` as tier `COLD`. The first version never registered it:
+    `mc ilm tier info` exits 0 for a missing tier, so the `||` never ran. It uses `tier ls | grep`
+    now, and was run twice to prove it is idempotent.
+  - **Proved:** `lifecycle.smoke.spec.ts`, 3 passed against the live bucket. A transition to `COLD`
+    is written and read back equal, an unregistered class is refused, and the bucket's own
+    configuration is put back afterwards (checked with `mc ilm rule ls`: `export/` only).
+    `retention.rules.spec.ts` +4 and `maintenance.consumer.spec.ts` +1. The latter shows the
+    nightly job restoring a transition removed by hand, and its drift line naming the class.
+
+- [x] `24.3` **Read replica per shard** `done: 2026-09-25` — built as filed, with one design
+  choice the entry did not make: **a read uses the replica only once it has caught up.**
+  `DatabaseCluster.readerAt(node)` asks the primary for `pg_current_wal_lsn()` and the replica
+  whether it has replayed that far. It uses the replica if so, and the primary if not or if the
+  replica cannot be reached. So no caller reasons about lag. `DATABASE_REPLICA_URL` and
+  `DATABASE_SHARD_<n>_REPLICA_URL`, read by all three shard readers (assertion 29 still holds);
+  `BaseRepository.reader()`, the transaction inside one; `PlacedShard.replica`, which `withShard`
+  passes from the platform switch. **What moved onto it is the analytics projection**,
+  `PgActivityReplayReader.since` and `dailyCounts`: the worker's biggest batch read, as `25.2`
+  said. The web app reads nothing there.
+  - **Compose:** `postgres-replica` under a `replica` profile, `pnpm infra:up:replica`. It clones
+    itself with `pg_basebackup -R` on an empty volume. The primary now starts with `hba_file` on
+    `infra/pg_hba.conf`: the image's rules plus replication from the network.
+  - **Proved on a live standby.** `replica.smoke.spec.ts`, 4 passed. Fifty rows, each found by
+    the read straight after its insert and again by the first read the replica is chosen for.
+    **Red with the caught-up check removed**: the first read after the first insert missed its
+    row. `database-cluster.spec.ts` covers no replica, an unreachable one, and a primary
+    configured as its own replica.
+  - **And end to end, with the worker running.** Scans of `activity_log` partitions over one
+    projection run: switch off, standby +0 and primary +81; switch on, standby +42 and primary +0.
+  - **One trap found and fixed on the way.** A failing `toBe` on a `Database` makes vitest print
+    a live `pg` pool, and the whole smoke run died out of heap. The committed tree was run
+    to confirm the new spec was the cause. The assertions compare booleans now; 42 passed.
+- [x] `25.1` **Status** `done: 2026-09-25` — `InspectPlatformStatusUseCase` returns
+  `replica: { healthy, lagSeconds, readsEnabled } | null`, from `PlatformHealthReader.replica()`,
+  every node's standby folded into one reading. Kept out of `healthy` on purpose: a standby that
+  falls behind slows batch reads and takes nothing down. Lag is `now() -
+  pg_last_xact_replay_timestamp()`, and **zero when replay has reached receive**, because an idle
+  primary sends nothing and the timestamp alone would read as growing lag. Rendered on
+  `/platform/status` as a row and a lag line. Read over the live API: `{"healthy":true,"lagSeconds":0,"readsEnabled":false}`.
+- [x] `25.2` **The switch** `done: 2026-09-25` — `toggle-replica-reads.use-case.ts` under a new
+  `platform.replica.manage` key; procedure `platform.updateReplicaSwitch`, `PUT
+  /platform/policy/replica`; `ReplicaSwitchPanel` on `/platform/status`, beside the lag it
+  governs. It refuses `ConflictError("replica", "not_configured")` with no standby, as the
+  projection switch does. Audited on the platform tenant as `platform.replica.enabled` /
+  `disabled`. `pnpm db:seed` gave `platform_admin` the key, 10 platform keys now. Flipped over
+  the API with a throwaway platform admin: the row saved and the audit row landed. It is back
+  **off**, the default.
+
+- [x] `24.2b` **The move's settle does not cover a long job** `done: 2026-09-25` — built as the
+  entry's recorded design: **a job re-reads its placement at the start of every transaction; a
+  request does not**, because the settle covers it. `PlacedShard.recheck`; `DatabaseCluster.placementOf`,
+  the resolver's cached `{ node, frozen }`; `PgUnitOfWork.run` re-reads it when it *opens* a
+  non-catalog transaction with `recheck` set, and throws `ForbiddenError("shard.move.inFlight")`
+  if the tenant is frozen or its node changed. `Container.placed` takes `{ recheck }` and the
+  worker's `withShard` passes `true`, so every consumer job gets it and no request does.
+  - **Proved twice, and red both times without it.** `pg-unit-of-work.spec.ts` gains four
+    cases: frozen, moved to another node, one resolve per transaction and none per savepoint,
+    and a request and a catalog transaction left unchecked. With the call removed, three fail.
+    `tenant-move.smoke.spec.ts` on two live nodes gains a job placed on node 0 before the move
+    and writing only after the flip. It is refused and its row is on neither node. With
+    `recheck: false` the same write **lands on node 0**, after its page was copied, which is
+    the gap reproduced rather than argued. The file is 6 passed.
+  - **The cost is one cached resolve per job transaction:** 979 µs on this machine, a Redis
+    `GET` averaged over 2 000, against the 914 µs `S.3` recorded for a warm resolve. A savepoint
+    and a catalog transaction pay nothing.
+  - `sharding.md`'s "What the settle does not cover" is now "A job re-reads its placement at
+    every transaction".
 
 - [x] `24.2a` **A moved tenant's catalog-written rows** `done: 2026-09-24` — decided with the user
   as a **third option** to the two filed: the audit row goes through node 0's outbox. A catalog
@@ -201,7 +345,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 - [x] `23.12` **Record the walk** `done: 2026-09-20` — recorded **here**, not in
   `archive/COMMUNICATION-PLAN.md`: rule 2 of this file is that `archive/` is not edited, and the
   entry predates that rule. `T-036` is section 7 and **still cannot close** — its "Done when"
-  names Phase 26, which moved to [`COMMUNICATION.md`](../COMMUNICATION.md) rather than closing. The
+  names Phase 26, which moved to [`COMMUNICATION.md`](COMMUNICATION.md) rather than closing. The
   walk itself is done.
 - [x] `23.15` **The English fallback layer is dead payload** `done: 2026-09-21` — the first of
   the two decisions the entry allowed, and the one it recommended: the base layer is dropped, and
@@ -711,6 +855,21 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
 ## 5. Verification owed — browser, manual, or a scale not run
 
+- [x] **The whole-plan verification** `done: 2026-09-25` — `archive/PLAN.md`'s closing section,
+  both halves. **The command block** ran end to end in one pass: `build:packages`, the web and
+  worker builds, `check:architecture` 29 of 29 with none skipped, `typecheck`, `lint`, `test` (205
+  files), `db:migrate`, `db:seed`, `ch:migrate` and `smoke` (9 files, 3 skipped by opt-in).
+  **The Exit lines were read by hand**, all 26, and each was checked against the tree. Phases 1–15
+  are true in the tree. 11–13 and 18–21 are true by their recorded walks. Phases 23, 24 and 26
+  have no Exit line: their ledgers say all closed except `23.14` and the conditional `24.7`, and
+  Phase 26 went to `COMMUNICATION.md`. **One clause is false, and on purpose.** Phase 22's
+  "`sharded.spec.ts` fails on exactly the foreign-key constraint `24.1` names" was true when
+  written. `24.1` dropped those keys, and the spec now asserts the write *succeeding*
+  (`sharded.smoke.spec.ts:319`). The rest is stale wording in a frozen file: assertion counts of
+  20, 21 and 23 against 29; `TENANT_EXEMPT`, which is `shard.ts`'s `CATALOG` list now;
+  `sharded.spec.ts` for `sharded.smoke.spec.ts`; `/health` for `/api/health`; "nine platform
+  keys" for ten. Listed in `BACKLOG.md`'s "do not fix" table rather than edited.
+
 - [x] **`archive/REVIEW.md`'s own gap** `done: 2026-09-22` — the review session had no Docker, so
   neither the `infrastructure` integration specs nor the smoke suites ran against it, and the
   forty-five fixes then landed without either being re-run. Both have now run on the tree that
@@ -799,6 +958,16 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
     is `null` until the first switch or found, because a plain sign-in does not write it.
   — `archive/TODO.md:228–241`
 ## 7. `archive/TODO.md` — the three ledger rows
+
+- [x] `T-036` **Communication plan** `P1`. `done: 2026-09-25` — **its "Done when" narrowed, as
+  decided, and this supersedes the 2026-09-22 note** that kept the row open. The row now closes on
+  Phases 9–13, `23.1`–`23.3` and `23.5`–`23.12`, and every one of those is closed: Phases 9–13
+  before this ledger existed, `23.1`–`23.3` on 2026-09-21, and `23.5`–`23.12` on the browser walk.
+  Phase 26 is not dropped. It moved whole to [`COMMUNICATION.md`](COMMUNICATION.md) on
+  2026-09-22 as the input to a performance and isolation plan not yet written, and that plan will
+  carry its own row. The 2026-09-22 note's objection still stands, and it is now true: a `P1` row
+  reading "done" sits above eight unbuilt items. That is the trade the decision accepted. The
+  items are recorded in `COMMUNICATION.md`, not here. — `archive/TODO.md:140`
 
 - [x] `T-037` **Database scaling plan** `P1`. `done: 2026-09-21` — Phases 14–17, 21 and 22 all
   report their Exit lines true and Phase 24 is filed. It was **not** ticked on the file's own
@@ -927,10 +1096,481 @@ comparisons that carry weight are the ones inside one run, or ones far larger th
   partitioned parent is now a stated rule. The compose comment citing the deleted `users` cascade
   is rewritten. No config change.
 
+---
+
+## 10. Code review of 2026-09-25 — closed
+
+Bodies in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), at the line each backlog entry gave.
+Twenty closed with the communication performance plan, pushed as `14d49db..45633e6` and listed
+in that plan's changelog; twenty-six more closed on 2026-09-26 in the per-layer commits after
+`e265714`, three of them the rest of what the plan had closed in part, and `CR.16` later that day.
+Two stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.20` and `CR.33`.
+**Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
+unless it says otherwise.
+
+### 10.A Security and tenant isolation
+
+- [x] `CR.1` **Any role that can invite could make an owner** `done: 2026-09-26` — a role now
+  goes only to someone who could have granted every key of it: `RoleRules.assertAssignableBy`,
+  in both `InviteMemberUseCase` and `ChangeMemberRoleUseCase`, asks the new
+  `CapabilitySet.canTenantWide`. `owner` holds every key, so only an owner hands it out.
+  `invite-member.use-case.spec.ts` and `member-lifecycle.use-case.spec.ts` refuse and save nothing;
+  `capability-set.spec.ts` covers the org-level question for a goal-scoped key.
+- [x] `CR.2` **Deactivation did not revoke** `done: 2026-09-26` — `ApiKeyResolver` checks the
+  issuer's `isActive`, in parallel with the capability read, as the session path does;
+  `SetMemberActiveUseCase` flushes the cached set after the commit, which reaches the platform
+  axis. `api-key.resolver.spec.ts`, `member-lifecycle.use-case.spec.ts`. The latent half — goal
+  grants and overrides unfiltered by `deactivated_at` in `resolveFor` — is unreachable while both
+  paths refuse a deactivated principal first.
+- [x] `CR.3` **A key could mint a permanent key** `done: 2026-09-26` — `CreateApiKeyUseCase`
+  refuses any `api_key` principal. `api-key.use-case.spec.ts`.
+- [x] `CR.4` **A stream was authorized once** `done: 2026-09-26` — `StreamRevalidation` asks
+  again every sixty seconds and ends the subscription the first time the answer is no; a check
+  that throws keeps it. The user stream asks `isActive`, the conversation stream the new
+  `WatchConversationUseCase`, which it also opens with instead of the roster-loading
+  `getConversation`. `stream-revalidation.spec.ts`.
+- [x] `CR.5` **Conversation streams had no per-user cap** `done: 2026-09-26` — every stream
+  counts against its owner's cap. `CP7.4` in
+  [`COMMUNICATION-PERFORMANCE-PLAN.md`](COMMUNICATION-PERFORMANCE-PLAN.md).
+- [x] `CR.6` **Nothing on the oRPC surface was rate-limited** `done: 2026-09-26` —
+  `rateLimitMiddleware` in `authed`, per principal and procedure, on the six procedures
+  `RateLimitPolicy` names: invitations, document search and index, message send, conversation
+  create. A fixed window in the cache Redis; open when the counter cannot be reached.
+  `rate-limit.spec.ts` (429 past the limit, per person, fails open, every name a real procedure),
+  `redis.smoke.spec.ts` (the window).
+- [x] `CR.7` **Deactivated in the last-active tenant locked a user out of all of them**
+  `done: 2026-09-26` — `activeOrganizationFor` and `organizationsFor` skip a deactivated
+  membership, and the switch asks `isActive`. `isMember`, left with no caller, is gone from the
+  port. `pg-membership.reader.spec.ts` against Postgres, `organization.plugin.spec.ts`.
+- [x] `CR.8` **Indexing ignored goal scope** `done: 2026-09-26` — `QueueDocumentIndexUseCase`
+  asserts `ai.embedding.write` for the goal named and for the goal the document is in now, read
+  by the new `VectorStore.sourceOf`. Both keys are org-scoped today, so it binds the day one is
+  not. `document.use-case.spec.ts`, `pg-vector.store.spec.ts`.
+- [x] `CR.9` **The capability cache could re-cache a revoked set** `done: 2026-09-26` — every
+  flush repeats itself two seconds later, taking a racing read-through's write with it.
+  `capability.cache.spec.ts`, on fake timers.
+- [x] `CR.10` **The shard resolver's fill race** `done: 2026-09-26` — `quiesce` invalidates the
+  cached placement again once the settle is over. `tenant-move.smoke.spec.ts` on two nodes, 6 of 6.
+- [x] `CR.11` **The move freeze only inside `PgUnitOfWork.run`** `done: 2026-09-26` — the six
+  routed writes that opened no transaction open a unit of work now: both mark-read use-cases,
+  the preference, the conversation's read position, `DeliverNotification`'s `saveMany`, the
+  search's audit row. `notification-preferences.use-case.spec.ts` refuses on a frozen unit.
+- [x] `CR.12` **The OpenAI call had no timeout** `done: 2026-09-26` — twenty seconds a batch,
+  and a network failure is `UnavailableError`, which retries. `openai-embedding.provider.spec.ts`.
+
+### 10.B Lost work, the worker and its queues
+
+- [x] `CR.13` **Retries ran out in seconds** `done: 2026-09-26` — `CP3.1`; replay is
+  `pnpm queue:replay`. The hand walk through a mail outage is `BACKLOG.md` §12.
+- [x] `CR.14` **One down node stopped every node after it** `done: 2026-09-26` — `CP3.5`.
+- [x] `CR.15` **An archive cut off mid-way hid a month** `done: 2026-09-26` — the detach is
+  inside the `try`, and the retention pass calls `recover(table)` on each node before it lists
+  months: detach-pending children are finalized, standalone month tables attached again, and each
+  one is a `cold.partition.recovered` line. `pg-partition-archive.gateway.spec.ts` recovers a
+  detached month, archives it, and leaves a `_restore` scratch table alone.
+- [x] `CR.16` **Cold restore and re-projection loaded a whole month into memory**
+  `done: 2026-09-26` — restore streams into its scratch table, hashing and counting as it goes and
+  dropping the table on a mismatch; re-projection reads `ColdArchiveReader.batches`, verified in a
+  first pass; and the archived-notifications page keeps only the page it returns, verified before
+  it returns. `s3-cold-archive.reader.spec.ts` feeds the object three bytes a chunk.
+- [x] `CR.17` **One failed boot run switched off the boot runway** `done: 2026-09-26` —
+  `removeOnFail: true` on `partitions-boot`.
+- [x] `CR.18` **Fixed job ids swallowed repeat admin requests** `done: 2026-09-26` — the four
+  operator jobs dedupe only while one is queued or running: `JobOptions.inFlightId`, BullMQ's
+  simple-mode deduplication. `redis.smoke.spec.ts` publishes twice, finishes, publishes again.
+- [x] `CR.19` **One failure at 07:00 cancelled every digest** `done: 2026-09-26` — `CP3.4`.
+
+### 10.C Scaling limits in the database layer
+
+- [x] `CR.21` **The nightly orphan check scanned every message** `done: 2026-09-26` — one
+  statement per tenant, each pruned to that tenant's partitions and committed alone.
+  `orphaned-tenants.spec.ts`; the case the backlog called flaky took 1.9 s.
+- [x] `CR.22` **The digest's tenant scan ran out of locks** `done: 2026-09-26` — `CP4.6`.
+- [x] `CR.23` **Archiving rescanned the partition for every page** `done: 2026-09-26` — a month of
+  more than one page gets `<child>_walk` on `(column, id)`, on the detached table through the
+  direct pool; the unwind and `recover` drop it before attaching.
+- [x] `CR.24` **The export sorted every table for every page** `done: 2026-09-26` — compared and
+  ordered on the native key columns. Checked by `EXPLAIN` against the dev database: an Index Only
+  Scan on `role_permissions_uq` with the cursor inside the index condition.
+- [x] `CR.25` **The first page and `unreadCounts` touched every month** `done: 2026-09-26` —
+  `CP2.3`, `CP2.4`.
+- [x] `CR.26` **Conversation reads loaded every member** `done: 2026-09-26` — the hot path in
+  `CP2.1`; the list now brings a sample, at most five per row with the reader always in it.
+  `pg-conversation.repository.spec.ts` with a nine-member channel.
+- [x] `CR.27` **The outbox drain held a transaction across Redis calls** `done: 2026-09-26` — `CP4.2`.
+- [x] `CR.28` **N+1 in notification fan-out and the digest** `done: 2026-09-26` — `CP4.3`, `CP4.4`.
+- [x] `CR.29` **The replay keyset used the `OR` form** `done: 2026-09-26` — the row constructor
+  plus a redundant bound. `pg-activity-replay.reader.spec.ts` asserts it is an index condition.
+- [x] `CR.30` **Conversation recency could move backwards** `done: 2026-09-26` — `CP2.5`.
+- [x] `CR.31` **Cursor precision dropped rows** `done: 2026-09-26` — `conversations.created_at`
+  is `timestamptz(3)`, migration `0041_conversation_created_at_ms`, applied to both local nodes.
+- [x] `CR.32` **Creating a conversation checked members one by one** `done: 2026-09-26` — `CP2.6`.
+
+### 10.D Resource lifetimes, timeouts and the client
+
+- [x] `CR.34` **The web process never disposed its container** `done: 2026-09-26` — the Redis half
+  and the dev cache in `CP5.1` and `CP7.8`. The shutdown: srvx fires no Nitro hook on `SIGTERM`
+  and never exits, so `server/container.ts` disposes the container `SERVER_SHUTDOWN_TIMEOUT` plus a
+  second after the signal. **Checked by build**, which puts it in the server bundle and nowhere
+  else; the real signal on Linux is `BACKLOG.md` §12's `CP7.5`.
+- [x] `CR.35` **The S3 clients had no timeouts** `done: 2026-09-26` — `S3ClientFactory`, five
+  seconds to connect and sixty of socket inactivity, for both gateways.
+- [x] `CR.36` **One failed close in `dispose()` skipped the rest** `done: 2026-09-26` — `CP3.5`.
+- [x] `CR.37` **Streams ended at 30 minutes and never reopened** `done: 2026-09-26` — `CP1.3`.
+- [x] `CR.38` **Reconnects retried every 2 s forever** `done: 2026-09-26` — `CP1.3`.
+- [x] `CR.39` **One message refetched every loaded page, twice** `done: 2026-09-26` — `CP1.4`,
+  `CP1.6`. The measurement is `BACKLOG.md` §12's `CP1.9`.
+- [x] `CR.40` **Failed jobs were bounded by age only** `done: 2026-09-26` — `CP3.2`.
+- [x] `CR.41` **ClickHouse `query` buffered the whole response** `done: 2026-09-26` — rows are
+  parsed as their lines arrive. `clickhouse.connection.spec.ts` splits a row across two chunks.
+- [x] `CR.42` **`RealtimeProvider` re-rendered every consumer** `done: 2026-09-26` — `CP1.7`.
+- [x] `CR.43` **The pool check counted the wrong consumers** `done: 2026-09-26` — `CP4.8`.
+
+### 10.E From the 2026-09-25 unpushed work
+
+- [x] `CR.44` **The analytics skip check could hide the failure it followed** `done: 2026-09-26`
+  — the directory lookup and the checkpoint read after a failure are both guarded, so the
+  original error is the one thrown and `analytics.projection.failed` is emitted.
+  `analytics.consumer.spec.ts`.
+- [x] `CR.45` **The analytics loader blocked on ClickHouse** `done: 2026-09-26` — prefetched
+  rather than ensured.
+- [x] `CR.46` **A comment in `container.ts` described the wrong field** `done: 2026-09-26` — back
+  above `notification`.
+- [x] `CR.47` **The same, in `query-key.ts`** `done: 2026-09-26` — `CP1.8`.
+
+### 10.F Docs that said something the code did not
+
+- [x] `CR.48` **Four reference pages contradicted the code** `done: 2026-09-26` — each fixed with
+  its finding: `partitions.md` with `CR.21` and `CR.22`, `cold-storage.md` with `CR.16`, `env.md`
+  and `messaging.md` with `CR.37` and `CR.39`. Each re-read against the code on the day.
+- [x] `CR.49` **"Roughly a minute" was about 30 s** `done: 2026-09-26` — rewritten with `CR.13`.
+
+---
+
+## 11. Communication features — closed
+
+- [x] `26.5` **Replay on reconnect** `done: 2026-09-26` — every `event` frame is logged to a Redis
+  Stream per channel before it is published, in one `MULTI`: about two hundred entries, expiring
+  an hour after the last write. A resume passes `lastEventId` as `after`; the subscriber attaches
+  first, reads the log, and replays what came after it ahead of anything live, dropping a live
+  frame the replay already carried. Past the log it resyncs as before. Server-side only, as the
+  entry said: the client already sent `lastEventId`, and a replayed frame routes like a live one.
+  Typing frames are neither logged nor given an SSE id. Proved by
+  `redis-realtime.subscriber.spec.ts` (replay then live, the duplicate dropped, resync past the
+  log, resync with no log) and `redis.smoke.spec.ts` against the live instance. The body is
+  [`COMMUNICATION.md`](COMMUNICATION.md) line 26.
+
+---
+
+## 12. Communication performance plan — closed
+
+- [x] `CP7.8` **The web process's SIGTERM dispose** `done: 2026-09-26` — it was blocked on where
+  a Nitro plugin would live, and the answer is that one would not help: the Node preset serves
+  through srvx, whose shutdown fires no Nitro `close` hook and does not exit. The container is
+  disposed from `server/container.ts` once srvx's window is over. `CR.34` above.
+
+**Checked by hand on 2026-09-26**, with web, worker and realtime running in dev on one Windows
+machine. The scripts were throwaway and are not in the repository; the accounts they made are
+`hand-*`, `owner-*`, `outage-*`, `exhaust-*` and `split-*` at `example.test`.
+
+- [x] `CP3.1` **Mail survives an outage** `done: 2026-09-26` — Mailpit stopped at 13:50:53 and a
+  member invited in the same second; Mailpit back at 13:53:55; the invitation arrived at 13:55:46,
+  through the retries. Then past them: stopped at 13:56:44 and invited, back at 14:09:45, **nothing
+  arrived by 14:10:15** — the job had failed for good — and `pnpm queue:replay mail` answered "1
+  failed mail job(s) queued again" at 14:10:20, when the invitation arrived.
+- [x] `CP5.1` **A separate realtime Redis** `done: 2026-09-26` — the whole stack started with
+  `REDIS_REALTIME_URL` at the queue instance. With a stream open, `PUBSUB CHANNELS` listed one
+  channel on the queue instance and none on the cache; an invitation's `member.changed` frame
+  reached the stream; and `26.5`'s replay log was written there too. **The log key carries the
+  client's `app:` prefix**, which pub/sub channels do not — a scan for `realtime:log:*` finds
+  nothing. The reference page says so now.
+- [x] `CP7.3` **A stream held thirty minutes** `done: 2026-09-26` — through the dev proxy and
+  the stream process: `200 text/event-stream`, held 31.5 minutes — inside the age's ±10 % — and
+  ended cleanly with `done`, after 128 chunks of keep-alive. Nothing in Node's `http` timeouts cut
+  it early. `CORSPlugin` on an event stream from a desktop shell stays unchecked, because there is
+  no desktop shell.
+- [x] `CP7.7` **The dev proxy in a tab, and two hundred streams** `done: 2026-09-26` — in Chrome, a
+  signed-in tab's `fetch` to `/api/realtime/realtime/stream` answered `200 text/event-stream` and
+  its first frame arrived 39 ms later, while the stream stayed open: the proxy passes it through,
+  unbuffered. Two hundred streams held in the stream process, with its per-person cap raised for
+  the run, left the web app's `/api/rpc` where it was — `notification.unreadCount` over 300
+  calls:
+
+  | | p50 | p95 | max |
+  |---|---|---|---|
+  | no streams | 16.1 ms | 31.1 ms | 68.0 ms |
+  | 200 streams | 16.0 ms | 29.9 ms | 55.7 ms |
+
+  None of the stream requests reached the web app's log; all went to the stream process.
+  **One dev-only finding:** two hundred opens fired in the same tick through the Vite proxy failed
+  with `fetch failed` on the client, where batches of twenty all opened. Production puts a real
+  proxy there, and a browser opens one or two streams a tab, so it is recorded and not filed.
+- [x] `CP1.9` **The client's refetch load** `done: 2026-09-26` — **the measurement found a gap
+  and the fix is in the same commit.** Two Chrome tabs on one channel, twenty sends from the other
+  member 110 ms apart: each tab made 20 `message.list` calls — one page each, not the two per
+  message the review found, so the dedupe held — but one per message, where the plan expected
+  about one a second. `refreshNewest` was single-flight with no floor, and each fetch finished
+  just before the next frame arrived. It now holds its busy window for the rest of a second, as
+  `RealtimeRefetch` does. The same burst then cost each tab **2** calls, 1.8 s apart, with all
+  twenty messages rendered in both. `use-conversation-stream.spec.tsx` fails without the floor.
+- [x] `CP4.9` **The worker's fan-out** `done: 2026-09-26` — **after only.** A channel seeded to 501
+  members, five sends, one worker at `debug`:
+
+  | job | duration |
+  |---|---|
+  | outbox drain — claim, relay, mark | 149–209 ms |
+  | `messaging-realtime` — the paged member fan-out | 87–139 ms |
+  | `notification` — a channel message notifies nobody | 3–10 ms |
+
+  There is no *before*: the pre-plan code was not run beside it, and a number from memory is not a
+  measurement. Two things the measurement needed and did not have. **The event queue logged no
+  completion timings**, unlike every other queue; it does now (`outbox.consumer.ts`). And **stray dev
+  workers from earlier `pnpm dev` runs were splitting the queue**, so the first two attempts
+  timed a fraction of the jobs — Windows leaves a `tsx watch` child running when its parent is killed.
+  On the way it found the analytics flood fixed in the same commits: with ClickHouse down, `CR.20`'s
+  keep-going walk logged a failure per tenant per run; three in a row now stop it.
+
+---
+
+## Moved out of `BACKLOG.md` on 2026-09-25
+
+**Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
+triggers under about three hundred lines of closed-work notes, history and state. Everything below
+is that prose, moved as it stood so nothing is lost and the backlog shows only the work. Headings
+keep their section numbers, and every ID resolves as before. The machine-state tables went to
+[`STATE.md`](STATE.md) instead, because they are what to undo, not what was done.
+
+### How the backlog came to be
+
+Everything not done, gathered once. Five files used to hold open work and each held a different
+kind: `archive/PLAN.md` the unchecked boxes, `archive/REVIEW.md` forty-five defects nothing has
+fixed, `archive/STUCK.md` what a session could not do and why, `archive/OPEN.md` the ledger of what
+closed and what did not, `archive/TODO.md` three ledger rows. All five moved to `archive/` on
+2026-09-20 and this file replaced them. They are still the place each item's **full argument**
+lives — every entry below is a summary with a pointer — but nothing is ticked there any more.
+
+**Split on 2026-09-22.** This file had grown to eighty-four closed entries against nineteen open
+ones, and a ledger you scroll past four-fifths of to reach the work is one nobody opens. Every
+closed entry moved to [`archive/DONE.md`](archive/DONE.md) with its proof intact and its ID
+unchanged, and the changelog went with them. What is left here is the work.
+
+**Every archived plan was checked and carries nothing of its own.** Every `[ ]` in
+`archive/COMMUNICATION-PLAN.md`, `DB-SCALING-PLAN.md`, `PLATFORM-ADMIN-PLAN.md` and
+`IMPLEMENTATION-PLAN.md` maps through `archive/PLAN.md`'s **Where the old IDs went** table to an item that
+is either ticked there or listed in section 1 below. The four blockquoted Exit clauses in the
+communication plan are `23.5`–`23.11`. `DB-SCALING-DEFERRED.md`'s two items were reopened and
+delivered as Phases 18–20. `P2.20` was dropped as moot; `P8.3` is `23.4`, done.
+
+> **The stack runs again, as of 2026-09-20.** Every port it needed — 5432, 6379, 9000, 1025, 8025 —
+> was held by two unrelated projects, so nothing could start: the whole of `packages/infrastructure`
+> was red with an authentication error from *another project's* Postgres, and two `Container.health`
+> cases timed out. Every published port is now the well-known one with a `1` in front, stated once
+> in the root `.env`, which is now the only env file. `infra/.env` and `packages/infrastructure/.env`
+> are gone, and `check:architecture` §27 fails the build if a port and the URL that dials it ever
+> disagree. The infrastructure suite is 35 files and 236 tests green; `composition` is green.
+>
+> **A second node runs too**, under `pnpm infra:up:sharded` with the two `DATABASE_SHARD_1_*`
+> lines in `.env`. That is what proved half of `R.2`, and `24.1`, `24.2` and `24.5` were built and
+> proved against it. An entry that is blocked says so.
+
+### Where work stopped — 2026-09-25, as the backlog recorded it
+
+
+**Every item on the 2026-09-24 list is done except one**, and that one is skipped with its reasons
+in its entry. Everything is committed on `dev` and **not pushed**. Build, typecheck, lint, all 29
+architecture assertions with none skipped, the full test suite and the smoke suite are green. What
+closed, each with its proof in [`archive/DONE.md`](archive/DONE.md):
+
+| ID | What | Proof |
+|---|---|---|
+| `24.2b` | a job re-reads its placement per transaction | red without it, twice: a spec and a live move |
+| `24.3` | read replica per node, used only once caught up | live standby; red without the caught-up check |
+| `25.1` · `25.2` | replica status and the switch, on `/platform/status` | over the API; standby +42 vs +0 scans per run |
+| `25.3` | colder storage class, a MinIO tier | the live bucket takes a `COLD` transition and refuses an unknown one |
+| `24.6` | routed writes at 1× and 10× across two nodes | 0 errors, no misplaced row, 142–159 writes/s at 10× |
+| `24.4` | the catalog, measured | zero catalog reads per warm routed write; nothing built |
+| `T-036` | the communication row | "Done when" narrowed, as decided |
+
+**`23.14` and `23.21` closed later the same day, decided with the user.** Doing `23.14`
+end to end found a sign-up regression from `24.2a`, and that is fixed too — see
+[`archive/DONE.md`](archive/DONE.md) §1.
+
+**What is left is not a session's to do.** `S.2` waits for real traffic. `S.3` waits for a node
+that is provisioned rather than a second container. Section 6 is triggers, none fired. The
+whole-plan verification's reading pass was done on 2026-09-25 and is in section 5.
+
+### §1, the closed phases' notes
+
+### Phase 23 — Loose ends, no gate
+
+**One box left of nineteen.** The three recommendations, the eight browser clauses and the eight
+found-on-the-day fixes all closed between 2026-09-20 and 2026-09-22; they are in
+[`archive/DONE.md`](archive/DONE.md) §1 with what each was measured against.
+
+**Empty.** `23.14` closed on 2026-09-25, decided with the user — see
+[`archive/DONE.md`](archive/DONE.md) §1.
+
+**`24.1`–`24.6` are built, and `24.7` waits on a relation count no node has reached** —
+[`archive/DONE.md`](archive/DONE.md) §1. A tenant can be moved, a move under load loses no
+acknowledged write, a moved tenant's catalog audit rows reach its own node through the outbox, a
+job still writing after the settle is refused rather than landing on the source, and the
+projection reads from a standby once it has caught up.
+
+### Phase 25 — The replica panel and the shard map 📁
+
+**Empty.** `25.1` and `25.2` closed with `24.3` on 2026-09-25, and `25.3` the same day —
+[`archive/DONE.md`](archive/DONE.md) §1.
+
+### §2 — the closing notes
+
+
+**Empty. All forty-five were fixed on 2026-09-20** and are in
+[`archive/DONE.md`](archive/DONE.md) §2, each with the proof and the specs written for it.
+
+Two are worth finding again without reading the whole list. `R.9` is the one defect that ships
+with **no unit test**, because `session.fn.ts` calls `createServerFn` at module scope and hangs
+under vitest. And `R.24` changed no behaviour at all, only comments that were untrue — the
+behaviour behind it was `23.1`'s decision to take, and it was taken.
+
+**`R.2`'s last owed spec was written on 2026-09-24**: `sharded.smoke.spec.ts` publishes an event
+for a tenant on node 1 and drains it from node 1's outbox, and it is red with the catalog unit of
+work `R.2` fixed. The file is 7 passed.
+
+### §3 — `S.2`'s history, and `S.3` as it stood
+
+  **Step one was not in the state this file recorded, and now is.** On 2026-09-20 the ClickHouse
+  container was `Exited (137)` five days old and `CLICKHOUSE_URL` was commented out in `.env` —
+  so the projection had been writing **nowhere**, and the wait for "a few days of data" had never
+  started. Both are on now, `ch:migrate` re-applied, and the projection wrote its first 37 rows
+  within one five-minute cycle, `member.invited` and `member.joined` from the `S.1` walk among
+  them. `ANALYTICS_DRIVER` stays `postgres`, which is the adoption order `.env` itself documents.
+  **What is left is genuinely only waiting**: run the worker for days, let the nightly
+  reconciliation come back clean, then write the reader against real data. No session can do that.
+  - **But the waiting only works if the run does.** Turning it on immediately reproduced
+    `23.21`'s second defect: one orphan tenant with no shard assignment aborted the whole run,
+    after the first tenant's rows had landed. Left alone, `S.2`'s "a few days of data" would have
+    been the same 37 rows on day three. The orphan is placed now; the defect is not fixed, and
+    **`23.21` is a prerequisite of `23.14`** rather than an unrelated line in the same phase.
+  - The count in the old note is stale too: `analytics.smoke.spec.ts` is **2** cases, not four.
+
+- [ ] `S.3` **Phase 24 is gated on a second shard being provisioned**, and one container is not
+  that. Re-measured 2026-09-20 on the renumbered ports, because the numbers in this file were
+  taken before them: `sharded.smoke.spec.ts` is **5 passed**, not 4 — the fifth is `R.2`'s runway
+  assertion — and a warm placement resolve is **914 µs** against the 679 µs recorded, a miss
+  **3 576 µs** against 2 568 µs. The third routed case still passes for the reason it exists: a
+  routed insert on node 1 is a `23503` before it can be timed. **The blocker is unchanged and is
+  not a tool.** ~~`24.1` is deliberately filed until that node exists~~ — **superseded
+  2026-09-22**: `24.1` was decided and built, the routed insert on node 1 lands, and
+  `sharded.smoke.spec.ts` is 6 passed. What is left of this entry is a node that is *provisioned*
+  rather than a second container on one machine, which is `24.6`'s load test and a deploy.
+
+### §4 — the resolved notes
+
+
+Each of these sits under a `[x]` in `archive/PLAN.md` as an `unfinished:`, `concern:` or `corrected:` note.
+Re-checked against the tree on 2026-09-20; the ones that turned out to be resolved are listed at
+the end so nobody chases them. **None is open**: `16.12`, the last, closed with `PF.0` on
+2026-09-24 — [`archive/DONE.md`](archive/DONE.md) §4.
+
+**Checked and already resolved**, so the notes in `archive/PLAN.md` and `archive/OPEN.md` are stale rather than
+open: `22.12`'s "the two unit-of-work instances are not bound per slice yet" —
+`container.ts` binds `routedUnitOfWork` to notification, messaging and ai and `catalogUnitOfWork`
+to the rest. `archive/OPEN.md` A.10's "`vitest.smoke.config.ts` has no sweep" — it has
+`globalSetup: ["tests/support/orphan-sweep.ts"]`. Phase 20's Exit note "not fixed: a teardown in
+every integration spec" — the global sweep is that fix. `T-031`'s "not yet run against a
+database" — walked on 2026-09-13 in the communication plan's Phase 2 Exit.
+
+### §5 — what the walks found
+
+
+Every phase is unit-tested and most are verified against live containers; these are the clauses
+the record says were *not* proven, beyond the eight in `23.5`–`23.12`.
+
+**All seven browser clauses were walked on 2026-09-21**, in one pass against `pnpm dev` on
+`:13000` with live containers and the worker up. `pnpm platform:grant alice@example.test` was the
+setup step the 2026-09-20 walk had not taken; it moves her `loadbearing` membership from `owner`
+to `platform_admin`, which is the tier by construction.
+
+**Two accounts, four organizations, and every clause below the API actually called.** What each
+clause was measured against is in [`archive/DONE.md`](archive/DONE.md) §5; what the pass left
+behind is in the state table at the end of this file. Two findings are worth carrying here rather
+than burying in a tick, because the next walk needs them:
+
+- **A platform admin is not a tenant member, and `/notifications` proves it.** Alice with
+  `loadbearing` active is refused `/notifications` — `platform_admin` holds the nine platform keys
+  and no `notification.inbox.read`. That is the design working, and it is also why the archived
+  month had to be manufactured for a *tenant owner* rather than for her.
+- **A synthetic mouse click misses in this harness and a real one does not.** Three buttons —
+  pause projection, send invitation, restore — read as dead on a coordinate click and fired on
+  `element.click()`. Checked before filing anything: `elementFromPoint` returned the button
+  itself, so it was the input path and not an `R.44`-shaped missing handler. Worth knowing before
+  the next walk files a defect against a button that works.
+
+**The whole-plan verification closed on 2026-09-25**, both halves — the command block and all 26
+Exit lines by hand. [`archive/DONE.md`](archive/DONE.md) §5 has what was found.
+
+### §7 and §8 — the closing notes
+
+
+**Empty.** `T-036` closed on 2026-09-25 with its "Done when" narrowed as decided, so Phase 26
+lives in [`COMMUNICATION.md`](COMMUNICATION.md) rather than on this row. `T-037` and `T-038`
+closed on 2026-09-21. All three are in [`archive/DONE.md`](archive/DONE.md) §7.
+
+
+**Empty.** All six closed on 2026-09-21 and 2026-09-22 —
+[`archive/DONE.md`](archive/DONE.md) §8. The last of them was never a doc edit at all: three
+copies of the `DATABASE_SHARD_<n>_URL` reader, which stay three copies and now run one algorithm,
+held together by assertion 29.
+
+### §9 — the performance summary
+
+
+**Empty. All eight closed on 2026-09-24** and are in [`archive/DONE.md`](archive/DONE.md) §9, each
+with its before and after. The short version, at 2 000 tenants on one node:
+
+| | before | after |
+| --- | --- | --- |
+| a signup, whole founding transaction | ~126 ms inline, and its DDL grows with the node | **21 ms** on a spare |
+| `SHARE ROW EXCLUSIVE` on `conversations` per 20 signups | 2 227 samples | **0** |
+| the monthly runway pass | 35.6 s | **1.6 s** |
+| dropping one tenant | one transaction over seven parents | one statement per table |
+
+**One finding is not a task and needs a decision**: one unpruned read of `notifications` at full
+retention exhausts the lock table at ~1 800 tenants, not the ~5 000 the plan estimated. Nothing in
+the application issues one. `max_locks_per_transaction` stays 1 024 until a node heads there.
+
+### Do not fix these — stale lines in `archive/`, frozen by design
+
+
+Six lines inside `archive/` were stale the day the files moved, and the 2026-09-25 verification
+added two rows. **They are not tasks.** A file in
+`archive/` records what was believed when it was written, and correcting one would make it a worse
+record, not a better one. Listed so nobody reads them as current on the way to an entry's body.
+
+| Where | What it says | What is true |
+|---|---|---|
+| `archive/PLAN.md:34–81` | eighteen phases built, "start at Phase 19" | twenty-two built; the queue is Phase 23 |
+| `archive/PLAN.md:87` | `check:architecture` "21/21 today; 23 after Phase 22" | 29 |
+| `archive/PLAN.md:3347` | Phase 23 is "three fixes, eight clauses, three from `TODO.md`, and `23.16`" | `23.16` is done; `23.17`–`23.24` came later |
+| `archive/OPEN.md:763` | "45 commits on `main`, nothing pushed" | merged as PR #18; `origin/main..HEAD` is empty |
+| `archive/OPEN.md:544` | section B line numbers, taken 2026-09-19 | drifted by that night's edits; the IDs are right |
+| Phase 22's Exit | "`sharded.spec.ts` fails on exactly the foreign-key constraint `24.1` names" | `24.1` dropped the keys; the spec asserts the write succeeding |
+| Phases 17–22's Exits | 20, 21 or 23 assertions; `TENANT_EXEMPT`; `/health`; nine platform keys | 29; `shard.ts`'s `CATALOG`; `/api/health`; ten |
+| `archive/REVIEW.md` | line numbers as of `d98c9f3` | one commit behind `885e144`; accurate until the first fix |
+
+---
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-26 | @sami | **`CP1.9` and `CP4.9` measured, and each measurement changed code.** Two tabs showed a conversation refetching once per message rather than once a second, so `refreshNewest` got the floor `RealtimeRefetch` already had. The fan-out could not be timed because the event queue logged no completions, and a stack without ClickHouse showed the projection flooding the log once per tenant; both fixed. Section 12 is down to `CP7.5`, which wants Linux, and `CP7.9`, which wants a later release |
+| 2026-09-26 | @sami | **Four of section 12's hand checks done in a running app**: mail through an outage and past its retries with `queue:replay`, a separate realtime Redis, a stream held thirty minutes, and the dev proxy in a Chrome tab plus two hundred streams with the web p95 unchanged. `CP7.5` still wants Linux; `CP1.9` and `CP4.9` are measurements still to make |
+| 2026-09-26 | @sami | **`26.5` built: a resume is replayed what it missed.** A short log per channel beside the pub/sub, read on a resume after attaching, with a `resync` past it. The first of section 11's communication features, and the one that needed no product decision: the client already sent its last event id |
+| 2026-09-26 | @sami | **Section 10 closed but for three, and `CP7.8` with it.** Twenty of the forty-nine review findings closed with the communication performance plan (`14d49db..45633e6`) and twenty-six more on 2026-09-26 in per-layer commits after `e265714`, every one with a spec except `CR.24`, checked by `EXPLAIN`, and `CR.34`, checked by build. Three shipped security defects first: an admin could invite an owner, a deactivated member's keys kept working, and a key could mint a permanent key. Then a stream that re-asks every minute, a rate limit on the six procedures that cost someone else something, the move freeze on every routed write, archive recovery, streamed cold reads, and a web process that disposes once srvx has finished. `CP7.8` was not blocked on where a Nitro plugin lives: srvx fires no Nitro hook on `SIGTERM` at all. `CR.16`, `CR.20` and `CR.33` stay open, narrowed to what is left of each |
+| 2026-09-25 | @sami | **`BACKLOG.md` cut to the open work: 393 lines to 93.** Three items were open (`24.7`, `S.2`, `S.3`) and five triggers, under about three hundred lines of closed-section notes, history, walk findings and machine state. The prose moved verbatim to this file's new section, "Moved out of `BACKLOG.md`", under the same section numbers, so every ID still resolves. The machine-state tables moved to [`STATE.md`](STATE.md): they record what to undo, and they are not done work. `S.2`'s title now says what is left, which is checking against real traffic rather than waiting to build |
+| 2026-09-25 | @sami | **`23.14` and `23.21` decided with the user and built, and a sign-up defect found by doing it.** The first dashboard is *activity over time*, and it was built against seeded data rather than waiting for real traffic. An unplaceable tenant is now skipped and logged rather than failing the run. It is skipped only when the directory has no row; a catalog that cannot be asked still fails the run. **Walking the dashboard end to end found that every sign-up failed on a two-node stack**, a regression `24.2a` introduced a day earlier: the audit logger resolved an uncommitted directory row through another connection. It is fixed and proved on two nodes. One migration run failed once and succeeded on the retry. Its output was not captured, so its cause is not known. Also: `orphaned-tenants.spec.ts`'s `danglingConversations` case timed out once at 30 s in the full run and passed four times alone. It is a cross-tenant scan that runs close to its budget on this disk, and nothing changed today touches it. `S.2` and `S.3` remain, and neither can be closed in a session |
+| 2026-09-25 | @sami | **The 2026-09-24 list, worked through: nine closed, one skipped with its reasons.** `24.2b` first, because it was half built: a job now re-reads its placement at every transaction, and a live move shows the gap before the fix — a late job's write landed on the source. `24.3` added a streaming standby in compose and a read path that uses it only once it has caught up with the primary, so a lagging replica is a slower read and never a stale one. Removing that check made the first read after a write miss its row. `25.1` and `25.2` put the lag and the switch on `/platform/status`. Turning the switch on moved the projection's reads onto the standby (+42 scans vs +0). `25.3` gave the `cold/` prefixes a transition to a MinIO tier, and refuses `GLACIER` and `DEEP_ARCHIVE`, because a restore reads with `GetObject`. `24.6` ran the routed writes at 1× and 10×: 0 errors, and no row on the wrong node. `24.4` measured zero catalog reads per warm write and built nothing. `T-036` closed on its narrowed "done when", and the whole-plan verification ran both halves. **`23.14` was skipped**: ClickHouse held 242 rows over 3 days, mostly spec debris, and its first dashboard is a product choice. **Three things found on the way:** the checkout's `.env` predated the port renumbering and its database the last 104 commits. `mc ilm tier info` exits 0 for a missing tier. And a failing `toBe` on a `pg` pool ran the smoke suite out of heap. Nothing is pushed |
 | 2026-09-24 | @sami | **`24.2a` closed, `R.2`'s owed spec written, and work stopped at a clean point on request.** `24.2a` was filed with two options, and asking produced a third that beat both: a moved tenant's catalog audit row goes through node 0's outbox and is written on its own node by a relay. It is saved with the action, so nothing can be lost, and it lives in one place, so the runway, the archive and the projection all look where it is. The reclaim carries late rows before it drops node 0's copy, which retires the old rule that node 0's audit partition is never dropped. `R.2`'s last spec drains node 1's outbox from node 1 and is red on the catalog binding; running that red check drained node 0's real outbox with a relay that delivers nothing, so it was checked afterwards: nothing was pending and nothing was marked. `24.2b` was half built and **reverted rather than committed untested**; its entry records the design and what is left |
 | 2026-09-24 | @sami | **Section 9 closed, all eight, and `16.12` with it.** Measured twice at 100, 500 and 2 000 tenants, before and after. **Signup:** the two keys into `conversations` made their tables attach twelve times slower than their neighbours and took `SHARE ROW EXCLUSIVE` on `conversations` 2 227 times in twenty signups; dropped in `0037`, it is zero, and warm spares take the whole founding transaction from 126 ms to 21 ms. **The runway** is 35.6 s → 1.6 s at 2 000, one read and one transaction per page of 200. **The drop** runs a statement per table with no transaction, and its spec is red on the old code. **Three corrections, all found by measuring:** the first run's 2 000 row was taken without the keys, because the smoke's own migrate step applied `0037` mid-run; `PF.6`'s "no `Sort`" assertion was wrong, because the old query sorts too on tables this small, and what the `OR` rewrite actually loses is the index condition; and `PF.7`'s lock ceiling is ~1 800 tenants, not ~5 000, because a lock is per relation *and* per index. **Also closed here:** `24.2`'s work had been left uncommitted by the last session and was verified green and committed first, thirteen commits by layer. The four stale lines in `BACKLOG.md` are fixed: the preamble and `S.3` both said `24.1` was undecided, and `24.7`'s trigger is re-stated from the numbers |
 | 2026-09-24 | @sami | **`24.2`, `24.5` and `25.5` closed — a tenant can be moved, and the proof is under load.** Half the move had been built across three commits and the backlog still listed it open. Finishing it found two defects in that half: `prepare` seeded only the runway months, so **no tenant with older rows could ever have moved**; and a retry wrote `on conflict do nothing` over a failed attempt's copy, so a row changed between attempts came back stale and the count check could not see it. And the freeze had a gap: a request places itself once, so one that resolved just before the freeze wrote to the source during the copy. `quiesce` closes it — a settle, then a `SHARE` lock — and the smoke proves it with a straggler holding its transaction across the move, which a sabotaged `quiesce` loses three runs out of three. **Two things found and filed rather than fixed:** `24.2a` — a catalog transaction writes a tenant's audit row and event on node 0 wherever the tenant lives, so after a move node 0's runway stops covering that tenant's `activity_log` and invitations for it fail within two months; and `24.2b`, the settle window does not cover a long job |
@@ -939,7 +1579,7 @@ comparisons that carry weight are the ones inside one run, or ones far larger th
 | 2026-09-22 | @sami | **`19.20` closed, and not for the reason it was filed.** The entry said to make the tenant delete a job "when a large tenant's in-request archive bites"; implementing `24.1` found that the delete was **running on the wrong node**. `shardMiddleware` places on the actor's principal and the use-case placed nothing of its own, so a platform admin on node 0 deleting a tenant on node 1 dropped partitions on node 0, found none and reported success. It is the same class as `R.2` and latent only while everything sits on node 0. A job fixes it by construction — `withShard` places by organization id — so `DeleteOrganizationUseCase` now keeps every guard and queues, and `PurgeOrganizationUseCase` does the work on the tenant's own node with no permission to assert and the actor carried in the payload. The wire answers a job id rather than a tally, matching `tenant-export` and `cold-restore` |
 | 2026-09-22 | @sami | **`REVIEW.md`'s own gap closed, and closing it found the thing it was most likely to miss.** The review ran without Docker, so its forty-five fixes landed with neither the integration specs nor the smoke suites re-run against them; both ran today — 278 integration tests, 31 smoke. **`LOKI_URL` was commented out in `.env` while Loki was up and answering,** so `observability.smoke.spec.ts` would have skipped silently and the run would have "passed" having proved nothing about the log read-back path. That is `S.2`'s ClickHouse trap in a second place, five days after the first. Uncommented, the file runs 5 cases. The three remaining skips — `routed`, `fan-out`, `tenant-ceiling` — are opt-in scale runs gated on env vars and are their own open items, named rather than counted |
 | 2026-09-22 | @sami | **`BACKLOG.md` was split in half and this file is the other half.** It held eighty-four closed entries against nineteen open ones — 106 KB you scroll four-fifths of to reach the work — so every ticked entry moved here with its proof, its ID and the changelog that explains it, and the backlog came out at 25 KB holding only what is open. Nothing was rewritten in the move and nothing was summarised: every moved line is here verbatim, checked line by line rather than trusted. Sections keep their numbers, so `R.7` and `23.15` resolve exactly as before, and the pointers into `archive/PLAN.md` still point where they did. Two prose repairs were needed where entries came out from under an intro that then introduced nothing — Phase 23's three headings and section 2's three severity bands — and both now say what closed and where it went. This is the first file in `archive/` that grows: the plans beside it are frozen records of one day, and `index.md` now names the difference rather than claiming nothing here is ever touched |
-| 2026-09-22 | @sami | **Phase 26 left this file whole**, for [`COMMUNICATION.md`](../COMMUNICATION.md) — all eight boxes, plus `26.4` from the same phase and `26.8` from section 4 and the two conditional entries in section 6. **Not one of them was blocked**: every item could have been built against the local stack the day it was filed, which is why the move is worth explaining. They share a requirement none of their entries carried — messaging, email and notifications must not slow the app down — and that is a performance and isolation design rather than eight features, so it gets a plan written against these as its input. The new file carries the decisions already reached so nobody pays for them twice: SMTP as a platform default plus a per-tenant override, `auth.*` always on the platform sender because a tenant must never be able to lock people out of signing in, tenant passwords encrypted under a new `MAIL_SECRET_KEY` rather than derived from `AUTH_SECRET`, web push whole or not at all as a third channel in the preference grid. It also carries three things the archived entries get wrong, each found by reading the tree: `26.1` assumes `messages` is unpartitioned and it is not, so a thread `parent_id` cannot reference `id` alone; `StorageGateway.presignUpload` already exists with an adapter, a fake and no production caller; and `26.5`'s stated blocker `R.27` was fixed on 2026-09-20. `T-036` now waits on that plan rather than on a section of this one, and `24.5`'s "4 passed" was corrected to the 5 `S.3` measured. Open boxes: 28 → 19 |
+| 2026-09-22 | @sami | **Phase 26 left this file whole**, for [`COMMUNICATION.md`](COMMUNICATION.md) — all eight boxes, plus `26.4` from the same phase and `26.8` from section 4 and the two conditional entries in section 6. **Not one of them was blocked**: every item could have been built against the local stack the day it was filed, which is why the move is worth explaining. They share a requirement none of their entries carried — messaging, email and notifications must not slow the app down — and that is a performance and isolation design rather than eight features, so it gets a plan written against these as its input. The new file carries the decisions already reached so nobody pays for them twice: SMTP as a platform default plus a per-tenant override, `auth.*` always on the platform sender because a tenant must never be able to lock people out of signing in, tenant passwords encrypted under a new `MAIL_SECRET_KEY` rather than derived from `AUTH_SECRET`, web push whole or not at all as a third channel in the preference grid. It also carries three things the archived entries get wrong, each found by reading the tree: `26.1` assumes `messages` is unpartitioned and it is not, so a thread `parent_id` cannot reference `id` alone; `StorageGateway.presignUpload` already exists with an adapter, a fake and no production caller; and `26.5`'s stated blocker `R.27` was fixed on 2026-09-20. `T-036` now waits on that plan rather than on a section of this one, and `24.5`'s "4 passed" was corrected to the 5 `S.3` measured. Open boxes: 28 → 19 |
 | 2026-09-22 | @sami | `17.2`/`22.1` closed with migration `0034`, and **the gate it waited two phases on was a fact, not a judgement**: "no deployment can hold objects under the old `activity-archive/` key" is checkable, and the answer is that there is no deployment — CI has no deploy job, there are no tags or releases, and the only bucket this system has written to holds `cold/` and `export/`. Outside the migrations that made it, the table had two live references and no reader: the schema and `shard.ts`'s catalog list. Generated rather than hand-written so the snapshot stays the diff base, applied to both nodes and verified on each, with `partition_archive`'s three months intact. `T-036` decided the other way and **stays open**: narrowing its "Done when" to the walk would put a `P1` row reading "done" above eight unbuilt Phase 26 boxes, and the row blocks nothing |
 | 2026-09-22 | @sami | **Section 8 is empty, and `R.3`'s two uncovered call sites are covered.** The three `DATABASE_SHARD_<n>_URL` parsers wanted a decision and the answer is that the copies stay: `apps/web/src/env.ts` is under the server-only ban, so no package it could import may name the parser, and `docs/setup/25` forbids the shared schema separately. What was wrong was that there were two *algorithms* — the scripts walked upward and scanned for an orphan, the apps collect-sort-check — and they disagreed about an empty value, which is what a commented-out line in `.env` leaves behind: one node to the apps, and to the scripts an error naming shard 1 as its own missing predecessor. `shard-env.ts` runs the apps' algorithm now, nine specs cover it, and **assertion 29** compares the three bodies with comments and signatures stripped so a fourth divergence is a build failure. Then the two failure hooks, which `R.3` left owed: twenty-three cases, each reading a decoded envelope as well as an `AppError`. **Writing them found a defect nobody had filed** — `reason in CONFLICT_COPY` walks the prototype chain, so a `CONFLICT` with reason `toString` rendered an empty notice rather than any sentence at all. Two more sites had the same shape and both are reachable from the wire: `FIELD_RULE_COPY[rule] ?? "error.unexpected"` never reaches its fallback, because an inherited method is truthy, and `BY_CODE[error.code]` returned a function whose call hands back `"[object Undefined]"` where an `AppError` is declared. `Object.hasOwn` in all three, which is what `AppError.isKnownCode` already used and already explained |
 | 2026-09-21 | @sami | `23.26b` built, at the size it was filed at. **A conversation member carries a name now**, and it cannot be a join: `conversation_members` is routed and `users` is catalog, so `ConversationNaming` resolves the page in one catalog statement after the routed read and attaches it by key. `CreateConversationUseCase` names the row it wrote **after** the commit rather than inside `unitOfWork.run` — a crossing that is invisible on one node, so a spec asserts the ordering and is red on the shape that reads more naturally. Its own narrow port rather than `NotificationRecipientReader`, because `Recipient` carries an email address and its `users()` hides deactivated members, which for a thread is how every message somebody wrote goes back to a uuid the day they leave. On the client `ConversationEntity` answers all three questions — its `otherMember` had been written for this and had no caller — so the typing notice, the inbox title and the author line come from one place, and none of them can print an id: `messaging.member.unknown` is the fallback. Proved over `/api/rpc` against live Postgres as well as in nineteen specs |

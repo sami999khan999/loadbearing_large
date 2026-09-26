@@ -27,11 +27,12 @@ export interface ColdPage {
 // Through the worker rather than ClickHouse's `s3()` table function: the convention
 // that lifts a subject out of a payload is one function, and SQL would be a second.
 export abstract class ColdArchiveReader {
-  // Whole-object, at the ~8 MB a tenant-month sits at. **Verified** against the
-  // recorded checksum and count: an object that rotted later is what the index cannot see.
-  public abstract rows(
+  // The whole object in batches of `size`, never whole in memory (`CR.16`). **Verified**
+  // against the recorded checksum and count before the first batch is handed out.
+  public abstract batches(
     entry: PartitionArchiveEntry,
-  ): Promise<readonly Readonly<Record<string, unknown>>[]>;
+    size: number,
+  ): AsyncIterable<readonly Readonly<Record<string, unknown>>[]>;
 
   // The same object, filtered to one user. The caller takes `userId` off the
   // principal, never the input: the object on disk holds the whole tenant.

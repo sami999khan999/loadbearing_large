@@ -1,5 +1,6 @@
 import {
   Buffer,
+  type ColdTier,
   createHash,
   DeleteObjectCommand,
   GetObjectCommand,
@@ -9,11 +10,12 @@ import {
   NotFoundError,
   PutObjectCommand,
   Readable,
-  S3Client,
+  type S3Client,
   StorageGateway,
   type StoredObject,
   Upload,
 } from "../import.js";
+import { S3ClientFactory } from "./s3-client.factory.js";
 
 export interface S3Config {
   readonly endpoint: string;
@@ -23,6 +25,8 @@ export interface S3Config {
   readonly secretKey: string;
   // true for MinIO, false for AWS.
   readonly forcePathStyle: boolean;
+  // Absent is no colder class, which is every deployment until someone pays for one.
+  readonly coldTier?: ColdTier;
 }
 
 interface Digest {
@@ -35,12 +39,7 @@ export class S3StorageGateway extends StorageGateway {
 
   public constructor(private readonly config: S3Config) {
     super();
-    this.s3 = new S3Client({
-      endpoint: config.endpoint,
-      region: config.region,
-      forcePathStyle: config.forcePathStyle,
-      credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey },
-    });
+    this.s3 = S3ClientFactory.create(config);
   }
 
   public override async put(
@@ -108,6 +107,16 @@ export class S3StorageGateway extends StorageGateway {
     );
     if (!result.Body) throw new NotFoundError("storage.object", key);
     return new Uint8Array(await result.Body.transformToByteArray());
+  }
+
+  // The SDK's body is a Node `Readable` on this runtime, which is an async iterable of
+  // chunks — so the object is never assembled here.
+  public override async *getStream(key: string): AsyncGenerator<Uint8Array> {
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+    );
+    if (!result.Body) throw new NotFoundError("storage.object", key);
+    yield* result.Body as unknown as AsyncIterable<Uint8Array>;
   }
 
   public override async delete(key: string): Promise<void> {

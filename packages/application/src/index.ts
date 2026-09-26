@@ -1,3 +1,11 @@
+export {
+  type ActivityCount,
+  type ActivityTrend,
+  AnalyticsReader,
+  type GetActivityTrendInput,
+  GetActivityTrendUseCase,
+} from "./analytics/index.js";
+
 import { ServerOnly } from "./import.js";
 
 ServerOnly.assert("@loadbearing/application");
@@ -57,6 +65,7 @@ export {
 export {
   AddConversationMemberUseCase,
   ConversationAccess,
+  type ConversationHeader,
   type ConversationListItem,
   type ConversationListPage,
   type ConversationMemberRecord,
@@ -85,6 +94,7 @@ export {
   SendMessageUseCase,
   SignalTypingUseCase,
   type UnreadCount,
+  WatchConversationUseCase,
 } from "./messaging/index.js";
 export {
   type ArchivedMonth,
@@ -93,7 +103,6 @@ export {
   GetNotificationPreferencesUseCase,
   type ListArchivedNotificationsInput,
   ListArchivedNotificationsUseCase,
-  ListDigestOrganizationsUseCase,
   ListNotificationsUseCase,
   MarkAllNotificationsReadUseCase,
   MarkNotificationReadUseCase,
@@ -164,6 +173,8 @@ export {
   type RelocatedTenant,
   type RelocateTenantInput,
   RelocateTenantUseCase,
+  type ReplicaHealthReport,
+  type ReplicaStatus,
   type ReprojectPartitionInput,
   ReprojectPartitionUseCase,
   type ReprojectRequested,
@@ -196,6 +207,8 @@ export {
   type TenantStorageRow,
   type ToggleProjectionInput,
   ToggleProjectionUseCase,
+  type ToggleReplicaReadsInput,
+  ToggleReplicaReadsUseCase,
   type UpdateProjectionPolicyInput,
   UpdateProjectionPolicyUseCase,
   type UpdateRetentionPolicyInput,
@@ -214,6 +227,7 @@ export {
   CapabilityInvalidator,
   ColdArchiveReader,
   type ColdPage,
+  type ColdTier,
   type DailyCount,
   type DanglingConversations,
   type DeletedTenantSweep,
@@ -224,6 +238,7 @@ export {
   EmailSender,
   EmbeddingProvider,
   type ExportedObject,
+  type IndexedSource,
   type JobOptions,
   type LifecycleRule,
   type LogEntry,
@@ -240,7 +255,9 @@ export {
   type PartitionEstimate,
   type ProjectionCheckpoint,
   type ProjectionGap,
+  type QueuedJob,
   QueuePublisher,
+  RateLimitStore,
   RealtimePublisher,
   RealtimeSubscriber,
   type RelayedActivity,
@@ -259,6 +276,7 @@ export {
   StorageGateway,
   StoragePolicyGateway,
   type StoredObject,
+  type SubscribeOptions,
   type SweepOutcome,
   type TableRowCount,
   type TenantExport,

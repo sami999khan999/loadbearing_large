@@ -1,13 +1,14 @@
 ---
 title: Realtime
-description: One subscriber connection per process, ref-counted channels, and a bounded queue whose overflow is a resync rather than a dropped frame nobody hears about.
+description: One subscriber connection per process, ref-counted channels, a bounded queue whose overflow is a resync rather than a dropped frame nobody hears about, and the short log a resume is replayed from.
 ---
 
 # Realtime
 
-Two adapters over Redis pub/sub, both on the **cache** instance. Pub/sub is fire-and-forget, so
-the queue instance's durability guarantee buys nothing here and its `noeviction` policy is wasted
-on traffic that is gone the moment it is delivered.
+Two adapters over Redis pub/sub, both on the **realtime** role — the cache instance unless
+`REDIS_REALTIME_URL` sets a third one apart. Pub/sub is fire-and-forget, so the queue instance's
+durability guarantee buys nothing here and its `noeviction` policy is wasted on traffic that is
+gone the moment it is delivered. When to split it out is in `docs/infra/reference/redis.md`.
 
 ## One connection per process, not one per stream
 
@@ -53,9 +54,30 @@ the reader is handed a `resync` before anything else. Two halves are load-bearin
 - **Oldest, not newest.** The newest frame is the one the reader has not seen. The lost ones cost
   a refetch either way, and dropping the arriving frame would mean a reader that is behind stays
   behind forever.
-- **A `resync` rather than silence.** The whole contract is that this transport cannot replay, so
-  a gap the client is not told about is a screen that is quietly wrong. A slow tab costs a
-  refetch; it must never cost the process memory.
+- **A `resync` rather than silence.** A reader this far behind is past what any replay would
+  hand it in time, so a gap the client is not told about is a screen that is quietly wrong. A
+  slow tab costs a refetch; it must never cost the process memory.
+
+## A resume is replayed from a short log (`26.5`)
+
+The publisher writes every `event` frame twice, in one `MULTI`: `XADD` to the channel's log —
+`realtime:log:<channel>` behind the client's key prefix (`app:realtime:log:…` on the wire; ioredis
+prefixes keys and never pub/sub channels), a Redis Stream trimmed to about two hundred entries
+and expiring an hour after its last write — then `PUBLISH`. Logged first, so a frame a client has seen is always a
+frame the log holds. Typing frames are neither logged nor given an SSE id, so they are never the
+point a client resumes from.
+
+On a resume the router passes `lastEventId` as `after`. The subscriber attaches to the channel
+**first**, so nothing published while it reads is lost, then reads the log with `XRANGE` on a
+client that is not in subscriber mode, finds `after`, and queues everything past it ahead of what
+it has heard live — dropping from the live queue any frame the log already carried. When `after`
+is not in the log, because it was trimmed or expired or the frame was never logged, the reader is
+handed a `resync` instead, as every resume was before. A stream over more than one channel always
+resyncs: two logs share no order that one `lastEventId` could name.
+
+**The cost** is one `XADD` and one `EXPIRE` beside each `PUBLISH`, in the same round trip, and
+about two hundred frames of memory per active channel on the realtime Redis. A log is rebuildable
+state in the sense `data.md` means: losing it costs a refetch and nothing else.
 
 ## The cap counts user channels only
 
@@ -67,6 +89,12 @@ conversation is.
 It is a per-process count, not a per-cluster one. A shared counter would cost a round trip on
 every stream open, and the failure this exists to prevent is one runaway tab, which is local by
 construction.
+
+## The maximum age is spread
+
+Each stream's deadline is `maxAgeMs × (0.9 + 0.2 × random)`. Tabs opened in the same second — every
+tab after a deploy — would otherwise all end in the same second thirty minutes later and all reopen
+together. Ending is not an error: the client's `RealtimeStream` reopens a stream that ended cleanly.
 
 ## Every frame is parsed, not cast
 

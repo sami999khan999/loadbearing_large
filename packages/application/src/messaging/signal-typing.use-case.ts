@@ -30,7 +30,7 @@ export class SignalTypingUseCase {
   // signal that arrives late is worse than one that never arrives.
   public async execute(actor: Principal, input: TypingInput): Promise<void> {
     this.authorizer.assert(actor, "messaging.conversation.read");
-    await this.access.assertMember(actor, input.conversationId);
+    await this.access.assertParticipant(actor, input.conversationId);
 
     const key = SignalTypingUseCase.key(actor.organizationId, input.conversationId, actor.userId);
     // The throttle is a cache entry rather than a counter, because "have I published in

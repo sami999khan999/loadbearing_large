@@ -1,4 +1,11 @@
 export {
+  type ActivityDto,
+  type ActivityPointDto,
+  type ActivityQuery,
+  AnalyticsContract,
+  AnalyticsProcedures,
+} from "./analytics/index.js";
+export {
   ApiKeyContract,
   type ApiKeyDto,
   ApiKeyEntity,
@@ -87,6 +94,8 @@ export {
   type ProjectionGapDto,
   type ProjectionToggleInput,
   type ProjectionUpdateInput,
+  type ReplicaDto,
+  type ReplicaToggleInput,
   type ReprojectInput,
   type ReprojectRequestedDto,
   type RestoreInput,

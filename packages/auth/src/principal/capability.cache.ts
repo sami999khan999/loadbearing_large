@@ -21,6 +21,10 @@ export class CapabilityCache {
   // rather than a hit-rate dial. See docs/reference/capability-cache.md.
   private static readonly TTL_SECONDS = 60;
 
+  // How long after an invalidation it is repeated. Longer than any read-through takes,
+  // which is one indexed query; far shorter than the minute the stale set would live.
+  private static readonly REPEAT_MS = 2_000;
+
   public constructor(
     private readonly repository: CapabilityRepository,
     private readonly cache: CacheStore,
@@ -56,14 +60,18 @@ export class CapabilityCache {
   // Called on every RBAC write. Stale in this direction means a revoked permission keeps
   // working — a security bug wearing a caching bug's clothes.
   public async invalidate(organizationId: OrganizationId, userId: UserId): Promise<void> {
-    await this.cache.delete(CapabilityCache.keyFor(organizationId, userId));
+    const key = CapabilityCache.keyFor(organizationId, userId);
+    await this.cache.delete(key);
+    this.repeat(() => this.cache.delete(key));
     if (await this.isPlatform(organizationId)) await this.invalidatePlatform();
   }
 
   // A role edit affects everyone holding it, and the holders are not known here —
   // cheaper to flush the tenant than to enumerate them, and never wider than one.
   public async invalidateOrganization(organizationId: OrganizationId): Promise<void> {
-    await this.cache.deletePrefix(`${CapabilityCache.PREFIX}${organizationId}:`);
+    const prefix = `${CapabilityCache.PREFIX}${organizationId}:`;
+    await this.cache.deletePrefix(prefix);
+    this.repeat(() => this.cache.deletePrefix(prefix));
     if (await this.isPlatform(organizationId)) await this.invalidatePlatform();
   }
 
@@ -71,6 +79,16 @@ export class CapabilityCache {
   // and the entries for everyone else are empty sets that cost one query to rebuild.
   public async invalidatePlatform(): Promise<void> {
     await this.cache.deletePrefix(CapabilityCache.PLATFORM_PREFIX);
+    this.repeat(() => this.cache.deletePrefix(CapabilityCache.PLATFORM_PREFIX));
+  }
+
+  // `CR.9`. A read-through that queried before the revoke committed can `SET` after the
+  // delete, and the revoked set is served for a minute. The repeat removes what it wrote.
+  private repeat(work: () => Promise<void>): void {
+    setTimeout(() => {
+      // Best effort: the TTL is still the backstop, and nobody is waiting on this.
+      work().catch(() => undefined);
+    }, CapabilityCache.REPEAT_MS).unref();
   }
 
   // The whole rule the use-cases would otherwise each have to carry: a role edit in a

@@ -6,6 +6,7 @@ import type { RealtimeMessage } from "../../src/import.js";
 import {
   RedisCacheStore,
   RedisConnection,
+  RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
 } from "../../src/redis/index.js";
@@ -34,6 +35,22 @@ describe("RedisCacheStore against the running instance", () => {
   it("answers healthy for both instances, separately", async () => {
     expect(await redis.healthy("cache")).toBe(true);
     expect(await redis.healthy("queue")).toBe(true);
+  });
+});
+
+// `CR.6`. The window starts at the first call and carries its own expiry, so a key that
+// was counted is never left behind without one.
+describe("RedisRateLimitStore against the running cache instance", () => {
+  it("counts within a window, and starts again once it has passed", async () => {
+    const limits = new RedisRateLimitStore(redis.client());
+    const key = `smoke:rate:${Date.now()}`;
+
+    expect(await limits.hit(key, 1)).toBe(1);
+    expect(await limits.hit(key, 1)).toBe(2);
+    expect(await redis.client().ttl(key)).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(await limits.hit(key, 1)).toBe(1);
   });
 });
 
@@ -70,11 +87,55 @@ describe("realtime against the running cache instance", () => {
       id: "00000000-0000-7000-8000-00000000000a",
       name: "member.changed",
       at: new Date("2026-01-01T00:00:00Z"),
-      payload: { organizationId: ORG },
+      payload: {},
     });
     await reading;
 
     expect(received.map((message) => message.id)).toEqual(["00000000-0000-7000-8000-00000000000a"]);
+  });
+
+  // `26.5`. The frames a tab missed while it was away are in the log, in order, and a
+  // resume from the first of them is handed the rest before anything live.
+  it("replays a resumed stream from the log the publisher wrote", async () => {
+    const channel = RealtimeChannels.user(ORG, "00000000-0000-7000-8000-0000000000e1");
+    const publisher = new RedisRealtimePublisher(redis.client());
+    const subscriber = new RedisRealtimeSubscriber(
+      () => redis.subscriberClient(),
+      { maxStreamsPerUser: 8, maxAgeMs: 5_000, queueSize: 256 },
+      () => redis.client(),
+    );
+    const ids = [
+      "00000000-0000-7000-8000-0000000000f1",
+      "00000000-0000-7000-8000-0000000000f2",
+      "00000000-0000-7000-8000-0000000000f3",
+    ];
+
+    try {
+      for (const id of ids) {
+        await publisher.publish(channel, {
+          kind: "event",
+          id,
+          name: "member.changed",
+          at: new Date("2026-01-01T00:00:00Z"),
+          payload: {},
+        });
+      }
+
+      const controller = new AbortController();
+      const received: string[] = [];
+      for await (const message of subscriber.subscribe([channel], controller.signal, {
+        after: ids[0],
+      })) {
+        received.push(message.id);
+        if (received.length === 2) break;
+      }
+      controller.abort();
+
+      expect(received).toEqual(ids.slice(1));
+      expect(await redis.client().ttl(`realtime:log:${channel}`)).toBeGreaterThan(0);
+    } finally {
+      await redis.client().del(`realtime:log:${channel}`);
+    }
   });
 
   // PING is one of the eight commands valid in subscriber mode, and it answers
@@ -126,12 +187,61 @@ describe("QueuePublisher against the running queue instance", () => {
       const job = await reader.getJob("smoke-probe");
 
       expect(job?.data).toEqual({ probe: true });
-      // From the port's defaults, and the pair that matters on a `noeviction` instance:
-      // BullMQ keeps completed jobs forever otherwise.
-      expect(job?.opts.attempts).toBe(3);
+      // From the port's defaults: minutes of retries, and both sets bounded, because on a
+      // `noeviction` instance BullMQ would otherwise keep every job forever.
+      expect(job?.opts.attempts).toBe(8);
+      expect(job?.opts.backoff).toMatchObject({ type: "exponential", delay: 5_000 });
       expect(job?.opts.removeOnComplete).toBeTruthy();
+      expect(job?.opts.removeOnFail).toMatchObject({ count: 10_000 });
     } finally {
       await (await reader.getJob("smoke-probe"))?.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
+  // `CP4.1`: a fan-out's jobs go in one `addBulk`, and each keeps its own id and options.
+  it("publishes many jobs at once, each under its own id", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+    const ids = ["smoke-bulk-1", "smoke-bulk-2", "smoke-bulk-3"];
+
+    try {
+      await publisher.publishMany(
+        SMOKE_QUEUE,
+        ids.map((jobId, index) => ({ payload: { index }, options: { jobId, attempts: 2 } })),
+      );
+
+      for (const [index, jobId] of ids.entries()) {
+        const job = await reader.getJob(jobId);
+        expect(job?.data).toEqual({ index });
+        expect(job?.opts.attempts).toBe(2);
+      }
+    } finally {
+      for (const jobId of ids) await (await reader.getJob(jobId))?.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
+  // `CR.18`. An operator's request is one job while one is queued or running, and a new
+  // one after: a fixed `jobId` swallowed a retry for as long as the failed job was kept.
+  it("dedupes an in-flight id only while a job holding it is on the queue", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+    const waiting = async () =>
+      (await reader.getJobs(["waiting"])).filter((job) => job.data.inFlight);
+
+    try {
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 1 }, { inFlightId: "smoke-in-flight" });
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 2 }, { inFlightId: "smoke-in-flight" });
+      expect((await waiting()).map((job) => job.data.inFlight)).toEqual([1]);
+
+      for (const job of await waiting()) await job.remove();
+      await publisher.publish(SMOKE_QUEUE, { inFlight: 3 }, { inFlightId: "smoke-in-flight" });
+      expect((await waiting()).map((job) => job.data.inFlight)).toEqual([3]);
+    } finally {
+      for (const job of await waiting()) await job.remove();
       await reader.close();
       await publisher.close();
     }
@@ -193,5 +303,39 @@ describe("QueuePublisher against the running queue instance", () => {
       await reader.close();
       await publisher.close();
     }
+  });
+});
+
+// `CP5.1`: live frames get a role of their own, which costs nothing until it is set apart.
+describe("RedisConnection's realtime role", () => {
+  it("is the cache client itself when no realtime instance is configured", async () => {
+    const connection = new RedisConnection(stack.redis);
+    try {
+      expect(connection.realtimeClient()).toBe(connection.client());
+      expect(connection.opened("realtime")).toBe(false);
+    } finally {
+      await connection.close();
+    }
+  });
+
+  // The queue instance stands in for a third one: pub/sub ignores the database index, so
+  // a `/1` on the cache URL would prove nothing about which server a frame reached.
+  it("is its own connection, to its own instance, when one is configured", async () => {
+    const connection = new RedisConnection({ ...stack.redis, realtimeUrl: stack.redis.queueUrl });
+    try {
+      expect(connection.realtimeClient()).not.toBe(connection.client());
+      expect(await connection.healthy("realtime")).toBe(true);
+    } finally {
+      await connection.close();
+    }
+  });
+
+  // A stream's `finally` runs after shutdown has closed Redis, and must not reopen it.
+  it("refuses to open a connection once closed", async () => {
+    const connection = new RedisConnection(stack.redis);
+    connection.client();
+    await connection.close();
+
+    expect(() => connection.subscriberClient()).toThrow(/closed/);
   });
 });

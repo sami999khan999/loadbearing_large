@@ -38,9 +38,10 @@ export {
   type RestoredMonth,
   type TenantExport,
 } from "./partition-archive.gateway.js";
-export { type JobOptions, QueuePublisher } from "./queue.publisher.js";
+export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
+export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
-export { RealtimeSubscriber } from "./realtime.subscriber.js";
+export { RealtimeSubscriber, type SubscribeOptions } from "./realtime.subscriber.js";
 export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
 export {
   type RequestHeaders,
@@ -54,9 +55,18 @@ export {
 } from "./shard-assignment.repository.js";
 export { ShardingStrategy } from "./sharding.strategy.js";
 export { StorageGateway, type StoredObject } from "./storage.gateway.js";
-export { type LifecycleRule, StoragePolicyGateway } from "./storage-policy.gateway.js";
+export {
+  type ColdTier,
+  type LifecycleRule,
+  StoragePolicyGateway,
+} from "./storage-policy.gateway.js";
 export { TenantMembershipReader } from "./tenant-membership.reader.js";
 export { type TableRowCount, TenantMoveGateway } from "./tenant-move.gateway.js";
 export { UnitOfWork } from "./unit-of-work.js";
 export { UserReader } from "./user.reader.js";
-export { type DocumentChunk, type SearchHit, VectorStore } from "./vector.store.js";
+export {
+  type DocumentChunk,
+  type IndexedSource,
+  type SearchHit,
+  VectorStore,
+} from "./vector.store.js";

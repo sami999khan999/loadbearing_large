@@ -141,27 +141,40 @@ export class PgMaintenanceGateway extends BaseRepository implements MaintenanceG
     return candidates.filter((id) => !present.has(id)) as OrganizationId[];
   }
 
-  // One statement, and one node: all three tables are routed, so the anti-join never
-  // crosses. Distinct pairs first, so the probe runs once per conversation, not per row.
+  // **One tenant per statement** (`CR.21`). One statement over every tenant locked every
+  // `messages` leaf on the node at once and ran out of lock slots near 1 860 tenants.
+  // ──
+  // Each statement prunes to one tenant's partitions and commits on its own, so the locks
+  // it holds are that tenant's. The tenant list is the partition names, which cost nothing.
   public async danglingConversations(): Promise<DanglingConversations> {
-    const found = await this.db.execute<{ members: string; messages: string }>(sql`
-      select
-        (select count(*) from (
-          select distinct organization_id, conversation_id from conversation_members
-        ) m where not exists (
-          select 1 from conversations c
-          where c.organization_id = m.organization_id and c.id = m.conversation_id
-        ))::text as members,
-        (select count(*) from (
-          select distinct organization_id, conversation_id from messages
-        ) m where not exists (
-          select 1 from conversations c
-          where c.organization_id = m.organization_id and c.id = m.conversation_id
-        ))::text as messages
-    `);
+    let members = 0;
+    let messages = 0;
 
-    const row = found.rows[0];
-    return { members: Number(row?.members ?? 0), messages: Number(row?.messages ?? 0) };
+    for (const organizationId of await this.tenantsWithRowsHere()) {
+      const found = await this.db.execute<{ members: string; messages: string }>(sql`
+        select
+          (select count(*) from (
+            select distinct conversation_id from conversation_members
+            where organization_id = ${organizationId}
+          ) m where not exists (
+            select 1 from conversations c
+            where c.organization_id = ${organizationId} and c.id = m.conversation_id
+          ))::text as members,
+          (select count(*) from (
+            select distinct conversation_id from messages
+            where organization_id = ${organizationId}
+          ) m where not exists (
+            select 1 from conversations c
+            where c.organization_id = ${organizationId} and c.id = m.conversation_id
+          ))::text as messages
+      `);
+
+      const row = found.rows[0];
+      members += Number(row?.members ?? 0);
+      messages += Number(row?.messages ?? 0);
+    }
+
+    return { members, messages };
   }
 
   // Partition names, not a scan: a tenant table is LIST-partitioned by tenant, so the

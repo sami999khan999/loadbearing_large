@@ -233,4 +233,34 @@ describe("PgVectorStore", () => {
 
     await store.deleteBySource(organizationId, sourceId);
   });
+
+  // `CR.8` and `CR.33` read these two off one chunk: where the source sits, and which
+  // request wrote it. A chunk from before versions reads as null, never as zero.
+  it("answers where a source is indexed and at which version", async () => {
+    const organizationId = await seedOrg();
+    const sourceId = Uuid.v7();
+    const goalId = Identifiers.goalId.parse(Uuid.v7());
+    const chunk = (version?: number) => ({
+      id: Uuid.v7(),
+      sourceId,
+      goalId,
+      content: "versioned",
+      embedding: axis(6),
+      metadata: { chunkIndex: 0, ...(version === undefined ? {} : { version }) },
+    });
+
+    expect(await store.sourceOf(organizationId, sourceId)).toBeNull();
+
+    await store.upsert(organizationId, [chunk()]);
+    expect(await store.sourceOf(organizationId, sourceId)).toEqual({ goalId, version: null });
+
+    await store.deleteBySource(organizationId, sourceId);
+    await store.upsert(organizationId, [chunk(1_790_000_000_000)]);
+    expect(await store.sourceOf(organizationId, sourceId)).toEqual({
+      goalId,
+      version: 1_790_000_000_000,
+    });
+
+    await store.deleteBySource(organizationId, sourceId);
+  });
 });

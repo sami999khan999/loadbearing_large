@@ -63,6 +63,16 @@ export class OutboxConsumer {
       });
     });
 
+    // The drain and each delivery with how long it took, as every other queue reports. A
+    // fan-out cannot be measured without it, and `CP4.9` found it missing.
+    worker.on("completed", (job) => {
+      this.container.logger.emit("queue.job.completed", {
+        queue: QueueName.EVENT,
+        jobId: job.id ?? "unknown",
+        durationMs: Math.max(0, (job.finishedOn ?? 0) - (job.processedOn ?? 0)),
+      });
+    });
+
     worker.on("stalled", (jobId) => {
       this.container.logger.emit("queue.job.stalled", { queue: QueueName.EVENT, jobId });
     });
@@ -123,7 +133,9 @@ export class OutboxConsumer {
             priority: 10,
             // No `:` — BullMQ keys on this and rejects the job at publish time.
             jobId: `${subscriber}_${event.id}`,
-            attempts: 5,
+            // About three hours of doubling retries. The row is already marked published, so
+            // a delivery that runs out of attempts is only recoverable by replay.
+            attempts: 12,
             removeOnCompleteAgeSeconds: DELIVERY_RETENTION_SECONDS,
           },
         );

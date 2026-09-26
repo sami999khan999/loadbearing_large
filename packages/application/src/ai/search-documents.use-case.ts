@@ -1,5 +1,11 @@
 import { UnavailableError, ValidationError } from "../import.js";
-import type { ActivityLogger, EmbeddingProvider, SearchHit, VectorStore } from "../port/index.js";
+import type {
+  ActivityLogger,
+  EmbeddingProvider,
+  SearchHit,
+  UnitOfWork,
+  VectorStore,
+} from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 
 export interface SearchDocumentsInput {
@@ -16,6 +22,7 @@ export class SearchDocumentsUseCase {
     private readonly embeddings: EmbeddingProvider,
     private readonly vectors: VectorStore,
     private readonly activity: ActivityLogger,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(
@@ -39,11 +46,13 @@ export class SearchDocumentsUseCase {
     const hits = await this.vectors.search(actor.organizationId, embedding, goalIds, input.limit);
 
     // A search is a business fact — what someone looked for is the question an audit
-    // asks after a leak — so it is recorded, and the query text is part of it.
-    await this.activity.record(actor, "ai.document.searched", {
-      query,
-      hits: hits.length,
-    });
+    // asks after a leak — so it is recorded, in a unit of work for the freeze (`CR.11`).
+    await this.unitOfWork.run(() =>
+      this.activity.record(actor, "ai.document.searched", {
+        query,
+        hits: hits.length,
+      }),
+    );
 
     return hits;
   }

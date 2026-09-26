@@ -8,6 +8,7 @@ export {
   type DatabaseStats,
   type DrizzleClient,
   KeysetCursor,
+  type ReplicaHealth,
   type ShardConfig,
 } from "./primitive/index.js";
 export {

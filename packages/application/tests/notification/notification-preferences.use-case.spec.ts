@@ -97,7 +97,9 @@ describe("GetNotificationPreferencesUseCase", () => {
 describe("UpdateNotificationPreferenceUseCase", () => {
   it("saves against the actor's own id and nobody else's", async () => {
     const preferences = new Preferences();
-    const useCase = new UpdateNotificationPreferenceUseCase(new Authorizer(), preferences);
+    const useCase = new UpdateNotificationPreferenceUseCase(new Authorizer(), preferences, {
+      run: (work: () => Promise<unknown>) => work(),
+    } as never);
 
     await useCase.execute(actorHolding("notification.preference.update"), {
       category: "membership",
@@ -110,10 +112,29 @@ describe("UpdateNotificationPreferenceUseCase", () => {
     ]);
   });
 
+  // `CR.11`. The move freeze lives in `UnitOfWork.run` and nowhere else, so a routed write
+  // that skipped it landed on the source mid-move and was lost at the flip.
+  it("writes inside the unit of work, so a frozen tenant refuses it", async () => {
+    const preferences = new Preferences();
+    const frozen = { run: () => Promise.reject(new Error("shard.move.inFlight")) } as never;
+    const useCase = new UpdateNotificationPreferenceUseCase(new Authorizer(), preferences, frozen);
+
+    await expect(
+      useCase.execute(actorHolding("notification.preference.update"), {
+        category: "membership",
+        channel: "email",
+        mode: "digest",
+      }),
+    ).rejects.toThrow("shard.move.inFlight");
+    expect(preferences.saved).toEqual([]);
+  });
+
   // Reading the inbox and changing how you are contacted are separate powers, so the
   // read permission alone must not carry the write.
   it("refuses a principal holding only the read permission", async () => {
-    const useCase = new UpdateNotificationPreferenceUseCase(new Authorizer(), new Preferences());
+    const useCase = new UpdateNotificationPreferenceUseCase(new Authorizer(), new Preferences(), {
+      run: (work: () => Promise<unknown>) => work(),
+    } as never);
 
     await expect(
       useCase.execute(actorHolding("notification.inbox.read"), {

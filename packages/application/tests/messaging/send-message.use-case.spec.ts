@@ -21,6 +21,7 @@ import {
   CountingUnitOfWork,
   conversation,
   GRACE,
+  membershipFrom,
   message,
   NOW,
   ORG,
@@ -34,6 +35,7 @@ class Conversations {
   public touched = 0;
 
   public findById = () => Promise.resolve(conversation());
+  public findMembership = membershipFrom(() => this.findById());
   public touch = () => {
     this.touched += 1;
     return Promise.resolve();

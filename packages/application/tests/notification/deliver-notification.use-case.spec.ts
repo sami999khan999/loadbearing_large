@@ -54,13 +54,16 @@ class Notifications implements NotificationRepository {
   // declare no subject, so suppression never runs for them.
   public unreadSubjects: readonly string[] = [];
 
-  public existsUnread(
+  public suppressionQueries = 0;
+
+  public unreadSubjectHolders(
     _organizationId: unknown,
-    _userId: unknown,
+    userIds: readonly (typeof TARGET)[],
     _kind: unknown,
     subjectId: string,
-  ): Promise<boolean> {
-    return Promise.resolve(this.unreadSubjects.includes(subjectId));
+  ): Promise<ReadonlySet<typeof TARGET>> {
+    this.suppressionQueries += 1;
+    return Promise.resolve(new Set(this.unreadSubjects.includes(subjectId) ? userIds : []));
   }
 
   public saveMany(records: readonly NewNotification[]): Promise<readonly (typeof TARGET)[]> {
@@ -85,15 +88,11 @@ class Notifications implements NotificationRepository {
     return Promise.resolve();
   }
 
-  public listUnreadSince(): Promise<readonly NotificationRecord[]> {
-    return Promise.resolve([]);
+  public listUnreadBetween(): Promise<ReadonlyMap<typeof TARGET, readonly NotificationRecord[]>> {
+    return Promise.resolve(new Map());
   }
 
-  public recipientsWithUnreadSince(): Promise<readonly never[]> {
-    return Promise.resolve([]);
-  }
-
-  public organizationsWithUnreadSince(): Promise<readonly never[]> {
+  public recipientsWithUnreadBetween(): Promise<readonly never[]> {
     return Promise.resolve([]);
   }
 }
@@ -147,6 +146,11 @@ class Mail implements MailPublisher {
 
   public publish<K extends MailTemplateKey>(mail: MailRequest<K>): Promise<void> {
     this.published.push(mail as MailRequest<MailTemplateKey>);
+    return Promise.resolve();
+  }
+
+  public publishMany(mails: readonly MailRequest[]): Promise<void> {
+    this.published.push(...(mails as MailRequest<MailTemplateKey>[]));
     return Promise.resolve();
   }
 }
@@ -228,6 +232,7 @@ const build = (
     mail,
     realtime,
     cache,
+    { run: (work: () => Promise<unknown>) => work() } as never,
   );
 };
 

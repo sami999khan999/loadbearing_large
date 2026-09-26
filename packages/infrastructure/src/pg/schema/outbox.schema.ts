@@ -29,6 +29,9 @@ export const outboxEvent = pgTable(
     // Null until the drain has handed the row to the queue. It is the claim marker and
     // the retention key, and nothing is unique over it.
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    // Set while a drain relays the row, so another replica skips it; a drain that dies
+    // mid-relay frees it when this passes.
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
   },
   (t) => [
     // Postgres requires the partition key in the primary key. `Uuid.v7()` is

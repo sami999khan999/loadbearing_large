@@ -5,7 +5,7 @@ import {
   type UserId,
 } from "@loadbearing/contracts";
 import { Uuid } from "@loadbearing/core";
-import { eq, type Logger } from "drizzle-orm";
+import { eq, type Logger, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
@@ -136,6 +136,37 @@ describe("PgConversationRepository.listByMember", () => {
     expect(sizes).toEqual([2, 2, 2, 3]);
   });
 
+  // `CR.26`. A page of twenty channels of five thousand was a hundred thousand member
+  // rows; a row needs a name, so a channel brings a sample and the reader is always in it.
+  it("brings a sample of a large channel, with the reader in it", async () => {
+    const crowd: UserId[] = [];
+    for (let index = 0; index < 8; index += 1) crowd.push(await makeUser(`Crowd ${index}`));
+    // Made last, so the newest id among nine: a sample by id alone would leave them out.
+    const reader = await makeUser("Reader");
+    const id = await repository.save({
+      organizationId,
+      kind: "channel",
+      title: "Crowded",
+      directKey: null,
+      createdBy: crowd[0] as UserId,
+      memberIds: [...crowd, reader],
+    });
+
+    try {
+      const page = await repository.listByMember(organizationId, reader, { limit: 10 });
+      const members = page.items.find((item) => item.id === id)?.members ?? [];
+
+      expect(members.length).toBeLessThanOrEqual(6);
+      expect(members.length).toBeGreaterThan(1);
+      expect(members.map((member) => member.userId)).toContain(reader);
+      // The whole roster is still one call away, where it is needed.
+      expect((await repository.findById(organizationId, id))?.members).toHaveLength(9);
+    } finally {
+      for (const user of [...crowd, reader])
+        await database.client.delete(users).where(eq(users.id, user));
+    }
+  });
+
   it("spends one statement on a page with nothing on it", async () => {
     const page = await repository.listByMember(organizationId, dave, { limit: 10 });
 
@@ -209,5 +240,57 @@ describe("PgConversationRepository.listByMember — a conversation with no messa
     expect(walked).toContain(quiet);
     // Last, not first: `created_at` is today and every other row was touched into 2030.
     expect(walked.at(-1)).toBe(quiet);
+  });
+});
+
+describe("PgConversationRepository.findMembership", () => {
+  // One statement, and no member rows: the check every send and every page open makes.
+  it("answers a member with the header, in one statement", async () => {
+    const id = conversationIds[3] as ConversationId;
+
+    const header = await repository.findMembership(organizationId, id, carol);
+
+    expect(header).toMatchObject({ id, kind: "channel" });
+    expect(header).not.toHaveProperty("members");
+    expect(counter.count).toBe(1);
+  });
+
+  it("answers null to somebody who is not in the room", async () => {
+    const id = conversationIds[0] as ConversationId;
+
+    await expect(repository.findMembership(organizationId, id, carol)).resolves.toBeNull();
+  });
+});
+
+describe("PgConversationRepository.touch", () => {
+  // Two sends committing out of order: the older one must not become the latest.
+  it("never moves the latest message backwards", async () => {
+    const id = conversationIds[1] as ConversationId;
+    const before = await repository.findById(organizationId, id);
+
+    await repository.touch(
+      organizationId,
+      id,
+      Identifiers.messageId.parse(Uuid.v7()),
+      new Date(Date.UTC(2020, 0, 1)),
+    );
+
+    const after = await repository.findById(organizationId, id);
+    expect(after?.lastMessageAt).toEqual(before?.lastMessageAt);
+    expect(after?.lastMessageId).toEqual(before?.lastMessageId);
+  });
+});
+
+// `CR.31`. `KeysetCursor` encodes milliseconds, and a microsecond sort key made a page
+// ending on a message-less conversation skip the rows in the truncated window.
+describe("conversations.created_at", () => {
+  it("is stored to the millisecond, the precision the cursor carries", async () => {
+    const found = await database.client.execute<{ precision: number }>(sql`
+      select datetime_precision as precision from information_schema.columns
+      where table_name = 'conversations' and column_name = 'created_at'
+      limit 1
+    `);
+
+    expect(Number(found.rows[0]?.precision)).toBe(3);
   });
 });

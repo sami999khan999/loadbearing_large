@@ -80,6 +80,11 @@ export class PgActivityLogger
     if (this.cluster.size === 1) return false;
     if (this.scope.current()?.placement !== "catalog") return false;
 
-    return (await this.cluster.nodeOf(Shard.keyOf(actor.organizationId))) !== 0;
+    // A placement already in scope for this tenant is the answer. The founder needs it:
+    // its directory row is uncommitted, and the resolver reads through its own pool.
+    const key = Shard.keyOf(actor.organizationId);
+    const placed = this.shards.current();
+    const node = placed?.key === key ? placed.node : await this.cluster.nodeOf(key);
+    return node !== 0;
   }
 }

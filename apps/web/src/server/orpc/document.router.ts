@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Three lines per procedure, as `RoleRouter`. `search` maps a domain array onto the
 // contract's `{ hits }`, which is the transport's shape and not the domain's.

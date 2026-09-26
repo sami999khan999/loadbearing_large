@@ -10,6 +10,7 @@ import {
   type ProjectionCheckpoint,
   QueueName,
   type Redis,
+  Shard,
   Worker,
 } from "../import.js";
 
@@ -50,6 +51,15 @@ export class AnalyticsConsumer {
   // The label on every line this file emits, so a second projection does not change the
   // event shape and a dashboard filters on it rather than on the queue name.
   private static readonly PROJECTION = "activity_events";
+
+  // Where the last run stopped. In the cache, because losing it costs one run that starts
+  // at the first tenant again; a day, because the schedule fires every five minutes.
+  private static readonly CURSOR_KEY = "analytics:project:cursor";
+  private static readonly CURSOR_TTL_SECONDS = 24 * 60 * 60;
+
+  // Consecutive tenant failures after which the run stops. The cursor still advances, so
+  // a tenant that alone keeps failing is passed on the next run rather than retried first.
+  private static readonly FAILURES_BEFORE_STOPPING = 3;
 
   public constructor(
     private readonly container: Container,
@@ -116,16 +126,17 @@ export class AnalyticsConsumer {
     const excluding = await this.excluded();
 
     for (const entry of entries) {
-      const rows = await this.container.coldArchive.rows(entry);
-      const records = rows
-        .map((row) => AnalyticsConsumer.recordOf(row, entry.organizationId))
-        .filter((record) => !excluding.includes(record.action as ActivityAction));
-
+      // A batch at a time, never the month (`CR.16`): a month parsed whole OOMed the worker
+      // and blocked the event loop past the other queues' locks.
       let projected = 0;
-      for (let at = 0; at < records.length; at += AnalyticsConsumer.BATCH_SIZE) {
-        projected += await this.container.projector.project(
-          records.slice(at, at + AnalyticsConsumer.BATCH_SIZE),
-        );
+      for await (const rows of this.container.coldArchive.batches(
+        entry,
+        AnalyticsConsumer.BATCH_SIZE,
+      )) {
+        const records = rows
+          .map((row) => AnalyticsConsumer.recordOf(row, entry.organizationId))
+          .filter((record) => !excluding.includes(record.action as ActivityAction));
+        if (records.length > 0) projected += await this.container.projector.project(records);
       }
 
       // Stamped after the rows land, never before: a stamp on a projection that failed
@@ -168,7 +179,8 @@ export class AnalyticsConsumer {
   private async project(): Promise<void> {
     // No batches, no lag computation, and **no log line**: 288 lines a day saying
     // "paused" is noise, and the status screen already shows the state.
-    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+    const policy = await this.container.platformPolicy.get();
+    if (!policy.projectionEnabled) return;
 
     const startedAt = this.container.clock.now();
     // Once per run, not per tenant: it is one small table and every tenant's walk
@@ -179,30 +191,58 @@ export class AnalyticsConsumer {
     let batches = 0;
     let lagMs = 0;
     let tenants = 0;
-    let after: OrganizationId | null = null;
+    let skipped = 0;
+    let failed = 0;
+    let failingInARow = 0;
+    let failure: Error | null = null;
+    let last: OrganizationId | null = null;
 
-    for (;;) {
-      const page = await this.container.organizations.page(after, AnalyticsConsumer.TENANT_PAGE);
-      if (page.length === 0) break;
+    // From where the last run stopped, wrapping round: first come, first served let one
+    // tenant early in id order spend every run's budget before anyone after it (`CR.20`).
+    const start = await this.container.cache
+      .get<OrganizationId>(AnalyticsConsumer.CURSOR_KEY)
+      .catch(() => null);
 
-      for (const organizationId of page) {
-        tenants += 1;
-        if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) continue;
+    for await (const organizationId of this.rotation(start)) {
+      if (batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN) break;
+      tenants += 1;
+      last = organizationId;
 
-        const outcome = await this.projectTenantOrReport(
+      // Reported and passed over: one tenant in a bad state must not stop a rebuildable
+      // store for everyone after it. The first failure still fails the run, below.
+      let outcome: Awaited<ReturnType<AnalyticsConsumer["projectTenantOrReport"]>>;
+      try {
+        outcome = await this.projectTenantOrReport(
           organizationId,
           AnalyticsConsumer.MAX_BATCHES_PER_RUN - batches,
           excluding,
+          policy.replicaReadsEnabled,
         );
-        projected += outcome.projected;
-        batches += outcome.batches;
-        // The max over tenants, not the last one's: the run is as far behind as its
-        // furthest-behind tenant.
-        lagMs = Math.max(lagMs, outcome.lagMs);
+      } catch (error: unknown) {
+        failed += 1;
+        failure ??= error instanceof Error ? error : new Error(String(error));
+        // Three in a row is the store, not the tenants: an unreachable ClickHouse wrote a
+        // failure line for every tenant every five minutes until the run stopped here.
+        failingInARow += 1;
+        if (failingInARow >= AnalyticsConsumer.FAILURES_BEFORE_STOPPING) break;
+        continue;
       }
+      failingInARow = 0;
+      if (outcome === null) {
+        skipped += 1;
+        continue;
+      }
+      projected += outcome.projected;
+      batches += outcome.batches;
+      // The max over tenants, not the last one's: the run is as far behind as its
+      // furthest-behind tenant.
+      lagMs = Math.max(lagMs, outcome.lagMs);
+    }
 
-      after = page[page.length - 1] ?? null;
-      if (page.length < AnalyticsConsumer.TENANT_PAGE) break;
+    if (last !== null) {
+      await this.container.cache
+        .set(AnalyticsConsumer.CURSOR_KEY, last, AnalyticsConsumer.CURSOR_TTL_SECONDS)
+        .catch(() => undefined);
     }
 
     const now = this.container.clock.now();
@@ -214,6 +254,8 @@ export class AnalyticsConsumer {
       events: projected,
       durationMs: now.getTime() - startedAt.getTime(),
       lagSeconds,
+      skipped,
+      failed,
       capped: batches >= AnalyticsConsumer.MAX_BATCHES_PER_RUN,
     });
 
@@ -226,6 +268,33 @@ export class AnalyticsConsumer {
         thresholdSeconds: AnalyticsConsumer.LAG_WARNING_MS / 1_000,
       });
     }
+
+    // After every other tenant has had its turn, so BullMQ still sees the run fail.
+    if (failure !== null) throw failure;
+  }
+
+  // Every tenant once, starting after `start` and wrapping round to it. Pages from the
+  // catalog lazily, so a run that spends its budget early stops reading it too.
+  private async *rotation(start: OrganizationId | null): AsyncGenerator<OrganizationId> {
+    let after = start;
+    for (;;) {
+      const page = await this.container.organizations.page(after, AnalyticsConsumer.TENANT_PAGE);
+      yield* page;
+      if (page.length < AnalyticsConsumer.TENANT_PAGE) break;
+      after = page[page.length - 1] ?? null;
+    }
+    if (start === null) return;
+
+    after = null;
+    for (;;) {
+      const page = await this.container.organizations.page(after, AnalyticsConsumer.TENANT_PAGE);
+      for (const organizationId of page) {
+        if (organizationId > start) return;
+        yield organizationId;
+      }
+      if (page.length < AnalyticsConsumer.TENANT_PAGE) return;
+      after = page[page.length - 1] ?? null;
+    }
   }
 
   // The actions no longer projected. An absent row is "projected", so this is the
@@ -237,33 +306,57 @@ export class AnalyticsConsumer {
 
   // Rethrows: BullMQ's retry is driven by rejection. Per tenant, because the checkpoint
   // is — there is no global "where the replay resumes" left to report.
+  // ──
+  // `null` is a tenant skipped for having no directory row — `23.21`, decided 2026-09-25.
   private async projectTenantOrReport(
     organizationId: OrganizationId,
     budget: number,
     excluding: readonly ActivityAction[],
-  ): Promise<{ projected: number; batches: number; lagMs: number }> {
+    replica: boolean,
+  ): Promise<{ projected: number; batches: number; lagMs: number } | null> {
     try {
       // Placed *inside* the guard. Outside it a tenant with no `shard_assignments` row
       // threw past this catch, so the run died on `queue.job.failed` and the line a
       // ──
       // projection dashboard filters on was never emitted. Per tenant rather than per
       // node: the read side is routed `activity_log`, the write side one ClickHouse.
-      return await withShard(this.container, organizationId, () =>
-        this.projectTenant(organizationId, budget, excluding),
+      return await withShard(
+        this.container,
+        organizationId,
+        () => this.projectTenant(organizationId, budget, excluding),
+        { replica },
       );
     } catch (error: unknown) {
+      // Guarded, both: a lookup that threw here replaced the error it follows, and the
+      // failure line was never emitted (`CR.44`). Unknown is "not skipped".
+      if (await this.skippedUnplaced(organizationId, "project").catch(() => false)) return null;
+
       // Read after the throw rather than before it, so the failure line names where the
       // destination actually stands rather than where this run hoped to start. Outside
       // ──
       // the shard scope on purpose: the checkpoint is ClickHouse, one for the deployment.
-      const checkpoint = await this.container.projector.checkpoint(organizationId);
+      const checkpoint = await this.container.projector
+        .checkpoint(organizationId)
+        .catch(() => null);
       this.container.logger.emit("analytics.projection.failed", {
         projection: AnalyticsConsumer.PROJECTION,
         organizationId,
-        eventId: checkpoint.lastId ?? "none",
+        eventId: checkpoint === null ? "unknown" : (checkpoint.lastId ?? "none"),
       });
       throw error;
     }
+  }
+
+  // **Skipped only when the directory has no row**, asked after the throw. Any other
+  // failure — the catalog down, a query timing out — still fails the run and retries.
+  // ──
+  // One tenant in the wrong state must not stop a rebuildable store for everyone else.
+  private async skippedUnplaced(organizationId: OrganizationId, job: string): Promise<boolean> {
+    const assignment = await this.container.shardAssignments.findByKey(Shard.keyOf(organizationId));
+    if (assignment !== null) return false;
+
+    this.container.logger.emit("analytics.tenant.skipped", { organizationId, job });
+    return true;
   }
 
   // One tenant's walk, bounded by what is left of the run's batch budget. The checkpoint
@@ -343,7 +436,8 @@ export class AnalyticsConsumer {
   private async reconcile(): Promise<void> {
     // Paused, so there is nothing to reconcile against: every day in the window would
     // report drift, which is an alert that says only what the switch already says.
-    if (!(await this.container.platformPolicy.get()).projectionEnabled) return;
+    const policy = await this.container.platformPolicy.get();
+    if (!policy.projectionEnabled) return;
 
     const now = this.container.clock.now();
     const excluding = await this.excluded();
@@ -359,9 +453,17 @@ export class AnalyticsConsumer {
       if (page.length === 0) break;
 
       for (const organizationId of page) {
-        const outcome = await withShard(this.container, organizationId, () =>
-          this.reconcileTenant(organizationId, from, to, excluding),
-        );
+        const outcome = await withShard(
+          this.container,
+          organizationId,
+          () => this.reconcileTenant(organizationId, from, to, excluding),
+          { replica: policy.replicaReadsEnabled },
+        ).catch(async (error: unknown) => {
+          if (await this.skippedUnplaced(organizationId, "reconcile").catch(() => false))
+            return null;
+          throw error;
+        });
+        if (outcome === null) continue;
         days += outcome.days;
         drifted += outcome.drifted;
       }

@@ -201,6 +201,35 @@ describe("PgActivityReplayReader", () => {
     }
   });
 
+  // `CR.29`. The `OR` keyset fell out of the index into a row-by-row filter, so every page
+  // after the first re-read the checkpoint's month from its start.
+  it("keeps a checkpoint inside the index condition", async () => {
+    const checkpoint = {
+      lastOccurredAt: INSTANT,
+      lastId: "018f8c00-0000-7000-8000-000000000001",
+    } as unknown as typeof BEFORE;
+    await reader.since(organization, checkpoint, 2, [], NO_HORIZON);
+
+    const issued = recorder.last;
+    if (!issued) throw new Error("expected the walk above to have been logged");
+
+    const pool = new Pool({ connectionString: DATABASE_URL });
+    const client = await pool.connect();
+
+    try {
+      await client.query("begin");
+      await client.query("set local enable_seqscan = off");
+      const explained = await client.query(`explain ${issued.query}`, issued.params);
+      await client.query("rollback");
+
+      const plan = explained.rows.map((row) => Object.values(row).join(" ")).join(" | ");
+      expect(plan).toMatch(/Index Cond: .*ROW\(occurred_at, id\) >/);
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  });
+
   it("returns nothing for a window with no rows", async () => {
     const from = new Date("2031-04-01T00:00:00.000Z");
     const to = new Date("2031-04-02T00:00:00.000Z");

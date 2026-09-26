@@ -46,6 +46,11 @@ export class RecordingPartitionArchiveGateway extends PartitionArchiveGateway {
     super();
   }
 
+  // Nothing is ever left detached in memory, so there is nothing to put back.
+  public override recover(): Promise<readonly string[]> {
+    return Promise.resolve([]);
+  }
+
   public override archive(
     table: PartitionedTableName,
     period: Date,

@@ -13,8 +13,8 @@ export class GetConversationUseCase {
     private readonly naming: ConversationNaming,
   ) {}
 
-  // Also what the conversation stream calls before it subscribes: opening a channel is
-  // the same question as reading it, and one implementation answers both.
+  // The stream asks `WatchConversationUseCase` instead: the same question without the
+  // roster, since it asks again every minute it stays open (`CR.4`).
   public async execute(
     actor: Principal,
     conversationId: ConversationId,

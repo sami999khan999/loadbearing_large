@@ -38,9 +38,12 @@ class StubConversations implements Partial<ConversationRepository> {
   public memberIds(
     _organizationId: OrganizationId,
     _conversationId: ConversationId,
+    limit = members.length,
+    after: UserId | null = null,
   ): Promise<readonly UserId[]> {
     this.calls += 1;
-    return Promise.resolve(members);
+    const start = after === null ? 0 : members.indexOf(after) + 1;
+    return Promise.resolve(members.slice(start, start + limit));
   }
 }
 
@@ -91,8 +94,8 @@ describe("MessagingRealtimeSubscriber", () => {
 
     expect(userFrames).toHaveLength(MEMBERS);
     expect(channels.size).toBe(MEMBERS);
-    // One read of the member list, not one per chunk.
-    expect(conversations.calls).toBe(1);
+    // One read per page of a thousand, not one per chunk and not one for the whole room.
+    expect(conversations.calls).toBe(2);
   });
 
   // Every frame carries its own id: one domain event becomes several, and a client
@@ -115,6 +118,30 @@ describe("MessagingRealtimeSubscriber", () => {
 
     expect(realtime.sent).toHaveLength(1);
     expect(conversations.calls).toBe(0);
+  });
+
+  // The client dedupes the request's fast-path frame against this one by `messageId`.
+  it("carries the message id on a message frame", async () => {
+    const { subscriber, realtime } = harness();
+    const messageId = "018f8c00-0000-7000-8000-0000000000d1";
+    await subscriber.handle({
+      ...eventOf("message.edited"),
+      payload: { conversationId: CONVERSATION, messageId, createdAt: NOW },
+    } as DomainEvent);
+
+    expect(realtime.sent[0]?.message).toMatchObject({
+      payload: { conversationId: CONVERSATION, messageId },
+    });
+  });
+
+  // So a member's tab refetches that one conversation, not the whole inbox.
+  it("names the conversation on each member's frame", async () => {
+    const { subscriber, realtime } = harness();
+    await subscriber.handle(eventOf("message.sent"));
+
+    const userFrame = realtime.sent.find((frame) => frame.channel.includes(":user:"));
+
+    expect(userFrame?.message).toMatchObject({ payload: { conversationId: CONVERSATION } });
   });
 
   it("ignores an event with no conversation in its payload", async () => {

@@ -12,6 +12,17 @@ export interface PlatformHealth {
   readonly realtime: boolean | null;
 }
 
+// Every node's standby folded into one reading — `25.1`. Healthy only when all answer,
+// and the lag is the worst of them: a panel is asking whether to worry.
+export interface ReplicaHealthReport {
+  readonly healthy: boolean;
+  // Null when any standby could not be asked, which is what `healthy: false` means.
+  readonly lagSeconds: number | null;
+}
+
 export abstract class PlatformHealthReader {
   public abstract report(): Promise<PlatformHealth>;
+
+  // `null` when the deployment runs no standby, never a failing reading.
+  public abstract replica(): Promise<ReplicaHealthReport | null>;
 }

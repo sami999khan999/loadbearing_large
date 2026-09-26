@@ -29,4 +29,10 @@ export interface MailRequest<K extends MailTemplateKey = MailTemplateKey> {
 // caller reading an id back would be reaching for a record that does not exist.
 export abstract class MailPublisher {
   public abstract publish<K extends MailTemplateKey>(mail: MailRequest<K>): Promise<void>;
+
+  // A digest page or a notification's recipients, at once. The default is one each; the
+  // queued adapter sends them as one batch.
+  public async publishMany(mails: readonly MailRequest[]): Promise<void> {
+    for (const mail of mails) await this.publish(mail);
+  }
 }

@@ -57,8 +57,8 @@ export class ReprojectPartitionUseCase {
       throw new NotFoundError("cold", `${PartitionedTable.ACTIVITY_LOG}/${input.period}`);
     }
 
-    // **No `:`** — BullMQ rejects a colon in a job id, which is why this is dotted.
-    // A double click is one job, and so is a second request while the first runs.
+    // **No `:`** — BullMQ rejects a colon in a job id. One job while one is queued or
+    // running, and a new one after it has finished (`CR.18`).
     const jobId = `cold-reproject.activity_log.${input.period}.${input.organizationId ?? "all"}`;
 
     const auditor = new Principal(
@@ -76,7 +76,7 @@ export class ReprojectPartitionUseCase {
     await this.queue.publish(
       QueueName.ANALYTICS,
       { period: input.period, organizationId: input.organizationId ?? null },
-      { jobId, name: "cold-reproject" },
+      { inFlightId: jobId, name: "cold-reproject" },
     );
 
     return { jobId, objects: entries.length };

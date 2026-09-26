@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Can,
   type ClientNamespace,
   PlatformQueries,
   PlatformStatusPanel,
+  ReplicaSwitchPanel,
+  useCapabilities,
   useMessages,
 } from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
@@ -24,12 +27,16 @@ export const Route = createFileRoute("/(app)/_authenticated/platform/status")({
 
 function PlatformStatus() {
   const { t } = useMessages("platform");
+  const capabilities = useCapabilities();
 
   return (
     <main>
       <h1>{t("platform.title")}</h1>
       <p>{t("platform.subtitle")}</p>
       <PlatformStatusPanel />
+      <Can permission="platform.replica.manage" capabilities={capabilities}>
+        <ReplicaSwitchPanel />
+      </Can>
     </main>
   );
 }

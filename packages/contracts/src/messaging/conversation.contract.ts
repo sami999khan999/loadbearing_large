@@ -43,6 +43,8 @@ export class ConversationContract {
     // on the conversation rather than looked up per row.
     lastMessageAt: z.date().nullable(),
     lastMessageId: Identifiers.messageId.nullable(),
+    // The whole roster from `conversation.get`; a sample from `conversation.list`, the
+    // reader always in it, since a list row needs a name and not the room (`CR.26`).
     members: z.array(ConversationContract.member).readonly(),
     // Computed per request from `last_read_at`, capped at 100 — there is no stored
     // counter to drift. See packages/application/docs/reference/messaging.md.

@@ -1,3 +1,5 @@
+import { RealtimeRouter } from "../import.js";
+import { AnalyticsRouter } from "./analytics.router.js";
 import { ApiKeyRouter } from "./api-key.router.js";
 import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
@@ -5,7 +7,6 @@ import { MessageRouter } from "./message.router.js";
 import { ConversationRouter } from "./messaging.router.js";
 import { NotificationRouter } from "./notification.router.js";
 import { PlatformRouter } from "./platform.router.js";
-import { RealtimeRouter } from "./realtime.router.js";
 import { RoleRouter } from "./role.router.js";
 
 // The merge point, mirroring `contract` from `@loadbearing/contracts` exactly — a
@@ -20,4 +21,5 @@ export const appRouter = {
   conversation: ConversationRouter.all,
   message: MessageRouter.all,
   platform: PlatformRouter.all,
+  analytics: AnalyticsRouter.all,
 };

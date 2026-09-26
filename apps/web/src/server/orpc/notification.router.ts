@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Three lines per procedure, as `MemberRouter`. Nothing here names a user: every one of
 // these acts on the principal's own inbox, and an input carrying a userId would be a hole.

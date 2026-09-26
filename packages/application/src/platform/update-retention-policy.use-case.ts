@@ -79,7 +79,9 @@ export class UpdateRetentionPolicyUseCase {
   private async apply(input: UpdateRetentionPolicyInput): Promise<void> {
     try {
       const rows = await this.policies.all();
-      await this.storagePolicy.applyLifecycle(RetentionRules.lifecycleFor(rows));
+      await this.storagePolicy.applyLifecycle(
+        RetentionRules.lifecycleFor(rows, this.storagePolicy.coldTier()),
+      );
 
       if (input.store !== "clickhouse" || !this.projector) return;
 

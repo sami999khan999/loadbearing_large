@@ -111,6 +111,22 @@ acknowledged, so a projector that failed mid-insert resumes from what is actuall
 A short batch means the replay has caught up — continuing would issue one more query to learn what
 the length already said.
 
+**A run starts where the last one stopped, and wraps round** (`CR.20`). The budget is shared across
+tenants, and when every run started at the first tenant in id order, one tenant with a large backlog
+early in that order spent it every time and nobody after it was reached — unmeasured, because the
+lag line is the maximum and that tenant was the maximum. The cursor is the last tenant a run reached,
+kept in the cache for a day: losing it costs one run that starts at the beginning again. Once the
+budget is spent the walk stops paging the catalog too, so `tenants` on the completion line counts the
+tenants the run *reached*.
+
+**One tenant's failure does not stop the others.** It emits `analytics.projection.failed` and the walk
+moves on; the run still throws the first error once everyone else has had a turn, so BullMQ counts it
+failed. **Three failures in a row do stop it**, because that is the store and not the tenants: a dev
+stack with `CLICKHOUSE_URL` set and ClickHouse not running wrote a failure line for every tenant every
+five minutes, 180 of them in one sitting, until this rule. The cursor still advances past the three. The directory lookup and the checkpoint read that follow a failure are both guarded
+(`CR.44`): either one throwing used to replace the error it followed, and the failure line was never
+emitted. A checkpoint that could not be read reports `eventId: "unknown"`, not `"none"`.
+
 **The walk stops thirty seconds behind the clock, and that bound is not tuning.** `occurred_at` is
 stamped when a transaction *starts*, and transactions commit in whatever order they finish. A slow
 write that stamped an early timestamp becomes visible after a fast one that stamped a later one, so
@@ -145,6 +161,14 @@ clears.
 lag computation, no drift comparison, and **no log line** — 288 lines a day saying "paused" is
 noise the one line that matters would be lost in. The `retention` job's `applyRetention` still
 runs: the connection exists, and a TTL edit is not a projection.
+
+**A tenant with no directory row is skipped, not fatal — `23.21`, decided 2026-09-25.** A tenant
+in `organizations` with no `shard_assignments` row cannot be placed. It used to fail the whole
+run, so one stray row stopped analytics for every tenant. Now both jobs skip it and emit
+`analytics.tenant.skipped` at `error`, naming the tenant and the job. The completed line counts
+it in `skipped`. The skip is decided by asking the directory *after* the throw. Only a missing
+row skips. A catalog that cannot be asked still fails the run and retries, because a catalog
+outage that skipped every tenant would look like a quiet, successful run.
 
 ### `reconcile`
 
@@ -219,14 +243,21 @@ would still do its work again on every retry.
 drops the duplicates — which is why `removeOnCompleteAgeSeconds` on this queue asks for 24 hours
 rather than the default hour.
 
-**The window it actually gets is seconds, and that is not a bug to fix here.** BullMQ trims a
-queue's completed set on *every* completion, by whichever of age and count bites first. The
-publisher sets `count: 1_000`, and the drain's own repeat job — on this same queue, once a second —
-sets `removeOnComplete: 10`. So the set holds roughly the last ten completions, and the 24 hours
-never applies. **Nothing depends on it**: the subscribers are idempotent on `event.id`, which is a
-stated requirement rather than a hope, and the id dedupe is a cheap first line rather than the
-guarantee. Giving the drain a queue of its own would restore the long window; that is a decision
-with a cost, and it is filed rather than taken.
+**The window is the last thousand deliveries or 24 hours, whichever is shorter.** BullMQ trims a
+queue's completed set on every completion, by whichever of age and count bites first. It used to be
+seconds: the drain's own repeat job, on this same queue once a second, set `removeOnComplete: 10`,
+which trimmed the *shared* set to ten. It sets `true` now, which removes only itself. **Nothing
+depends on the window even so**: the subscribers are idempotent on `event.id`, which is a stated
+requirement rather than a hope, and the id dedupe is a cheap first line rather than the guarantee.
+
+**A delivery gets twelve attempts, doubling from five seconds — about three hours.** Its outbox row
+is already marked published, so a delivery that runs out is recoverable only by replay: it stays in
+the failed set for a week (`pnpm queue:replay event deliver`). Every other job defaults to eight,
+about ten minutes. Three from two seconds, the old default, gave up inside a Postgres failover.
+
+**A pass over every node goes on past a node that fails.** `Container.eachShard` catches each
+node's error, logs `shard.sweep.failed { node }`, runs the rest, and rethrows the first at the end so
+the job still fails and still retries. Before, node 2 down meant node 3's outbox was never drained.
 
 **An event nobody listens for still gets marked published.** Leaving it pending would make the
 outbox grow forever on a name whose subscriber was deleted.
@@ -260,14 +291,16 @@ that fires twice, or a fan-out that is redelivered after a crash, produces the s
 sends one morning's digest. The day comes from `container.clock` in UTC rather than from the job
 payload, so a retry covers the day it was for and not the day it ran.
 
-**The fan-out is capped at 5 000 tenants** and the emitted `notification.digest.completed` carries
-the unclipped count, so a deployment that has outgrown one page of tenants says so in a line rather
-than by quietly dropping the tail. Paging the fan-out itself is the fix when that line appears.
+**The fan-out pages each node's tenants from the catalog**, five hundred at a time, inside
+`container.eachShard`, and enqueues each page's digest jobs in one `addBulk`. It used to ask
+`notifications` which tenants had anything unread — one `SELECT DISTINCT` over every tenant's
+partitions, which locks two runway months per tenant and ran out of lock slots near 5 800 tenants.
+A tenant with nothing unread now costs its digest job one pruned query and no mail. There is no cap.
 
-`digestOrganizations` is asked **per node**, inside `container.eachShard`, because
-`notification_preferences` is routed: which tenants have anyone to write to is a question each node
-answers about the tenants it holds. The per-tenant `digest` job then places itself with
-`withShard`.
+**The digest itself is four queries and one enqueue per page of two hundred people**: the
+candidates, their addresses, their stored modes, and every one's unread rows at once through a
+window function. The window is the day before, half-open, so a row lands in one digest only. The
+per-tenant `digest` job places itself with `withShard`.
 
 ## Every cross-tenant pass loops the cluster, and the loop is over nodes
 
@@ -284,7 +317,7 @@ changes.
 | `OutboxConsumer.reportLag` | `oldestPendingAt`, per node | the line — one a run, from the **worst** node |
 | `MaintenanceConsumer.partitions` | the runway and the prune, per node | `retentionPolicies`, read once for the run |
 | `AnalyticsConsumer` project / reconcile | **per tenant**, not per node | the checkpoint: one ClickHouse, keyed by tenant |
-| `NotificationConsumer.fanOut` | `digestOrganizations`, per node | the queue, and the per-tenant `digest` job |
+| `NotificationConsumer.fanOut` | the catalog's tenants, per node, a page at a time | the queue, and the per-tenant `digest` job |
 
 **The projection is the one that loops tenants rather than nodes**, and that is not an
 inconsistency. The other four are physical — a partition, an outbox row and a `SKIP LOCKED` claim

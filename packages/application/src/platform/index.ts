@@ -15,6 +15,7 @@ export {
 export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
+  type ReplicaStatus,
 } from "./inspect-platform-status.use-case.js";
 export {
   type InspectShardMapInput,
@@ -55,7 +56,11 @@ export {
   MoveTenantUseCase,
 } from "./move-tenant.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
-export { type PlatformHealth, PlatformHealthReader } from "./platform-health.reader.js";
+export {
+  type PlatformHealth,
+  PlatformHealthReader,
+  type ReplicaHealthReport,
+} from "./platform-health.reader.js";
 export {
   type PlatformPolicyRecord,
   PlatformPolicyRepository,
@@ -122,6 +127,10 @@ export {
   type ToggleProjectionInput,
   ToggleProjectionUseCase,
 } from "./toggle-projection.use-case.js";
+export {
+  type ToggleReplicaReadsInput,
+  ToggleReplicaReadsUseCase,
+} from "./toggle-replica-reads.use-case.js";
 export {
   type UpdateProjectionPolicyInput,
   UpdateProjectionPolicyUseCase,

@@ -434,11 +434,57 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  apps/realtime:
+    dependencies:
+      '@loadbearing/api-server':
+        specifier: workspace:*
+        version: link:../../packages/api-server
+      '@loadbearing/composition':
+        specifier: workspace:*
+        version: link:../../packages/composition
+      '@orpc/server':
+        specifier: 'catalog:'
+        version: 1.15.0(crossws@0.4.12(srvx@0.11.22))
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@loadbearing/application':
+        specifier: workspace:*
+        version: link:../../packages/application
+      '@loadbearing/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@loadbearing/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@loadbearing/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.3
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(jsdom@28.1.0(@noble/hashes@2.3.0)(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)(tsx@4.23.12)(yaml@2.9.0)
+
   apps/web:
     dependencies:
       '@loadbearing/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@loadbearing/api-server':
+        specifier: workspace:*
+        version: link:../../packages/api-server
       '@loadbearing/application':
         specifier: workspace:*
         version: link:../../packages/application
@@ -610,6 +656,55 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@26.2.0)(jiti@2.7.0)(jsdom@28.1.0(@noble/hashes@2.3.0)(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/api-server:
+    dependencies:
+      '@loadbearing/application':
+        specifier: workspace:*
+        version: link:../application
+      '@loadbearing/composition':
+        specifier: workspace:*
+        version: link:../composition
+      '@loadbearing/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@loadbearing/errors':
+        specifier: workspace:*
+        version: link:../errors
+      '@loadbearing/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@orpc/contract':
+        specifier: 'catalog:'
+        version: 1.15.0
+      '@orpc/server':
+        specifier: 'catalog:'
+        version: 1.15.0(crossws@0.4.12(srvx@0.11.22))
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@loadbearing/permissions':
+        specifier: workspace:*
+        version: link:../permissions
+      '@loadbearing/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.3
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(supports-color@7.2.0)(tsx@4.23.12)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(jsdom@28.1.0(@noble/hashes@2.3.0)(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)(tsx@4.23.12)(yaml@2.9.0)
 
   packages/application:
     dependencies:

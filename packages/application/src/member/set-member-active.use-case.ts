@@ -1,5 +1,5 @@
 import { type Clock, ConflictError, NotFoundError, type UserId } from "../import.js";
-import type { ActivityLogger, UnitOfWork } from "../port/index.js";
+import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { MemberRecord, MemberRepository } from "./member.repository.js";
 import { MemberRules } from "./member.rules.js";
@@ -14,6 +14,7 @@ export class SetMemberActiveUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
     private readonly members: MemberRepository,
+    private readonly capabilities: CapabilityInvalidator,
     private readonly activity: ActivityLogger,
     private readonly unitOfWork: UnitOfWork,
     private readonly clock: Clock,
@@ -48,6 +49,10 @@ export class SetMemberActiveUseCase {
         userId: member.userId,
       });
     });
+
+    // After the commit, as a role change does. Deactivation refuses the principal on the
+    // next request anyway; this is the platform axis, cached per user for a minute.
+    await this.capabilities.invalidate(actor.organizationId, member.userId);
 
     return { ...member, deactivated: !active };
   }

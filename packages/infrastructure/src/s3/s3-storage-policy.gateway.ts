@@ -1,11 +1,14 @@
 import {
+  type ColdTier,
   DeleteBucketLifecycleCommand,
   GetBucketLifecycleConfigurationCommand,
   type LifecycleRule,
   PutBucketLifecycleConfigurationCommand,
-  S3Client,
+  type S3Client,
   StoragePolicyGateway,
+  type TransitionStorageClass,
 } from "../import.js";
+import { S3ClientFactory } from "./s3-client.factory.js";
 import type { S3Config } from "./s3-storage.gateway.js";
 
 // What S3 answers for a bucket with no configuration. An **error code**, not an empty
@@ -19,12 +22,7 @@ export class S3StoragePolicyGateway extends StoragePolicyGateway {
 
   public constructor(private readonly config: S3Config) {
     super();
-    this.s3 = new S3Client({
-      endpoint: config.endpoint,
-      region: config.region,
-      forcePathStyle: config.forcePathStyle,
-      credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey },
-    });
+    this.s3 = S3ClientFactory.create(config);
   }
 
   public async lifecycle(): Promise<readonly LifecycleRule[]> {
@@ -41,7 +39,14 @@ export class S3StoragePolicyGateway extends StoragePolicyGateway {
           // A rule this system did not write — no prefix, or an expiry expressed as a
           // date rather than a span. Reported as absent rather than guessed at.
           if (!prefix || days === undefined) return [];
-          return [{ prefix, expireAfterDays: days }];
+
+          const [transition] = rule.Transitions ?? [];
+          const storageClass = transition?.StorageClass;
+          const afterDays = transition?.Days;
+          if (!storageClass || afterDays === undefined) {
+            return [{ prefix, expireAfterDays: days }];
+          }
+          return [{ prefix, expireAfterDays: days, transition: { storageClass, afterDays } }];
         });
     } catch (error: unknown) {
       if (S3StoragePolicyGateway.isMissing(error)) return [];
@@ -70,10 +75,26 @@ export class S3StoragePolicyGateway extends StoragePolicyGateway {
             Filter: { Prefix: rule.prefix },
             Status: "Enabled",
             Expiration: { Days: rule.expireAfterDays },
+            // The SDK types the class as AWS's enum; MinIO names a tier instead, so the
+            // string is passed through and the bucket is what validates it.
+            ...(rule.transition
+              ? {
+                  Transitions: [
+                    {
+                      Days: rule.transition.afterDays,
+                      StorageClass: rule.transition.storageClass as TransitionStorageClass,
+                    },
+                  ],
+                }
+              : {}),
           })),
         },
       }),
     );
+  }
+
+  public coldTier(): ColdTier | null {
+    return this.config.coldTier ?? null;
   }
 
   // The SDK puts the code on `name` for a modelled error and on `Code` for one it only

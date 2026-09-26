@@ -115,9 +115,30 @@ describe("PgMembershipReader", () => {
   });
 
   it("answers membership for the switch endpoint", async () => {
-    expect(await reader().isMember(ada, first)).toBe(true);
-    expect(await reader().isMember(ada, elsewhere)).toBe(false);
-    expect(await reader().isMember(grace, elsewhere)).toBe(true);
+    expect(await reader().isActive(ada, first)).toBe(true);
+    expect(await reader().isActive(ada, elsewhere)).toBe(false);
+    expect(await reader().isActive(grace, elsewhere)).toBe(true);
+  });
+
+  // `CR.7`. Pinned to the tenant that deactivated them, every request answered anonymous
+  // and the user never reached the switcher to leave it.
+  it("passes over a deactivated membership for sign-in, the switcher and the switch", async () => {
+    const deactivate = (at: Date | null) =>
+      database.client
+        .update(memberships)
+        .set({ deactivatedAt: at })
+        .where(and(eq(memberships.userId, grace), eq(memberships.organizationId, elsewhere)));
+    await setLastActive(grace, elsewhere);
+    await deactivate(new Date());
+
+    try {
+      expect(await reader().activeOrganizationFor(grace)).toBe(first);
+      expect((await reader().organizationsFor(grace)).map((row) => row.id)).toEqual([first]);
+      expect(await reader().isActive(grace, elsewhere)).toBe(false);
+    } finally {
+      await deactivate(null);
+      await setLastActive(grace, null);
+    }
   });
 
   it("defaults the active organization to the oldest membership", async () => {

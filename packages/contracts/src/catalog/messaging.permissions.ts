@@ -14,7 +14,6 @@ export const messagingProcedurePermissions = {
   "conversation.leave": "messaging.conversation.read",
   "conversation.markRead": "messaging.conversation.read",
   "message.list": "messaging.conversation.read",
-  "message.stream": "messaging.conversation.read",
   "message.send": "messaging.message.send",
   "message.edit": "messaging.message.update",
   "message.remove": "messaging.message.update",

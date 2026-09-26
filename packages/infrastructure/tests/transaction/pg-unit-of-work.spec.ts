@@ -1,6 +1,13 @@
-import { Principal } from "@loadbearing/application";
-import { Identifiers } from "@loadbearing/contracts";
+import {
+  Principal,
+  Shard,
+  type ShardKey,
+  type ShardPlacement,
+  ShardResolver,
+} from "@loadbearing/application";
+import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { SystemClock, Uuid } from "@loadbearing/core";
+import { ForbiddenError } from "@loadbearing/errors";
 import { CapabilitySet } from "@loadbearing/permissions";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -193,5 +200,98 @@ describe("PgUnitOfWork", () => {
     } finally {
       await pooled.close();
     }
+  });
+});
+
+// The directory as a move changes it: the answer is whatever the spec last set, and
+// every read is counted, because the recheck's cost is one resolve per transaction.
+class MovingResolver extends ShardResolver {
+  public answer: ShardPlacement = { node: 0, frozen: false };
+  public reads = 0;
+
+  public override placementOf(_key: ShardKey): Promise<ShardPlacement> {
+    this.reads += 1;
+    return Promise.resolve(this.answer);
+  }
+
+  public override resolve(key: ShardKey): Promise<number> {
+    return this.placementOf(key).then((placement) => placement.node);
+  }
+
+  public override invalidate(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+// `24.2b`: a job placed before a freeze and still opening transactions after the settle.
+describe("PgUnitOfWork recheck", () => {
+  const key = Shard.keyOf(Uuid.v7() as OrganizationId);
+
+  const build = (placement: "routed" | "local" | "catalog" = "routed") => {
+    const resolver = new MovingResolver();
+    const cluster = DatabaseCluster.of([{ pooled: database, direct: database }], resolver);
+    const jobShards = new ShardScope();
+    const uow = new PgUnitOfWork(cluster, new TransactionScope(), jobShards, placement);
+    const asJob = <T>(work: () => Promise<T>, recheck = true) =>
+      jobShards.within({ key, node: 0, frozen: false, recheck }, work);
+    return { resolver, uow, asJob };
+  };
+
+  const inFlight = (error: unknown) =>
+    error instanceof ForbiddenError && error.context.permission === "shard.move.inFlight";
+
+  it("refuses a job's next transaction once the tenant is frozen", async () => {
+    const { resolver, uow, asJob } = build();
+    let ran = false;
+
+    await asJob(async () => {
+      await uow.run(async () => {
+        ran = true;
+      });
+      resolver.answer = { node: 0, frozen: true };
+
+      const refused = await uow.run(async () => "wrote").catch((error: unknown) => error);
+      expect(inFlight(refused)).toBe(true);
+    });
+
+    expect(ran).toBe(true);
+  });
+
+  // The flip happened between two transactions: the rows the job would write now live
+  // on node 1, and a write to node 0 is one the reclaim drops.
+  it("refuses a job whose tenant moved to another node", async () => {
+    const { resolver, uow, asJob } = build("local");
+    resolver.answer = { node: 1, frozen: false };
+
+    const refused = await asJob(() => uow.run(async () => "wrote")).catch((error) => error);
+    expect(inFlight(refused)).toBe(true);
+  });
+
+  it("costs one resolve per transaction and none per savepoint", async () => {
+    const { resolver, uow, asJob } = build();
+
+    await asJob(async () => {
+      await uow.run(async () => {
+        await uow.run(async () => undefined);
+        await uow.run(async () => undefined);
+      });
+      await uow.run(async () => undefined);
+    });
+
+    expect(resolver.reads).toBe(2);
+  });
+
+  // A request places itself once and the settle covers it; a catalog row is never
+  // copied by a move. Neither asks, so neither pays the resolve.
+  it("leaves a request and a catalog transaction unchecked", async () => {
+    const request = build();
+    request.resolver.answer = { node: 0, frozen: true };
+    expect(await request.asJob(() => request.uow.run(async () => "wrote"), false)).toBe("wrote");
+    expect(request.resolver.reads).toBe(0);
+
+    const catalog = build("catalog");
+    catalog.resolver.answer = { node: 0, frozen: true };
+    expect(await catalog.asJob(() => catalog.uow.run(async () => "wrote"))).toBe("wrote");
+    expect(catalog.resolver.reads).toBe(0);
   });
 });

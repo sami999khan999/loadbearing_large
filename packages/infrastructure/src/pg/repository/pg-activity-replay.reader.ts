@@ -7,14 +7,12 @@ import {
   asc,
   type DailyCount,
   eq,
-  gt,
   gte,
   inArray,
   lt,
   lte,
   not,
   type OrganizationId,
-  or,
   type Placement,
   type ProjectionCheckpoint,
   type SQL,
@@ -40,18 +38,19 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     // row for a caller that has not been told the horizon exists.
     until: Date = new Date(8.64e15),
   ): Promise<readonly ActivityRecord[]> {
+    // The row constructor, plus a redundant bound on the leading column (`CR.29`). The `OR`
+    // form loses the index condition, so every page re-filtered from the month's start.
     const after =
       checkpoint.lastOccurredAt && checkpoint.lastId
-        ? or(
-            gt(activityLog.occurredAt, checkpoint.lastOccurredAt),
-            and(
-              sql`${activityLog.occurredAt} = ${checkpoint.lastOccurredAt}`,
-              gt(activityLog.id, checkpoint.lastId),
-            ),
+        ? and(
+            gte(activityLog.occurredAt, checkpoint.lastOccurredAt),
+            sql`(${activityLog.occurredAt}, ${activityLog.id}) > (${checkpoint.lastOccurredAt}, ${checkpoint.lastId}::uuid)`,
           )
         : undefined;
 
-    const rows = await this.db
+    // A standby when the job allows one: the projection is the first read `24.3` moves.
+    const reader = await this.reader();
+    const rows = await reader
       .select({
         id: activityLog.id,
         organizationId: activityLog.organizationId,
@@ -95,7 +94,8 @@ export class PgActivityReplayReader extends BaseRepository implements ActivityRe
     to: Date,
     excluding: readonly ActivityAction[] = [],
   ): Promise<readonly DailyCount[]> {
-    const rows = await this.db
+    const reader = await this.reader();
+    const rows = await reader
       .select({
         day: sql<string>`to_char(date_trunc('day', ${activityLog.occurredAt}), 'YYYY-MM-DD')`.as(
           "day",

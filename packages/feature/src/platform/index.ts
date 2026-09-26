@@ -6,6 +6,7 @@ export {
   ProjectionSwitchPanel,
   type ProjectionSwitchPanelProps,
 } from "./projection-switch.panel.js";
+export { ReplicaSwitchPanel } from "./replica-switch.panel.js";
 export {
   RestorePartitionPanel,
   type RestorePartitionPanelProps,

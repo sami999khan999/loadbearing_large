@@ -343,7 +343,7 @@ export class MaintenanceConsumer {
   }
 
   private async convergeLifecycle(rows: readonly RetentionPolicyRecord[]): Promise<void> {
-    const expected = RetentionRules.lifecycleFor(rows);
+    const expected = RetentionRules.lifecycleFor(rows, this.container.storagePolicy.coldTier());
     const actual = await this.container.storagePolicy.lifecycle();
     if (RetentionRules.lifecycleMatches(expected, actual)) return;
 
@@ -419,10 +419,12 @@ export class MaintenanceConsumer {
     return (PartitionedTable.NAMES as readonly string[]).includes(table);
   }
 
-  private static serialise(rules: readonly { prefix: string; expireAfterDays: number }[]): string {
+  // The comparison's own spelling, transitions included: a drift line that left them out
+  // would print two identical strings for a bucket that lost its colder class.
+  private static serialise(rules: Parameters<typeof RetentionRules.lifecycleMatches>[0]): string {
     return [...rules]
       .sort((left, right) => left.prefix.localeCompare(right.prefix))
-      .map((rule) => `${rule.prefix}=${rule.expireAfterDays}`)
+      .map((rule) => RetentionRules.describe(rule))
       .join("|");
   }
 
@@ -540,6 +542,11 @@ export class MaintenanceConsumer {
     // makes an empty `retention_policy` behave exactly as the deploy before it did.
     const months = policy?.hotMonths ?? PartitionedTable.byName(table).retentionMonths;
     if (months === null) return;
+
+    // Before the months are listed, so one a cut-off run left detached is listed again.
+    for (const partition of await this.container.partitionArchive.recover(table)) {
+      this.container.logger.emit("cold.partition.recovered", { table, partition });
+    }
 
     const now = this.container.clock.now();
     const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));

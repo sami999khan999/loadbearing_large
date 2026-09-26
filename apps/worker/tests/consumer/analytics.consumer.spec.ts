@@ -4,6 +4,7 @@ import {
   FixedClock,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryCacheStore,
   InMemoryColdArchiveReader,
   InMemoryOrganizationReader,
   InMemoryPlatformPolicyRepository,
@@ -391,13 +392,13 @@ describe("AnalyticsConsumer project — the settle horizon", () => {
   });
 });
 
-// `23.21` (2). A tenant in `organizations` with no `shard_assignments` row throws out of
-// `PgShardResolver`, and the placement used to sit outside the per-tenant guard.
-describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
+// `23.21`, decided 2026-09-25: **skip**. A tenant in `organizations` with no
+// `shard_assignments` row is passed over and named; every other tenant still projects.
+describe("AnalyticsConsumer — a tenant that cannot be placed", () => {
   const SECOND = "018f8c00-0000-7000-8000-000000000020";
 
-  function unplaceable() {
-    const activityReplay = new InMemoryActivityReplayReader([record("a", minutesBefore(1))]);
+  function unplaceable(directory: "missing" | "down" = "missing") {
+    const activityReplay = new InMemoryActivityReplayReader([record("a", minutesBefore(5))]);
     const analyticsProjector = new InMemoryAnalyticsProjector();
     const logger = { emit: vi.fn(), failure: vi.fn() };
 
@@ -405,9 +406,10 @@ describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
       ...TestContainer.build({
         activityReplay,
         analyticsProjector,
+        // The unplaceable tenant first, so a skip that stopped the walk would show.
         organizations: new InMemoryOrganizationReader([
-          Identifiers.organizationId.parse(ORG),
           Identifiers.organizationId.parse(SECOND),
+          Identifiers.organizationId.parse(ORG),
         ]),
       }),
       projector: analyticsProjector,
@@ -422,26 +424,196 @@ describe("AnalyticsConsumer project — a tenant that cannot be placed", () => {
         }
         return work();
       },
+      // `down` is the catalog failing, which must still fail the run rather than skip.
+      shardAssignments: {
+        findByKey: (key: string) => {
+          if (directory === "down") return Promise.reject(new Error("catalog unreachable"));
+          return Promise.resolve(key === SECOND ? null : { key, node: 0 });
+        },
+      },
     } as unknown as Container;
 
-    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), logger };
+    return {
+      consumer: new AnalyticsConsumer(container, undefined as never, 1),
+      logger,
+      projected: analyticsProjector,
+    };
   }
 
-  it("reports the failure in the projection's own vocabulary", async () => {
-    const { consumer, logger } = unplaceable();
+  it("skips it, names it, and projects every other tenant", async () => {
+    const { consumer, logger, projected } = unplaceable();
 
-    await expect(consumer.handle(job("project"))).rejects.toThrow("No shard assignment");
+    await consumer.handle(job("project"));
 
-    // The defect: this was empty, because the throw escaped `projectTenantOrReport`'s
-    // `try` and only `queue.job.failed` named the run at all.
-    expect(emitted(logger, "analytics.projection.failed")[0]).toMatchObject({
-      organizationId: SECOND,
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([
+      { organizationId: SECOND, job: "project" },
+    ]);
+    expect(emitted(logger, "analytics.projection.failed")).toEqual([]);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({
+      tenants: 2,
+      skipped: 1,
+      events: 1,
+    });
+    expect(await projected.checkpoint(Identifiers.organizationId.parse(ORG))).toMatchObject({
+      lastId: "a",
     });
   });
 
-  it("still fails the run, which is the behaviour that was not in question", async () => {
-    const { consumer } = unplaceable();
+  it("skips it in the reconciliation too", async () => {
+    const { consumer, logger } = unplaceable();
 
-    await expect(consumer.handle(job("project"))).rejects.toThrow();
+    await consumer.handle(job("reconcile"));
+
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([
+      { organizationId: SECOND, job: "reconcile" },
+    ]);
+    expect(emitted(logger, "analytics.reconciliation.completed")).toHaveLength(1);
+  });
+
+  // The skip is for a missing row, never for a failure to ask: a catalog outage that
+  // skipped every tenant would read as a quiet, successful run.
+  // ──
+  // `CR.44`: and the lookup's own error must not replace the one it follows, or the
+  // failure line is never emitted. `CR.20`: the tenants after it still project.
+  it("still fails the run when the directory cannot be asked, with the original error", async () => {
+    const { consumer, logger, projected } = unplaceable("down");
+
+    await expect(consumer.handle(job("project"))).rejects.toThrow("No shard assignment");
+    expect(emitted(logger, "analytics.tenant.skipped")).toEqual([]);
+    expect(emitted(logger, "analytics.projection.failed")).toEqual([
+      { projection: "activity_events", organizationId: SECOND, eventId: "none" },
+    ]);
+    expect(emitted(logger, "analytics.projection.completed")[0]).toMatchObject({ failed: 1 });
+    expect(await projected.checkpoint(Identifiers.organizationId.parse(ORG))).toMatchObject({
+      lastId: "a",
+    });
+  });
+});
+
+// `24.3`. The switch is read once per run and rides on every tenant's placement; the
+// repository decides what to do with it. Every job is placed with `recheck` — `24.2b`.
+describe("AnalyticsConsumer — the replica switch", () => {
+  function switched(replicaReadsEnabled: boolean) {
+    const placements: { recheck?: boolean; replica?: boolean }[] = [];
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([record("a", minutesBefore(5))]),
+        analyticsProjector,
+        organizations: new InMemoryOrganizationReader(TENANTS),
+      }),
+      projector: analyticsProjector,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ replicaReadsEnabled }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger: { emit: vi.fn(), failure: vi.fn() },
+      placed: <T>(
+        _principal: unknown,
+        work: () => Promise<T>,
+        options: { recheck?: boolean; replica?: boolean } = {},
+      ) => {
+        placements.push(options);
+        return work();
+      },
+    } as unknown as Container;
+
+    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), placements };
+  }
+
+  it.each([true, false])("places the projection with the switch %s", async (enabled) => {
+    const { consumer, placements } = switched(enabled);
+
+    await consumer.handle(job("project"));
+
+    expect(placements).toEqual([{ recheck: true, replica: enabled }]);
+  });
+
+  it("places the reconciliation with the switch too", async () => {
+    const { consumer, placements } = switched(true);
+
+    await consumer.handle(job("reconcile"));
+
+    expect(placements).toEqual([{ recheck: true, replica: true }]);
+  });
+});
+
+// `CR.20`. Every run started at the first tenant and spent the budget first come, first
+// served, so a large backlog early in id order starved everyone after it, unmeasured.
+describe("AnalyticsConsumer — where a run starts", () => {
+  const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
+  const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
+  const THIRD = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000003");
+
+  function rotating() {
+    const visited: string[] = [];
+    const cache = new InMemoryCacheStore();
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+    const analyticsProjector = new InMemoryAnalyticsProjector();
+
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([]),
+        analyticsProjector,
+        cache,
+        organizations: new InMemoryOrganizationReader([FIRST, SECOND, THIRD]),
+      }),
+      projector: analyticsProjector,
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      placed: <T>(principal: { organizationId: string }, work: () => Promise<T>) => {
+        visited.push(principal.organizationId);
+        return work();
+      },
+    } as unknown as Container;
+
+    return { consumer: new AnalyticsConsumer(container, undefined as never, 1), cache, visited };
+  }
+
+  it("starts after the tenant the last run stopped at, and wraps round to it", async () => {
+    const { consumer, cache, visited } = rotating();
+    await cache.set("analytics:project:cursor", SECOND, 60);
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([THIRD, FIRST, SECOND]);
+    expect(await cache.get("analytics:project:cursor")).toBe(SECOND);
+  });
+
+  // The store down is every tenant failing, and a line each for every tenant every five
+  // minutes was the flood a dev stack without ClickHouse produced. Three, then stop.
+  it("stops after three failures in a row, which is the store rather than a tenant", async () => {
+    const tenants = Array.from({ length: 6 }, (_, index) =>
+      Identifiers.organizationId.parse(`018f8c00-0000-7000-8000-00000000003${index}`),
+    );
+    const logger = { emit: vi.fn(), failure: vi.fn() };
+    const container = {
+      ...TestContainer.build({
+        activityReplay: new InMemoryActivityReplayReader([]),
+        organizations: new InMemoryOrganizationReader(tenants),
+      }),
+      projector: new InMemoryAnalyticsProjector(),
+      platformPolicy: new InMemoryPlatformPolicyRepository({ projectionEnabled: true }),
+      projectionPolicies: new InMemoryProjectionPolicyRepository([]),
+      clock: new FixedClock(NOW),
+      logger,
+      placed: () => Promise.reject(new Error("clickhouse unreachable")),
+      shardAssignments: { findByKey: (key: string) => Promise.resolve({ key, node: 0 }) },
+    } as unknown as Container;
+
+    await expect(
+      new AnalyticsConsumer(container, undefined as never, 1).handle(job("project")),
+    ).rejects.toThrow("clickhouse unreachable");
+    expect(emitted(logger, "analytics.projection.failed")).toHaveLength(3);
+  });
+
+  it("starts at the first tenant when there is no cursor", async () => {
+    const { consumer, visited } = rotating();
+
+    await consumer.handle(job("project"));
+
+    expect(visited).toEqual([FIRST, SECOND, THIRD]);
   });
 });

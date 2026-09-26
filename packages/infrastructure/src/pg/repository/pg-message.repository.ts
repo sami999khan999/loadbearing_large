@@ -5,6 +5,7 @@ import {
   eq,
   inArray,
   isNull,
+  lte,
   type MessageId,
   type MessagePageResult,
   type MessageQuery,
@@ -24,6 +25,9 @@ import { conversationMembers, messages } from "../schema/index.js";
 // Past this the badge says "99+". Counting further is a scan nobody reads, and the cap
 // is what keeps a stale channel to a hundred index entries.
 const UNREAD_CAP = 100;
+// A floor under every count, so the read prunes to recent months: `messages` is never
+// retired, and an unread from last year still reads as "100+" without being counted.
+const UNREAD_WINDOW_MS = 90 * 86_400_000;
 
 interface MessageRow {
   readonly id: MessageId;
@@ -58,8 +62,10 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
           before
             ? sql`(${messages.createdAt}, ${messages.id}) < (${before.at}, ${before.id}::uuid)`
             : undefined,
-          // The month ceiling, for the reason `PgNotificationRepository.list` gives.
+          // The month ceiling, for the reason `PgNotificationRepository.list` gives. The
+          // first page has no cursor, so the newest message's time is its ceiling instead.
           before ? sql`${messages.createdAt} <= ${before.at}` : undefined,
+          !before && query.upTo ? lte(messages.createdAt, query.upTo) : undefined,
         ),
       )
       .orderBy(desc(messages.createdAt), desc(messages.id))
@@ -170,6 +176,8 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
     conversationIds: readonly ConversationId[],
   ): Promise<readonly UnreadCount[]> {
     if (conversationIds.length === 0) return [];
+    // A bound parameter, not `now()`, so the planner prunes the partitions before running.
+    const floor = new Date(Date.now() - UNREAD_WINDOW_MS);
 
     const rows = await this.db
       .select({
@@ -182,6 +190,7 @@ export class PgMessageRepository extends BaseRepository implements MessageReposi
             where m.organization_id = conversation_members.organization_id
               and m.conversation_id = conversation_members.conversation_id
               and m.created_at > coalesce(conversation_members.last_read_at, '-infinity'::timestamptz)
+              and m.created_at > ${floor}
               and m.author_id <> ${userId}
               and m.deleted_at is null
             limit ${UNREAD_CAP}

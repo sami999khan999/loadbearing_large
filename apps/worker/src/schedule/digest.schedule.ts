@@ -22,6 +22,9 @@ export class DigestSchedule {
         {
           repeat: { pattern: DigestSchedule.PATTERN },
           jobId: DigestSchedule.JOB_ID,
+          // One failed fan-out at 07:00 would otherwise be every tenant's digest, gone.
+          attempts: 5,
+          backoff: { type: "exponential", delay: 60_000 },
           removeOnComplete: 10,
           removeOnFail: 100,
         },

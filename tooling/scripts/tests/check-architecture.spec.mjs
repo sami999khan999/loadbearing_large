@@ -1228,8 +1228,8 @@ describe("28 — every permission in the catalog gates a procedure", () => {
   });
 });
 
-describe("29 — the three shard readers run one algorithm", () => {
-  const NAME = "the three shard readers run one algorithm";
+describe("29 — the four shard readers run one algorithm", () => {
+  const NAME = "the four shard readers run one algorithm";
 
   // The rule all three carry, written once here. A fixture varies one copy of it.
   const reader = (guard) =>

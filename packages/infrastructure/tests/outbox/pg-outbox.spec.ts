@@ -25,15 +25,13 @@ let actor: Principal;
 beforeAll(async () => {
   database = openDatabase();
   scope = new TransactionScope();
-  const unitOfWork = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");
-
   publisher = new PgOutboxPublisher(
     DatabaseCluster.single(database),
     scope,
     shards,
     new SystemClock(),
   );
-  gateway = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards, unitOfWork);
+  gateway = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards);
 
   organizationId = await seedOrganizationId(database);
   actor = Principal.system(
@@ -93,15 +91,49 @@ describe("PgOutboxGateway.drain", () => {
     expect(await pendingCount()).toBe(0);
   });
 
-  // The whole reason `relay` is awaited inside the transaction. A throw has to leave the
-  // rows claimable, or a failing subscriber silently loses the event.
-  it("leaves the rows pending when the relay throws", async () => {
+  // A throw has to leave the rows claimable, or a failing subscriber silently loses the
+  // event — and claimable at once, not a lease later.
+  it("leaves the rows pending, and free, when the relay throws", async () => {
     await publish();
 
     await expect(gateway.drain(10, () => Promise.reject(new Error("queue down")))).rejects.toThrow(
       "queue down",
     );
     expect(await pendingCount()).toBe(1);
+    expect(await gateway.drain(10, () => Promise.resolve())).toBe(1);
+  });
+
+  // `CR.27`: the relay is Redis round trips, and holding the claim's transaction open
+  // across them held row locks and the node's xmin for the whole batch.
+  it("relays with no transaction open", async () => {
+    await publish();
+    let open: unknown = "not called";
+
+    await gateway.drain(10, () => {
+      open = scope.current();
+      return Promise.resolve();
+    });
+
+    expect(open).toBeUndefined();
+  });
+
+  // A drain that dies mid-relay commits nothing more; its lease is what frees the rows.
+  it("skips a row under another drain's lease, and takes it once the lease passes", async () => {
+    await publish();
+    await database.client.execute(sql`
+      update outbox_event set claimed_until = now() + interval '1 hour'
+      where organization_id = ${organizationId}
+    `);
+
+    expect(await gateway.drain(10, () => Promise.resolve())).toBe(0);
+
+    await database.client.execute(sql`
+      update outbox_event set claimed_until = now() - interval '1 second'
+      where organization_id = ${organizationId}
+    `);
+
+    expect(await gateway.drain(10, () => Promise.resolve())).toBe(1);
+    expect(await pendingCount()).toBe(0);
   });
 
   // `SKIP LOCKED` is what lets two worker replicas share the drain with no coordinator.

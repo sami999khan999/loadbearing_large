@@ -1,5 +1,5 @@
 import type { ActivityAction } from "../import.js";
-import type { LifecycleRule } from "../port/index.js";
+import type { ColdTier, LifecycleRule } from "../port/index.js";
 import type { ProjectionPolicyRecord } from "./projection-policy.repository.js";
 import type { RetentionPolicyRecord } from "./retention-policy.repository.js";
 
@@ -37,13 +37,24 @@ export class RetentionRules {
 
   // Sorted by prefix, so two runs over the same rows compare equal — otherwise the daily
   // job rewrites the bucket every time the row order changes.
-  public static lifecycleFor(rows: readonly RetentionPolicyRecord[]): readonly LifecycleRule[] {
+  // ──
+  // `tier` moves every cold prefix to a colder class, never an export: a download that
+  // must be restored first is not a download. See infrastructure's storage-policy.md.
+  public static lifecycleFor(
+    rows: readonly RetentionPolicyRecord[],
+    tier: ColdTier | null = null,
+  ): readonly LifecycleRule[] {
     const cold = rows
       .filter((row) => row.store === "postgres" && row.coldMonths !== null)
-      .map((row) => ({
-        prefix: `${COLD_PREFIX}${row.tableName}/`,
-        expireAfterDays: RetentionRules.daysFor(row.coldMonths ?? 0),
-      }));
+      .map((row) => {
+        const rule = {
+          prefix: `${COLD_PREFIX}${row.tableName}/`,
+          expireAfterDays: RetentionRules.daysFor(row.coldMonths ?? 0),
+        };
+        // Only a transition that lands before the expiry: one after it moves nothing,
+        // and S3 rejects a rule whose transition is not earlier than its expiration.
+        return tier && tier.afterDays < rule.expireAfterDays ? { ...rule, transition: tier } : rule;
+      });
 
     return [...cold, { prefix: EXPORT_PREFIX, expireAfterDays: EXPORT_DAYS }].sort((left, right) =>
       left.prefix.localeCompare(right.prefix),
@@ -112,10 +123,18 @@ export class RetentionRules {
     return RetentionRules.serialise(expected) === RetentionRules.serialise(actual);
   }
 
+  // One rule as the screen shows it and the comparison reads it, so a bucket that lost
+  // its transition is drift rather than a match. `cold/messages/=365>COLD@30`.
+  public static describe(rule: LifecycleRule): string {
+    const base = `${rule.prefix}=${rule.expireAfterDays}`;
+    if (!rule.transition) return base;
+    return `${base}>${rule.transition.storageClass}@${rule.transition.afterDays}`;
+  }
+
   private static serialise(rules: readonly LifecycleRule[]): string {
     return [...rules]
       .sort((left, right) => left.prefix.localeCompare(right.prefix))
-      .map((rule) => `${rule.prefix}=${rule.expireAfterDays}`)
+      .map((rule) => RetentionRules.describe(rule))
       .join("|");
   }
 }

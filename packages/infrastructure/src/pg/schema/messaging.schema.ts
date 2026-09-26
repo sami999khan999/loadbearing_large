@@ -29,7 +29,9 @@ export const conversations = pgTable(
     // twice return the same row rather than a second one.
     directKey: text("direct_key"),
     createdBy: uuid("created_by").$type<UserId>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Milliseconds, like `messages.created_at`: `KeysetCursor` encodes milliseconds, and a
+    // microsecond sort key skipped the rows inside the truncated window (`CR.31`).
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
     // Denormalised onto the conversation because it is the list's sort key: looked up
     // per row it would be a correlated subquery on every page.
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),

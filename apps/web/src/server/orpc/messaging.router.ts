@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Two groups, mounted under `conversation` and `message` so a procedure path mirrors its
 // permission. Nothing here names a member: the channel is the actor's own membership.

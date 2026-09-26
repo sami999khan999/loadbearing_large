@@ -34,7 +34,7 @@ export interface RouterDehydrated {
 // The server branch and its imports are removed from the client build, which is what
 // keeps the container graph out of the browser. See docs/reference/import-surfaces.md.
 const transport = createIsomorphicFn()
-  .client(() => ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy()))
+  .client(() => ApiClient.overHttp(Endpoint.rpc, new CookieAuthStrategy(), Endpoint.realtime))
   .server(() => serverTransport());
 
 // Called per request on the server and once in the browser, which is the lifetime every

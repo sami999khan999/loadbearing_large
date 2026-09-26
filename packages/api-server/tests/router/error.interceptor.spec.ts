@@ -2,7 +2,7 @@ import { ForbiddenError, HTTP_STATUS, ValidationError } from "@loadbearing/error
 import { SilentLogger } from "@loadbearing/observability";
 import { ORPCError } from "@orpc/server";
 import { describe, expect, it } from "vitest";
-import { ErrorInterceptor } from "../../src/server/orpc/error.interceptor.js";
+import { ErrorInterceptor } from "../../src/router/error.interceptor.js";
 
 const TRACE = "trace-0123456789";
 

@@ -16,4 +16,11 @@ export class InMemoryTenantMembershipReader extends TenantMembershipReader {
   ): Promise<boolean> {
     return Promise.resolve(!this.absent.has(userId));
   }
+
+  public override activeMemberIds(
+    _organizationId: OrganizationId,
+    userIds: readonly UserId[],
+  ): Promise<ReadonlySet<UserId>> {
+    return Promise.resolve(new Set(userIds.filter((userId) => !this.absent.has(userId))));
+  }
 }

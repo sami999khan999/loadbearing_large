@@ -25,10 +25,16 @@ export class RealtimeContract {
       id: z.uuid(),
       name: eventName,
       at: z.coerce.date(),
-      payload: z.record(z.string(), z.unknown()),
+      // Ids a client may dedupe or narrow a refetch by, never data to render. Unknown keys
+      // are stripped, so a publisher one deploy ahead still parses.
+      payload: z.object({
+        conversationId: z.uuid().optional(),
+        messageId: z.uuid().optional(),
+        kind: z.string().optional(),
+      }),
     }),
-    // Pub/sub cannot replay, so a resume is a resync and saying so is the honest
-    // contract. The client refetches what it subscribes to rather than trusting a gap.
+    // A resume the replay log cannot serve, or a reader that fell behind. The client
+    // refetches what it subscribes to rather than trusting a gap.
     z.object({ kind: z.literal("resync"), id: z.uuid() }),
     // Its own variant rather than an `event`: it invalidates nothing, expires on its
     // own, and a routing table that had to skip it would be a table with a hole.

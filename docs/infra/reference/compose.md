@@ -1,6 +1,6 @@
 ---
 title: docker-compose.yml
-description: Nine services, two profiles, six volumes and one network — what every block does and which parts are load-bearing.
+description: Fifteen services, five profiles, eight volumes and one network — what every block does and which parts are load-bearing.
 ---
 
 # `docker-compose.yml`
@@ -90,6 +90,43 @@ There is no range or key configuration beside them. `shard_assignments` on the c
 node, one row per tenant, so a second node is two URLs and nothing else — see
 [sharding](../../../packages/infrastructure/docs/reference/sharding.md).
 
+### Node 0's standby, profile `replica`
+
+`postgres-replica`, a streaming hot standby of `postgres`. `pnpm infra:up:replica` starts it, and
+`DATABASE_REPLICA_URL` in `.env.example` points at `:15434`. It has no pooler in front: nothing
+writes to it, and the reads that use it are the worker's batch reads, a handful of connections.
+
+**It clones itself on an empty volume.** The entrypoint runs `pg_basebackup -R` against the
+primary when `$PGDATA` holds no `PG_VERSION`. `-R` writes `standby.signal` and the connection
+string, so the image's own entrypoint then finds a data directory and starts a standby rather
+than running `initdb`. To re-clone, remove the `pgreplicadata` volume and start it again.
+
+**The primary needed one line for it.** The image's `pg_hba.conf` allows replication from
+localhost only. `infra/pg_hba.conf` restates the image's rules and adds `host replication all all
+scram-sha-256`, and the primary is started with `hba_file` pointing at it. Mounted rather than
+written into the volume, so an existing volume gets the rule too.
+
+**It carries the primary's settings.** A hot standby refuses to start with a lower
+`max_connections` or `max_locks_per_transaction` than its primary.
+
+Which reads use it, and why a read never sees less than the primary had, is in
+[sharding](../../../packages/infrastructure/docs/reference/sharding.md#read-replicas).
+
+### The colder tier, profile `cold-tier`
+
+`minio-cold` and `minio-cold-init`, for `25.3`. **MinIO has no storage classes of its own.** A
+lifecycle transition on MinIO names a *remote tier*, another object store that MinIO moves the
+object to. So the rehearsal is a second MinIO. `minio-cold-init` creates its `tier` bucket and
+registers it on `minio` as `COLD`, the value `S3_COLD_STORAGE_CLASS` names.
+
+**`tier ls | grep`, never `tier info`, decides whether to add it.** `mc ilm tier info` exits 0
+for a tier that does not exist, so a check built on it never adds one. The first version of this
+service did exactly that, and printed "cold tier ready" over a bucket with no tier.
+
+It publishes no port. Nothing outside the network dials it: the application writes a rule
+naming `COLD`, and MinIO does the moving. See
+[storage policy](../../../packages/infrastructure/docs/reference/storage-policy.md).
+
 ---
 
 ## Profiles
@@ -102,6 +139,8 @@ docker compose ... up -d                                  # 5 services
 docker compose ... --profile observability up -d          # 8
 docker compose ... --profile observability --profile analytics up -d   # 9
 docker compose ... --profile observability --profile sharded up -d     # 10
+docker compose ... --profile observability --profile replica up -d     # 9
+docker compose ... --profile observability --profile cold-tier up -d   # 10
 ```
 
 The `pnpm infra:*` scripts wrap those, with `observability` on by default.
@@ -114,21 +153,23 @@ The `pnpm infra:*` scripts wrap those, with `observability` on by default.
 
 ## Volumes
 
-Seven named volumes, and which are disposable is the whole point.
+Eight named volumes, and which are disposable is the whole point.
 
 | Volume | Service | Rebuildable from |
 |---|---|---|
 | `pgdata` | postgres | migrations + seeds |
 | `pgshard1data` | postgres-shard-1 | migrations + the tenants the directory places there |
+| `pgreplicadata` | postgres-replica | the primary — it is a copy, re-cloned on an empty volume |
 | `redisqueuedata` | redis-queue | **nothing** |
 | `miniodata` | minio | uploads are a second source of truth; Loki chunks are not |
+| `miniocolddata` | minio-cold | **nothing** — a transitioned object lives only here |
 | `lokidata` | loki | index only — chunks live in MinIO |
 | `clickhousedata` | clickhouse | replaying the activity log |
 
 **`redis-cache` has no volume, on purpose.** A named volume for something explicitly disposable
 invites the next person to treat it as durable.
 
-`pnpm infra:reset` destroys all seven. Locally that is fine — it is a scratch database. The habit is
+`pnpm infra:reset` destroys all eight. Locally that is fine — it is a scratch database. The habit is
 what matters: in any environment with real pending work, clearing the cache and clearing the queue
 are different operations, and the two-instance split is what makes it possible to do one without the
 other.
@@ -140,6 +181,7 @@ Every config file is mounted individually, read-only:
 ```yaml
 - ./loki.config.yml:/etc/loki/config.yml:ro
 - ./postgres.init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+- ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
 ```
 
 Docker creates the target's parent directories if they do not exist, so a single file can be placed
@@ -192,6 +234,8 @@ missing file, compose has no `-if-exists` form, and CI runs the stack with no `.
 | `REDIS_QUEUE_PORT` | 16380 | `SMTP_PORT` | 11025 |
 | `S3_PORT` | 19000 | `CLICKHOUSE_HTTP_PORT` | 18123 |
 | `MINIO_CONSOLE_PORT` | 19001 | `CLICKHOUSE_NATIVE_PORT` | 19002 |
+| `POSTGRES_SHARD_1_PORT` | 15433 | `PGBOUNCER_SHARD_1_PORT` | 16433 |
+| `POSTGRES_REPLICA_PORT` | 15434 | | |
 
 These defaults are what a checkout with no `.env` gets, which is exactly what CI is, so
 `check:architecture` §27 asserts each one equals the value `.env.example` documents. It also pairs

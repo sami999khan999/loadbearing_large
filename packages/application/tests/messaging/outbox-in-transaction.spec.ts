@@ -21,6 +21,7 @@ import {
   CountingUnitOfWork,
   GRACE,
   MESSAGE,
+  membershipFrom,
   message,
   NOW,
   principal,
@@ -44,6 +45,7 @@ const channel = (): ConversationRecord => ({
 class Conversations {
   public findByDirectKey = () => Promise.resolve(null);
   public findById = () => Promise.resolve(channel());
+  public findMembership = membershipFrom(() => this.findById());
   public save = () => Promise.resolve(CONVERSATION);
   public saveMember = () => Promise.resolve();
   public deleteMember = () => Promise.resolve();
@@ -59,6 +61,13 @@ class Messages {
 class Memberships extends TenantMembershipReader {
   public override isActiveMember(_org: OrganizationId, _userId: UserId): Promise<boolean> {
     return Promise.resolve(true);
+  }
+
+  public override activeMemberIds(
+    _org: OrganizationId,
+    userIds: readonly UserId[],
+  ): Promise<ReadonlySet<UserId>> {
+    return Promise.resolve(new Set(userIds));
   }
 }
 

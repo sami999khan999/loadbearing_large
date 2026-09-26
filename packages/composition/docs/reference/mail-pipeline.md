@@ -33,7 +33,14 @@ for it. It was rejected, and the trade is worth stating plainly rather than disc
   is the first time anyone finds out.
 
 The mitigation is priority, not an exception: auth mail publishes at `high`, which is BullMQ
-priority 1 with five attempts, ahead of anything else on the queue.
+priority 1 with ten attempts, ahead of anything else on the queue. Doubling from five seconds, ten
+attempts wait about forty minutes and `normal`'s eight about ten, so a provider down for a few
+minutes delays mail rather than losing it. A message that runs out anyway stays in the failed set
+for a week, and `pnpm queue:replay mail` sends it again.
+
+**Batches go as one enqueue.** `MailPublisher.publishMany` sends a digest page or a notification's
+recipients as one `addBulk` round trip, each job keeping the priority, attempts and dedupe key a
+single `publish` would have given it.
 
 ## There is no delivery table, and that is a decision
 

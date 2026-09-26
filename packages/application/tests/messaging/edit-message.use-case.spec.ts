@@ -14,6 +14,7 @@ import {
   conversation,
   GRACE,
   MESSAGE,
+  membershipFrom,
   message,
   NOW,
   principal,
@@ -24,6 +25,7 @@ const clockAt = (at: Date): Clock => ({ now: () => at }) as Clock;
 
 const conversations = {
   findById: () => Promise.resolve(conversation()),
+  findMembership: membershipFrom(() => Promise.resolve(conversation())),
 } as unknown as ConversationRepository;
 
 class Messages {

@@ -110,3 +110,9 @@ partition for next month rejects inserts on the first, and `runOnce()` at boot r
 on **every** node because the job it enqueues does, not because the schedule knows how many there
 are.
 
+**The boot job keeps no failure** (`CR.17`). It has a fixed id, `partitions-boot`, so two replicas
+booting together enqueue one job. BullMQ ignores an `add` whose id is still in the failed set, and
+the job kept its last hundred failures — so one boot with Postgres down disabled the recovery at
+every later boot, silently. It is `removeOnFail: true` now: the failure is still a
+`queue.job.failed` line, and the next boot enqueues again.
+

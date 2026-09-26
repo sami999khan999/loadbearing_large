@@ -40,8 +40,8 @@ class Counting implements NotificationRepository {
     return Promise.resolve([]);
   }
 
-  public existsUnread(): Promise<boolean> {
-    return Promise.resolve(false);
+  public unreadSubjectHolders(): Promise<ReadonlySet<never>> {
+    return Promise.resolve(new Set());
   }
 
   public markRead(): Promise<void> {
@@ -52,15 +52,11 @@ class Counting implements NotificationRepository {
     return Promise.resolve();
   }
 
-  public listUnreadSince(): Promise<readonly NotificationRecord[]> {
-    return Promise.resolve([]);
+  public listUnreadBetween(): Promise<ReadonlyMap<typeof USER, readonly NotificationRecord[]>> {
+    return Promise.resolve(new Map());
   }
 
-  public recipientsWithUnreadSince(): Promise<readonly never[]> {
-    return Promise.resolve([]);
-  }
-
-  public organizationsWithUnreadSince(): Promise<readonly never[]> {
+  public recipientsWithUnreadBetween(): Promise<readonly never[]> {
     return Promise.resolve([]);
   }
 }
@@ -112,9 +108,13 @@ describe("CountUnreadNotificationsUseCase", () => {
     const repository = new Counting();
     const cache = new Memory();
     const count = new CountUnreadNotificationsUseCase(new Authorizer(), repository, cache);
-    const markAll = new MarkAllNotificationsReadUseCase(new Authorizer(), repository, cache, {
-      now: () => new Date("2026-08-15T00:00:00Z"),
-    });
+    const markAll = new MarkAllNotificationsReadUseCase(
+      new Authorizer(),
+      repository,
+      cache,
+      { now: () => new Date("2026-08-15T00:00:00Z") },
+      { run: (work: () => Promise<unknown>) => work() } as never,
+    );
     const actor = actorHolding("notification.inbox.read", "notification.inbox.update");
 
     await count.execute(actor);

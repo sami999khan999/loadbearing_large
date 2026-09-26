@@ -141,6 +141,21 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
 
+  # Every open browser stream, and nothing else. The same `.env.production`, so the
+  # same `AUTH_SECRET` — the web app signs the cookie this process reads.
+  realtime:
+    build: { context: .., dockerfile: apps/realtime/Dockerfile }
+    restart: unless-stopped
+    env_file: [.env.production]
+    environment:
+      APP: realtime
+      ENV: production
+      REALTIME_PORT: "3001"
+    # Longer than `REALTIME_SHUTDOWN_TIMEOUT_MS`, or Docker kills the drain half-way.
+    stop_grace_period: 30s
+    depends_on:
+      postgres: { condition: service_healthy }
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -204,11 +219,11 @@ that died quietly on a Tuesday is not something a probe finds.
 **The applications are containers here, and they were not locally.** `pnpm dev` runs on the host, so
 Alloy needed the `infra/logs` file tail to see anything ([alloy](reference/alloy.md)).
 
-In production `web` and `worker` are in the same Compose project, so `discovery.docker` picks them up
+In production `web`, `worker` and `realtime` are in the same Compose project, so `discovery.docker` picks them up
 with **no configuration change at all** — the `com.docker.compose.project=ratchet` filter already
 matches them. The file-tail source simply goes unused.
 
-`APP: web` and `APP: worker` are what make the `app` label distinguish the two, which is exactly why
+`APP: web`, `APP: worker` and `APP: realtime` are what make the `app` label distinguish the three, which is exactly why
 the pipeline reads that label from the log body rather than from the container name.
 
 ### TLS
@@ -217,9 +232,21 @@ the pipeline reads that label from the log body rather than from the container n
 
 ```
 example.com {
+    # Before the catch-all. `flush_interval -1` writes each event as it arrives; Caddy
+    # already streams `text/event-stream`, and saying so survives a config refactor.
+    handle /api/realtime/* {
+        reverse_proxy realtime:3001 {
+            flush_interval -1
+        }
+    }
     reverse_proxy web:3000
 }
 ```
+
+**The stream path goes to its own process.** Every open tab holds one or two streams for as long as it
+is open, and `apps/realtime` holds all of them so the web app's event loop holds none. The browser
+still sees one origin, which is what lets the session cookie ride along. Behind nginx instead, the
+location block wants `proxy_buffering off` and `proxy_read_timeout` above the thirty-minute stream age.
 
 Caddy obtains and renews Let's Encrypt certificates automatically, and `caddydata` persists them —
 without that volume you re-issue on every deploy and hit rate limits. Traefik and nginx both work;

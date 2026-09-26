@@ -143,6 +143,25 @@ describe("CreateApiKeyUseCase", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  // `CR.3`. A leaked short-lived key with `apikey.manage` minted a permanent sibling, which
+  // is the issuer's and so survived the parent's revocation.
+  it("refuses a key minting a key, even one holding apikey.manage", async () => {
+    const key = Principal.apiKey(
+      ORG,
+      ACTOR,
+      CapabilitySet.from({
+        wildcard: false,
+        org: { grants: ["apikey.manage", "member.read"], denies: [] },
+        goals: {},
+      }),
+    );
+
+    await expect(
+      create().execute(key, { name: "CI", scopes: ["member.read"], expiresAt: null }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(keys.created).toEqual([]);
+  });
+
   it("returns the token once and stores only a digest", async () => {
     const result = await create().execute(actorHolding("apikey.manage", "member.read"), {
       name: "CI",

@@ -54,6 +54,9 @@ export const coreEvents = {
   // One per tenant-month restored. Into a scratch table unless the month is inside
   // the hot window, which the line says so a reader knows where to look.
   "cold.partition.restored": { level: "info" },
+  // A month a cut-off archive left detached, put back where a query and the next run can
+  // see it. Warn, because the run that left it there did not finish.
+  "cold.partition.recovered": { level: "warn" },
   // Cold storage outliving a deleted tenant is the hole this mechanism created, so
   // this is the line that says it closed. One per run, not one per object.
   "cold.objects.swept": { level: "info" },
@@ -99,6 +102,8 @@ export const coreEvents = {
   // because "no events published" and "no events to publish" look identical.
   "outbox.drain.completed": { level: "debug" },
   "outbox.drain.lagged": { level: "warn" },
+  // One node failed a cross-tenant pass and the pass went on to the next one.
+  "shard.sweep.failed": { level: "warn" },
   "outbox.delivery.failed": { level: "error" },
 
   "notification.digest.completed": { level: "info" },
@@ -107,6 +112,8 @@ export const coreEvents = {
   // duration on `closed` is what says whether a client is reconnecting in a loop.
   "realtime.stream.opened": { level: "debug" },
   "realtime.stream.closed": { level: "debug" },
+  // A stopping stream process handed its streams on; `streams` is -1 if it ran out of time.
+  "realtime.stream.drained": { level: "info" },
   "realtime.publish.failed": { level: "warn" },
 
   "cache.entry.corrupt": { level: "warn" },
@@ -117,6 +124,9 @@ export const coreEvents = {
   "analytics.projection.completed": { level: "debug" },
   "analytics.projection.failed": { level: "error" },
   "analytics.projection.lagged": { level: "warn" },
+  // A tenant with no directory row, passed over so every other tenant still projects —
+  // `23.21`. Error, because the row should not exist and somebody has to fix it.
+  "analytics.tenant.skipped": { level: "error" },
   // A tenant-month that left Postgres without reaching ClickHouse. Recorded rather than
   // blocking the drop: a forgotten switch costs a known hole, never an unbounded table.
   "analytics.projection.gap": { level: "warn" },

@@ -1,7 +1,7 @@
 import { Identifiers } from "@loadbearing/contracts";
 import { ForbiddenError, UnavailableError, ValidationError } from "@loadbearing/errors";
-import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
-import { beforeEach, describe, expect, it } from "vitest";
+import { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueueDocumentIndexUseCase } from "../../src/ai/queue-document-index.use-case.js";
 import { SearchDocumentsUseCase } from "../../src/ai/search-documents.use-case.js";
 import type {
@@ -17,6 +17,10 @@ import { Principal } from "../../src/primitive/principal.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
 const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000011");
+const GOAL = "018f8c00-0000-7000-8000-0000000000a1";
+const OTHER_GOAL = "018f8c00-0000-7000-8000-0000000000a2";
+const DOCUMENT = "018f8c00-0000-7000-8000-0000000000d1";
+const NOW = new Date("2026-09-26T00:00:00.000Z");
 
 function actorHolding(...grants: readonly PermissionKey[]): Principal {
   return new Principal(
@@ -32,6 +36,13 @@ class RecordingQueue implements QueuePublisher {
   public publish<T>(queue: string, payload: T, options?: JobOptions): Promise<void> {
     this.published.push({ queue, payload, options });
     return Promise.resolve();
+  }
+
+  public async publishMany<T>(
+    queue: string,
+    jobs: readonly { payload: T; options?: JobOptions }[],
+  ): Promise<void> {
+    for (const job of jobs) await this.publish(queue, job.payload, job.options);
   }
 }
 
@@ -60,6 +71,12 @@ class RecordingVectors implements VectorStore {
 
   public deleteBySource(): Promise<void> {
     throw new Error("not under test");
+  }
+
+  public indexed: { goalId: string | null; version: number | null } | null = null;
+
+  public sourceOf(): Promise<{ goalId: string | null; version: number | null } | null> {
+    return Promise.resolve(this.indexed);
   }
 
   public search(
@@ -95,7 +112,41 @@ beforeEach(() => {
 });
 
 describe("QueueDocumentIndexUseCase", () => {
-  const useCase = () => new QueueDocumentIndexUseCase(new Authorizer(), queue);
+  let vectors = new RecordingVectors();
+  const useCase = () =>
+    new QueueDocumentIndexUseCase(new Authorizer(), queue, vectors, { now: () => NOW });
+
+  beforeEach(() => {
+    vectors = new RecordingVectors();
+  });
+
+  // `CR.8`. The key is org-scoped today, so the goal is asked of the key as a goal-scoped
+  // one would be — stubbing the registry is how the refusal is reachable at all.
+  it("refuses a re-index of a document in a goal the actor cannot write to", async () => {
+    vi.spyOn(PermissionRegistry.instance, "scopeOf").mockReturnValue("goal");
+    vectors.indexed = { goalId: GOAL, version: null };
+    const actor = new Principal(
+      ORG,
+      ACTOR,
+      CapabilitySet.from({
+        wildcard: false,
+        org: { grants: [], denies: [] },
+        goals: { [OTHER_GOAL]: { grants: ["ai.embedding.write"], denies: [] } },
+      }),
+    );
+
+    await expect(
+      useCase().execute(actor, { documentId: DOCUMENT, text: "moved", goalId: OTHER_GOAL }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(queue.published).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it("stamps the job with the request's time", async () => {
+    await useCase().execute(actorHolding("ai.embedding.write"), { text: "a document" });
+
+    expect(queue.published[0]?.payload).toMatchObject({ version: NOW.getTime() });
+  });
 
   it("refuses a principal without ai.embedding.write", async () => {
     await expect(
@@ -189,7 +240,9 @@ describe("QueueDocumentIndexUseCase", () => {
 
 describe("SearchDocumentsUseCase", () => {
   const useCase = (vectors: RecordingVectors, embeddings: EmbeddingProvider) =>
-    new SearchDocumentsUseCase(new Authorizer(), embeddings, vectors, activity);
+    new SearchDocumentsUseCase(new Authorizer(), embeddings, vectors, activity, {
+      run: (work: () => Promise<unknown>) => work(),
+    } as never);
 
   it("refuses a principal without ai.embedding.read", async () => {
     const vectors = new RecordingVectors();

@@ -58,6 +58,7 @@ describe("TestContainer", () => {
       "partitionArchive",
       "placed",
       "queue",
+      "rateLimits",
       "realtime",
       "realtimeSubscriber",
       "relayedActivity",

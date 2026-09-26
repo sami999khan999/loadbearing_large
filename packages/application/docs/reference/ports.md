@@ -124,8 +124,10 @@ has no `CapabilitySet` and no join back to goal membership, least of all a remot
 
 ## `ColdArchiveReader` has two methods for two callers, and one of them is a hole waiting
 
-`rows(entry)` reads a whole tenant-month, verified against the recorded checksum and count. Its
-callers are the re-projection and the restore — machinery, reading everything.
+`batches(entry, size)` reads a whole tenant-month a batch at a time, verified against the recorded
+checksum and count **before** the first batch is handed out. Its caller is the re-projection —
+machinery, reading everything. It was `rows(entry)` until `CR.16`, which returned the month whole:
+a large one OOMed the worker.
 
 `page(entry, userId, cursor, limit)` is the user-facing one, and the `userId` is why it is
 separate. **The object on disk holds the whole tenant.** There is no per-user object and no
@@ -230,14 +232,18 @@ reader in the UI; the other has a schema, a `published_at`, and subscribers.
 
 ## `OutboxGateway` hands out claimed work, and marks it only on success
 
-`drain(limit, relay)` selects a batch, calls `relay`, and marks the rows published **only if `relay`
-resolves**. A throw rolls the claim back and the same rows come round on the next tick. That is what
+`drain(limit, relay)` claims a batch, calls `relay`, and marks the rows published **only if `relay`
+resolves**. A throw releases the claim and the same rows come round on the next tick. That is what
 makes the whole pipeline at-least-once rather than at-most-once, and it is why the in-memory fake
 honours the same ordering — a fake that removed rows first would let a spec prove a guarantee the
 adapter does not have.
 
-The batch is claimed with `FOR UPDATE SKIP LOCKED`, so two worker replicas share the drain with no
-coordinator and no leader election.
+**No transaction is open across the relay.** The claim is one auto-committed statement — `FOR UPDATE
+SKIP LOCKED` inside an `UPDATE` that stamps `claimed_until` sixty seconds out — so two worker
+replicas still share the drain with no coordinator, and the relay's Redis round trips hold no row
+lock and no snapshot. It used to run inside one transaction, which held the node's xmin for the
+whole batch every second, and a slow queue Redis stalled vacuum node-wide. A drain that dies
+between relay and mark frees its rows when the lease passes; the relayed jobs dedupe by id.
 
 `oldestPendingAt()` returns `null` when nothing is pending. That is the *healthy* answer, not a
 missing one, and an alert keyed on lag has to treat the two differently.
@@ -268,10 +274,11 @@ would silently never run.
 
 ## `RealtimePublisher` is fire-and-forget, and says so
 
-A frame published to a channel nobody is listening on is gone. That is not a defect to be fixed with
-a buffer — it is why the client refetches what it subscribes to rather than trusting a replay, and
-why a reconnect yields a `resync` frame rather than a gap fill. Pub/sub cannot replay, and a contract
-that pretended otherwise would be a lie the first time a tab slept.
+A frame published to a channel nobody is listening on is kept only as long as the adapter's
+replay log keeps it — the last two hundred per channel, for an hour (`26.5`). A resume inside that
+is replayed what it missed; one outside it is handed a `resync` and refetches what it subscribes
+to. The `resync` variant stays in the contract because the log is short by design, and a contract
+that promised a full replay would be a lie the first time a tab slept for a day.
 
 Channels are **tenant-leading, always**: `org:<organizationId>:user:<userId>`. Sharded pub/sub
 (`SPUBLISH`), Redis Streams and a broker partitioner can all key on a prefix, and none of them can

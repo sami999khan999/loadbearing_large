@@ -133,7 +133,7 @@ class StubRoles implements RoleRepository {
         description: null,
         scope: "org",
         isSystem: true,
-        permissions: [],
+        permissions: ["member.invite"],
       });
     }
     if (roleId === MEMBER_ROLE) {
@@ -237,11 +237,17 @@ const changeRole = (
   ),
 });
 
-const setActive = (members: RecordingMembers, activity = new RecordingActivityLogger()) => ({
+const setActive = (
+  members: RecordingMembers,
+  activity = new RecordingActivityLogger(),
+  capabilities = new RecordingCapabilities(),
+) => ({
   activity,
+  capabilities,
   useCase: new SetMemberActiveUseCase(
     new Authorizer(),
     members,
+    capabilities,
     activity,
     new DirectUnitOfWork(),
     CLOCK,
@@ -257,11 +263,26 @@ describe("ChangeMemberRoleUseCase", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  // `CR.1`. The role is the actor's tenant's and not a goal role, and still it hands out
+  // more than the actor holds: that is a takeover, not a role change.
+  it("refuses to hand out a role granting a key the actor does not hold", async () => {
+    const members = new RecordingMembers(member({ roleId: MEMBER_ROLE, roleKey: "member" }), 2);
+    const { useCase } = changeRole(members);
+
+    await expect(
+      useCase.execute(actorHolding("member.role.change"), { userId: TARGET, roleId: OWNER_ROLE }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(members.roleChanges).toEqual([]);
+  });
+
   it("does not find a member of another tenant", async () => {
     const { useCase } = changeRole(new RecordingMembers(null, 2));
 
     await expect(
-      useCase.execute(actorHolding("member.role.change"), { userId: TARGET, roleId: MEMBER_ROLE }),
+      useCase.execute(actorHolding("member.role.change", "member.invite"), {
+        userId: TARGET,
+        roleId: MEMBER_ROLE,
+      }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -272,7 +293,10 @@ describe("ChangeMemberRoleUseCase", () => {
     const { useCase } = changeRole(members);
 
     await expect(
-      useCase.execute(actorHolding("member.role.change"), { userId: TARGET, roleId: MEMBER_ROLE }),
+      useCase.execute(actorHolding("member.role.change", "member.invite"), {
+        userId: TARGET,
+        roleId: MEMBER_ROLE,
+      }),
     ).rejects.toBeInstanceOf(ConflictError);
     expect(members.roleChanges).toEqual([]);
   });
@@ -281,7 +305,7 @@ describe("ChangeMemberRoleUseCase", () => {
     const members = new RecordingMembers(member(), 2);
     const { useCase, activity, events } = changeRole(members);
 
-    const result = await useCase.execute(actorHolding("member.role.change"), {
+    const result = await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: MEMBER_ROLE,
     });
@@ -306,7 +330,7 @@ describe("ChangeMemberRoleUseCase", () => {
     const members = new RecordingMembers(member(), 2);
     const { useCase, capabilities } = changeRole(members);
 
-    await useCase.execute(actorHolding("member.role.change"), {
+    await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: MEMBER_ROLE,
     });
@@ -319,7 +343,7 @@ describe("ChangeMemberRoleUseCase", () => {
   it("flushes nothing when the role is already the one asked for", async () => {
     const { useCase, capabilities } = changeRole(new RecordingMembers(member(), 2));
 
-    await useCase.execute(actorHolding("member.role.change"), {
+    await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: OWNER_ROLE,
     });
@@ -332,7 +356,7 @@ describe("ChangeMemberRoleUseCase", () => {
     const members = new RecordingMembers(member({ roleId: MEMBER_ROLE, roleKey: "member" }), 1);
     const { useCase } = changeRole(members);
 
-    const result = await useCase.execute(actorHolding("member.role.change"), {
+    const result = await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: OWNER_ROLE,
     });
@@ -344,7 +368,7 @@ describe("ChangeMemberRoleUseCase", () => {
     const members = new RecordingMembers(member(), 2);
     const { useCase, activity, events } = changeRole(members);
 
-    await useCase.execute(actorHolding("member.role.change"), {
+    await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: OWNER_ROLE,
     });
@@ -403,6 +427,17 @@ describe("SetMemberActiveUseCase", () => {
     expect(second.activity.records.map((r) => r.action)).toEqual(["member.reactivated"]);
   });
 
+  // `CR.2`: the cached set outlived the deactivation by a minute, and the platform axis
+  // with it — a deactivated platform admin kept platform rights in every other tenant.
+  it("flushes the member's cached capabilities after the commit", async () => {
+    const members = new RecordingMembers(member({ roleKey: "member" }), 2);
+    const { useCase, capabilities } = setActive(members);
+
+    await useCase.execute(actorHolding("member.deactivate"), { userId: TARGET }, false);
+
+    expect(capabilities.flushed).toEqual([`${ORG}:${TARGET}`]);
+  });
+
   it("writes nothing when the membership is already in the state asked for", async () => {
     const members = new RecordingMembers(member({ roleKey: "member" }), 2);
     const { useCase, activity } = setActive(members);
@@ -421,7 +456,7 @@ describe("the last-owner rule takes the locking read", () => {
     const members = new RecordingMembers(member(), 2);
     const { useCase } = changeRole(members);
 
-    await useCase.execute(actorHolding("member.role.change"), {
+    await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: MEMBER_ROLE,
     });
@@ -465,7 +500,7 @@ describe("a membership role cannot be goal-scoped", () => {
     const { useCase } = changeRole(members);
 
     await expect(
-      useCase.execute(actorHolding("member.role.change"), {
+      useCase.execute(actorHolding("member.role.change", "member.invite"), {
         userId: TARGET,
         roleId: GOAL_ROLE,
       }),
@@ -480,7 +515,7 @@ describe("a membership role cannot be goal-scoped", () => {
     const members = new RecordingMembers(member(), 2);
     const { useCase } = changeRole(members);
 
-    await useCase.execute(actorHolding("member.role.change"), {
+    await useCase.execute(actorHolding("member.role.change", "member.invite"), {
       userId: TARGET,
       roleId: PLATFORM_ROLE,
     });

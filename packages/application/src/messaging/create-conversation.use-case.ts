@@ -34,12 +34,10 @@ export class CreateConversationUseCase {
 
     // Membership is the only thing that scopes these ids to the tenant: the column's
     // foreign key is `users.id`, which every tenant's people share.
-    for (const userId of input.memberIds) {
-      if (userId === actor.userId) continue;
-      if (!(await this.memberships.isActiveMember(actor.organizationId, userId))) {
-        throw new NotFoundError("member", userId);
-      }
-    }
+    const others = input.memberIds.filter((userId) => userId !== actor.userId);
+    const active = await this.memberships.activeMemberIds(actor.organizationId, others);
+    const stranger = others.find((userId) => !active.has(userId));
+    if (stranger) throw new NotFoundError("member", stranger);
 
     const directKey =
       input.kind === "direct" && other ? MessagingRules.directKey(actor.userId, other) : null;

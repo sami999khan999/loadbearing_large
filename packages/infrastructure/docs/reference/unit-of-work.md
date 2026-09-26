@@ -87,7 +87,8 @@ It is also why the audit row doubles as a **transactional outbox**. The domain e
 commit is a latency optimisation, not a durability mechanism — if the publish is lost, the row is still
 in `activity_log`, reconciliation finds the gap, and a replay closes it. Publishing *inside* the
 transaction is the tempting mistake: it holds the transaction open across a network call and reintroduces
-the two-store atomicity problem the queue hop exists to avoid.
+the two-store atomicity problem the queue hop exists to avoid. The outbox drain made it until `CP4.2`,
+relaying inside its claim; it claims with a lease now and relays with nothing open.
 
 ## The test is the only proof
 

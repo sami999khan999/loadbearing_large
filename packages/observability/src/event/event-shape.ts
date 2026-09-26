@@ -76,6 +76,7 @@ export interface EventShape {
     readonly rows: number;
   };
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
+  readonly "cold.partition.recovered": { readonly table: string; readonly partition: string };
   readonly "partition.runway.low": {
     readonly table: string;
     // Which tenant ran out, empty for the table that has no tenant level. Body, not label.
@@ -190,6 +191,7 @@ export interface EventShape {
 
   readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
   readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
+  readonly "shard.sweep.failed": { readonly node: number };
   readonly "outbox.delivery.failed": { readonly subscriber: string; readonly event: string };
 
   readonly "notification.digest.completed": {
@@ -201,6 +203,7 @@ export interface EventShape {
   // become — but a line body carrying one on every stream open is a retention bill.
   readonly "realtime.stream.opened": { readonly resumed: boolean };
   readonly "realtime.stream.closed": { readonly durationMs: number; readonly frames: number };
+  readonly "realtime.stream.drained": { readonly streams: number; readonly durationMs: number };
   readonly "realtime.publish.failed": { readonly event: string };
 
   readonly "cache.entry.corrupt": { readonly key: string };
@@ -208,7 +211,7 @@ export interface EventShape {
 
   readonly "analytics.projection.completed": {
     readonly projection: string;
-    // How many tenants the run walked. The projection is per tenant since `0023`, so a
+    // How many tenants the run reached before its budget ran out. Per tenant since `0023`, so a
     // count of events alone cannot say whether the loop reached the end.
     readonly tenants: number;
     readonly events: number;
@@ -216,6 +219,12 @@ export interface EventShape {
     // On the success line, not only the warning one: a field that appears only when
     // something is wrong has no baseline to be wrong against.
     readonly lagSeconds: number;
+    // Tenants passed over for having no directory row. Zero on the success line too, so
+    // a dashboard has a baseline the day it is not.
+    readonly skipped: number;
+    // Tenants whose walk threw. Each has its own `analytics.projection.failed` line, and
+    // the run still fails after the others have had their turn.
+    readonly failed: number;
     // True when the run stopped at its batch ceiling rather than because it caught up —
     // which separates "behind and closing" from "behind every run for a week".
     readonly capped: boolean;
@@ -233,6 +242,11 @@ export interface EventShape {
     // The threshold that fired, so the line explains itself without the reader having
     // to find the constant.
     readonly thresholdSeconds: number;
+  };
+  readonly "analytics.tenant.skipped": {
+    readonly organizationId: string;
+    // `project` or `reconcile`: both walk every tenant, and both skip the same way.
+    readonly job: string;
   };
   readonly "analytics.projection.gap": {
     readonly period: string;

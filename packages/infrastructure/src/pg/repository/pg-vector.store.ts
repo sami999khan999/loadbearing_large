@@ -4,6 +4,7 @@ import {
   cosineDistance,
   type DocumentChunk,
   eq,
+  type IndexedSource,
   inArray,
   isNull,
   lt,
@@ -81,6 +82,30 @@ export class PgVectorStore extends BaseRepository implements VectorStore {
           eq(documentChunks.sourceId, sourceId),
         ),
       );
+  }
+
+  // Any one chunk answers: every chunk of a source is written in one transaction, with one
+  // goal and one version. `document_chunks_source_idx` serves it.
+  public async sourceOf(
+    organizationId: OrganizationId,
+    sourceId: string,
+  ): Promise<IndexedSource | null> {
+    const [row] = await this.db
+      .select({
+        goalId: documentChunks.goalId,
+        version: sql<string | null>`${documentChunks.metadata} ->> 'version'`,
+      })
+      .from(documentChunks)
+      .where(
+        and(
+          eq(documentChunks.organizationId, organizationId),
+          eq(documentChunks.sourceId, sourceId),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+    return { goalId: row.goalId, version: row.version === null ? null : Number(row.version) };
   }
 
   public async search(

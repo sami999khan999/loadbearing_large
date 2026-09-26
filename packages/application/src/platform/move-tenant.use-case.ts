@@ -55,8 +55,8 @@ export class MoveTenantUseCase {
       throw new ConflictError("shard", "sourcePending");
     }
 
-    // **No `:`** — BullMQ rejects a colon in a job id. One per tenant, so a second click
-    // while the first is queued is the same job rather than a second copy.
+    // **No `:`** — BullMQ rejects a colon in a job id. One per tenant *in flight*, so a
+    // second click while the first is queued is the same job, and moving back is not.
     const jobId = `tenant-move.${input.organizationId}`;
 
     const auditor = new Principal(
@@ -75,7 +75,7 @@ export class MoveTenantUseCase {
     await this.queue.publish(
       QueueName.MAINTENANCE,
       { organizationId: input.organizationId, toNode: input.toNode, actorId: actor.userId },
-      { jobId, name: "tenant-move" },
+      { inFlightId: jobId, name: "tenant-move" },
     );
 
     return { jobId };

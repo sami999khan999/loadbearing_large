@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Three lines per procedure and nothing else: no business logic, no authorization, no
 // error mapping — which is what makes a framework swap a rewrite of this file alone.

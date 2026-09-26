@@ -31,19 +31,24 @@ const platform = () => globalThis as unknown as { URL: UrlCtor; window?: unknown
 export class ApiClient {
   private constructor(private readonly rpc: AppClient) {}
 
-  // Browser, Tauri webview, and any cross-process caller.
-  public static overHttp(baseUrl: string, auth: AuthStrategy): ApiClient {
+  // Browser, Tauri webview, and any cross-process caller. `streamUrl` is where every
+  // `realtime.*` procedure goes — the stream process — and defaults to the one base.
+  public static overHttp(baseUrl: string, auth: AuthStrategy, streamUrl = baseUrl): ApiClient {
     ApiClient.assertResolvable(baseUrl);
+    ApiClient.assertResolvable(streamUrl);
 
     const link = new RPCLink({
-      url: baseUrl,
+      // By the first path segment, so one namespace is one process and no list of stream
+      // procedures has to be kept in step with the contract.
+      url: (_options: unknown, path: readonly string[]) =>
+        path[0] === "realtime" ? streamUrl : baseUrl,
       headers: () => auth.headers(),
       // The override exists only to attach `credentials`, which is what decides
       // whether the cookie rides along — and it is per-strategy, not per-call.
       fetch: (request, init) =>
         platformFetch()(request, { ...init, credentials: auth.credentials }),
-      // No `default`, so nothing retries unless its call site says so. A stream asks for
-      // infinite retries; a mutation that retried itself would submit twice.
+      // No `default`, so nothing retries unless its call site says so: a mutation that
+      // retried itself would submit twice. Streams reconnect in `query`'s `RealtimeStream`.
       plugins: [new ClientRetryPlugin()],
     });
 
@@ -109,6 +114,10 @@ export class ApiClient {
 
   public get platform(): AppClient["platform"] {
     return this.rpc.platform;
+  }
+
+  public get analytics(): AppClient["analytics"] {
+    return this.rpc.analytics;
   }
 
   // The escape hatch for a namespace with no accessor yet.

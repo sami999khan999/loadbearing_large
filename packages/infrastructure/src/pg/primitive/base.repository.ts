@@ -55,6 +55,15 @@ export abstract class BaseRepository {
     return this.cluster.catalog().client;
   }
 
+  // **For a read that may be served by a standby** — `24.3`. Inside a transaction it is
+  // the transaction, because read-your-writes is what a transaction is for.
+  // ──
+  // Otherwise the replica when the placement allows it and the replica has caught up.
+  protected async reader(): Promise<DrizzleClient> {
+    if (this.scope.current() || this.shards.current()?.replica !== true) return this.db;
+    return (await this.cluster.readerAt(this.nodeOfPool())).client;
+  }
+
   // The direct pool, for the DDL a transaction pooler cannot carry. Never inside a
   // transaction, which is what makes it direct.
   protected get direct(): Database {
@@ -65,12 +74,16 @@ export abstract class BaseRepository {
   }
 
   private pool(): Database {
-    if (this.placement === "catalog") return this.cluster.catalog();
-    if (this.placement === "routed") return this.cluster.at(this.node());
+    return this.cluster.at(this.nodeOfPool());
+  }
+
+  private nodeOfPool(): number {
+    if (this.placement === "catalog") return 0;
+    if (this.placement === "routed") return this.node();
 
     // `local` follows the node a sweep placed itself on, and falls back to the catalog
     // pool outside one — node 0 is the only node an unsharded deployment has.
-    return this.cluster.at(this.shards.current()?.node ?? 0);
+    return this.shards.current()?.node ?? 0;
   }
 
   private node(): number {

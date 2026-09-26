@@ -7,6 +7,7 @@ ServerOnly.assert("@loadbearing/infrastructure");
 export { BullMqQueuePublisher } from "./bullmq/index.js";
 export {
   ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
@@ -59,6 +60,7 @@ export {
   PgUserReader,
   PgVectorStore,
   type PlacedShard,
+  type ReplicaHealth,
   type ShardConfig,
   ShardScope,
   TransactionScope,
@@ -67,6 +69,7 @@ export {
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
+  RedisRateLimitStore,
   type RedisRealtimeConfig,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,

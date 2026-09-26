@@ -800,7 +800,7 @@ and a sign-in that never does, with the membership row present in the database t
 Three actions do not fit the oRPC router, and the reason is worth stating rather than working around.
 
 **They are identity-gated, not permission-gated.** Switching to an organization you are a member of
-is not a permission any role grants — `memberships.isMember(user, org)` *is* the whole authorization,
+is not a permission any role grants — `memberships.isActive(user, org)` *is* the whole authorization,
 and there is no key that could express it. Creating an organization is the same: a person with no
 memberships at all may do it.
 
@@ -814,7 +814,7 @@ own base path:
 
 | Endpoint | Authorization |
 |---|---|
-| `POST /organization/switch` | `memberships.isMember(user, organizationId)` — one indexed lookup, and the whole check |
+| `POST /organization/switch` | `memberships.isActive(user, organizationId)` — one indexed lookup, and the whole check |
 | `POST /organization/create` | A session, **and** fewer than `AUTH_MAX_OWNED_ORGANIZATIONS` already owned. The caller becomes `owner`, through the same `OrganizationFounder` the personal enroller uses |
 | `POST /invitation/accept` | The token, claimed against the verified address |
 

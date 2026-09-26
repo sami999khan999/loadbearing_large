@@ -86,6 +86,26 @@ describe("ApiClient.overHttp", () => {
 
     expect(captured?.url.startsWith("https://api.test/rpc")).toBe(true);
   });
+
+  // `CP7.6`: one namespace is one process. Streams go to the stream process, and every
+  // other procedure stays on the web app.
+  it("sends a realtime procedure to the stream url and anything else to the base", async () => {
+    globalThis.fetch = capturingFetch as typeof globalThis.fetch;
+    const client = ApiClient.overHttp(
+      "https://app.test/api/rpc",
+      new CookieAuthStrategy(),
+      "https://app.test/api/realtime",
+    );
+    const raw = client.raw as unknown as {
+      realtime: { probe: (input: unknown) => Promise<unknown> };
+    };
+
+    await expect(raw.realtime.probe({})).rejects.toThrow();
+    expect(captured?.url.startsWith("https://app.test/api/realtime/realtime/probe")).toBe(true);
+
+    await callThrough(client);
+    expect(captured?.url.startsWith("https://app.test/api/rpc/probe")).toBe(true);
+  });
 });
 
 describe("ApiClient.overHttp rejects a base Node cannot resolve", () => {

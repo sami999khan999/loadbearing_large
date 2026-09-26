@@ -16,6 +16,34 @@ const build = () => {
 const recipient = { email: "a@example.test", userId: USER, locale: "bn" as const };
 
 describe("QueuedMailPublisher", () => {
+  // A digest page as one batch, each job keeping the options a single send would get.
+  it("publishes a batch with the options each single send would have", async () => {
+    const { queue, mail } = build();
+    const batches: number[] = [];
+    const publishMany = queue.publishMany.bind(queue);
+    queue.publishMany = (name, jobs) => {
+      batches.push(jobs.length);
+      return publishMany(name, jobs);
+    };
+
+    await mail.publishMany(
+      ["a", "b"].map((who) => ({
+        template: "notification.single" as const,
+        to: `${who}@example.test`,
+        locale: "en" as const,
+        params: { kind: "message.direct", name: who, url: "" },
+        organizationId: ORG,
+        userId: USER,
+        dedupeKey: `n_${who}`,
+      })),
+    );
+
+    expect(batches).toEqual([2]);
+    const jobs = queue.publishedTo(QueueName.MAIL);
+    expect(jobs.map((job) => job.options?.jobId)).toEqual(["n_a", "n_b"]);
+    expect(jobs.every((job) => job.options?.name === "send")).toBe(true);
+  });
+
   it("publishes one `send` job on the mail queue", async () => {
     const { queue, mail } = build();
 
@@ -34,7 +62,7 @@ describe("QueuedMailPublisher", () => {
     expect(job?.options?.name).toBe("send");
   });
 
-  // Five attempts and the front of the queue, because somebody is sitting in front of a
+  // More attempts and the front of the queue, because somebody is sitting in front of a
   // screen waiting for a verification link and nobody is waiting on a digest.
   it("gives high priority more attempts and a lower priority number", async () => {
     const { queue, mail } = build();
@@ -50,8 +78,8 @@ describe("QueuedMailPublisher", () => {
     await mail.publish({ ...base, template: "auth.reset" });
 
     const [high, normal] = queue.publishedTo(QueueName.MAIL);
-    expect(high?.options?.attempts).toBe(5);
-    expect(normal?.options?.attempts).toBe(3);
+    expect(high?.options?.attempts).toBe(10);
+    expect(normal?.options?.attempts).toBe(8);
     expect(high?.options?.priority).toBeLessThan(normal?.options?.priority ?? 0);
   });
 
@@ -89,7 +117,7 @@ describe("QueuedAuthMailer", () => {
     const jobs = queue.publishedTo(QueueName.MAIL);
     expect(jobs).toHaveLength(4);
     for (const job of jobs) {
-      expect(job.options?.attempts).toBe(5);
+      expect(job.options?.attempts).toBe(10);
       expect(job.payload).toMatchObject({ locale: "bn", organizationId: null });
     }
   });

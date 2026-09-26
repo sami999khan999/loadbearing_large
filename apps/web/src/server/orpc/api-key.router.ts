@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // Three lines per procedure, as `RoleRouter`. `create` is the exception worth noticing:
 // the plaintext token exists in this response and nowhere else, ever.

@@ -74,6 +74,11 @@ export class PlatformProcedures {
     .input(PlatformContract.projectionToggle)
     .output(Envelope.acknowledged);
 
+  public static readonly updateReplicaSwitch = oc
+    .route({ method: "PUT", path: "/platform/policy/replica" })
+    .input(PlatformContract.replicaToggle)
+    .output(Envelope.acknowledged);
+
   public static readonly listProjection = oc
     .route({ method: "GET", path: "/platform/projection" })
     .output(PlatformContract.projection);
@@ -131,6 +136,7 @@ export class PlatformProcedures {
     listGaps: PlatformProcedures.listGaps,
     reprojectPartition: PlatformProcedures.reprojectPartition,
     updateProjectionSwitch: PlatformProcedures.updateProjectionSwitch,
+    updateReplicaSwitch: PlatformProcedures.updateReplicaSwitch,
     listProjection: PlatformProcedures.listProjection,
     updateProjection: PlatformProcedures.updateProjection,
     deleteTenant: PlatformProcedures.deleteTenant,

@@ -332,9 +332,9 @@ The Postgres side gets its own section because it is the largest folder in the p
 - **`src/endpoint.ts`** — `Endpoint`. The two API paths, and nothing else — what isomorphic code imports *instead of* `Env`. Reads no environment, so there is nothing for it to leak.
 - **`src/server/`** — **the entire transport layer**, and the thing that moves to `apps/api` if NestJS ever arrives. Nothing above or below it changes when it does. This is why it is one directory instead of scattered through routes.
   - **`container.ts`** — one `Container` at module scope. Per-request construction would open a connection pool per request.
-  - **`orpc/base.ts`** — the shared context type and three middlewares: correlation, error, principal. `principalMiddleware` calls `PrincipalBuilder`, never Better Auth, fails closed on any procedure with no permission mapping, and throws `AppError`s so `errorMiddleware` logs and shapes them like everything else.
+  - **`authed`, from `@loadbearing/api-server`** — the shared context type and the middlewares: correlation, error, principal, shard. `principalMiddleware` calls `PrincipalBuilder`, never Better Auth, fails closed on any procedure with no permission mapping, and throws `AppError`s so `errorMiddleware` logs and shapes them like everything else. It lives in a package because a second app mounts the same chain.
   - **`orpc/<subject>.router.ts`** — three lines per procedure: pull the use-case off the container, call `execute`, return.
-  - **`orpc/error.interceptor.ts`** — the one place `AppError.code` becomes a transport code, and the one place a server-side failure is logged. Reached from a **middleware**, not an adapter interceptor: oRPC's `clientInterceptors` see only the initial context, so they have no `traceId` and no request-scoped logger.
+  - **`ErrorInterceptor`, in `api-server` beside `authed`** — the one place `AppError.code` becomes a transport code, and the one place a server-side failure is logged. Reached from a **middleware**, not an adapter interceptor: oRPC's `clientInterceptors` see only the initial context, so they have no `traceId` and no request-scoped logger.
   - **`rpc-client.ts`** — the in-process client for SSR, which skips serialisation but runs the same middleware.
 - **`src/route/`** — pages and composition, plus `api/rpc/$.ts` and `api/auth/$.ts`. Those two are Start server routes and are three lines each: hand the `Request` to `src/server/`, return its `Response`. Nothing here *implements* an API. Loaders reach the server through `ApiClient`, never by importing `appRouter`.
   - They are file routes rather than Nitro handlers because `serverDir` scanning is Nitro's, and Nitro is one deployment target of several — a route in the tree ships wherever the app ships ([24](24-web-app.md)).
@@ -430,7 +430,7 @@ apps/web  route/(app)/_authenticated/task/$taskId.tsx
         │  beforeLoad → RouteGuard.requireSession(), in (app)/_authenticated.tsx above
         │  loader     → ApiClient (in-process on SSR, HTTP in the browser)
         ▼
-apps/web  server/orpc/base.ts
+packages/api-server  router/base.ts
         │  principalMiddleware
         │    → auth  PrincipalBuilder.fromHeaders()
         │        → auth  BetterAuthSessionResolver     (who is this?)

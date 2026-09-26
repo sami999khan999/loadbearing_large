@@ -22,6 +22,10 @@ a summary.
 | File | What it holds | Moved |
 |---|---|---|
 | [`DONE.md`](DONE.md) | **The only file here that grows.** Every entry `BACKLOG.md` has closed — 84 of them — with the proof each was ticked on, and that file's changelog | 2026-09-22 |
+| [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md) | Forty-nine findings from five reviews of `dev` at `b58e748` — bugs, scaling limits, leaks and security. The bodies only: every box is in `BACKLOG.md` §10, pointing at a line here | 2026-09-26 |
+| [`COMMUNICATION-PERFORMANCE-PLAN.md`](COMMUNICATION-PERFORMANCE-PLAN.md) | Seven phases that took realtime, messaging, notifications and email off the web app's path — the `apps/realtime` stream process, `packages/api-server`, the outbox lease, batched fan-out and digest, longer retries. Built 2026-09-26; what is left is `BACKLOG.md` §12 | 2026-09-26 |
+| [`COMMUNICATION.md`](COMMUNICATION.md) | Messaging, email and notification features deferred whole on 2026-09-22, the decisions reached for them, and three things their older entries get wrong. Every item is a box in `BACKLOG.md` §11 | 2026-09-26 |
+| [`STATE.md`](STATE.md) | What sessions left on the two developer machines on purpose — accounts, tenants, archived months, `.env` edits, compose profiles — and how to undo each. Extends `OPEN.md` section D | 2026-09-26 |
 | [`PLAN.md`](PLAN.md) | The whole project in build order — 26 phases, items `<phase>.<item>`, decisions `D1`–`D50`, and the **Where the old IDs went** table that resolves every ID below | 2026-09-20 |
 | [`REVIEW.md`](REVIEW.md) | Forty-five defects a green build does not catch, found by a full read at `d98c9f3`, ranked, none fixed | 2026-09-20 |
 | [`OPEN.md`](OPEN.md) | The 2026-09-19 review's ten findings, what closed on 2026-09-20, and section D — what changed on the developer's machine and how to undo each piece | 2026-09-20 |

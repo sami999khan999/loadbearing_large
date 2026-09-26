@@ -1,4 +1,10 @@
-import { type DocumentChunk, type OrganizationId, type SearchHit, VectorStore } from "../import.js";
+import {
+  type DocumentChunk,
+  type IndexedSource,
+  type OrganizationId,
+  type SearchHit,
+  VectorStore,
+} from "../import.js";
 
 // The same floor `PgVectorStore` applies. Without it a fake returns the least-unrelated
 // chunk where the adapter returns nothing, and the caller's empty branch never runs.
@@ -29,6 +35,19 @@ export class InMemoryVectorStore extends VectorStore {
       existing.filter((chunk) => chunk.sourceId !== sourceId),
     );
     return Promise.resolve();
+  }
+
+  public override sourceOf(
+    organizationId: OrganizationId,
+    sourceId: string,
+  ): Promise<IndexedSource | null> {
+    const chunk = (this.chunks.get(organizationId) ?? []).find((c) => c.sourceId === sourceId);
+    if (!chunk) return Promise.resolve(null);
+    const version = chunk.metadata.version;
+    return Promise.resolve({
+      goalId: chunk.goalId,
+      version: typeof version === "number" ? version : null,
+    });
   }
 
   // Filters the input set before scoring, like the real store: filtering after retrieval

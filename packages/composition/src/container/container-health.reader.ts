@@ -1,4 +1,4 @@
-import { type PlatformHealth, PlatformHealthReader } from "../import.js";
+import { type PlatformHealth, PlatformHealthReader, type ReplicaHealthReport } from "../import.js";
 import type { Container } from "./container.js";
 
 // The container already answers this for the liveness probe; the platform screen asks
@@ -16,5 +16,16 @@ export class ContainerHealthReader extends PlatformHealthReader {
     // Every node folded into one boolean. Which node is down is an operator's question
     // and the readiness endpoint answers it; the platform screen asks whether to worry.
     return { ...rest, database: Object.values(database).every(Boolean) };
+  }
+
+  // Every node's standby folded the same way: healthy only if all answer, and the worst
+  // lag, because one node's standby a minute behind is the one that decides.
+  public async replica(): Promise<ReplicaHealthReport | null> {
+    const standbys = await this.container.replicaHealth();
+    if (standbys.length === 0) return null;
+
+    const healthy = standbys.every((standby) => standby.healthy);
+    const lags = standbys.map((standby) => standby.lagSeconds ?? 0);
+    return { healthy, lagSeconds: healthy ? Math.max(...lags) : null };
   }
 }

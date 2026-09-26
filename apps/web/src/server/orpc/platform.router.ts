@@ -1,4 +1,4 @@
-import { authed } from "./base.js";
+import { authed } from "../import.js";
 
 // The proof page's one handler. `ProcedurePermissions` gates the path before this runs
 // and the use-case asserts again — the two are deliberate, not redundant.
@@ -63,6 +63,13 @@ export class PlatformRouter {
     },
   );
 
+  public static readonly updateReplicaSwitch = authed.platform.updateReplicaSwitch.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.toggleReplicaReads.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   public static readonly listProjection = authed.platform.listProjection.handler(({ context }) =>
     context.container.platformAdmin.listProjection.execute(context.principal),
   );
@@ -114,6 +121,7 @@ export class PlatformRouter {
     listGaps: PlatformRouter.listGaps,
     reprojectPartition: PlatformRouter.reprojectPartition,
     updateProjectionSwitch: PlatformRouter.updateProjectionSwitch,
+    updateReplicaSwitch: PlatformRouter.updateReplicaSwitch,
     listProjection: PlatformRouter.listProjection,
     updateProjection: PlatformRouter.updateProjection,
     deleteTenant: PlatformRouter.deleteTenant,

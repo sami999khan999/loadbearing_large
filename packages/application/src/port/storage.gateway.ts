@@ -18,6 +18,10 @@ export abstract class StorageGateway {
     contentType: string,
   ): Promise<StoredObject>;
   public abstract get(key: string): Promise<Uint8Array>;
+
+  // The same read for a body that must not be held in memory: a cold month is read by
+  // the chunk, never whole.
+  public abstract getStream(key: string): AsyncIterable<Uint8Array>;
   public abstract delete(key: string): Promise<void>;
   public abstract exists(key: string): Promise<boolean>;
 

@@ -4,7 +4,7 @@ import type { DomainEvent, OrganizationId } from "../import.js";
 // the worker only: nothing on a request path drains an outbox.
 export abstract class OutboxGateway {
   // `relay` is called with a claimed batch and the rows are marked published only if it
-  // resolves. A throw rolls the claim back, and the same rows come round next tick.
+  // resolves. At least once: a throw, or a crash mid-relay, hands the rows out again.
   public abstract drain(
     limit: number,
     relay: (events: readonly DomainEvent[]) => Promise<void>,

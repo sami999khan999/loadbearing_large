@@ -456,3 +456,45 @@ describe("CapabilitySet — the platform axis", () => {
     expect(caps.toJSON().platform).toEqual({ grants: [], denies: [] });
   });
 });
+
+// What a role hands out is judged at the org level, since a role is never assigned inside
+// one goal. `can()` without a goal answers `false` for a goal key, which is the wrong question.
+describe("CapabilitySet.canTenantWide", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("holds a goal-scoped key granted at the org level", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: ["rbac.role.read"], denies: [] },
+      goals: {},
+    });
+
+    expect(caps.can("rbac.role.read")).toBe(false);
+    expect(caps.canTenantWide("rbac.role.read")).toBe(true);
+  });
+
+  it("does not count a grant inside one goal as tenant-wide", () => {
+    treatEveryKeyAsGoalScoped();
+    const caps = CapabilitySet.from({
+      wildcard: false,
+      org: { grants: [], denies: [] },
+      goals: { [GOAL]: { grants: ["rbac.role.read"], denies: [] } },
+    });
+
+    expect(caps.canTenantWide("rbac.role.read")).toBe(false);
+  });
+
+  it("lets an org deny beat the wildcard", () => {
+    const caps = CapabilitySet.from({
+      wildcard: true,
+      org: { grants: [], denies: ["rbac.role.read"] },
+      goals: {},
+    });
+
+    expect(caps.canTenantWide("rbac.role.read")).toBe(false);
+    expect(caps.canTenantWide("rbac.role.manage")).toBe(true);
+  });
+});

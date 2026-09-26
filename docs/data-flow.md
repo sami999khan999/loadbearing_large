@@ -132,7 +132,6 @@ copies can all be rebuilt, and that is what makes them safe to lose.
 | The ClickHouse table and its expiry | `packages/infrastructure/clickhouse-migrations/0000_activity_events.sql` |
 
 The positions behind all of this are in [`docs/opinions/data-and-scale.md`](opinions/data-and-scale.md).
-What is planned and not yet built is in [`plans/BACKLOG.md`](../plans/BACKLOG.md), except for
-messaging, email and notifications — those moved to
-[`plans/COMMUNICATION.md`](../plans/COMMUNICATION.md), to be designed as one system rather than
-as eight features.
+What is planned and not yet built is in [`plans/BACKLOG.md`](../plans/BACKLOG.md). The
+messaging, email and notification features are its §11, built on the communication performance
+plan that makes them one system rather than eight features.

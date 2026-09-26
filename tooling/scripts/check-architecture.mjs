@@ -205,7 +205,7 @@ const ENV_EXEMPT = [
   // The web smoke's `globalSetup`: it spawns the built server, so it composes that
   // child's whole environment out of the one it was given.
   /^apps\/web\/tests\/smoke\/support\/server\.ts$/,
-  /^packages\/infrastructure\/(clickhouse-migrate|migrate|partitions|platform-grant|seed|shard-env|smoke)\.ts$/,
+  /^packages\/infrastructure\/(clickhouse-migrate|migrate|partitions|platform-grant|queue-replay|seed|shard-env|smoke)\.ts$/,
 ];
 
 assert("only `env.ts` reads `process.env`", (failures) => {
@@ -1540,10 +1540,12 @@ assert("every script above `src/` is in its package's tsconfig", (failures) => {
 const PORT_PAIRS = [
   ["POSTGRES_PORT", "DATABASE_DIRECT_URL"],
   ["PGBOUNCER_PORT", "DATABASE_URL"],
+  ["POSTGRES_REPLICA_PORT", "DATABASE_REPLICA_URL"],
   ["POSTGRES_SHARD_1_PORT", "DATABASE_SHARD_1_DIRECT_URL"],
   ["PGBOUNCER_SHARD_1_PORT", "DATABASE_SHARD_1_URL"],
   ["REDIS_CACHE_PORT", "REDIS_CACHE_URL"],
   ["REDIS_QUEUE_PORT", "REDIS_QUEUE_URL"],
+  ["REDIS_CACHE_PORT", "REDIS_REALTIME_URL"],
   ["SMTP_PORT", "SMTP_URL"],
   ["S3_PORT", "S3_ENDPOINT"],
   ["LOKI_PORT", "LOKI_URL"],
@@ -1675,7 +1677,7 @@ assert("every permission in the catalog gates a procedure", (failures) => {
   }
 });
 
-// ── 29 — the three shard readers run one algorithm ──────────────────────
+// ── 29 — the four shard readers run one algorithm ──────────────────────
 //
 // `DATABASE_SHARD_<n>_URL` is parsed in three places and cannot be parsed in one: each
 // app declares the environment it needs (docs/setup/25), and the scripts above
@@ -1686,6 +1688,7 @@ assert("every permission in the catalog gates a procedure", (failures) => {
 const SHARD_READERS = [
   "apps/web/src/env.ts",
   "apps/worker/src/env.ts",
+  "apps/realtime/src/env.ts",
   "packages/infrastructure/shard-env.ts",
 ];
 
@@ -1711,7 +1714,7 @@ function shardReaderBody(file) {
     .trim();
 }
 
-assert("the three shard readers run one algorithm", (failures) => {
+assert("the four shard readers run one algorithm", (failures) => {
   const bodies = new Map();
   let present = 0;
 

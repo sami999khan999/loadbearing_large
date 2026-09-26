@@ -1,41 +1,72 @@
-import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import type { QueryKey } from "@tanstack/react-query";
+import { describe, expect, it } from "vitest";
 import { QueryKeys } from "../../src/key/index.js";
 import { RealtimeRoutes } from "../../src/realtime/realtime-route.js";
 
-const spyOn = (client: QueryClient) =>
-  vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
+const CONVERSATION = "00000000-0000-7000-8000-000000000001";
+
+const collect = () => {
+  const keys: QueryKey[] = [];
+  return { keys, request: (key: QueryKey) => keys.push(key) };
+};
 
 describe("RealtimeRoutes", () => {
-  it("invalidates the member namespace for a member frame", () => {
-    const client = new QueryClient();
-    const invalidate = spyOn(client);
+  it("refetches the member namespace for a member frame", () => {
+    const { keys, request } = collect();
 
-    RealtimeRoutes.apply(client, "member.changed");
+    RealtimeRoutes.apply(request, "member.changed", {});
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.member.all() });
+    expect(keys).toEqual([QueryKeys.member.all()]);
   });
 
-  it("invalidates the notification namespace for a notification frame", () => {
-    const client = new QueryClient();
-    const invalidate = spyOn(client);
+  // Not the whole namespace: archived months and preferences do not change when a
+  // notification arrives, and each one refetched was a request per frame.
+  it("refetches the bell count and the lists for a notification frame", () => {
+    const { keys, request } = collect();
 
-    RealtimeRoutes.apply(client, "notification.created");
+    RealtimeRoutes.apply(request, "notification.created", { kind: "message.direct" });
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.notification.all() });
+    expect(keys).toEqual([QueryKeys.notification.unreadCount(), QueryKeys.notification.lists()]);
   });
 
-  // The point of the table being the source of both: a name added to the contract has
-  // to be routed, and its key is then part of the resync sweep for free.
-  it("resyncs every key the table names, derived rather than listed twice", () => {
-    const client = new QueryClient();
-    const invalidate = spyOn(client);
+  it("narrows a conversation frame to the lists and that one conversation", () => {
+    const { keys, request } = collect();
 
-    RealtimeRoutes.resync(client);
+    RealtimeRoutes.apply(request, "conversation.changed", { conversationId: CONVERSATION });
 
-    expect(invalidate).toHaveBeenCalledTimes(RealtimeRoutes.names().length);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.member.all() });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: QueryKeys.notification.all() });
+    expect(keys).toEqual([
+      QueryKeys.conversation.lists(),
+      QueryKeys.conversation.get(CONVERSATION),
+    ]);
+  });
+
+  it("narrows a message frame to that conversation's messages", () => {
+    const { keys, request } = collect();
+
+    RealtimeRoutes.apply(request, "message.sent", { conversationId: CONVERSATION });
+
+    expect(keys).toEqual([QueryKeys.message.list(CONVERSATION)]);
+  });
+
+  // A frame from a publisher that predates the ids still refetches, only more broadly.
+  it("falls back to the namespace when the payload names no conversation", () => {
+    const { keys, request } = collect();
+
+    RealtimeRoutes.apply(request, "conversation.changed", {});
+
+    expect(keys).toEqual([QueryKeys.conversation.all()]);
+  });
+
+  // The gap could have held any frame, so a resync is every route with no ids at all.
+  it("resyncs every namespace the table names, derived rather than listed twice", () => {
+    const { keys, request } = collect();
+
+    RealtimeRoutes.resync(request);
+
+    expect(keys).toContainEqual(QueryKeys.member.all());
+    expect(keys).toContainEqual(QueryKeys.notification.unreadCount());
+    expect(keys).toContainEqual(QueryKeys.conversation.all());
+    expect(keys).toContainEqual(QueryKeys.message.all());
   });
 
   it("names every event the contract declares", () => {

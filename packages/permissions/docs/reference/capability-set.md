@@ -15,6 +15,7 @@ export class CapabilitySet {
   public can(permission: PermissionKey, goalId?: string): boolean;
   public canAll(permissions: readonly PermissionKey[], goalId?: string): boolean;
   public canAny(permissions: readonly PermissionKey[], goalId?: string): boolean;
+  public canTenantWide(permission: PermissionKey): boolean;   // held in every goal at once
   public goalsWith(permission: PermissionKey, amongGoalIds: readonly string[]): readonly string[];
   public intersect(other: CapabilitySet): CapabilitySet;
   public toJSON(): CapabilitySetDto;
@@ -131,6 +132,20 @@ Taking candidates and filtering them through `can()` makes all four shapes corre
 It also mirrors `VectorStore.search()` itself, where `goalIds` is required so the permitted scope
 cannot be forgotten ([12](../../../../docs/setup/12-application-package.md)). Duplicates in the input
 are collapsed; order is the caller's.
+
+---
+
+## `canTenantWide()` is the question a role assignment asks
+
+A role is never assigned inside one goal, so "may this actor hand out that role" is "does the actor
+hold every key of it **in every goal at once**". `can()` without a goal answers `false` for a
+goal-scoped key by rule 3, which would make every such role unassignable. `canTenantWide()` asks the
+org level instead: a deny wins, then the wildcard and `core`, then an org grant. A grant inside one
+goal does not count, and a platform key is asked exactly as `can()` asks it.
+
+`RoleRules.assertAssignableBy` is the one caller. It is `CR.1`'s fix: `admin` held `member.invite`
+and could invite anyone onto `owner`, because nothing compared what the role grants with what the
+actor holds.
 
 ---
 

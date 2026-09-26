@@ -1,10 +1,11 @@
 import type { ApiKeyRecord } from "@loadbearing/application";
-import { Identifiers } from "@loadbearing/contracts";
+import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { ApiKeyHasher } from "../../src/apikey/api-key.hasher.js";
 import { ApiKeyResolver } from "../../src/apikey/api-key.resolver.js";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
+import { MembershipReader, type OrganizationSummary } from "../../src/session/index.js";
 import {
   MapCacheStore,
   RecordingCapabilityRepository,
@@ -36,7 +37,30 @@ function issuerHolding(...grants: readonly PermissionKey[]): CapabilitySet {
   return CapabilitySet.from({ wildcard: false, org: { grants, denies: [] }, goals: {} });
 }
 
-function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet) {
+// Only `isActive` is asked: the issuer's membership, the check the session path makes.
+class StubMemberships extends MembershipReader {
+  public constructor(private readonly active: boolean) {
+    super();
+  }
+
+  public override activeOrganizationFor(): Promise<OrganizationId | null> {
+    return Promise.resolve(ORG);
+  }
+
+  public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
+    return Promise.resolve([]);
+  }
+
+  public override isActive(): Promise<boolean> {
+    return Promise.resolve(this.active);
+  }
+
+  public override ownedCount(): Promise<number> {
+    return Promise.resolve(0);
+  }
+}
+
+function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet, active = true) {
   const repository = new StubApiKeyRepository(records);
   const capabilities = new CapabilityCache(
     new RecordingCapabilityRepository(new Map([[`${ORG}:${ISSUER}`, issuer]])),
@@ -44,7 +68,10 @@ function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet) {
     new StubPlatformReader(),
   );
 
-  return { repository, resolver: new ApiKeyResolver(repository, capabilities) };
+  return {
+    repository,
+    resolver: new ApiKeyResolver(repository, capabilities, new StubMemberships(active)),
+  };
 }
 
 describe("ApiKeyResolver", () => {
@@ -96,6 +123,19 @@ describe("ApiKeyResolver", () => {
     // A row written before a permission was renamed, or by hand. It cannot become a
     // grant of anything, and it must not throw either — a stale key is a 401, not a 500.
     expect(principal?.capabilities.toJSON().org.grants).toEqual(["rbac.role.read"]);
+  });
+
+  // `CR.2`. A fired employee's key kept working, because only the session path checked
+  // the membership — and `core` keys survive any intersection with an emptied issuer.
+  it("refuses a key whose issuer's membership is deactivated", async () => {
+    const hash = await ApiKeyHasher.hash(TOKEN);
+    const { resolver } = resolverFor(
+      [record({ tokenHash: hash })],
+      issuerHolding("rbac.role.read", "rbac.role.manage"),
+      false,
+    );
+
+    expect(await resolver.resolve(TOKEN)).toBeNull();
   });
 
   it("refuses a revoked key", async () => {

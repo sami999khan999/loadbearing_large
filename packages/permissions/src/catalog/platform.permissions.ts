@@ -43,6 +43,13 @@ export const platformPermissions = {
     module: "platform",
     label: "Move a tenant between nodes",
   },
+  // Routes the worker's batch reads to a standby — `24.3`. Manage only: whether one
+  // exists and how far behind it is shows on the status page under `status.read`.
+  "platform.replica.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Route reads to the replica",
+  },
   "platform.tenant.manage": {
     scope: "platform",
     module: "platform",

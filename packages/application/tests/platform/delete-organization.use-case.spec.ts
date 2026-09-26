@@ -140,8 +140,11 @@ describe("DeleteOrganizationUseCase", () => {
     const { queue, useCase } = build();
     await useCase.execute(allowed(), input);
 
-    expect(queue.published[0]?.options?.jobId).toBe(`tenant-delete.${TENANT}`);
-    expect(queue.published[0]?.options?.jobId).not.toContain(":");
+    // In flight only (`CR.18`): a fixed `jobId` swallowed a retry for as long as the
+    // failed job was kept, and the audit row still said it was requested.
+    expect(queue.published[0]?.options?.inFlightId).toBe(`tenant-delete.${TENANT}`);
+    expect(queue.published[0]?.options?.jobId).toBeUndefined();
+    expect(queue.published[0]?.options?.inFlightId).not.toContain(":");
   });
 
   // Rebased onto the tier, like `tenant.deleted` is: under the tenant it would be a

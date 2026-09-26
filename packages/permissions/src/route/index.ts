@@ -1,4 +1,5 @@
 import { accountRoutes } from "./account.routes.js";
+import { analyticsRoutes } from "./analytics.routes.js";
 import { documentRoutes } from "./document.routes.js";
 import { messagingRoutes } from "./messaging.routes.js";
 import { notificationRoutes } from "./notification.routes.js";
@@ -20,6 +21,7 @@ export const ROUTES = {
   document: documentRoutes,
   notification: notificationRoutes,
   messaging: messagingRoutes,
+  analytics: analyticsRoutes,
   platform: platformRoutes,
 } as const;
 

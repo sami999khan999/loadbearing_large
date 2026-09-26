@@ -39,7 +39,9 @@ export class SendNotificationDigestUseCase {
   ) {}
 
   public async execute(actor: Principal, input: SendNotificationDigestInput): Promise<void> {
-    const since = new Date(new Date(`${input.day}T00:00:00.000Z`).getTime() - DAY_MS);
+    // The day before `day`, half-open: a row created at midnight is in exactly one digest.
+    const until = new Date(`${input.day}T00:00:00.000Z`);
+    const since = new Date(until.getTime() - DAY_MS);
     // Once per run, not per recipient. The footer reads "you belong to {organization}",
     // and the id is what a person saw there before this.
     const organization = (await this.organizations.nameOf(input.organizationId)) ?? "";
@@ -48,15 +50,16 @@ export class SendNotificationDigestUseCase {
     // Paged, because a digest over a large tenant is the one job here whose recipient
     // list does not fit in memory and whose failure mode is silent truncation.
     for (;;) {
-      const page = await this.notifications.recipientsWithUnreadSince(
+      const page = await this.notifications.recipientsWithUnreadBetween(
         input.organizationId,
         since,
+        until,
         PAGE,
         after,
       );
       if (page.length === 0) break;
 
-      await this.sendTo(input, page, since, organization);
+      await this.sendTo(input, page, { since, until }, organization);
 
       after = page.at(-1) ?? null;
       if (page.length < PAGE) break;
@@ -65,48 +68,58 @@ export class SendNotificationDigestUseCase {
     void actor;
   }
 
+  // Four queries and one enqueue for the page, whatever its size: the addresses, the
+  // stored modes, and every person's unread rows at once.
   private async sendTo(
     input: SendNotificationDigestInput,
     userIds: readonly UserId[],
-    since: Date,
+    window: { readonly since: Date; readonly until: Date },
     organization: string,
   ): Promise<void> {
-    // One query for the page's addresses and locales, not one per recipient.
     const people = await this.recipients.users(input.organizationId, userIds);
     const stored = await this.storedModes(input.organizationId, userIds);
+    const unread = await this.notifications.listUnreadBetween(
+      input.organizationId,
+      userIds,
+      window.since,
+      window.until,
+      SAMPLE,
+    );
 
-    for (const person of people) {
-      const unread = await this.notifications.listUnreadSince(
-        input.organizationId,
-        person.userId,
-        since,
-        SAMPLE,
-      );
+    const mails = people.flatMap((person) => {
       // The candidate list is everyone with unread rows, so this is where the reader's
       // own answer is applied — stored if they set one, the policy's default if not.
-      const digestable = SendNotificationDigestUseCase.forDigest(stored, person.userId, unread);
+      const digestable = SendNotificationDigestUseCase.forDigest(
+        stored,
+        person.userId,
+        unread.get(person.userId) ?? [],
+      );
 
       // Nothing to say. A daily message reading "you have 0 notifications" is how a
       // digest gets filtered, and a row already emailed immediately is not news.
-      if (digestable.length === 0) continue;
+      if (digestable.length === 0) return [];
 
-      await this.mail.publish({
-        template: "notification.digest",
-        to: person.email,
-        locale: person.locale,
-        params: {
-          count: digestable.length,
-          name: person.name,
-          organization,
-          url: "/notifications",
+      return [
+        {
+          template: "notification.digest" as const,
+          to: person.email,
+          locale: person.locale,
+          params: {
+            count: digestable.length,
+            name: person.name,
+            organization,
+            url: "/notifications",
+          },
+          organizationId: input.organizationId,
+          userId: person.userId,
+          // Organization, person and day. A redelivered job produces the same key, so a
+          // retry sends one message rather than a second copy of the same morning.
+          dedupeKey: `digest_${input.organizationId}_${person.userId}_${input.day}`,
         },
-        organizationId: input.organizationId,
-        userId: person.userId,
-        // Organization, person and day. A redelivered job produces the same key, so a
-        // retry sends one message rather than a second copy of the same morning.
-        dedupeKey: `digest_${input.organizationId}_${person.userId}_${input.day}`,
-      });
-    }
+      ];
+    });
+
+    if (mails.length > 0) await this.mail.publishMany(mails);
   }
 
   // One query per category for the whole page. `findFor` takes many users and one

@@ -6,7 +6,7 @@ import {
   type UserId,
   Uuid,
 } from "../import.js";
-import type { CacheStore, MailPublisher, RealtimePublisher } from "../port/index.js";
+import type { CacheStore, MailPublisher, RealtimePublisher, UnitOfWork } from "../port/index.js";
 import { type Principal, RealtimeChannels } from "../primitive/index.js";
 import { CountUnreadNotificationsUseCase } from "./count-unread-notifications.use-case.js";
 import { NotificationPolicy, type PolicyRow } from "./notification.policy.js";
@@ -35,6 +35,7 @@ export class DeliverNotificationUseCase {
     private readonly mail: MailPublisher,
     private readonly realtime: RealtimePublisher,
     private readonly cache: CacheStore,
+    private readonly unitOfWork: UnitOfWork,
   ) {}
 
   public async execute(actor: Principal, event: DomainEvent): Promise<void> {
@@ -48,8 +49,13 @@ export class DeliverNotificationUseCase {
 
     // One statement for N recipients, and idempotent on `(event_id, user_id, kind)`.
     // The rows it reports as new are the ones nobody has been told about yet.
-    const written = await this.notifications.saveMany(
-      audience.map((recipient) => DeliverNotificationUseCase.rowFor(event, row, recipient)),
+    // ──
+    // In a unit of work because it is routed and this is the job `24.2b`'s recheck was
+    // built for: the freeze and the recheck both live in `run` (`CR.11`).
+    const written = await this.unitOfWork.run(() =>
+      this.notifications.saveMany(
+        audience.map((recipient) => DeliverNotificationUseCase.rowFor(event, row, recipient)),
+      ),
     );
     if (written.length === 0) return;
 
@@ -102,28 +108,24 @@ export class DeliverNotificationUseCase {
     }
   }
 
-  // Drops anyone who already has an unread one about this subject. One query per
-  // recipient, and only for the rows that declare a subject at all.
+  // Drops anyone who already has an unread one about this subject, in one query for the
+  // whole audience — a channel message used to ask once per member, up to five hundred.
   private async suppressed(
     event: DomainEvent,
     audience: readonly Recipient[],
     row: PolicyRow,
   ): Promise<readonly Recipient[]> {
     const subjectId = NotificationPolicy.subjectOf(event);
-    if (!subjectId) return audience;
+    if (!subjectId || audience.length === 0) return audience;
 
-    const kept: Recipient[] = [];
-    for (const recipient of audience) {
-      const already = await this.notifications.existsUnread(
-        event.organizationId,
-        recipient.userId,
-        row.kind,
-        subjectId,
-      );
-      if (!already) kept.push(recipient);
-    }
+    const holding = await this.notifications.unreadSubjectHolders(
+      event.organizationId,
+      audience.map((recipient) => recipient.userId),
+      row.kind,
+      subjectId,
+    );
 
-    return kept;
+    return audience.filter((recipient) => !holding.has(recipient.userId));
   }
 
   private static conversationOf(event: DomainEvent): ConversationId | null {
@@ -166,19 +168,21 @@ export class DeliverNotificationUseCase {
   }
 
   // `immediate` only. `digest` recipients are collected by the daily schedule, and `off`
-  // means in-app only rather than nothing at all.
+  // means in-app only rather than nothing at all. One batch for the lot.
   private async notifyByEmail(
     event: DomainEvent,
     recipients: readonly Recipient[],
     modes: readonly PreferenceRecord[],
     row: PolicyRow,
   ): Promise<void> {
-    for (const recipient of recipients) {
-      const mode = DeliverNotificationUseCase.modeFor(modes, recipient.userId, "email", event);
-      if (mode !== "immediate") continue;
-
-      await this.mail.publish({
-        template: "notification.single",
+    const mails = recipients
+      .filter(
+        (recipient) =>
+          DeliverNotificationUseCase.modeFor(modes, recipient.userId, "email", event) ===
+          "immediate",
+      )
+      .map((recipient) => ({
+        template: "notification.single" as const,
         to: recipient.email,
         locale: recipient.locale,
         params: { kind: row.kind, name: recipient.name, url: row.link(event) ?? "" },
@@ -187,8 +191,9 @@ export class DeliverNotificationUseCase {
         // The row's own id would do, but the event id plus the recipient is what makes a
         // replayed event send one message rather than two.
         dedupeKey: `notification_${event.id}_${recipient.userId}`,
-      });
-    }
+      }));
+
+    if (mails.length > 0) await this.mail.publishMany(mails);
   }
 
   private static modeFor(

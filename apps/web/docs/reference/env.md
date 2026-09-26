@@ -182,6 +182,27 @@ in a reconnect loop opening streams faster than it closes them — is local to t
 happening on. Behind a load balancer the effective per-person total is the cap times the replica
 count, which is the right order of magnitude for a limit whose job is to bound one bug.
 
-The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
-error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+The age limit is what releases a channel nobody is reading. The server spreads it by ±10 % so tabs
+opened together do not all end together. A stream ended by the server is not an error: the
+client's `RealtimeStream` reopens it within a second and is replayed what it missed. That path is exercised on every
 deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.
+
+## `SERVER_SHUTDOWN_TIMEOUT` is srvx's, and the container waits it out
+
+Nitro's Node server is srvx. On `SIGTERM` it stops accepting, gives the requests in flight
+`SERVER_SHUTDOWN_TIMEOUT` seconds — five by default — and then closes what is left. It fires no
+Nitro `close` hook, and it does not exit the process: the preset wires neither.
+
+So the web process disposed nothing (`CR.34`). Its pools and Redis sockets were dropped rather than
+drained, and while they were open the process could not exit on its own; the orchestrator's kill
+ended it. A `SIGTERM` listener that disposed at once would be worse, closing the pools under the
+very requests srvx is letting finish.
+
+`server/container.ts` listens for `SIGTERM` once, waits `Env.shutdownGraceMs` — srvx's window plus a
+second — and disposes the container. `dispose` runs every step even when one throws, and a closed
+Redis connection refuses to reopen, so a stream's `finally` that runs late cannot build a new
+socket. The schema reads the variable srvx reads, rather than a second one of this app's own, so
+the two cannot disagree.
+
+**Checked by build, not by hand.** Windows delivers no catchable `SIGTERM`; the real signal on
+Linux is `BACKLOG.md` §12's `CP7.5`.

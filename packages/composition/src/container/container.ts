@@ -14,6 +14,7 @@ import {
   CapabilityCache,
   ChangeMemberRoleUseCase,
   ClickHouseAnalyticsProjector,
+  ClickHouseAnalyticsReader,
   ClickHouseConnection,
   type Clock,
   type ColdArchiveReader,
@@ -36,6 +37,7 @@ import {
   type EmailSender,
   type EmbeddingProvider,
   ExportOrganizationUseCase,
+  GetActivityTrendUseCase,
   GetConversationUseCase,
   GetNotificationPreferencesUseCase,
   GetPlatformPolicyUseCase,
@@ -52,7 +54,6 @@ import {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
-  ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,
@@ -130,17 +131,20 @@ import {
   PurgeOrganizationUseCase,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
+  type RateLimitStore,
   type RealtimePublisher,
   type RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
   RedisCacheStore,
   RedisConnection,
+  RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
   type RelayedActivityStore,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
   RenameConversationUseCase,
+  type ReplicaHealth,
   ReprojectPartitionUseCase,
   ResendInvitationUseCase,
   RestorePartitionUseCase,
@@ -159,6 +163,7 @@ import {
   type SessionResolver,
   SetMemberActiveUseCase,
   type ShardAssignmentRepository,
+  type ShardConfig,
   type ShardingStrategy,
   type ShardResolver,
   ShardScope,
@@ -173,6 +178,7 @@ import {
   type TenantMoveGateway,
   type TenantRetentionPolicyRepository,
   ToggleProjectionUseCase,
+  ToggleReplicaReadsUseCase,
   TransactionScope,
   type UnitOfWork,
   UpdateNotificationPreferenceUseCase,
@@ -181,6 +187,7 @@ import {
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
   type VectorStore,
+  WatchConversationUseCase,
 } from "../import.js";
 import {
   ContentMailRenderer,
@@ -292,6 +299,9 @@ export class Container {
 
   // ── ports, exposed as their abstract types ────────────────
   public readonly cache: CacheStore;
+  // The transport's per-procedure counters, in the cache instance: losing them resets a
+  // limit, which costs nobody anything (`CR.6`).
+  public readonly rateLimits: RateLimitStore;
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
@@ -373,6 +383,9 @@ export class Container {
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
   public readonly mail: { readonly send: SendMailUseCase };
+  public readonly analytics: {
+    readonly activity: GetActivityTrendUseCase;
+  };
   // In every process: the worker delivers and digests, the web tier reads. Neither
   // half needs an auth config, which is why this sits outside that branch too.
   public readonly notification: {
@@ -385,7 +398,6 @@ export class Container {
     readonly updatePreference: UpdateNotificationPreferenceUseCase;
     readonly deliver: DeliverNotificationUseCase;
     readonly sendDigest: SendNotificationDigestUseCase;
-    readonly digestOrganizations: ListDigestOrganizationsUseCase;
   };
   public readonly messaging: {
     readonly listConversations: ListConversationsUseCase;
@@ -401,6 +413,7 @@ export class Container {
     readonly edit: EditMessageUseCase;
     readonly remove: DeleteMessageUseCase;
     readonly typing: SignalTypingUseCase;
+    readonly watch: WatchConversationUseCase;
   };
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
@@ -430,6 +443,7 @@ export class Container {
     readonly updateTenantRetention: UpdateTenantRetentionUseCase;
     readonly reprojectPartition: ReprojectPartitionUseCase;
     readonly toggleProjection: ToggleProjectionUseCase;
+    readonly toggleReplicaReads: ToggleReplicaReadsUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
@@ -509,6 +523,7 @@ export class Container {
             onError: (error: Error) =>
               this.logger.emit("database.pool.error", { message: error.message }),
           },
+          replica: this.replicaPool(config, config.database.replicaUrl),
         },
         // Nodes 1 and up. Same pool settings as node 0, because a shard is the same
         // database with a different set of tenants on it.
@@ -531,6 +546,7 @@ export class Container {
             onError: (error: Error) =>
               this.logger.emit("database.pool.error", { message: error.message }),
           },
+          replica: this.replicaPool(config, shard.replicaUrl),
         })),
       ],
       this.shardResolver,
@@ -554,12 +570,14 @@ export class Container {
     this.redis = new RedisConnection({
       cacheUrl: config.redis.cacheUrl,
       queueUrl: config.redis.queueUrl,
+      ...(config.redis.realtimeUrl ? { realtimeUrl: config.redis.realtimeUrl } : {}),
     });
 
     this.clock = new SystemClock();
     this.authorizer = new Authorizer();
 
     this.cache = new RedisCacheStore(this.redis.client(), this.logger);
+    this.rateLimits = new RedisRateLimitStore(this.redis.client());
     this.storage = new S3StorageGateway(config.storage);
     this.storagePolicy = new S3StoragePolicyGateway(config.storage);
     this.coldArchive = new S3ColdArchiveReader(this.storage);
@@ -621,10 +639,20 @@ export class Container {
       : undefined;
 
     // The projector follows the connection and nothing else. There is no read driver to
-    // flip: the store is written and reconciled, and no feature reads it yet.
+    // flip: one store is written and reconciled, and the dashboard reads the same one.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
       : undefined;
+
+    // `23.14`. Null without ClickHouse, which the use-case answers as "not configured"
+    // rather than as a tenant that did nothing.
+    this.analytics = {
+      activity: new GetActivityTrendUseCase(
+        this.authorizer,
+        this.clickhouse ? new ClickHouseAnalyticsReader(this.clickhouse) : null,
+        this.clock,
+      ),
+    };
 
     // Its absence changes nothing about what is written: `JsonLogger` goes to stdout
     // either way.
@@ -658,23 +686,26 @@ export class Container {
       this.shards,
       this.clock,
     );
-    this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards, {
-      settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS,
-    });
-    this.outbox = new PgOutboxGateway(
+    this.tenantMove = new PgTenantMoveGateway(
       this.cluster,
       this.transactions,
       this.shards,
-      this.localUnitOfWork,
+      this.shardResolver,
+      { settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS },
     );
-    this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
+    this.outbox = new PgOutboxGateway(this.cluster, this.transactions, this.shards);
+    this.realtime = new RedisRealtimePublisher(this.redis.realtimeClient(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
     // one — which is what makes `health().realtime` honestly `null`.
-    this.realtimeSubscriber = new RedisRealtimeSubscriber(() => this.redis.subscriberClient(), {
-      maxStreamsPerUser: config.realtime.maxStreamsPerUser,
-      maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
-      queueSize: Container.REALTIME_QUEUE_SIZE,
-    });
+    this.realtimeSubscriber = new RedisRealtimeSubscriber(
+      () => this.redis.subscriberClient(),
+      {
+        maxStreamsPerUser: config.realtime.maxStreamsPerUser,
+        maxAgeMs: config.realtime.streamMaxAgeSeconds * 1_000,
+        queueSize: Container.REALTIME_QUEUE_SIZE,
+      },
+      () => this.redis.realtimeClient(),
+    );
 
     const notifications = new PgNotificationRepository(
       this.cluster,
@@ -713,17 +744,20 @@ export class Container {
         notifications,
         this.cache,
         this.clock,
+        this.routedUnitOfWork,
       ),
       markAllRead: new MarkAllNotificationsReadUseCase(
         this.authorizer,
         notifications,
         this.cache,
         this.clock,
+        this.routedUnitOfWork,
       ),
       preferences: new GetNotificationPreferencesUseCase(this.authorizer, notificationPreferences),
       updatePreference: new UpdateNotificationPreferenceUseCase(
         this.authorizer,
         notificationPreferences,
+        this.routedUnitOfWork,
       ),
       deliver: new DeliverNotificationUseCase(
         notifications,
@@ -732,6 +766,7 @@ export class Container {
         this.mailPublisher,
         this.realtime,
         this.cache,
+        this.routedUnitOfWork,
       ),
       sendDigest: new SendNotificationDigestUseCase(
         notifications,
@@ -740,7 +775,6 @@ export class Container {
         this.mailPublisher,
         this.organizations,
       ),
-      digestOrganizations: new ListDigestOrganizationsUseCase(notifications),
     };
 
     // One instance under two ports, and they must never be passed for each other:
@@ -766,6 +800,7 @@ export class Container {
         messages,
         conversationNaming,
       ),
+      watch: new WatchConversationUseCase(this.authorizer, conversationAccess),
       getConversation: new GetConversationUseCase(
         this.authorizer,
         conversationAccess,
@@ -814,6 +849,7 @@ export class Container {
         conversationAccess,
         conversations,
         this.realtime,
+        this.routedUnitOfWork,
       ),
       listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
       send: new SendMessageUseCase(
@@ -914,7 +950,11 @@ export class Container {
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
       const apiKeyRepository = new PgApiKeyRepository(this.cluster, this.transactions, this.shards);
-      const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
+      const apiKeyResolver = new ApiKeyResolver(
+        apiKeyRepository,
+        this.capabilities,
+        this.memberships,
+      );
 
       this.apiKeyUseCases = {
         listApiKeys: new ListApiKeysUseCase(this.authorizer, apiKeyRepository),
@@ -982,6 +1022,7 @@ export class Container {
         setMemberActive: new SetMemberActiveUseCase(
           this.authorizer,
           members,
+          this.capabilities,
           this.activity,
           this.catalogUnitOfWork,
           this.clock,
@@ -1089,6 +1130,7 @@ export class Container {
         this.authorizer,
         this.platform,
         new ContainerHealthReader(this),
+        this.platformPolicy,
       ),
       getPolicy: new GetPlatformPolicyUseCase(
         this.authorizer,
@@ -1111,6 +1153,14 @@ export class Container {
         this.activity,
       ),
       toggleProjection: new ToggleProjectionUseCase(
+        this.authorizer,
+        this.platformPolicy,
+        new ContainerHealthReader(this),
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      toggleReplicaReads: new ToggleReplicaReadsUseCase(
         this.authorizer,
         this.platformPolicy,
         new ContainerHealthReader(this),
@@ -1229,12 +1279,18 @@ export class Container {
         this.activity,
         this.routedUnitOfWork,
       ),
-      queueIndex: new QueueDocumentIndexUseCase(this.authorizer, this.queuePublisher),
+      queueIndex: new QueueDocumentIndexUseCase(
+        this.authorizer,
+        this.queuePublisher,
+        this.vectors,
+        this.clock,
+      ),
       searchDocuments: new SearchDocumentsUseCase(
         this.authorizer,
         this.embeddings,
         this.vectors,
         this.activity,
+        this.routedUnitOfWork,
       ),
     };
   }
@@ -1341,23 +1397,59 @@ export class Container {
 
   // **The one place a request or a job is placed.** Both run once, here, so
   // `BaseRepository.db` stays a property read — see the sharding reference.
-  public async placed<T>(principal: Principal, work: () => Promise<T>): Promise<T> {
+  // ──
+  // `recheck` is the worker's: a job can outlive the move's settle — decision `24.2b`.
+  public async placed<T>(
+    principal: Principal,
+    work: () => Promise<T>,
+    options: { readonly recheck?: boolean; readonly replica?: boolean } = {},
+  ): Promise<T> {
     const key = this.sharding.keyOf(principal);
     // The freeze rides with the node, resolved once here rather than per write: a move
     // makes the tenant readable and unwritable, and `PgUnitOfWork` reads it off scope.
     const placement = await this.shardResolver.placementOf(key);
 
-    return this.shards.within({ key, node: placement.node, frozen: placement.frozen }, work);
+    return this.shards.within(
+      {
+        key,
+        node: placement.node,
+        frozen: placement.frozen,
+        recheck: options.recheck,
+        replica: options.replica,
+      },
+      work,
+    );
+  }
+
+  // Every node's standby, empty when none is configured — what the status panel reads.
+  public async replicaHealth(): Promise<readonly ReplicaHealth[]> {
+    return this.cluster.replicaHealth();
+  }
+
+  public get hasReplicas(): boolean {
+    return this.cluster.hasReplicas;
   }
 
   // **The one place a cross-tenant sweep is placed**, and it is per node rather than
   // per tenant: the outbox, the partition runway and the digest fan-out are per node.
   public async eachShard(work: (node: number) => Promise<void>): Promise<void> {
+    let first: Error | null = null;
+
     // Serial, not `Promise.all`. These are the DDL and drain passes, and running them
     // against every node at once multiplies this process's pool by the shard count.
     for (let node = 0; node < this.cluster.size; node += 1) {
-      await this.shards.atNode(node, () => work(node));
+      try {
+        await this.shards.atNode(node, () => work(node));
+      } catch (error) {
+        // One node down delays its own work, never the nodes after it. The first error is
+        // rethrown at the end, so the job still fails and BullMQ still retries it.
+        first ??= error instanceof Error ? error : new Error(String(error));
+        this.logger.emit("shard.sweep.failed", { node });
+        this.logger.failure(error, { node });
+      }
     }
+
+    if (first !== null) throw first;
   }
 
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
@@ -1414,6 +1506,22 @@ export class Container {
     });
   }
 
+  // A node's standby pool, sized like its primary: what moves onto it is the reads that
+  // would otherwise have held a primary connection for the same time.
+  private replicaPool(config: ContainerConfig, url: string | undefined): ShardConfig["replica"] {
+    if (!url) return undefined;
+    return {
+      url,
+      maxConnections: config.database.poolMax,
+      statementTimeoutMs: config.database.statementTimeoutMs,
+      idleTimeoutMs: config.database.poolIdleTimeoutMs,
+      connectionTimeoutMs: config.database.poolConnectTimeoutMs,
+      applicationName: `${config.logging.app}-replica`,
+      onError: (error: Error) =>
+        this.logger.emit("database.pool.error", { message: error.message }),
+    };
+  }
+
   // `Database`'s own default when the config omits one, because the two numbers have to
   // agree: a probe slower than the connect timeout watches a queue that is never there.
   private static probeIntervalFor(connectTimeoutMs: number | undefined): number {
@@ -1428,15 +1536,24 @@ export class Container {
   // hangs on shutdown, and it is a deadlock.
   public async dispose(): Promise<void> {
     clearInterval(this.poolProbe);
-    await this.queuePublisher.close();
-    await this.redis.close();
-    await this.clickhouse?.close();
+    // Each step on its own: one close that rejects must not leave the pools after it open.
+    await this.closing("queue", () => this.queuePublisher.close());
+    await this.closing("redis", () => this.redis.close());
+    await this.closing("clickhouse", async () => this.clickhouse?.close());
     // Before Postgres only because nothing else depends on it: an unclosed transport is
     // its own reason to be here, not a step in the ordering above.
-    await this.emailSender.close();
+    await this.closing("smtp", () => this.emailSender.close());
     // The cluster owns every pool including node 0's, so this is the one close and it
     // is last: a repository on any node may still be finishing the lines above.
-    await this.cluster.close();
+    await this.closing("postgres", () => this.cluster.close());
+  }
+
+  private async closing(what: string, close: () => Promise<unknown>): Promise<void> {
+    try {
+      await close();
+    } catch (error) {
+      this.logger.failure(error, { closing: what });
+    }
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The

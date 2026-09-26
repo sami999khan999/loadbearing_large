@@ -24,6 +24,11 @@ No config file and no volume. Every setting is a flag or a default, and the inbo
 `smtp://localhost:11025` locally. Mailpit accepts the message, **delivers it nowhere**, and shows it
 at <http://localhost:18025>.
 
+The transport is **pooled** — up to five connections, each recycled after a hundred messages — and
+bounded: ten seconds to connect and greet, thirty of silence mid-send. A hung server fails the send
+as `UNAVAILABLE`, which the queue retries, rather than holding the job for nodemailer's minutes.
+The pool connects on the first send, so a process that never mails opens no socket.
+
 > [!IMPORTANT]
 > **It cannot send mail to a real address, and that is the feature.** A misaddressed digest during
 > development reaches an inbox you own rather than a customer. The day this is swapped for a real

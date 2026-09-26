@@ -34,6 +34,7 @@ export { ConversationEntity } from "@loadbearing/contracts";
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
   ActiveSessionList,
+  ActivityTrendPanel,
   ApiKeyList,
   ArchivedNotificationList,
   ChangeEmailForm,
@@ -66,6 +67,7 @@ export {
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  ReplicaSwitchPanel,
   ResetPasswordForm,
   RestorePartitionPanel,
   RetentionPolicyForm,
@@ -104,6 +106,7 @@ export {
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
 export {
+  AnalyticsQueries,
   ApiClientProvider,
   ApiKeyQueries,
   createQueryClient,

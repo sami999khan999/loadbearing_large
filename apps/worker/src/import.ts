@@ -17,6 +17,7 @@ export {
   QueueName,
   type RetentionPolicyRecord,
   RetentionRules,
+  Shard,
   type TenantRetentionPolicyRecord,
   type TenantRunway,
 } from "@loadbearing/application";

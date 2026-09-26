@@ -33,10 +33,6 @@ class UnusedMembershipReader extends MembershipReader {
     return unreachable();
   }
 
-  public override isMember(): Promise<boolean> {
-    return unreachable();
-  }
-
   public override organizationsFor(): Promise<readonly OrganizationSummary[]> {
     return unreachable();
   }

@@ -8,6 +8,7 @@ import {
   type OrganizationId,
   type Placement,
   Principal,
+  Shard,
   sql,
   type UserId,
   Uuid,
@@ -96,10 +97,15 @@ export class PgOrganizationFounder extends BaseRepository {
 
         // The tenant just created, not the caller's. An empty capability set: the logger
         // reads only the organization and the actor off it.
-        await this.activity.record(
-          new Principal(organizationId, userId, CapabilitySet.empty()),
-          "organization.created",
-          { name },
+        // ──
+        // Placed on node 0, where the row above put it: the resolver reads through its own
+        // pool and cannot see that row until this commits. See docs/reference/sharding.md.
+        await this.shards.within({ key: Shard.keyOf(organizationId), node: 0 }, () =>
+          this.activity.record(
+            new Principal(organizationId, userId, CapabilitySet.empty()),
+            "organization.created",
+            { name },
+          ),
         );
 
         return organizationId;

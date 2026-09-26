@@ -28,6 +28,9 @@ export class CreateApiKeyUseCase {
 
   public async execute(actor: Principal, input: CreateApiKeyInput): Promise<CreatedApiKey> {
     this.authorizer.assert(actor, "apikey.manage");
+    // A key minting a key outlives its own revocation: the child is the issuer's, not the
+    // parent's, and nothing ties the two. Keys are made by a person, signed in.
+    if (actor.kind === "api_key") throw new ForbiddenError("apikey.manage");
 
     const scopes = ApiKeyRules.assertKnownScopes(input.scopes);
 

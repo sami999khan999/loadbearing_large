@@ -1,10 +1,25 @@
-import { type ApiClient, useEffect, useQueryClient, useRef, useState } from "../import.js";
+import {
+  type ApiClient,
+  type RealtimeMessage,
+  useEffect,
+  useQueryClient,
+  useRef,
+  useState,
+} from "../import.js";
 import { QueryKeys } from "../key/index.js";
+import { RealtimeRefetch, RealtimeStream } from "../realtime/index.js";
+import { MessagingQueries } from "./messaging.queries.js";
 
 // A signal is published at most every two seconds, so a little over that is how long one
 // stays true before the person is taken to have stopped.
 const TYPING_EXPIRY_MS = 4_000;
 const SWEEP_MS = 1_000;
+// Enough to span the gap between a send's fast-path frame and its durable one.
+const SEEN_LIMIT = 256;
+
+// The newest page at most once a second, as `RealtimeRefetch` does for the rest. Without the
+// floor a burst arriving a little slower than a fetch cost one fetch per message (`CP1.9`).
+const REFRESH_INTERVAL_MS = 1_000;
 
 export interface ConversationStreamState {
   readonly connected: boolean;
@@ -40,47 +55,73 @@ export function useConversationStream(
     if (typeof window === "undefined") return;
 
     const controller = new AbortController();
-    let cancelled = false;
+    const refetch = new RealtimeRefetch(cache.current);
+    const listKey = QueryKeys.message.list(conversationId);
+    // Every send arrives twice, once from the request and once from the outbox.
+    const seen = new Set<string>();
+    let refreshing: Promise<void> | null = null;
+    let refreshAgain = false;
 
-    const run = async () => {
-      const stream = await client.message.stream(
-        { conversationId },
-        { signal: controller.signal, context: { retry: Number.POSITIVE_INFINITY } },
-      );
-
-      setConnected(true);
-
-      for await (const frame of stream) {
-        if (cancelled) break;
-
-        if (frame.kind === "typing") {
-          if (frame.userId === self.current) continue;
-          const expiresAt = Date.now() + TYPING_EXPIRY_MS;
-          setTyping((current) => new Map(current).set(frame.userId, expiresAt));
-          continue;
-        }
-
-        // Everything else is a refetch. The frame says a message changed, never what it
-        // changed to — patching a page from a payload is a copy of the server's shaping.
-        void cache.current.invalidateQueries({
-          queryKey: QueryKeys.message.list(conversationId),
-        });
+    // Single-flight with one trailing run, like `RealtimeRefetch`, but for one page.
+    const refreshNewest = () => {
+      if (refreshing) {
+        refreshAgain = true;
+        return;
       }
+      const startedAt = Date.now();
+      refreshing = MessagingQueries.refreshNewest(cache.current, client, conversationId)
+        .catch(() => refetch.request(listKey))
+        // Held busy for the rest of the second, so frames in it fold into one trailing run.
+        .then(
+          () =>
+            new Promise<void>((resolve) => {
+              setTimeout(resolve, Math.max(0, REFRESH_INTERVAL_MS - (Date.now() - startedAt)));
+            }),
+        )
+        .finally(() => {
+          refreshing = null;
+          if (refreshAgain && !controller.signal.aborted) {
+            refreshAgain = false;
+            refreshNewest();
+          }
+        });
     };
 
-    run()
-      .catch(() => {
-        // The retry plugin owns reconnection. Reaching here means it gave up or the
-        // component unmounted, and neither is an error to render.
-      })
-      .finally(() => {
-        if (!cancelled) setConnected(false);
-      });
+    const onFrame = (frame: RealtimeMessage) => {
+      if (frame.kind === "typing") {
+        if (frame.userId === self.current) return;
+        const expiresAt = Date.now() + TYPING_EXPIRY_MS;
+        setTyping((current) => new Map(current).set(frame.userId, expiresAt));
+        return;
+      }
+
+      if (frame.kind === "event" && frame.payload.messageId) {
+        const key = `${frame.name}:${frame.payload.messageId}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (seen.size > SEEN_LIMIT) seen.delete(seen.values().next().value as string);
+      }
+
+      // Refetched, never patched from the payload. A send touches only the newest page;
+      // an edit, a delete or a resync can touch any loaded one.
+      if (frame.kind === "event" && frame.name === "message.sent") refreshNewest();
+      else refetch.request(listKey);
+    };
+
+    void RealtimeStream.run<RealtimeMessage>({
+      open: (signal, lastEventId) =>
+        client.realtime.conversation({ conversationId }, { signal, lastEventId }),
+      onConnected: (value) => {
+        if (!controller.signal.aborted) setConnected(value);
+      },
+      onFrame,
+      signal: controller.signal,
+    });
 
     return () => {
-      cancelled = true;
       setConnected(false);
       setTyping(new Map());
+      refetch.dispose();
       controller.abort();
     };
   }, [client, conversationId]);

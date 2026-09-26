@@ -16,7 +16,15 @@ export class InMemoryColdArchiveReader extends ColdArchiveReader {
     this.objects.set(objectKey, rows);
   }
 
-  public override rows(
+  public override async *batches(
+    entry: PartitionArchiveEntry,
+    size: number,
+  ): AsyncGenerator<readonly Readonly<Record<string, unknown>>[]> {
+    const rows = await this.rows(entry);
+    for (let at = 0; at < rows.length; at += size) yield rows.slice(at, at + size);
+  }
+
+  private rows(
     entry: PartitionArchiveEntry,
   ): Promise<readonly Readonly<Record<string, unknown>>[]> {
     const rows = this.objects.get(entry.objectKey);
