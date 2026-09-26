@@ -543,6 +543,11 @@ export class MaintenanceConsumer {
     const months = policy?.hotMonths ?? PartitionedTable.byName(table).retentionMonths;
     if (months === null) return;
 
+    // Before the months are listed, so one a cut-off run left detached is listed again.
+    for (const partition of await this.container.partitionArchive.recover(table)) {
+      this.container.logger.emit("cold.partition.recovered", { table, partition });
+    }
+
     const now = this.container.clock.now();
     const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1));
 

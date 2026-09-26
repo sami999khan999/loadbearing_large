@@ -122,16 +122,17 @@ export class AnalyticsConsumer {
     const excluding = await this.excluded();
 
     for (const entry of entries) {
-      const rows = await this.container.coldArchive.rows(entry);
-      const records = rows
-        .map((row) => AnalyticsConsumer.recordOf(row, entry.organizationId))
-        .filter((record) => !excluding.includes(record.action as ActivityAction));
-
+      // A batch at a time, never the month (`CR.16`): a month parsed whole OOMed the worker
+      // and blocked the event loop past the other queues' locks.
       let projected = 0;
-      for (let at = 0; at < records.length; at += AnalyticsConsumer.BATCH_SIZE) {
-        projected += await this.container.projector.project(
-          records.slice(at, at + AnalyticsConsumer.BATCH_SIZE),
-        );
+      for await (const rows of this.container.coldArchive.batches(
+        entry,
+        AnalyticsConsumer.BATCH_SIZE,
+      )) {
+        const records = rows
+          .map((row) => AnalyticsConsumer.recordOf(row, entry.organizationId))
+          .filter((record) => !excluding.includes(record.action as ActivityAction));
+        if (records.length > 0) projected += await this.container.projector.project(records);
       }
 
       // Stamped after the rows land, never before: a stamp on a projection that failed
