@@ -377,12 +377,11 @@ export class Container {
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
   public readonly mail: { readonly send: SendMailUseCase };
-  // In every process: the worker delivers and digests, the web tier reads. Neither
-  // half needs an auth config, which is why this sits outside that branch too.
   public readonly analytics: {
     readonly activity: GetActivityTrendUseCase;
   };
-
+  // In every process: the worker delivers and digests, the web tier reads. Neither
+  // half needs an auth config, which is why this sits outside that branch too.
   public readonly notification: {
     readonly list: ListNotificationsUseCase;
     readonly archived: ListArchivedNotificationsUseCase;
@@ -729,17 +728,20 @@ export class Container {
         notifications,
         this.cache,
         this.clock,
+        this.routedUnitOfWork,
       ),
       markAllRead: new MarkAllNotificationsReadUseCase(
         this.authorizer,
         notifications,
         this.cache,
         this.clock,
+        this.routedUnitOfWork,
       ),
       preferences: new GetNotificationPreferencesUseCase(this.authorizer, notificationPreferences),
       updatePreference: new UpdateNotificationPreferenceUseCase(
         this.authorizer,
         notificationPreferences,
+        this.routedUnitOfWork,
       ),
       deliver: new DeliverNotificationUseCase(
         notifications,
@@ -748,6 +750,7 @@ export class Container {
         this.mailPublisher,
         this.realtime,
         this.cache,
+        this.routedUnitOfWork,
       ),
       sendDigest: new SendNotificationDigestUseCase(
         notifications,
@@ -829,6 +832,7 @@ export class Container {
         conversationAccess,
         conversations,
         this.realtime,
+        this.routedUnitOfWork,
       ),
       listMessages: new ListMessagesUseCase(this.authorizer, conversationAccess, messages),
       send: new SendMessageUseCase(
@@ -929,7 +933,11 @@ export class Container {
       this.sessionResolver = new BetterAuthSessionResolver(this.authInstance);
 
       const apiKeyRepository = new PgApiKeyRepository(this.cluster, this.transactions, this.shards);
-      const apiKeyResolver = new ApiKeyResolver(apiKeyRepository, this.capabilities);
+      const apiKeyResolver = new ApiKeyResolver(
+        apiKeyRepository,
+        this.capabilities,
+        this.memberships,
+      );
 
       this.apiKeyUseCases = {
         listApiKeys: new ListApiKeysUseCase(this.authorizer, apiKeyRepository),
@@ -997,6 +1005,7 @@ export class Container {
         setMemberActive: new SetMemberActiveUseCase(
           this.authorizer,
           members,
+          this.capabilities,
           this.activity,
           this.catalogUnitOfWork,
           this.clock,
@@ -1253,12 +1262,18 @@ export class Container {
         this.activity,
         this.routedUnitOfWork,
       ),
-      queueIndex: new QueueDocumentIndexUseCase(this.authorizer, this.queuePublisher),
+      queueIndex: new QueueDocumentIndexUseCase(
+        this.authorizer,
+        this.queuePublisher,
+        this.vectors,
+        this.clock,
+      ),
       searchDocuments: new SearchDocumentsUseCase(
         this.authorizer,
         this.embeddings,
         this.vectors,
         this.activity,
+        this.routedUnitOfWork,
       ),
     };
   }

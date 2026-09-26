@@ -48,6 +48,7 @@ export {
   GetPlatformPolicyUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
+  type IndexedSource,
   InspectEffectivePermissionsUseCase,
   InspectPlatformStatusUseCase,
   InspectShardMapUseCase,
