@@ -252,7 +252,9 @@ under the root: each leaf and the tenant partition, each with all its indexes. M
 | `activity_log` | 3 | (months + 1) × 4 | 13 + runway ≈ 16 months → 68 | ~3 000 tenants |
 | `messages` | 3 | (months + 1) × 4 | no retention; 24 months → 100 | ~2 000 tenants, falling |
 
-Nothing in the application issues such a read. Every repository query carries the tenant, and
+The digest's fan-out used to issue one: a `SELECT DISTINCT organization_id` over `notifications`
+with no tenant, once a day per node (`CR.22`). It pages the catalog's tenants instead now. The
+nightly orphan check is the other (`CR.21`, still open). Otherwise every repository query carries the tenant, and
 `pg` sends unnamed statements, so each is planned with its values and pruned at plan time. Two
 things would issue one:
 
@@ -293,9 +295,10 @@ of three things per query, and **which one is the finding**:
 | --- | --- | --- |
 | **One tenant partition** | every tenant-scoped read | The tenant predicate — the neighbour's subtree is not in the plan |
 | **Exactly one month** | `markRead`, `findById`, the activity daily rollup | An equality or a closed range on the time column |
-| **The retention tail is pruned** | `listUnreadSince`, the projection walk | A floor — nothing older than it is in the plan |
+| **The retention tail is pruned** | `listUnreadBetween`, the projection walk, `unreadCounts` | A floor — nothing older than it is in the plan |
+| **Bounded by the newest message** | a conversation's first page, given `upTo` | A ceiling — nothing newer than the room's latest message is in the plan |
 | **Bounded by the cursor's month** | the inbox's and a conversation's later pages | A ceiling — nothing newer than the cursor is in the plan, and the cursor is still an index condition |
-| **Pinned at every month of the tenant** | a first page, `countUnread`, `existsUnread`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
+| **Pinned at every month of the tenant** | the inbox's first page, a conversation's first page with no `upTo`, `countUnread`, `unreadSubjectHolders`, `markAllRead`, the outbox drain | Today's behaviour, deliberately |
 
 The first row is the one the tenant level bought, and the spec proves it against a second tenant
 that also holds rows in both months — otherwise it would pass on a database with one tenant in it
@@ -326,7 +329,9 @@ numbers re-measured — rather than arriving as a badge that has quietly stopped
 
 At the fifteen-partition steady state the unbounded reads cost 0.21–0.87 ms, which is why they were
 left unbounded — and the tenant level narrows that set to one tenant's months rather than every
-tenant's.
+tenant's. **That steady state does not hold for `messages`**, which is never retired: its month count
+only grows. So its two reads made on every render — a room's first page and the conversation list's
+unread counts — carry a bound of their own, and the spec asserts each one prunes.
 
 ## `messages` had to give up an index to join the list
 

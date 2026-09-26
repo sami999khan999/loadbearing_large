@@ -223,10 +223,9 @@ describe.skipIf(!shard1)("a two-node cluster", () => {
   // `R.2`'s other half, owed since `24.1` removed the `23503` that blocked it. The drain
   // walks nodes with the `local` unit of work, so node 1's events are drained from node 1.
   it("drains a tenant's event from the outbox on the node it was written to", async () => {
-    const localWork = new PgUnitOfWork(cluster, scope, shards, "local");
     const routedWork = new PgUnitOfWork(cluster, scope, shards, "routed");
     const publisher = new PgOutboxPublisher(cluster, scope, shards, { now: () => new Date() });
-    const outbox = new PgOutboxGateway(cluster, scope, shards, localWork);
+    const outbox = new PgOutboxGateway(cluster, scope, shards);
     const conversationId = Uuid.v7() as ConversationId;
     const actor = new Principal(onNodeOne, author, CapabilitySet.empty());
 

@@ -51,6 +51,7 @@ export {
   ColdArchiveReader,
   type ColdPage,
   type ColdTier,
+  type ConversationHeader,
   type ConversationMemberRecord,
   type ConversationPage,
   type ConversationRecord,
@@ -113,6 +114,7 @@ export {
   type ProjectionGap,
   type ProjectionPolicyRecord,
   type ProjectionPolicyRepository,
+  type QueuedJob,
   QueuePublisher,
   type RealtimeChannel,
   RealtimeChannels,
@@ -142,6 +144,7 @@ export {
   StorageGateway,
   StoragePolicyGateway,
   type StoredObject,
+  type SubscribeOptions,
   type SweepOutcome,
   // A value: the move gateway treats a `local` table differently from a routed one.
   TablePlacement,

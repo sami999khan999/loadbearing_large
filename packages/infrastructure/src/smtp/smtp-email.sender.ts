@@ -15,13 +15,20 @@ export interface SmtpConfig {
   // Not optional and not defaulted: an address the domain does not authorise bounces or
   // lands in spam, silently, on the first real deploy.
   readonly from: string;
+  // Open connections the pool may hold. Five is what most providers allow one client.
+  readonly maxConnections?: number;
 }
+
+// A hung server is a hung job: without these nodemailer waits minutes, holding the job's
+// lock, before the retry that would have succeeded elsewhere can run.
+const CONNECTION_TIMEOUT_MS = 10_000;
+const SOCKET_TIMEOUT_MS = 30_000;
 
 // SMTP, not a provider's HTTP API: every managed sender speaks it, so swapping vendors is
 // a URL rather than a new class.
 export class SmtpEmailSender extends EmailSender {
-  // Built once and reused: the transport holds the resolved auth and TLS settings, and
-  // rebuilding it per message re-does that work on every send.
+  // Built once and pooled: a handshake and TLS per message was most of each send's time.
+  // The pool connects on the first send, so a process that never mails opens no socket.
   private readonly transport: Transporter;
 
   public constructor(
@@ -29,7 +36,17 @@ export class SmtpEmailSender extends EmailSender {
     private readonly logger?: Logger,
   ) {
     super();
-    this.transport = createTransport(config.url);
+    this.transport = createTransport({
+      url: config.url,
+      pool: true,
+      maxConnections: config.maxConnections ?? 5,
+      // Recycled after this many, so a long-lived connection a provider has quietly
+      // degraded is replaced rather than kept forever.
+      maxMessages: 100,
+      connectionTimeout: CONNECTION_TIMEOUT_MS,
+      greetingTimeout: CONNECTION_TIMEOUT_MS,
+      socketTimeout: SOCKET_TIMEOUT_MS,
+    });
   }
 
   public override async send(message: EmailMessage): Promise<EmailReceipt> {

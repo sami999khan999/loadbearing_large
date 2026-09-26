@@ -182,21 +182,11 @@ describe("the pooled connection path", () => {
 
       await Promise.all([
         drain(
-          new PgOutboxGateway(
-            DatabaseCluster.single(pooled.database),
-            pooled.scope,
-            shards,
-            pooled.unitOfWork,
-          ),
+          new PgOutboxGateway(DatabaseCluster.single(pooled.database), pooled.scope, shards),
           claimed[0] as string[],
         ),
         drain(
-          new PgOutboxGateway(
-            DatabaseCluster.single(second.database),
-            second.scope,
-            shards,
-            second.unitOfWork,
-          ),
+          new PgOutboxGateway(DatabaseCluster.single(second.database), second.scope, shards),
           claimed[1] as string[],
         ),
       ]);

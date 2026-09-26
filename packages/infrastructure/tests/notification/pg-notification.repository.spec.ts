@@ -31,6 +31,8 @@ let stranger: UserId;
 const RECENT = new Date(Date.UTC(2031, 4, 2, 9, 0, 0));
 const OLD = new Date(Date.UTC(2031, 3, 2, 9, 0, 0));
 const CUTOFF = new Date(Date.UTC(2031, 4, 1, 0, 0, 0));
+// The window's end, exclusive. Past `RECENT`, so the rows the cases plant fall inside it.
+const UNTIL = new Date(Date.UTC(2031, 4, 3, 0, 0, 0));
 
 const makeUser = async (name: string): Promise<UserId> => {
   const id = Identifiers.userId.parse(Uuid.v7());
@@ -109,11 +111,17 @@ afterAll(async () => {
 
 // The two reads the digest is built on. Before them the candidate list came from
 // `notification_preferences`, which is empty for everyone on the shipped defaults.
-describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
+describe("PgNotificationRepository.recipientsWithUnreadBetween", () => {
   it("finds a reader who has stored no preference at all", async () => {
     await notify(organizationId, ada, RECENT);
 
-    const found = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 50, null);
+    const found = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
+      50,
+      null,
+    );
 
     expect(found).toContain(ada);
   });
@@ -121,7 +129,13 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
   it("does not leak a reader from another tenant", async () => {
     await notify(other, stranger, RECENT);
 
-    const found = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 50, null);
+    const found = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
+      50,
+      null,
+    );
 
     expect(found).not.toContain(stranger);
   });
@@ -129,7 +143,13 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
   it("ignores rows older than the cutoff", async () => {
     await notify(organizationId, grace, OLD);
 
-    const found = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 50, null);
+    const found = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
+      50,
+      null,
+    );
 
     expect(found).not.toContain(grace);
   });
@@ -139,7 +159,13 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
     await notify(organizationId, reader, RECENT);
     await repository.markAllRead(organizationId, reader, new Date());
 
-    const found = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 50, null);
+    const found = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
+      50,
+      null,
+    );
 
     expect(found).not.toContain(reader);
     await database.client.delete(users).where(eq(users.id, reader));
@@ -151,7 +177,13 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
     const busy = await makeUser("Busy");
     for (let index = 0; index < 3; index += 1) await notify(organizationId, busy, RECENT);
 
-    const found = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 50, null);
+    const found = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
+      50,
+      null,
+    );
 
     expect(found.filter((id) => id === busy)).toHaveLength(1);
     await database.client.delete(users).where(eq(users.id, busy));
@@ -159,12 +191,19 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
 
   // Keyset on the user id, which is the only stable order this page has.
   it("pages from the cursor without repeating a reader", async () => {
-    const first = await repository.recipientsWithUnreadSince(organizationId, CUTOFF, 1, null);
-    expect(first).toHaveLength(1);
-
-    const second = await repository.recipientsWithUnreadSince(
+    const first = await repository.recipientsWithUnreadBetween(
       organizationId,
       CUTOFF,
+      UNTIL,
+      1,
+      null,
+    );
+    expect(first).toHaveLength(1);
+
+    const second = await repository.recipientsWithUnreadBetween(
+      organizationId,
+      CUTOFF,
+      UNTIL,
       50,
       first[0] ?? null,
     );
@@ -174,24 +213,58 @@ describe("PgNotificationRepository.recipientsWithUnreadSince", () => {
   });
 });
 
-describe("PgNotificationRepository.organizationsWithUnreadSince", () => {
-  // The fan-out's question. It used to ask the preference table, so a tenant where
-  // nobody had opened the preferences screen was never queued a digest at all.
-  it("names a tenant that has unread rows and nothing else", async () => {
-    const found = await repository.organizationsWithUnreadSince(CUTOFF);
+// `CP4.4`: the digest's rows for a whole page of people in one statement.
+describe("PgNotificationRepository.listUnreadBetween", () => {
+  it("groups each person's unread rows in the window, newest first, capped per person", async () => {
+    const many = await makeUser("Many");
+    const hours = [1, 2, 3].map((hour) => new Date(Date.UTC(2031, 4, 2, hour)));
+    for (const at of hours) await notify(organizationId, many, at);
 
-    expect(found).toContain(organizationId);
-    expect(found).toContain(other);
+    const found = await repository.listUnreadBetween(organizationId, [many], CUTOFF, UNTIL, 2);
+
+    expect(found.get(many)?.map((row) => row.createdAt)).toEqual([hours[2], hours[1]]);
+    await database.client.delete(users).where(eq(users.id, many));
   });
 
-  it("does not name a tenant whose only rows are older than the cutoff", async () => {
-    const quiet = await makeTenant("notification-quiet");
-    await notify(quiet, ada, OLD);
+  // Half-open, so a row created at the window's end belongs to the next day's digest.
+  it("leaves out a row at the window's exclusive end", async () => {
+    const edge = await makeUser("Edge");
+    await notify(organizationId, edge, UNTIL);
 
-    const found = await repository.organizationsWithUnreadSince(CUTOFF);
+    const found = await repository.listUnreadBetween(organizationId, [edge], CUTOFF, UNTIL, 10);
 
-    expect(found).not.toContain(quiet);
-    await dropTenant(database, quiet);
-    await database.client.delete(organizations).where(eq(organizations.id, quiet));
+    expect(found.get(edge)).toBeUndefined();
+    await database.client.delete(users).where(eq(users.id, edge));
+  });
+});
+
+// `CP4.3`: one query for the whole audience of a delivery.
+describe("PgNotificationRepository.unreadSubjectHolders", () => {
+  it("names exactly the people holding an unread one about the subject", async () => {
+    const [holder, fresh] = [await makeUser("Holder"), await makeUser("Fresh")];
+    const subjectId = Uuid.v7();
+    await repository.saveMany([
+      {
+        organizationId,
+        userId: holder,
+        eventId: Uuid.v7(),
+        kind: "message.received",
+        category: "messaging",
+        params: {},
+        link: null,
+        subjectId,
+        createdAt: RECENT,
+      },
+    ]);
+
+    const found = await repository.unreadSubjectHolders(
+      organizationId,
+      [holder, fresh],
+      "message.received",
+      subjectId,
+    );
+
+    expect([...found]).toEqual([holder]);
+    for (const id of [holder, fresh]) await database.client.delete(users).where(eq(users.id, id));
   });
 });

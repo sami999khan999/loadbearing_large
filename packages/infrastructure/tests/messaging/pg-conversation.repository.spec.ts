@@ -211,3 +211,41 @@ describe("PgConversationRepository.listByMember — a conversation with no messa
     expect(walked.at(-1)).toBe(quiet);
   });
 });
+
+describe("PgConversationRepository.findMembership", () => {
+  // One statement, and no member rows: the check every send and every page open makes.
+  it("answers a member with the header, in one statement", async () => {
+    const id = conversationIds[3] as ConversationId;
+
+    const header = await repository.findMembership(organizationId, id, carol);
+
+    expect(header).toMatchObject({ id, kind: "channel" });
+    expect(header).not.toHaveProperty("members");
+    expect(counter.count).toBe(1);
+  });
+
+  it("answers null to somebody who is not in the room", async () => {
+    const id = conversationIds[0] as ConversationId;
+
+    await expect(repository.findMembership(organizationId, id, carol)).resolves.toBeNull();
+  });
+});
+
+describe("PgConversationRepository.touch", () => {
+  // Two sends committing out of order: the older one must not become the latest.
+  it("never moves the latest message backwards", async () => {
+    const id = conversationIds[1] as ConversationId;
+    const before = await repository.findById(organizationId, id);
+
+    await repository.touch(
+      organizationId,
+      id,
+      Identifiers.messageId.parse(Uuid.v7()),
+      new Date(Date.UTC(2020, 0, 1)),
+    );
+
+    const after = await repository.findById(organizationId, id);
+    expect(after?.lastMessageAt).toEqual(before?.lastMessageAt);
+    expect(after?.lastMessageId).toEqual(before?.lastMessageId);
+  });
+});

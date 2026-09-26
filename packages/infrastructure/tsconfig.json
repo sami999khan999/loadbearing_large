@@ -10,6 +10,7 @@
     "partition-ddl.ts",
     "partitions.ts",
     "platform-grant.ts",
+    "queue-replay.ts",
     "seed.ts",
     "shard-env.ts"
   ]

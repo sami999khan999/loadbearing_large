@@ -70,7 +70,7 @@ describe("realtime against the running cache instance", () => {
       id: "00000000-0000-7000-8000-00000000000a",
       name: "member.changed",
       at: new Date("2026-01-01T00:00:00Z"),
-      payload: { organizationId: ORG },
+      payload: {},
     });
     await reading;
 
@@ -126,12 +126,38 @@ describe("QueuePublisher against the running queue instance", () => {
       const job = await reader.getJob("smoke-probe");
 
       expect(job?.data).toEqual({ probe: true });
-      // From the port's defaults, and the pair that matters on a `noeviction` instance:
-      // BullMQ keeps completed jobs forever otherwise.
-      expect(job?.opts.attempts).toBe(3);
+      // From the port's defaults: minutes of retries, and both sets bounded, because on a
+      // `noeviction` instance BullMQ would otherwise keep every job forever.
+      expect(job?.opts.attempts).toBe(8);
+      expect(job?.opts.backoff).toMatchObject({ type: "exponential", delay: 5_000 });
       expect(job?.opts.removeOnComplete).toBeTruthy();
+      expect(job?.opts.removeOnFail).toMatchObject({ count: 10_000 });
     } finally {
       await (await reader.getJob("smoke-probe"))?.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
+  // `CP4.1`: a fan-out's jobs go in one `addBulk`, and each keeps its own id and options.
+  it("publishes many jobs at once, each under its own id", async () => {
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = queue();
+    const ids = ["smoke-bulk-1", "smoke-bulk-2", "smoke-bulk-3"];
+
+    try {
+      await publisher.publishMany(
+        SMOKE_QUEUE,
+        ids.map((jobId, index) => ({ payload: { index }, options: { jobId, attempts: 2 } })),
+      );
+
+      for (const [index, jobId] of ids.entries()) {
+        const job = await reader.getJob(jobId);
+        expect(job?.data).toEqual({ index });
+        expect(job?.opts.attempts).toBe(2);
+      }
+    } finally {
+      for (const jobId of ids) await (await reader.getJob(jobId))?.remove();
       await reader.close();
       await publisher.close();
     }
@@ -193,5 +219,39 @@ describe("QueuePublisher against the running queue instance", () => {
       await reader.close();
       await publisher.close();
     }
+  });
+});
+
+// `CP5.1`: live frames get a role of their own, which costs nothing until it is set apart.
+describe("RedisConnection's realtime role", () => {
+  it("is the cache client itself when no realtime instance is configured", async () => {
+    const connection = new RedisConnection(stack.redis);
+    try {
+      expect(connection.realtimeClient()).toBe(connection.client());
+      expect(connection.opened("realtime")).toBe(false);
+    } finally {
+      await connection.close();
+    }
+  });
+
+  // The queue instance stands in for a third one: pub/sub ignores the database index, so
+  // a `/1` on the cache URL would prove nothing about which server a frame reached.
+  it("is its own connection, to its own instance, when one is configured", async () => {
+    const connection = new RedisConnection({ ...stack.redis, realtimeUrl: stack.redis.queueUrl });
+    try {
+      expect(connection.realtimeClient()).not.toBe(connection.client());
+      expect(await connection.healthy("realtime")).toBe(true);
+    } finally {
+      await connection.close();
+    }
+  });
+
+  // A stream's `finally` runs after shutdown has closed Redis, and must not reopen it.
+  it("refuses to open a connection once closed", async () => {
+    const connection = new RedisConnection(stack.redis);
+    connection.client();
+    await connection.close();
+
+    expect(() => connection.subscriberClient()).toThrow(/closed/);
   });
 });

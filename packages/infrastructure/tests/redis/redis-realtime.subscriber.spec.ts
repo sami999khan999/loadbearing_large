@@ -234,4 +234,51 @@ describe("RedisRealtimeSubscriber", () => {
     // subscribed to a channel with no reader for as long as it runs.
     expect(redis.unsubscribed).toEqual([CHANNEL]);
   });
+
+  // `CR.5`: counted against the person who opened it, a room stream shares the cap — the
+  // room is still uncapped, because each reader brings their own owner.
+  it("counts a room stream against its owner's cap", async () => {
+    const { subscriber } = build({ maxStreamsPerUser: 1 });
+    const room = `org:${ORG}:conversation:x` as RealtimeChannel;
+    const held = new AbortController();
+
+    const one = (async () => {
+      for await (const _ of subscriber.subscribe([CHANNEL], held.signal)) break;
+    })();
+    await Promise.resolve();
+
+    const second = new AbortController();
+    const refused = async () => {
+      for await (const _ of subscriber.subscribe([room], second.signal, { owner: CHANNEL })) break;
+    };
+
+    await expect(refused()).rejects.toThrow("RATE_LIMITED");
+    held.abort();
+    await one;
+  });
+
+  // A shutdown ends streams the way the maximum age does — cleanly — so a client reopens
+  // against another process rather than treating it as an error.
+  it("ends every open stream cleanly on drain, and counts them", async () => {
+    const { redis, subscriber } = build();
+    const controllers = [new AbortController(), new AbortController()];
+    const ended = controllers.map(async (controller) => {
+      for await (const _ of subscriber.subscribe([CHANNEL], controller.signal)) {
+        // nothing is published; the loop only ends when the stream does
+      }
+      return "ended";
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await expect(subscriber.drain(10)).resolves.toBe(2);
+    await expect(Promise.all(ended)).resolves.toEqual(["ended", "ended"]);
+    expect(redis.unsubscribed).toEqual([CHANNEL]);
+  });
+
+  it("drains nothing when nothing is open", async () => {
+    const { subscriber } = build();
+
+    await expect(subscriber.drain(10)).resolves.toBe(0);
+  });
 });

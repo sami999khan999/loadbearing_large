@@ -5,6 +5,9 @@ export interface RedisConfig {
   readonly cacheUrl: string;
   // Never evicts. A queued job is derived from nothing.
   readonly queueUrl: string;
+  // Live frames. Absent, or equal to the cache's, and they ride the cache instance with no
+  // extra socket; set apart, sessions and permissions stop sharing a CPU with fan-out.
+  readonly realtimeUrl?: string;
   // Deliberately not the project name: a literal here survives a rename and comes back as
   // a cache that reads nothing, so the real value is a deployment decision.
   readonly keyPrefix?: string;
@@ -12,12 +15,13 @@ export interface RedisConfig {
 
 // Which instance a consumer is asking about. The health check takes it rather than
 // exposing the clients, so `Container` never names `Redis` (17).
-export type RedisRole = "cache" | "queue" | "subscriber";
+export type RedisRole = "cache" | "queue" | "subscriber" | "realtime";
 
 // Two instances, one class. Which connection a consumer gets is a property of what
 // it is doing, not a wiring decision two same-typed arguments could get backwards.
 export class RedisConnection {
   private readonly clients = new Map<RedisRole, Redis>();
+  private closed = false;
 
   public constructor(private readonly config: RedisConfig) {}
 
@@ -30,6 +34,12 @@ export class RedisConnection {
   // open indefinitely and ioredis's default retry limit kills them silently.
   public queueClient(): Redis {
     return this.resolve("queue");
+  }
+
+  // Where live frames are published. The cache client itself unless a separate instance
+  // is configured, so the default opens nothing new.
+  public realtimeClient(): Redis {
+    return this.separateRealtime() ? this.resolve("realtime") : this.client();
   }
 
   // A connection in subscriber mode can run nothing else, which is why this is a role
@@ -62,6 +72,9 @@ export class RedisConnection {
   private resolve(role: RedisRole): Redis {
     const existing = this.clients.get(role);
     if (existing) return existing;
+    // After `close()`, a late caller — a stream's `finally` detaching — would otherwise
+    // open a fresh socket that holds a stopping process open.
+    if (this.closed) throw new Error(`Redis is closed; refusing to open the ${role} connection`);
 
     const created = this.build(role);
 
@@ -69,8 +82,8 @@ export class RedisConnection {
     return created;
   }
 
-  // The subscriber shares the cache instance and its key prefix. Neither `PUBLISH` nor
-  // `SUBSCRIBE` declares a key; `SPUBLISH` does — see docs/reference/realtime.md.
+  // The subscriber dials the realtime instance, which is the cache's unless one is set.
+  // Neither `PUBLISH` nor `SUBSCRIBE` declares a key; `SPUBLISH` does — see realtime.md.
   private build(role: RedisRole): Redis {
     const prefix = this.config.keyPrefix ?? "app:";
 
@@ -81,11 +94,15 @@ export class RedisConnection {
       });
     }
 
+    const realtimeUrl = this.config.realtimeUrl ?? this.config.cacheUrl;
+
     if (role === "subscriber") {
       // Auto-pipelining batches commands issued in one tick, and a subscriber issues
       // almost none: the traffic it carries is pushed, not requested.
-      return this.create(this.config.cacheUrl, { keyPrefix: prefix, enableAutoPipelining: false });
+      return this.create(realtimeUrl, { keyPrefix: prefix, enableAutoPipelining: false });
     }
+
+    if (role === "realtime") return this.create(realtimeUrl, { keyPrefix: prefix });
 
     return this.create(this.config.cacheUrl, { keyPrefix: prefix });
   }
@@ -100,7 +117,13 @@ export class RedisConnection {
     });
   }
 
+  private separateRealtime(): boolean {
+    const { realtimeUrl, cacheUrl } = this.config;
+    return realtimeUrl !== undefined && realtimeUrl !== cacheUrl;
+  }
+
   public async close(): Promise<void> {
+    this.closed = true;
     await Promise.all([...this.clients.values()].map((client) => client.quit()));
     this.clients.clear();
   }

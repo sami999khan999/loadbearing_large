@@ -94,6 +94,8 @@ const axis = (index: number): number[] =>
 // creates every partition it reads and drops every one it created.
 const FIRST = new Date("2032-05-01T00:00:00.000Z");
 const SECOND = new Date("2032-06-01T00:00:00.000Z");
+// Years before any unread floor, so a floor that prunes has something to prune.
+const ANCIENT = new Date("2020-01-01T00:00:00.000Z");
 
 const notification = (organization: OrganizationId, createdAt: Date) => ({
   organizationId: organization,
@@ -201,7 +203,7 @@ beforeAll(async () => {
   );
   corpus = new PgVectorStore(DatabaseCluster.single(database), scope, shards);
   replay = new PgActivityReplayReader(DatabaseCluster.single(database), scope, shards);
-  outbox = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards, unitOfWork);
+  outbox = new PgOutboxGateway(DatabaseCluster.single(database), scope, shards);
 
   reader = Identifiers.userId.parse(Uuid.v7());
   await database.client
@@ -223,6 +225,8 @@ beforeAll(async () => {
       await maintenance.ensureMonthlyPartitions(entry.name, tenant, FIRST, 2);
     }
   }
+
+  await maintenance.ensureMonthlyPartitions(PartitionedTable.MESSAGES, organizationId, ANCIENT, 1);
 
   conversationId = await conversationFor(organizationId);
   await writeRows(organizationId, conversationId);
@@ -553,9 +557,10 @@ describe("exactly one month, for the reads carrying an equality or a closed rang
 describe("the retention tail is pruned, for the reads that carry a floor", () => {
   // A floor cannot prune a *future* month — rows could legitimately land in one — so this
   // is the strongest honest assertion: nothing older than the floor is in the plan.
-  it("listUnreadSince leaves out every month before its floor", async () => {
+  it("listUnreadBetween leaves out every month before its floor", async () => {
     const statement = await capture(
-      () => inbox.listUnreadSince(organizationId, reader, SECOND, 50),
+      // An end past every planted month: the claim is about the floor pruning the tail.
+      () => inbox.listUnreadBetween(organizationId, [reader], SECOND, new Date("2099-01-01"), 50),
       /from "notifications"/i,
     );
 
@@ -655,6 +660,33 @@ describe("bounded by the cursor's month, for the pages after the first", () => {
   });
 });
 
+// `CP2.2` and `CP2.3`: the message reads a conversation list and a room open make on every
+// render carry a bound of their own now, because `messages` is never retired.
+describe("bounded by the conversation's own dates, for the message reads", () => {
+  it("the conversation's first page drops every month after its newest message", async () => {
+    const statement = await capture(
+      () => chat.list(organizationId, { conversationId, limit: 20, upTo: FIRST }),
+      /from "messages"/i,
+    );
+
+    const leaves = await scanned(statement, PartitionedTable.MESSAGES);
+    oneTenant(leaves, "messages");
+    expect(leaves.map((leaf) => leaf.month)).toContain(monthIndex(FIRST));
+    expect(leaves.map((leaf) => leaf.month)).not.toContain(monthIndex(SECOND));
+  });
+
+  it("the unread counts leave out every month before their floor", async () => {
+    const statement = await capture(
+      () => chat.unreadCounts(organizationId, reader, [conversationId]),
+      /from messages m/i,
+    );
+
+    const leaves = await scanned(statement, PartitionedTable.MESSAGES);
+    expect(leaves.map((leaf) => leaf.month)).not.toContain(monthIndex(ANCIENT));
+    expect(leaves.map((leaf) => leaf.month)).toContain(monthIndex(FIRST));
+  });
+});
+
 // Today's behaviour, asserted on purpose: a first page has no cursor, so nothing bounds
 // it and these read every month there is — see docs/reference/partitions.md.
 describe("pinned at every month of the tenant, for the reads that carry no bound", () => {
@@ -694,7 +726,7 @@ describe("pinned at every month of the tenant, for the reads that carry no bound
 
   it("the suppression check reads every month", async () => {
     const statement = await capture(
-      () => inbox.existsUnread(organizationId, reader, "message.received", Uuid.v7()),
+      () => inbox.unreadSubjectHolders(organizationId, [reader], "message.received", Uuid.v7()),
       /from "notifications"/i,
     );
 

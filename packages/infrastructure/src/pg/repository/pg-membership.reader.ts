@@ -2,6 +2,7 @@ import {
   and,
   asc,
   eq,
+  inArray,
   isNull,
   type OrganizationId,
   type Placement,
@@ -68,6 +69,26 @@ export class PgMembershipReader extends BaseRepository {
   // One row on `memberships_uq`, so deactivation stays per membership.
   public isActiveMember(organizationId: OrganizationId, userId: UserId): Promise<boolean> {
     return this.isActive(userId, organizationId);
+  }
+
+  public async activeMemberIds(
+    organizationId: OrganizationId,
+    userIds: readonly UserId[],
+  ): Promise<ReadonlySet<UserId>> {
+    if (userIds.length === 0) return new Set();
+
+    const rows = await this.db
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organizationId, organizationId),
+          inArray(memberships.userId, [...userIds]),
+          isNull(memberships.deactivatedAt),
+        ),
+      );
+
+    return new Set(rows.map((row) => row.userId));
   }
 
   public async isActive(userId: UserId, organizationId: OrganizationId): Promise<boolean> {

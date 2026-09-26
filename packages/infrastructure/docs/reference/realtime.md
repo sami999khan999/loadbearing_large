@@ -5,9 +5,10 @@ description: One subscriber connection per process, ref-counted channels, and a 
 
 # Realtime
 
-Two adapters over Redis pub/sub, both on the **cache** instance. Pub/sub is fire-and-forget, so
-the queue instance's durability guarantee buys nothing here and its `noeviction` policy is wasted
-on traffic that is gone the moment it is delivered.
+Two adapters over Redis pub/sub, both on the **realtime** role — the cache instance unless
+`REDIS_REALTIME_URL` sets a third one apart. Pub/sub is fire-and-forget, so the queue instance's
+durability guarantee buys nothing here and its `noeviction` policy is wasted on traffic that is
+gone the moment it is delivered. When to split it out is in `docs/infra/reference/redis.md`.
 
 ## One connection per process, not one per stream
 
@@ -67,6 +68,12 @@ conversation is.
 It is a per-process count, not a per-cluster one. A shared counter would cost a round trip on
 every stream open, and the failure this exists to prevent is one runaway tab, which is local by
 construction.
+
+## The maximum age is spread
+
+Each stream's deadline is `maxAgeMs × (0.9 + 0.2 × random)`. Tabs opened in the same second — every
+tab after a deploy — would otherwise all end in the same second thirty minutes later and all reopen
+together. Ending is not an error: the client's `RealtimeStream` reopens a stream that ended cleanly.
 
 ## Every frame is parsed, not cast
 

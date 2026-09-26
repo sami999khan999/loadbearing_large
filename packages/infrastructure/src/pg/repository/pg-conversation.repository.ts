@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  type ConversationHeader,
   type ConversationId,
   type ConversationMemberRecord,
   type ConversationMemberRole,
@@ -9,11 +10,15 @@ import {
   type ConversationRepository,
   desc,
   eq,
+  gt,
   inArray,
+  isNull,
   type KeysetQuery,
+  lt,
   type MessageId,
   type NewConversation,
   type OrganizationId,
+  or,
   type Placement,
   sql,
   type UserId,
@@ -121,6 +126,33 @@ export class PgConversationRepository extends BaseRepository implements Conversa
     return PgConversationRepository.toRecord(row, members.get(conversationId) ?? []);
   }
 
+  public async findMembership(
+    organizationId: OrganizationId,
+    conversationId: ConversationId,
+    userId: UserId,
+  ): Promise<ConversationHeader | null> {
+    const [row] = await this.db
+      .select({ conversation: conversations })
+      .from(conversations)
+      .innerJoin(
+        conversationMembers,
+        and(
+          eq(conversationMembers.organizationId, conversations.organizationId),
+          eq(conversationMembers.conversationId, conversations.id),
+        ),
+      )
+      .where(
+        and(
+          eq(conversations.organizationId, organizationId),
+          eq(conversations.id, conversationId),
+          eq(conversationMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    return row ? PgConversationRepository.toHeader(row.conversation) : null;
+  }
+
   public async findByDirectKey(
     organizationId: OrganizationId,
     directKey: string,
@@ -199,6 +231,7 @@ export class PgConversationRepository extends BaseRepository implements Conversa
     organizationId: OrganizationId,
     conversationId: ConversationId,
     limit?: number,
+    after?: UserId | null,
   ): Promise<readonly UserId[]> {
     const query = this.db
       .select({ userId: conversationMembers.userId })
@@ -207,6 +240,7 @@ export class PgConversationRepository extends BaseRepository implements Conversa
         and(
           eq(conversationMembers.organizationId, organizationId),
           eq(conversationMembers.conversationId, conversationId),
+          after ? gt(conversationMembers.userId, after) : undefined,
         ),
       )
       .orderBy(asc(conversationMembers.userId));
@@ -281,7 +315,11 @@ export class PgConversationRepository extends BaseRepository implements Conversa
       .update(conversations)
       .set({ lastMessageId, lastMessageAt })
       .where(
-        and(eq(conversations.organizationId, organizationId), eq(conversations.id, conversationId)),
+        and(
+          eq(conversations.organizationId, organizationId),
+          eq(conversations.id, conversationId),
+          or(isNull(conversations.lastMessageAt), lt(conversations.lastMessageAt, lastMessageAt)),
+        ),
       );
   }
 
@@ -332,6 +370,10 @@ export class PgConversationRepository extends BaseRepository implements Conversa
     row: ConversationRow,
     members: readonly ConversationMemberRecord[],
   ): ConversationRecord {
+    return { ...PgConversationRepository.toHeader(row), members };
+  }
+
+  private static toHeader(row: ConversationRow): ConversationHeader {
     return {
       id: row.id,
       kind: row.kind === "channel" ? "channel" : "direct",
@@ -340,7 +382,6 @@ export class PgConversationRepository extends BaseRepository implements Conversa
       createdAt: row.createdAt,
       lastMessageAt: row.lastMessageAt,
       lastMessageId: row.lastMessageId,
-      members,
     };
   }
 }

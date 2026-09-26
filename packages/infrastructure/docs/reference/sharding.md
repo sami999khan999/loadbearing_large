@@ -89,6 +89,8 @@ records a rule rather than guarding one.
 `ShardScope.atNode` is what the outbox drain, the partition runway and the digest fan-out run
 inside, through `Container.eachShard`. Serial, not `Promise.all` — these are DDL and drain passes,
 and running them against every node at once multiplies this process's pool by the shard count.
+A node that throws is logged as `shard.sweep.failed` and skipped; the rest still run, and the first
+error is rethrown at the end, so one node down delays only its own work.
 
 Inside a node-only scope a `local` table resolves to that node's pool rather than the catalog's,
 which is the whole point: `outbox_event` and `activity_log` exist on every node and the row you

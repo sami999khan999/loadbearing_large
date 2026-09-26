@@ -7,6 +7,7 @@ import {
   type RealtimeMessage,
   RealtimeSubscriber,
   type Redis,
+  type SubscribeOptions,
   Uuid,
 } from "../import.js";
 
@@ -18,11 +19,17 @@ export interface RedisRealtimeConfig {
 
 type Sink = (message: RealtimeMessage) => void;
 
+interface LiveStream {
+  readonly endBy: (at: number) => void;
+}
+
 // One connection per process, demultiplexed here. A connection per stream would open one
 // socket per open tab, which is the number that takes a Redis down rather than a replica.
 export class RedisRealtimeSubscriber extends RealtimeSubscriber {
   private readonly sinks = new Map<string, Set<Sink>>();
   private readonly streamsPerChannel = new Map<string, number>();
+  private readonly live = new Set<LiveStream>();
+  private readonly idle: (() => void)[] = [];
   private listening = false;
 
   // A factory, not a client. Resolving the role here would open the subscriber socket in
@@ -37,8 +44,13 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
   public override async *subscribe(
     channels: readonly RealtimeChannel[],
     signal: CancellationSignal,
+    options?: SubscribeOptions,
   ): AsyncIterable<RealtimeMessage> {
-    const capped = channels.filter((channel) => RealtimeChannels.isUser(channel));
+    // Counted against the person who opened it, so conversation streams share the cap:
+    // counting only user channels let one tab open any number of room streams.
+    const capped = options?.owner
+      ? [options.owner]
+      : channels.filter((channel) => RealtimeChannels.isUser(channel));
     this.assertUnderCap(capped);
 
     const queue: RealtimeMessage[] = [];
@@ -61,7 +73,17 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
       wake = null;
     };
 
-    const deadline = Date.now() + this.config.maxAgeMs;
+    // ±10 %, so tabs opened together after a deploy do not all reopen in the same second.
+    let deadline = Date.now() + this.config.maxAgeMs * (0.9 + 0.2 * Math.random());
+    // What `drain` reaches: it can only bring the deadline forward, never push it back.
+    const live: LiveStream = {
+      endBy: (at) => {
+        deadline = Math.min(deadline, at);
+        wake?.();
+        wake = null;
+      },
+    };
+    this.live.add(live);
     signal.addEventListener("abort", onAbort);
     for (const channel of capped) this.count(channel, 1);
 
@@ -89,7 +111,23 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
       signal.removeEventListener("abort", onAbort);
       for (const channel of capped) this.count(channel, -1);
       await this.detach(channels, push);
+      this.live.delete(live);
+      if (this.live.size === 0) for (const settle of this.idle.splice(0)) settle();
     }
+  }
+
+  public override async drain(withinMs: number): Promise<number> {
+    const streams = this.live.size;
+    if (streams === 0) return 0;
+
+    const settled = new Promise<void>((resolve) => {
+      this.idle.push(resolve);
+    });
+    const now = Date.now();
+    for (const live of this.live) live.endBy(now + Math.random() * withinMs);
+
+    await settled;
+    return streams;
   }
 
   private assertUnderCap(channels: readonly RealtimeChannel[]): void {
@@ -147,7 +185,11 @@ export class RedisRealtimeSubscriber extends RealtimeSubscriber {
       if (existing.size > 0) continue;
 
       this.sinks.delete(channel);
-      await this.connection().unsubscribe(channel);
+      // A stream ending during shutdown finds the connection already closed, and there is
+      // nothing left to unsubscribe from.
+      await Promise.resolve()
+        .then(() => this.connection().unsubscribe(channel))
+        .catch(() => undefined);
     }
   }
 
