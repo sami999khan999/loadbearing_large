@@ -124,3 +124,38 @@ describe("S3ColdArchiveReader", () => {
     ).rejects.toThrow("CONFLICT");
   });
 });
+
+// `CR.16`. The page held the whole tenant-month to serve one user's rows; it now keeps only
+// the page, and still refuses an object that fails its checksum before returning anything.
+describe("S3ColdArchiveReader.page", () => {
+  const OTHER = "018f8c00-0000-7000-8000-000000000099";
+  const rows = [
+    { id: "1", user_id: USER },
+    { id: "2", user_id: OTHER },
+    { id: "3", user_id: USER },
+    { id: "4", user_id: USER },
+    { id: "5", user_id: OTHER },
+  ];
+
+  it("pages through one user's rows and says where the next page starts", async () => {
+    const storage = new FakeStorage();
+    const checksum = storage.stage(entry().objectKey, ndjson(rows));
+    const of = entry({ checksum, rowCount: rows.length });
+
+    const first = await readerFor(storage).page(of, USER, null, 2);
+    expect(first.items.map((row) => row.id)).toEqual(["1", "3"]);
+
+    const second = await readerFor(storage).page(of, USER, first.nextCursor, 2);
+    expect(second.items.map((row) => row.id)).toEqual(["4"]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("returns nothing from an object that fails its checksum", async () => {
+    const storage = new FakeStorage();
+    storage.stage(entry().objectKey, ndjson(rows));
+
+    await expect(
+      readerFor(storage).page(entry({ checksum: "wrong", rowCount: rows.length }), USER, null, 2),
+    ).rejects.toThrow("CONFLICT");
+  });
+});

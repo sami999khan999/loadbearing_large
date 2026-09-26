@@ -173,8 +173,9 @@ The compressed bytes are hashed on the way through and the lines counted; a mism
 `ColdArchiveReader.batches` is the same read for the re-projection, with one difference: it proves
 the object in a **first pass** and parses it in a second. Rows handed to the projector from an
 object found corrupt only at its end would already be in ClickHouse. The archived-notifications
-page is the one reader still holding a tenant-month whole — capped at 50 MB compressed, on the
-request path, filtering one user's rows out of it.
+page reads in one pass instead: it keeps only the rows of the page it returns, counts the rest,
+and checks the hash and the count at the end, before it returns anything. The 50 MB cap on it stays,
+as a bound on how long one request may spend reading rather than on memory.
 The scratch table is dropped and recreated rather than appended to: a previous restore of the same
 month is evidence of that restore, and two runs merged into one table are evidence of neither.
 

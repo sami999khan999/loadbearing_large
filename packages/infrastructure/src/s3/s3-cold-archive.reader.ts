@@ -10,12 +10,9 @@ import {
 import { NdjsonLines } from "./ndjson-lines.js";
 import { OrdinalCursor } from "./ordinal-cursor.js";
 
-// The bound `21.1` states, with headroom. Past it the object is refused rather than
-// read into memory: "it was slow" is a worse failure than "it said no".
+// The bound `21.1` states, with headroom, on what one request may read through. Past it the
+// object is refused: "it was slow" is a worse failure than "it said no".
 const MAX_BYTES = 50 * 1024 * 1024;
-
-// Rows parsed per step of that whole read. Any size works; it only bounds one push.
-const MAX_BATCH = 5_000;
 
 export class S3ColdArchiveReader extends ColdArchiveReader {
   public constructor(private readonly storage: StorageGateway) {
@@ -53,33 +50,39 @@ export class S3ColdArchiveReader extends ColdArchiveReader {
     if (count !== entry.rowCount) throw new ConflictError("cold", "row-count");
   }
 
-  // Whole, and capped: the request path's read, one user's slice of a tenant-month.
-  private async rows(
-    entry: PartitionArchiveEntry,
-  ): Promise<readonly Readonly<Record<string, unknown>>[]> {
-    if (entry.bytes > MAX_BYTES) {
-      throw new ConflictError("cold", "too-large");
-    }
-
-    const rows: Readonly<Record<string, unknown>>[] = [];
-    for await (const batch of this.batches(entry, MAX_BATCH)) rows.push(...batch);
-    return rows;
-  }
-
-  // Reads and gunzips the **whole** tenant-month to serve one user's slice, because the
-  // cursor is an ordinal inside it. The cost is stated in the plan's `21.1`.
+  // One pass, verified at the end and before anything is returned, holding only the page:
+  // the month streams past and this user's rows outside the window are counted, not kept.
+  // ──
+  // It held the whole tenant-month to serve one user's slice (`CR.16`). The cap stays as a
+  // bound on the time a request may spend reading, which streaming does not shorten.
   public async page(
     entry: PartitionArchiveEntry,
     userId: UserId,
     cursor: string | null,
     limit: number,
   ): Promise<ColdPage> {
+    if (entry.bytes > MAX_BYTES) {
+      throw new ConflictError("cold", "too-large");
+    }
+
     const from = OrdinalCursor.decode(cursor) ?? 0;
-    const mine = (await this.rows(entry)).filter((row) => row.user_id === userId);
+    const hash = createHash("sha256");
+    const items: Readonly<Record<string, unknown>>[] = [];
+    let lines = 0;
+    let mine = 0;
 
-    const items = mine.slice(from, from + limit);
+    for await (const line of NdjsonLines.of(this.storage.getStream(entry.objectKey), hash)) {
+      lines += 1;
+      const row = JSON.parse(line) as Readonly<Record<string, unknown>>;
+      if (row.user_id !== userId) continue;
+      if (mine >= from && items.length < limit) items.push(row);
+      mine += 1;
+    }
+
+    if (hash.digest("hex") !== entry.checksum) throw new ConflictError("cold", "checksum");
+    if (lines !== entry.rowCount) throw new ConflictError("cold", "row-count");
+
     const next = from + items.length;
-
-    return { items, nextCursor: next < mine.length ? OrdinalCursor.encode(next) : null };
+    return { items, nextCursor: next < mine ? OrdinalCursor.encode(next) : null };
   }
 }
