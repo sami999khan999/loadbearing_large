@@ -1299,6 +1299,14 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
   **One dev-only finding:** two hundred opens fired in the same tick through the Vite proxy failed
   with `fetch failed` on the client, where batches of twenty all opened. Production puts a real
   proxy there, and a browser opens one or two streams a tab, so it is recorded and not filed.
+- [x] `CP1.9` **The client's refetch load** `done: 2026-09-26` — **the measurement found a gap
+  and the fix is in the same commit.** Two Chrome tabs on one channel, twenty sends from the other
+  member 110 ms apart: each tab made 20 `message.list` calls — one page each, not the two per
+  message the review found, so the dedupe held — but one per message, where the plan expected
+  about one a second. `refreshNewest` was single-flight with no floor, and each fetch finished
+  just before the next frame arrived. It now holds its busy window for the rest of a second, as
+  `RealtimeRefetch` does. The same burst then cost each tab **2** calls, 1.8 s apart, with all
+  twenty messages rendered in both. `use-conversation-stream.spec.tsx` fails without the floor.
 
 ---
 
