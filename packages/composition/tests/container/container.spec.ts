@@ -191,6 +191,51 @@ describe("Container.dispose", () => {
   });
 });
 
+describe("Container.dispose — a close that fails", () => {
+  // `CR.36`: one rejected close used to skip every close after it, Postgres included.
+  it("still closes Postgres when Redis fails to close", async () => {
+    const container = new Container(baseConfig());
+    const internals = container as unknown as Record<string, { close: () => Promise<void> }>;
+    const redis = internals.redis;
+    const database = internals.database;
+    if (!redis || !database) throw new Error("the container has no redis or database");
+
+    const realRedisClose = redis.close.bind(redis);
+    redis.close = async () => {
+      await realRedisClose();
+      throw new Error("redis would not close");
+    };
+    const closeDatabase = vi.spyOn(database, "close");
+
+    await expect(container.dispose()).resolves.toBeUndefined();
+    expect(closeDatabase).toHaveBeenCalled();
+  });
+});
+
+describe("Container.eachShard", () => {
+  // `CR.14`: node 2 of 3 failing used to mean node 3 was never reached at all.
+  it("runs every node when one fails, then fails with the first error", async () => {
+    const container = build();
+    const internals = container as unknown as {
+      cluster: { size: number };
+      shards: { atNode: (node: number, work: () => Promise<void>) => Promise<void> };
+    };
+    Object.defineProperty(internals.cluster, "size", { value: 3 });
+    internals.shards.atNode = (_node, work) => work();
+
+    const reached: number[] = [];
+    const broken = new Error("node 1 is down");
+
+    await expect(
+      container.eachShard(async (node) => {
+        reached.push(node);
+        if (node === 1) throw broken;
+      }),
+    ).rejects.toBe(broken);
+    expect(reached).toEqual([0, 1, 2]);
+  });
+});
+
 describe("Container.health", () => {
   it("reports each dependency separately and rolls them up", async () => {
     const report = await build().health();

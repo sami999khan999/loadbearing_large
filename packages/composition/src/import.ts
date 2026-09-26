@@ -60,7 +60,6 @@ export {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
-  ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,

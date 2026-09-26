@@ -36,6 +36,9 @@ export interface ContainerConfig {
     // queueUrl silently puts jobs on the instance that evicts them.
     readonly cacheUrl: string;
     readonly queueUrl: string;
+    // Live frames. Absent means the cache instance, which is the right default until
+    // fan-out is heavy enough to compete with session reads.
+    readonly realtimeUrl?: string;
   };
   readonly storage: {
     readonly endpoint: string;

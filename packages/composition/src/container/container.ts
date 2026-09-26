@@ -54,7 +54,6 @@ import {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
-  ListDigestOrganizationsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,
@@ -394,7 +393,6 @@ export class Container {
     readonly updatePreference: UpdateNotificationPreferenceUseCase;
     readonly deliver: DeliverNotificationUseCase;
     readonly sendDigest: SendNotificationDigestUseCase;
-    readonly digestOrganizations: ListDigestOrganizationsUseCase;
   };
   public readonly messaging: {
     readonly listConversations: ListConversationsUseCase;
@@ -566,6 +564,7 @@ export class Container {
     this.redis = new RedisConnection({
       cacheUrl: config.redis.cacheUrl,
       queueUrl: config.redis.queueUrl,
+      ...(config.redis.realtimeUrl ? { realtimeUrl: config.redis.realtimeUrl } : {}),
     });
 
     this.clock = new SystemClock();
@@ -683,13 +682,8 @@ export class Container {
     this.tenantMove = new PgTenantMoveGateway(this.cluster, this.transactions, this.shards, {
       settleMs: config.database.moveSettleMs ?? Container.DEFAULT_MOVE_SETTLE_MS,
     });
-    this.outbox = new PgOutboxGateway(
-      this.cluster,
-      this.transactions,
-      this.shards,
-      this.localUnitOfWork,
-    );
-    this.realtime = new RedisRealtimePublisher(this.redis.client(), this.logger);
+    this.outbox = new PgOutboxGateway(this.cluster, this.transactions, this.shards);
+    this.realtime = new RedisRealtimePublisher(this.redis.realtimeClient(), this.logger);
     // The role is resolved on the first `subscribe`, not here, so the worker never holds
     // one — which is what makes `health().realtime` honestly `null`.
     this.realtimeSubscriber = new RedisRealtimeSubscriber(() => this.redis.subscriberClient(), {
@@ -762,7 +756,6 @@ export class Container {
         this.mailPublisher,
         this.organizations,
       ),
-      digestOrganizations: new ListDigestOrganizationsUseCase(notifications),
     };
 
     // One instance under two ports, and they must never be passed for each other:
@@ -1408,11 +1401,23 @@ export class Container {
   // **The one place a cross-tenant sweep is placed**, and it is per node rather than
   // per tenant: the outbox, the partition runway and the digest fan-out are per node.
   public async eachShard(work: (node: number) => Promise<void>): Promise<void> {
+    let first: Error | null = null;
+
     // Serial, not `Promise.all`. These are the DDL and drain passes, and running them
     // against every node at once multiplies this process's pool by the shard count.
     for (let node = 0; node < this.cluster.size; node += 1) {
-      await this.shards.atNode(node, () => work(node));
+      try {
+        await this.shards.atNode(node, () => work(node));
+      } catch (error) {
+        // One node down delays its own work, never the nodes after it. The first error is
+        // rethrown at the end, so the job still fails and BullMQ still retries it.
+        first ??= error instanceof Error ? error : new Error(String(error));
+        this.logger.emit("shard.sweep.failed", { node });
+        this.logger.failure(error, { node });
+      }
     }
+
+    if (first !== null) throw first;
   }
 
   // Postgres and both Redis instances, as a breakdown rather than one boolean: the body
@@ -1499,15 +1504,24 @@ export class Container {
   // hangs on shutdown, and it is a deadlock.
   public async dispose(): Promise<void> {
     clearInterval(this.poolProbe);
-    await this.queuePublisher.close();
-    await this.redis.close();
-    await this.clickhouse?.close();
+    // Each step on its own: one close that rejects must not leave the pools after it open.
+    await this.closing("queue", () => this.queuePublisher.close());
+    await this.closing("redis", () => this.redis.close());
+    await this.closing("clickhouse", async () => this.clickhouse?.close());
     // Before Postgres only because nothing else depends on it: an unclosed transport is
     // its own reason to be here, not a step in the ordering above.
-    await this.emailSender.close();
+    await this.closing("smtp", () => this.emailSender.close());
     // The cluster owns every pool including node 0's, so this is the one close and it
     // is last: a repository on any node may still be finishing the lines above.
-    await this.cluster.close();
+    await this.closing("postgres", () => this.cluster.close());
+  }
+
+  private async closing(what: string, close: () => Promise<unknown>): Promise<void> {
+    try {
+      await close();
+    } catch (error) {
+      this.logger.failure(error, { closing: what });
+    }
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The
