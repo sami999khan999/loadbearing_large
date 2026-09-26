@@ -30,7 +30,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
-| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 2 | 7 |
+| 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -159,15 +159,6 @@ Built on 2026-09-26 and archived; every body is on its item in
 
 - [~] `CP7.9` **Web stops serving streams** — the second release: drop `realtime.*` from web's
   handler and point the stream smoke spec at `apps/realtime`. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:525`
-
-**Checked by spec, not yet by hand.** Each item below is built and its specs pass; what is missing is
-the walk-through in a running app, which the unattended build could not do.
-
-- [ ] `CP7.5` **A real SIGTERM on Linux** — streams end inside the window, clients reopen, the
-  process exits 0. Windows terminates instead of signalling; CI's boot smoke covers it on Linux.
-  The same walk now covers the web process too: it disposes its container
-  `SERVER_SHUTDOWN_TIMEOUT` plus a second after the signal, and should exit 0 on its own (`CR.34`).
-  — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:507`, Exit `:544`
 
 ---
 
