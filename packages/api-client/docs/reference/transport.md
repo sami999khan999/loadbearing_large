@@ -8,9 +8,14 @@ description: Why ApiClient's constructor is private, what the loopback SSR reque
 ```ts
 private constructor(private readonly rpc: AppClient) {}
 
-public static overHttp(baseUrl: string, auth: AuthStrategy): ApiClient
+public static overHttp(baseUrl: string, auth: AuthStrategy, streamUrl = baseUrl): ApiClient
 public static inProcess(rpc: AppClient): ApiClient
 ```
+
+**Streams go to `streamUrl`.** The link picks a URL per call from the procedure's first path
+segment: `realtime.*` — both streams — goes to `streamUrl`, and everything else to `baseUrl`. The
+web app passes `/api/realtime`, which Vite or the reverse proxy sends to the stream process, so the
+web app holds no open stream at all. One namespace is one process, with no list to keep in step.
 
 The constructor is private because **a URL is not always the right way to reach the server, and the
 one case where it is wrong is the common one.**
