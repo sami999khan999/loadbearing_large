@@ -136,6 +136,37 @@ describe("PgConversationRepository.listByMember", () => {
     expect(sizes).toEqual([2, 2, 2, 3]);
   });
 
+  // `CR.26`. A page of twenty channels of five thousand was a hundred thousand member
+  // rows; a row needs a name, so a channel brings a sample and the reader is always in it.
+  it("brings a sample of a large channel, with the reader in it", async () => {
+    const crowd: UserId[] = [];
+    for (let index = 0; index < 8; index += 1) crowd.push(await makeUser(`Crowd ${index}`));
+    // Made last, so the newest id among nine: a sample by id alone would leave them out.
+    const reader = await makeUser("Reader");
+    const id = await repository.save({
+      organizationId,
+      kind: "channel",
+      title: "Crowded",
+      directKey: null,
+      createdBy: crowd[0] as UserId,
+      memberIds: [...crowd, reader],
+    });
+
+    try {
+      const page = await repository.listByMember(organizationId, reader, { limit: 10 });
+      const members = page.items.find((item) => item.id === id)?.members ?? [];
+
+      expect(members.length).toBeLessThanOrEqual(6);
+      expect(members.length).toBeGreaterThan(1);
+      expect(members.map((member) => member.userId)).toContain(reader);
+      // The whole roster is still one call away, where it is needed.
+      expect((await repository.findById(organizationId, id))?.members).toHaveLength(9);
+    } finally {
+      for (const user of [...crowd, reader])
+        await database.client.delete(users).where(eq(users.id, user));
+    }
+  });
+
   it("spends one statement on a page with nothing on it", async () => {
     const page = await repository.listByMember(organizationId, dave, { limit: 10 });
 

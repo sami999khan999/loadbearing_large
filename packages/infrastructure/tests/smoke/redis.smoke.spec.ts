@@ -6,6 +6,7 @@ import type { RealtimeMessage } from "../../src/import.js";
 import {
   RedisCacheStore,
   RedisConnection,
+  RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
 } from "../../src/redis/index.js";
@@ -34,6 +35,22 @@ describe("RedisCacheStore against the running instance", () => {
   it("answers healthy for both instances, separately", async () => {
     expect(await redis.healthy("cache")).toBe(true);
     expect(await redis.healthy("queue")).toBe(true);
+  });
+});
+
+// `CR.6`. The window starts at the first call and carries its own expiry, so a key that
+// was counted is never left behind without one.
+describe("RedisRateLimitStore against the running cache instance", () => {
+  it("counts within a window, and starts again once it has passed", async () => {
+    const limits = new RedisRateLimitStore(redis.client());
+    const key = `smoke:rate:${Date.now()}`;
+
+    expect(await limits.hit(key, 1)).toBe(1);
+    expect(await limits.hit(key, 1)).toBe(2);
+    expect(await redis.client().ttl(key)).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(await limits.hit(key, 1)).toBe(1);
   });
 });
 

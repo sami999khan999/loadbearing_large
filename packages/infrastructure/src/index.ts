@@ -69,6 +69,7 @@ export {
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
+  RedisRateLimitStore,
   type RedisRealtimeConfig,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,

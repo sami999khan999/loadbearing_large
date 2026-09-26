@@ -117,6 +117,7 @@ export {
   type ProjectionPolicyRepository,
   type QueuedJob,
   QueuePublisher,
+  RateLimitStore,
   type RealtimeChannel,
   RealtimeChannels,
   type RealtimePublisher,

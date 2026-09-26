@@ -37,12 +37,24 @@ interface ConversationRow {
   readonly lastMessageId: MessageId | null;
 }
 
+// The sample's row as `pg` hands it back: uuids as text, timestamps as strings.
+type SampleRow = {
+  conversation_id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  last_read_at: string | null;
+};
+
 export class PgConversationRepository extends BaseRepository implements ConversationRepository {
   // `conversations` is tenant-produced.
   protected override readonly placement: Placement = "routed";
 
-  // Two statements for a page regardless of its size: the conversations, then every
-  // member row for the ids on it. One query per row would be N+1 by construction.
+  // Enough to name an untitled channel after someone in it; the reader comes on top.
+  private static readonly MEMBER_SAMPLE = 5;
+
+  // Two statements for a page regardless of its size: the conversations, then a sample
+  // of each one's members. One query per row would be N+1 by construction.
   public async listByMember(
     organizationId: OrganizationId,
     userId: UserId,
@@ -95,8 +107,9 @@ export class PgConversationRepository extends BaseRepository implements Conversa
 
     const window = rows.slice(0, page.limit);
     const last = window.at(-1);
-    const members = await this.membersOf(
+    const members = await this.sampleOf(
       organizationId,
+      userId,
       window.map((row) => row.id),
     );
 
@@ -321,6 +334,52 @@ export class PgConversationRepository extends BaseRepository implements Conversa
           or(isNull(conversations.lastMessageAt), lt(conversations.lastMessageAt, lastMessageAt)),
         ),
       );
+  }
+
+  // A few members per conversation, the reader always among them: the list names a row
+  // and nothing more. The whole roster was 100 000 rows for 20 channels of 5 000 (`CR.26`).
+  // ──
+  // `order by user_id` so the `limit` walks `conversation_members_uq` rather than sorting
+  // every member; a direct conversation has two, so it always comes back whole.
+  private async sampleOf(
+    organizationId: OrganizationId,
+    reader: UserId,
+    ids: readonly ConversationId[],
+  ): Promise<Map<ConversationId, ConversationMemberRecord[]>> {
+    const grouped = new Map<ConversationId, ConversationMemberRecord[]>();
+    if (ids.length === 0) return grouped;
+
+    const found = await this.db.execute<SampleRow>(sql`
+      select c.id::text as conversation_id, m.user_id::text as user_id, m.role,
+             m.joined_at, m.last_read_at
+      from unnest(array[${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}]) as c(id)
+      cross join lateral (
+        (select user_id, role, joined_at, last_read_at from conversation_members
+          where organization_id = ${organizationId} and conversation_id = c.id
+            and user_id = ${reader})
+        union
+        (select user_id, role, joined_at, last_read_at from conversation_members
+          where organization_id = ${organizationId} and conversation_id = c.id
+          order by user_id limit ${PgConversationRepository.MEMBER_SAMPLE})
+      ) m
+    `);
+
+    for (const row of found.rows) {
+      const conversationId = row.conversation_id as ConversationId;
+      const existing = grouped.get(conversationId) ?? [];
+      existing.push({
+        userId: row.user_id as UserId,
+        role: row.role as ConversationMemberRole,
+        joinedAt: new Date(row.joined_at),
+        lastReadAt: row.last_read_at === null ? null : new Date(row.last_read_at),
+      });
+      grouped.set(conversationId, existing);
+    }
+
+    return grouped;
   }
 
   private async membersOf(
