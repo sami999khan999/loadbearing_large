@@ -130,7 +130,7 @@ happening on. Behind a load balancer the effective per-person total is the cap t
 count, which is the right order of magnitude for a limit whose job is to bound one bug.
 
 The age limit is what releases a channel nobody is reading. A stream ended by the server is not an
-error: the client reconnects, is handed a `resync`, and refetches. That path is exercised on every
+error: the client reconnects and is replayed what it missed. That path is exercised on every
 deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.
 
 The worker parses both and uses neither: it builds a container, and a container builds a realtime

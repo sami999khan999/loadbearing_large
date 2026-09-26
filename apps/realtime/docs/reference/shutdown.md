@@ -7,7 +7,7 @@ description: Why a stop ends every stream cleanly at a random point in a window,
 
 **The problem.** A deploy stops every replica of this process in turn. Each holds thousands of open
 streams. Cut them all at once and every tab reconnects in the same second — each reconnect a full
-principal resolution, a Postgres read and a resync that refetches what the tab shows. The next
+principal resolution, a Postgres read and a replay of what the tab missed. The next
 replica takes the whole herd at once.
 
 **So a stop hands streams on rather than dropping them.** `RealtimeBootstrap.stop`:
@@ -20,7 +20,8 @@ replica takes the whole herd at once.
 4. Cuts whatever is left, disposes the container, emits `process.stopped`.
 
 A clean end is the part that matters. The browser's `RealtimeStream` reopens a stream that ended
-cleanly within a second, with a `lastEventId`, so the server answers `resync`. Through the proxy that
+cleanly within a second, with a `lastEventId`, and the next replica replays from the log both
+share. Through the proxy that
 reopen lands on another replica. A cut connection is an error instead, and the client backs off —
 which is right for an outage and wrong for a deploy.
 

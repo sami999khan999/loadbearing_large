@@ -100,10 +100,12 @@ nothing to ask for. That is the entire authorization argument, and it is why the
 `core.realtime.subscribe` — held by every resolved principal, because each frame on the stream was
 authorised where it was produced. Gating the pipe again would gate the wrong thing.
 
-**A resume is a `resync`.** When `lastEventId` is set, the handler yields a `resync` frame before
-anything live. Redis pub/sub cannot replay, so a gap-fill would be a lie; the client refetches what
-it subscribes to. Every frame goes out through `withEventMeta({ id, retry })` — the `id` is what
-comes back as `Last-Event-ID`, and the `retry` is what `ClientRetryPlugin` reads for its delay.
+**A resume is a replay, or a `resync` past it.** When `lastEventId` is set the handler passes it
+to the subscriber as `after`, and the subscriber replays what its log holds past that id or yields
+a `resync` when the log no longer reaches back (`26.5`). Every event frame goes out through
+`withEventMeta({ id, retry })` — the `id` is what comes back as `Last-Event-ID`, and the `retry` is
+what `ClientRetryPlugin` reads for its delay. A typing frame carries no `id`, so it is never the
+point a client resumes from.
 
 **Keep-alive is set, not enabled.** `RPCHandler` sends a comment every 5 s by default; the handler
 here sets 15 s, inside every proxy idle timeout worth worrying about and a third of the traffic. It

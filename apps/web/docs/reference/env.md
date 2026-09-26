@@ -184,7 +184,7 @@ count, which is the right order of magnitude for a limit whose job is to bound o
 
 The age limit is what releases a channel nobody is reading. The server spreads it by ±10 % so tabs
 opened together do not all end together. A stream ended by the server is not an error: the
-client's `RealtimeStream` reopens it within a second, is handed a `resync`, and refetches. That path is exercised on every
+client's `RealtimeStream` reopens it within a second and is replayed what it missed. That path is exercised on every
 deploy anyway, so it is better to run it on a schedule than to discover it does not work at 3am.
 
 ## `SERVER_SHUTDOWN_TIMEOUT` is srvx's, and the container waits it out

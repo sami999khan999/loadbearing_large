@@ -32,8 +32,13 @@ function containerWith(frames: readonly RealtimeMessage[], seen: string[]) {
     },
     realtimeSubscriber: {
       // eslint-disable-next-line @typescript-eslint/require-await
-      subscribe: async function* (channels: readonly string[]) {
+      subscribe: async function* (
+        channels: readonly string[],
+        _signal: AbortSignal,
+        options?: { after?: string },
+      ) {
         seen.push(...channels);
+        if (options?.after) seen.push(`after:${options.after}`);
         for (const frame of frames) yield frame;
       },
     },
@@ -117,17 +122,18 @@ describe("the realtime stream over RPCHandler", () => {
     expect(seen).toEqual([CHANNEL]);
   });
 
-  it("opens a resumed stream with a resync before anything live", async () => {
+  // `26.5`. The resume point goes to the subscriber, which replays what came after it or
+  // answers `resync` when its log no longer reaches back; the router decides neither.
+  it("hands a resumed stream's last event id to the subscriber", async () => {
+    const seen: string[] = [];
     const response = await call(
-      containerWith([frame("00000000-0000-7000-8000-00000000000b")], []),
+      containerWith([frame("00000000-0000-7000-8000-00000000000b")], seen),
       { lastEventId: "00000000-0000-7000-8000-000000000099" },
     );
     const body = await response.text();
 
-    expect(body.indexOf("resync")).toBeGreaterThan(-1);
-    expect(body.indexOf("resync")).toBeLessThan(
-      body.indexOf("00000000-0000-7000-8000-00000000000b"),
-    );
+    expect(seen).toEqual([CHANNEL, "after:00000000-0000-7000-8000-000000000099"]);
+    expect(body).toContain("00000000-0000-7000-8000-00000000000b");
   });
 
   // The buffering risk this whole tier exists to rule out: `Cors.apply` must set
