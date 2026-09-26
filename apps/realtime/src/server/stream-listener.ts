@@ -23,6 +23,8 @@ const ALLOWED_HEADERS = ["content-type", "authorization", "x-api-key", "last-eve
 export class StreamListener {
   private readonly handler;
   private readonly server: Server;
+  // Settles when `close()` has seen the last connection go; resolved until a stop begins.
+  private shut: Promise<void> = Promise.resolve();
 
   public constructor(
     private readonly container: Container,
@@ -60,8 +62,27 @@ export class StreamListener {
 
   // No new connections, and idle ones dropped. Open streams keep going until drained.
   public stopAccepting(): void {
-    this.server.close();
+    this.shut = new Promise((resolve) => {
+      this.server.close(() => resolve());
+    });
     this.server.closeIdleConnections();
+  }
+
+  // Resolves once every connection has closed, or after `withinMs`. A drained stream still
+  // has its last frame to write, and a response that finishes leaves its socket idle.
+  // ──
+  // Measured on Linux (`CP7.5`): cutting at once, the last stream to drain lost its final
+  // frame, so its client saw a socket error rather than a clean end, and backed off.
+  public closed(withinMs: number): Promise<void> {
+    const sweep = setInterval(() => this.server.closeIdleConnections(), 50);
+    let limit: ReturnType<typeof setTimeout> | undefined;
+    const budget = new Promise<void>((resolve) => {
+      limit = setTimeout(resolve, withinMs);
+    });
+    return Promise.race([this.shut, budget]).finally(() => {
+      clearInterval(sweep);
+      clearTimeout(limit);
+    });
   }
 
   // Whatever the drain left open, cut. A client treats that as an error and backs off.

@@ -47,6 +47,9 @@ export class RealtimeBootstrap {
       durationMs: Date.now() - startedAt,
     });
 
+    // The drained streams finish writing inside what is left of the budget, and only what
+    // is still open after that is cut.
+    await this.listener.closed(Math.max(0, this.shutdownTimeoutMs - (Date.now() - startedAt)));
     this.listener.closeAll();
     await this.container.dispose();
 

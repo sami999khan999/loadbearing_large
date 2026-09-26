@@ -27,6 +27,10 @@ const harness = (drain: () => Promise<number>) => {
   const listener = {
     listen: () => Promise.resolve(),
     stopAccepting: () => steps.push("stopAccepting"),
+    closed: () => {
+      steps.push("closed");
+      return Promise.resolve();
+    },
     closeAll: () => steps.push("closeAll"),
   } as unknown as StreamListener;
 
@@ -34,13 +38,14 @@ const harness = (drain: () => Promise<number>) => {
 };
 
 describe("RealtimeBootstrap.stop", () => {
-  // Stop taking streams, hand the open ones on, then cut what is left and close the pools.
+  // Stop taking streams, hand the open ones on, let them finish writing, then cut what is
+  // left and close the pools. `closed` is what `CP7.5` found missing on Linux.
   it("stops accepting, drains, then closes, in that order", async () => {
     const { steps, events, bootstrap } = harness(() => Promise.resolve(3));
 
     await bootstrap.stop("SIGTERM");
 
-    expect(steps).toEqual(["stopAccepting", "drain", "closeAll", "dispose"]);
+    expect(steps).toEqual(["stopAccepting", "drain", "closed", "closeAll", "dispose"]);
     expect(events.find((line) => line.event === "realtime.stream.drained")?.fields).toMatchObject({
       streams: 3,
     });
@@ -52,7 +57,7 @@ describe("RealtimeBootstrap.stop", () => {
 
     await bootstrap.stop("SIGTERM");
 
-    expect(steps).toEqual(["stopAccepting", "drain", "closeAll", "dispose"]);
+    expect(steps).toEqual(["stopAccepting", "drain", "closed", "closeAll", "dispose"]);
     expect(events.find((line) => line.event === "realtime.stream.drained")?.fields).toMatchObject({
       streams: -1,
     });
