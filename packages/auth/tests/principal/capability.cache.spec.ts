@@ -1,6 +1,6 @@
 import { Identifiers } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CapabilityCache } from "../../src/principal/capability.cache.js";
 import {
   MapCacheStore,
@@ -169,5 +169,28 @@ describe("CapabilityCache — the platform axis", () => {
 
     await cache.invalidate(PLATFORM_ORG, USER);
     expect(store.entries.has(`capability:platform:${USER}`)).toBe(false);
+  });
+});
+
+// `CR.9`. A read-through that queried before the revoke committed wrote the old set back
+// after the delete, and it was served for the rest of the minute.
+describe("CapabilityCache — a fill racing the invalidation", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("deletes again a moment later, taking the late write with it", async () => {
+    vi.useFakeTimers();
+    const { cache, store } = cacheWith(new Map([[`${ORG_A}:${USER}`, holding("member.read")]]));
+    const key = `capability:user:${ORG_A}:${USER}`;
+
+    await cache.invalidate(ORG_A, USER);
+    // The racing read-through landing after the first delete.
+    await store.set(key, holding("member.read").toJSON());
+    expect(store.entries.has(key)).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(store.entries.has(key)).toBe(false);
   });
 });

@@ -32,6 +32,7 @@ write:
 | Membership's role changed | `invalidate(organizationId, userId)` |
 | Membership added or removed | `invalidate(organizationId, userId)` |
 | Per-user override written | `invalidate(organizationId, userId)` |
+| Membership deactivated or reactivated | `invalidate(organizationId, userId)` — `CR.2` |
 | Any of the above **in the platform tier** | the same call, plus `invalidatePlatform()` |
 
 The domain does not name this class. `CreateRoleUseCase` and its four siblings take a
@@ -41,6 +42,14 @@ this to it — the same shape as every other adapter.
 **The call goes after the commit, never inside it.** A flush issued while the old row is still the
 committed one lets a concurrent read resolve the stale set and put it straight back, which is the
 same bug the flush exists to prevent, now with a race attached.
+
+**After the commit is not quite enough, so every flush happens twice** (`CR.9`). A read-through
+that ran its query *before* the commit and reaches its `SET` *after* the flush writes the revoked
+set back, and it is served for the rest of the minute. Each invalidation repeats itself two seconds
+later — longer than any read-through takes, since that is one indexed query, and far shorter than
+the TTL. The repeat is a timer that holds no process open and swallows its own failure: the TTL is
+still the backstop. A generation counter compared on every read would close the window exactly,
+at the price of a second Redis round trip on every request; this closes it for a timer.
 
 Getting this wrong in the stale direction means a revoked permission keeps working, which is a
 security bug wearing a caching bug's clothes. The TTL exists so that a forgotten call site costs a
