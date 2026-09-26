@@ -54,6 +54,9 @@ export const coreEvents = {
   // One per tenant-month restored. Into a scratch table unless the month is inside
   // the hot window, which the line says so a reader knows where to look.
   "cold.partition.restored": { level: "info" },
+  // A month a cut-off archive left detached, put back where a query and the next run can
+  // see it. Warn, because the run that left it there did not finish.
+  "cold.partition.recovered": { level: "warn" },
   // Cold storage outliving a deleted tenant is the hole this mechanism created, so
   // this is the line that says it closed. One per run, not one per object.
   "cold.objects.swept": { level: "info" },

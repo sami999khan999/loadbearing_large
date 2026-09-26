@@ -76,6 +76,7 @@ export interface EventShape {
     readonly rows: number;
   };
   readonly "maintenance.partition.dropped": { readonly table: string; readonly partition: string };
+  readonly "cold.partition.recovered": { readonly table: string; readonly partition: string };
   readonly "partition.runway.low": {
     readonly table: string;
     // Which tenant ran out, empty for the table that has no tenant level. Body, not label.
