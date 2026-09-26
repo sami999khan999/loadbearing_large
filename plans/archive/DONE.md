@@ -1,6 +1,6 @@
 ---
 title: Backlog — closed
-updated: 2026-09-25
+updated: 2026-09-26
 owner: sami
 schema: backlog/v1
 source: split out of plans/BACKLOG.md on 2026-09-22
@@ -1098,6 +1098,158 @@ comparisons that carry weight are the ones inside one run, or ones far larger th
 
 ---
 
+## 10. Code review of 2026-09-25 — closed
+
+Bodies in [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md), at the line each backlog entry gave.
+Twenty closed with the communication performance plan, pushed as `14d49db..45633e6` and listed
+in that plan's changelog; twenty-six more closed on 2026-09-26 in the per-layer commits after
+`e265714`, three of them the rest of what the plan had closed in part. Three stay open in `BACKLOG.md` §10, narrowed to what is left of them: `CR.16`,
+`CR.20` and `CR.33`. **Every proof below is a spec that runs in `pnpm test` or `pnpm smoke`**,
+unless it says otherwise.
+
+### 10.A Security and tenant isolation
+
+- [x] `CR.1` **Any role that can invite could make an owner** `done: 2026-09-26` — a role now
+  goes only to someone who could have granted every key of it: `RoleRules.assertAssignableBy`,
+  in both `InviteMemberUseCase` and `ChangeMemberRoleUseCase`, asks the new
+  `CapabilitySet.canTenantWide`. `owner` holds every key, so only an owner hands it out.
+  `invite-member.use-case.spec.ts` and `member-lifecycle.use-case.spec.ts` refuse and save nothing;
+  `capability-set.spec.ts` covers the org-level question for a goal-scoped key.
+- [x] `CR.2` **Deactivation did not revoke** `done: 2026-09-26` — `ApiKeyResolver` checks the
+  issuer's `isActive`, in parallel with the capability read, as the session path does;
+  `SetMemberActiveUseCase` flushes the cached set after the commit, which reaches the platform
+  axis. `api-key.resolver.spec.ts`, `member-lifecycle.use-case.spec.ts`. The latent half — goal
+  grants and overrides unfiltered by `deactivated_at` in `resolveFor` — is unreachable while both
+  paths refuse a deactivated principal first.
+- [x] `CR.3` **A key could mint a permanent key** `done: 2026-09-26` — `CreateApiKeyUseCase`
+  refuses any `api_key` principal. `api-key.use-case.spec.ts`.
+- [x] `CR.4` **A stream was authorized once** `done: 2026-09-26` — `StreamRevalidation` asks
+  again every sixty seconds and ends the subscription the first time the answer is no; a check
+  that throws keeps it. The user stream asks `isActive`, the conversation stream the new
+  `WatchConversationUseCase`, which it also opens with instead of the roster-loading
+  `getConversation`. `stream-revalidation.spec.ts`.
+- [x] `CR.5` **Conversation streams had no per-user cap** `done: 2026-09-26` — every stream
+  counts against its owner's cap. `CP7.4` in
+  [`COMMUNICATION-PERFORMANCE-PLAN.md`](COMMUNICATION-PERFORMANCE-PLAN.md).
+- [x] `CR.6` **Nothing on the oRPC surface was rate-limited** `done: 2026-09-26` —
+  `rateLimitMiddleware` in `authed`, per principal and procedure, on the six procedures
+  `RateLimitPolicy` names: invitations, document search and index, message send, conversation
+  create. A fixed window in the cache Redis; open when the counter cannot be reached.
+  `rate-limit.spec.ts` (429 past the limit, per person, fails open, every name a real procedure),
+  `redis.smoke.spec.ts` (the window).
+- [x] `CR.7` **Deactivated in the last-active tenant locked a user out of all of them**
+  `done: 2026-09-26` — `activeOrganizationFor` and `organizationsFor` skip a deactivated
+  membership, and the switch asks `isActive`. `isMember`, left with no caller, is gone from the
+  port. `pg-membership.reader.spec.ts` against Postgres, `organization.plugin.spec.ts`.
+- [x] `CR.8` **Indexing ignored goal scope** `done: 2026-09-26` — `QueueDocumentIndexUseCase`
+  asserts `ai.embedding.write` for the goal named and for the goal the document is in now, read
+  by the new `VectorStore.sourceOf`. Both keys are org-scoped today, so it binds the day one is
+  not. `document.use-case.spec.ts`, `pg-vector.store.spec.ts`.
+- [x] `CR.9` **The capability cache could re-cache a revoked set** `done: 2026-09-26` — every
+  flush repeats itself two seconds later, taking a racing read-through's write with it.
+  `capability.cache.spec.ts`, on fake timers.
+- [x] `CR.10` **The shard resolver's fill race** `done: 2026-09-26` — `quiesce` invalidates the
+  cached placement again once the settle is over. `tenant-move.smoke.spec.ts` on two nodes, 6 of 6.
+- [x] `CR.11` **The move freeze only inside `PgUnitOfWork.run`** `done: 2026-09-26` — the six
+  routed writes that opened no transaction open a unit of work now: both mark-read use-cases,
+  the preference, the conversation's read position, `DeliverNotification`'s `saveMany`, the
+  search's audit row. `notification-preferences.use-case.spec.ts` refuses on a frozen unit.
+- [x] `CR.12` **The OpenAI call had no timeout** `done: 2026-09-26` — twenty seconds a batch,
+  and a network failure is `UnavailableError`, which retries. `openai-embedding.provider.spec.ts`.
+
+### 10.B Lost work, the worker and its queues
+
+- [x] `CR.13` **Retries ran out in seconds** `done: 2026-09-26` — `CP3.1`; replay is
+  `pnpm queue:replay`. The hand walk through a mail outage is `BACKLOG.md` §12.
+- [x] `CR.14` **One down node stopped every node after it** `done: 2026-09-26` — `CP3.5`.
+- [x] `CR.15` **An archive cut off mid-way hid a month** `done: 2026-09-26` — the detach is
+  inside the `try`, and the retention pass calls `recover(table)` on each node before it lists
+  months: detach-pending children are finalized, standalone month tables attached again, and each
+  one is a `cold.partition.recovered` line. `pg-partition-archive.gateway.spec.ts` recovers a
+  detached month, archives it, and leaves a `_restore` scratch table alone.
+- [x] `CR.17` **One failed boot run switched off the boot runway** `done: 2026-09-26` —
+  `removeOnFail: true` on `partitions-boot`.
+- [x] `CR.18` **Fixed job ids swallowed repeat admin requests** `done: 2026-09-26` — the four
+  operator jobs dedupe only while one is queued or running: `JobOptions.inFlightId`, BullMQ's
+  simple-mode deduplication. `redis.smoke.spec.ts` publishes twice, finishes, publishes again.
+- [x] `CR.19` **One failure at 07:00 cancelled every digest** `done: 2026-09-26` — `CP3.4`.
+
+### 10.C Scaling limits in the database layer
+
+- [x] `CR.21` **The nightly orphan check scanned every message** `done: 2026-09-26` — one
+  statement per tenant, each pruned to that tenant's partitions and committed alone.
+  `orphaned-tenants.spec.ts`; the case the backlog called flaky took 1.9 s.
+- [x] `CR.22` **The digest's tenant scan ran out of locks** `done: 2026-09-26` — `CP4.6`.
+- [x] `CR.23` **Archiving rescanned the partition for every page** `done: 2026-09-26` — a month of
+  more than one page gets `<child>_walk` on `(column, id)`, on the detached table through the
+  direct pool; the unwind and `recover` drop it before attaching.
+- [x] `CR.24` **The export sorted every table for every page** `done: 2026-09-26` — compared and
+  ordered on the native key columns. Checked by `EXPLAIN` against the dev database: an Index Only
+  Scan on `role_permissions_uq` with the cursor inside the index condition.
+- [x] `CR.25` **The first page and `unreadCounts` touched every month** `done: 2026-09-26` —
+  `CP2.3`, `CP2.4`.
+- [x] `CR.26` **Conversation reads loaded every member** `done: 2026-09-26` — the hot path in
+  `CP2.1`; the list now brings a sample, at most five per row with the reader always in it.
+  `pg-conversation.repository.spec.ts` with a nine-member channel.
+- [x] `CR.27` **The outbox drain held a transaction across Redis calls** `done: 2026-09-26` — `CP4.2`.
+- [x] `CR.28` **N+1 in notification fan-out and the digest** `done: 2026-09-26` — `CP4.3`, `CP4.4`.
+- [x] `CR.29` **The replay keyset used the `OR` form** `done: 2026-09-26` — the row constructor
+  plus a redundant bound. `pg-activity-replay.reader.spec.ts` asserts it is an index condition.
+- [x] `CR.30` **Conversation recency could move backwards** `done: 2026-09-26` — `CP2.5`.
+- [x] `CR.31` **Cursor precision dropped rows** `done: 2026-09-26` — `conversations.created_at`
+  is `timestamptz(3)`, migration `0041_conversation_created_at_ms`, applied to both local nodes.
+- [x] `CR.32` **Creating a conversation checked members one by one** `done: 2026-09-26` — `CP2.6`.
+
+### 10.D Resource lifetimes, timeouts and the client
+
+- [x] `CR.34` **The web process never disposed its container** `done: 2026-09-26` — the Redis half
+  and the dev cache in `CP5.1` and `CP7.8`. The shutdown: srvx fires no Nitro hook on `SIGTERM`
+  and never exits, so `server/container.ts` disposes the container `SERVER_SHUTDOWN_TIMEOUT` plus a
+  second after the signal. **Checked by build**, which puts it in the server bundle and nowhere
+  else; the real signal on Linux is `BACKLOG.md` §12's `CP7.5`.
+- [x] `CR.35` **The S3 clients had no timeouts** `done: 2026-09-26` — `S3ClientFactory`, five
+  seconds to connect and sixty of socket inactivity, for both gateways.
+- [x] `CR.36` **One failed close in `dispose()` skipped the rest** `done: 2026-09-26` — `CP3.5`.
+- [x] `CR.37` **Streams ended at 30 minutes and never reopened** `done: 2026-09-26` — `CP1.3`.
+- [x] `CR.38` **Reconnects retried every 2 s forever** `done: 2026-09-26` — `CP1.3`.
+- [x] `CR.39` **One message refetched every loaded page, twice** `done: 2026-09-26` — `CP1.4`,
+  `CP1.6`. The measurement is `BACKLOG.md` §12's `CP1.9`.
+- [x] `CR.40` **Failed jobs were bounded by age only** `done: 2026-09-26` — `CP3.2`.
+- [x] `CR.41` **ClickHouse `query` buffered the whole response** `done: 2026-09-26` — rows are
+  parsed as their lines arrive. `clickhouse.connection.spec.ts` splits a row across two chunks.
+- [x] `CR.42` **`RealtimeProvider` re-rendered every consumer** `done: 2026-09-26` — `CP1.7`.
+- [x] `CR.43` **The pool check counted the wrong consumers** `done: 2026-09-26` — `CP4.8`.
+
+### 10.E From the 2026-09-25 unpushed work
+
+- [x] `CR.44` **The analytics skip check could hide the failure it followed** `done: 2026-09-26`
+  — the directory lookup and the checkpoint read after a failure are both guarded, so the
+  original error is the one thrown and `analytics.projection.failed` is emitted.
+  `analytics.consumer.spec.ts`.
+- [x] `CR.45` **The analytics loader blocked on ClickHouse** `done: 2026-09-26` — prefetched
+  rather than ensured.
+- [x] `CR.46` **A comment in `container.ts` described the wrong field** `done: 2026-09-26` — back
+  above `notification`.
+- [x] `CR.47` **The same, in `query-key.ts`** `done: 2026-09-26` — `CP1.8`.
+
+### 10.F Docs that said something the code did not
+
+- [x] `CR.48` **Four reference pages contradicted the code** `done: 2026-09-26` — each fixed with
+  its finding: `partitions.md` with `CR.21` and `CR.22`, `cold-storage.md` with `CR.16`, `env.md`
+  and `messaging.md` with `CR.37` and `CR.39`. Each re-read against the code on the day.
+- [x] `CR.49` **"Roughly a minute" was about 30 s** `done: 2026-09-26` — rewritten with `CR.13`.
+
+---
+
+## 12. Communication performance plan — closed
+
+- [x] `CP7.8` **The web process's SIGTERM dispose** `done: 2026-09-26` — it was blocked on where
+  a Nitro plugin would live, and the answer is that one would not help: the Node preset serves
+  through srvx, whose shutdown fires no Nitro `close` hook and does not exit. The container is
+  disposed from `server/container.ts` once srvx's window is over. `CR.34` above.
+
+---
+
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
 **Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
@@ -1330,6 +1482,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-26 | @sami | **Section 10 closed but for three, and `CP7.8` with it.** Twenty of the forty-nine review findings closed with the communication performance plan (`14d49db..45633e6`) and twenty-six more on 2026-09-26 in per-layer commits after `e265714`, every one with a spec except `CR.24`, checked by `EXPLAIN`, and `CR.34`, checked by build. Three shipped security defects first: an admin could invite an owner, a deactivated member's keys kept working, and a key could mint a permanent key. Then a stream that re-asks every minute, a rate limit on the six procedures that cost someone else something, the move freeze on every routed write, archive recovery, streamed cold reads, and a web process that disposes once srvx has finished. `CP7.8` was not blocked on where a Nitro plugin lives: srvx fires no Nitro hook on `SIGTERM` at all. `CR.16`, `CR.20` and `CR.33` stay open, narrowed to what is left of each |
 | 2026-09-25 | @sami | **`BACKLOG.md` cut to the open work: 393 lines to 93.** Three items were open (`24.7`, `S.2`, `S.3`) and five triggers, under about three hundred lines of closed-section notes, history, walk findings and machine state. The prose moved verbatim to this file's new section, "Moved out of `BACKLOG.md`", under the same section numbers, so every ID still resolves. The machine-state tables moved to [`STATE.md`](STATE.md): they record what to undo, and they are not done work. `S.2`'s title now says what is left, which is checking against real traffic rather than waiting to build |
 | 2026-09-25 | @sami | **`23.14` and `23.21` decided with the user and built, and a sign-up defect found by doing it.** The first dashboard is *activity over time*, and it was built against seeded data rather than waiting for real traffic. An unplaceable tenant is now skipped and logged rather than failing the run. It is skipped only when the directory has no row; a catalog that cannot be asked still fails the run. **Walking the dashboard end to end found that every sign-up failed on a two-node stack**, a regression `24.2a` introduced a day earlier: the audit logger resolved an uncommitted directory row through another connection. It is fixed and proved on two nodes. One migration run failed once and succeeded on the retry. Its output was not captured, so its cause is not known. Also: `orphaned-tenants.spec.ts`'s `danglingConversations` case timed out once at 30 s in the full run and passed four times alone. It is a cross-tenant scan that runs close to its budget on this disk, and nothing changed today touches it. `S.2` and `S.3` remain, and neither can be closed in a session |
 | 2026-09-25 | @sami | **The 2026-09-24 list, worked through: nine closed, one skipped with its reasons.** `24.2b` first, because it was half built: a job now re-reads its placement at every transaction, and a live move shows the gap before the fix — a late job's write landed on the source. `24.3` added a streaming standby in compose and a read path that uses it only once it has caught up with the primary, so a lagging replica is a slower read and never a stale one. Removing that check made the first read after a write miss its row. `25.1` and `25.2` put the lag and the switch on `/platform/status`. Turning the switch on moved the projection's reads onto the standby (+42 scans vs +0). `25.3` gave the `cold/` prefixes a transition to a MinIO tier, and refuses `GLACIER` and `DEEP_ARCHIVE`, because a restore reads with `GetObject`. `24.6` ran the routed writes at 1× and 10×: 0 errors, and no row on the wrong node. `24.4` measured zero catalog reads per warm write and built nothing. `T-036` closed on its narrowed "done when", and the whole-plan verification ran both halves. **`23.14` was skipped**: ClickHouse held 242 rows over 3 days, mostly spec debris, and its first dashboard is a product choice. **Three things found on the way:** the checkout's `.env` predated the port renumbering and its database the last 104 commits. `mc ilm tier info` exits 0 for a missing tier. And a failing `toBe` on a `pg` pool ran the smoke suite out of heap. Nothing is pushed |
