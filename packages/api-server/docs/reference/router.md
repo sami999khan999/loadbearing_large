@@ -34,3 +34,28 @@ Both streams are under `realtime`: `realtime.stream` for the user's channel and
 `realtime.conversation` for one room. That is what lets the browser's client send every
 `realtime.*` path to the stream process and everything else to the web app — a routing rule on the
 first path segment, with no list to keep in step.
+
+## A stream asks again every minute
+
+A stream is authorized when it opens and can then be held for thirty minutes. Until `CR.4` that was
+the only check, so a member who was removed from a conversation, left it, or was deactivated kept
+receiving its frames — message ids, who was typing and when — until the stream aged out. The bodies
+stayed protected, because `list` re-checks, but the rest leaked.
+
+`StreamRevalidation.watch` asks again every sixty seconds. It gives the subscription a signal that
+aborts with the request **or** the first time the check says no. The stream then ends normally; the
+client reopens it, the open is refused, and a non-retryable refusal stops the client for good.
+
+| Stream | Asks |
+|---|---|
+| `realtime.stream` | `memberships.isActive(user, organization)` |
+| `realtime.conversation` | `messaging.watch`: `messaging.conversation.read`, then `assertParticipant` |
+
+`messaging.watch` is also what the conversation stream opens with. It used to open with
+`getConversation`, which loads the whole roster, an unread count and every member's name to answer
+a yes-or-no question — once per open, and it would have been once a minute per stream.
+
+**A check that throws keeps the stream.** Only a definite no ends it: `false`, or a
+`ForbiddenError` from the use-case. A database blip that ended every open stream would put every
+tab on the reconnect path at the same moment. The timer is `unref`'d and cleared in the handler's
+`finally`, so a closed stream asks nothing more.
