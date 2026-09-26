@@ -124,8 +124,10 @@ has no `CapabilitySet` and no join back to goal membership, least of all a remot
 
 ## `ColdArchiveReader` has two methods for two callers, and one of them is a hole waiting
 
-`rows(entry)` reads a whole tenant-month, verified against the recorded checksum and count. Its
-callers are the re-projection and the restore — machinery, reading everything.
+`batches(entry, size)` reads a whole tenant-month a batch at a time, verified against the recorded
+checksum and count **before** the first batch is handed out. Its caller is the re-projection —
+machinery, reading everything. It was `rows(entry)` until `CR.16`, which returned the month whole:
+a large one OOMed the worker.
 
 `page(entry, userId, cursor, limit)` is the user-facing one, and the `userId` is why it is
 separate. **The object on disk holds the whole tenant.** There is no per-user object and no

@@ -39,3 +39,4 @@ export { RemoveConversationMemberUseCase } from "./remove-conversation-member.us
 export { RenameConversationUseCase } from "./rename-conversation.use-case.js";
 export { SendMessageUseCase } from "./send-message.use-case.js";
 export { SignalTypingUseCase } from "./signal-typing.use-case.js";
+export { WatchConversationUseCase } from "./watch-conversation.use-case.js";

@@ -88,6 +88,10 @@ export abstract class PartitionArchiveGateway {
     organizationId?: OrganizationId,
   ): Promise<ArchivedPartition>;
 
+  // Months a cut-off `archive` left detached, attached again so they are readable and
+  // archived on the next pass. Run before the months are listed. Returns their names.
+  public abstract recover(table: PartitionedTableName): Promise<readonly string[]>;
+
   // Back out of cold storage into a scratch table. An archive nobody has restored is a
   // deletion with extra steps, which is why this is a method rather than a runbook.
   public abstract restore(

@@ -94,6 +94,7 @@ export {
   SendMessageUseCase,
   SignalTypingUseCase,
   type UnreadCount,
+  WatchConversationUseCase,
 } from "./messaging/index.js";
 export {
   type ArchivedMonth,
