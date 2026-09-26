@@ -190,6 +190,7 @@ export interface EventShape {
 
   readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
   readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };
+  readonly "shard.sweep.failed": { readonly node: number };
   readonly "outbox.delivery.failed": { readonly subscriber: string; readonly event: string };
 
   readonly "notification.digest.completed": {
@@ -201,6 +202,7 @@ export interface EventShape {
   // become — but a line body carrying one on every stream open is a retention bill.
   readonly "realtime.stream.opened": { readonly resumed: boolean };
   readonly "realtime.stream.closed": { readonly durationMs: number; readonly frames: number };
+  readonly "realtime.stream.drained": { readonly streams: number; readonly durationMs: number };
   readonly "realtime.publish.failed": { readonly event: string };
 
   readonly "cache.entry.corrupt": { readonly key: string };

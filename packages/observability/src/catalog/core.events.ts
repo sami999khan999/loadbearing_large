@@ -99,6 +99,8 @@ export const coreEvents = {
   // because "no events published" and "no events to publish" look identical.
   "outbox.drain.completed": { level: "debug" },
   "outbox.drain.lagged": { level: "warn" },
+  // One node failed a cross-tenant pass and the pass went on to the next one.
+  "shard.sweep.failed": { level: "warn" },
   "outbox.delivery.failed": { level: "error" },
 
   "notification.digest.completed": { level: "info" },
@@ -107,6 +109,8 @@ export const coreEvents = {
   // duration on `closed` is what says whether a client is reconnecting in a loop.
   "realtime.stream.opened": { level: "debug" },
   "realtime.stream.closed": { level: "debug" },
+  // A stopping stream process handed its streams on; `streams` is -1 if it ran out of time.
+  "realtime.stream.drained": { level: "info" },
   "realtime.publish.failed": { level: "warn" },
 
   "cache.entry.corrupt": { level: "warn" },
