@@ -17,6 +17,10 @@ const SWEEP_MS = 1_000;
 // Enough to span the gap between a send's fast-path frame and its durable one.
 const SEEN_LIMIT = 256;
 
+// The newest page at most once a second, as `RealtimeRefetch` does for the rest. Without the
+// floor a burst arriving a little slower than a fetch cost one fetch per message (`CP1.9`).
+const REFRESH_INTERVAL_MS = 1_000;
+
 export interface ConversationStreamState {
   readonly connected: boolean;
   // Keyed by user with an expiry, not a boolean: two people typing and one stopping has
@@ -64,8 +68,16 @@ export function useConversationStream(
         refreshAgain = true;
         return;
       }
+      const startedAt = Date.now();
       refreshing = MessagingQueries.refreshNewest(cache.current, client, conversationId)
         .catch(() => refetch.request(listKey))
+        // Held busy for the rest of the second, so frames in it fold into one trailing run.
+        .then(
+          () =>
+            new Promise<void>((resolve) => {
+              setTimeout(resolve, Math.max(0, REFRESH_INTERVAL_MS - (Date.now() - startedAt)));
+            }),
+        )
         .finally(() => {
           refreshing = null;
           if (refreshAgain && !controller.signal.aborted) {

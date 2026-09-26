@@ -26,6 +26,12 @@ an optimistic row by its `clientId`. The server shaped every row in it. If the f
 overlap the cached one, more than a page arrived and the cache starts again from the fresh page.
 What it replaces is refetching every loaded page, for every member, on every message.
 
+**And it runs at most once a second**, like `RealtimeRefetch` does for everything else: single
+flight, one trailing run, and the busy window held for the rest of the second. Measured in two
+Chrome tabs (`CP1.9`), twenty sends 110 ms apart cost each tab twenty `message.list` calls without
+the floor — each fetch finished just before the next frame, so the single flight never folded one
+in — and two with it, every message rendered. The first message of a burst still appears at once.
+
 It also means a frame needs no permission check on arrival. The refetch it triggers goes through the
 same procedure, the same `principalMiddleware` and the same permission as any other read, so a frame
 about something you may not see produces a request that returns what you may see.

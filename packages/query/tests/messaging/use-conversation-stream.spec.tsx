@@ -117,6 +117,44 @@ describe("useConversationStream messages", () => {
     expect(list).toHaveBeenCalledTimes(1);
   });
 
+  // `CP1.9`, measured in two Chrome tabs: twenty sends 110 ms apart were twenty fetches in
+  // each tab, because the single flight had no floor. A burst is now about one a second.
+  it("refreshes a burst of distinct sends about once a second, not once each", async () => {
+    const list = vi.fn(() => Promise.resolve({ items: [], olderCursor: null }));
+    const client = {
+      message: { list },
+      realtime: {
+        conversation: () =>
+          Promise.resolve(
+            (async function* () {
+              for (let index = 0; index < 10; index += 1) {
+                yield sent(
+                  `00000000-0000-7000-8000-0000000001${String(index).padStart(2, "0")}`,
+                  `00000000-0000-7000-8000-0000000002${String(index).padStart(2, "0")}`,
+                );
+                await new Promise((resolve) => setTimeout(resolve, 90));
+              }
+              await new Promise(() => {});
+            })(),
+          ),
+      },
+    } as unknown as ApiClient;
+
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(QueryKeys.message.list(CONVERSATION), {
+      pages: [{ items: [], olderCursor: null }],
+      pageParams: [undefined],
+    });
+
+    render(
+      createElement(QueryClientProvider, { client: queryClient }, createElement(Probe, { client })),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(list.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(list.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
   // An edit can land on any loaded page, so it refetches the list rather than one page.
   it("refetches the list for an edit", async () => {
     const client = clientYielding([
