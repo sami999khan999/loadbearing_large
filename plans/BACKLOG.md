@@ -29,7 +29,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 3 | `archive/STUCK.md` blockers | 2 | 1 |
 | 6 | Conditional work — triggers, not tasks | 5 | — |
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 3 | 46 |
-| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 9 | — |
+| 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 7 | 1 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
@@ -127,9 +127,6 @@ The full original text is in `archive/PLAN.md` under the same IDs.
 - [ ] `26.1` **Threads, reactions, attachments.** `messages` is partitioned, so a thread's
   `parent_id` cannot reference `id` alone; `StorageGateway.presignUpload` already exists with no
   caller. Thread reads should take the first page's `upTo` bound (`CP2.2`). — `archive/COMMUNICATION.md:25`
-- [ ] `26.5` **Replay on reconnect** — Redis Streams behind `RealtimeSubscriber`, so a resume is a
-  real replay rather than a resync. The client already sends `lastEventId` on every reopen
-  (`CP1.4`), so this is a server-side change only. — `archive/COMMUNICATION.md:26`
 - [ ] `26.6` **A cluster-wide stream cap, and presence from open streams.** The per-person cap now
   counts every stream a tab opens (`CP7.4`), per process; presence lives naturally in
   `apps/realtime`. — `archive/COMMUNICATION.md:28`

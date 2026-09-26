@@ -1241,6 +1241,21 @@ unless it says otherwise.
 
 ---
 
+## 11. Communication features — closed
+
+- [x] `26.5` **Replay on reconnect** `done: 2026-09-26` — every `event` frame is logged to a Redis
+  Stream per channel before it is published, in one `MULTI`: about two hundred entries, expiring
+  an hour after the last write. A resume passes `lastEventId` as `after`; the subscriber attaches
+  first, reads the log, and replays what came after it ahead of anything live, dropping a live
+  frame the replay already carried. Past the log it resyncs as before. Server-side only, as the
+  entry said: the client already sent `lastEventId`, and a replayed frame routes like a live one.
+  Typing frames are neither logged nor given an SSE id. Proved by
+  `redis-realtime.subscriber.spec.ts` (replay then live, the duplicate dropped, resync past the
+  log, resync with no log) and `redis.smoke.spec.ts` against the live instance. The body is
+  [`COMMUNICATION.md`](COMMUNICATION.md) line 26.
+
+---
+
 ## 12. Communication performance plan — closed
 
 - [x] `CP7.8` **The web process's SIGTERM dispose** `done: 2026-09-26` — it was blocked on where
@@ -1482,6 +1497,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-26 | @sami | **`26.5` built: a resume is replayed what it missed.** A short log per channel beside the pub/sub, read on a resume after attaching, with a `resync` past it. The first of section 11's communication features, and the one that needed no product decision: the client already sent its last event id |
 | 2026-09-26 | @sami | **Section 10 closed but for three, and `CP7.8` with it.** Twenty of the forty-nine review findings closed with the communication performance plan (`14d49db..45633e6`) and twenty-six more on 2026-09-26 in per-layer commits after `e265714`, every one with a spec except `CR.24`, checked by `EXPLAIN`, and `CR.34`, checked by build. Three shipped security defects first: an admin could invite an owner, a deactivated member's keys kept working, and a key could mint a permanent key. Then a stream that re-asks every minute, a rate limit on the six procedures that cost someone else something, the move freeze on every routed write, archive recovery, streamed cold reads, and a web process that disposes once srvx has finished. `CP7.8` was not blocked on where a Nitro plugin lives: srvx fires no Nitro hook on `SIGTERM` at all. `CR.16`, `CR.20` and `CR.33` stay open, narrowed to what is left of each |
 | 2026-09-25 | @sami | **`BACKLOG.md` cut to the open work: 393 lines to 93.** Three items were open (`24.7`, `S.2`, `S.3`) and five triggers, under about three hundred lines of closed-section notes, history, walk findings and machine state. The prose moved verbatim to this file's new section, "Moved out of `BACKLOG.md`", under the same section numbers, so every ID still resolves. The machine-state tables moved to [`STATE.md`](STATE.md): they record what to undo, and they are not done work. `S.2`'s title now says what is left, which is checking against real traffic rather than waiting to build |
 | 2026-09-25 | @sami | **`23.14` and `23.21` decided with the user and built, and a sign-up defect found by doing it.** The first dashboard is *activity over time*, and it was built against seeded data rather than waiting for real traffic. An unplaceable tenant is now skipped and logged rather than failing the run. It is skipped only when the directory has no row; a catalog that cannot be asked still fails the run. **Walking the dashboard end to end found that every sign-up failed on a two-node stack**, a regression `24.2a` introduced a day earlier: the audit logger resolved an uncommitted directory row through another connection. It is fixed and proved on two nodes. One migration run failed once and succeeded on the retry. Its output was not captured, so its cause is not known. Also: `orphaned-tenants.spec.ts`'s `danglingConversations` case timed out once at 30 s in the full run and passed four times alone. It is a cross-tenant scan that runs close to its budget on this disk, and nothing changed today touches it. `S.2` and `S.3` remain, and neither can be closed in a session |
