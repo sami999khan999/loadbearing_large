@@ -131,11 +131,13 @@ import {
   PurgeOrganizationUseCase,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
+  type RateLimitStore,
   type RealtimePublisher,
   type RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
   RedisCacheStore,
   RedisConnection,
+  RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
   type RelayedActivityStore,
@@ -297,6 +299,9 @@ export class Container {
 
   // ── ports, exposed as their abstract types ────────────────
   public readonly cache: CacheStore;
+  // The transport's per-procedure counters, in the cache instance: losing them resets a
+  // limit, which costs nobody anything (`CR.6`).
+  public readonly rateLimits: RateLimitStore;
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
@@ -572,6 +577,7 @@ export class Container {
     this.authorizer = new Authorizer();
 
     this.cache = new RedisCacheStore(this.redis.client(), this.logger);
+    this.rateLimits = new RedisRateLimitStore(this.redis.client());
     this.storage = new S3StorageGateway(config.storage);
     this.storagePolicy = new S3StoragePolicyGateway(config.storage);
     this.coldArchive = new S3ColdArchiveReader(this.storage);

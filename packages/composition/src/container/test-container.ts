@@ -7,6 +7,7 @@ import {
   InMemoryLogReader,
   InMemoryOrganizationReader,
   InMemoryOutboxGateway,
+  InMemoryRateLimitStore,
   InMemoryRealtimeHub,
   InMemoryRealtimeSubscriber,
   InMemoryShardAssignmentRepository,
@@ -54,6 +55,7 @@ import {
   type PartitionArchiveGateway,
   type Principal,
   type QueuePublisher,
+  type RateLimitStore,
   type RealtimePublisher,
   type RealtimeSubscriber,
   type RelayedActivityStore,
@@ -84,6 +86,7 @@ export interface TestPorts {
   // about the deployment, and a consumer spec needs both sides.
   readonly analyticsProjector: AnalyticsProjector;
   readonly cache: CacheStore;
+  readonly rateLimits: RateLimitStore;
   readonly capabilities: CapabilityInvalidator;
   readonly coldArchive: ColdArchiveReader;
   readonly content: ContentSource;
@@ -149,6 +152,7 @@ export class TestContainer {
       relayedActivity: overrides.relayedActivity ?? new RecordingRelayedActivityStore(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),
+      rateLimits: overrides.rateLimits ?? new InMemoryRateLimitStore(),
       capabilities: overrides.capabilities ?? new RecordingCapabilityInvalidator(),
       coldArchive: overrides.coldArchive ?? new InMemoryColdArchiveReader(),
       // The one port whose real implementation is the test double, and `SERVER_CATALOG`

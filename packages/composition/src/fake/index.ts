@@ -8,6 +8,7 @@ export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
 export { InMemoryPlatformPolicyRepository } from "./in-memory-platform-policy.repository.js";
 export { InMemoryProjectionPolicyRepository } from "./in-memory-projection-policy.repository.js";
+export { InMemoryRateLimitStore } from "./in-memory-rate-limit.store.js";
 export { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";
 export { InMemoryRetentionPolicyRepository } from "./in-memory-retention-policy.repository.js";

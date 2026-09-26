@@ -26,6 +26,7 @@ export {
   InMemoryOutboxGateway,
   InMemoryPlatformPolicyRepository,
   InMemoryProjectionPolicyRepository,
+  InMemoryRateLimitStore,
   InMemoryRetentionPolicyRepository,
   InMemoryShardAssignmentRepository,
   InMemoryShardResolver,
