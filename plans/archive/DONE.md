@@ -1313,6 +1313,16 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
   just before the next frame arrived. It now holds its busy window for the rest of a second, as
   `RealtimeRefetch` does. The same burst then cost each tab **2** calls, 1.8 s apart, with all
   twenty messages rendered in both. `use-conversation-stream.spec.tsx` fails without the floor.
+- [x] `CP7.5` **A real SIGTERM on Linux** `done: 2026-09-27` — **the drill found a defect and
+  the fix is in the same commits.** Both processes built in a throwaway `node:24` container,
+  against the host's services, five streams open. The stream process drained and exited 0, but
+  the last stream to drain was cut 50 ms before its final frame was written, so its client saw a
+  socket error instead of a clean end. It now waits for the server to close inside the budget,
+  sweeping idle sockets, before it cuts: 5 of 5 clean in two runs, exit 0 after about ten
+  seconds. The web process exited 0 on its own 6.0 s after `SIGTERM`, which proves `CR.34` on
+  Linux. The numbers are in `apps/realtime/docs/reference/shutdown.md`. Two dev-only lessons:
+  running from a Windows bind mount made the first start take over a minute, and a built web app
+  listens on Nitro's `PORT`, never `WEB_PORT`.
 - [x] `CP4.9` **The worker's fan-out** `done: 2026-09-26` — **after only.** A channel seeded to 501
   members, five sends, one worker at `debug`:
 
@@ -1564,6 +1574,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-27 | @sami | **`CP7.5` done in a Linux container, and it found the last stream of a drain being cut.** The stream process now waits for its connections to finish writing before it cuts; the web process was confirmed to exit on its own. Section 12 is down to `CP7.9`, the release after this one |
 | 2026-09-26 | @sami | **`CP1.9` and `CP4.9` measured, and each measurement changed code.** Two tabs showed a conversation refetching once per message rather than once a second, so `refreshNewest` got the floor `RealtimeRefetch` already had. The fan-out could not be timed because the event queue logged no completions, and a stack without ClickHouse showed the projection flooding the log once per tenant; both fixed. Section 12 is down to `CP7.5`, which wants Linux, and `CP7.9`, which wants a later release |
 | 2026-09-26 | @sami | **Four of section 12's hand checks done in a running app**: mail through an outage and past its retries with `queue:replay`, a separate realtime Redis, a stream held thirty minutes, and the dev proxy in a Chrome tab plus two hundred streams with the web p95 unchanged. `CP7.5` still wants Linux; `CP1.9` and `CP4.9` are measurements still to make |
 | 2026-09-26 | @sami | **`26.5` built: a resume is replayed what it missed.** A short log per channel beside the pub/sub, read on a resume after attaching, with a `resync` past it. The first of section 11's communication features, and the one that needed no product decision: the client already sent its last event id |
