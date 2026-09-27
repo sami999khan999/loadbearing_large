@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-09-26
+updated: 2026-09-27
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -10,7 +10,8 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 
 **This is the only open ledger, and it holds only what is open.** What has closed is in
 [`archive/DONE.md`](archive/DONE.md). What sessions left on a developer machine is in
-[`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history.
+[`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history, except a plan
+still being built, which its section here names.
 
 > **How to use this file**
 >
@@ -31,6 +32,7 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
+| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 72 | — |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -42,6 +44,9 @@ a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a pr
 the shipped security defects among them, are closed. **Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Section 12 is measurement and hand checks** a session without a person at the browser cannot do.
+**Section 13 is a live plan**, agreed 2026-09-27 and not started: flags, entitlement, per-user
+overrides, the platform deny and the dashboard's widgets. Its boxes are ticked in the plan itself
+until it is archived.
 
 ---
 
@@ -159,6 +164,27 @@ Built on 2026-09-26 and archived; every body is on its item in
 
 - [~] `CP7.9` **Web stops serving streams** — the second release: drop `realtime.*` from web's
   handler and point the stream smoke spec at `apps/realtime`. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:525`
+
+---
+
+## 13. Access and visibility plan — `ACCESS-AND-VISIBILITY-PLAN.md`
+
+Agreed 2026-09-27, not started. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
+boxes live in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) while it is being
+built, and whatever is open when it is archived comes back here. The decisions are its
+"Decisions recorded up front"; extensions were scrapped the same day.
+
+- [ ] Phase 1 — the rules, written before the first fragment (`AX1.1`–`AX1.6`)
+- [ ] Phase 2 — the kernel in `permissions`: requirements, flags, widgets, zones, the mask (`AX2.1`–`AX2.7`)
+- [ ] Phase 3 — flags end to end, and `check-architecture` §30 (`AX3.1`–`AX3.7`)
+- [ ] Phase 4 — entitlement: plans, adjustments, the module kill switch (`AX4.1`–`AX4.9`)
+- [ ] Phase 5 — per-user overrides: expiring grants, permanent denies, the drift overlay (`AX5.1`–`AX5.9`)
+- [ ] Phase 6 — the platform deny and the account suspend (`AX6.1`–`AX6.9`)
+- [ ] Phase 7 — `<Zone>` in `ui` (`AX7.1`–`AX7.3`)
+- [ ] Phase 8 — `<Widget>`, the dashboard zone, `/dashboard`, and §31 (`AX8.1`–`AX8.8`)
+- [ ] Phase 9 — widget preferences, rolled out behind `widget.dismissal` (`AX9.1`–`AX9.8`)
+- [ ] Phase 10 — the widget inspector (`AX10.1`–`AX10.3`)
+- [ ] Phase 11 — lint, the flag's retirement, the hand walk (`AX11.1`–`AX11.3`)
 
 ---
 
