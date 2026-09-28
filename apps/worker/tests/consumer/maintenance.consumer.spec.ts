@@ -101,6 +101,8 @@ const archived = (organizationId: OrganizationId): ArchivedObject => ({
 
 function harness(
   options: {
+    // How many entitlement adjustments the nightly sweep finds expired.
+    expired?: number;
     monthsAhead?: number;
     estimates?: readonly PartitionEstimate[];
     objects?: readonly ArchivedObject[];
@@ -154,6 +156,7 @@ function harness(
   const platform = {
     organizationId: () => Promise.resolve(FIRST),
   } as unknown as PlatformReader;
+  const expirations: { kind: string; at: Date }[] = [];
   const platformAdmin = {
     relocateTenant: new RelocateTenantUseCase(
       assignments,
@@ -165,6 +168,13 @@ function harness(
       7,
     ),
     reclaimMoveSources: new ReclaimMoveSourcesUseCase(assignments, move, clock),
+    // A stub: the use-case has its own spec; this one is about what `cleanup` does with it.
+    expireAdjustments: {
+      execute: (principal: { kind: string }, at: Date) => {
+        expirations.push({ kind: principal.kind, at });
+        return Promise.resolve({ adjustments: options.expired ?? 0 });
+      },
+    },
   };
 
   const container = {
@@ -209,6 +219,7 @@ function harness(
     storagePolicy,
     logger,
     placements,
+    expirations,
   };
 }
 
@@ -267,6 +278,16 @@ describe("MaintenanceConsumer", () => {
     await consumerFor(container).handle(job("cleanup"));
 
     expect(maintenance.swept()).toEqual([NOW]);
+  });
+
+  // `AX4.9`. A trial past its date already grants nothing; the sweep removes it, as the
+  // system principal and at the same instant as the rest of the night's cleanup.
+  it("expires entitlement adjustments on cleanup and counts them on the sweep line", async () => {
+    const { container, expirations, logger } = harness({ expired: 2 });
+    await consumerFor(container).handle(job("cleanup"));
+
+    expect(expirations).toEqual([{ kind: "system", at: NOW }]);
+    expect(emitted(logger, "maintenance.sweep.completed")[0]).toMatchObject({ adjustments: 2 });
   });
 
   it("runs a queued tenant move and says where the tenant went", async () => {
