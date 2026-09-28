@@ -1,4 +1,4 @@
-import type { CapabilitySet, OrganizationId, UserId } from "../import.js";
+import type { CapabilitySet, EntitlementMask, OrganizationId, UserId } from "../import.js";
 
 // A repository port, so it lives with its subject rather than in `port/` — one
 // file per slice there would grow forever.
@@ -13,4 +13,8 @@ export abstract class CapabilityRepository {
   // Keyed on the user alone: the tier is one organization, and the answer does not
   // change with whichever tenant the session is pointed at. **Only** the platform axis.
   public abstract resolvePlatformFor(userId: UserId): Promise<CapabilitySet>;
+
+  // What the org's plan allows, adjustments and the kill switch included. `resolveFor`
+  // already applies it; this is for a caller that must know the ceiling itself.
+  public abstract entitlementFor(organizationId: OrganizationId): Promise<EntitlementMask>;
 }

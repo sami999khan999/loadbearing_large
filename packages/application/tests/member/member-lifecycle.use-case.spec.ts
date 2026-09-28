@@ -1,7 +1,7 @@
 import type { DomainEventInput } from "@loadbearing/contracts";
 import { Identifiers, type OrganizationId, type RoleId, type UserId } from "@loadbearing/contracts";
 import { ConflictError, ForbiddenError, NotFoundError } from "@loadbearing/errors";
-import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
+import { CapabilitySet, EntitlementMask, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import { ChangeMemberRoleUseCase } from "../../src/member/change-member-role.use-case.js";
 import type {
@@ -18,6 +18,7 @@ import type {
 } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
+import type { CapabilityRepository } from "../../src/rbac/capability.repository.js";
 import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
@@ -101,6 +102,17 @@ class RecordingMembers implements MemberRepository {
     return Promise.resolve(this.activeOwners);
   }
 }
+
+const UNLIMITED = EntitlementMask.from({
+  plan: "all",
+  added: [],
+  removed: [],
+  disabledModules: [],
+});
+
+// Only the ceiling is under test; resolution is the adapter's, and is not asked for here.
+const planOf = (mask: EntitlementMask) =>
+  ({ entitlementFor: () => Promise.resolve(mask) }) as unknown as CapabilityRepository;
 
 class StubRoles implements RoleRepository {
   public list(): Promise<RolePage> {
@@ -212,6 +224,10 @@ class RecordingCapabilities implements CapabilityInvalidator {
 
   // The adapter decides when this fires — it is the only thing that knows which tenant
   // is the tier — so a use-case calling it directly is the bug this throw names.
+  public invalidateAll(): Promise<void> {
+    throw new Error("only a plan edit or the kill switch flushes every tenant");
+  }
+
   public invalidatePlatform(): Promise<void> {
     throw new Error("the cache flushes the platform axis, never a use-case");
   }
@@ -222,6 +238,7 @@ const changeRole = (
   activity = new RecordingActivityLogger(),
   capabilities = new RecordingCapabilities(),
   events = new RecordingDomainEventPublisher(),
+  entitlement: EntitlementMask = UNLIMITED,
 ) => ({
   activity,
   capabilities,
@@ -234,6 +251,7 @@ const changeRole = (
     activity,
     events,
     new DirectUnitOfWork(),
+    planOf(entitlement),
   ),
 });
 
@@ -273,6 +291,26 @@ describe("ChangeMemberRoleUseCase", () => {
       useCase.execute(actorHolding("member.role.change"), { userId: TARGET, roleId: OWNER_ROLE }),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(members.roleChanges).toEqual([]);
+  });
+
+  // `RV.10`. Grants are filtered, never deleted, so `owner` still lists a key the plan took
+  // away, and nobody holds it. Without the skip, no owner could ever be appointed again.
+  it("hands out a role whose extra keys the org is not entitled to", async () => {
+    const members = new RecordingMembers(member({ roleId: MEMBER_ROLE, roleKey: "member" }), 2);
+    const smaller = EntitlementMask.from({
+      plan: ["member.role.change", "member.read"],
+      added: [],
+      removed: [],
+      disabledModules: [],
+    });
+    const { useCase } = changeRole(members, undefined, undefined, undefined, smaller);
+
+    await useCase.execute(actorHolding("member.role.change"), {
+      userId: TARGET,
+      roleId: OWNER_ROLE,
+    });
+
+    expect(members.roleChanges).toHaveLength(1);
   });
 
   it("does not find a member of another tenant", async () => {

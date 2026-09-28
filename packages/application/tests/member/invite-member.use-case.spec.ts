@@ -7,7 +7,7 @@ import {
   NotFoundError,
   UnavailableError,
 } from "@loadbearing/errors";
-import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
+import { CapabilitySet, EntitlementMask, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
 import type { InvitationMail, InvitationMailer } from "../../src/member/invitation.mailer.js";
 import type {
@@ -25,6 +25,7 @@ import type {
 import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../../src/port/index.js";
 import { Authorizer } from "../../src/primitive/authorizer.js";
 import { Principal } from "../../src/primitive/principal.js";
+import type { CapabilityRepository } from "../../src/rbac/capability.repository.js";
 import type { RolePage, RoleRecord, RoleRepository } from "../../src/rbac/role.repository.js";
 
 const ORG = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000010");
@@ -231,6 +232,12 @@ function harness(
     events,
     options.unitOfWork ?? new DirectUnitOfWork(),
     new FixedClock(NOW),
+    {
+      entitlementFor: () =>
+        Promise.resolve(
+          EntitlementMask.from({ plan: "all", added: [], removed: [], disabledModules: [] }),
+        ),
+    } as unknown as CapabilityRepository,
   );
   return { useCase, invitations, mailer, activity, events };
 }

@@ -134,6 +134,10 @@ class RecordingCapabilities implements CapabilityInvalidator {
 
   // The adapter decides when this fires — it is the only thing that knows which tenant
   // is the tier — so a use-case calling it directly is the bug this throw names.
+  public invalidateAll(): Promise<void> {
+    throw new Error("only a plan edit or the kill switch flushes every tenant");
+  }
+
   public invalidatePlatform(): Promise<void> {
     throw new Error("the cache flushes the platform axis, never a use-case");
   }

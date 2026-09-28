@@ -1,6 +1,7 @@
 export { CapabilityRepository } from "./capability.repository.js";
 export { type CreateRoleInput, CreateRoleUseCase } from "./create-role.use-case.js";
 export { type DeleteRoleInput, DeleteRoleUseCase } from "./delete-role.use-case.js";
+export { GetEntitlementUseCase } from "./get-entitlement.use-case.js";
 export { type GrantPermissionInput, GrantPermissionUseCase } from "./grant-permission.use-case.js";
 export {
   type InspectEffectivePermissionsInput,

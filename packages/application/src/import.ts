@@ -68,4 +68,12 @@ export {
 // A value, not a type: a subscriber builds an empty set to make a system principal
 // that asserts nothing.
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
-export { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";
+export {
+  CapabilitySet,
+  CORE_MODULE,
+  EntitlementMask,
+  type FlagKey,
+  FlagRegistry,
+  type PermissionKey,
+  PermissionRegistry,
+} from "@loadbearing/permissions";

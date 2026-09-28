@@ -6,7 +6,7 @@ import type {
   UnitOfWork,
 } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
-import { type RoleRepository, RoleRules } from "../rbac/index.js";
+import { type CapabilityRepository, type RoleRepository, RoleRules } from "../rbac/index.js";
 import type { MemberRecord, MemberRepository } from "./member.repository.js";
 import { MemberRules } from "./member.rules.js";
 
@@ -26,6 +26,8 @@ export class ChangeMemberRoleUseCase {
     private readonly activity: ActivityLogger,
     private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
+    // The org's plan, so a key it no longer has cannot block handing out a role that lists it.
+    private readonly entitlements: CapabilityRepository,
   ) {}
 
   public async execute(actor: Principal, input: ChangeMemberRoleInput): Promise<MemberRecord> {
@@ -39,7 +41,11 @@ export class ChangeMemberRoleUseCase {
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
     RoleRules.assertMembershipScope(role);
-    RoleRules.assertAssignableBy(actor, role);
+    RoleRules.assertAssignableBy(
+      actor,
+      role,
+      await this.entitlements.entitlementFor(actor.organizationId),
+    );
 
     if (member.roleId === role.id) return member;
 

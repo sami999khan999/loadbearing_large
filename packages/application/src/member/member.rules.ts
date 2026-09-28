@@ -5,7 +5,7 @@ import type { MemberRecord } from "./member.repository.js";
 export class MemberRules {
   private constructor() {}
 
-  // The seeded wildcard role. `SystemRoleSeed` creates it per tenant, so the key is
+  // The seeded role listing every tenant key. `SystemRoleSeed` creates it per tenant, so the key is
   // the stable handle rather than any particular row's id.
   public static readonly OWNER_KEY = "owner";
 

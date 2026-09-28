@@ -83,6 +83,34 @@ from `@loadbearing/errors` anywhere under `packages/application/src`. It is also
 catch a `ForbiddenError` and log it, in a process that has no HTTP for a status code to mean anything
 in.
 
+## A flag is checked first, and it answers `NOT_FOUND`
+
+A use-case behind a feature flag asks two questions, in this order:
+
+```ts
+await this.flags.assertOn(actor, "widget.dismissal"); // NOT_FOUND when off
+this.authorizer.assert(actor, "core.widget.customize"); // FORBIDDEN when not held
+```
+
+**The flag goes first because it is the broader answer.** A flag that is off means the feature does
+not exist yet for this org. Answering `FORBIDDEN` would tell the caller that an endpoint exists and
+they lack the key for it. That is a claim about a feature nobody has announced, and it would send an
+org admin to the role editor to fix something no role can fix.
+
+**The error names no flag.** `FlagCache.assertOn` throws `NotFoundError("feature", "unavailable")`,
+the same context for every flag. `ErrorInterceptor` sends `toJSON()` to the browser, and a server-only
+flag's name must never reach it. `flag.cache.spec.ts` stringifies the error and asserts the key is
+absent.
+
+`FlagCache` is not `Authorizer`. The permission check is synchronous over the principal's set, while
+a flag is a read (one cache key for the whole deployment). That is why the flag check is `await`ed
+and lives beside the authorizer rather than inside it.
+
+**Its cache is invalidated with one delete, not the capability cache's two.** A read that raced the
+write can restore the old state for at most the 60-second TTL, which is the window a flag already
+promises. A flag is a rollout control, not a security boundary, so the second delete would buy
+nothing, and `application` has no timer to schedule it with.
+
 ## `Principal.system()` is the other half
 
 The worker needs an actor. The tempting shortcut is a wildcard principal, and the reason not to take

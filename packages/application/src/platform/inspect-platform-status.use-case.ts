@@ -30,7 +30,7 @@ export class InspectPlatformStatusUseCase {
   ) {}
 
   public async execute(actor: Principal): Promise<PlatformStatus> {
-    // The key is platform-scoped, so this denies a tenant owner holding the wildcard —
+    // The key is platform-scoped, so this denies a tenant owner holding every tenant key —
     // which is the whole of decision D31 arriving at a call site.
     this.authorizer.assert(actor, "platform.status.read");
 
