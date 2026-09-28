@@ -59,6 +59,8 @@ export interface EventShape {
     // Entitlement adjustments past their expiry. Already ignored by resolution; this is
     // the count the sweep removed and audited.
     readonly adjustments: number;
+    // Per-person grants past their expiry, removed and audited the same way.
+    readonly overrides: number;
   };
   readonly "maintenance.partitions.ensured": {
     readonly table: string;
