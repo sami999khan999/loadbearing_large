@@ -5,7 +5,7 @@ description: Four grammars that look alike and mean different things, plus the n
 
 # Vocabulary
 
-Four vocabularies that look alike and mean different things. Getting the tense wrong is the silent
+Seven vocabularies that look alike and mean different things. Getting the tense wrong is the silent
 failure — a permission is a right you hold, an activity is a fact that happened.
 
 | Kind | Grammar | Example |
@@ -14,6 +14,12 @@ failure — a permission is a right you hold, an activity is a fact that happene
 | Procedure path | `<subject>.<action>`, mirrors its permission | `task.reactivate` |
 | Activity / event name | `<subject>.<action>`, **past tense** | `task.reactivated` |
 | Log event code | `<subject>.<thing>.<state>`, **past tense** | `queue.job.failed` |
+| Feature flag | `<slice>.<change>`, a kebab noun | `widget.dismissal` |
+| Widget key | `<module>.<name>`, `<module>` a real module | `member.count` |
+| Zone key | `<page>.<region>` | `dashboard.main` |
+
+- **A zone, never a surface.** `--surface` is a colour token and "surface" is a package's import
+  surface already. The names are `ZoneKey`, `<Zone>`, `ui-zone`.
 
 - **The qualifier vocabulary is closed:** `.self`, `.goal`, `.global`, `.org`. Never `.own`/`.mine`.
 - **The scope vocabulary is closed and is a different axis:** `org`, `goal`, `platform`. A

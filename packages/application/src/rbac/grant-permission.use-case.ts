@@ -27,8 +27,8 @@ export class GrantPermissionUseCase {
     // it below — an unrecognised string is a validation failure, not a denial.
     const permission = RoleRules.assertKnownPermission(input.permission);
 
-    // No escalation: an owner holds the wildcard and passes for everything, so this
-    // only ever refuses someone handing out more than they were given.
+    // No escalation: nobody holds a wildcard, so this refuses anyone, `owner` included,
+    // handing out a key they do not hold themselves.
     if (!actor.can(permission)) throw new ForbiddenError(permission);
 
     const role = await this.roles.findById(actor.organizationId, input.roleId);

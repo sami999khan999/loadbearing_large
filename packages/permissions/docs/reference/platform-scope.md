@@ -40,8 +40,12 @@ if (scope === "platform") {
 
 Every line of that is load-bearing:
 
-1. **A tenant's `wildcard`.** Every `owner` holds it. Falling through to `allowsAtOrg` would make
-   the owner of every customer tenant a platform admin.
+1. **A tenant's `wildcard`.** Nothing in production sets it: both resolutions in
+   `PgCapabilityRepository` and the API-key resolver write `false`, and an `owner` holds every
+   tenant key as an explicit row. The flag is still on the DTO, and if anything ever set it,
+   falling through to `allowsAtOrg` would make that principal a platform admin in every tenant.
+   **A platform admin is never given it either.** It would make them an owner inside every
+   customer tenant, and a platform admin holds no tenant powers.
 2. **An org-level grant of the same key.** The branch consults `platformSet` and nothing else, so a
    `platform.*` string that reached `org.grants` grants nothing.
 3. **`intersect()`.** An API key is issued by a user who may be a platform admin. `intersect` sets

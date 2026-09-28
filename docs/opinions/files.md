@@ -60,8 +60,11 @@ Kebab-case sidesteps the entire class of problem, and `forceConsistentCasingInFi
 | `.permissions.ts` | `task.permissions.ts` | a catalog fragment |
 | `.errors.ts` | `core.errors.ts` | an error-catalog fragment |
 | `.events.ts` | `core.events.ts` | an event-catalog fragment |
+| `.actions.ts` | `member.actions.ts` | an activity-action fragment — the audit vocabulary |
 | `.gate.ts` | `rbac.gate.ts` | a module-gate fragment |
 | `.routes.ts` | `rbac.routes.ts` | a route fragment |
+| `.flags.ts` | `widget.flags.ts` | a feature-flag fragment |
+| `.widgets.ts` | `member.widgets.ts` | a widget-registry fragment |
 | `.data.ts` | `nav.data.ts` | a content record |
 | `.spec.ts` | `reactivate-task.use-case.spec.ts` | tests, in the package's `tests/` |
 

@@ -1,6 +1,6 @@
 ---
 title: Opinions
-description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, data ownership, simplicity, comments.
+description: The positions this repository takes, stated flatly. Naming, folders, imports, classes, vocabulary, data ownership, visibility, simplicity, comments.
 ---
 
 # Opinions
@@ -47,6 +47,7 @@ and the answer to how much structure to build once the naming questions are sett
 | [Classes and methods](classes.md) | Class-name grammar, banned suffixes, the method vocabulary |
 | [Vocabulary](vocabulary.md) | Permissions, procedures, events, queues, contract members, database, env, React |
 | [Data and scale](data-and-scale.md) | Which store owns which data, what is derived, what to build now, the order scaling moves happen in |
+| [Visibility](visibility.md) | Flags, entitlement, permissions and widget preferences — why something is missing from a screen, and which answer wins |
 | [Simplicity](simplicity.md) | How much structure to build, and why performance is part of the goal rather than the trade |
 | [Comments](comments.md) | Line comments only, two lines, where the reasoning goes instead |
 

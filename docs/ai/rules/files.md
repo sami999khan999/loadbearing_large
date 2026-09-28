@@ -16,7 +16,7 @@ description: Kebab-case everywhere, the closed set of role suffixes, one class p
   `.enroller` `.founder` `.claimer` `.rules` `.renderer` `.subscriber` `.policy` `.strategy` `.plugin`
   `.router` `.interceptor` `.consumer` `.schedule` `.error` `.schema` `.config`
   `.manifest`. Catalog fragments:
-  `.permissions` `.errors` `.events` `.gate` `.routes` `.data`. Client roles: `.form` `.list`
+  `.permissions` `.errors` `.events` `.actions` `.gate` `.routes` `.flags` `.widgets` `.data`. Client roles: `.form` `.list`
   `.panel` `.button` `.notice` `.setup` `.inspector` `.guard` `.context` `.client` `.queries`
   `.mutations` `.fn` `.server`. And `.spec`.
 - **Only the role takes the dot; the technology joins with a hyphen.** `redis-cache.store.ts`, never

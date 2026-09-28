@@ -26,6 +26,7 @@ than ~900 tokens, so read the one or two a task needs.
 | Name a class, port, or method | [`rules/classes.md`](rules/classes.md) |
 | Name a permission, event, table, or env var | [`rules/vocabulary.md`](rules/vocabulary.md) |
 | Add a table, migration, or store | [`rules/data.md`](rules/data.md) |
+| Gate something behind a flag, a plan, a permission or a widget | [`rules/visibility.md`](rules/visibility.md) |
 | Add a dependency | [`rules/dependencies.md`](rules/dependencies.md) |
 | Decide which package something belongs in | [`rules/layering.md`](rules/layering.md) |
 | Write a comment | [`rules/comments.md`](rules/comments.md) |
@@ -55,9 +56,9 @@ convention you infer will be wrong in the ways that matter.
 ## How an agent reaches this
 
 ```
-CLAUDE.md                       ← Claude Code: loaded unprompted, ~8,400 tok
+CLAUDE.md                       ← Claude Code: loaded unprompted, ~9,000 tok
   ├── @AGENTS.md                ← the brief (~340 tok)
-  └── @docs/ai/rules/*.md       ← all thirteen rule files, inlined at session start
+  └── @docs/ai/rules/*.md       ← all fourteen rule files, inlined at session start
 
 AGENTS.md                       ← every other tool: the only file loaded unprompted (~340 tok)
   └── docs/ai/index.md          ← this file: routes by task (~1,700 tok)
@@ -70,7 +71,7 @@ AGENTS.md                       ← every other tool: the only file loaded unpro
 **The rulebook loads whole, and that is a deliberate reversal.** This file used to argue the
 opposite — nothing loads that a task does not need, under 300 tokens unprompted, ~470 for a task
 that adds a dependency. The argument was sound while context was scarce and it stopped being sound
-when the window reached seven figures: thirteen rule files is **~8,500 tokens**, and a session that
+when the window reached seven figures: fourteen rule files is **~9,100 tokens**, and a session that
 needs *any* rule was already paying ~1,700 for this router plus 410–890 for the file it names, so
 the true saving was never the headline number.
 
