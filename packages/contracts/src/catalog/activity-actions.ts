@@ -1,6 +1,7 @@
 import { aiActions } from "./ai.actions.js";
 import { apiKeyActions } from "./apikey.actions.js";
 import { memberActions } from "./member.actions.js";
+import { overrideActions } from "./override.actions.js";
 import { platformActions } from "./platform.actions.js";
 import { roleActions } from "./role.actions.js";
 
@@ -9,6 +10,7 @@ import { roleActions } from "./role.actions.js";
 export const ACTIVITY_ACTIONS = {
   ...roleActions,
   ...memberActions,
+  ...overrideActions,
   ...apiKeyActions,
   ...aiActions,
   ...platformActions,

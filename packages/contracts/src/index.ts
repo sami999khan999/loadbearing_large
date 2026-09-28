@@ -81,6 +81,16 @@ export {
   type UpdateNotificationPreferenceInput,
 } from "./notification/index.js";
 export {
+  type ClearOverrideInput,
+  type DenyOverrideInput,
+  type GrantOverrideInput,
+  OverrideContract,
+  type OverrideEntityDto,
+  type OverrideListDto,
+  OverrideProcedures,
+  type OverrideWrittenDto,
+} from "./override/index.js";
+export {
   type AdjustedDto,
   type AdjustmentClearInput,
   type AdjustmentDto,
@@ -178,7 +188,10 @@ export {
   type ChangeRolePermissionInput,
   type CreateRoleInput,
   type DeleteRoleInput,
+  type EffectiveDto,
+  type ExplanationDto,
   type InspectEffectiveInput,
+  type OverrideDto,
   RoleContract,
   type RoleDto,
   type RoleEntitlementDto,

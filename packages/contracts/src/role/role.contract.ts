@@ -24,6 +24,8 @@ export class RoleContract {
     // Raw strings, filtered by `PermissionRegistry.isKnown()` at the point of use
     // rather than here: a renamed permission must not make this endpoint throw.
     permissions: z.array(z.string()).readonly(),
+    // Filled by the list alone; a single role read for an edit does not count it.
+    membersWithExceptions: z.number().int().nonnegative().optional(),
   });
 
   public static readonly listQuery = Pagination.query;
@@ -47,6 +49,32 @@ export class RoleContract {
   });
 
   public static readonly inspect = z.object({ userId: Identifiers.userId });
+
+  // One live override, as the explanation lists it. Raw strings, like a role's grants.
+  public static readonly override = z.object({
+    id: z.string(),
+    permission: z.string(),
+    effect: z.enum(["grant", "deny"]),
+    goalId: z.string().nullable(),
+    authority: z.enum(["org", "platform"]),
+    reason: z.string().nullable(),
+    expiresAt: z.date().nullable(),
+  });
+
+  // What an answer is made of: role grants, live overrides, and the plan's ceiling as the
+  // keys it lets through. The inspector names each key's source from this.
+  public static readonly explanation = z.object({
+    roleGrants: z.array(z.string()).readonly(),
+    goalGrants: z.record(z.string(), z.array(z.string()).readonly()),
+    overrides: z.array(RoleContract.override).readonly(),
+    entitled: z.array(z.string()).readonly(),
+  });
+
+  // `capabilities` stays the shape it was; the explanation rides beside it, not inside.
+  public static readonly effective = z.object({
+    capabilities: RoleContract.capabilities,
+    explanation: RoleContract.explanation,
+  });
 
   // Strings, not the permission union: the list is compared against role rows, which are
   // raw strings too, and a key the catalog dropped simply never matches.
@@ -87,6 +115,9 @@ export class RoleContract {
 
 export type RoleDto = z.infer<typeof RoleContract.entity>;
 export type CapabilitiesDto = z.infer<typeof RoleContract.capabilities>;
+export type OverrideDto = z.infer<typeof RoleContract.override>;
+export type ExplanationDto = z.infer<typeof RoleContract.explanation>;
+export type EffectiveDto = z.infer<typeof RoleContract.effective>;
 export type InspectEffectiveInput = z.infer<typeof RoleContract.inspect>;
 export type CreateRoleInput = z.infer<typeof RoleContract.create>;
 export type UpdateRoleInput = z.infer<typeof RoleContract.update>;

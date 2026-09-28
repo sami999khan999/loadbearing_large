@@ -15,7 +15,7 @@ export class RoleProcedures {
   public static readonly effective = oc
     .route({ method: "GET", path: "/roles/effective/{userId}" })
     .input(RoleContract.inspect)
-    .output(RoleContract.capabilities);
+    .output(RoleContract.effective);
 
   // The org's ceiling: every key its plan lets through. The role editor greys the rest
   // rather than hiding them, so an admin sees what an upgrade would bring back.
