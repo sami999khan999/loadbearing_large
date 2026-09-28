@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Can,
   type ClientNamespace,
+  ModuleSwitchPanel,
   PlatformQueries,
   PlatformStatusPanel,
   ReplicaSwitchPanel,
@@ -36,6 +37,9 @@ function PlatformStatus() {
       <PlatformStatusPanel />
       <Can permission="platform.replica.manage" capabilities={capabilities}>
         <ReplicaSwitchPanel />
+      </Can>
+      <Can permission="platform.module.manage" capabilities={capabilities}>
+        <ModuleSwitchPanel />
       </Can>
     </main>
   );

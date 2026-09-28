@@ -44,9 +44,14 @@ export class RoleRouter {
   );
 
   // The object the merge point in `app.router.ts` mounts, mirroring `RoleProcedures.all`.
+  public static readonly entitlement = authed.role.entitlement.handler(async ({ context }) => ({
+    keys: await context.container.rbac.entitlement.execute(context.principal),
+  }));
+
   public static readonly all = {
     list: RoleRouter.list,
     effective: RoleRouter.effective,
+    entitlement: RoleRouter.entitlement,
     create: RoleRouter.create,
     update: RoleRouter.update,
     remove: RoleRouter.remove,

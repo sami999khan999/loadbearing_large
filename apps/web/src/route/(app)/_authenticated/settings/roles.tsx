@@ -31,6 +31,7 @@ export const Route = createFileRoute("/(app)/_authenticated/settings/roles")({
     Promise.all([
       context.messages.ensure(MESSAGES),
       context.queryClient.ensureQueryData(RoleQueries.list(context.api, PAGE)),
+      context.queryClient.ensureQueryData(RoleQueries.entitlement(context.api)),
     ]),
   component: Roles,
 });

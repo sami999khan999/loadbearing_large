@@ -18,6 +18,7 @@ const OWNER: SessionSnapshot = {
   }).toJSON(),
   isPlatformOrganization: false,
   googleEnabled: false,
+  flags: [],
 };
 
 function counting(snapshot: SessionSnapshot) {
@@ -32,6 +33,17 @@ function counting(snapshot: SessionSnapshot) {
 }
 
 describe("SessionStore", () => {
+  // The on-set crosses SSR with the rest, and an unresolved store holds none: a flagged
+  // widget renders hidden until the server says otherwise.
+  it("carries the flag on-set across the SSR boundary, and starts with none", () => {
+    const store = new SessionStore();
+    expect(store.flags).toEqual([]);
+
+    store.restore({ ...OWNER, flags: ["widget.dismissal"] });
+    expect(store.flags).toEqual(["widget.dismissal"]);
+    expect(store.dehydrate().flags).toEqual(["widget.dismissal"]);
+  });
+
   // The security page picks the wizard or the panel from this field, and it used to be
   // read through a cast — `undefined` on every render, so the panel was unreachable.
   it("carries the two-factor flag across the SSR boundary", async () => {

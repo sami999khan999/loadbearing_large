@@ -37,6 +37,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       capabilities: context.session.dto,
       isPlatformOrganization: context.session.isPlatformOrganization,
       googleEnabled: context.session.googleEnabled,
+      flags: context.session.flags,
       appearanceSnapshot: context.appearance.current,
     };
   },
@@ -69,6 +70,7 @@ function RootDocument({ children }: { children: ReactNode }) {
     user,
     capabilities,
     isPlatformOrganization,
+    flags,
     appearanceSnapshot,
   } = Route.useRouteContext();
   const { theme, mode, preference, font } = appearanceSnapshot;
@@ -106,6 +108,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                 user={user}
                 capabilities={capabilities}
                 isPlatformOrganization={isPlatformOrganization}
+                flags={flags}
               >
                 {children}
               </SessionProvider>
