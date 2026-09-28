@@ -1,4 +1,4 @@
-import { ForbiddenError, NotFoundError, type RoleId } from "../import.js";
+import { ForbiddenError, NotFoundError, PermissionRegistry, type RoleId } from "../import.js";
 import type { ActivityLogger, CapabilityInvalidator, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { RoleRecord, RoleRepository } from "./role.repository.js";
@@ -35,16 +35,24 @@ export class GrantPermissionUseCase {
     if (!role) throw new NotFoundError("role", input.roleId);
     RoleRules.assertEditable(role);
 
-    if (role.permissions.includes(permission)) return role;
+    // What the key needs and the role lacks comes with it, each past the same no-escalation
+    // check, so a role is never left holding a key it cannot use.
+    const keys = PermissionRegistry.instance
+      .closure([permission])
+      .filter((key) => !role.permissions.includes(key));
+    if (keys.length === 0) return role;
+    for (const key of keys) if (!actor.can(key)) throw new ForbiddenError(key);
 
-    // One row, not the whole set. `save` reconciles against the list read above, so two
-    // concurrent grants each wrote the set the other had not seen and one was lost.
+    // One row per key, not the whole set. `save` reconciles against the list read above, so
+    // two concurrent grants each wrote the set the other had not seen and one was lost.
     const updated = await this.unitOfWork.run(async () => {
-      await this.roles.savePermission(actor.organizationId, role.id, permission);
-      await this.activity.record(actor, "role.permission.granted", {
-        roleId: role.id,
-        permission,
-      });
+      for (const key of keys) {
+        await this.roles.savePermission(actor.organizationId, role.id, key);
+        await this.activity.record(actor, "role.permission.granted", {
+          roleId: role.id,
+          permission: key,
+        });
+      }
 
       // Re-read inside the transaction, so the answer includes a grant that landed
       // between this caller's read and its write rather than silently dropping it.

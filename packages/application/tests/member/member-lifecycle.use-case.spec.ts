@@ -51,6 +51,7 @@ function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
     roleName: "Owner",
     joinedAt: new Date("2026-09-01T00:00:00Z"),
     deactivated: false,
+    exceptions: 0,
     ...overrides,
   };
 }

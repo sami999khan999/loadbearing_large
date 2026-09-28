@@ -335,7 +335,8 @@ describe("GrantPermissionUseCase", () => {
       permission: "member.deactivate",
     });
 
-    expect(result.permissions).toEqual(["member.deactivate"]);
+    // With what it requires: deactivating someone from a list you cannot read is no use.
+    expect([...result.permissions].sort()).toEqual(["member.deactivate", "member.read"]);
   });
 
   // The wildcard's one exclusion, and the reason the first platform admin has to come
@@ -470,20 +471,51 @@ describe("RevokePermissionUseCase", () => {
 // it back, so two concurrent grants each wrote the set the other had not seen.
 describe("granting and revoking write one row, not the whole set", () => {
   const actor = () =>
-    actorHolding("rbac.permission.grant", "rbac.permission.revoke", "member.read", "member.invite");
+    actorHolding(
+      "rbac.permission.grant",
+      "rbac.permission.revoke",
+      "member.read",
+      "member.invite",
+      "rbac.role.read",
+    );
 
+  // `member.read` requires nothing, so the one row here is the grant and not its closure.
   it("grants by inserting the one permission", async () => {
     reset([role()]);
 
     const updated = await grant().execute(actor(), {
       roleId: EDITABLE,
-      permission: "member.invite",
+      permission: "member.read",
     });
 
     // The row, not a reconciliation. `saved` holding a list is the read-modify-write.
-    expect(roles.granted).toEqual([{ roleId: EDITABLE, permission: "member.invite" }]);
+    expect(roles.granted).toEqual([{ roleId: EDITABLE, permission: "member.read" }]);
     expect(roles.saved).toEqual([]);
-    expect(updated.permissions).toContain("member.invite");
+    expect(updated.permissions).toContain("member.read");
+  });
+
+  // `AX5.4`. A key comes with what it needs and the role lacks, each one a row, each past
+  // the no-escalation check, so a role is never left holding a key it cannot use.
+  it("grants what a key requires alongside it, and refuses if the actor lacks any", async () => {
+    reset([role({ permissions: ["member.read"] })]);
+
+    // Holds the key and not the role list it needs, so the closure refuses it.
+    await expect(
+      grant().execute(actorHolding("rbac.permission.grant", "member.invite", "member.read"), {
+        roleId: EDITABLE,
+        permission: "member.invite",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(roles.granted).toEqual([]);
+
+    await grant().execute(
+      actorHolding("rbac.permission.grant", "member.invite", "rbac.role.read"),
+      { roleId: EDITABLE, permission: "member.invite" },
+    );
+    expect(roles.granted.map((row) => row.permission).sort()).toEqual([
+      "member.invite",
+      "rbac.role.read",
+    ]);
   });
 
   it("revokes by deleting the one permission", async () => {
@@ -515,6 +547,7 @@ describe("granting and revoking write one row, not the whole set", () => {
       "member.invite",
       "member.read",
       "member.remove",
+      "rbac.role.read",
     ]);
   });
 });

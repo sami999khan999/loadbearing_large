@@ -76,4 +76,5 @@ export {
   FlagRegistry,
   type PermissionKey,
   PermissionRegistry,
+  type ScopedSetDto,
 } from "@loadbearing/permissions";
