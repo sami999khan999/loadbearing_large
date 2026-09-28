@@ -1,4 +1,4 @@
-import type { ApiKeyRecord } from "@loadbearing/application";
+import { type ApiKeyRecord, Principal } from "@loadbearing/application";
 import { Identifiers, type OrganizationId } from "@loadbearing/contracts";
 import { CapabilitySet, type PermissionKey } from "@loadbearing/permissions";
 import { describe, expect, it } from "vitest";
@@ -204,5 +204,49 @@ describe("PrincipalBuilder — the platform axis", () => {
 
     expect(principal?.kind).toBe("api_key");
     expect(principal?.can("platform.status.read")).toBe(false);
+  });
+});
+
+// What a held stream re-reads each minute. A principal captured at open keeps every right
+// it had, so a deactivation or a revoked key would never reach the stream (`RV.1`).
+describe("PrincipalBuilder.refresh", () => {
+  it("rebuilds a user principal from the current capabilities", async () => {
+    const { builder } = await build({ session: true });
+    const stale = new Principal(ORG, COOKIE_USER, holding("messaging.conversation.read"));
+
+    const fresh = await builder.refresh(stale);
+
+    expect(fresh?.kind).toBe("user");
+    expect(fresh?.can("rbac.role.manage")).toBe(true);
+    expect(fresh?.can("messaging.conversation.read")).toBe(false);
+  });
+
+  it("returns null for a user whose membership was deactivated", async () => {
+    const { builder } = await build({ session: true, active: false });
+
+    expect(
+      await builder.refresh(new Principal(ORG, COOKIE_USER, holding("member.read"))),
+    ).toBeNull();
+  });
+
+  // The declared scopes are not in hand, so the old set is narrowed by the issuer's fresh
+  // one. Rebuilding from the issuer alone would widen a key to everything they hold.
+  it("narrows an api key by its issuer and never widens it", async () => {
+    const { builder } = await build({ session: true });
+    const key = Principal.apiKey(ORG, COOKIE_USER, holding("member.read"));
+
+    const fresh = await builder.refresh(key);
+
+    expect(fresh?.kind).toBe("api_key");
+    expect(fresh?.can("member.read")).toBe(true);
+    expect(fresh?.can("rbac.role.manage")).toBe(false);
+  });
+
+  it("returns null for an api key whose issuer was deactivated", async () => {
+    const { builder } = await build({ session: true, active: false });
+
+    expect(
+      await builder.refresh(Principal.apiKey(ORG, KEY_ISSUER, holding("member.read"))),
+    ).toBeNull();
   });
 });

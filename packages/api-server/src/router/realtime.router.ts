@@ -90,12 +90,15 @@ export class RealtimeRouter {
     let frames = 0;
     context.log.emit("realtime.stream.opened", { resumed: lastEventId !== undefined });
 
-    // Removed, left, or deactivated: the stream ends and the reopen is refused.
+    // Removed, left, deactivated, or the read revoked: the stream ends and the reopen is
+    // refused. Re-read, never the principal captured at open, which would keep all four.
     const watched = StreamRevalidation.watch(
       signal as AbortSignal,
       async () => {
+        const principal = await context.container.principals.refresh(context.principal);
+        if (!principal) return false;
         try {
-          await context.container.messaging.watch.execute(context.principal, input.conversationId);
+          await context.container.messaging.watch.execute(principal, input.conversationId);
           return true;
         } catch (error: unknown) {
           if (error instanceof ForbiddenError) return false;

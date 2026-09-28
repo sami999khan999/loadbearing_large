@@ -47,6 +47,24 @@ The builder throws nothing. `principalMiddleware` in `apps/web` turns `null` int
 named grant list. Keeping the decision at the call site is what lets one builder serve a transport
 that answers 401 and a process that has no HTTP.
 
+## `refresh` re-reads a principal a stream is holding
+
+A request builds its principal and drops it within milliseconds. A stream builds one and holds it
+for thirty minutes, and everything that happened in between is invisible to it: a deactivation, a
+role edit, a revoked grant. `refresh(principal)` is the read a held stream asks for each minute.
+
+| Kind | What `refresh` does |
+|---|---|
+| `user` | exactly what `fromHeaders` does after the session: `isActive`, then the tenant and platform sets, merged |
+| `api_key` | `isActive` for the issuer, then the old set **intersected** with the issuer's current one |
+| `system` | returns it unchanged — the worker never holds a stream |
+
+**An API key only narrows.** Its declared scopes are not in hand, only the principal. Rebuilding
+from the issuer alone would widen a key scoped to `member.read` into everything the issuer holds,
+which is the upgrade the key-first ordering above exists to prevent. The cost is that a right
+restored to the issuer does not come back until the stream reopens, and a reopen is a fresh
+`fromHeaders`.
+
 ## What it does not do
 
 **It does not authorize.** It produces the actor; `Authorizer.assert()` inside the use-case decides.
@@ -64,4 +82,5 @@ could set that reaches `Principal.organizationId`.
 ## Tested behaviours
 
 `tests/principal/principal.builder.spec.ts` pins the two orderings above, because both are invisible
-in review once they are correct — the file reads the same whichever way round it is.
+in review once they are correct — the file reads the same whichever way round it is. It also pins
+`refresh`: a deactivated user or issuer answers `null`, and a key is never widened.
