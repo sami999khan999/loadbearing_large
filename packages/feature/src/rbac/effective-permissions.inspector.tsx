@@ -4,6 +4,9 @@ import { useMessages } from "../i18n/index.js";
 import {
   type CapabilitiesDto,
   CapabilitySet,
+  CORE_MODULE,
+  type ExplanationDto,
+  type PermissionKey,
   PermissionRegistry,
   RoleQueries,
   StatusBadge,
@@ -28,6 +31,23 @@ function fromWire(dto: CapabilitiesDto): CapabilitySet {
   });
 }
 
+type Source = "role" | "override" | "denied" | "platform" | "plan";
+
+// Where one key's answer comes from, broadest cause first: the platform's deny, then the
+// org's, then the plan's ceiling, then an exception, then the role. Org scope only.
+function sourceOf(explanation: ExplanationDto, key: PermissionKey): Source | null {
+  const rows = explanation.overrides.filter((row) => row.permission === key && row.goalId === null);
+  if (rows.some((row) => row.effect === "deny" && row.authority === "platform")) {
+    return "platform";
+  }
+  if (rows.some((row) => row.effect === "deny")) return "denied";
+  const granted =
+    rows.some((row) => row.effect === "grant") || explanation.roleGrants.includes(key);
+  if (!granted) return null;
+  if (!explanation.entitled.includes(key)) return "plan";
+  return rows.some((row) => row.effect === "grant") ? "override" : "role";
+}
+
 export interface EffectivePermissionsInspectorProps {
   // Without one, `can()` denies every goal-scoped key — correct, and worth showing
   // rather than hiding.
@@ -45,6 +65,8 @@ export function EffectivePermissionsInspector({
 }: EffectivePermissionsInspectorProps) {
   const own = useCapabilities();
   const { t } = useMessages("common");
+  // Only read when there is an explanation, which only a route that loads `role` asks for.
+  const { t: role } = useMessages("role");
   const describe = useErrorMessage();
   const client = useApiClient();
 
@@ -53,7 +75,7 @@ export function EffectivePermissionsInspector({
   const other = useAppQuery({ ...RoleQueries.effective(client, userId ?? ""), enabled: !!userId });
 
   const capabilities = useMemo(
-    () => (userId ? (other.data ? fromWire(other.data) : null) : own),
+    () => (userId ? (other.data ? fromWire(other.data.capabilities) : null) : own),
     [userId, other.data, own],
   );
 
@@ -83,6 +105,14 @@ export function EffectivePermissionsInspector({
                     // with no goal selected is not a permission problem.
                   }
                   <small>{registry.scopeOf(permission)}</small>
+                  {(() => {
+                    const explanation = userId ? other.data?.explanation : undefined;
+                    if (!explanation || registry.meta(permission)?.module === CORE_MODULE) {
+                      return null;
+                    }
+                    const source = sourceOf(explanation, permission);
+                    return source ? <small> · {role(`role.source.${source}`)}</small> : null;
+                  })()}
                 </li>
               );
             })}

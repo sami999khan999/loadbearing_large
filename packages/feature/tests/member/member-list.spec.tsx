@@ -16,6 +16,7 @@ const MEMBER: MemberDto = {
   roleName: "Owner",
   joinedAt: new Date("2026-09-01T00:00:00.000Z"),
   deactivated: false,
+  exceptions: 0,
 };
 
 const clientWith = (list: () => Promise<unknown>) => ({ member: { list } }) as unknown as ApiClient;
@@ -129,5 +130,31 @@ describe("MemberList", () => {
         expect(screen.getByText("You cannot deactivate your own membership.")).toBeDefined(),
       );
     });
+  });
+});
+
+// `AX5.7`. The drift, read from the list: "Owner + 2 exceptions", and nothing when none.
+describe("MemberList — exceptions", () => {
+  const listed =
+    (...members: readonly MemberDto[]) =>
+    () =>
+      Promise.resolve({ items: members, total: members.length, limit: 25, offset: 0 });
+
+  it("adds the count to the role, singular and plural, and nothing at zero", async () => {
+    await render(
+      listed(
+        { ...MEMBER, exceptions: 1 },
+        {
+          ...MEMBER,
+          userId: "00000000-0000-7000-8000-000000000002" as MemberDto["userId"],
+          exceptions: 2,
+        },
+        { ...MEMBER, userId: "00000000-0000-7000-8000-000000000003" as MemberDto["userId"] },
+      ),
+    );
+
+    expect(await screen.findByText("+ 1 exception")).toBeDefined();
+    expect(screen.getByText("+ 2 exceptions")).toBeDefined();
+    expect(screen.getAllByText(/exception/)).toHaveLength(2);
   });
 });
