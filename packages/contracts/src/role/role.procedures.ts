@@ -17,6 +17,12 @@ export class RoleProcedures {
     .input(RoleContract.inspect)
     .output(RoleContract.capabilities);
 
+  // The org's ceiling: every key its plan lets through. The role editor greys the rest
+  // rather than hiding them, so an admin sees what an upgrade would bring back.
+  public static readonly entitlement = oc
+    .route({ method: "GET", path: "/roles/entitlement" })
+    .output(RoleContract.entitlement);
+
   public static readonly create = oc
     .route({ method: "POST", path: "/roles" })
     .input(RoleContract.create)
@@ -51,6 +57,7 @@ export class RoleProcedures {
   public static readonly all = {
     list: RoleProcedures.list,
     effective: RoleProcedures.effective,
+    entitlement: RoleProcedures.entitlement,
     create: RoleProcedures.create,
     update: RoleProcedures.update,
     remove: RoleProcedures.remove,

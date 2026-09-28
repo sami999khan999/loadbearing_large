@@ -48,6 +48,7 @@ describe("RoleProcedures", () => {
     expect(Object.keys(RoleProcedures.all).sort()).toEqual([
       "create",
       "effective",
+      "entitlement",
       "grant",
       "list",
       "remove",

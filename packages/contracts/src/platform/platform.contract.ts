@@ -169,6 +169,135 @@ export class PlatformContract {
 
   public static readonly replicaToggle = z.object({ enabled: z.boolean() });
 
+  // The key is a string, not the flag union: a row can outlive the code that declared it,
+  // and the list shows that row as orphaned rather than failing to parse it.
+  public static readonly flagTarget = z.object({
+    organizationId: Identifiers.organizationId,
+    slug: z.string(),
+  });
+
+  public static readonly flag = z.object({
+    key: z.string(),
+    owner: z.string().nullable(),
+    expiresOn: z.string().nullable(),
+    description: z.string().nullable(),
+    isEnabled: z.boolean(),
+    targets: z.array(PlatformContract.flagTarget),
+    orphaned: z.boolean(),
+    updatedAt: z.date().nullable(),
+  });
+
+  public static readonly flagList = z.object({ items: z.array(PlatformContract.flag) });
+
+  public static readonly flagToggle = z.object({
+    key: z.string().trim().min(1).max(128),
+    enabled: z.boolean(),
+  });
+
+  // Entitlement. Keys are strings rather than the permission union: a plan row can
+  // outlive a key the catalog dropped, and the screen shows it rather than failing.
+  public static readonly plan = z.object({
+    key: z.string(),
+    name: z.string(),
+    description: z.string(),
+    isUnlimited: z.boolean(),
+    isSystem: z.boolean(),
+    permissions: z.array(z.string()).readonly(),
+    organizations: z.number().int().nonnegative(),
+  });
+
+  public static readonly planList = z.object({
+    items: z.array(PlatformContract.plan).readonly(),
+    defaultPlanKey: z.string(),
+  });
+
+  public static readonly planSave = z.object({
+    key: z.string().trim().min(1).max(63),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500),
+    permissions: z.array(z.string().min(1).max(128)).max(500),
+  });
+
+  public static readonly planRef = z.object({ key: z.string().trim().min(1).max(63) });
+
+  // An id or a slug, whichever the operator is holding, as `tenantLookup` takes it.
+  public static readonly organizationRef = z.object({
+    organization: z.string().trim().min(1).max(128),
+  });
+
+  public static readonly adjustmentEffect = z.enum(["add", "remove"]);
+
+  public static readonly adjustment = z.object({
+    organizationId: Identifiers.organizationId,
+    permission: z.string(),
+    effect: PlatformContract.adjustmentEffect,
+    reason: z.string(),
+    expiresAt: z.date().nullable(),
+    createdAt: z.date(),
+  });
+
+  public static readonly roleCoverage = z.object({
+    key: z.string(),
+    name: z.string(),
+    listed: z.number().int().nonnegative(),
+    entitled: z.number().int().nonnegative(),
+  });
+
+  public static readonly organizationEntitlement = z.object({
+    organization: z.object({ id: Identifiers.organizationId, slug: z.string(), name: z.string() }),
+    planKey: z.string(),
+    adjustments: z.array(PlatformContract.adjustment).readonly(),
+    entitled: z.array(z.string()).readonly(),
+    roles: z.array(PlatformContract.roleCoverage).readonly(),
+  });
+
+  public static readonly planAssign = z.object({
+    organization: z.string().trim().min(1).max(128),
+    planKey: z.string().trim().min(1).max(63),
+  });
+
+  // `coerce`, because a date arrives as a string over the OpenAPI adapter. Null is permanent.
+  public static readonly adjustmentSave = z.object({
+    organization: z.string().trim().min(1).max(128),
+    permission: z.string().trim().min(1).max(128),
+    effect: PlatformContract.adjustmentEffect,
+    reason: z.string().trim().min(1).max(500),
+    expiresAt: z.coerce.date().nullable(),
+  });
+
+  // Every key the closure reached, so the screen can say "also removed: member.invite".
+  public static readonly adjusted = z.object({ permissions: z.array(z.string()).readonly() });
+
+  public static readonly adjustmentClear = z.object({
+    organization: z.string().trim().min(1).max(128),
+    permission: z.string().trim().min(1).max(128),
+  });
+
+  public static readonly moduleSwitch = z.object({
+    module: z.string(),
+    enabled: z.boolean(),
+    reason: z.string().nullable(),
+    disabledAt: z.date().nullable(),
+  });
+
+  public static readonly moduleSwitchList = z.object({
+    items: z.array(PlatformContract.moduleSwitch).readonly(),
+  });
+
+  // The reason is required to switch off; the use-case says so, with a field to point at.
+  public static readonly moduleSwitchUpdate = z.object({
+    module: z.string().trim().min(1).max(64),
+    enabled: z.boolean(),
+    reason: z.string().max(500),
+  });
+
+  // An id or a slug, whichever the operator is holding, as `tenantLookup` takes it.
+  public static readonly flagTargetToggle = z.object({
+    key: z.string().trim().min(1).max(128),
+    organization: z.string().trim().min(1).max(128),
+    enabled: z.boolean(),
+  });
+
   public static readonly projectionEntry = z.object({
     action: z.string().min(1),
     label: z.string().min(1),
@@ -353,6 +482,22 @@ export type ReprojectRequestedDto = z.infer<typeof PlatformContract.reprojectReq
 export type ProjectionToggleInput = z.infer<typeof PlatformContract.projectionToggle>;
 export type ReplicaDto = z.infer<typeof PlatformContract.replica>;
 export type ReplicaToggleInput = z.infer<typeof PlatformContract.replicaToggle>;
+export type FlagDto = z.infer<typeof PlatformContract.flag>;
+export type PlanDto = z.infer<typeof PlatformContract.plan>;
+export type PlanListDto = z.infer<typeof PlatformContract.planList>;
+export type PlanSaveInput = z.infer<typeof PlatformContract.planSave>;
+export type PlanRefInput = z.infer<typeof PlatformContract.planRef>;
+export type AdjustmentDto = z.infer<typeof PlatformContract.adjustment>;
+export type OrganizationEntitlementDto = z.infer<typeof PlatformContract.organizationEntitlement>;
+export type PlanAssignInput = z.infer<typeof PlatformContract.planAssign>;
+export type AdjustmentSaveInput = z.infer<typeof PlatformContract.adjustmentSave>;
+export type AdjustedDto = z.infer<typeof PlatformContract.adjusted>;
+export type AdjustmentClearInput = z.infer<typeof PlatformContract.adjustmentClear>;
+export type ModuleSwitchDto = z.infer<typeof PlatformContract.moduleSwitch>;
+export type ModuleSwitchUpdateInput = z.infer<typeof PlatformContract.moduleSwitchUpdate>;
+export type FlagTargetDto = z.infer<typeof PlatformContract.flagTarget>;
+export type FlagToggleInput = z.infer<typeof PlatformContract.flagToggle>;
+export type FlagTargetToggleInput = z.infer<typeof PlatformContract.flagTargetToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
 export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;

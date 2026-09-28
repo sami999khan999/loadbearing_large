@@ -79,6 +79,71 @@ export class PlatformProcedures {
     .input(PlatformContract.replicaToggle)
     .output(Envelope.acknowledged);
 
+  // Every flag, server-only ones included. The one place those names leave the server,
+  // and only to a platform admin.
+  public static readonly listFlags = oc
+    .route({ method: "GET", path: "/platform/flags" })
+    .output(PlatformContract.flagList);
+
+  public static readonly updateFlag = oc
+    .route({ method: "PUT", path: "/platform/flags" })
+    .input(PlatformContract.flagToggle)
+    .output(Envelope.acknowledged);
+
+  public static readonly updateFlagTarget = oc
+    .route({ method: "PUT", path: "/platform/flags/organization" })
+    .input(PlatformContract.flagTargetToggle)
+    .output(Envelope.acknowledged);
+
+  public static readonly listPlans = oc
+    .route({ method: "GET", path: "/platform/plans" })
+    .output(PlatformContract.planList);
+
+  public static readonly savePlan = oc
+    .route({ method: "PUT", path: "/platform/plans" })
+    .input(PlatformContract.planSave)
+    .output(Envelope.acknowledged);
+
+  public static readonly deletePlan = oc
+    .route({ method: "DELETE", path: "/platform/plans" })
+    .input(PlatformContract.planRef)
+    .output(Envelope.acknowledged);
+
+  // What the next signup lands on (`RV.14`). Not on the plan's own row: one default, many plans.
+  public static readonly updateDefaultPlan = oc
+    .route({ method: "PUT", path: "/platform/plans/default" })
+    .input(PlatformContract.planRef)
+    .output(Envelope.acknowledged);
+
+  public static readonly organizationEntitlement = oc
+    .route({ method: "GET", path: "/platform/entitlements" })
+    .input(PlatformContract.organizationRef)
+    .output(PlatformContract.organizationEntitlement);
+
+  public static readonly assignPlan = oc
+    .route({ method: "PUT", path: "/platform/entitlements/plan" })
+    .input(PlatformContract.planAssign)
+    .output(Envelope.acknowledged);
+
+  public static readonly adjustEntitlement = oc
+    .route({ method: "PUT", path: "/platform/entitlements/adjustments" })
+    .input(PlatformContract.adjustmentSave)
+    .output(PlatformContract.adjusted);
+
+  public static readonly clearAdjustment = oc
+    .route({ method: "DELETE", path: "/platform/entitlements/adjustments" })
+    .input(PlatformContract.adjustmentClear)
+    .output(Envelope.acknowledged);
+
+  public static readonly moduleSwitches = oc
+    .route({ method: "GET", path: "/platform/modules" })
+    .output(PlatformContract.moduleSwitchList);
+
+  public static readonly updateModuleSwitch = oc
+    .route({ method: "PUT", path: "/platform/modules" })
+    .input(PlatformContract.moduleSwitchUpdate)
+    .output(Envelope.acknowledged);
+
   public static readonly listProjection = oc
     .route({ method: "GET", path: "/platform/projection" })
     .output(PlatformContract.projection);
@@ -146,5 +211,18 @@ export class PlatformProcedures {
     shardMap: PlatformProcedures.shardMap,
     locateTenant: PlatformProcedures.locateTenant,
     moveTenant: PlatformProcedures.moveTenant,
+    listFlags: PlatformProcedures.listFlags,
+    updateFlag: PlatformProcedures.updateFlag,
+    updateFlagTarget: PlatformProcedures.updateFlagTarget,
+    listPlans: PlatformProcedures.listPlans,
+    savePlan: PlatformProcedures.savePlan,
+    deletePlan: PlatformProcedures.deletePlan,
+    updateDefaultPlan: PlatformProcedures.updateDefaultPlan,
+    organizationEntitlement: PlatformProcedures.organizationEntitlement,
+    assignPlan: PlatformProcedures.assignPlan,
+    adjustEntitlement: PlatformProcedures.adjustEntitlement,
+    clearAdjustment: PlatformProcedures.clearAdjustment,
+    moduleSwitches: PlatformProcedures.moduleSwitches,
+    updateModuleSwitch: PlatformProcedures.updateModuleSwitch,
   } as const;
 }

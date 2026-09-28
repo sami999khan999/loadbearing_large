@@ -5,6 +5,8 @@ import type { PermissionKey } from "../import.js";
 export const roleProcedurePermissions = {
   "role.list": "rbac.role.read",
   "role.effective": "rbac.effective.inspect",
+  // Read with the roles: the ceiling is what the role list is drawn against.
+  "role.entitlement": "rbac.role.read",
   "role.create": "rbac.role.manage",
   "role.update": "rbac.role.manage",
   "role.remove": "rbac.role.manage",

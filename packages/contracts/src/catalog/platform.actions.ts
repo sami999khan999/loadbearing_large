@@ -4,6 +4,22 @@ export const platformActions = {
   "platform.projection.resumed": { label: "Projection resumed" },
   "platform.replica.enabled": { label: "Replica reads enabled" },
   "platform.replica.disabled": { label: "Replica reads disabled" },
+  // Entitlement. A change to one org is audited twice: in the tier, and in that org's own
+  // log, so its admins can see what the platform did to their plan.
+  "plan.saved": { label: "Plan saved" },
+  "plan.deleted": { label: "Plan deleted" },
+  "plan.default.changed": { label: "Default plan changed" },
+  "organization.plan.changed": { label: "Organization moved to a plan" },
+  "entitlement.adjusted": { label: "Entitlement adjusted" },
+  "entitlement.adjustment.cleared": { label: "Entitlement adjustment cleared" },
+  "entitlement.adjustment.expired": { label: "Entitlement adjustment expired" },
+  "module.disabled": { label: "Module switched off" },
+  "module.enabled": { label: "Module switched back on" },
+  // The payload names the flag. It is an audit row a platform admin reads, never a response.
+  "flag.enabled": { label: "Flag switched on" },
+  "flag.disabled": { label: "Flag switched off" },
+  "flag.organization.added": { label: "Flag switched on for an organization" },
+  "flag.organization.removed": { label: "Flag switched off for an organization" },
   "platform.restore.requested": { label: "Restore requested" },
   "platform.reproject.requested": { label: "Re-projection requested" },
   "tenant.retention.changed": { label: "Tenant retention changed" },

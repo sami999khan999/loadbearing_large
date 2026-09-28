@@ -48,6 +48,10 @@ export class RoleContract {
 
   public static readonly inspect = z.object({ userId: Identifiers.userId });
 
+  // Strings, not the permission union: the list is compared against role rows, which are
+  // raw strings too, and a key the catalog dropped simply never matches.
+  public static readonly entitlement = z.object({ keys: z.array(z.string()).readonly() });
+
   // The stable handle a rule can name — `MemberRules.OWNER_KEY` is a string comparison
   // against this column, so it is a slug and it never changes after creation.
   public static readonly key = z
@@ -88,3 +92,4 @@ export type CreateRoleInput = z.infer<typeof RoleContract.create>;
 export type UpdateRoleInput = z.infer<typeof RoleContract.update>;
 export type DeleteRoleInput = z.infer<typeof RoleContract.remove>;
 export type ChangeRolePermissionInput = z.infer<typeof RoleContract.changePermission>;
+export type RoleEntitlementDto = z.infer<typeof RoleContract.entitlement>;

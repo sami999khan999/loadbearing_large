@@ -6,6 +6,7 @@ export {
   type InspectEffectiveInput,
   RoleContract,
   type RoleDto,
+  type RoleEntitlementDto,
   type UpdateRoleInput,
 } from "./role.contract.js";
 export { RoleEntity } from "./role.entity.js";

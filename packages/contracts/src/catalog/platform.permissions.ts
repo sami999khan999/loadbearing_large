@@ -33,4 +33,18 @@ export const platformProcedurePermissions = {
   "platform.locateTenant": "platform.shards.read",
   // Manage: a move freezes the tenant's writes for as long as the copy takes.
   "platform.moveTenant": "platform.shards.manage",
+  "platform.listFlags": "platform.flag.read",
+  "platform.updateFlag": "platform.flag.manage",
+  "platform.updateFlagTarget": "platform.flag.manage",
+  "platform.listPlans": "platform.entitlement.read",
+  "platform.savePlan": "platform.entitlement.manage",
+  "platform.deletePlan": "platform.entitlement.manage",
+  "platform.updateDefaultPlan": "platform.entitlement.manage",
+  "platform.organizationEntitlement": "platform.entitlement.read",
+  "platform.assignPlan": "platform.entitlement.manage",
+  "platform.adjustEntitlement": "platform.entitlement.manage",
+  "platform.clearAdjustment": "platform.entitlement.manage",
+  // Read under status: which modules are down is status, read by the people on call.
+  "platform.moduleSwitches": "platform.status.read",
+  "platform.updateModuleSwitch": "platform.module.manage",
 } as const satisfies Record<string, PermissionKey>;
