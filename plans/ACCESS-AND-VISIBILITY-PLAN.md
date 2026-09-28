@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day; next is Phase 6** (Phase 7 is also
-free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1` and
+`AX6.2` are done, and next is `AX6.3`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -26,6 +26,25 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 6–11 | all |
+
+### Where Phase 6 stopped (2026-09-28, 18:10 Asia/Dhaka)
+
+Pushed to `origin/dev`. To resume on another device:
+
+1. `git pull`, then `pnpm install`, then `pnpm db:migrate`. It applies `0046_account_suspension`
+   on every node. Without it, sign-in fails on the missing `users.suspended_at`.
+2. Pick up at `AX6.3`, the sign-in hook and `ACCOUNT_SUSPENDED`. `AX6.4`–`AX6.9` follow in order.
+   `AX6.6` needs `AX6.4`'s `SessionGateway`, and `AX6.7`–`AX6.8` need `AX6.6`'s procedures.
+3. The Phase 6 exit walk still has to prove `AX6.2`'s four consequences in the running app:
+   session anonymous, principal refused, API key refused, stream closed.
+
+Useful to know:
+- A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
+  that migration's snapshot JSON. Confirm with a plain `generate`, which must report no changes.
+- Test accounts `alice`, `bob` and `carol` `@example.test`, password `Correct-Horse-9`. Alice is
+  the platform admin. The web app runs on port 13000.
+- Stopping `pnpm dev` leaves node processes behind. Kill them by repo path **and** by ports
+  13000–13009, because the vite process names no repo path.
 
 ### Running it again
 
@@ -897,12 +916,15 @@ deleted, the stray invitation from line 1's probe revoked, the expired grant rem
 cannot undo. They can also cut a compromised account off everywhere in seconds. Both are loud,
 audited, and visible inside the tenant.
 
-- [ ] `AX6.1` **`users.suspended_at`** — rename `deactivated_at` in `auth.schema.ts` and in
+- [x] `AX6.1` **`users.suspended_at`** — rename `deactivated_at` in `auth.schema.ts` and in
   `auth.factory.ts`'s `additionalFields` (`input: false` stays), with migration
   `0046_account_suspension.sql`. "Deactivated" already means a membership here. drizzle-kit asks
   whether this is a rename; if that blocks, keep the old name, and **never** add a second column.
   Correct the comment on `memberships` that the rename makes wrong.
-- [ ] `AX6.2` **A suspended account holds nothing** — `PgMembershipReader.isActive`,
+  done: 2026-09-28. drizzle-kit's rename prompt cannot run non-interactively, so `0046` is
+  `generate --custom` with a hand-written `RENAME COLUMN`, and `meta/0046_snapshot.json` renames
+  the column to match. `generate` then reports "No schema changes". Applied on both nodes.
+- [x] `AX6.2` **A suspended account holds nothing** — `PgMembershipReader.isActive`,
   `activeOrganizationFor`, `organizationsFor` and `activeMemberIds` join `users` on
   `suspended_at IS NULL`. That one change:
   - makes `fetchSession` anonymous;
@@ -911,6 +933,8 @@ audited, and visible inside the tenant.
   - closes the user stream within 60 s.
   
   Spec: `infrastructure/tests/rbac/pg-membership.reader.spec.ts`.
+  done: 2026-09-28, the reader and its spec. The four consequences above follow from the reader
+  and are **not yet seen in the running app**. Phase 6's exit walk checks them.
 - [ ] `AX6.3` **Sign-in says why** — a Better Auth session-create hook refuses a suspended user with
   the new error code `ACCOUNT_SUSPENDED`. The code goes in `errors`, and its copy in `content`
   (`en`, `bn`); `Record<ErrorCode, ShellMessageKey>` will not compile without the copy. Verify the
@@ -1235,6 +1259,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-28 | @sami | Phase 6 started: `users.deactivated_at` renamed to `suspended_at` (`0046`, custom migration plus snapshot rename), and `PgMembershipReader` refuses a suspended account in all four readers (`AX6.1`, `AX6.2`). Stopped before `AX6.3`; handoff in "Where Phase 6 stopped" |
 | 2026-09-28 | @sami | Phase 5 done: override expiry, authority and CHECKs (`0044`), grants to existing roles (`0045`), `explainFor` with the fold in `application`, five override use-cases, the drift counts, the access panel and the inspector's sources. Exit verified in the running app. `AX5.10`–`AX5.14` recorded |
 | 2026-09-28 | @sami | Phase 4 done: plans, adjustments and the kill switch (`0043`), the mask inside resolution at four queries, `invalidateAll`, eleven use-cases, the platform screens and the role editor's ceiling. `RV.10`, `RV.13`, `RV.14` built. Exit verified in the running app. `AX1.9` done; `AX4.10`–`AX4.16` recorded |
 | 2026-09-28 | @sami | Phase 3 done: `feature_flags` and `feature_flag_organizations` (`0042`), `PgFlagRepository`, `FlagCache`, three platform procedures, flags on the session, `/platform/flags`. Exit verified in the running app. `AX3.8`–`AX3.12` recorded; `FlagCache` deletes once rather than twice |
