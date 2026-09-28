@@ -152,6 +152,33 @@ Every key the shipped catalog defines is org-scoped, which is why
 
 ---
 
+## `requires` and its mirror
+
+Some keys are useless alone. `member.invite` opens a form whose role picker reads `role.list`, so
+a person who can invite and cannot read roles sees an empty picker and a button that fails. A key
+names what it needs:
+
+```ts
+"member.invite": { …, requires: ["member.read", "rbac.role.read"] },
+```
+
+The rule for adding an edge: a write key requires its read key, and a key whose screen reads
+another subject requires that subject's read key too. Every requirement is in the same scope as
+the key that needs it, and the spec checks both.
+
+| Method | Answers | Used when |
+|---|---|---|
+| `closure(keys)` | the keys plus everything they need, transitively | an add: a plan, an adjustment, a per-user grant |
+| `dependentClosure(keys)` | the keys plus everything that needs them | a remove or a deny, so no key is left held and unusable |
+
+**Closed on write only.** Applying `requires` on read would take access away from existing roles
+on the day it deployed: every role holding `member.invite` without `rbac.role.read` would lose the
+invite. Closing the set when it is written changes nothing that already exists.
+
+`requires` is typed `readonly string[]`, not `PermissionKey[]`. The fragments `satisfies
+PermissionMeta`, and `PermissionKey` is derived from them, so the typed form is a circular type
+(TS7022). Each entry is narrowed through `Object.hasOwn(CATALOG, …)` once, at module load.
+
 ## Never delete a key
 
 > [!IMPORTANT]

@@ -17,6 +17,7 @@ export const platformPermissions = {
     scope: "platform",
     module: "platform",
     label: "Change retention policy",
+    requires: ["platform.retention.read"],
   },
   "platform.analytics.read": {
     scope: "platform",
@@ -27,6 +28,7 @@ export const platformPermissions = {
     scope: "platform",
     module: "platform",
     label: "Change analytics policy",
+    requires: ["platform.analytics.read"],
   },
   "platform.storage.read": {
     scope: "platform",
@@ -42,6 +44,7 @@ export const platformPermissions = {
     scope: "platform",
     module: "platform",
     label: "Move a tenant between nodes",
+    requires: ["platform.shards.read"],
   },
   // Routes the worker's batch reads to a standby — `24.3`. Manage only: whether one
   // exists and how far behind it is shows on the status page under `status.read`.
@@ -49,6 +52,37 @@ export const platformPermissions = {
     scope: "platform",
     module: "platform",
     label: "Route reads to the replica",
+    requires: ["platform.status.read"],
+  },
+  // Every flag, server-only ones included: the only place those names leave the server.
+  "platform.flag.read": {
+    scope: "platform",
+    module: "platform",
+    label: "View feature flags",
+  },
+  "platform.flag.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Switch feature flags",
+    requires: ["platform.flag.read"],
+  },
+  "platform.entitlement.read": {
+    scope: "platform",
+    module: "platform",
+    label: "View plans and entitlements",
+  },
+  "platform.entitlement.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Edit plans and adjust what an organization is entitled to",
+    requires: ["platform.entitlement.read"],
+  },
+  // The incident switch, on the status page: which modules are down is read as status.
+  "platform.module.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Switch a module off for every organization",
+    requires: ["platform.status.read"],
   },
   "platform.tenant.manage": {
     scope: "platform",

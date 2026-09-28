@@ -21,6 +21,7 @@ export const notificationPermissions = {
     scope: "org",
     module: "notification",
     label: "Mark notifications read",
+    requires: ["notification.inbox.read"],
   },
   // Separate again. Choosing how you are contacted is not the same power as reading what
   // you were sent, and an organization may want to fix the second while allowing the first.

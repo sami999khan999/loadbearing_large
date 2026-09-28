@@ -70,3 +70,58 @@ describe("PermissionRegistry", () => {
     expect(registry.byModule("rbac")).toBe(registry.byModule("rbac"));
   });
 });
+
+// `requires` is closed over on an add and its mirror on a remove or a deny. A requirement
+// in another scope would let a tenant grant pull a platform key in behind it.
+describe("PermissionRegistry — requirements", () => {
+  it("names only known keys, each in the scope of the key that needs it", () => {
+    for (const key of registry.all()) {
+      const declared = registry.meta(key)?.requires ?? [];
+
+      expect(registry.requirementsOf(key)).toHaveLength(declared.length);
+      for (const requirement of registry.requirementsOf(key)) {
+        expect(registry.scopeOf(requirement)).toBe(registry.scopeOf(key));
+      }
+    }
+  });
+
+  it("closes an add over what it needs, transitively and input first", () => {
+    expect(registry.closure(["member.invite"])).toEqual([
+      "member.invite",
+      "member.read",
+      "rbac.role.read",
+    ]);
+    expect(registry.closure(["member.read"])).toEqual(["member.read"]);
+  });
+
+  // The reason `RV.13` exists: without the role list, the invite form's picker is empty.
+  it("closes a remove over what depends on it", () => {
+    const taken = registry.dependentClosure(["rbac.role.read"]);
+
+    expect(taken[0]).toBe("rbac.role.read");
+    expect(taken).toContain("member.invite");
+    expect(taken).toContain("member.role.change");
+    expect(taken).toContain("rbac.role.manage");
+    expect(taken).not.toContain("member.read");
+  });
+
+  it("is idempotent in both directions", () => {
+    for (const key of registry.all()) {
+      const up = registry.closure([key]);
+      const down = registry.dependentClosure([key]);
+
+      expect(registry.closure(up)).toEqual(up);
+      expect(registry.dependentClosure(down)).toEqual(down);
+    }
+  });
+
+  // The walk keeps a visited set, so a cycle would end rather than hang. The catalog
+  // has none, and a key that ended up requiring itself would be a declaration mistake.
+  it("has no cycle, and closing over every key ends", () => {
+    for (const key of registry.all()) {
+      const others = registry.closure(registry.requirementsOf(key));
+      expect(others).not.toContain(key);
+    }
+    expect(registry.closure(registry.all())).toHaveLength(registry.all().length);
+  });
+});

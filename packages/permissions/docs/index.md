@@ -30,10 +30,13 @@ packages/permissions/
 │   ├── registry/                    ← no import.ts: this package takes nothing from outside
 │   │   ├── index.ts
 │   │   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
-│   │   └── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+│   │   ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
+│   │   ├── flag-registry.ts         → FlagRegistry, FlagKey, FlagMeta
+│   │   └── widget-registry.ts       → WidgetRegistry, WidgetKey, ZoneKey, ZONES, WidgetVisibility, …
 │   ├── capability/
 │   │   ├── index.ts
-│   │   └── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+│   │   ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
+│   │   └── entitlement-mask.ts      → EntitlementMask, EntitlementInput
 │   ├── catalog/                     ← one fragment per slice, team-owned
 │   │   ├── index.ts                 ←   merges fragments (platform-owned)
 │   │   ├── core.permissions.ts      ←   held by every principal (rule 5)
@@ -45,6 +48,14 @@ packages/permissions/
 │   ├── gate/                        ← same pattern for nav gates
 │   │   ├── index.ts
 │   │   └── rbac.gate.ts
+│   ├── flag/                        ← same pattern for feature flags
+│   │   ├── index.ts                 → FLAGS
+│   │   └── widget.flags.ts
+│   ├── widget/                      ← same pattern for widgets
+│   │   ├── index.ts                 → WIDGETS
+│   │   ├── core.widgets.ts          ←   the nav: required, ungated
+│   │   ├── member.widgets.ts
+│   │   └── notification.widgets.ts  ←   the bell: inline
 │   └── route/                       ← same pattern for destinations
 │       ├── index.ts                 → ROUTES, AppRoute, RoutePath
 │       ├── shell.routes.ts          ←   platform-owned: home, sign-in, forbidden
@@ -54,20 +65,23 @@ packages/permissions/
 └── tests/
     ├── registry/
     │   ├── permission-registry.spec.ts
-    │   └── module-registry.spec.ts
+    │   ├── module-registry.spec.ts
+    │   ├── flag-registry.spec.ts
+    │   └── widget-registry.spec.ts
     ├── capability/
-    │   └── capability-set.spec.ts
+    │   ├── capability-set.spec.ts
+    │   └── entitlement-mask.spec.ts
     └── route/
         └── route.spec.ts
 ```
 
 ---
 
-## The four seams
+## The seams
 
-The barrel has five `export` statements: these four, plus `CATALOG` and `GATES` — the raw tables
-the registries wrap, out here because the registries' own specs and `content`'s `ModuleKey` read
-them directly.
+Beside the seams below, the barrel exports the raw tables the registries wrap — `CATALOG`, `GATES`,
+`FLAGS` and `WIDGETS` — because the registries' own specs and `content`'s `ModuleKey` read them
+directly.
 
 ### [`PermissionRegistry`](reference/permission-registry.md) — the vocabulary
 
@@ -126,6 +140,37 @@ shell links against. It lives here rather than in a shell because a router's gen
 cannot be the source — a Nest process has none at all, and web, desktop, and Next each generate a
 different one. `ModuleGate.route` is typed `AppRoute`, so a gate naming an undeclared path fails to
 compile.
+
+### [`EntitlementMask`](reference/entitlement-mask.md) — what the org's plan allows
+
+```ts
+EntitlementMask.from({ plan: "all", added, removed, disabledModules }).narrow(dto);
+```
+
+A filter over the grants an org's roles hold, applied before `CapabilitySet.from`. It narrows
+grants and never touches a deny, a `core` key or the platform axis. So every check downstream obeys
+a plan without knowing plans exist, and an upgrade restores the org admin's roles at once, because
+nothing was deleted.
+
+### [`FlagRegistry`](reference/flag-registry.md) — what is switched on
+
+```ts
+FlagRegistry.instance.clientGating();   // the flags a widget names — the only ones sent to a browser
+```
+
+Every flag is declared in code with an owner and an expiry date, and switched in Postgres.
+Client-gating is derived from the widgets, never declared, so a server-only flag's name cannot
+reach the session payload by someone forgetting a field.
+
+### [`WidgetRegistry`](reference/widget-registry.md) — what a screen shows
+
+```ts
+WidgetRegistry.instance.visibilityOf("member.count", facts); // "visible" | "denied" | …
+```
+
+Every card and inline element that can be absent for its own reason, with its zone, its order, its
+permission and its policy. `visibilityOf` answers with the broadest cause, as pure data, so a zone
+resolves during SSR and a spec can say what a role sees without rendering anything.
 
 ---
 
@@ -204,6 +249,7 @@ reach that branch rather than leaving rule 3 unverified until a slice adds a goa
 
 ## See also
 
-- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [The platform scope](reference/platform-scope.md) · [ModuleRegistry](reference/module-registry.md) · [ROUTES](reference/routes.md)
+- [PermissionRegistry](reference/permission-registry.md) · [CapabilitySet](reference/capability-set.md) · [The platform scope](reference/platform-scope.md) · [ModuleRegistry](reference/module-registry.md) · [ROUTES](reference/routes.md) · [EntitlementMask](reference/entitlement-mask.md) · [FlagRegistry](reference/flag-registry.md) · [WidgetRegistry](reference/widget-registry.md)
+- [Visibility](../../../docs/opinions/visibility.md) — the four mechanisms and the order they resolve in
 - [Build order · 08 · permissions](../../../docs/setup/08-permissions-package.md)
 - [`@loadbearing/core`](../../core/docs/index.md) — the layer below
