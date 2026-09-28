@@ -50,6 +50,8 @@ const ROLES: readonly SystemRole[] = Object.freeze([
     permissions: [
       "rbac.role.read",
       "rbac.role.manage",
+      // The drift reviewer's view. Writing exceptions stays with whoever may grant.
+      "rbac.override.read",
       "member.read",
       "member.invite",
       ...NOTIFICATION,

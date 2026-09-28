@@ -16,6 +16,13 @@ import {
 import { BaseRepository } from "../primitive/index.js";
 import { memberships, roles, users } from "../schema/index.js";
 
+// Live overrides for the row's membership, on `permission_overrides_user_idx`. Named in full:
+// drizzle writes a column unqualified in a one-table select, and `po` would capture it.
+const EXCEPTIONS = sql<number>`(select count(*)::int from permission_overrides po
+  where po.organization_id = "memberships"."organization_id"
+    and po.user_id = "memberships"."user_id"
+    and (po.expires_at is null or po.expires_at > now()))`;
+
 export class PgMemberRepository extends BaseRepository implements MemberRepository {
   // `memberships` is RBAC.
   protected override readonly placement: Placement = "catalog";
@@ -33,6 +40,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
         roleName: roles.name,
         joinedAt: memberships.createdAt,
         deactivatedAt: memberships.deactivatedAt,
+        exceptions: EXCEPTIONS,
       })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
@@ -58,6 +66,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
       roleName: row.roleName,
       joinedAt: row.joinedAt,
       deactivated: row.deactivatedAt !== null,
+      exceptions: row.exceptions,
     }));
 
     return { items, total: counted?.total ?? 0 };
@@ -79,6 +88,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
         roleName: roles.name,
         joinedAt: memberships.createdAt,
         deactivatedAt: memberships.deactivatedAt,
+        exceptions: EXCEPTIONS,
       })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
@@ -97,6 +107,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
       roleName: row.roleName,
       joinedAt: row.joinedAt,
       deactivated: row.deactivatedAt !== null,
+      exceptions: row.exceptions,
     };
   }
 

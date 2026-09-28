@@ -34,6 +34,7 @@ export {
   PgOutboxGateway,
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
+  PgPermissionOverrideRepository,
   PgPersonalOrganizationEnroller,
   PgPlatformPolicyRepository,
   PgPlatformReader,

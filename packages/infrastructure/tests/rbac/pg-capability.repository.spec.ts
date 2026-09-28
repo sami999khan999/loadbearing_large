@@ -88,6 +88,9 @@ describe("PgCapabilityRepository", () => {
       goalId: null,
       permission: "rbac.role.read",
       effect: "grant" as const,
+      // Valid under the CHECKs, so the refusal below is the unique index and nothing else.
+      reason: "spec",
+      expiresAt: new Date(Date.now() + 3_600_000),
     };
 
     await database.client.insert(permissionOverrides).values({ id: Uuid.v7(), ...row });
@@ -99,7 +102,9 @@ describe("PgCapabilityRepository", () => {
     // Including the contradictory pair, which is the shape that made the accumulation
     // worth catching: `can()` resolves grant-plus-deny to deny either way.
     await expect(
-      database.client.insert(permissionOverrides).values({ id: Uuid.v7(), ...row, effect: "deny" }),
+      database.client
+        .insert(permissionOverrides)
+        .values({ id: Uuid.v7(), ...row, effect: "deny", reason: null, expiresAt: null }),
     ).rejects.toThrow();
 
     await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, userId));
@@ -167,6 +172,7 @@ describe("PgCapabilityRepository — entitlement", () => {
       permission: "member.read",
       effect: "grant",
       reason: "spec",
+      expiresAt: new Date(Date.now() + 3_600_000),
     });
 
     return { organizationId, userId };
@@ -289,5 +295,81 @@ describe("PgCapabilityRepository — entitlement", () => {
     } finally {
       await database.client.delete(disabledModules).where(eq(disabledModules.module, "messaging"));
     }
+  });
+});
+
+// `AX5.1` and `AX5.2`. A grant lapses and a deny does not; resolution reads only live rows,
+// and `explainFor` is the same four statements, unfolded.
+describe("PgCapabilityRepository — overrides", () => {
+  const repository = () =>
+    new PgCapabilityRepository(DatabaseCluster.single(database), new TransactionScope(), shards);
+
+  const override = (
+    organizationId: Awaited<ReturnType<typeof seedOrganizationId>>,
+    userId: UserId,
+    values: Partial<typeof permissionOverrides.$inferInsert>,
+  ) =>
+    database.client.insert(permissionOverrides).values({
+      id: Uuid.v7(),
+      organizationId,
+      userId,
+      goalId: null,
+      permission: "analytics.activity.read",
+      effect: "grant",
+      reason: "spec",
+      expiresAt: new Date(Date.now() + 3_600_000),
+      ...values,
+    });
+
+  it("explains in four statements, and ignores a grant past its expiry", async () => {
+    const organizationId = await seedOrganizationId(database);
+    const userId = await makeUser();
+    await override(organizationId, userId, { permission: "member.read" });
+    await override(organizationId, userId, { expiresAt: new Date(Date.now() - 1_000) });
+
+    counter.count = 0;
+    const explanation = await repository().explainFor(organizationId, userId);
+
+    expect(counter.count).toBe(4);
+    expect(explanation.overrides.map((row) => row.permission)).toEqual(["member.read"]);
+    expect((await repository().resolveFor(organizationId, userId)).can("member.read")).toBe(true);
+    expect(
+      (await repository().resolveFor(organizationId, userId)).can("analytics.activity.read"),
+    ).toBe(false);
+
+    await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, userId));
+  });
+
+  // The platform's deny and the org's own row for one key are two facts with two owners.
+  it("holds a platform deny beside an org grant of the same key, and the deny wins", async () => {
+    const organizationId = await seedOrganizationId(database);
+    const userId = await makeUser();
+    await override(organizationId, userId, {});
+    await override(organizationId, userId, {
+      effect: "deny",
+      authority: "platform",
+      reason: null,
+      expiresAt: null,
+    });
+
+    const explanation = await repository().explainFor(organizationId, userId);
+    expect(explanation.overrides.map((row) => row.authority).sort()).toEqual(["org", "platform"]);
+    expect(
+      (await repository().resolveFor(organizationId, userId)).can("analytics.activity.read"),
+    ).toBe(false);
+
+    await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, userId));
+  });
+
+  it("refuses a grant with no expiry or reason, a deny with one, and a platform grant", async () => {
+    const organizationId = await seedOrganizationId(database);
+    const userId = await makeUser();
+
+    await expect(override(organizationId, userId, { expiresAt: null })).rejects.toThrow();
+    await expect(override(organizationId, userId, { reason: null })).rejects.toThrow();
+    await expect(override(organizationId, userId, { effect: "deny" })).rejects.toThrow();
+    await expect(override(organizationId, userId, { authority: "platform" })).rejects.toThrow();
+
+    await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, userId));
   });
 });

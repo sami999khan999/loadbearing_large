@@ -8,7 +8,8 @@ import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgActivityLogger } from "../../src/pg/repository/pg-activity.logger.js";
 import { PgMemberRepository } from "../../src/pg/repository/pg-member.repository.js";
 import { PgOrganizationFounder } from "../../src/pg/repository/pg-organization.founder.js";
-import { organizations, roles, users } from "../../src/pg/schema/index.js";
+import { PgRoleRepository } from "../../src/pg/repository/pg-role.repository.js";
+import { organizations, permissionOverrides, roles, users } from "../../src/pg/schema/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase } from "../support/database.js";
 import { RecordingLogger } from "../support/recording.logger.js";
@@ -89,6 +90,7 @@ describe("PgMemberRepository", () => {
       roleKey: "owner",
       roleName: "Owner",
       deactivated: false,
+      exceptions: 0,
     });
     expect(page.items[0]?.joinedAt).toBeInstanceOf(Date);
 
@@ -112,5 +114,44 @@ describe("PgMemberRepository", () => {
     expect(await repository().existsByEmail(acme, email.toUpperCase())).toBe(true);
     expect(await repository().existsByEmail(other, email)).toBe(false);
     expect(await repository().existsByEmail(acme, "nobody@example.test")).toBe(false);
+  });
+});
+
+// `AX5.7`. The drift overlay: live exceptions counted in the statements that already
+// run, so a role review sees them without opening anyone.
+describe("PgMemberRepository and PgRoleRepository — exceptions", () => {
+  const row = (permission: string, effect: "grant" | "deny", expiresAt: Date | null) => ({
+    id: Uuid.v7(),
+    organizationId: acme,
+    userId: ada,
+    goalId: null,
+    permission,
+    effect,
+    reason: effect === "grant" ? "spec" : null,
+    expiresAt,
+  });
+
+  it("counts live overrides only, on the member and on the role", async () => {
+    await database.client
+      .insert(permissionOverrides)
+      .values([
+        row("analytics.activity.read", "grant", new Date(Date.now() + 3_600_000)),
+        row("member.invite", "deny", null),
+        row("member.read", "grant", new Date(Date.now() - 1_000)),
+      ]);
+
+    const [member] = (await repository().list(acme, { limit: 25, offset: 0 })).items;
+    expect(member?.exceptions).toBe(2);
+    expect((await repository().findByUser(acme, ada))?.exceptions).toBe(2);
+
+    const roles = await new PgRoleRepository(
+      DatabaseCluster.single(database),
+      new TransactionScope(),
+      shards,
+    ).list(acme, { limit: 25, offset: 0 });
+    expect(roles.items.find((role) => role.key === "owner")?.membersWithExceptions).toBe(1);
+    expect(roles.items.find((role) => role.key === "member")?.membersWithExceptions).toBe(0);
+
+    await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, ada));
   });
 });

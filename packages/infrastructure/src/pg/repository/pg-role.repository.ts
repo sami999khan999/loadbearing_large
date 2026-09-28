@@ -33,6 +33,15 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
         description: roles.description,
         scope: roles.scope,
         isSystem: roles.isSystem,
+        // Members of this role with at least one live override, correlated so the list stays
+        // three statements. Named in full: drizzle writes an unqualified column here.
+        membersWithExceptions: sql<number>`(select count(*)::int from memberships m
+          where m.organization_id = "roles"."organization_id"
+            and m.role_id = "roles"."id"
+            and exists (select 1 from permission_overrides po
+              where po.organization_id = m.organization_id
+                and po.user_id = m.user_id
+                and (po.expires_at is null or po.expires_at > now())))`,
       })
       .from(roles)
       // Every read narrows by tenant. There is no code path here that could omit it.
@@ -78,6 +87,7 @@ export class PgRoleRepository extends BaseRepository implements RoleRepository {
       isSystem: row.isSystem,
       // Sorted, so two runs against the same data produce the same response.
       permissions: (byRole.get(row.id) ?? []).sort(),
+      membersWithExceptions: row.membersWithExceptions,
     }));
 
     return { items, total: counted?.total ?? 0 };

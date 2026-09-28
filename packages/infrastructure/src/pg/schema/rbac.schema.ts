@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   type OrganizationId,
   pgTable,
@@ -189,21 +190,38 @@ export const permissionOverrides = pgTable(
     permission: text("permission").notNull(),
     effect: text("effect", { enum: ["grant", "deny"] }).notNull(),
     reason: text("reason"),
+    // A grant widens and must lapse; a deny narrows and is safe to leave. The CHECKs below
+    // hold both, so a hand-written grant with no end cannot exist.
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // No foreign key: the audit trail names the actor, and a departed admin keeps no row.
+    createdBy: uuid("created_by").$type<UserId>(),
+    // `platform` is a deny the tier set. The org admin sees it and cannot clear it.
+    authority: text("authority", { enum: ["org", "platform"] })
+      .notNull()
+      .default("org"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check(
+      "permission_overrides_expiry_ck",
+      sql`(${t.effect} = 'grant' and ${t.expiresAt} is not null) or (${t.effect} = 'deny' and ${t.expiresAt} is null)`,
+    ),
+    check("permission_overrides_reason_ck", sql`${t.effect} = 'deny' or ${t.reason} is not null`),
+    check("permission_overrides_authority_ck", sql`${t.authority} = 'org' or ${t.effect} = 'deny'`),
     index("permission_overrides_user_idx").on(t.organizationId, t.userId),
     // Same split: the tenant-leading index answers the resolver, this one answers
     // the cascade from `users`.
     index("permission_overrides_user_fk_idx").on(t.userId),
     index("permission_overrides_goal_idx").on(t.goalId),
-    // Two partial indexes, because NULLs are distinct: one index over a nullable
-    // `goal_id` accepts unlimited duplicate org-scope rows for the same permission.
+    // Two partial indexes, because NULLs are distinct over a nullable `goal_id`. `authority`
+    // is in both, so a platform deny and an org row for the same key coexist.
     uniqueIndex("permission_overrides_org_uq")
-      .on(t.organizationId, t.userId, t.permission)
+      .on(t.organizationId, t.userId, t.permission, t.authority)
       .where(sql`${t.goalId} is null`),
     uniqueIndex("permission_overrides_goal_uq")
-      .on(t.organizationId, t.userId, t.goalId, t.permission)
+      .on(t.organizationId, t.userId, t.goalId, t.permission, t.authority)
       .where(sql`${t.goalId} is not null`),
+    // The sweep's read. Partial: a deny never expires, so it is never a candidate.
+    index("permission_overrides_expiry_idx").on(t.expiresAt).where(sql`${t.expiresAt} is not null`),
   ],
 );
