@@ -53,6 +53,7 @@ export {
   InvitationList,
   InviteMemberForm,
   LinkedAccountList,
+  MemberAccessPanel,
   MemberCount,
   MemberList,
   MessageComposer,
