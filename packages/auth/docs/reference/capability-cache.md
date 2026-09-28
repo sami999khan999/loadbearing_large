@@ -19,6 +19,13 @@ private static readonly TTL_SECONDS = 60;
 worked.** It is not a cache-hit-rate dial, and raising it because the hit rate looks better trades a
 security window for a metric.
 
+**An expiry lands within the same window, and nothing fires at the moment itself.** A per-user
+grant or an entitlement trial is read only while it is live: `explainFor` and `entitlementFor`
+filter out a row past its `expires_at`. Nothing flushes the cache at that instant, so a set
+resolved just before a grant lapses can serve it for up to sixty more seconds. The nightly sweep
+removes and audits the row, and flushes the person or the org, but by then the row has granted
+nothing for hours. The filter is the mechanism; the sweep is housekeeping.
+
 The same ceiling applies to `AUTH_COOKIE_CACHE_MAX_AGE_SECONDS`, which is capped at 60 in the
 `env.ts` schema rather than by convention — a deploy that raises it fails at boot instead of quietly
 widening the gap between removing access and access stopping.

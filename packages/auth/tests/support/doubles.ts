@@ -4,6 +4,7 @@ import type {
   ApiKeyRepository,
   ApiKeySummary,
   CacheStore,
+  CapabilityExplanation,
   CapabilityRepository,
   PlatformOrganization,
   PlatformReader,
@@ -31,6 +32,11 @@ export class RecordingCapabilityRepository implements CapabilityRepository {
     const set = this.sets.get(`${organizationId}:${userId}`);
     if (!set) throw new Error(`No capability set staged for ${organizationId}:${userId}`);
     return Promise.resolve(set);
+  }
+
+  // Never asked here: the builder and the cache only resolve.
+  public explainFor(): Promise<CapabilityExplanation> {
+    throw new Error("explainFor is the inspector's, not under test here");
   }
 
   // Unlimited: these specs are about caching and credentials, not about plans.
