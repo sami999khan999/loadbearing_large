@@ -62,6 +62,9 @@ export class PgOrganizationFounder extends BaseRepository {
           // a normalisation pass and a collision strategy, and nothing routes by slug.
           slug: slug ?? `o-${organizationId}`,
           name,
+          // The platform's choice for a new signup (`RV.14`). The column default only placed
+          // the orgs that existed; the policy row may not exist yet, hence the fallback.
+          planKey: sql`coalesce((select default_plan_key from platform_policy where id = 1), 'unlimited')`,
         });
 
         // **Inside the transaction that creates the tenant**, which is what lets

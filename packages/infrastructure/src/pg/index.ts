@@ -18,6 +18,8 @@ export {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
+  PgEntitlementRepository,
+  PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMaintenanceGateway,

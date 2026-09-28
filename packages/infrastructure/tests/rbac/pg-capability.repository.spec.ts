@@ -5,7 +5,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/pg/primitive/index.js";
 import { DatabaseCluster } from "../../src/pg/primitive/index.js";
 import { PgCapabilityRepository } from "../../src/pg/repository/pg-capability.repository.js";
-import { permissionOverrides, users } from "../../src/pg/schema/index.js";
+import {
+  disabledModules,
+  entitlementAdjustments,
+  memberships,
+  organizations,
+  permissionOverrides,
+  planPermissions,
+  plans,
+  rolePermissions,
+  roles,
+  users,
+} from "../../src/pg/schema/index.js";
 import { ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { openDatabase, seedOrganizationId } from "../support/database.js";
 
@@ -45,9 +56,9 @@ const makeUser = async () => {
 };
 
 describe("PgCapabilityRepository", () => {
-  // "Three queries" decays silently — someone adds a lookup inside a loop and it
-  // becomes 3 + N, invisible at ten users and fatal at five thousand.
-  it("resolves capabilities in exactly three queries", async () => {
+  // "Four queries" decays silently — someone adds a lookup inside a loop and it
+  // becomes 4 + N, invisible at ten users and fatal at five thousand.
+  it("resolves capabilities in exactly four queries", async () => {
     const organizationId = await seedOrganizationId(database);
     const repository = new PgCapabilityRepository(
       DatabaseCluster.single(database),
@@ -62,7 +73,7 @@ describe("PgCapabilityRepository", () => {
     counter.count = 0;
     await repository.resolveFor(organizationId, absentUser);
 
-    expect(counter.count).toBe(3);
+    expect(counter.count).toBe(4);
   });
 
   // NULLs are distinct in a unique index, so `(user_id, goal_id, permission)` exempted
@@ -114,5 +125,169 @@ describe("PgCapabilityRepository", () => {
     expect(rows).toHaveLength(2);
 
     await database.client.delete(permissionOverrides).where(eq(permissionOverrides.userId, userId));
+  });
+});
+
+// The mask inside resolution. Each case founds its own tenant, so a plan change touches
+// nothing another spec reads; the kill switch is global, so its case removes its own row.
+describe("PgCapabilityRepository — entitlement", () => {
+  const run = Uuid.v7();
+  const PLAN = `spec-plan-${run}`;
+  const ROLE_KEYS = ["rbac.role.read", "analytics.activity.read", "messaging.conversation.read"];
+  const founded: string[] = [];
+
+  const repository = () =>
+    new PgCapabilityRepository(DatabaseCluster.single(database), new TransactionScope(), shards);
+
+  // A tenant whose one member holds `ROLE_KEYS` through a role and `member.read` through an
+  // override grant — both kinds of grant the mask has to reach.
+  const tenant = async () => {
+    const organizationId = Identifiers.organizationId.parse(Uuid.v7());
+    const roleId = Uuid.v7();
+    const userId = await makeUser();
+    founded.push(organizationId);
+
+    await database.client
+      .insert(organizations)
+      .values({ id: organizationId, slug: `mask-${organizationId}`, name: "Mask" });
+    await database.client
+      .insert(roles)
+      .values({ id: roleId, organizationId, key: "member", name: "Member", scope: "org" });
+    await database.client
+      .insert(rolePermissions)
+      .values(ROLE_KEYS.map((permission) => ({ organizationId, roleId, permission })));
+    await database.client
+      .insert(memberships)
+      .values({ id: Uuid.v7(), organizationId, userId, roleId });
+    await database.client.insert(permissionOverrides).values({
+      id: Uuid.v7(),
+      organizationId,
+      userId,
+      goalId: null,
+      permission: "member.read",
+      effect: "grant",
+      reason: "spec",
+    });
+
+    return { organizationId, userId };
+  };
+
+  const adjust = (
+    organizationId: string,
+    permission: string,
+    effect: "add" | "remove",
+    expiresAt: Date | null = null,
+  ) =>
+    database.client.insert(entitlementAdjustments).values({
+      id: Uuid.v7(),
+      organizationId: Identifiers.organizationId.parse(organizationId),
+      permission,
+      effect,
+      reason: "spec",
+      expiresAt,
+    });
+
+  beforeAll(async () => {
+    await database.client.insert(plans).values({ key: PLAN, name: "Spec plan" });
+    await database.client.insert(planPermissions).values(
+      ["rbac.role.read", "messaging.conversation.read", "member.read"].map((permission) => ({
+        planKey: PLAN,
+        permission,
+      })),
+    );
+  });
+
+  afterAll(async () => {
+    if (founded.length > 0) {
+      await database.client.delete(organizations).where(
+        inArray(
+          organizations.id,
+          founded.map((id) => Identifiers.organizationId.parse(id)),
+        ),
+      );
+    }
+    await database.client.delete(plans).where(eq(plans.key, PLAN));
+  });
+
+  it("resolves an org on unlimited to exactly what its roles and overrides grant", async () => {
+    const { organizationId, userId } = await tenant();
+
+    const set = await repository().resolveFor(organizationId, userId);
+
+    expect([...set.toJSON().org.grants].sort()).toEqual([...ROLE_KEYS, "member.read"].sort());
+  });
+
+  // Filtered, not deleted: the role row stays, so moving back restores it with no edit.
+  it("masks a key the plan leaves out, and restores it when the org moves back", async () => {
+    const { organizationId, userId } = await tenant();
+
+    await database.client
+      .update(organizations)
+      .set({ planKey: PLAN })
+      .where(eq(organizations.id, organizationId));
+    expect(
+      (await repository().resolveFor(organizationId, userId)).can("analytics.activity.read"),
+    ).toBe(false);
+
+    await database.client
+      .update(organizations)
+      .set({ planKey: "unlimited" })
+      .where(eq(organizations.id, organizationId));
+    expect(
+      (await repository().resolveFor(organizationId, userId)).can("analytics.activity.read"),
+    ).toBe(true);
+  });
+
+  it("lets a remove mask a role grant and an override grant alike", async () => {
+    const { organizationId, userId } = await tenant();
+    await adjust(organizationId, "rbac.role.read", "remove");
+    await adjust(organizationId, "member.read", "remove");
+
+    const set = await repository().resolveFor(organizationId, userId);
+
+    expect(set.can("rbac.role.read")).toBe(false);
+    expect(set.can("member.read")).toBe(false);
+    expect(set.can("messaging.conversation.read")).toBe(true);
+  });
+
+  it("ignores an adjustment past its expiry", async () => {
+    const { organizationId, userId } = await tenant();
+    await database.client
+      .update(organizations)
+      .set({ planKey: PLAN })
+      .where(eq(organizations.id, organizationId));
+    await adjust(organizationId, "analytics.activity.read", "add", new Date(Date.now() - 60_000));
+
+    const set = await repository().resolveFor(organizationId, userId);
+
+    expect(set.can("analytics.activity.read")).toBe(false);
+  });
+
+  it("honours a live add on top of the plan — a trial", async () => {
+    const { organizationId, userId } = await tenant();
+    await database.client
+      .update(organizations)
+      .set({ planKey: PLAN })
+      .where(eq(organizations.id, organizationId));
+    await adjust(organizationId, "analytics.activity.read", "add", new Date(Date.now() + 60_000));
+
+    expect(
+      (await repository().resolveFor(organizationId, userId)).can("analytics.activity.read"),
+    ).toBe(true);
+  });
+
+  it("masks every key of a disabled module, and never a core key", async () => {
+    const { organizationId, userId } = await tenant();
+
+    await database.client.insert(disabledModules).values({ module: "messaging", reason: "spec" });
+    try {
+      const set = await repository().resolveFor(organizationId, userId);
+
+      expect(set.can("messaging.conversation.read")).toBe(false);
+      expect(set.can("rbac.role.read")).toBe(true);
+      expect(set.can("core.realtime.subscribe")).toBe(true);
+    } finally {
+      await database.client.delete(disabledModules).where(eq(disabledModules.module, "messaging"));
+    }
   });
 });

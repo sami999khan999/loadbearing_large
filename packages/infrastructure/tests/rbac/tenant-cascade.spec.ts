@@ -6,6 +6,9 @@ import type { Database } from "../../src/pg/primitive/index.js";
 import {
   apiKeys,
   documentChunks,
+  entitlementAdjustments,
+  featureFlagOrganizations,
+  featureFlags,
   goalMembers,
   invitations,
   memberships,
@@ -20,6 +23,9 @@ import { openDatabase, seedTenant as seedTenantPartitions } from "../support/dat
 let database: Database;
 let userId: UserId;
 let organizationId: OrganizationId;
+
+// One flag row for the whole file, removed once: each seed targets it for a new tenant.
+const CASCADE_FLAG = "cascade.spec";
 
 const EMBEDDING = Array.from({ length: 1536 }, (_, i) => (i === 0 ? 1 : 0));
 
@@ -70,6 +76,17 @@ const seedTenant = async () => {
     prefix: organizationId.slice(0, 8),
     tokenHash: `key-${organizationId}`,
   });
+  await database.client.insert(featureFlags).values({ key: CASCADE_FLAG }).onConflictDoNothing();
+  await database.client
+    .insert(featureFlagOrganizations)
+    .values({ organizationId, flagKey: CASCADE_FLAG });
+  await database.client.insert(entitlementAdjustments).values({
+    id: Uuid.v7(),
+    organizationId,
+    permission: "member.read",
+    effect: "remove",
+    reason: "cascade",
+  });
   await database.client.insert(documentChunks).values({
     id: Uuid.v7(),
     organizationId: Identifiers.organizationId.parse(organizationId),
@@ -111,6 +128,14 @@ const remaining = async () => {
       .from(invitations)
       .where(eq(invitations.organizationId, organizationId)),
     database.client.select().from(apiKeys).where(eq(apiKeys.organizationId, organizationId)),
+    database.client
+      .select()
+      .from(featureFlagOrganizations)
+      .where(eq(featureFlagOrganizations.organizationId, organizationId)),
+    database.client
+      .select()
+      .from(entitlementAdjustments)
+      .where(eq(entitlementAdjustments.organizationId, organizationId)),
   ]);
 
   return counts.map((rows) => rows.length);
@@ -137,6 +162,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await database.client.delete(organizations).where(eq(organizations.id, organizationId));
+  await database.client.delete(featureFlags).where(eq(featureFlags.key, CASCADE_FLAG));
   await database.client.delete(users).where(eq(users.id, userId));
   await database.close();
 });
@@ -146,11 +172,11 @@ describe("deleting an organization", () => {
   // cascaded, so this delete failed and a tenant could not be removed at all.
   it("takes every catalog row with it", async () => {
     await seedTenant();
-    expect(await remaining()).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(await remaining()).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
 
     await database.client.delete(organizations).where(eq(organizations.id, organizationId));
 
-    expect(await remaining()).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(await remaining()).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   // **And leaves the routed rows, which is `24.1` working rather than a leak.** A shard

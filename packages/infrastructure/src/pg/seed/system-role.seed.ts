@@ -19,7 +19,7 @@ interface SystemRole {
   readonly permissions: readonly PermissionKey[] | "all";
 }
 
-// Only `owner` is a wildcard: a role granting "everything in module X" keeps granting new
+// Only `owner` gets every key: a role granting "everything in module X" keeps granting new
 // things as X grows, which is how a reviewer acquires write access.
 
 // Everyone who can hold a membership gets an inbox. Named once because `admin` and

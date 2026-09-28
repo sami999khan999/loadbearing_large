@@ -12,6 +12,31 @@ import {
 } from "../../import.js";
 import { users } from "./auth.schema.js";
 
+// What an org has paid for, as keys. `is_unlimited` is every tenant key, resolved at read
+// time rather than stored — see packages/permissions/docs/reference/entitlement-mask.md.
+export const plans = pgTable("plans", {
+  key: text("key").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  isUnlimited: boolean("is_unlimited").notNull().default(false),
+  // Shipped by a migration, never deleted: `unlimited` is every existing org's plan.
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Raw strings, filtered through `PermissionRegistry.isKnown` before they are trusted.
+export const planPermissions = pgTable(
+  "plan_permissions",
+  {
+    planKey: text("plan_key")
+      .notNull()
+      .references(() => plans.key, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+  },
+  (t) => [uniqueIndex("plan_permissions_uq").on(t.planKey, t.permission)],
+);
+
 export const organizations = pgTable(
   "organizations",
   {
@@ -21,6 +46,11 @@ export const organizations = pgTable(
     // The platform tier is an organization, so a platform grant rides the roles and
     // memberships every other grant does. Marked by the seed, never by a user.
     isPlatform: boolean("is_platform").notNull().default(false),
+    // No action on delete: a plan in use cannot be deleted, which `delete-plan` also says.
+    planKey: text("plan_key")
+      .notNull()
+      .default("unlimited")
+      .references(() => plans.key),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -30,6 +60,8 @@ export const organizations = pgTable(
     // Partial, so it constrains only the true rows: at most one platform tier, and any
     // number of ordinary tenants. `resolvePlatformFor` resolves one row or none.
     uniqueIndex("organizations_platform_uq").on(t.isPlatform).where(sql`is_platform`),
+    // For the foreign key, and for "is this plan in use" before a delete.
+    index("organizations_plan_idx").on(t.planKey),
   ],
 );
 

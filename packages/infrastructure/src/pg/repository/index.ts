@@ -6,6 +6,8 @@ export { PgApiKeyRepository } from "./pg-api-key.repository.js";
 export { PgBootstrapMembershipEnroller } from "./pg-bootstrap-membership.enroller.js";
 export { PgCapabilityRepository } from "./pg-capability.repository.js";
 export { PgConversationRepository } from "./pg-conversation.repository.js";
+export { PgEntitlementRepository } from "./pg-entitlement.repository.js";
+export { PgFlagRepository } from "./pg-flag.repository.js";
 export { PgInvitationClaimer } from "./pg-invitation.claimer.js";
 export { PgInvitationRepository } from "./pg-invitation.repository.js";
 export { PgMaintenanceGateway } from "./pg-maintenance.gateway.js";

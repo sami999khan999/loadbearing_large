@@ -300,3 +300,54 @@ describe("PgOrganizationFounder on a cluster of more than one node", () => {
     expect(audit).toEqual([{ action: "organization.created" }]);
   });
 });
+
+// `RV.14`. The column default only placed the orgs that existed when it was added; a new
+// signup lands on whatever the platform chose, and on `unlimited` before anyone chose.
+describe("PgOrganizationFounder — the default plan", () => {
+  const plan = `spec-default-${Uuid.v7()}`;
+  const founded: OrganizationId[] = [];
+
+  const setDefault = (key: string) =>
+    database.client.execute(
+      sql`insert into platform_policy (id, default_plan_key) values (1, ${key})
+          on conflict (id) do update set default_plan_key = excluded.default_plan_key`,
+    );
+
+  const planOf = async (organizationId: OrganizationId) =>
+    (
+      await database.client
+        .select({ key: organizations.planKey })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+    )[0]?.key;
+
+  afterAll(async () => {
+    await setDefault("unlimited");
+    if (founded.length > 0) {
+      await database.client
+        .update(organizations)
+        .set({ planKey: "unlimited" })
+        .where(inArray(organizations.id, founded));
+    }
+    await database.client.execute(sql`delete from plans where key = ${plan}`);
+  });
+
+  it("founds an org on the platform's default plan", async () => {
+    await database.client.execute(sql`insert into plans (key, name) values (${plan}, ${"Spec"})`);
+    await setDefault(plan);
+
+    const organizationId = await founder().found(await makeUser(), "Planned Co");
+    founded.push(organizationId);
+
+    expect(await planOf(organizationId)).toBe(plan);
+  });
+
+  it("founds on unlimited when the default is unlimited", async () => {
+    await setDefault("unlimited");
+
+    const organizationId = await founder().found(await makeUser(), "Unplanned Co");
+    founded.push(organizationId);
+
+    expect(await planOf(organizationId)).toBe("unlimited");
+  });
+});

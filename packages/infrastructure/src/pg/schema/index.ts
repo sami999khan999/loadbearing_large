@@ -2,6 +2,8 @@ export * from "./activity.schema.js";
 export * from "./api-key.schema.js";
 export * from "./archive.schema.js";
 export * from "./auth.schema.js";
+export * from "./entitlement.schema.js";
+export * from "./flag.schema.js";
 export * from "./invitation.schema.js";
 export * from "./messaging.schema.js";
 export * from "./notification.schema.js";

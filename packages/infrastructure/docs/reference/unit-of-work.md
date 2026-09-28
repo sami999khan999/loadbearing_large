@@ -116,17 +116,17 @@ rollback assertion perfectly.
 
 ## The query-count assertion needs a seam
 
-`DatabaseConfig` takes an optional drizzle `logger`, and that exists so "three queries" can be an
+`DatabaseConfig` takes an optional drizzle `logger`, and that exists so "four queries" can be an
 assertion rather than a claim:
 
 ```ts
 counter.count = 0;
 await repository.resolveFor(organizationId, userId);
-expect(counter.count).toBe(3);
+expect(counter.count).toBe(4);
 ```
 
-`PgCapabilityRepository.resolveFor` is the hottest query in the system. "Three queries" decays silently
-— someone adds a lookup inside the loop and it becomes 3 + N, invisible at ten users and fatal at five
+`PgCapabilityRepository.resolveFor` is the hottest query in the system. "Four queries" decays silently
+— someone adds a lookup inside the loop and it becomes 4 + N, invisible at ten users and fatal at five
 thousand. Without the logger seam there is no way to notice.
 
 ## The statement timeout is set here, not on the connection

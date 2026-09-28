@@ -61,7 +61,7 @@ export class PgBootstrapMembershipEnroller extends BaseRepository {
     const organizationId = organization.id;
 
     // Read-decide-write in one transaction behind an advisory lock: without it two racing
-    // sign-ups both land as `owner`, which is the wildcard role.
+    // sign-ups both land as `owner`, which holds every tenant key.
     return this.cluster.catalog().client.transaction(async (tx) =>
       this.scope.within(tx, "catalog", async () => {
         await this.db.execute(

@@ -3,21 +3,29 @@ import {
   type CapabilityRepository,
   CapabilitySet,
   type CapabilitySetDto,
+  EntitlementMask,
   eq,
+  gt,
   isNull,
   type OrganizationId,
+  or,
   type PermissionKey,
   PermissionRegistry,
   type Placement,
   type ScopedSetDto,
+  sql,
   type UserId,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import {
+  disabledModules,
+  entitlementAdjustments,
   goalMembers,
   memberships,
   organizations,
   permissionOverrides,
+  planPermissions,
+  plans,
   rolePermissions,
 } from "../schema/index.js";
 
@@ -30,8 +38,8 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
   // RBAC — read on every request, before a key is known.
   protected override readonly placement: Placement = "catalog";
 
-  // Org grants + goal grants + per-user overrides, deny winning. Three targeted
-  // queries, not one join: the join is a cartesian product needing dedup in code.
+  // Org grants + goal grants + per-user overrides, deny winning, then the plan's mask.
+  // Four targeted queries, not one join: the join is a cartesian product needing dedup.
   public async resolveFor(organizationId: OrganizationId, userId: UserId): Promise<CapabilitySet> {
     const registry = PermissionRegistry.instance;
 
@@ -103,7 +111,57 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
       goals: Object.fromEntries([...goals].map(([id, scoped]) => [id, freeze(scoped)])),
     };
 
-    return CapabilitySet.from(dto);
+    // Filtered, never deleted: the role rows are the org admin's, and an upgrade restores
+    // them at once. Denies pass through the mask untouched.
+    const mask = await this.entitlementFor(organizationId);
+    return CapabilitySet.from(mask.narrow(dto));
+  }
+
+  // One statement: four index lookups, tagged by kind and unioned. A join of the four would
+  // multiply rows; a union is four small reads in one round trip.
+  public async entitlementFor(organizationId: OrganizationId): Promise<EntitlementMask> {
+    const planRows = this.db
+      .select({ kind: sql<string>`'plan'`.as("kind"), value: planPermissions.permission })
+      .from(organizations)
+      .innerJoin(planPermissions, eq(planPermissions.planKey, organizations.planKey))
+      .where(eq(organizations.id, organizationId));
+
+    const unlimited = this.db
+      .select({ kind: sql<string>`'unlimited'`.as("kind"), value: plans.key })
+      .from(organizations)
+      .innerJoin(plans, eq(plans.key, organizations.planKey))
+      .where(and(eq(organizations.id, organizationId), eq(plans.isUnlimited, true)));
+
+    // Expired rows are ignored here, which is the real mechanism; the sweep only tidies.
+    const adjustments = this.db
+      .select({
+        kind: sql<string>`${entitlementAdjustments.effect}`.as("kind"),
+        value: entitlementAdjustments.permission,
+      })
+      .from(entitlementAdjustments)
+      .where(
+        and(
+          eq(entitlementAdjustments.organizationId, organizationId),
+          or(
+            isNull(entitlementAdjustments.expiresAt),
+            gt(entitlementAdjustments.expiresAt, sql`now()`),
+          ),
+        ),
+      );
+
+    const disabled = this.db
+      .select({ kind: sql<string>`'disabled'`.as("kind"), value: disabledModules.module })
+      .from(disabledModules);
+
+    const rows = await planRows.unionAll(unlimited).unionAll(adjustments).unionAll(disabled);
+
+    const of = (kind: string) => rows.filter((row) => row.kind === kind).map((row) => row.value);
+    return EntitlementMask.from({
+      plan: rows.some((row) => row.kind === "unlimited") ? "all" : of("plan"),
+      added: of("add"),
+      removed: of("remove"),
+      disabledModules: of("disabled"),
+    });
   }
 
   // Two queries against the one organization marked `is_platform`, filtered to keys the
