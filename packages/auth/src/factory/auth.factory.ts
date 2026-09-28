@@ -85,7 +85,7 @@ export class AuthFactory {
         additionalFields: {
           locale: { type: "string", required: false, defaultValue: "en" },
           timezone: { type: "string", required: false },
-          deactivatedAt: { type: "date", required: false, input: false },
+          suspendedAt: { type: "date", required: false, input: false },
           // Written by the organization plugin through `internalAdapter.updateUser`,
           // which is why it must be declared here and not only in the Drizzle schema.
           lastActiveOrganizationId: { type: "string", required: false, input: false },
