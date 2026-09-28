@@ -75,12 +75,19 @@ export class QueryKeys {
     // The term is the key, because that is what the answer is about: two lookups of two
     // tenants are two answers, not one refetched.
     tenantLocation: (term: string) => ["platform", "shard", "tenant", term] as const,
+    flags: () => ["platform", "flag", "list"] as const,
+    plans: () => ["platform", "plan", "list"] as const,
+    // The prefix every org's entitlement shares, so a plan edit invalidates them all.
+    entitlements: () => ["platform", "entitlement"] as const,
+    entitlement: (organization: string) => ["platform", "entitlement", organization] as const,
+    modules: () => ["platform", "module", "list"] as const,
   };
 
   public static readonly rbac = {
     all: () => ["rbac"] as const,
     roles: (params: unknown) => ["rbac", "role", "list", params] as const,
     effective: (userId: string) => ["rbac", "effective", userId] as const,
+    entitlement: () => ["rbac", "entitlement"] as const,
   };
 
   // Create and revoke both invalidate `all()`: the list is the only read, and a new

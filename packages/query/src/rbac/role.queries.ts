@@ -19,6 +19,16 @@ export class RoleQueries {
     });
   }
 
+  // The org's ceiling. Five minutes: it moves when a platform admin changes the plan,
+  // which is rare, and a stale answer only greys a box the server refuses anyway.
+  public static entitlement(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.rbac.entitlement(),
+      queryFn: () => client.role.entitlement(),
+      staleTime: 300_000,
+    });
+  }
+
   // Someone else's effective permissions. `staleTime: 0` on purpose: an inspector is
   // read to answer "why can they do that", and a cached answer is the wrong one.
   public static effective(client: ApiClient, userId: string) {
