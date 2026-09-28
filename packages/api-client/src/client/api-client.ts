@@ -116,6 +116,10 @@ export class ApiClient {
     return this.rpc.platform;
   }
 
+  public get override(): AppClient["override"] {
+    return this.rpc.override;
+  }
+
   public get analytics(): AppClient["analytics"] {
     return this.rpc.analytics;
   }

@@ -6,4 +6,6 @@ export const platformRoutes = {
   analytics: "/platform/analytics",
   storage: "/platform/storage",
   shards: "/platform/shards",
+  flags: "/platform/flags",
+  entitlements: "/platform/entitlements",
 } as const satisfies Record<string, RoutePath>;

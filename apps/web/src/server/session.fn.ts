@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { Env } from "~/env.js";
-import { CapabilitySet, type OrganizationId, type UserId } from "~/import.js";
+import { CapabilitySet, FlagRegistry, type OrganizationId, type UserId } from "~/import.js";
 import type { SessionSnapshot } from "~/store/session.store.js";
 import { container } from "./container.js";
 
@@ -12,6 +12,7 @@ const anonymous = (): SessionSnapshot => ({
   capabilities: CapabilitySet.empty().toJSON(),
   isPlatformOrganization: false,
   googleEnabled: Env.googleEnabled,
+  flags: [],
 });
 
 // Resolves who is asking and what they may do, and decides nothing. Not routed through
@@ -32,13 +33,15 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
 
     // The same cache and the same merge `PrincipalBuilder` runs, so client `can()` and
     // server `assert()` answer off one set. The membership list rides along too.
-    const [tenant, platform, organizations, platformOrganizationId, isActive] = await Promise.all([
-      container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
-      container.capabilities.platformFor(userId),
-      container.memberships.organizationsFor(userId),
-      container.platform.organizationId(),
-      container.memberships.isActive(userId, activeOrganizationId as OrganizationId),
-    ]);
+    const [tenant, platform, organizations, platformOrganizationId, isActive, flags] =
+      await Promise.all([
+        container.capabilities.forUser(activeOrganizationId as OrganizationId, userId),
+        container.capabilities.platformFor(userId),
+        container.memberships.organizationsFor(userId),
+        container.platform.organizationId(),
+        container.memberships.isActive(userId, activeOrganizationId as OrganizationId),
+        container.flags.onFor(activeOrganizationId as OrganizationId),
+      ]);
 
     // `PrincipalBuilder` returns null for a deactivated membership, so without this the
     // shell rendered and every stream it opened answered UNAUTHORIZED and reconnected.
@@ -66,6 +69,8 @@ export const fetchSession = createServerFn({ method: "GET" }).handler(
       capabilities: capabilities.toJSON(),
       isPlatformOrganization: activeOrganizationId === platformOrganizationId,
       googleEnabled: Env.googleEnabled,
+      // Filtered here, on the server: the browser is never sent a flag it could not use.
+      flags: flags.filter((key) => FlagRegistry.instance.isClientGating(key)),
     };
   },
 );

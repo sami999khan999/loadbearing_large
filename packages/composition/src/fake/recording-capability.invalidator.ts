@@ -28,4 +28,10 @@ export class RecordingCapabilityInvalidator extends CapabilityInvalidator {
   public flushed(): readonly string[] {
     return this.entries;
   }
+
+  // Recorded as `*`, so a spec asserts the whole-deployment flush the same way as a tenant.
+  public override invalidateAll(): Promise<void> {
+    this.entries.push("*");
+    return Promise.resolve();
+  }
 }

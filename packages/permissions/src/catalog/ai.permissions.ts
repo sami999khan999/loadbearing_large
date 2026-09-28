@@ -7,6 +7,7 @@ export const aiPermissions = {
     scope: "org",
     module: "ai",
     label: "Index documents for search",
+    requires: ["ai.embedding.read"],
   },
   "ai.embedding.read": {
     scope: "org",

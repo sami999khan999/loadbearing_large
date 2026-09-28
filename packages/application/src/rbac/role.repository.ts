@@ -14,6 +14,9 @@ export interface RoleRecord {
   // Raw and unfiltered: a repository that dropped unknown keys would hide a rename
   // rather than surface it. The registry decides.
   readonly permissions: readonly string[];
+  // How many of its members carry an exception. Filled by `list` alone — the one screen
+  // that shows it — so a record read for an edit does not pay for it.
+  readonly membersWithExceptions?: number;
 }
 
 export interface RolePage {

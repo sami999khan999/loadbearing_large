@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-09-26
+updated: 2026-09-28
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -10,7 +10,8 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 
 **This is the only open ledger, and it holds only what is open.** What has closed is in
 [`archive/DONE.md`](archive/DONE.md). What sessions left on a developer machine is in
-[`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history.
+[`archive/STATE.md`](archive/STATE.md). Everything else in `plans/` is history, except a plan
+still being built, which its section here names.
 
 > **How to use this file**
 >
@@ -31,6 +32,8 @@ source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to arc
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
+| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 72 | — |
+| 14 | Code review of 2026-09-28, and the plan's review before it starts | 8 | 8 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -42,6 +45,9 @@ a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a pr
 the shipped security defects among them, are closed. **Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Section 12 is measurement and hand checks** a session without a person at the browser cannot do.
+**Section 13 is a live plan**, agreed 2026-09-27 and not started: flags, entitlement, per-user
+overrides, the platform deny and the dashboard's widgets. Its boxes are ticked in the plan itself
+until it is archived.
 
 ---
 
@@ -159,6 +165,101 @@ Built on 2026-09-26 and archived; every body is on its item in
 
 - [~] `CP7.9` **Web stops serving streams** — the second release: drop `realtime.*` from web's
   handler and point the stream smoke spec at `apps/realtime`. — `archive/COMMUNICATION-PERFORMANCE-PLAN.md:525`
+
+---
+
+## 13. Access and visibility plan — `ACCESS-AND-VISIBILITY-PLAN.md`
+
+Agreed 2026-09-27, not started. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
+boxes live in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) while it is being
+built, and whatever is open when it is archived comes back here. The decisions are its
+"Decisions recorded up front"; extensions were scrapped the same day.
+
+- [ ] Phase 1 — the rules, written before the first fragment (`AX1.1`–`AX1.6`)
+- [ ] Phase 2 — the kernel in `permissions`: requirements, flags, widgets, zones, the mask (`AX2.1`–`AX2.7`)
+- [ ] Phase 3 — flags end to end, and `check-architecture` §30 (`AX3.1`–`AX3.7`)
+- [ ] Phase 4 — entitlement: plans, adjustments, the module kill switch (`AX4.1`–`AX4.9`)
+- [ ] Phase 5 — per-user overrides: expiring grants, permanent denies, the drift overlay (`AX5.1`–`AX5.9`)
+- [ ] Phase 6 — the platform deny and the account suspend (`AX6.1`–`AX6.9`)
+- [ ] Phase 7 — `<Zone>` in `ui` (`AX7.1`–`AX7.3`)
+- [ ] Phase 8 — `<Widget>`, the dashboard zone, `/dashboard`, and §31 (`AX8.1`–`AX8.8`)
+- [ ] Phase 9 — widget preferences, rolled out behind `widget.dismissal` (`AX9.1`–`AX9.8`)
+- [ ] Phase 10 — the widget inspector (`AX10.1`–`AX10.3`)
+- [ ] Phase 11 — lint, the flag's retirement, the hand walk (`AX11.1`–`AX11.3`)
+
+---
+
+## 14. Code review of 2026-09-28 — and the plan's review before it starts
+
+A review of the code changed since the 2026-09-25 review (`14d49db..2ee420a`), and of
+`ACCESS-AND-VISIBILITY-PLAN.md` before its first box is ticked. IDs are `RV.<n>`, new. Each body is
+here rather than in an archived file, because there is no archived file for it yet; line numbers
+are as of `2ee420a`. Each was checked against the code, and the scenario says what triggers it.
+
+### Code
+
+- [ ] `RV.2` **Typing and resync frames become the client's resume point.** At
+  `packages/query/src/realtime/realtime-stream.ts:48`, `lastEventId = frame.id` runs for every
+  frame. A typing frame is never logged (`redis-realtime.publisher.ts:24`), and a resync's id is a
+  fresh `Uuid.v7()` that is never logged either. After either one, the next reopen at the
+  thirty-minute age or a drain always finds nothing in `RealtimeLog.since`. So it is always a
+  resync, and a resync refetches every list the table names. That happens in every busy
+  conversation, since typing is the most frequent frame. **Fix:** track only `kind === "event"` ids.
+- [ ] `RV.3` **Every fanned-out frame writes a replay log per member.** `MessagingRealtimeSubscriber`
+  publishes one `conversation.changed` per member to each user channel, and
+  `RedisRealtimePublisher.publish` turns each one into `XADD` + `EXPIRE` on
+  `realtime:log:<user channel>`. A message to a 25 000-member channel creates or extends 25 000
+  streams, each kept an hour, on the cache instance. `RealtimeLog.since` then reads and zod-parses
+  the whole stream (`XRANGE - +`) on every resume. After a drain that is every stream at once.
+  **Fix:** skip the log for user-channel fan-out frames, which are only list invalidations, or
+  measure the cost first at `26.8`'s scale.
+- [ ] `RV.4` **Stream revalidation is a database query per open stream per minute.** `StreamRevalidation`
+  (`packages/api-server/src/router/stream-revalidation.ts:14`) runs `isActive` or `findMembership`
+  every 60 s for each stream. At 10 000 streams that is ~170 queries a second against
+  `apps/realtime`'s `DATABASE_POOL_MAX` default of 5. The comment beside that default
+  (`apps/realtime/src/env.ts:14-15`) still says "once per stream opened, never per frame". The checks
+  can also overlap when one takes longer than the interval. **Fix:** batch the check per process,
+  one query for all open streams per tick, and correct the comment and the pool sizing in
+  `apps/realtime/docs/reference/env.md`.
+- [ ] `RV.5` **Mail dedupe outlives BullMQ's completed-job cap only briefly.** `QueuedMailPublisher`
+  turns `dedupeKey` into a `jobId` (`packages/composition/src/mail/queued-mail.publisher.ts:49`),
+  but BullMQ only dedupes while the job still exists. `removeOnComplete` is
+  `{ age: 3_600, count: 1_000 }` (`bullmq-queue.publisher.ts:62`). Take a digest run over a tenant
+  with more than 1 000 recipients that fails on a later page and retries. The earlier pages' jobs
+  have already been trimmed, so those people get the morning's digest twice. The spec
+  "keys the send on the day, so a retry is one message" passes only because
+  `RecordingMailPublisher` dedupes forever. **Fix:** keep completed mail jobs longer than the
+  longest retry window, or dedupe on a Redis key with its own TTL.
+- [ ] `RV.6` **Per-command failures inside `MULTI` are silent.** At `redis-realtime.publisher.ts:32-37`,
+  ioredis `exec()` resolves with `[error, result]` pairs, so a failed `XADD` is neither thrown nor
+  logged, and `realtime.publish.failed` never fires. The frame is then missing from the log, so a
+  resume turns into a resync. The rate limit store reads the pairs deliberately
+  (`redis-rate-limit.store.ts:19`); the publisher does not. **Fix:** check the pairs and emit the
+  failure line.
+- [ ] `RV.7` **`// ──` separators split a sentence to pass §14.** The rule is two comment lines, and
+  a separator ends a run so that "two comment lines either side of a separator are two comments"
+  (`docs/opinions/comments.md:178`). In 22 places the separator falls mid-sentence, so each is one
+  comment of four or five lines. Examples: `apps/worker/src/consumer/maintenance.consumer.ts:95`,
+  `analytics.consumer.ts:320` and `:336`, `packages/query/src/messaging/use-conversation-stream.ts:38`,
+  `packages/content/src/source/static-content.source.ts:21`,
+  `packages/application/src/platform/preview-retention-change.use-case.ts:92`,
+  `purge-organization.use-case.ts:103`, `pg-organization.founder.ts:76`,
+  `tenant-partition.seed.ts:134`, `shard.schema.ts:49`, `apps/web/src/router.tsx:101`, and
+  `notification.list.tsx:93`. The rest are in specs. **Fix:** cut each one to two lines, with the
+  argument in `docs/reference/`. Then make §14 fail a separator whose line above does not end a
+  sentence.
+- [ ] `RV.8` **A relative import without `.js`.** `apps/web/src/router.tsx:16` imports
+  `./route-tree.gen`. `docs/ai/rules/imports.md` says `.js` on every relative import. **Fix:** add
+  the extension, or record the generated file as an exemption where the rule lists its three.
+- [ ] `RV.9` **§29's comments still say three readers.** At `tooling/scripts/check-architecture.mjs:1682`,
+  the comment reads "parsed in three places", and the spec says "The rule all three carry"
+  (`tooling/scripts/tests/check-architecture.spec.mjs:1234`). There are four readers since
+  `apps/realtime`.
+
+### The access and visibility plan — improvements before Phase 1
+
+All seven, `RV.10`–`RV.16`, were folded into `ACCESS-AND-VISIBILITY-PLAN.md` on 2026-09-28,
+before its first box was ticked. They are in [`archive/DONE.md`](archive/DONE.md) §14.
 
 ---
 

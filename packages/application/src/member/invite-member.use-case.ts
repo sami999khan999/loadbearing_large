@@ -9,6 +9,7 @@ import {
 } from "../import.js";
 import type { ActivityLogger, DomainEventPublisher, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
+import type { CapabilityRepository } from "../rbac/capability.repository.js";
 import type { RoleRepository } from "../rbac/role.repository.js";
 import { RoleRules } from "../rbac/role.rules.js";
 import type { InvitationMailer } from "./invitation.mailer.js";
@@ -34,6 +35,8 @@ export class InviteMemberUseCase {
     private readonly events: DomainEventPublisher,
     private readonly unitOfWork: UnitOfWork,
     private readonly clock: Clock,
+    // The org's plan, so a key it no longer has cannot block inviting to a role that lists it.
+    private readonly entitlements: CapabilityRepository,
   ) {}
 
   public async execute(actor: Principal, input: InviteMemberInput): Promise<InvitationRecord> {
@@ -44,7 +47,11 @@ export class InviteMemberUseCase {
     const role = await this.roles.findById(actor.organizationId, input.roleId);
     if (!role) throw new NotFoundError("role", input.roleId);
     RoleRules.assertMembershipScope(role);
-    RoleRules.assertAssignableBy(actor, role);
+    RoleRules.assertAssignableBy(
+      actor,
+      role,
+      await this.entitlements.entitlementFor(actor.organizationId),
+    );
 
     // Lowercased once, here, so the unique index on `(organization_id, email)` sees one
     // address as one row.

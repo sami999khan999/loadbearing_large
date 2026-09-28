@@ -295,6 +295,41 @@
       "when": 1790424786362,
       "tag": "0041_conversation_created_at_ms",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790580428095,
+      "tag": "0042_feature_flags",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790583029912,
+      "tag": "0043_entitlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790590671115,
+      "tag": "0044_override_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790592006693,
+      "tag": "0045_override_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790596537870,
+      "tag": "0046_account_suspension",
+      "breakpoints": true
     }
   ]
 }

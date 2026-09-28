@@ -25,6 +25,7 @@ This list is checked: `check-architecture.mjs` §12 fails if a file lands in `do
 @docs/ai/rules/dependencies.md
 @docs/ai/rules/vocabulary.md
 @docs/ai/rules/data.md
+@docs/ai/rules/visibility.md
 @docs/ai/rules/simplicity.md
 @docs/ai/rules/workflow.md
 @docs/ai/rules/explaining.md

@@ -23,7 +23,7 @@ export class RoleEntity {
     return !this.dto.isSystem;
   }
 
-  // The only wildcard role the seed creates, named because "why does this row show every
+  // The only role the seed gives every tenant key, named because "why does this row show every
   // permission" is otherwise a mystery.
   public get grantsEverything(): boolean {
     return this.dto.key === "owner";

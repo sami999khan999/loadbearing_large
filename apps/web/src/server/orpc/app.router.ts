@@ -6,6 +6,7 @@ import { MemberRouter } from "./member.router.js";
 import { MessageRouter } from "./message.router.js";
 import { ConversationRouter } from "./messaging.router.js";
 import { NotificationRouter } from "./notification.router.js";
+import { OverrideRouter } from "./override.router.js";
 import { PlatformRouter } from "./platform.router.js";
 import { RoleRouter } from "./role.router.js";
 
@@ -22,4 +23,5 @@ export const appRouter = {
   message: MessageRouter.all,
   platform: PlatformRouter.all,
   analytics: AnalyticsRouter.all,
+  override: OverrideRouter.all,
 };

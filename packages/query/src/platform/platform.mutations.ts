@@ -1,8 +1,17 @@
 import type {
+  AdjustedDto,
+  AdjustmentClearInput,
+  AdjustmentSaveInput,
   ApiClient,
   DeleteRequestedDto,
   ExportRequestedDto,
+  FlagTargetToggleInput,
+  FlagToggleInput,
+  ModuleSwitchUpdateInput,
   MoveRequestedDto,
+  PlanAssignInput,
+  PlanRefInput,
+  PlanSaveInput,
   ProjectionToggleInput,
   ProjectionUpdateInput,
   ReplicaToggleInput,
@@ -91,6 +100,72 @@ export class PlatformMutations {
     return useAppMutation<{ ok: true }, ReplicaToggleInput>({
       mutationFn: (input) => client.platform.updateReplicaSwitch(input),
       invalidates: [QueryKeys.platform.status(), QueryKeys.platform.policy()],
+    });
+  }
+
+  // A plan edit changes what every org on it may do, so every org's panel is stale.
+  public static useSavePlan(client: ApiClient) {
+    return useAppMutation<{ ok: true }, PlanSaveInput>({
+      mutationFn: (input) => client.platform.savePlan(input),
+      invalidates: [QueryKeys.platform.plans(), QueryKeys.platform.entitlements()],
+    });
+  }
+
+  public static useDeletePlan(client: ApiClient) {
+    return useAppMutation<{ ok: true }, PlanRefInput>({
+      mutationFn: (input) => client.platform.deletePlan(input),
+      invalidates: [QueryKeys.platform.plans()],
+    });
+  }
+
+  public static useUpdateDefaultPlan(client: ApiClient) {
+    return useAppMutation<{ ok: true }, PlanRefInput>({
+      mutationFn: (input) => client.platform.updateDefaultPlan(input),
+      invalidates: [QueryKeys.platform.plans()],
+    });
+  }
+
+  // The plan list too: it counts the orgs on each plan, and this moved one.
+  public static useAssignPlan(client: ApiClient) {
+    return useAppMutation<{ ok: true }, PlanAssignInput>({
+      mutationFn: (input) => client.platform.assignPlan(input),
+      invalidates: [QueryKeys.platform.entitlements(), QueryKeys.platform.plans()],
+    });
+  }
+
+  public static useAdjustEntitlement(client: ApiClient) {
+    return useAppMutation<AdjustedDto, AdjustmentSaveInput>({
+      mutationFn: (input) => client.platform.adjustEntitlement(input),
+      invalidates: [QueryKeys.platform.entitlements()],
+    });
+  }
+
+  public static useClearAdjustment(client: ApiClient) {
+    return useAppMutation<{ ok: true }, AdjustmentClearInput>({
+      mutationFn: (input) => client.platform.clearAdjustment(input),
+      invalidates: [QueryKeys.platform.entitlements()],
+    });
+  }
+
+  // Every org's panel as well: a switched-off module masks keys for all of them.
+  public static useUpdateModuleSwitch(client: ApiClient) {
+    return useAppMutation<{ ok: true }, ModuleSwitchUpdateInput>({
+      mutationFn: (input) => client.platform.updateModuleSwitch(input),
+      invalidates: [QueryKeys.platform.modules(), QueryKeys.platform.entitlements()],
+    });
+  }
+
+  public static useUpdateFlag(client: ApiClient) {
+    return useAppMutation<{ ok: true }, FlagToggleInput>({
+      mutationFn: (input) => client.platform.updateFlag(input),
+      invalidates: [QueryKeys.platform.flags()],
+    });
+  }
+
+  public static useUpdateFlagTarget(client: ApiClient) {
+    return useAppMutation<{ ok: true }, FlagTargetToggleInput>({
+      mutationFn: (input) => client.platform.updateFlagTarget(input),
+      invalidates: [QueryKeys.platform.flags()],
     });
   }
 

@@ -12,6 +12,7 @@ export const messagingPermissions = {
     scope: "org",
     module: "messaging",
     label: "Start a conversation",
+    requires: ["messaging.conversation.read"],
   },
   // Renaming, adding and removing members. Separate from `create`, because opening a DM
   // is something everyone does and administering a channel is not.
@@ -19,11 +20,13 @@ export const messagingPermissions = {
     scope: "org",
     module: "messaging",
     label: "Manage conversations and their members",
+    requires: ["messaging.conversation.read"],
   },
   "messaging.message.send": {
     scope: "org",
     module: "messaging",
     label: "Send messages",
+    requires: ["messaging.conversation.read"],
   },
   // Editing and deleting your own, inside the window. Beyond it, or somebody else's,
   // takes `messaging.conversation.manage` instead.
@@ -31,5 +34,6 @@ export const messagingPermissions = {
     scope: "org",
     module: "messaging",
     label: "Edit and delete your own messages",
+    requires: ["messaging.conversation.read"],
   },
 } as const satisfies Record<string, PermissionMeta>;

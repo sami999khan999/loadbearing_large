@@ -9,15 +9,23 @@ export class RoleRouter {
     context.container.rbac.listRoles.execute(context.principal, input),
   );
 
-  // `toJSON()` is the four lines: the use-case answers a `CapabilitySet` because that
-  // is the domain's type, and the contract declares its wire shape.
+  // The set goes out as its DTO and the ceiling as its keys: the domain holds a
+  // `CapabilitySet` and an `EntitlementMask`, and the contract declares their wire shapes.
   public static readonly effective = authed.role.effective.handler(async ({ input, context }) => {
-    const capabilities = await context.container.rbac.inspectEffective.execute(
+    const { capabilities, explanation } = await context.container.rbac.inspectEffective.execute(
       context.principal,
       input,
     );
 
-    return capabilities.toJSON();
+    return {
+      capabilities: capabilities.toJSON(),
+      explanation: {
+        roleGrants: explanation.roleGrants,
+        goalGrants: explanation.goalGrants,
+        overrides: explanation.overrides,
+        entitled: explanation.entitlement.keys(),
+      },
+    };
   });
 
   public static readonly create = authed.role.create.handler(({ input, context }) =>
@@ -44,9 +52,14 @@ export class RoleRouter {
   );
 
   // The object the merge point in `app.router.ts` mounts, mirroring `RoleProcedures.all`.
+  public static readonly entitlement = authed.role.entitlement.handler(async ({ context }) => ({
+    keys: await context.container.rbac.entitlement.execute(context.principal),
+  }));
+
   public static readonly all = {
     list: RoleRouter.list,
     effective: RoleRouter.effective,
+    entitlement: RoleRouter.entitlement,
     create: RoleRouter.create,
     update: RoleRouter.update,
     remove: RoleRouter.remove,

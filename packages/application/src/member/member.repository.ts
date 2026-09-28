@@ -10,6 +10,8 @@ export interface MemberRecord {
   readonly roleName: string;
   readonly joinedAt: Date;
   readonly deactivated: boolean;
+  // Live overrides — a role review's drift, read in the same statement as the member.
+  readonly exceptions: number;
 }
 
 export interface MemberPage {

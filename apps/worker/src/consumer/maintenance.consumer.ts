@@ -1,4 +1,4 @@
-import { withShard } from "../bootstrap/index.js";
+import { SystemPrincipal, withShard } from "../bootstrap/index.js";
 import {
   type ArchivedPartition,
   type ColdMode,
@@ -302,12 +302,21 @@ export class MaintenanceConsumer {
   }
 
   private async cleanup(): Promise<void> {
-    const outcome = await this.container.maintenance.sweepExpired(this.container.clock.now());
+    const now = this.container.clock.now();
+    const outcome = await this.container.maintenance.sweepExpired(now);
+    // A trial past its date already grants nothing; this removes the row and audits it.
+    const expired = await this.container.platformAdmin.expireAdjustments.execute(
+      SystemPrincipal.platform(),
+      now,
+    );
+    const lapsed = await this.container.overrides.expire.execute(SystemPrincipal.platform(), now);
 
     this.container.logger.emit("maintenance.sweep.completed", {
       sessions: outcome.sessions,
       verifications: outcome.verifications,
       invitations: outcome.invitations,
+      adjustments: expired.adjustments,
+      overrides: lapsed.overrides,
     });
 
     // Here rather than on a schedule of its own: a grace period is days long, and one

@@ -8,6 +8,14 @@ export {
   PermissionMatrix,
   type PermissionMatrixProps,
 } from "./permission-matrix.js";
+export {
+  PermissionOverrideForm,
+  type PermissionOverrideFormProps,
+} from "./permission-override.form.js";
+export {
+  PermissionOverrideList,
+  type PermissionOverrideListProps,
+} from "./permission-override.list.js";
 export { RoleList, type RoleListProps } from "./role-list.js";
 export { RoleMatrix, type RoleMatrixProps } from "./role-matrix.js";
 export { useRoleFailure } from "./use-role-failure.js";

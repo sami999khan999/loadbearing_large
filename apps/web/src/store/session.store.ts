@@ -1,4 +1,4 @@
-import { CapabilitySet, type CapabilitySetDto, type SessionUser } from "~/import.js";
+import { CapabilitySet, type CapabilitySetDto, type FlagKey, type SessionUser } from "~/import.js";
 
 // What crosses the SSR boundary. The DTO rather than the class, because `can()` on the
 // client has to be the same `can()` the server ran.
@@ -11,6 +11,9 @@ export interface SessionSnapshot {
   // Not about the user, and it rides here anyway: `Env` is server-only, and this is the
   // one payload the root route already awaits on every request.
   readonly googleEnabled: boolean;
+  // The on-set of client-gating flags only — the ones a widget names. A server-only
+  // flag's name never rides here. See docs/reference/server-functions.md.
+  readonly flags: readonly FlagKey[];
 }
 
 // Signed out, denying everything: there is no loading state that grants access, so
@@ -22,6 +25,7 @@ const ANONYMOUS: SessionSnapshot = {
   // Off until the server says otherwise, so an unresolved store renders no button rather
   // than one that leads nowhere.
   googleEnabled: false,
+  flags: [],
 };
 
 // Resolve on the server, ride the SSR payload, be complete before the first client
@@ -72,6 +76,10 @@ export class SessionStore {
 
   public get googleEnabled(): boolean {
     return this.snapshot.googleEnabled;
+  }
+
+  public get flags(): readonly FlagKey[] {
+    return this.snapshot.flags;
   }
 
   public dehydrate(): SessionSnapshot {

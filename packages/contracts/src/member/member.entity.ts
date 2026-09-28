@@ -17,7 +17,7 @@ export class MemberEntity {
     return this.dto.name;
   }
 
-  // `owner` is the wildcard role, so a list marks it: it is the one row whose removal
+  // `owner` lists every tenant key, so a list marks it: it is the one row whose removal
   // can lock a tenant.
   public get isOwner(): boolean {
     return this.dto.roleKey === "owner";

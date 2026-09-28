@@ -1,50 +1,49 @@
 import {
   and,
+  type CapabilityExplanation,
   type CapabilityRepository,
+  CapabilityResolution,
   CapabilitySet,
-  type CapabilitySetDto,
+  EntitlementMask,
   eq,
+  gt,
   isNull,
   type OrganizationId,
+  or,
   type PermissionKey,
   PermissionRegistry,
   type Placement,
-  type ScopedSetDto,
+  sql,
   type UserId,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
 import {
+  disabledModules,
+  entitlementAdjustments,
   goalMembers,
   memberships,
   organizations,
   permissionOverrides,
+  planPermissions,
+  plans,
   rolePermissions,
 } from "../schema/index.js";
-
-interface MutableScoped {
-  grants: Set<PermissionKey>;
-  denies: Set<PermissionKey>;
-}
 
 export class PgCapabilityRepository extends BaseRepository implements CapabilityRepository {
   // RBAC — read on every request, before a key is known.
   protected override readonly placement: Placement = "catalog";
 
-  // Org grants + goal grants + per-user overrides, deny winning. Three targeted
-  // queries, not one join: the join is a cartesian product needing dedup in code.
+  // Org grants + goal grants + per-user overrides, deny winning, then the plan's mask.
+  // A fold over `explainFor`, so the inspector's "why" and the gate's answer cannot differ.
   public async resolveFor(organizationId: OrganizationId, userId: UserId): Promise<CapabilitySet> {
-    const registry = PermissionRegistry.instance;
+    return CapabilityResolution.fold(await this.explainFor(organizationId, userId));
+  }
 
-    const org: MutableScoped = { grants: new Set(), denies: new Set() };
-    const goals = new Map<string, MutableScoped>();
-    const scopedFor = (goalId: string): MutableScoped => {
-      const existing = goals.get(goalId);
-      if (existing) return existing;
-      const created: MutableScoped = { grants: new Set(), denies: new Set() };
-      goals.set(goalId, created);
-      return created;
-    };
-
+  // Four targeted queries, not one join: the join is a cartesian product needing dedup.
+  public async explainFor(
+    organizationId: OrganizationId,
+    userId: UserId,
+  ): Promise<CapabilityExplanation> {
     const orgRows = await this.db
       .select({ permission: rolePermissions.permission })
       .from(memberships)
@@ -59,51 +58,93 @@ export class PgCapabilityRepository extends BaseRepository implements Capability
         ),
       );
 
-    for (const row of orgRows) {
-      if (registry.isKnown(row.permission)) org.grants.add(row.permission);
-    }
-
     const goalRows = await this.db
       .select({ goalId: goalMembers.goalId, permission: rolePermissions.permission })
       .from(goalMembers)
       .innerJoin(rolePermissions, eq(rolePermissions.roleId, goalMembers.roleId))
       .where(and(eq(goalMembers.organizationId, organizationId), eq(goalMembers.userId, userId)));
 
-    for (const row of goalRows) {
-      if (registry.isKnown(row.permission)) scopedFor(row.goalId).grants.add(row.permission);
-    }
-
+    // Expired rows are filtered here, which is the real mechanism: a cached set can outlive
+    // an expiry by up to the TTL, and the sweep only tidies. A deny never expires.
     const overrideRows = await this.db
-      .select()
+      .select({
+        id: permissionOverrides.id,
+        permission: permissionOverrides.permission,
+        effect: permissionOverrides.effect,
+        goalId: permissionOverrides.goalId,
+        authority: permissionOverrides.authority,
+        reason: permissionOverrides.reason,
+        expiresAt: permissionOverrides.expiresAt,
+      })
       .from(permissionOverrides)
       .where(
         and(
           eq(permissionOverrides.organizationId, organizationId),
           eq(permissionOverrides.userId, userId),
+          or(isNull(permissionOverrides.expiresAt), gt(permissionOverrides.expiresAt, sql`now()`)),
         ),
       );
 
-    // Every raw string passes isKnown() before it is trusted, so a stale row can
-    // never grant a capability the registry no longer defines.
-    for (const row of overrideRows) {
-      if (!registry.isKnown(row.permission)) continue;
-      const target = row.goalId ? scopedFor(row.goalId) : org;
-      if (row.effect === "deny") target.denies.add(row.permission);
-      else target.grants.add(row.permission);
+    const goalGrants: Record<string, string[]> = {};
+    for (const row of goalRows) {
+      const bucket = goalGrants[row.goalId] ?? [];
+      bucket.push(row.permission);
+      goalGrants[row.goalId] = bucket;
     }
 
-    const freeze = (scoped: MutableScoped): ScopedSetDto => ({
-      grants: [...scoped.grants],
-      denies: [...scoped.denies],
-    });
-
-    const dto: CapabilitySetDto = {
-      wildcard: false,
-      org: freeze(org),
-      goals: Object.fromEntries([...goals].map(([id, scoped]) => [id, freeze(scoped)])),
+    return {
+      roleGrants: orgRows.map((row) => row.permission),
+      goalGrants,
+      overrides: overrideRows,
+      entitlement: await this.entitlementFor(organizationId),
     };
+  }
 
-    return CapabilitySet.from(dto);
+  // One statement: four index lookups, tagged by kind and unioned. A join of the four would
+  // multiply rows; a union is four small reads in one round trip.
+  public async entitlementFor(organizationId: OrganizationId): Promise<EntitlementMask> {
+    const planRows = this.db
+      .select({ kind: sql<string>`'plan'`.as("kind"), value: planPermissions.permission })
+      .from(organizations)
+      .innerJoin(planPermissions, eq(planPermissions.planKey, organizations.planKey))
+      .where(eq(organizations.id, organizationId));
+
+    const unlimited = this.db
+      .select({ kind: sql<string>`'unlimited'`.as("kind"), value: plans.key })
+      .from(organizations)
+      .innerJoin(plans, eq(plans.key, organizations.planKey))
+      .where(and(eq(organizations.id, organizationId), eq(plans.isUnlimited, true)));
+
+    // Expired rows are ignored here, which is the real mechanism; the sweep only tidies.
+    const adjustments = this.db
+      .select({
+        kind: sql<string>`${entitlementAdjustments.effect}`.as("kind"),
+        value: entitlementAdjustments.permission,
+      })
+      .from(entitlementAdjustments)
+      .where(
+        and(
+          eq(entitlementAdjustments.organizationId, organizationId),
+          or(
+            isNull(entitlementAdjustments.expiresAt),
+            gt(entitlementAdjustments.expiresAt, sql`now()`),
+          ),
+        ),
+      );
+
+    const disabled = this.db
+      .select({ kind: sql<string>`'disabled'`.as("kind"), value: disabledModules.module })
+      .from(disabledModules);
+
+    const rows = await planRows.unionAll(unlimited).unionAll(adjustments).unionAll(disabled);
+
+    const of = (kind: string) => rows.filter((row) => row.kind === kind).map((row) => row.value);
+    return EntitlementMask.from({
+      plan: rows.some((row) => row.kind === "unlimited") ? "all" : of("plan"),
+      added: of("add"),
+      removed: of("remove"),
+      disabledModules: of("disabled"),
+    });
   }
 
   // Two queries against the one organization marked `is_platform`, filtered to keys the

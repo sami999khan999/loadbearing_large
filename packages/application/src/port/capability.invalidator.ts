@@ -12,4 +12,8 @@ export abstract class CapabilityInvalidator {
   // The third axis is cached under its own key, so flushing a tenant does not reach it.
   // Called by the adapter when the tenant being flushed *is* the platform one.
   public abstract invalidatePlatform(): Promise<void>;
+
+  // Every tenant at once: a plan edit or the kill switch changes what every holder of a
+  // plan may do, and the holders are not known here. The platform axis is never masked.
+  public abstract invalidateAll(): Promise<void>;
 }

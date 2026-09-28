@@ -70,6 +70,90 @@ export class PlatformRouter {
     },
   );
 
+  // Copied, not cast: the use-case hands out readonly arrays and the wire type is mutable.
+  public static readonly listFlags = authed.platform.listFlags.handler(async ({ context }) => {
+    const flags = await context.container.platformAdmin.listFlags.execute(context.principal);
+    return { items: flags.map((flag) => ({ ...flag, targets: [...flag.targets] })) };
+  });
+
+  public static readonly updateFlag = authed.platform.updateFlag.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.updateFlag.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly updateFlagTarget = authed.platform.updateFlagTarget.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.updateFlagTarget.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly listPlans = authed.platform.listPlans.handler(({ context }) =>
+    context.container.platformAdmin.listPlans.execute(context.principal),
+  );
+
+  public static readonly savePlan = authed.platform.savePlan.handler(async ({ input, context }) => {
+    await context.container.platformAdmin.savePlan.execute(context.principal, input);
+    return { ok: true } as const;
+  });
+
+  public static readonly deletePlan = authed.platform.deletePlan.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.deletePlan.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly updateDefaultPlan = authed.platform.updateDefaultPlan.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.updateDefaultPlan.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly organizationEntitlement = authed.platform.organizationEntitlement.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.organizationEntitlement.execute(context.principal, input),
+  );
+
+  public static readonly assignPlan = authed.platform.assignPlan.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.assignPlan.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly adjustEntitlement = authed.platform.adjustEntitlement.handler(
+    async ({ input, context }) => ({
+      permissions: await context.container.platformAdmin.adjustEntitlement.execute(
+        context.principal,
+        input,
+      ),
+    }),
+  );
+
+  public static readonly clearAdjustment = authed.platform.clearAdjustment.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.clearAdjustment.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly moduleSwitches = authed.platform.moduleSwitches.handler(
+    async ({ context }) => ({
+      items: await context.container.platformAdmin.moduleSwitches.execute(context.principal),
+    }),
+  );
+
+  public static readonly updateModuleSwitch = authed.platform.updateModuleSwitch.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.switchModule.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   public static readonly listProjection = authed.platform.listProjection.handler(({ context }) =>
     context.container.platformAdmin.listProjection.execute(context.principal),
   );
@@ -131,5 +215,18 @@ export class PlatformRouter {
     shardMap: PlatformRouter.shardMap,
     locateTenant: PlatformRouter.locateTenant,
     moveTenant: PlatformRouter.moveTenant,
+    listFlags: PlatformRouter.listFlags,
+    updateFlag: PlatformRouter.updateFlag,
+    updateFlagTarget: PlatformRouter.updateFlagTarget,
+    listPlans: PlatformRouter.listPlans,
+    savePlan: PlatformRouter.savePlan,
+    deletePlan: PlatformRouter.deletePlan,
+    updateDefaultPlan: PlatformRouter.updateDefaultPlan,
+    organizationEntitlement: PlatformRouter.organizationEntitlement,
+    assignPlan: PlatformRouter.assignPlan,
+    adjustEntitlement: PlatformRouter.adjustEntitlement,
+    clearAdjustment: PlatformRouter.clearAdjustment,
+    moduleSwitches: PlatformRouter.moduleSwitches,
+    updateModuleSwitch: PlatformRouter.updateModuleSwitch,
   } as const;
 }

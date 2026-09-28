@@ -82,6 +82,8 @@ export const CATALOG_TABLES: readonly ExportTable[] = Object.freeze([
   catalogTable("permission_overrides", ["id"]),
   catalogTable("invitations", ["id"], ["token_hash"]),
   catalogTable("api_keys", ["id"], ["token_hash"]),
+  catalogTable("entitlement_adjustments", ["id"]),
+  catalogTable("feature_flag_organizations", ["flag_key"]),
 ]);
 
 // An alias rather than an interface: drizzle's `execute<T>` constrains `T` to

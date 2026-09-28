@@ -129,3 +129,48 @@ describe("PermissionMatrix — excludeScopes", () => {
     expect(screen.getByText(first)).toBeDefined();
   });
 });
+
+// `AX4.8`. A key outside the org's plan is shown, because the grant is still stored, but
+// cannot be edited. The row says why, once, rather than in every column.
+describe("PermissionMatrix — keys outside the plan", () => {
+  const editable = (blocked?: ReadonlySet<(typeof ALL)[number]>) =>
+    renderWithFakes(
+      <PermissionMatrix
+        subjects={[
+          {
+            id: "member",
+            label: "Member",
+            editable: true,
+            capabilities: CapabilitySet.from(capabilitiesWith(["analytics.activity.read"])),
+          },
+        ]}
+        onToggle={() => undefined}
+        {...(blocked ? { blocked } : {})}
+      />,
+      capabilitiesWith([]),
+      TEST_USER,
+      ["role"],
+    );
+
+  it("disables a blocked key's checkbox and says it is not in the plan", async () => {
+    await editable(new Set(["analytics.activity.read"]));
+
+    const box = screen.getByRole<HTMLInputElement>("checkbox", {
+      name: "Member — analytics.activity.read",
+    });
+    expect(box.disabled).toBe(true);
+    // Still ticked: the grant is kept, which is what makes an upgrade restore it.
+    expect(box.checked).toBe(true);
+    expect(screen.getAllByText("Not included in your plan")).toHaveLength(1);
+  });
+
+  it("leaves every row editable when nothing is blocked", async () => {
+    await editable();
+
+    expect(
+      screen.getByRole<HTMLInputElement>("checkbox", { name: "Member — analytics.activity.read" })
+        .disabled,
+    ).toBe(false);
+    expect(screen.queryByText("Not included in your plan")).toBeNull();
+  });
+});

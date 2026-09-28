@@ -95,6 +95,46 @@ export class PlatformQueries {
     });
   }
 
+  // Ten seconds, like the policy read: a switch somebody may have just thrown from another
+  // tab, and a stale answer is a toggle that does the opposite.
+  public static flags(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.flags(),
+      queryFn: () => client.platform.listFlags(),
+      staleTime: 10_000,
+    });
+  }
+
+  // A minute: plans change when somebody saves, and every save invalidates this key.
+  public static plans(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.plans(),
+      queryFn: () => client.platform.listPlans(),
+      staleTime: 60_000,
+    });
+  }
+
+  // Keyed on the term the operator typed, so two lookups are two answers. Disabled
+  // until there is one: an empty term is a request for nobody.
+  public static entitlement(client: ApiClient, organization: string) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.entitlement(organization),
+      queryFn: () => client.platform.organizationEntitlement({ organization }),
+      enabled: organization.trim() !== "",
+      staleTime: 10_000,
+    });
+  }
+
+  // Ten seconds, like the status read it sits beside: during an incident this is the
+  // switch someone may have just thrown from another tab.
+  public static moduleSwitches(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.modules(),
+      queryFn: () => client.platform.moduleSwitches(),
+      staleTime: 10_000,
+    });
+  }
+
   // A minute, like the retention read beside it: the rows change when somebody saves,
   // and the mutation invalidates this key. The backstop is for a second tab.
   public static projection(client: ApiClient) {

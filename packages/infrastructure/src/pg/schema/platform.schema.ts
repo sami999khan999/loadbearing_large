@@ -1,6 +1,7 @@
 import {
   boolean,
   check,
+  index,
   integer,
   type OrganizationId,
   pgTable,
@@ -11,6 +12,7 @@ import {
   timestamp,
   uuid,
 } from "../../import.js";
+import { plans } from "./rbac.schema.js";
 
 // **Global, and deliberately so.** A partition spans every tenant, so a per-tenant row
 // here would describe something the storage engine cannot do.
@@ -63,9 +65,19 @@ export const platformPolicy = pgTable(
     // How long a moved tenant's rows stay on the node it left. **Null is not zero**: it
     // means "use the deployment's own default", the way an absent retention row does.
     moveGraceDays: smallint("move_grace_days"),
+    // What a new signup lands on. The column default on `organizations` only places the
+    // orgs that existed when the column was added; the founders read this one.
+    defaultPlanKey: text("default_plan_key")
+      .notNull()
+      .default("unlimited")
+      .references(() => plans.key),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("platform_policy_singleton_ck", sql`${t.id} = 1`)],
+  (t) => [
+    check("platform_policy_singleton_ck", sql`${t.id} = 1`),
+    // One row, so this serves nothing a scan would not. §18 asks it of every foreign key.
+    index("platform_policy_default_plan_idx").on(t.defaultPlanKey),
+  ],
 );
 
 // One row per activity action, and an absent row is "projected, with the default TTL".

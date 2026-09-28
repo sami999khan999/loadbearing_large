@@ -141,6 +141,25 @@ describe("PgMembershipReader", () => {
     }
   });
 
+  // `AX6.2`. The suspend is on the user, so every membership they hold goes dark at once.
+  it("answers a suspended account as a member of nothing, in every tenant", async () => {
+    const suspend = (at: Date | null) =>
+      database.client.update(users).set({ suspendedAt: at }).where(eq(users.id, grace));
+    await suspend(new Date());
+
+    try {
+      expect(await reader().activeOrganizationFor(grace)).toBeNull();
+      expect(await reader().organizationsFor(grace)).toEqual([]);
+      expect(await reader().isActive(grace, elsewhere)).toBe(false);
+      expect(await reader().isActiveMember(first, grace)).toBe(false);
+      expect([...(await reader().activeMemberIds(first, [ada, grace]))]).toEqual([ada]);
+    } finally {
+      await suspend(null);
+    }
+
+    expect(await reader().isActive(grace, elsewhere)).toBe(true);
+  });
+
   it("defaults the active organization to the oldest membership", async () => {
     await setLastActive(ada, null);
 

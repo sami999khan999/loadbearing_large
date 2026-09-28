@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   type OrganizationId,
   pgTable,
@@ -12,6 +13,31 @@ import {
 } from "../../import.js";
 import { users } from "./auth.schema.js";
 
+// What an org has paid for, as keys. `is_unlimited` is every tenant key, resolved at read
+// time rather than stored — see packages/permissions/docs/reference/entitlement-mask.md.
+export const plans = pgTable("plans", {
+  key: text("key").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  isUnlimited: boolean("is_unlimited").notNull().default(false),
+  // Shipped by a migration, never deleted: `unlimited` is every existing org's plan.
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Raw strings, filtered through `PermissionRegistry.isKnown` before they are trusted.
+export const planPermissions = pgTable(
+  "plan_permissions",
+  {
+    planKey: text("plan_key")
+      .notNull()
+      .references(() => plans.key, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+  },
+  (t) => [uniqueIndex("plan_permissions_uq").on(t.planKey, t.permission)],
+);
+
 export const organizations = pgTable(
   "organizations",
   {
@@ -21,6 +47,11 @@ export const organizations = pgTable(
     // The platform tier is an organization, so a platform grant rides the roles and
     // memberships every other grant does. Marked by the seed, never by a user.
     isPlatform: boolean("is_platform").notNull().default(false),
+    // No action on delete: a plan in use cannot be deleted, which `delete-plan` also says.
+    planKey: text("plan_key")
+      .notNull()
+      .default("unlimited")
+      .references(() => plans.key),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -30,6 +61,8 @@ export const organizations = pgTable(
     // Partial, so it constrains only the true rows: at most one platform tier, and any
     // number of ordinary tenants. `resolvePlatformFor` resolves one row or none.
     uniqueIndex("organizations_platform_uq").on(t.isPlatform).where(sql`is_platform`),
+    // For the foreign key, and for "is this plan in use" before a delete.
+    index("organizations_plan_idx").on(t.planKey),
   ],
 );
 
@@ -96,8 +129,8 @@ export const memberships = pgTable(
       .notNull()
       .references(() => roles.id, { onDelete: "no action" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    // Per membership, not per user: `users.deactivated_at` would lock someone out of
-    // every tenant they belong to, which is a cross-tenant write dressed as a local one.
+    // Per membership: a tenant admin locks someone out of this tenant only. The lock on
+    // every tenant at once is `users.suspended_at`, and it is the platform's.
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (t) => [
@@ -157,21 +190,38 @@ export const permissionOverrides = pgTable(
     permission: text("permission").notNull(),
     effect: text("effect", { enum: ["grant", "deny"] }).notNull(),
     reason: text("reason"),
+    // A grant widens and must lapse; a deny narrows and is safe to leave. The CHECKs below
+    // hold both, so a hand-written grant with no end cannot exist.
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // No foreign key: the audit trail names the actor, and a departed admin keeps no row.
+    createdBy: uuid("created_by").$type<UserId>(),
+    // `platform` is a deny the tier set. The org admin sees it and cannot clear it.
+    authority: text("authority", { enum: ["org", "platform"] })
+      .notNull()
+      .default("org"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check(
+      "permission_overrides_expiry_ck",
+      sql`(${t.effect} = 'grant' and ${t.expiresAt} is not null) or (${t.effect} = 'deny' and ${t.expiresAt} is null)`,
+    ),
+    check("permission_overrides_reason_ck", sql`${t.effect} = 'deny' or ${t.reason} is not null`),
+    check("permission_overrides_authority_ck", sql`${t.authority} = 'org' or ${t.effect} = 'deny'`),
     index("permission_overrides_user_idx").on(t.organizationId, t.userId),
     // Same split: the tenant-leading index answers the resolver, this one answers
     // the cascade from `users`.
     index("permission_overrides_user_fk_idx").on(t.userId),
     index("permission_overrides_goal_idx").on(t.goalId),
-    // Two partial indexes, because NULLs are distinct: one index over a nullable
-    // `goal_id` accepts unlimited duplicate org-scope rows for the same permission.
+    // Two partial indexes, because NULLs are distinct over a nullable `goal_id`. `authority`
+    // is in both, so a platform deny and an org row for the same key coexist.
     uniqueIndex("permission_overrides_org_uq")
-      .on(t.organizationId, t.userId, t.permission)
+      .on(t.organizationId, t.userId, t.permission, t.authority)
       .where(sql`${t.goalId} is null`),
     uniqueIndex("permission_overrides_goal_uq")
-      .on(t.organizationId, t.userId, t.goalId, t.permission)
+      .on(t.organizationId, t.userId, t.goalId, t.permission, t.authority)
       .where(sql`${t.goalId} is not null`),
+    // The sweep's read. Partial: a deny never expires, so it is never a candidate.
+    index("permission_overrides_expiry_idx").on(t.expiresAt).where(sql`${t.expiresAt} is not null`),
   ],
 );

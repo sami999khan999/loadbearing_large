@@ -1,5 +1,12 @@
 import type { ApiKeyResolver } from "../apikey/api-key.resolver.js";
-import { CapabilitySet, Principal, type RequestHeaders, type SessionResolver } from "../import.js";
+import {
+  CapabilitySet,
+  type OrganizationId,
+  Principal,
+  type RequestHeaders,
+  type SessionResolver,
+  type UserId,
+} from "../import.js";
 import type { MembershipReader } from "../session/membership.reader.js";
 import type { CapabilityCache } from "./capability.cache.js";
 
@@ -22,15 +29,35 @@ export class PrincipalBuilder {
     const session = await this.sessions.resolve(headers);
     if (!session) return null;
 
+    return this.forUser(session.organizationId, session.userId);
+  }
+
+  // What a held stream asks each minute: the principal it opened with, as it stands now.
+  // `null` once deactivated. A key only narrows — its declared scopes are not in hand here.
+  public async refresh(principal: Principal): Promise<Principal | null> {
+    const { organizationId, userId } = principal;
+
+    if (principal.kind === "user") return this.forUser(organizationId, userId);
+    if (principal.kind === "system") return principal;
+
+    const [active, issuer] = await Promise.all([
+      this.memberships.isActive(userId, organizationId),
+      this.capabilities.forUser(organizationId, userId),
+    ]);
+    if (!active) return null;
+    return Principal.apiKey(organizationId, userId, principal.capabilities.intersect(issuer));
+  }
+
+  private async forUser(organizationId: OrganizationId, userId: UserId): Promise<Principal | null> {
     // Before the capabilities, because a deactivated membership is not a principal with
     // nothing granted — it is no principal at all. One row on `memberships_uq`.
-    if (!(await this.memberships.isActive(session.userId, session.organizationId))) return null;
+    if (!(await this.memberships.isActive(userId, organizationId))) return null;
 
     // In parallel: two independent reads, both usually cache hits, and serialising them
     // puts a second round trip on every request that misses.
     const [tenant, platform] = await Promise.all([
-      this.capabilities.forUser(session.organizationId, session.userId),
-      this.capabilities.platformFor(session.userId),
+      this.capabilities.forUser(organizationId, userId),
+      this.capabilities.platformFor(userId),
     ]);
 
     // Merged rather than chosen between: a platform admin switched into a customer tenant
@@ -40,6 +67,6 @@ export class PrincipalBuilder {
       platform: platform.toJSON().platform,
     });
 
-    return new Principal(session.organizationId, session.userId, capabilities, "user");
+    return new Principal(organizationId, userId, capabilities, "user");
   }
 }

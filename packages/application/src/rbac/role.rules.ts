@@ -1,5 +1,6 @@
 import {
   ConflictError,
+  type EntitlementMask,
   ForbiddenError,
   type PermissionKey,
   PermissionRegistry,
@@ -22,7 +23,7 @@ export class RoleRules {
   private constructor() {}
 
   // `SystemRoleSeed` resolves its rows by `(organization_id, key)` and grants them its
-  // own permission list. A user-created `owner` would collect the wildcard on re-seed.
+  // own permission list. A user-created `owner` would collect every key on re-seed.
   public static isReservedKey(key: string): boolean {
     return RESERVED_KEYS.has(key);
   }
@@ -53,11 +54,16 @@ export class RoleRules {
     return permission;
   }
 
-  // No escalation by assignment: a role may go only to someone the actor could have granted
-  // every key of it to. `owner` holds them all, so only an owner hands out `owner`.
-  public static assertAssignableBy(actor: Principal, role: RoleRecord): void {
+  // No escalation by assignment: the actor must hold every key of the role. Un-entitled
+  // keys are skipped — grants are filtered, never deleted, so `owner` still lists them.
+  public static assertAssignableBy(
+    actor: Principal,
+    role: RoleRecord,
+    entitlement: EntitlementMask,
+  ): void {
     for (const permission of role.permissions) {
       if (!PermissionRegistry.instance.isKnown(permission)) continue;
+      if (!entitlement.isEntitled(permission)) continue;
       if (!actor.canTenantWide(permission)) throw new ForbiddenError(permission);
     }
   }

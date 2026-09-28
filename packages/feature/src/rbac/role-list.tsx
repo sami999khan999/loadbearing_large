@@ -88,6 +88,19 @@ export function RoleList({ limit = 25 }: RoleListProps) {
       },
       { key: "key", header: t("role.create.key"), cell: (row) => <code>{row.key}</code> },
       {
+        key: "exceptions",
+        header: "",
+        // A role review sees the drift here, without opening each member.
+        cell: (row) =>
+          row.membersWithExceptions ? (
+            <StatusBadge tone="warning">
+              {row.membersWithExceptions === 1
+                ? t("role.exceptions.one")
+                : t("role.exceptions.other", { count: row.membersWithExceptions })}
+            </StatusBadge>
+          ) : null,
+      },
+      {
         key: "actions",
         header: t("role.column.actions"),
         cell: (row) => (

@@ -30,6 +30,14 @@ const CATALOG = Object.freeze([
   "tenant_retention_policy",
   "projection_policy",
   "platform_policy",
+  // Deployment-wide switches, read before a request knows its shard.
+  "feature_flags",
+  "feature_flag_organizations",
+  // Entitlement: read inside capability resolution, which runs before a shard is known.
+  "plans",
+  "plan_permissions",
+  "entitlement_adjustments",
+  "disabled_modules",
 ] as const);
 
 // Present on every physical database and written in whichever transaction is open.

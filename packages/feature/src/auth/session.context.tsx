@@ -2,6 +2,7 @@ import {
   CapabilitySet,
   type CapabilitySetDto,
   createContext,
+  type FlagKey,
   type ReactNode,
   useContext,
   useMemo,
@@ -35,9 +36,13 @@ interface SessionValue {
   // Whether the *active* tenant is the platform tier — not whether this user is a
   // platform admin, which is the third axis of `capabilities`.
   readonly isPlatformOrganization: boolean;
+  readonly flags: ReadonlySet<FlagKey>;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
+
+// One instance, so the default does not change identity each render and rebuild the memo.
+const NO_FLAGS: readonly FlagKey[] = Object.freeze([]);
 
 export interface SessionProviderProps {
   readonly user: SessionUser | null;
@@ -47,6 +52,9 @@ export interface SessionProviderProps {
   // Defaulted, so a caller that has not been updated renders as an ordinary tenant —
   // which is the safe reading: the platform module stays hidden.
   readonly isPlatformOrganization?: boolean;
+  // The on-set of client-gating flags. Defaulted to none, so a caller not yet updated
+  // renders every flagged widget hidden, which is the side a rollout starts from.
+  readonly flags?: readonly FlagKey[];
   readonly children: ReactNode;
 }
 
@@ -54,6 +62,7 @@ export function SessionProvider({
   user,
   capabilities,
   isPlatformOrganization = false,
+  flags = NO_FLAGS,
   children,
 }: SessionProviderProps) {
   // Memoised so a re-render does not rebuild the internal Sets and invalidate every
@@ -63,8 +72,9 @@ export function SessionProvider({
       user,
       capabilities: CapabilitySet.from(capabilities),
       isPlatformOrganization,
+      flags: new Set(flags),
     }),
-    [user, capabilities, isPlatformOrganization],
+    [user, capabilities, isPlatformOrganization, flags],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -82,4 +92,8 @@ export function useCapabilities(): CapabilitySet {
 
 export function useIsPlatformOrganization(): boolean {
   return useSession().isPlatformOrganization;
+}
+
+export function useFlags(): ReadonlySet<FlagKey> {
+  return useSession().flags;
 }

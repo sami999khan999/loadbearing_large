@@ -23,6 +23,9 @@ import { EffectivePermissionsInspector } from "../rbac/index.js";
 export interface MemberListProps {
   // Paged rather than unbounded: `Pagination.query` caps `limit` at 100 in the schema.
   readonly limit?: number;
+  // Given, the row opens the route's access panel; absent, the inline inspector as before.
+  // A prop, because `feature` may not import routing.
+  readonly onOpenAccess?: (userId: string) => void;
 }
 
 // A row needs a stable `id` for `DataTable`; the member's user id is that.
@@ -30,7 +33,7 @@ interface MemberRow extends MemberDto {
   readonly id: string;
 }
 
-export function MemberList({ limit = 25 }: MemberListProps) {
+export function MemberList({ limit = 25, onOpenAccess }: MemberListProps) {
   const { t } = useMessages("member");
   // Renders the code the server sent rather than one generic sentence: a 403 and a
   // 409 are different things to be told.
@@ -70,7 +73,24 @@ export function MemberList({ limit = 25 }: MemberListProps) {
         ),
       },
       { key: "email", header: t("member.column.email"), cell: (row) => row.email },
-      { key: "role", header: t("member.column.role"), cell: (row) => row.roleName },
+      {
+        key: "role",
+        header: t("member.column.role"),
+        // "Accountant + 2 exceptions": the drift, read from the list without opening anyone.
+        cell: (row) =>
+          row.exceptions === 0 ? (
+            row.roleName
+          ) : (
+            <>
+              {row.roleName}{" "}
+              <StatusBadge tone="warning">
+                {row.exceptions === 1
+                  ? t("member.exception.one")
+                  : t("member.exception.other", { count: row.exceptions })}
+              </StatusBadge>
+            </>
+          ),
+      },
       {
         key: "joined",
         header: t("member.column.joined"),
@@ -82,8 +102,11 @@ export function MemberList({ limit = 25 }: MemberListProps) {
         cell: (row) => (
           <>
             <Can permission="rbac.effective.inspect" capabilities={capabilities}>
-              <Button variant="ghost" onClick={() => setInspecting(row)}>
-                {t("member.action.inspect")}
+              <Button
+                variant="ghost"
+                onClick={() => (onOpenAccess ? onOpenAccess(row.userId) : setInspecting(row))}
+              >
+                {onOpenAccess ? t("member.action.access") : t("member.action.inspect")}
               </Button>
             </Can>
             <Can permission="member.deactivate" capabilities={capabilities}>
@@ -111,7 +134,7 @@ export function MemberList({ limit = 25 }: MemberListProps) {
         ),
       },
     ],
-    [t, capabilities, user, deactivate, reactivate],
+    [t, capabilities, user, deactivate, reactivate, onOpenAccess],
   );
 
   // The last-owner and self refusals get their own sentence: the catalog's generic

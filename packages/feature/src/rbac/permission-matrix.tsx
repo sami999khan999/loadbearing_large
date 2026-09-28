@@ -24,6 +24,9 @@ export interface PermissionMatrixProps {
   // By scope, never by module name: "not a tenant's to hold" is a property of the
   // scope, and a module list here would go stale the first time one is renamed.
   readonly excludeScopes?: readonly PermissionScope[];
+  // Keys the org's plan does not include. Shown, not hidden — the grant is still stored,
+  // and an upgrade brings it back — but the row cannot be edited.
+  readonly blocked?: ReadonlySet<PermissionKey>;
 }
 
 // Rows are every permission in the catalog, grouped by module; columns are subjects.
@@ -33,6 +36,7 @@ export function PermissionMatrix({
   goalId,
   onToggle,
   excludeScopes,
+  blocked,
 }: PermissionMatrixProps) {
   const { t } = useMessages("common");
   // The column of permission names has no visible heading, and an empty `<th>` is
@@ -63,39 +67,44 @@ export function PermissionMatrix({
         </tr>
       </thead>
       <tbody>
-        {permissions.map((permission) => (
-          <tr key={permission}>
-            {
-              // `scope="row"`, or a screen reader reads every cell as a bare "yes"
-              // or "no" with no permission attached.
-            }
-            <th scope="row">
-              <code>{permission}</code>
-            </th>
-            {subjects.map((subject) => {
-              const allowed = subject.capabilities.can(permission, goalId);
-              return (
-                <td key={subject.id} data-allowed={allowed ? "true" : "false"}>
-                  {onToggle && subject.editable ? (
-                    <input
-                      type="checkbox"
-                      checked={allowed}
-                      aria-label={`${subject.label} — ${permission}`}
-                      onChange={() => onToggle(subject.id, permission)}
-                    />
-                  ) : // A word, not a glyph. The row and column headers already say which
-                  // permission and subject a cell is about, so the cell carries only the
-                  // answer. A design pass can swap in an icon behind `data-allowed`.
-                  allowed ? (
-                    t("state.allowed")
-                  ) : (
-                    t("state.denied")
-                  )}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
+        {permissions.map((permission) => {
+          const outside = blocked?.has(permission) ?? false;
+          return (
+            <tr key={permission} data-blocked={outside ? "true" : undefined}>
+              {
+                // `scope="row"`, or a screen reader reads every cell as a bare "yes"
+                // or "no" with no permission attached.
+              }
+              <th scope="row">
+                <code>{permission}</code>
+                {outside ? <small> {rbac("role.blocked")}</small> : null}
+              </th>
+              {subjects.map((subject) => {
+                const allowed = subject.capabilities.can(permission, goalId);
+                return (
+                  <td key={subject.id} data-allowed={allowed ? "true" : "false"}>
+                    {onToggle && subject.editable ? (
+                      <input
+                        type="checkbox"
+                        checked={allowed}
+                        disabled={outside}
+                        aria-label={`${subject.label} — ${permission}`}
+                        onChange={() => onToggle(subject.id, permission)}
+                      />
+                    ) : // A word, not a glyph. The row and column headers already say which
+                    // permission and subject a cell is about, so the cell carries only the
+                    // answer. A design pass can swap in an icon behind `data-allowed`.
+                    allowed ? (
+                      t("state.allowed")
+                    ) : (
+                      t("state.denied")
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

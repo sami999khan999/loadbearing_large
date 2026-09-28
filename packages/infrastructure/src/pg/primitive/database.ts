@@ -11,7 +11,7 @@ export interface DatabaseConfig {
   // parameter a transaction pooler forwards rather than dropping.
   readonly applicationName?: string;
   // Every statement, as drizzle issues it. This is the seam the query-count
-  // assertions need — "three queries" is a claim that decays silently without one.
+  // assertions need — "four queries" is a claim that decays silently without one.
   readonly logger?: DrizzleLogger;
   // Where a dead *idle* connection goes. Never optional in effect: see the listener below.
   readonly onError?: (error: Error) => void;

@@ -37,4 +37,10 @@ export const member: NamespaceBundle<"member"> = {
   "member.inspect.close": "বন্ধ করুন",
   "member.error.lastOwner": "ইনিই একমাত্র সক্রিয় মালিক। আগে অন্য কাউকে মালিক করুন।",
   "member.error.self": "আপনি নিজের সদস্যপদ নিষ্ক্রিয় করতে পারবেন না।",
+
+  "member.exception.one": "+ ১টি ব্যতিক্রম",
+  "member.exception.other": "+ {count}টি ব্যতিক্রম",
+  "member.action.access": "প্রবেশাধিকার",
+  "member.access.title": "প্রবেশাধিকার ও ব্যতিক্রম",
+  "member.access.close": "বন্ধ করুন",
 };

@@ -8,5 +8,6 @@ export const apiKeyPermissions = {
     scope: "org",
     module: "apikey",
     label: "Create and revoke API keys",
+    requires: ["apikey.read"],
   },
 } as const satisfies Record<string, PermissionMeta>;

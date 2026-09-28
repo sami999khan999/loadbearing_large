@@ -76,7 +76,15 @@ client reopens it, the open is refused, and a non-retryable refusal stops the cl
 | Stream | Asks |
 |---|---|
 | `realtime.stream` | `memberships.isActive(user, organization)` |
-| `realtime.conversation` | `messaging.watch`: `messaging.conversation.read`, then `assertParticipant` |
+| `realtime.conversation` | `principals.refresh`, then `messaging.watch` with the principal it returns |
+
+**The conversation check re-reads the principal before it asks.** Until `RV.1` it re-ran
+`messaging.watch` with the principal captured at open. That principal still held
+`messaging.conversation.read` whatever had changed since, and `assertParticipant` reads only
+`conversation_members`, which deactivating a member never touches. So a deactivated member kept
+the stream for thirty minutes. `PrincipalBuilder.refresh` answers `null` for an inactive
+membership, and otherwise a principal built from the current capabilities, so a role edit that
+takes the read away ends the stream too.
 
 `messaging.watch` is also what the conversation stream opens with. It used to open with
 `getConversation`, which loads the whole roster, an unread count and every member's name to answer

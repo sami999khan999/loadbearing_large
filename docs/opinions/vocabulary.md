@@ -18,6 +18,9 @@ Four vocabularies that look alike and mean different things.
 | **Log label** | fixed set, low cardinality | `app`, `env`, `level`, `event_code` |
 | **Queue name** | `<domain>.<work>`, noun-ish | `embedding.generate` |
 | **Repeatable job key** | `schedule.<name>` | `schedule.overdue-sweep` |
+| **Feature flag** | `<slice>.<change>`, the change a kebab noun | `widget.dismissal` |
+| **Widget key** | `<module>.<name>`, the module one `PermissionRegistry.modules()` knows | `member.count` |
+| **Zone key** | `<page>.<region>` | `dashboard.main` |
 
 **Permission actions are imperative because they name a capability you hold; activity names are past
 tense because they record something that happened.** `task.reactivate` is a right.
@@ -37,6 +40,17 @@ exception — see
 map stays explicit regardless. An identity-looking map is still the thing that fails closed when
 someone adds a procedure and forgets the entry
 ([10](../setup/10-contracts-package.md), [24](../setup/24-web-app.md)).
+
+**A flag names a change, a widget names a unit, and a zone names a place.** All three are dotted
+like a permission key, and none of them is one. A flag is temporary and deleted after its
+rollout, so its key says what is changing, not what it guards. A widget key leads with a module
+so a reader can see which slice owns the card. A zone key leads with the page, because a zone
+belongs to a screen, not a slice. [Visibility](visibility.md) has how the three combine.
+
+**The mount point is a zone, never a surface.** "Surface" already means two things here:
+`--surface` is one of the twelve colour tokens, and a package's `index.ts` and `import.ts` are its
+import surfaces. A third meaning would turn every grep for the word into noise. So the names are
+`ZoneKey`, `<Zone>` and `ui-zone`.
 
 **REST paths** on `.route({ path })` are kebab-case, plural resources, braced params matching the
 contract field name: `/tasks/{taskId}/reactivate`.

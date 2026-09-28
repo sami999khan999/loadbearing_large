@@ -1,5 +1,14 @@
 {
   "title": "Reference",
   "description": "One page per export",
-  "pages": ["permission-registry", "capability-set", "platform-scope", "module-registry", "routes"]
+  "pages": [
+    "permission-registry",
+    "capability-set",
+    "platform-scope",
+    "module-registry",
+    "routes",
+    "entitlement-mask",
+    "flag-registry",
+    "widget-registry"
+  ]
 }

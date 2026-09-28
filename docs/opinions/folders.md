@@ -124,6 +124,8 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 | `document/` | long-form editorial — a contract and the entity over it | `content` |
 | `gate/` | module gates, fragment-per-slice | `permissions` |
 | `route/` | declared destinations, fragment-per-slice | `permissions` |
+| `flag/` | feature flags, fragment-per-slice, merged by a platform-owned barrel | `permissions` |
+| `widget/` | widget declarations, fragment-per-slice, merged by a platform-owned barrel | `permissions` |
 | `procedure/` | the merged oRPC contract every slice's `.procedures.ts` feeds | `contracts` |
 | `event/` | type-only declarations of what an event carries | `observability` |
 | `logger/` | the diagnostic seam and its sinks | `observability` |
@@ -150,6 +152,12 @@ gets the same name in every package, so `catalog/` means the same thing in `erro
 
 **Non-plural, always.** `tasks/` and `task/` coexisting in different packages is exactly the
 ambiguity this removes.
+
+**`flag/` and `widget/` are role folders in `permissions` and subject folders everywhere
+else.** In `permissions` each holds one declaration fragment per slice, the way `gate/` does.
+Elsewhere each is a slice. `application/src/flag/` holds the flag repository port and
+`FlagCache`, and the widget slice is preferences, `<Widget>` and the inspector. The two meanings
+never share a package, so a path always says which one it is.
 
 **Adding a name to this table is a decision, not a side effect.** If a new folder wants a name that
 already means something else here, it is the wrong name.

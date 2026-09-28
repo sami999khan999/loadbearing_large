@@ -40,4 +40,10 @@ export const member = {
   // else changed this first" — is wrong about both.
   "member.error.lastOwner": "This is the only active owner. Promote someone else to owner first.",
   "member.error.self": "You cannot deactivate your own membership.",
+
+  "member.exception.one": "+ 1 exception",
+  "member.exception.other": "+ {count} exceptions",
+  "member.action.access": "Access",
+  "member.access.title": "Access and exceptions",
+  "member.access.close": "Close",
 } as const;
