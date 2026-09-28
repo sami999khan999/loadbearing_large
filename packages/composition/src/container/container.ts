@@ -3,8 +3,10 @@ import {
   ActivityRelaySubscriber,
   type ActivityReplayReader,
   AddConversationMemberUseCase,
+  AdjustEntitlementUseCase,
   type AnalyticsProjector,
   ApiKeyResolver,
+  AssignPlanUseCase,
   AuthFactory,
   type AuthInstance,
   Authorizer,
@@ -13,6 +15,7 @@ import {
   type CacheStore,
   CapabilityCache,
   ChangeMemberRoleUseCase,
+  ClearEntitlementAdjustmentUseCase,
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
   ClickHouseConnection,
@@ -30,16 +33,21 @@ import {
   type DatabaseStats,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
+  DeletePlanUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
   type DomainEventPublisher,
   EditMessageUseCase,
   type EmailSender,
   type EmbeddingProvider,
+  ExpireEntitlementAdjustmentsUseCase,
   ExportOrganizationUseCase,
+  FlagCache,
   GetActivityTrendUseCase,
   GetConversationUseCase,
+  GetEntitlementUseCase,
   GetNotificationPreferencesUseCase,
+  GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -54,10 +62,13 @@ import {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
+  ListFlagsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
   ListMessagesUseCase,
+  ListModuleSwitchesUseCase,
   ListNotificationsUseCase,
+  ListPlansUseCase,
   ListProjectionGapsUseCase,
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
@@ -92,6 +103,8 @@ import {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
+  PgEntitlementRepository,
+  PgFlagRepository,
   PgInvitationClaimer,
   PgInvitationRepository,
   PgMaintenanceGateway,
@@ -155,6 +168,7 @@ import {
   S3ColdArchiveReader,
   S3StorageGateway,
   S3StoragePolicyGateway,
+  SavePlanUseCase,
   SERVER_CATALOG,
   SearchDocumentsUseCase,
   SendMailUseCase,
@@ -173,6 +187,7 @@ import {
   type StorageGateway,
   type StoragePolicyGateway,
   SubscriberRegistry,
+  SwitchModuleUseCase,
   SystemClock,
   type TenantMembershipReader,
   type TenantMoveGateway,
@@ -181,6 +196,9 @@ import {
   ToggleReplicaReadsUseCase,
   TransactionScope,
   type UnitOfWork,
+  UpdateDefaultPlanUseCase,
+  UpdateFlagTargetUseCase,
+  UpdateFlagUseCase,
   UpdateNotificationPreferenceUseCase,
   UpdateProjectionPolicyUseCase,
   UpdateRetentionPolicyUseCase,
@@ -444,6 +462,21 @@ export class Container {
     readonly reprojectPartition: ReprojectPartitionUseCase;
     readonly toggleProjection: ToggleProjectionUseCase;
     readonly toggleReplicaReads: ToggleReplicaReadsUseCase;
+    readonly listFlags: ListFlagsUseCase;
+    readonly listPlans: ListPlansUseCase;
+    readonly savePlan: SavePlanUseCase;
+    readonly deletePlan: DeletePlanUseCase;
+    readonly updateDefaultPlan: UpdateDefaultPlanUseCase;
+    readonly organizationEntitlement: GetOrganizationEntitlementUseCase;
+    readonly assignPlan: AssignPlanUseCase;
+    readonly adjustEntitlement: AdjustEntitlementUseCase;
+    readonly clearAdjustment: ClearEntitlementAdjustmentUseCase;
+    // The worker's nightly sweep. Reachable from the worker only, like `purgeOrganization`.
+    readonly expireAdjustments: ExpireEntitlementAdjustmentsUseCase;
+    readonly moduleSwitches: ListModuleSwitchesUseCase;
+    readonly switchModule: SwitchModuleUseCase;
+    readonly updateFlag: UpdateFlagUseCase;
+    readonly updateFlagTarget: UpdateFlagTargetUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
   };
@@ -459,6 +492,9 @@ export class Container {
   // One row, read at the top of every analytics job. An absent row is the defaults,
   // so a deployment that never opens the screen behaves as it always did.
   public readonly platformPolicy: PlatformPolicyRepository;
+  // Whether a flag is on for an org. Read by `fetchSession` on every document request,
+  // and by a use-case before its permission check when a flag guards it.
+  public readonly flags: FlagCache;
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -468,6 +504,8 @@ export class Container {
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
+    // The org's ceiling, for the role editor to grey out what the plan does not include.
+    readonly entitlement: GetEntitlementUseCase;
     readonly createRole: CreateRoleUseCase;
     readonly updateRole: UpdateRoleUseCase;
     readonly deleteRole: DeleteRoleUseCase;
@@ -995,6 +1033,7 @@ export class Container {
           this.eventPublisher,
           this.catalogUnitOfWork,
           this.clock,
+          capabilityRepository,
         ),
         revokeInvitation: new RevokeInvitationUseCase(
           this.authorizer,
@@ -1018,6 +1057,7 @@ export class Container {
           this.activity,
           this.eventPublisher,
           this.catalogUnitOfWork,
+          capabilityRepository,
         ),
         setMemberActive: new SetMemberActiveUseCase(
           this.authorizer,
@@ -1044,6 +1084,11 @@ export class Container {
       this.transactions,
       this.shards,
     );
+    const flagRepository = new PgFlagRepository(this.cluster, this.transactions, this.shards);
+    const entitlements = new PgEntitlementRepository(this.cluster, this.transactions, this.shards);
+    // The directory's own lookup, shared by every screen that takes an id or a slug.
+    const tenantLookup = new PgShardMapReader(this.cluster, this.transactions, this.shards);
+    this.flags = new FlagCache(flagRepository, this.cache);
     this.retentionPolicies = new PgRetentionPolicyRepository(
       this.cluster,
       this.transactions,
@@ -1168,6 +1213,99 @@ export class Container {
         this.activity,
         this.catalogUnitOfWork,
       ),
+      listFlags: new ListFlagsUseCase(this.authorizer, flagRepository),
+      listPlans: new ListPlansUseCase(this.authorizer, entitlements),
+      savePlan: new SavePlanUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      deletePlan: new DeletePlanUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      updateDefaultPlan: new UpdateDefaultPlanUseCase(
+        this.authorizer,
+        entitlements,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      organizationEntitlement: new GetOrganizationEntitlementUseCase(
+        this.authorizer,
+        entitlements,
+        capabilityRepository,
+        roles,
+        tenantLookup,
+      ),
+      assignPlan: new AssignPlanUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        tenantLookup,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      adjustEntitlement: new AdjustEntitlementUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        tenantLookup,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+        this.clock,
+      ),
+      clearAdjustment: new ClearEntitlementAdjustmentUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        tenantLookup,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      expireAdjustments: new ExpireEntitlementAdjustmentsUseCase(
+        entitlements,
+        this.capabilities,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      moduleSwitches: new ListModuleSwitchesUseCase(this.authorizer, entitlements),
+      switchModule: new SwitchModuleUseCase(
+        this.authorizer,
+        entitlements,
+        this.capabilities,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      updateFlag: new UpdateFlagUseCase(
+        this.authorizer,
+        flagRepository,
+        this.flags,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      updateFlagTarget: new UpdateFlagTargetUseCase(
+        this.authorizer,
+        flagRepository,
+        this.flags,
+        new PgShardMapReader(this.cluster, this.transactions, this.shards),
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
       updateProjection: new UpdateProjectionPolicyUseCase(
         this.authorizer,
         this.projectionPolicies,
@@ -1234,6 +1372,7 @@ export class Container {
         members,
         capabilityRepository,
       ),
+      entitlement: new GetEntitlementUseCase(this.authorizer, capabilityRepository),
       createRole: new CreateRoleUseCase(
         this.authorizer,
         roles,
