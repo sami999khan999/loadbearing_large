@@ -1,6 +1,6 @@
 ---
 title: Access and visibility plan — flags, entitlement, per-user overrides, the platform deny, widgets and zones
-updated: 2026-09-27
+updated: 2026-09-28
 owner: sami
 schema: plan/v1
 source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server authorization model, the client and session path, the plan and CI conventions) and one design pass, checked against the tree
@@ -10,7 +10,9 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Not started.** Written and agreed 2026-09-27; `BACKLOG.md` §13 points here, one line per
+**Phases 1–4 done 2026-09-28, and `RV.1` fixed the same day; next is Phase 5** (Phase 7 is also
+free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
 becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
@@ -19,13 +21,18 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 
 | Phase | Open items |
 |---|---|
-| 1–11 | all |
+| 1 | `AX1.8` — deferred, not blocking |
+| 2 | `AX2.11` — a docs listing, not blocking |
+| 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
+| 4 | `AX4.15`, `AX4.16` — neither blocks |
+| 5–11 | all |
 
 ### Running it again
 
 ```bash
 pnpm build:packages && pnpm --filter @loadbearing/web build && pnpm --filter @loadbearing/worker build
-pnpm check:architecture      # 29/29 today; 30/30 after Phase 3; 31/31 after Phase 8; no "○ skipped"
+pnpm --filter @loadbearing/realtime build
+pnpm check:architecture      # 29/29 today; 30/30 after Phase 8; 31/31 after Phase 9; no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm check:contrast          # after Phase 7
 pnpm infra:up && pnpm db:migrate && pnpm db:seed && pnpm dev
@@ -247,18 +254,21 @@ The request: plan all of it, except the extension model, which the user scrapped
 **Goal.** Every name and rule this plan introduces is in `docs/opinions/` and its digest before any
 code uses it. Anyone who authors a second fragment reads the rule first.
 
-- [ ] `AX1.1` **Suffixes** — `docs/opinions/files.md` catalog-fragment rows for `.flags.ts`
+- [x] `AX1.1` **Suffixes** — `docs/opinions/files.md` catalog-fragment rows for `.flags.ts`
   (`widget.flags.ts`) and `.widgets.ts` (`member.widgets.ts`). Add `.actions.ts` too: five files
   in `contracts/src/catalog/` use it, and the closed set never listed it. The digest
   `docs/ai/rules/files.md` lists the fragments as
   `.permissions .errors .events .actions .gate .routes .flags .widgets .data`.
-- [ ] `AX1.2` **Folders** — `docs/opinions/folders.md` role-table rows `flag/` and `widget/`: fragment
+  done: 2026-09-28
+- [x] `AX1.2` **Folders** — `docs/opinions/folders.md` role-table rows `flag/` and `widget/`: fragment
   per slice, merged by a platform-owned barrel, used by `permissions`. Add both to the list in
   `docs/ai/rules/folders.md`.
-- [ ] `AX1.3` **Vocabulary** — `docs/opinions/vocabulary.md` gains three grammar rows (flag, widget,
+  done: 2026-09-28
+- [x] `AX1.3` **Vocabulary** — `docs/opinions/vocabulary.md` gains three grammar rows (flag, widget,
   zone), from the table above, and a paragraph: *zone, never surface*, and why. The digest
   `docs/ai/rules/vocabulary.md` mirrors the rows and its count of grammars.
-- [ ] `AX1.4` **`docs/opinions/visibility.md`** — the argument page. It holds:
+  done: 2026-09-28
+- [x] `AX1.4` **`docs/opinions/visibility.md`** — the argument page. It holds:
   - the four-mechanism table and the resolution order, and why entitlement is a mask, not a step;
   - the six rules from the design text:
     - a widget is the smallest unit with an independent reason to be absent;
@@ -275,7 +285,8 @@ code uses it. Anyone who authors a second fragment reads the rule first.
     - **hiding is not revoking** — the API, a bookmarked URL and the nav still work.
   
   `docs/opinions/meta.json` puts `"visibility"` before `"simplicity"`, and `index.md` gains a row.
-- [ ] `AX1.5` **The digest and its routes** — `docs/ai/rules/visibility.md`, under 900 tokens,
+  done: 2026-09-28
+- [x] `AX1.5` **The digest and its routes** — `docs/ai/rules/visibility.md`, under 900 tokens,
   with the standard footer. Then:
   - `CLAUDE.md` gains `@docs/ai/rules/visibility.md`.
   - `docs/ai/rules/index.md` gains a row; "thirteen" becomes "fourteen", and the token estimate is
@@ -285,12 +296,34 @@ code uses it. Anyone who authors a second fragment reads the rule first.
   - `AGENTS.md:10` becomes "fourteen files".
   
   §12 fails if any of these is missing.
-- [ ] `AX1.6` **The stale wildcard claims** — `platform-scope.md:43` ("Every `owner` holds it") and
+  done: 2026-09-28
+- [x] `AX1.6` **The stale wildcard claims** — `platform-scope.md:43` ("Every `owner` holds it") and
   the comment at `grant-permission.use-case.ts:30` are wrong today: owners hold an explicit list,
   and nothing sets `wildcard` in production. Correct both and state decision 1 there.
+  done: 2026-09-28
+
+**Defects found in Phase 1.**
+
+- [x] `AX1.7` **§15 has no `UNBUILT` wording.** The exit below named one, and
+  `check-architecture.mjs` never had it. §15 skips a backticked path only when it has no `/` or
+  holds a placeholder (`{}`, `*`, `<>`, `…`). So a page naming something no phase has built names
+  it by class or bare filename, never by path. The exit is corrected.
+  done: 2026-09-28
+- [ ] `AX1.8` **"None longer than ~900 tokens" is already false.** It is stated in `AGENTS.md:10`
+  (~850), `docs/ai/rules/index.md:8` and `docs/ai/index.md`. By a `chars / 4` count, `data.md`
+  (~1,780) and `workflow.md` (~1,640) are about twice any other rule file, and were before this
+  plan. Either split them, or state the real ceiling. Not this plan's work; it belongs in
+  `BACKLOG.md` when the plan is archived.
+- [x] `AX1.9` **"The wildcard role" survives as a phrase in eight comments** — `member.rules.ts:8`,
+  `member.entity.ts:20`, `role.entity.ts:26`, `role.rules.ts:25`, `system-role.seed.ts:22`,
+  `pg-bootstrap-membership.enroller.ts:64`, `invite-member.form.tsx:34`,
+  `inspect-platform-status.use-case.ts:33`. Each means "the role the seed gives every tenant key",
+  which is true today. Once Phase 4 lands, `owner` no longer holds everything, and each should say
+  "every tenant key, as rows". **Do with `AX4.4`.**
+  done: 2026-09-28
 
 **Exit.** `pnpm check:architecture` 29/29, with §12, §13 and §15 green. A path that no phase has
-built yet is written with the `UNBUILT` wording §15 accepts, never as a live path.
+built yet is named by class or bare filename, never by a path §15 would try to resolve.
 
 ---
 
@@ -299,12 +332,15 @@ built yet is written with the `UNBUILT` wording §15 accepts, never as a live pa
 **Goal.** The whole vocabulary — requirements, flags, widgets, zones, the visibility union and the
 entitlement mask — exists as pure, tested data before anything reads it. No new permission keys.
 
-- [ ] `AX2.1` **Requirements** — `PermissionMeta.requires?: readonly string[]`.
+- [x] `AX2.1` **Requirements** — `PermissionMeta.requires?: readonly string[]`.
   - Typed `string[]`, not `PermissionKey[]`: the fragments `satisfies PermissionMeta` and
     `PermissionKey` derives from them, so the typed form is a circular type (TS7022).
   - A module-level frozen `REQUIRES` map narrows each entry through `isKnown`.
   - New methods `requirementsOf(key)` and `closure(keys)`. `closure` is transitive and safe against
     a cycle.
+  - Their mirror, `dependentsOf(key)` and `dependentClosure(keys)`, from a second frozen map built
+    from the same data: what stops working when a key goes. A remove or a deny closes over it,
+    exactly as an add closes over `closure` (`RV.13`).
   - Existing fragments gain `requires`:
     - a write key requires its read key;
     - `member.invite` and `member.role.change` also require `rbac.role.read`, because the role
@@ -312,8 +348,10 @@ entitlement mask — exists as pure, tested data before anything reads it. No ne
   
   Spec (`tests/registry/permission-registry.spec.ts`):
   - every requirement is known and has the same scope as the key that needs it;
-  - `closure` is idempotent and survives a cycle.
-- [ ] `AX2.2` **Flags** — `src/flag/widget.flags.ts` declares
+  - `closure` and `dependentClosure` are idempotent and survive a cycle;
+  - `dependentClosure(["rbac.role.read"])` includes `member.invite`.
+  done: 2026-09-28
+- [x] `AX2.2` **Flags** — `src/flag/widget.flags.ts` declares
   `"widget.dismissal": { owner, expiresOn: "YYYY-MM-DD", description }`, and `src/flag/index.ts`
   exports `FLAGS`. `src/registry/flag-registry.ts` holds:
   - `FlagMeta` and `FlagKey`;
@@ -322,7 +360,8 @@ entitlement mask — exists as pure, tested data before anything reads it. No ne
   
   The client-gating set is derived from `WIDGETS` at module load and frozen — never declared by
   hand. Spec: `tests/registry/flag-registry.spec.ts`.
-- [ ] `AX2.3` **Widgets and zones** — `src/registry/widget-registry.ts`:
+  done: 2026-09-28
+- [x] `AX2.3` **Widgets and zones** — `src/registry/widget-registry.ts`:
   - **Zones:** `ZONES` (a frozen tuple, one entry: `dashboard.main`) and `ZoneKey`. No zone folder
     and no zone metadata while there is one zone.
   - **Metadata:** `WidgetMeta` is a union of a zone widget and an inline widget. An inline widget
@@ -335,14 +374,16 @@ entitlement mask — exists as pure, tested data before anything reads it. No ne
   - **`WidgetRegistry.instance`** — `meta`, `forZone` (sorted by `order`, from a frozen `BY_ZONE`
     map), `isDismissible`, and `visibilityOf(key, facts)`. The order of checks is: unregistered,
     flag, permission, admin, user. A required widget ignores both preferences.
-- [ ] `AX2.4` **The first fragments** —
+  done: 2026-09-28
+- [x] `AX2.4` **The first fragments** —
   - `widget/core.widgets.ts`: `core.module-nav` (zone `dashboard.main`, permission `null`,
     required, order 10).
   - `widget/member.widgets.ts`: `member.count` (`member.read`, user-dismissible, order 20).
   - `widget/notification.widgets.ts`: `notification.bell` (inline, `notification.inbox.read`).
   
   `widget/index.ts` exports `WIDGETS`.
-- [ ] `AX2.5` **Registry specs** — `tests/registry/widget-registry.spec.ts`:
+  done: 2026-09-28
+- [x] `AX2.5` **Registry specs** — `tests/registry/widget-registry.spec.ts`:
   - each resolution step on its own, and that broadest wins when two apply;
   - `unregistered` for an unknown key;
   - `order` is unique within a zone;
@@ -351,7 +392,8 @@ entitlement mask — exists as pure, tested data before anything reads it. No ne
   - **the nav-path invariant** (decision 12): every dismissible widget's permission belongs to the
     module of some `GATES[*].permission`. The join is on the permission's module, not the gate key,
     because the `document` gate's permission is `ai.embedding.read`.
-- [ ] `AX2.6` **`EntitlementMask`** — `src/capability/entitlement-mask.ts`:
+  done: 2026-09-28
+- [x] `AX2.6` **`EntitlementMask`** — `src/capability/entitlement-mask.ts`:
   - `EntitlementMask.from({ plan: keys | "all", added, removed, disabledModules })`.
   - `isEntitled(key)` is always true for `core` keys and for `platform`-scope keys.
   - `keys()`.
@@ -363,9 +405,31 @@ entitlement mask — exists as pure, tested data before anything reads it. No ne
   - a disabled module removes its keys;
   - denies survive;
   - `"all"` includes a key declared after the mask was built.
-- [ ] `AX2.7` **Barrels and docs** — `src/index.ts`, `registry/index.ts` and `capability/index.ts`
+  done: 2026-09-28
+- [x] `AX2.7` **Barrels and docs** — `src/index.ts`, `registry/index.ts` and `capability/index.ts`
   name every new export. **Docs:** `packages/permissions/docs/index.md` (the tree and the seams),
   new `docs/reference/{flag-registry,widget-registry,entitlement-mask}.md`, and `meta.json`.
+  done: 2026-09-28
+
+**Recorded while executing Phase 2.**
+
+- [x] `AX2.8` **The policy word is `dismissible`, not `user-dismissible`.** `AX2.4` wrote
+  `member.count` as "user-dismissible", which reads as one of three policies with an admin one
+  missing. There are two: `required` and `dismissible`, and a dismissible widget can be hidden
+  by a user *or* by an org admin for everyone. `WidgetPolicy` says so, and every later phase uses
+  the word `dismissible`.
+  done: 2026-09-28
+- [x] `AX2.9` **`widget.dismissal` expires 2027-03-31**, owner `sami`. The plan named no date.
+  §31 will fail the build that day, so the rollout and `AX11.2` have to land before it.
+  done: 2026-09-28
+- [x] `AX2.10` **The `requires` edges.** A write key requires its read key. `member.invite`
+  and `member.role.change` also require `rbac.role.read`. `platform.replica.manage` requires
+  `platform.status.read`, because that page is where it shows. `platform.tenant.manage` and
+  `notification.preference.update` have no read key, so they have no edge. 17 edges in all.
+  done: 2026-09-28
+- [ ] `AX2.11` **`packages/permissions/docs/index.md`'s tree was already incomplete.** It lists
+  six of nine catalog fragments, one of six gates and four of nine route fragments. Phase 2 added
+  its own files and left the older gaps. Fix the listing whole, in one change. Not blocking.
 
 **Exit.** `pnpm --filter @loadbearing/permissions test` green. The package still has no
 dependencies and no React. `check:architecture` 29/29.
@@ -377,7 +441,7 @@ dependencies and no React. `check:architecture` 29/29.
 **Goal.** A platform admin turns a flag on for the deployment or for chosen orgs. A procedure behind
 it answers `NOT_FOUND` when it is off. The browser learns only the on-set of flags a widget names.
 
-- [ ] `AX3.1` **Tables** — `pg/schema/flag.schema.ts`:
+- [x] `AX3.1` **Tables** — `pg/schema/flag.schema.ts`:
   - `feature_flags`: `key` primary key, `is_enabled` default false, `updated_by`, `updated_at`.
   - `feature_flag_organizations`: `organization_id` (FK cascade), `flag_key` (FK cascade),
     `created_by`, `created_at`. Unique `feature_flag_organizations_uq (organization_id, flag_key)`,
@@ -387,11 +451,13 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   Register the file in `schema/index.ts` (§11), add both tables to the catalog list in
   `application/src/primitive/shard.ts`, and generate migration `0042_feature_flags.sql`. Add
   `feature_flag_organizations` to `tests/rbac/tenant-cascade.spec.ts`.
-- [ ] `AX3.2` **`FlagRepository`** — the port in `application/src/flag/flag.repository.ts`, the
+  done: 2026-09-28
+- [x] `AX3.2` **`FlagRepository`** — the port in `application/src/flag/flag.repository.ts`, the
   adapter `pg-flag.repository.ts` (catalog placement) with its spec, and
   `composition/src/fake/in-memory-flag.repository.ts`. `test-container.ts` compiles only once the
   fake exists.
-- [ ] `AX3.3` **`FlagCache`** — `application/src/flag/flag.cache.ts`:
+  done: 2026-09-28
+- [x] `AX3.3` **`FlagCache`** — `application/src/flag/flag.cache.ts`:
   - one key, `flag:state`, 60 s TTL;
   - `onFor(org)` and `isOn(org, key)`;
   - `assertOn(actor, key)` throws `NotFoundError` with **no flag key in its context**;
@@ -405,7 +471,8 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   
   **Docs:** `application/docs/reference/authorizer.md` — the flag check comes before the
   permission check, and NOT_FOUND vs FORBIDDEN.
-- [ ] `AX3.4` **Platform flag management** — use-cases `list-flags`, `update-flag` and
+  done: 2026-09-28
+- [x] `AX3.4` **Platform flag management** — use-cases `list-flags`, `update-flag` and
   `update-flag-target` in `application/src/platform/`, audited in the tier org.
   - Keys `platform.flag.read` and `platform.flag.manage`; `PlatformRoleSeed` picks them up by
     scope.
@@ -420,7 +487,8 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   
   `listFlags` is also the platform-only view of **every** flag, server-behaviour flags included —
   the endpoint the design text asks for.
-- [ ] `AX3.5` **Flags on the session** — `fetchSession` adds `container.flags.onFor(org)` to its
+  done: 2026-09-28
+- [x] `AX3.5` **Flags on the session** — `fetchSession` adds `container.flags.onFor(org)` to its
   existing `Promise.all`, filtered through `FlagRegistry.isClientGating`, and sends the on-set only.
   The flag rides through:
   - `SessionSnapshot.flags: readonly FlagKey[]` (`[]` when anonymous);
@@ -430,7 +498,8 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   `renderWithFakes` gains a `flags` parameter. Spec: `apps/web/tests/store/session.store.spec.ts`.
   **Docs:** `apps/web/docs/reference/server-functions.md`, which notes that flag *names* are in
   the bundle anyway, so a flag is the wrong tool for a secret.
-- [ ] `AX3.6` **`/platform/flags`** — `feature/src/platform/flag.list.tsx` shows:
+  done: 2026-09-28
+- [x] `AX3.6` **`/platform/flags`** — `feature/src/platform/flag.list.tsx` shows:
   - owner, expiry and description from code;
   - the global toggle and the org targets from the database;
   - a row in the database that code no longer declares, marked orphaned.
@@ -439,21 +508,61 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   `ROUTES.platform.flags`, `PlatformQueries.flags`, `useUpdateFlag` / `useUpdateFlagTarget`,
   `QueryKeys.platform.flags()`, and copy in `content/src/message/{en,bn}/platform.ts`.
   Spec: `feature/tests/platform/flag.list.spec.tsx`.
-- [ ] `AX3.7` **§30 — every flag is live** — `check-architecture.mjs` reads `flag/index.ts` with
-  `spreadFragments`. It fails when a flag's `expiresOn` is before today (UTC), or when its key
-  appears in no `src/` file outside `permissions/src/flag/`. With zero flags it **passes, not
-  skips**.
-  - The spec gets fixtures that fail and pass, and the count at `:142` becomes 30.
-  - The count moves in `AGENTS.md:24`, `docs/ai/rules/workflow.md` (`:14`, `:43` and the prose
-    list), and `docs/setup/26-hygiene-and-ci.md` (`:372`, `:374`, `:1064`, `:1118`, `:1121`, plus a
-    new `### 30` section).
+  done: 2026-09-28
+- [ ] `AX3.7` **§31 — every flag is live** — **Depends on** `AX9.4`, and is built with Phase 9
+  (`RV.11`). `widget.dismissal` is declared in `AX2.2` and has no reader in `src/` until `AX9.4`,
+  so a check landed here would fail its own phase. `check-architecture.mjs` reads
+  `flag/index.ts` with `spreadFragments`. It fails when a flag's `expiresOn` is before today
+  (UTC), or when its key appears in no `src/` file outside `permissions/src/flag/`. With zero
+  flags it **passes, not skips**.
+  - The spec gets fixtures that fail and pass, and the count at `:142` becomes 31.
+  - The count moves in the places `AX8.7` moved it to 30, plus a new `### 31` section.
   - Verified by setting an expiry in the past and watching it fail.
 
+**Recorded while executing Phase 3.**
+
+- [x] `AX3.8` **`FlagCache.invalidate` deletes once, not twice.** `AX3.3` asked for the
+  capability cache's delete-then-repeat. `application`'s type library has no timers, which is the
+  layering saying the domain does not schedule. Putting `deleteLater` on `CacheStore` would have
+  broken nine implementations, seven of them test doubles. A read racing the write can restore
+  the old state for at most the 60 s TTL. That is the window a flag already promises, and a flag
+  is a rollout control, not a security boundary. `application/docs/reference/authorizer.md`
+  says so. **Reopen if** a flag ever guards something where a minute of staleness matters.
+  done: 2026-09-28
+- [x] `AX3.9` **Choices the plan left open.** `update-flag` accepts an orphaned row, but only to
+  switch it off, which is how `AX11.2` clears one. `update-flag-target` takes an id or a slug
+  and resolves it through `ShardMapReader.findByTerm`, so a flag admin needs no shard
+  permission. `FlagRecord` carries each target's slug, joined in the same statement, and the spec
+  pins `findAll` at one statement. `FlagRepository` is a slice port, so it is not in
+  `TestPorts`, and `AX3.2`'s remark about `test-container.ts` did not apply.
+  done: 2026-09-28
+- [ ] `AX3.10` **§18 does not count a primary key as an index.** `(organization_id, flag_key)`
+  was first a primary key. Postgres backs one with a unique index, so it serves the cascade, but
+  §18 reads only `index()` and `uniqueIndex()`. The table went back to the plan's unique index
+  with no primary key, and `0042` was regenerated before anything shipped it. Either teach §18
+  that a primary key is an index, or record why a catalog table here has none. Not blocking.
+- [x] `AX3.11` **A new platform key reaches the tier at the next `pnpm db:seed`**, not at
+  migrate. `PlatformRoleSeed` grants by scope when it runs. Locally the infrastructure suite
+  had already run it, which is why alice held both keys without a seed. A deploy that adds a
+  platform key has to seed, or the tier admin gets 403 on the new screen.
+  done: 2026-09-28
+- [ ] `AX3.12` **`/platform/flags` is reachable by URL only**, like every platform page but
+  status, which the nav gate names. The platform section has no sub-navigation, so there is no
+  list to add it to. Worth one when the section grows past six pages.
+
+**Exit verified 2026-09-28** against `pnpm dev`, signed in as alice (platform admin):
+`listFlags` returned `widget.dismissal` with owner and expiry from code;
+`updateFlagTarget` turned it on for `loadbearing`, alice's active org, and the list showed the
+target by slug; the home page's SSR payload then carried `flags:[]`; both switches landed in
+`activity_log` in the tier with their payloads; the target was removed afterwards.
+`check:architecture` 29/29; every suite green, the database included.
+
 **Exit.** On the running app:
-1. A platform admin turns `widget.dismissal` on for one org only.
-2. That org's session payload lists it; another org's does not.
-3. A server-only flag never appears in any payload.
-4. `pnpm check:architecture` is 30/30, and every suite is green.
+1. A platform admin turns `widget.dismissal` on for one org only, and `listFlags` shows it.
+2. That org's session payload still has no flags. No widget names `widget.dismissal` until
+   `AX9.6`, so here it is a server-only flag, and a server-only flag never appears in any
+   payload.
+3. `pnpm check:architecture` is 29/29, and every suite is green.
 
 ---
 
@@ -463,7 +572,7 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
 switch a module off for everyone during an incident. Every downstream check — `<Can>`, nav,
 `RouteGuard` and `Authorizer.assert` — obeys it without learning that entitlement exists.
 
-- [ ] `AX4.1` **Schema** —
+- [x] `AX4.1` **Schema** —
   - `plans` (`key` primary key, `name`, `description`, `is_unlimited`, `is_system`, timestamps) and
     `plan_permissions` (`plan_key` FK cascade, `permission`, unique `(plan_key, permission)`) go in
     `rbac.schema.ts`, declared above `organizations`.
@@ -475,10 +584,16 @@ switch a module off for everyone during an incident. Every downstream check — 
       Unique `(organization_id, permission)`, plus a partial expiry index.
     - `disabled_modules`: `module` primary key, `reason`, `disabled_by`, `disabled_at`.
   
+  - `platform_policy.default_plan_key text NOT NULL DEFAULT 'unlimited'`, FK to `plans` with no
+    action (`RV.14`). The column default only places *existing* orgs; `PgOrganizationFounder`
+    and `PgPersonalOrganizationEnroller` read this column and write `plan_key` explicitly, so a
+    platform admin decides what a new signup gets. `delete-plan` refuses the default plan.
+  
   All four tables go in the catalog list in `shard.ts`. Migration `0043_entitlement.sql` is
   hand-edited: **insert the `unlimited` row (`is_unlimited`, `is_system`) before** adding the
   column with its default and FK, so every existing org lands on it. Cascade spec updated.
-- [ ] `AX4.2` **The mask in resolution** — `CapabilityRepository.entitlementFor(org)`.
+  done: 2026-09-28
+- [x] `AX4.2` **The mask in resolution** — `CapabilityRepository.entitlementFor(org)`.
   `resolveFor` gains **one** statement: a `UNION ALL` of four index lookups:
   - the plan's rows;
   - the unlimited marker;
@@ -497,15 +612,26 @@ switch a module off for everyone during an incident. Every downstream check — 
   **Docs:** "three queries" becomes four, with why the fourth is a union rather than a join, in
   `docs/opinions/simplicity.md`, `packages/auth/docs/reference/capability-cache.md` and the
   comment at `capability.cache.ts:12`.
-- [ ] `AX4.3` **Invalidation** — `CapabilityInvalidator.invalidateAll()`: one `deletePrefix` over
+  done: 2026-09-28
+- [x] `AX4.3` **Invalidation** — `CapabilityInvalidator.invalidateAll()`: one `deletePrefix` over
   `capability:user:`, repeated after 2 s, for plan edits and the kill switch. It is implemented in
   `CapabilityCache`, and `recording-capability.invalidator.ts` fakes it. Spec:
   `auth/tests/principal/capability.cache.spec.ts`. **Docs:** `capability-cache.md` gains an
   invalidation table (which write flushes what), and decision 4's argument for no stamp.
-- [ ] `AX4.4` **Rules and use-cases** — `application/src/platform/entitlement.rules.ts`:
+  done: 2026-09-28
+- [x] `AX4.4` **Rules and use-cases** — `application/src/platform/entitlement.rules.ts`:
   - no `core` or `platform` keys in a plan or an adjustment;
   - an add closes over `requires`, with the same expiry;
+  - a remove closes over `dependentClosure`, so a plan without `rbac.role.read` cannot leave
+    `member.invite` entitled and broken (`RV.13`). A saved plan is stored closed both ways;
   - the `core` and `platform` modules cannot be switched off.
+  
+  **`RoleRules.assertAssignableBy` skips keys outside the entitlement** (`RV.10`). Grants are
+  filtered, never deleted, so `owner` still lists every key after a downgrade — and the rule
+  refused any key the actor cannot hold, so every invite or role change to `owner` answered 403,
+  including the one that restores a second owner. It takes the org's `EntitlementMask` and
+  checks only entitled keys. Spec: on a plan without `analytics.activity.read`, an owner can
+  still assign `owner`.
   
   Use-cases:
   - `list-plans`, `save-plan`, `delete-plan` (`ConflictError` while a plan is in use or is a
@@ -517,7 +643,8 @@ switch a module off for everyone during an incident. Every downstream check — 
   Assign, adjust and clear call `invalidateOrganization`. Plan save or delete and the switch call
   `invalidateAll`. Every write is audited in the tier org, and a plan or adjustment change also in
   the target org.
-- [ ] `AX4.5` **Keys, procedures, adapter** — keys `platform.entitlement.read`,
+  done: 2026-09-28
+- [x] `AX4.5` **Keys, procedures, adapter** — keys `platform.entitlement.read`,
   `platform.entitlement.manage` and `platform.module.manage`.
 
   | Procedure | Method and path | Permission |
@@ -538,12 +665,14 @@ switch a module off for everyone during an incident. Every downstream check — 
   - `pg-entitlement.repository.ts` and its spec.
   - `entitlement_adjustments` joins `CATALOG_TABLES` in `pg-partition-archive.gateway.ts`, so a
     tenant export carries it.
-- [ ] `AX4.6` **What a tenant can read** — `rbac/get-entitlement.use-case.ts` (`rbac.role.read`) and
+  done: 2026-09-28
+- [x] `AX4.6` **What a tenant can read** — `rbac/get-entitlement.use-case.ts` (`rbac.role.read`) and
   `role.entitlement`, GET `/roles/entitlement`. It returns the entitled key set, so the role editor
   can show the ceiling.
-- [ ] `AX4.7` **Platform screens** —
-  - `platform/plan.form.tsx`: ticking a module writes `byModule`, and ticking a key also ticks
-    what it requires.
+  done: 2026-09-28
+- [x] `AX4.7` **Platform screens** —
+  - `platform/plan.form.tsx`: ticking a module writes `byModule`, ticking a key also ticks
+    what it requires, and unticking a key also unticks what depends on it.
   - `platform/organization-entitlement.panel.tsx`: the plan picker, the adjustments with expiry and
     reason, and **the effective result** — "entitled to 47 permissions; their Accountant role
     holds 12 of them".
@@ -551,13 +680,62 @@ switch a module off for everyone during an incident. Every downstream check — 
     `<Can permission="platform.module.manage">`.
   - The route `platform/entitlements.tsx`, `PlatformQueries.plans`, `.entitlement(slug)` and
     `.moduleSwitches`, and copy.
-- [ ] `AX4.8` **Show the ceiling to the org admin** — `PermissionMatrix` gains
+  done: 2026-09-28
+- [x] `AX4.8` **Show the ceiling to the org admin** — `PermissionMatrix` gains
   `blocked?: ReadonlySet<PermissionKey>`. A blocked cell is disabled and reads "Not included in
   your plan". `RoleMatrix` supplies it from `RoleQueries.entitlement`, and the `settings/roles.tsx`
   loader prefetches that query. Specs in `feature/tests/rbac/`.
-- [ ] `AX4.9` **The expiry sweep** — the maintenance consumer's `cleanup()` runs
+  done: 2026-09-28
+- [x] `AX4.9` **The expiry sweep** — the maintenance consumer's `cleanup()` runs
   `expire-entitlement-adjustments`, which audits each expired row and invalidates each org.
   `maintenance.sweep.completed` gains `adjustments` in `observability/src/event/event-shape.ts`.
+  done: 2026-09-28
+
+**Recorded while executing Phase 4.**
+
+- [x] `AX4.10` **Audited twice, as planned — after a wrong turn.** I first moved the target-org
+  copy out, reasoning that `activity_log` is partitioned per tenant on that tenant's node, which a
+  catalog transaction cannot reach. `PgActivityLogger.record` already handles it (`24.2a`): a
+  row for a tenant placed elsewhere goes through the outbox, still inside the catalog
+  transaction, and the relay writes it on the tenant's node. So assign, adjust, clear and expire
+  each write the entry in the tier and in the org they changed. Verified in the running app.
+  done: 2026-09-28
+- [x] `AX4.11` **`platform.updateDefaultPlan`, PUT `/platform/plans/default`.** `RV.14` added
+  `platform_policy.default_plan_key` and nothing that writes it. `EntitlementRepository` owns the
+  column; `PlatformPolicyRecord` does not grow, so twelve unrelated files stay untouched and
+  `PgPlatformPolicyRepository`'s upsert never overwrites it. `delete-plan` refuses the default.
+  done: 2026-09-28
+- [x] `AX4.12` **Phase 3 missed `feature_flag_organizations` in the tenant export.** Added to
+  `CATALOG_TABLES` beside `entitlement_adjustments`; `export-keyset.spec.ts` checks both keysets
+  against a unique index, which the `AX3.10` choice of a unique index is what lets pass.
+  done: 2026-09-28
+- [x] `AX4.13` **A trial stops at its expiry, not "after the sweep".** Resolution ignores an
+  expired row, so a trial ends within the cache's minute of `expires_at`. The sweep only removes
+  and audits it. The exit line below is worded for the sweep; the behaviour is earlier, which
+  is the safer direction.
+  done: 2026-09-28
+- [x] `AX4.14` **The blocked note appears once per row, not in every cell.** Every role column
+  would repeat one sentence; the row header carries it and each cell's checkbox is disabled.
+  done: 2026-09-28
+- [ ] `AX4.15` **Phase 3's `listFlags` handler copies readonly arrays.** `Envelope.paginated`
+  shows the house fix: `z.array(…).readonly()` in the contract, so the wire type accepts what the
+  use-case returns. Phase 4's shapes use it; the flag shapes should too. Not blocking.
+- [ ] `AX4.16` **`/platform/entitlements` is reachable by URL only** — the same gap as
+  `AX3.12`, one page larger.
+
+**Exit verified 2026-09-28** against `pnpm dev`, alice (platform admin) driving bob's own org,
+where his `owner` role lists `analytics.activity.read`:
+1. On a plan without the key: `analytics.activity` answered `FORBIDDEN`, bob's session no longer
+   held the key (so the nav gate hides Analytics), `role.entitlement` excluded it, and `role.list`
+   still showed it on his role.
+2. Moved back to `unlimited` with no role edit: the call succeeded and the key was back.
+3. A 30-second trial `add` on the smaller plan: succeeded during it, `FORBIDDEN` after.
+4. `messaging` switched off: `conversation.list` answered `FORBIDDEN`; switched back on, it
+   succeeded.
+Each change was audited in the tier and in bob's org. Everything was put back afterwards.
+A first run used bob's session on `loadbearing`, where he holds no analytics key, and proved
+nothing for lines 1–3; it was rerun after switching his session to his own org.
+`check:architecture` 29/29; every suite green, the database included (infrastructure 352).
 
 **Exit.** On the running app:
 1. An org moved to a plan without `analytics.activity.read` loses the Analytics nav item and gets
@@ -606,7 +784,8 @@ reason until a date. A reviewer can see the drift without opening each member.
   - `list-permission-overrides`;
   - `grant-permission-override`, which closes over the requirements the target lacks, with the
     same expiry and reason;
-  - `deny-permission-override`, permanent;
+  - `deny-permission-override`, permanent, which closes over `dependentClosure` so a deny of
+    `rbac.role.read` also denies `member.invite` (`RV.13`);
   - `clear-permission-override`, which refuses a platform row with
     `ConflictError("override", "platform")`;
   - `expire-permission-overrides`, for the worker.
@@ -688,8 +867,11 @@ audited, and visible inside the tenant.
   recording fake.
 - [ ] `AX6.5` **Open streams re-read permissions** — the conversation stream's revalidation in
   `packages/api-server/src/router/realtime.router.ts:98` re-runs `watch.execute` with the principal
-  captured at open, so no deny, kill switch, plan change or suspend ever closed it. It now
-  re-resolves through `container.capabilities.forUser` (the tenant and platform merge) first.
+  captured at open, so no deny, kill switch, plan change or suspend ever closed it. **The fix is
+  not this phase's** (`RV.15`): it is a live gap today (`RV.1`, a deactivated member keeps their
+  stream), so the re-resolve through `container.capabilities.forUser` lands ahead of Phase 1 as
+  `RV.1`'s fix. What stays here is the proof that it covers suspension: a suspended user's open
+  conversation stream closes at its next revalidation.
   Spec: `apps/web/tests/server/realtime.stream.spec.ts`. **Docs:** `packages/api-server/docs/`.
 - [ ] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
   `platform.account.*`, not `platform.principal.*`: `Principal` is the per-request class, and the
@@ -700,8 +882,11 @@ audited, and visible inside the tenant.
     invalidates each of those orgs; calls `revokeAll` after commit;
   - `reinstate-account`;
   - `deny-account-permission`: a tenant key, only in an org the user belongs to; a platform key,
-    only in the tier. It refuses `core` keys and yourself, and writes `authority = 'platform'`
-    with no expiry;
+    only in the tier. It refuses `core` keys and yourself, closes over `dependentClosure`
+    (`RV.13`), and writes `authority = 'platform'` with no expiry;
+  - **the last platform admin is never locked out** (`RV.14`): `suspend-account` and a platform-key
+    `deny-account-permission` refuse with `ConflictError` when the target is the last active
+    holder of `platform.account.manage`. Spec for both.
   - `clear-account-deny`.
   
   Procedures:
@@ -720,8 +905,9 @@ audited, and visible inside the tenant.
 - [ ] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
   memberships, suspend and reinstate with a reason, per-org denies), the route, and copy.
 - [ ] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
-  loudly, naming the reinstate route. A platform admin who suspended themselves by mistake would
-  otherwise have no way back. **Docs:** `platform-scope.md`, and
+  loudly, naming the reinstate route. `AX6.6` refuses a self-suspend and the last admin's lockout,
+  so this is for what those miss: two admins suspending each other, or an operator reinstating by
+  hand with nobody left to use the route (`RV.14`). **Docs:** `platform-scope.md`, and
   `auth/docs/reference/{principal-builder,enrolment}.md`.
 
 **Exit.** On the running app:
@@ -797,11 +983,15 @@ never mounts and never fetches. The header bell is an inline widget.
   - `prefetchDashboard` skips both.
   
   `apps/web/tests/route/routes.spec.ts` passes with the new route.
-- [ ] `AX8.7` **§31 — every inline widget is placed by a literal key** — every fragment entry with
+- [ ] `AX8.7` **§30 — every inline widget is placed by a literal key** — every fragment entry with
   no zone must appear as `widget="<key>"` in `packages/feature/src` or `apps/web/src`. Any
-  `<Widget … widget={` fails, which also forbids a `<Widget>` inside a loop over runtime data. The
-  spec gets fixtures that fail and pass, and the count moves to 31 in the same places as `AX3.7`,
-  plus a new `### 31` section. Verified by writing each violation.
+  `<Widget … widget={` fails, which also forbids a `<Widget>` inside a loop over runtime data.
+  Verified by writing each violation.
+  - The spec gets fixtures that fail and pass, and `tests/check-architecture.spec.mjs:142`
+    becomes 30.
+  - The count moves in `AGENTS.md:24`, `docs/ai/rules/workflow.md` (`:14`, `:43` and the prose
+    list), and `docs/setup/26-hygiene-and-ci.md` (`:372`, `:1118`, `:1121`, plus a new `### 30`
+    section after `:1030`).
 - [ ] `AX8.8` **Docs** — `apps/web/docs/reference/enforcement-surfaces.md`: surface 4 now has two
   forms, `<Can>` and `<Widget>`, and neither is the gate. Also `docs/setup/28-folder-structure.md`
   and `packages/feature/docs/`.
@@ -811,7 +1001,7 @@ never mounts and never fetches. The header bell is an inline widget.
 2. A member without `member.read` sees one card, and the network panel shows no `member.list`
    call.
 3. A signed-out visitor still sees the landing page.
-4. `pnpm check:architecture` is 31/31, and every suite is green.
+4. `pnpm check:architecture` is 30/30, and every suite is green.
 
 ---
 
@@ -834,8 +1024,10 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   derive from the allowlist. The `tenant-partition` spec counts are updated.
 - [ ] `AX9.2` **Adapter** — `WidgetPreferenceRepository` port, `pg-widget-preference.repository.ts`
   (routed) with its spec, and the fake.
-- [ ] `AX9.3` **Keys** — `core.widget.customize` (core: held by everyone) and
-  `widget.default.manage`, in a new `widget` module.
+- [ ] `AX9.3` **Keys** — `core.widget.customize` in the **`core`** module, and
+  `widget.default.manage` in a new `widget` module (`RV.12`). Core-ness is
+  `PermissionMeta.module === "core"` (`capability-set.ts:206`), so a key in the `widget` module
+  would be held by nobody until a role granted it.
   - `gate/widget.gate.ts` and `route/widget.routes.ts` (`/settings/widgets`).
   - A nav item in `nav.data.ts`, with `nav.widgets` copy.
   - `SystemRoleSeed`: `admin` gets `widget.default.manage`.
@@ -881,7 +1073,9 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
 1. Hide the member card: it is gone after a reload and listed in the tray. Restore it.
 2. The org admin hides it for everyone: a member cannot restore it.
 3. In an org without the flag there is no Hide action, and the procedure answers 404.
-4. Every suite is green.
+4. That org's session payload lists `widget.dismissal`; another org's does not. This is Phase 3's
+   old exit line, which could only pass once `AX9.6` made the flag client-gating (`RV.11`).
+5. `AX3.7` is built: `pnpm check:architecture` is 31/31, and every suite is green.
 
 ---
 
@@ -922,7 +1116,7 @@ flag should be, and the plan is walked end to end.
   - both `assertOn` calls;
   - the database rows, through `platform.updateFlag`, or leave them for the orphan view to show.
   
-  §30 still passes with zero flags. This is the lifecycle the design text wants, and doing it once
+  §31 still passes with zero flags. This is the lifecycle the design text wants, and doing it once
   proves the path. **Trigger:** the rollout is complete, and in any case before its `expiresOn`.
 - [ ] `AX11.3` **The hand walk** — every Exit line above, in one session, against
   `pnpm infra:up && pnpm dev`, as one platform admin, one org admin and one member. Record the
@@ -938,6 +1132,7 @@ open.
 
 ```bash
 pnpm build:packages && pnpm --filter @loadbearing/web build && pnpm --filter @loadbearing/worker build
+pnpm --filter @loadbearing/realtime build
 pnpm check:architecture          # 31/31, no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm check:contrast
@@ -985,4 +1180,8 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-28 | @sami | Phase 4 done: plans, adjustments and the kill switch (`0043`), the mask inside resolution at four queries, `invalidateAll`, eleven use-cases, the platform screens and the role editor's ceiling. `RV.10`, `RV.13`, `RV.14` built. Exit verified in the running app. `AX1.9` done; `AX4.10`–`AX4.16` recorded |
+| 2026-09-28 | @sami | Phase 3 done: `feature_flags` and `feature_flag_organizations` (`0042`), `PgFlagRepository`, `FlagCache`, three platform procedures, flags on the session, `/platform/flags`. Exit verified in the running app. `AX3.8`–`AX3.12` recorded; `FlagCache` deletes once rather than twice |
+| 2026-09-28 | @sami | Phase 2 done: `requires` with both closures, `FlagRegistry`, `WidgetRegistry`, `EntitlementMask`, three widgets and one flag, 28 new spec cases in `permissions` (82 in all). `AX2.8`–`AX2.11` recorded |
+| 2026-09-28 | @sami | Corrected by `BACKLOG.md` §14 `RV.10`–`RV.16` before the first box: `assertAssignableBy` skips un-entitled keys; a remove or deny closes over `dependentClosure`; `core.widget.customize` moves to `core`; a default plan on `platform_policy`; a last-platform-admin guard; `AX6.5`'s fix moves ahead as `RV.1`; the realtime build joins both verification blocks. `RV.11`: §31 (flag liveness) is built with Phase 9, and the inline-widget check becomes §30. Phase 1 done; `AX1.7`–`AX1.9` found |
 | 2026-09-27 | @sami | Written from the design text "Widget, permission, and extension model"; extensions scrapped; decisions 1–13 agreed. |

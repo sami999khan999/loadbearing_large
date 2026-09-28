@@ -80,11 +80,16 @@ conflict, say so explicitly rather than letting the simpler one win by default.
 
 Most of the time they do not conflict, and this repository is full of the proof:
 
-**Three queries instead of one join.** `CapabilityRepository.resolveFor()` runs three targeted
-queries rather than one three-way left join ([13](../setup/13-infrastructure-postgres.md)). Fewer queries sounds
+**Four queries instead of one join.** `CapabilityRepository.resolveFor()` runs four targeted
+queries rather than one wide left join ([13](../setup/13-infrastructure-postgres.md)). Fewer queries sounds
 simpler; the join produces a cartesian product across role permissions, goal memberships, and
-overrides, and needs deduplication in application code. The three-query version is both easier to
+overrides, and needs deduplication in application code. The four-query version is both easier to
 read and faster.
+
+The fourth is the org's entitlement, and it is itself four lookups in one statement: the plan's
+rows, the unlimited marker, the live adjustments and the disabled modules, tagged and joined with
+`UNION ALL`. A join across those four would multiply rows, while a union returns each lookup's rows
+once, in one round trip. The union keeps the count at four without paying for it in rows.
 
 **A grep instead of a lint plugin.** `check-architecture.mjs` is zero-dependency Node that greps for
 rules no linter expresses ([26](../setup/26-hygiene-and-ci.md)). A custom ESLint plugin would be the

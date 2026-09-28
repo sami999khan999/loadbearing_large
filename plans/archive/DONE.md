@@ -1342,6 +1342,41 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
 
 ---
 
+## 14. Code review of 2026-09-28 — closed so far
+
+`RV.1` is a code fix. `RV.10`–`RV.16` were changes to `ACCESS-AND-VISIBILITY-PLAN.md`, made
+before its first box was ticked; their proof is the plan's text, and the item IDs there name the
+`RV` they came from.
+
+- [x] `RV.1` **A deactivated member's conversation stream never ended** `done: 2026-09-28` — the
+  check re-ran `messaging.watch` with the principal captured at open, and `assertParticipant`
+  reads only `conversation_members`, which deactivation never touches. `PrincipalBuilder.refresh`
+  now re-reads the principal first: `null` for an inactive membership, otherwise one built from
+  the current capabilities, and an API key is only ever narrowed. A role edit that takes the read
+  away ends the stream too. Proof: two cases in `apps/web/tests/server/realtime.stream.spec.ts`,
+  both failing with the old router and passing with the new one, and four in
+  `principal.builder.spec.ts`. `CR.4`'s closure above claimed both streams ended, and only the
+  user stream did. `AX6.5` keeps the spec for suspension.
+- [x] `RV.10` **Owners cannot hand out `owner` on a smaller plan** `done: 2026-09-28` — `AX4.4`
+  now teaches `RoleRules.assertAssignableBy` to skip keys outside the entitlement, with a spec.
+- [x] `RV.11` **Phase 3's exit could not pass** `done: 2026-09-28` — `widget.dismissal` has no
+  reader in `src/` until `AX9.4`. Flag liveness (`AX3.7`) is built with Phase 9 as §31, and the
+  inline-widget check (`AX8.7`) becomes §30. Phase 3's exit now proves the server-only case, and
+  the session-payload line moved to Phase 9's exit.
+- [x] `RV.12` **`core.widget.customize` was not core where the plan put it** `done: 2026-09-28` —
+  `AX9.3` declares it in the `core` module.
+- [x] `RV.13` **A removal did not close over what requires it** `done: 2026-09-28` — `AX2.1` adds
+  `dependentsOf` and `dependentClosure`. A plan remove, a per-user deny and a platform deny
+  close over it, and unticking a key in the plan editor unticks what depends on it.
+- [x] `RV.14` **No plan for a new tenant, no guard on the last platform admin**
+  `done: 2026-09-28` — `AX4.1` adds `platform_policy.default_plan_key`, read by the founder and
+  the personal-organization enroller. `AX6.6` refuses to suspend or deny the last holder of
+  `platform.account.manage`, and `AX6.9` states what the recovery path is for.
+- [x] `RV.15` **Move `AX6.5` to the front** `done: 2026-09-28` — `AX6.5` is now the spec that
+  covers suspension. The fix itself is `RV.1`, closed the same day, above.
+- [x] `RV.16` **"Running it again" skipped the realtime build** `done: 2026-09-28` — both
+  verification blocks build `@loadbearing/realtime`.
+
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
 **Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
@@ -1574,6 +1609,9 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-28 | @sami | **`RV.1` fixed: an open conversation stream re-reads its principal.** A deactivated member's stream now ends within a minute, as does one whose role loses `messaging.conversation.read`. `PrincipalBuilder.refresh` is the new read; an API key only narrows |
+| 2026-09-28 | @sami | **§14's seven plan items closed**: `RV.10`–`RV.16` folded into `ACCESS-AND-VISIBILITY-PLAN.md` before its Phase 1, which is now done. `RV.11` took the option of building flag liveness with Phase 9. `RV.1`–`RV.9` stay open |
+| 2026-09-28 | @sami | **`BACKLOG.md` §14 opened: sixteen `RV.*` items.** Nine come from reviewing the code changed since `14d49db`: a deactivated member's conversation stream never ends, typing and resync frames used as the resume point, the replay log per fanned-out member, per-stream revalidation queries, mail dedupe outliving BullMQ's completed cap, silent `MULTI` failures, separators splitting sentences, a missing `.js`, and a stale §29 comment. Seven are improvements to `ACCESS-AND-VISIBILITY-PLAN.md` before it starts |
 | 2026-09-27 | @sami | **`CP7.5` done in a Linux container, and it found the last stream of a drain being cut.** The stream process now waits for its connections to finish writing before it cuts; the web process was confirmed to exit on its own. Section 12 is down to `CP7.9`, the release after this one |
 | 2026-09-26 | @sami | **`CP1.9` and `CP4.9` measured, and each measurement changed code.** Two tabs showed a conversation refetching once per message rather than once a second, so `refreshNewest` got the floor `RealtimeRefetch` already had. The fan-out could not be timed because the event queue logged no completions, and a stack without ClickHouse showed the projection flooding the log once per tenant; both fixed. Section 12 is down to `CP7.5`, which wants Linux, and `CP7.9`, which wants a later release |
 | 2026-09-26 | @sami | **Four of section 12's hand checks done in a running app**: mail through an outage and past its retries with `queue:replay`, a separate realtime Redis, a stream held thirty minutes, and the dev proxy in a Chrome tab plus two hundred streams with the web p95 unchanged. `CP7.5` still wants Linux; `CP1.9` and `CP4.9` are measurements still to make |
