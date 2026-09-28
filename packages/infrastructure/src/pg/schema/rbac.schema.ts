@@ -129,8 +129,8 @@ export const memberships = pgTable(
       .notNull()
       .references(() => roles.id, { onDelete: "no action" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    // Per membership, not per user: `users.deactivated_at` would lock someone out of
-    // every tenant they belong to, which is a cross-tenant write dressed as a local one.
+    // Per membership: a tenant admin locks someone out of this tenant only. The lock on
+    // every tenant at once is `users.suspended_at`, and it is the platform's.
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
   },
   (t) => [

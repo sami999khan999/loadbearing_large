@@ -45,7 +45,13 @@ export class PgMembershipReader extends BaseRepository {
       .select({ organizationId: memberships.organizationId })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(and(eq(memberships.userId, userId), isNull(memberships.deactivatedAt)))
+      .where(
+        and(
+          eq(memberships.userId, userId),
+          isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
+        ),
+      )
       // `true` sorts first under `desc`. A user with no preference compares as null on
       // every row, and `nulls last` makes that a tie rather than a winner.
       .orderBy(
@@ -72,11 +78,13 @@ export class PgMembershipReader extends BaseRepository {
     const rows = await this.db
       .select({ userId: memberships.userId })
       .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
       .where(
         and(
           eq(memberships.organizationId, organizationId),
           inArray(memberships.userId, [...userIds]),
           isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
         ),
       );
 
@@ -87,11 +95,14 @@ export class PgMembershipReader extends BaseRepository {
     const [row] = await this.db
       .select({ id: memberships.id })
       .from(memberships)
+      // A platform suspend outranks every tenant: one join, and each reader here refuses.
+      .innerJoin(users, eq(users.id, memberships.userId))
       .where(
         and(
           eq(memberships.organizationId, organizationId),
           eq(memberships.userId, userId),
           isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
         ),
       )
       .limit(1);
@@ -114,8 +125,15 @@ export class PgMembershipReader extends BaseRepository {
       .from(memberships)
       .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
       .innerJoin(roles, eq(roles.id, memberships.roleId))
+      .innerJoin(users, eq(users.id, memberships.userId))
       // A tenant that deactivated this person is not one they can switch to.
-      .where(and(eq(memberships.userId, userId), isNull(memberships.deactivatedAt)))
+      .where(
+        and(
+          eq(memberships.userId, userId),
+          isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
+        ),
+      )
       .orderBy(asc(memberships.createdAt))
       .limit(PgMembershipReader.MAX_ORGANIZATIONS);
 

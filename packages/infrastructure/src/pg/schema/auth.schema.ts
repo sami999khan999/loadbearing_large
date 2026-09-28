@@ -31,9 +31,9 @@ export const users = pgTable(
     // in a preferences table that would need a join before anything can be rendered.
     locale: text("locale").notNull().default("en"),
     timezone: text("timezone"),
-    // A state, not a delete: the activity log points at this row forever, so a deactivated
-    // user keeps their rows and loses their capabilities.
-    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    // The platform's lock on a compromised account, in every tenant at once. A state, not a
+    // delete: the activity log points at this row forever. Deactivation is per membership.
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     // `set null`, because a tenant being deleted must not take the account with it.
     // `PgMembershipReader` re-checks membership before honouring it.
     lastActiveOrganizationId: uuid("last_active_organization_id").references(
