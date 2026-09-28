@@ -14,6 +14,7 @@ export {
 } from "./messaging/index.js";
 export { NotificationMutations, NotificationQueries } from "./notification/index.js";
 export { OrganizationMutations } from "./organization/index.js";
+export { OverrideMutations, OverrideQueries } from "./override/index.js";
 export { PlatformMutations, PlatformQueries } from "./platform/index.js";
 export { RoleMutations, RoleQueries } from "./rbac/index.js";
 export {

@@ -97,6 +97,12 @@ export class QueryKeys {
     list: (params: unknown) => ["apiKey", "list", params] as const,
   };
 
+  // One person's exceptions. `all()` is what every override write invalidates.
+  public static readonly override = {
+    all: () => ["override"] as const,
+    list: (userId: string) => ["override", "list", userId] as const,
+  };
+
   // Inviting and revoking both invalidate `all()`: an invitation becoming a membership
   // changes both lists at once.
   public static readonly member = {
