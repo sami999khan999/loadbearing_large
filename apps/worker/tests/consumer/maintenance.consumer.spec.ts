@@ -103,6 +103,8 @@ function harness(
   options: {
     // How many entitlement adjustments the nightly sweep finds expired.
     expired?: number;
+    // How many per-person grants it finds lapsed.
+    lapsed?: number;
     monthsAhead?: number;
     estimates?: readonly PartitionEstimate[];
     objects?: readonly ArchivedObject[];
@@ -187,6 +189,15 @@ function harness(
     // The harness fixes its own epoch; this spec asserts against a later month.
     clock,
     platformAdmin,
+    // A stub, as `expireAdjustments` is: the use-case has its own spec.
+    overrides: {
+      expire: {
+        execute: (principal: { kind: string }, at: Date) => {
+          expirations.push({ kind: principal.kind, at });
+          return Promise.resolve({ overrides: options.lapsed ?? 0 });
+        },
+      },
+    },
     retentionPolicies,
     projectionPolicies,
     platformPolicy,
@@ -283,11 +294,18 @@ describe("MaintenanceConsumer", () => {
   // `AX4.9`. A trial past its date already grants nothing; the sweep removes it, as the
   // system principal and at the same instant as the rest of the night's cleanup.
   it("expires entitlement adjustments on cleanup and counts them on the sweep line", async () => {
-    const { container, expirations, logger } = harness({ expired: 2 });
+    const { container, expirations, logger } = harness({ expired: 2, lapsed: 3 });
     await consumerFor(container).handle(job("cleanup"));
 
-    expect(expirations).toEqual([{ kind: "system", at: NOW }]);
-    expect(emitted(logger, "maintenance.sweep.completed")[0]).toMatchObject({ adjustments: 2 });
+    // Both sweeps, as the system principal, at the one instant the night's cleanup uses.
+    expect(expirations).toEqual([
+      { kind: "system", at: NOW },
+      { kind: "system", at: NOW },
+    ]);
+    expect(emitted(logger, "maintenance.sweep.completed")[0]).toMatchObject({
+      adjustments: 2,
+      overrides: 3,
+    });
   });
 
   it("runs a queued tenant move and says where the tenant went", async () => {

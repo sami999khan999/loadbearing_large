@@ -309,12 +309,14 @@ export class MaintenanceConsumer {
       SystemPrincipal.platform(),
       now,
     );
+    const lapsed = await this.container.overrides.expire.execute(SystemPrincipal.platform(), now);
 
     this.container.logger.emit("maintenance.sweep.completed", {
       sessions: outcome.sessions,
       verifications: outcome.verifications,
       invitations: outcome.invitations,
       adjustments: expired.adjustments,
+      overrides: lapsed.overrides,
     });
 
     // Here rather than on a schedule of its own: a grace period is days long, and one
