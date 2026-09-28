@@ -106,6 +106,25 @@ describe("CapabilityCache", () => {
     ]);
   });
 
+  // A plan edit or the kill switch changes every holder of a plan, and they are not known.
+  // The platform axis stays: no plan reaches it, so there is nothing of it to flush.
+  it("flushes every tenant on invalidateAll, and leaves the platform axis", async () => {
+    const { cache, store } = cacheWith(
+      new Map([
+        [`${ORG_A}:${USER}`, holding("member.read")],
+        [`${ORG_B}:${USER}`, holding("member.read")],
+      ]),
+    );
+
+    await cache.forUser(ORG_A, USER);
+    await cache.forUser(ORG_B, USER);
+    await cache.platformFor(USER);
+
+    await cache.invalidateAll();
+
+    expect([...store.entries.keys()]).toEqual([`capability:platform:${USER}`]);
+  });
+
   it("re-reads the repository after an invalidation", async () => {
     const { cache, repository } = cacheWith(
       new Map([[`${ORG_A}:${USER}`, holding("member.read")]]),

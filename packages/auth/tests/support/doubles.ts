@@ -9,7 +9,7 @@ import type {
   PlatformReader,
 } from "@loadbearing/application";
 import type { ApiKeyId, OrganizationId, UserId } from "@loadbearing/contracts";
-import { CapabilitySet } from "@loadbearing/permissions";
+import { CapabilitySet, EntitlementMask } from "@loadbearing/permissions";
 import type { RequestHeaders, ResolvedSession, SessionResolver } from "../../src/import.js";
 
 // Hand-written rather than `composition`'s fakes, which would close a cycle. Each
@@ -31,6 +31,13 @@ export class RecordingCapabilityRepository implements CapabilityRepository {
     const set = this.sets.get(`${organizationId}:${userId}`);
     if (!set) throw new Error(`No capability set staged for ${organizationId}:${userId}`);
     return Promise.resolve(set);
+  }
+
+  // Unlimited: these specs are about caching and credentials, not about plans.
+  public entitlementFor(): Promise<EntitlementMask> {
+    return Promise.resolve(
+      EntitlementMask.from({ plan: "all", added: [], removed: [], disabledModules: [] }),
+    );
   }
 
   public resolvePlatformFor(userId: UserId): Promise<CapabilitySet> {

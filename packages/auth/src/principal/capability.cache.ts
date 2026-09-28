@@ -8,7 +8,7 @@ import {
   type UserId,
 } from "../import.js";
 
-// `resolveFor` is three queries and runs on essentially every request. Fine at ten users,
+// `resolveFor` is four queries and runs on essentially every request. Fine at ten users,
 // not at five hundred.
 export class CapabilityCache {
   private static readonly PREFIX = "capability:user:";
@@ -80,6 +80,13 @@ export class CapabilityCache {
   public async invalidatePlatform(): Promise<void> {
     await this.cache.deletePrefix(CapabilityCache.PLATFORM_PREFIX);
     this.repeat(() => this.cache.deletePrefix(CapabilityCache.PLATFORM_PREFIX));
+  }
+
+  // Every tenant entry, repeated like the rest. Rare — a plan edit or an incident — and a
+  // flushed entry costs one resolution to rebuild. See docs/reference/capability-cache.md.
+  public async invalidateAll(): Promise<void> {
+    await this.cache.deletePrefix(CapabilityCache.PREFIX);
+    this.repeat(() => this.cache.deletePrefix(CapabilityCache.PREFIX));
   }
 
   // `CR.9`. A read-through that queried before the revoke committed can `SET` after the

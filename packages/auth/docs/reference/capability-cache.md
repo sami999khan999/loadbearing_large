@@ -5,8 +5,8 @@ description: Sixty seconds, and no longer — the TTL is a revocation window rat
 
 # `CapabilityCache`
 
-`CapabilityRepository.resolveFor()` is three queries across role permissions, goal memberships and
-per-user overrides, and it runs on essentially every request. Fine at ten users, not at five hundred.
+`CapabilityRepository.resolveFor()` is four queries: role permissions, goal memberships, per-user
+overrides, and the org's entitlement, which masks the other three. It runs on essentially every request. Fine at ten users, not at five hundred.
 This class is the read-through in front of it.
 
 ## The TTL is a revocation window
@@ -55,6 +55,30 @@ Getting this wrong in the stale direction means a revoked permission keeps worki
 security bug wearing a caching bug's clothes. The TTL exists so that a forgotten call site costs a
 minute rather than a session lifetime.
 
+## Which write flushes what
+
+Every write that changes what someone may do calls exactly one of these, after its commit.
+
+| Write | Call | Why that wide |
+|---|---|---|
+| A per-user override, a membership's role or active state | `invalidate(org, user)` | One person's set changed |
+| A role's grants, a role deleted | `invalidateOrganization(org)` | Everyone holding the role changed, and they are not enumerated |
+| An org moved to a plan, an adjustment added, cleared or expired | `invalidateOrganization(org)` | The org's mask changed |
+| A plan edited or deleted | `invalidateAll()` | Every org on the plan changed, and they are not enumerated |
+| A module switched off or on | `invalidateAll()` | The kill switch masks every org |
+| Anything in the platform tier | the platform prefix too | Added by this class, never by a use-case |
+
+`invalidateAll()` is one `deletePrefix` over `capability:user:`, repeated after two seconds like the
+rest. It leaves `capability:platform:` alone, because no plan reaches the platform axis. It is rare
+(a plan edit, an incident), and a flushed entry costs one resolution to rebuild. Either way, that is
+cheaper than enumerating a plan's orgs to flush them one at a time.
+
+**No version stamp, on purpose.** Keying every entry on a plan or org version would make a plan
+edit invalidate by construction. But each request would then read the version before the entry,
+which is the second Redis round trip the section above already declined. The stamp would buy exact
+invalidation for writes that happen a few times a month, and charge for it on every request. The
+flush, repeated, costs nothing until something changes.
+
 ## The third axis has its own prefix, and the adapter decides when to flush it
 
 `platformFor(userId)` caches under `capability:platform:<userId>` — no organization in the key,
@@ -101,4 +125,5 @@ and deletes nothing. The prefix is stripped before the delete for exactly that r
 behaviour, because the layout *is* the behaviour: one assertion on
 `capability:user:<org>:<user>`, one that the same user in two tenants gets two answers and two
 repository calls, and one that `invalidateOrganization()` takes the named tenant's entries and
-leaves both the other tenant's and unrelated keys alone.
+leaves both the other tenant's and unrelated keys alone. `invalidateAll()` has its own case: every
+tenant's entry goes, and the platform entry stays.
