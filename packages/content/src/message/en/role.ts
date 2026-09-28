@@ -10,6 +10,8 @@ export const role = {
   "role.hint.owner": "The owner role is granted every permission, including new ones.",
   "role.hint.system": "Built-in roles are rewritten on every deploy, so they cannot be edited.",
   "role.hint.readOnly": "You can see these grants but not change them.",
+  // The grant is kept, so moving back to a plan that includes it restores it.
+  "role.blocked": "Not included in your plan",
   "role.empty": "No roles yet. Run `pnpm db:seed` to create the built-in four.",
   "role.create.title": "New role",
   "role.create.key": "Key",
