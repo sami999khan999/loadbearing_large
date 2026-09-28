@@ -10,7 +10,7 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–4 done 2026-09-28, and `RV.1` fixed the same day; next is Phase 5** (Phase 7 is also
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day; next is Phase 6** (Phase 7 is also
 free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
@@ -25,7 +25,7 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 2 | `AX2.11` — a docs listing, not blocking |
 | 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
-| 5–11 | all |
+| 6–11 | all |
 
 ### Running it again
 
@@ -753,7 +753,7 @@ nothing for lines 1–3; it was rerun after switching his session to his own org
 **Goal.** An org admin can deny one person one permission indefinitely, or grant it for a stated
 reason until a date. A reviewer can see the drift without opening each member.
 
-- [ ] `AX5.1` **Migration `0044_override_expiry.sql`** — new columns `expires_at`, `created_by`
+- [x] `AX5.1` **Migration `0044_override_expiry.sql`** — new columns `expires_at`, `created_by`
   (uuid, no FK) and `authority text NOT NULL DEFAULT 'org'`.
   - **Backfill:** existing grant rows get `expires_at = now() + 90 days` and a reason if they had
     none.
@@ -764,7 +764,8 @@ reason until a date. A reviewer can see the drift without opening each member.
   - **Indexes:** both partial unique indexes are rebuilt with `authority` in them, so a platform
     deny and an org row for the same key can coexist. Add `permission_overrides_expiry_idx`.
   - `rbac.schema.ts` matches.
-- [ ] `AX5.2` **Resolution explains itself** — override reads filter out expired rows. That filter
+  done: 2026-09-28
+- [x] `AX5.2` **Resolution explains itself** — override reads filter out expired rows. That filter
   is the real mechanism: a cached set can outlive an expiry by up to the 60 s TTL, and the docs say
   so.
   - `CapabilityRepository.explainFor(org, user)` returns the ingredients: role grants, overrides
@@ -772,7 +773,8 @@ reason until a date. A reviewer can see the drift without opening each member.
     and stays at four statements.
   - `InspectEffectivePermissionsUseCase` returns `{ capabilities, explanation }`.
   - `RoleContract.capabilities` stays as it is; the explanation is its own schema.
-- [ ] `AX5.3` **Rules** — `application/src/rbac/permission-override.rules.ts`:
+  done: 2026-09-28
+- [x] `AX5.3` **Rules** — `application/src/rbac/permission-override.rules.ts`:
   - expiry defaults to 30 days and may not pass 90;
   - a grant needs a reason;
   - no `core` or `platform`-scope key;
@@ -780,7 +782,8 @@ reason until a date. A reviewer can see the drift without opening each member.
   - the actor must hold the key tenant-wide (`canTenantWide`);
   - the actor may not override someone who outranks them (reuse `role.rules.ts`
     `assertAssignableBy`).
-- [ ] `AX5.4` **Use-cases** —
+  done: 2026-09-28
+- [x] `AX5.4` **Use-cases** —
   - `list-permission-overrides`;
   - `grant-permission-override`, which closes over the requirements the target lacks, with the
     same expiry and reason;
@@ -795,12 +798,14 @@ reason until a date. A reviewer can see the drift without opening each member.
   no-escalation check. Spec: `application/tests/rbac/permission-override.use-case.spec.ts` —
   escalation, outrank, self, core and platform refused, expiry default and maximum, reason,
   platform row not clearable, closure.
-- [ ] `AX5.5` **Keys and grants** — `rbac.override.read` (requires `member.read`) and
+  done: 2026-09-28
+- [x] `AX5.5` **Keys and grants** — `rbac.override.read` (requires `member.read`) and
   `rbac.override.manage` (requires `rbac.override.read`). `SystemRoleSeed`: `admin` gets
   `rbac.override.read`. Migration `0045_override_grants.sql`, shaped like `0039`:
   - roles holding `rbac.role.manage` get `.read`;
   - roles holding `rbac.permission.grant` get `.manage`.
-- [ ] `AX5.6` **Transport** — a new contracts subject `contracts/src/override/`:
+  done: 2026-09-28
+- [x] `AX5.6` **Transport** — a new contracts subject `contracts/src/override/`:
   - `override.list` — GET `/overrides`;
   - `override.grant` — POST `/overrides/grant`;
   - `override.deny` — POST `/overrides/deny`;
@@ -809,12 +814,14 @@ reason until a date. A reviewer can see the drift without opening each member.
   Plus `catalog/override.{permissions,actions}.ts` (`override.granted`, `.denied`, `.cleared`,
   `.expired`), the api-client accessor, `server/orpc/override.router.ts`, the composition wiring,
   and `pg-permission-override.repository.ts` with its spec.
-- [ ] `AX5.7` **The drift overlay** — `member.entity.ts` gains `exceptions`, a correlated count of
+  done: 2026-09-28
+- [x] `AX5.7` **The drift overlay** — `member.entity.ts` gains `exceptions`, a correlated count of
   live overrides, added to the existing member-list statement so its query count holds.
   - `MemberList` reads "Accountant + 2 exceptions".
   - `RoleList` shows, per role, how many of its members carry exceptions, so a role review sees
     drift without opening anyone.
-- [ ] `AX5.8` **Screens** — `member/member-access.panel.tsx`, opened from `settings/members.tsx`
+  done: 2026-09-28
+- [x] `AX5.8` **Screens** — `member/member-access.panel.tsx`, opened from `settings/members.tsx`
   by a validated `?member=` search parameter. It holds:
   - `rbac/permission-override.list.tsx` — platform rows show a lock and "Set by the platform";
   - `rbac/permission-override.form.tsx` — an expiry picker capped at 90 days, and a reason
@@ -823,8 +830,56 @@ reason until a date. A reviewer can see the drift without opening each member.
     not in plan, or platform deny.
   
   Copy in `role.ts` and `member.ts`, `en` and `bn`. Specs in `feature/tests/`.
-- [ ] `AX5.9` **The expiry sweep** — `cleanup()` runs `expire-permission-overrides`: one audit entry
+  done: 2026-09-28
+- [x] `AX5.9` **The expiry sweep** — `cleanup()` runs `expire-permission-overrides`: one audit entry
   per row, and `invalidate` per user. The event shape gains `overrides`.
+  done: 2026-09-28
+
+**Recorded while executing Phase 5.**
+
+- [x] `AX5.10` **The fold lives in `application`, as `CapabilityResolution.fold`.** `AX5.2` put it
+  in the adapter. There it would cost the inspector eight statements, a `resolveFor` and an
+  `explainFor`, or a second copy of the fold. The adapter's `resolveFor` and the inspector's
+  use-case now call the same one, and both stay at four statements.
+  done: 2026-09-28
+- [x] `AX5.11` **`role.effective` answers `{ capabilities, explanation }`.** `RoleContract.capabilities`
+  is unchanged; the output wraps it. The web app is the only client, and the inspector reads the
+  new shape, but an external client of `GET /roles/effective/{userId}` would see the change.
+  done: 2026-09-28
+- [x] `AX5.12` **Drizzle writes a column unqualified in a one-table select.** The role list's
+  correlated count wrote `${roles.id}` inside a subquery over `memberships`, and Postgres bound
+  the bare `"id"` to `memberships.id`. Every role read 0, and the new spec caught it. Both
+  correlated counts now name the outer columns in full. **The rule:** never interpolate an outer
+  column into a correlated subquery in a query that joins nothing.
+  done: 2026-09-28
+- [x] `AX5.13` **Choices the plan left open.**
+  - A deny's closure needs the actor to hold only the key denied, not each dependent: narrowing
+    someone widens nothing.
+  - Clearing a deny widens access, so it passes the grant's checks: the actor holds the key and
+    does not rank below the person.
+  - `membersWithExceptions` is optional on `RoleRecord`, filled by `list` alone, so the dozens
+    of role literals in specs stayed as they were.
+  - `MemberList` takes `onOpenAccess`, because `feature` may not import routing. The members
+    route owns the validated `?member=` and renders `MemberAccessPanel`.
+  - The translator has no plural rules, so a count gets a `.one` and an `.other` key.
+  done: 2026-09-28
+- [x] `AX5.14` **A grant of an un-entitled key is refused, not saved and ignored.** The actor's
+  own set is masked, so `assertHeld` answers `FORBIDDEN`. The exit's "changes nothing" holds, and
+  the admin is told so instead of watching a grant do nothing.
+  done: 2026-09-28
+
+**Exit verified 2026-09-28** against `pnpm dev`, alice (owner) and bob in alice's own org:
+1. Bob moved to `admin`, then `member.invite` denied to him: `member.invite` answered
+   `FORBIDDEN`; his session's `denies` went from `[]` to `["member.invite"]`, so `can()` hides the
+   button; the member list read `exceptions: 1`.
+2. A one-minute grant of `analytics.activity.read`: the call succeeded during it and the list read
+   1; after the grant and the cache's minute it answered `FORBIDDEN` and the list read 0.
+   Resolution ignored the expired row before any sweep ran, as `AX4.13` found for trials.
+3. On a plan without `analytics.activity.read`, alice's grant of it answered `FORBIDDEN`, and bob's
+   access did not change.
+Everything was put back: the deny cleared, bob back to `member`, the org on `unlimited`, the plan
+deleted, the stray invitation from line 1's probe revoked, the expired grant removed.
+`check:architecture` 29/29; every suite green, the database included (infrastructure 360).
 
 **Exit.** On the running app:
 1. Deny `member.invite` to one admin: the button disappears, and the procedure answers 403 within
@@ -1180,6 +1235,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-28 | @sami | Phase 5 done: override expiry, authority and CHECKs (`0044`), grants to existing roles (`0045`), `explainFor` with the fold in `application`, five override use-cases, the drift counts, the access panel and the inspector's sources. Exit verified in the running app. `AX5.10`–`AX5.14` recorded |
 | 2026-09-28 | @sami | Phase 4 done: plans, adjustments and the kill switch (`0043`), the mask inside resolution at four queries, `invalidateAll`, eleven use-cases, the platform screens and the role editor's ceiling. `RV.10`, `RV.13`, `RV.14` built. Exit verified in the running app. `AX1.9` done; `AX4.10`–`AX4.16` recorded |
 | 2026-09-28 | @sami | Phase 3 done: `feature_flags` and `feature_flag_organizations` (`0042`), `PgFlagRepository`, `FlagCache`, three platform procedures, flags on the session, `/platform/flags`. Exit verified in the running app. `AX3.8`–`AX3.12` recorded; `FlagCache` deletes once rather than twice |
 | 2026-09-28 | @sami | Phase 2 done: `requires` with both closures, `FlagRegistry`, `WidgetRegistry`, `EntitlementMask`, three widgets and one flag, 28 new spec cases in `permissions` (82 in all). `AX2.8`–`AX2.11` recorded |
