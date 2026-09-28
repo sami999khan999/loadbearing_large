@@ -16,6 +16,7 @@ import {
   CapabilityCache,
   ChangeMemberRoleUseCase,
   ClearEntitlementAdjustmentUseCase,
+  ClearPermissionOverrideUseCase,
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
   ClickHouseConnection,
@@ -36,11 +37,13 @@ import {
   DeletePlanUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
+  DenyPermissionOverrideUseCase,
   type DomainEventPublisher,
   EditMessageUseCase,
   type EmailSender,
   type EmbeddingProvider,
   ExpireEntitlementAdjustmentsUseCase,
+  ExpirePermissionOverridesUseCase,
   ExportOrganizationUseCase,
   FlagCache,
   GetActivityTrendUseCase,
@@ -49,6 +52,7 @@ import {
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   InspectEffectivePermissionsUseCase,
@@ -68,6 +72,7 @@ import {
   ListMessagesUseCase,
   ListModuleSwitchesUseCase,
   ListNotificationsUseCase,
+  ListPermissionOverridesUseCase,
   ListPlansUseCase,
   ListProjectionGapsUseCase,
   ListProjectionPoliciesUseCase,
@@ -119,6 +124,7 @@ import {
   PgOutboxGateway,
   PgOutboxPublisher,
   PgPartitionArchiveGateway,
+  PgPermissionOverrideRepository,
   PgPersonalOrganizationEnroller,
   PgPlatformPolicyRepository,
   PgPlatformReader,
@@ -501,6 +507,14 @@ export class Container {
   // Read once per table by the prune pass, and usually empty: an override is what
   // makes that pass walk tenants rather than months.
   public readonly tenantRetentionPolicies: TenantRetentionPolicyRepository;
+  // One person's exceptions to their role. `expire` is the worker's, like the other sweeps.
+  public readonly overrides: {
+    readonly list: ListPermissionOverridesUseCase;
+    readonly grant: GrantPermissionOverrideUseCase;
+    readonly deny: DenyPermissionOverrideUseCase;
+    readonly clear: ClearPermissionOverrideUseCase;
+    readonly expire: ExpirePermissionOverridesUseCase;
+  };
   public readonly rbac: {
     readonly listRoles: ListRolesUseCase;
     readonly inspectEffective: InspectEffectivePermissionsUseCase;
@@ -1360,6 +1374,33 @@ export class Container {
         // Logged, never rethrown: the row is the truth and the daily job closes the
         // gap, so a bucket that was unreachable must not fail a save that committed.
         (error: unknown) => this.logger.failure(error, { at: "retention.apply" }),
+      ),
+    };
+
+    const overrideRepository = new PgPermissionOverrideRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    const overrideDeps = [
+      members,
+      roles,
+      capabilityRepository,
+      overrideRepository,
+      this.capabilities,
+      this.activity,
+      this.catalogUnitOfWork,
+    ] as const;
+    this.overrides = {
+      list: new ListPermissionOverridesUseCase(this.authorizer, members, overrideRepository),
+      grant: new GrantPermissionOverrideUseCase(this.authorizer, ...overrideDeps, this.clock),
+      deny: new DenyPermissionOverrideUseCase(this.authorizer, ...overrideDeps),
+      clear: new ClearPermissionOverrideUseCase(this.authorizer, ...overrideDeps),
+      expire: new ExpirePermissionOverridesUseCase(
+        overrideRepository,
+        this.capabilities,
+        this.activity,
+        this.catalogUnitOfWork,
       ),
     };
 
