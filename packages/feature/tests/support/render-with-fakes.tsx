@@ -2,6 +2,7 @@ import type { ApiClient } from "@loadbearing/api-client";
 import { type ClientNamespace, MessageStore, StaticContentSource } from "@loadbearing/content";
 import {
   type CapabilitySetDto,
+  type FlagKey,
   type PermissionKey,
   PermissionRegistry,
 } from "@loadbearing/permissions";
@@ -48,6 +49,8 @@ export const renderWithFakes = async (
   // Only for components that read a procedure. Omitted, nothing provides one, and a
   // component reaching for it throws — which is the honest answer for a spec that forgot.
   client?: ApiClient,
+  // The session on-set. None by default, which is where every rollout starts.
+  flags: readonly FlagKey[] = [],
 ): Promise<RenderResult> => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
@@ -57,7 +60,7 @@ export const renderWithFakes = async (
   const tree = (
     <QueryClientProvider client={queryClient}>
       <MessageProvider messages={messages}>
-        <SessionProvider user={user} capabilities={capabilities}>
+        <SessionProvider user={user} capabilities={capabilities} flags={flags}>
           {ui}
         </SessionProvider>
       </MessageProvider>

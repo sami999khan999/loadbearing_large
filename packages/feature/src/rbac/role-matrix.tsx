@@ -41,6 +41,7 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
   const capabilities = useCapabilities();
   const isPlatformOrganization = useIsPlatformOrganization();
   const roles = useAppQuery(RoleQueries.list(client, { limit, offset: 0 }));
+  const entitlement = useAppQuery(RoleQueries.entitlement(client));
   const grant = RoleMutations.useGrant(client);
   const revoke = RoleMutations.useRevoke(client);
 
@@ -78,6 +79,15 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
     }));
   }, [items, editable]);
 
+  // Every catalog key the plan leaves out. Empty until the ceiling loads, so a slow read
+  // leaves the matrix editable rather than blocking every row.
+  const blocked = useMemo<ReadonlySet<PermissionKey>>(() => {
+    const keys = entitlement.data?.keys;
+    if (!keys) return new Set();
+    const entitled = new Set(keys);
+    return new Set(PermissionRegistry.instance.all().filter((key) => !entitled.has(key)));
+  }, [entitlement.data]);
+
   const toggle = useCallback(
     (roleId: string, permission: PermissionKey) => {
       const role = items.find((candidate) => candidate.id === roleId);
@@ -108,6 +118,7 @@ export function RoleMatrix({ limit = 25 }: RoleMatrixProps) {
         subjects={subjects}
         onToggle={editable ? toggle : undefined}
         excludeScopes={isPlatformOrganization ? undefined : PLATFORM_ONLY}
+        blocked={blocked}
       />
       {items.some((role) => role.key === "owner") ? (
         <StatusBadge tone="neutral">{t("role.hint.owner")}</StatusBadge>

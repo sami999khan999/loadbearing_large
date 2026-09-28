@@ -31,7 +31,7 @@ export function InviteMemberForm() {
   // Annotated rather than inferred: the client's procedure types are reconstructed
   // through two packages, and a break anywhere degrades to `any` silently.
   const options: readonly RoleDto[] = roles.data?.items ?? [];
-  // `member` by default, never `owner`: the wildcard role should be a deliberate pick.
+  // `member` by default, never `owner`: the role holding every key should be a deliberate pick.
   // The first option and not `""`, so the value equals what the select paints.
   const fallback = options.find((role) => role.key === "member")?.id ?? options[0]?.id ?? "";
   // And the stored id counts only while it is still on offer, so a role that goes away

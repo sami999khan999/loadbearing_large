@@ -11,6 +11,7 @@ export {
   type SessionProviderProps,
   type SessionUser,
   useCapabilities,
+  useFlags,
   useIsPlatformOrganization,
   useSession,
 } from "./session.context.js";

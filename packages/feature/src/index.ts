@@ -43,6 +43,7 @@ export {
   TwoFactorForm,
   type TwoFactorFormProps,
   useCapabilities,
+  useFlags,
   useSession,
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
@@ -96,6 +97,12 @@ export {
 } from "./organization/index.js";
 export {
   DeleteTenantPanel,
+  FlagList,
+  ModuleSwitchPanel,
+  OrganizationEntitlementPanel,
+  PlanForm,
+  type PlanFormProps,
+  PlanList,
   PlatformStatusPanel,
   ProjectionGapsPanel,
   ProjectionPolicyForm,

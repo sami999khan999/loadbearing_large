@@ -23,6 +23,7 @@ export { ErrorCopy } from "@loadbearing/content";
 // server enforces, so a form cannot advertise a different floor.
 export {
   type ActivityPointDto,
+  type AdjustmentDto,
   type ApiKeyDto,
   ApiKeyEntity,
   type CapabilitiesDto,
@@ -30,6 +31,7 @@ export {
   type ConversationDto,
   ConversationEntity,
   type DocumentHitDto,
+  type FlagDto,
   type InvitationDto,
   type MemberDto,
   type MessageDto,
@@ -37,6 +39,7 @@ export {
   type NotificationPreferenceDto,
   type OrganizationId,
   Password,
+  type PlanDto,
   type ProjectionEntryDto,
   type RestoreRequestedDto,
   type RetentionEntryDto,
@@ -57,6 +60,7 @@ export {
   CapabilitySet,
   type CapabilitySetDto,
   CORE_MODULE,
+  type FlagKey,
   type ModuleKey,
   ModuleRegistry,
   type PermissionKey,
