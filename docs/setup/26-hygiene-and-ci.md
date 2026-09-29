@@ -369,7 +369,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The twenty-nine architectural assertions
+## Step 26.4 — The thirty architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Twenty-nine greps can.
 
@@ -1054,6 +1054,27 @@ itself where it sits; the signature is dropped, because the infrastructure copy 
 type where the two apps inline it. What is left is the algorithm, and four copies of one algorithm
 is a duplication somebody can read. Two algorithms is a bug nobody can see.
 
+### 30 — Every inline widget is placed by a literal key
+
+```js
+// fail if a widget fragment declares an entry with no `zone` and no file in
+// packages/feature/src or apps/*/src writes `<Widget widget="<that key>">`,
+// or if any `<Widget>` takes its key from an expression: `widget={…}`
+```
+
+A zone widget is placed by its zone: `DASHBOARD_WIDGETS` is typed total over it, so a card
+registered without an entry does not compile. An inline widget has no zone, and nothing in the
+type system says it is on a page at all. The only proof is the tag that renders it, so the rule
+reads the tag.
+
+**A literal, never an expression.** `widget={key}` compiles, and it proves nothing: the key is
+whatever the variable holds. Inside a loop over runtime data it places whatever the data says,
+which is a widget list assembled at runtime — the thing a registry exists to replace. Banning the
+braces is what makes the grep sound.
+
+Comments are stripped first, so a key named in a comment places nothing. The fragments are read
+through the widget barrel's spreads, as §24 and §28 read theirs.
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -1115,10 +1136,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through twenty-nine
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through thirty
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-six of the
-twenty-nine are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-seven of the
+thirty are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 
