@@ -13,6 +13,7 @@ import type { notification } from "./en/notification.js";
 import type { organization } from "./en/organization.js";
 import type { platform } from "./en/platform.js";
 import type { role } from "./en/role.js";
+import type { widget } from "./en/widget.js";
 
 // Type-only. `verbatimModuleSyntax` erases the imports above, so the key union stays
 // complete while the runtime data splits into one chunk per locale × namespace.
@@ -30,6 +31,7 @@ interface NamespaceShape {
   readonly messaging: typeof messaging;
   readonly notification: typeof notification;
   readonly analytics: typeof analytics;
+  readonly widget: typeof widget;
   readonly error: typeof error;
   readonly email: typeof email;
 }
@@ -50,7 +52,8 @@ export type ClientNamespace =
   | "notification"
   | "document"
   | "analytics"
-  | "platform";
+  | "platform"
+  | "widget";
 // Never reachable from a client catalog — only `SERVER_CATALOG` carries a loader for it.
 export type ServerNamespace = "email";
 export type Namespace = ClientNamespace | ServerNamespace;
@@ -79,6 +82,7 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "error",
   "nav",
   "auth",
+  "account",
   "role",
   "member",
   "organization",
@@ -88,4 +92,5 @@ export const CLIENT_NAMESPACES: readonly ClientNamespace[] = [
   "notification",
   "analytics",
   "platform",
+  "widget",
 ];
