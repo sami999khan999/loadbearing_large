@@ -108,6 +108,23 @@ describe("PgMemberRepository", () => {
     expect(counter.count).toBe(2);
   });
 
+  // The platform's lock is on the account, so it shows in every tenant's list at once, and
+  // it rides the `users` join the list already makes rather than a third query.
+  it("reads the platform's suspend on the member, in the list and the single read", async () => {
+    const suspend = (at: Date | null) =>
+      database.client.update(users).set({ suspendedAt: at }).where(eq(users.id, grace));
+    await suspend(new Date());
+
+    try {
+      const listed = await repository().list(other, { limit: 25, offset: 0 });
+      expect(listed.items.find((m) => m.userId === grace)?.suspended).toBe(true);
+      expect((await repository().findByUser(other, grace))?.suspended).toBe(true);
+      expect((await repository().findByUser(acme, ada))?.suspended).toBe(false);
+    } finally {
+      await suspend(null);
+    }
+  });
+
   it("answers membership by address, case-insensitively and per tenant", async () => {
     const email = `${ada}@example.test`;
 
