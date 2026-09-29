@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6 and 7 done 2026-09-29;
-next is Phase 8** (it needs Phases 3 and 7). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–8 done 2026-09-29;
+next is Phase 9** (it needs Phase 8). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -26,9 +26,9 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 7 | `AX7.5` — a colour-rule decision, not blocking |
-| 8–11 | all |
+| 9–11 | all |
 
-### Before picking up Phase 8 (2026-09-29)
+### Before picking up Phase 9 (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
@@ -37,8 +37,8 @@ Pushed to `origin/dev`. To resume on another device:
 2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
    tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
    procedure.
-3. Pick up at Phase 8, `<Widget>`, the dashboard zone and `/dashboard`. Nothing blocking is
-   open in Phases 6 or 7.
+3. Pick up at Phase 9, widget preferences behind `widget.dismissal`. Nothing blocking is open
+   in Phases 6–8. `widgetFacts` passes empty preference sets today; Phase 9 fills them.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -55,7 +55,7 @@ Useful to know:
 ```bash
 pnpm build:packages && pnpm --filter @loadbearing/web build && pnpm --filter @loadbearing/worker build
 pnpm --filter @loadbearing/realtime build
-pnpm check:architecture      # 29/29 today; 30/30 after Phase 8; 31/31 after Phase 9; no "○ skipped"
+pnpm check:architecture      # 30/30 today; 31/31 after Phase 9; no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm check:contrast          # after Phase 7
 pnpm infra:up && pnpm db:migrate && pnpm db:seed && pnpm dev
@@ -1126,19 +1126,23 @@ Documented setup gate 22's domain-noun grep still finds nothing. Every suite is 
 **Goal.** A signed-in user lands on `/dashboard`. Its cards come from the registry. A hidden card
 never mounts and never fetches. The header bell is an inline widget.
 
-- [ ] `AX8.1` **`<Widget>`** — `feature/src/widget/{widget.tsx,use-widget-visibility.ts}`:
+- [x] `AX8.1` **`<Widget>`** — `feature/src/widget/{widget.tsx,use-widget-visibility.ts}`:
   - `Widget({ widget: InlineWidgetKey, goalId?, fallback?, children })`.
   - It checks the flag and the permission; there is **no permission prop**.
   - It returns its children bare, like `<Can>`, and neither wraps the other.
   
   Spec: `feature/tests/widget/widget.spec.tsx`.
-- [ ] `AX8.2` **`DashboardZone`** — `feature/src/dashboard/dashboard-zone.tsx`:
+  done: 2026-09-29. Beside them, `widget-facts.ts` builds the facts `visibilityOf` reads, so the
+  header's `<Widget>` and its loader's prefetch gate cannot answer differently.
+- [x] `AX8.2` **`DashboardZone`** — `feature/src/dashboard/dashboard-zone.tsx`:
   - `DASHBOARD_WIDGETS` `satisfies Record<ZoneWidgetKey<"dashboard.main">, { component; prefetch? }>`,
     total over the zone.
   - `DashboardZone` builds the `<Zone>` items from `forZone`, keeping only `visible` ones.
   - `prefetchDashboard(...)` prefetches for visible widgets only.
   - The barrel exports `DashboardZone` and `prefetchDashboard`, **never the map**.
-- [ ] `AX8.3` **Copy** — the `widget` namespace:
+  done: 2026-09-29. The prefetch takes the client types off `QueryRuntime`, so `feature` still names
+  no cache library.
+- [x] `AX8.3` **Copy** — the `widget` namespace:
   - `namespace.ts`: `NamespaceShape`, `ClientNamespace` and `CLIENT_NAMESPACES`, which also gets
     the missing `"account"`;
   - loaders in `catalog.ts`;
@@ -1146,22 +1150,27 @@ never mounts and never fetches. The header bell is an inline widget.
   
   A new `message/widget-copy.ts` holds `WIDGET_COPY: Record<WidgetKey, NamespaceKeys["widget"]>`,
   on the `error-copy.ts` pattern, so a widget without a title does not compile.
-- [ ] `AX8.4` **The route** — `ROUTES` gains `/dashboard` (in `shell.routes.ts` beside `home`).
+  done: 2026-09-29. A `ZONE_COPY` beside it names each zone for a screen reader.
+- [x] `AX8.4` **The route** — `ROUTES` gains `/dashboard` (in `shell.routes.ts` beside `home`).
   - New `route/(app)/_authenticated/dashboard.tsx`, with messages `["nav", "widget"]`. Its loader
     loads the nav, then calls `prefetchDashboard`.
   - `(shell)/index.tsx` gains a `beforeLoad` that sends a signed-in user to `/dashboard`, and
     loses `MemberCount`, `ModuleNav` and the member prefetch.
-- [ ] `AX8.5` **The bell** — in `_authenticated.tsx`, `<Can permission="notification.inbox.read">`
+  done: 2026-09-29
+- [x] `AX8.5` **The bell** — in `_authenticated.tsx`, `<Can permission="notification.inbox.read">`
   around the bell becomes `<Widget widget="notification.bell">`. The loader's prefetch gate
   uses `visibilityOf`.
-- [ ] `AX8.6` **Specs** — `feature/tests/dashboard/dashboard-zone.spec.tsx`:
+  done: 2026-09-29
+- [x] `AX8.6` **Specs** — `feature/tests/dashboard/dashboard-zone.spec.tsx`:
   - the map's keys equal `forZone("dashboard.main")` — a runtime backstop to the type;
   - a denied widget and a flag-hidden widget do not mount, **and the fake client's `member.list`
     is never called**;
   - `prefetchDashboard` skips both.
   
   `apps/web/tests/route/routes.spec.ts` passes with the new route.
-- [ ] `AX8.7` **§30 — every inline widget is placed by a literal key** — every fragment entry with
+  done: 2026-09-29. No widget names a flag yet, so the flag-hidden cases force the registry's answer
+  with a spy: what is under test is that any answer but `visible` keeps the card unmounted.
+- [x] `AX8.7` **§30 — every inline widget is placed by a literal key** — every fragment entry with
   no zone must appear as `widget="<key>"` in `packages/feature/src` or `apps/web/src`. Any
   `<Widget … widget={` fails, which also forbids a `<Widget>` inside a loop over runtime data.
   Verified by writing each violation.
@@ -1170,9 +1179,21 @@ never mounts and never fetches. The header bell is an inline widget.
   - The count moves in `AGENTS.md:24`, `docs/ai/rules/workflow.md` (`:14`, `:43` and the prose
     list), and `docs/setup/26-hygiene-and-ci.md` (`:372`, `:1118`, `:1121`, plus a new `### 30`
     section after `:1030`).
-- [ ] `AX8.8` **Docs** — `apps/web/docs/reference/enforcement-surfaces.md`: surface 4 now has two
+  done: 2026-09-29. Written into the real tree both ways: a `widget={…}` and the bell removed each
+  failed it, and the file was restored. Five fixture specs.
+- [x] `AX8.8` **Docs** — `apps/web/docs/reference/enforcement-surfaces.md`: surface 4 now has two
   forms, `<Can>` and `<Widget>`, and neither is the gate. Also `docs/setup/28-folder-structure.md`
   and `packages/feature/docs/`.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`:
+1. Signed out, `/` rendered the landing page. Alice's `/` answered 307 to `/dashboard`, which
+   rendered two cards, "Go to" and "Members: 2", under the header and its nav.
+2. With `member.read` denied to bob in alice's org, his dashboard rendered one card, and its
+   dehydrated state held no member list. In the browser, a full load and a client-side trip away
+   and back sent no `/api/rpc` request at all; a `fetch` of `/api/health` showed the capture was on.
+3. `check:architecture` 30/30, `check:contrast` green, and every suite passes.
+Bob's deny was cleared afterwards.
 
 **Exit.** On the running app:
 1. A signed-in user who opens `/` lands on `/dashboard`, with the header, the nav and two cards.
@@ -1358,6 +1379,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 8 done: `<Widget>`, `DashboardZone` and `prefetchDashboard`, the `widget` namespace and `WIDGET_COPY`, `/dashboard` with `/` redirecting a session to it, the bell as an inline widget, and `check-architecture` §30. Exit verified in the running app and the browser |
 | 2026-09-29 | @sami | Phase 7 done: `<Zone>` in `ui`, its styles, the kitchen-sink section and docs. Exit verified in all nine theme-and-mode pairs. `AX7.4` fixed, `AX7.5` recorded: tinted badges take the wrong hue |
 | 2026-09-29 | @sami | Phase 6 done: the `/platform/accounts` panel (`AX6.8`) and the recovery path (`AX6.9`). Exit verified in the running app, the API key included. Next is Phase 7 |
 | 2026-09-29 | @sami | `AX6.7` done: `suspended` on the member entity and a "Suspended by the platform" badge. Next is `AX6.8` |
