@@ -160,6 +160,7 @@ export {
   SendMailUseCase,
   SendMessageUseCase,
   SendNotificationDigestUseCase,
+  SessionGateway,
   SessionResolver,
   SetMemberActiveUseCase,
   Shard,

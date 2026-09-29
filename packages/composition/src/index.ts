@@ -50,6 +50,7 @@ export {
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
+  RecordingSessionGateway,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubSessionResolver,

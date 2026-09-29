@@ -28,6 +28,7 @@ import {
   RecordingQueuePublisher,
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
+  RecordingSessionGateway,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubSessionResolver,
@@ -60,6 +61,7 @@ import {
   type RealtimeSubscriber,
   type RelayedActivityStore,
   SERVER_CATALOG,
+  type SessionGateway,
   type SessionResolver,
   type ShardAssignmentRepository,
   type ShardingStrategy,
@@ -104,6 +106,7 @@ export interface TestPorts {
   readonly realtimeSubscriber: RealtimeSubscriber;
   readonly queue: QueuePublisher;
   readonly sessions: SessionResolver;
+  readonly signOuts: SessionGateway;
   readonly shardAssignments: ShardAssignmentRepository;
   readonly shardResolver: ShardResolver;
   readonly tenantMove: TenantMoveGateway;
@@ -175,6 +178,7 @@ export class TestContainer {
         overrides.realtimeSubscriber ?? new InMemoryRealtimeSubscriber(new InMemoryRealtimeHub()),
       queue: overrides.queue ?? new RecordingQueuePublisher(),
       sessions: overrides.sessions ?? new StubSessionResolver(),
+      signOuts: overrides.signOuts ?? new RecordingSessionGateway(),
       shardAssignments: overrides.shardAssignments ?? new InMemoryShardAssignmentRepository(),
       shardResolver: overrides.shardResolver ?? new InMemoryShardResolver(),
       tenantMove: overrides.tenantMove ?? new InMemoryTenantMoveGateway(),
