@@ -83,6 +83,27 @@ pnpm platform:grant alice@example.test
 One membership in the platform organization, under `platform_admin`. Every later admin is invited
 through the existing members screen with the platform organization active.
 
+## A suspended account, and the way back
+
+`users.suspended_at` is the platform's lock on an account in every tenant at once, set from
+`/platform/accounts` with `platform.account.manage`. A suspended platform admin holds nothing, the
+tier included, because every membership read answers no for them.
+
+Two guards stop the tier locking itself out. Neither a suspend nor a platform deny that reaches
+`platform.account.manage` may take it from its last live holder, and nobody may suspend
+themselves. What those miss — two admins suspending each other in the same second — is why
+`platform:grant` refuses a suspended account and prints the way back:
+
+```bash
+pnpm platform:grant alice@example.test
+# alice@example.test is suspended by the platform (since …).
+# Reinstate them at /platform/accounts. With no platform admin left to do that, by hand:
+#   UPDATE users SET suspended_at = NULL WHERE email = 'alice@example.test';
+```
+
+A reinstate by hand writes no audit row. The script does not do it for you, so that the one
+unaudited change is one somebody typed on purpose.
+
 ## Where the axis is resolved, cached and flushed
 
 `PgCapabilityRepository.resolvePlatformFor(userId)` is two queries against the organization marked

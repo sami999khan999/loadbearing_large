@@ -8,4 +8,5 @@ export const platformRoutes = {
   shards: "/platform/shards",
   flags: "/platform/flags",
   entitlements: "/platform/entitlements",
+  accounts: "/platform/accounts",
 } as const satisfies Record<string, RoutePath>;
