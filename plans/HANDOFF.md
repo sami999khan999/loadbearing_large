@@ -1,6 +1,6 @@
 ---
 title: Handoff — where the access and visibility plan stands, and how to pick it up anywhere
-updated: 2026-09-29
+updated: 2026-09-30
 owner: sami
 ---
 
@@ -161,7 +161,7 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
 
 The full text is in the plan.
 
-1. **`AX11.1`** — an ESLint `no-restricted-syntax` ban on `lazy(` and `React.lazy` in
+1. **`AX11.1`** — done 2026-09-30. An ESLint `no-restricted-syntax` ban on `lazy(` and `React.lazy` in
    `packages/feature/src` and `apps/web/src`.
    - Its message names `docs/opinions/visibility.md`.
    - Verify it by writing the violation.

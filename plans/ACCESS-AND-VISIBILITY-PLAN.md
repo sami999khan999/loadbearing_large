@@ -26,7 +26,7 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 3 | `AX3.10`, `AX3.12` — neither blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 7 | `AX7.5` — a colour-rule decision, not blocking |
-| 11 | all |
+| 11 | `AX11.2` — waits on its trigger; `AX11.3` — needs a running stack |
 
 ### Before picking up Phase 11 (2026-09-29)
 
@@ -1360,11 +1360,15 @@ an admin hides the card, it says `hidden-by-admin`. Every suite is green.
 **Goal.** The one rule no type can hold is linted, the demonstration flag is deleted the way every
 flag should be, and the plan is walked end to end.
 
-- [ ] `AX11.1` **No lazy-loading by permission** — ESLint `no-restricted-syntax` against `lazy(` and
+- [x] `AX11.1` **No lazy-loading by permission** — ESLint `no-restricted-syntax` against `lazy(` and
   `React.lazy` in `packages/feature/src` and `apps/web/src`, with a message naming
   `docs/opinions/visibility.md`. Route splitting is the router's, so the ban costs nothing.
   Verified by writing the violation. **Docs:** `tooling/eslint-config/docs/reference/rules.md`, and
   the enforcement table in `docs/opinions/index.md` (§30, §31, this rule).
+  done: 2026-09-30. Three selectors: the `react` import specifier (catches `lazy as x`), a bare
+  `lazy(` call, and `React.lazy`. The probe wrote all three into both trees, and each was flagged.
+  `lazyRouteComponent` passed. Neither tree held a `lazy()` before. `visibility.md`'s
+  "none of these is built yet" line was stale and is rewritten.
 - [ ] `AX11.2` **Retire `widget.dismissal`** — once it has been on for every org, remove:
   - the flag's fragment entry;
   - the `flag` field on `core.hidden-widgets`;
@@ -1373,6 +1377,8 @@ flag should be, and the plan is walked end to end.
   
   §31 still passes with zero flags. This is the lifecycle the design text wants, and doing it once
   proves the path. **Trigger:** the rollout is complete, and in any case before its `expiresOn`.
+  2026-09-30: not due. `expiresOn` is 2027-03-31, and `HANDOFF.md` records the flag off with no
+  targets, so the rollout has not started. Left open rather than forced ahead of its trigger.
 - [ ] `AX11.3` **The hand walk** — every Exit line above, in one session, against
   `pnpm infra:up && pnpm dev`, as one platform admin, one org admin and one member. Record the
   timestamps in this item's `done:` line.
@@ -1435,6 +1441,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | `AX11.1` done: ESLint bans `lazy()` in `feature` and `apps/web`, proven by writing the violation. `AX11.2` checked and left open: its trigger has not arrived |
 | 2026-09-29 | @sami | Phase 10 done: `WidgetInspector` for your own view and another member's, in the member access panel and behind the tray's "Why is something missing?". Exit verified in the browser |
 | 2026-09-29 | @sami | Phase 9 done: `widget_preferences` (`0047`, partitioned per tenant), the keys and `0048`, the preference and default use-cases behind `widget.dismissal`, the tray widget that makes the flag client-gating, the Hide action, the tray and `/settings/widgets`, and `check-architecture` §31 (`AX3.7`). Exit verified in the running app. `AX9.9`–`AX9.10` recorded |
 | 2026-09-29 | @sami | Phase 8 done: `<Widget>`, `DashboardZone` and `prefetchDashboard`, the `widget` namespace and `WIDGET_COPY`, `/dashboard` with `/` redirecting a session to it, the bell as an inline widget, and `check-architecture` §30. Exit verified in the running app and the browser |
