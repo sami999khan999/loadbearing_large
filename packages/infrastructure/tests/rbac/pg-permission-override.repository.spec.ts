@@ -114,7 +114,7 @@ describe("PgPermissionOverrideRepository", () => {
       permission: "analytics.activity.read",
       effect: "grant",
       reason: "trial",
-      expiresAt: new Date(Date.now() - 1_000),
+      expiresAt: new Date(Date.now() - 60_000),
     });
 
     expect(await overrides.findFor(organizationId, userId)).toEqual([]);

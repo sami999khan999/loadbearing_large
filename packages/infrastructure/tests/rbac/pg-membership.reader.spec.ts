@@ -118,6 +118,7 @@ describe("PgMembershipReader", () => {
     expect(await reader().isActive(ada, first)).toBe(true);
     expect(await reader().isActive(ada, elsewhere)).toBe(false);
     expect(await reader().isActive(grace, elsewhere)).toBe(true);
+    expect(await reader().isSuspended(grace)).toBe(false);
   });
 
   // `CR.7`. Pinned to the tenant that deactivated them, every request answered anonymous
@@ -148,6 +149,8 @@ describe("PgMembershipReader", () => {
     await suspend(new Date());
 
     try {
+      expect(await reader().isSuspended(grace)).toBe(true);
+      expect(await reader().isSuspended(ada)).toBe(false);
       expect(await reader().activeOrganizationFor(grace)).toBeNull();
       expect(await reader().organizationsFor(grace)).toEqual([]);
       expect(await reader().isActive(grace, elsewhere)).toBe(false);

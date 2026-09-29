@@ -151,4 +151,15 @@ export class PgMembershipReader extends BaseRepository {
 
     return row?.owned ?? 0;
   }
+
+  // No user row answers not suspended: the session hook runs after Better Auth found one.
+  public async isSuspended(userId: UserId): Promise<boolean> {
+    const [row] = await this.db
+      .select({ suspendedAt: users.suspendedAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    return row?.suspendedAt != null;
+  }
 }
