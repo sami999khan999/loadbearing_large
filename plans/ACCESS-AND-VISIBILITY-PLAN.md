@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.5`
-are done, and next is `AX6.6`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.6`
+are done, and next is `AX6.7`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -33,12 +33,16 @@ Pushed to `origin/dev`. To resume on another device:
 
 1. `git pull`, then `pnpm install`, then `pnpm db:migrate`. It applies `0046_account_suspension`
    on every node. Without it, sign-in fails on the missing `users.suspended_at`.
-2. Pick up at `AX6.6`, the account use-cases and keys. It wires `BetterAuthSessionGateway`
-   (`AX6.4`), which must be built inside the container's `if (config.auth)` block because the
-   worker has no auth. `AX6.7`–`AX6.8` need its procedures, and `AX6.9` comes last.
-3. Seen in the running app already: a suspended user's open session answers `UNAUTHORIZED`, a
+2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
+   tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
+   procedure.
+3. Pick up at `AX6.7`, the tenant's view of a suspend and a platform deny. `AX6.8` is the
+   `/platform/accounts` panel over `container.accounts`, and `AX6.9` comes last.
+4. Seen in the running app already: a suspended user's open session answers `UNAUTHORIZED`, a
    right password answers `403 ACCOUNT_SUSPENDED`, a wrong one stays generic, and a held stream
-   closes within 60 s. Still to see: an API key the user issued is refused.
+   closes within 60 s. Through `AX6.6`'s procedures: a suspend deletes the sessions and their
+   Redis copies and audits in the tier and each tenant, and the tenant's clear of a platform deny
+   answers 409. Still to see: an API key the user issued is refused.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -966,7 +970,7 @@ audited, and visible inside the tenant.
   `auth`, and each link already has a spec: the reader (`AX6.2`), `PrincipalBuilder.refresh`
   answering null for an inactive member, and the stream ending on a null. Against `pnpm dev`,
   bob's held conversation stream closed 55 s after the suspend. `router.md` says so.
-- [ ] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
+- [x] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
   `platform.account.*`, not `platform.principal.*`: `Principal` is the per-request class, and the
   suspend acts on the `users` row. Use-cases in `application/src/platform/`:
   - `find-account`: the user's memberships, whether they are suspended, and their platform denies
@@ -991,6 +995,11 @@ audited, and visible inside the tenant.
   
   Actions `account.suspended` and `account.reinstated`. A platform deny reuses `override.denied`
   with `authority` in its payload.
+  done: 2026-09-29. `PgAccountRepository` reads the account, its memberships and the platform's
+  denies, and counts live holders of the recovery key in one statement. The use-cases live in the
+  container's auth block as `container.accounts`, because the suspend needs Better Auth's
+  sessions. `clear-account-deny` refuses an org's own exception with 409, the mirror of the
+  tenant's clear refusing a platform deny. See `AX6.13`.
 - [ ] `AX6.7` **Visible inside the tenant** — `member.entity.ts` gains `suspended`, and the member
   list shows a "Suspended by the platform" badge. Platform deny rows are locked in the override
   list with "Set by the platform — contact support". Otherwise an admin wastes an afternoon trying
@@ -1018,9 +1027,18 @@ audited, and visible inside the tenant.
   back, which would open a session for a suspended account. The factory spec leaves `enrol`
   unreachable to hold that order.
   done: 2026-09-29
-- [ ] `AX6.12` **A suspended user's session row outlives the suspend until `AX6.6`.** Better
+- [x] `AX6.12` **A suspended user's session row outlives the suspend until `AX6.6`.** Better
   Auth's `get-session` still answers with it, though every procedure answers `UNAUTHORIZED`. The
   suspend use-case's `revokeAll` closes this.
+  done: 2026-09-29. After a suspend the rows and the Redis copy are gone, and `get-session` with
+  `disableCookieCache` answers null. Only the signed cookie cache still answers, for at most
+  60 s, and during that window every procedure already answers `UNAUTHORIZED`.
+- [x] `AX6.13` **`permission_overrides` is catalog, so no account change is placed.** The
+  platform deny was first built to run on the target tenant's node, on the belief that overrides
+  are per tenant. `shard.ts` lists them as catalog, like the rest of RBAC. So the deny and clear
+  run through the catalog unit of work from the tier's request, and the account's denies come
+  back in the same read as its memberships.
+  done: 2026-09-29
 
 **Exit.** On the running app:
 1. Suspend a signed-in member with a conversation open: the page falls back to signed-out on its
@@ -1292,6 +1310,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | `AX6.6` done: `platform.account.*`, five account use-cases, `PgAccountRepository`, the procedures, and `container.accounts`. Walked in the running app. `AX6.12` closed, `AX6.13` recorded. Next is `AX6.7` |
 | 2026-09-29 | @sami | Phase 6 continued: sign-in answers `ACCOUNT_SUSPENDED` (`AX6.3`), `SessionGateway` and its Better Auth adapter (`AX6.4`), the stream closing on a suspend proven live (`AX6.5`). `AX6.10`–`AX6.12` recorded. Next is `AX6.6` |
 | 2026-09-28 | @sami | Phase 6 started: `users.deactivated_at` renamed to `suspended_at` (`0046`, custom migration plus snapshot rename), and `PgMembershipReader` refuses a suspended account in all four readers (`AX6.1`, `AX6.2`). Stopped before `AX6.3`; handoff in "Where Phase 6 stopped" |
 | 2026-09-28 | @sami | Phase 5 done: override expiry, authority and CHECKs (`0044`), grants to existing roles (`0045`), `explainFor` with the fold in `application`, five override use-cases, the drift counts, the access panel and the inspector's sources. Exit verified in the running app. `AX5.10`–`AX5.14` recorded |
