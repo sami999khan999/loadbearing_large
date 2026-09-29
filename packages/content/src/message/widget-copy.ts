@@ -7,6 +7,7 @@ type WidgetMessageKey = NamespaceKeys["widget"];
 // a title here is a compile error, not a card headed by its own raw key.
 export const WIDGET_COPY: Readonly<Record<WidgetKey, WidgetMessageKey>> = {
   "core.module-nav": "widget.core.module-nav.title",
+  "core.hidden-widgets": "widget.core.hidden-widgets.title",
   "member.count": "widget.member.count.title",
   "notification.bell": "widget.notification.bell.title",
 };
