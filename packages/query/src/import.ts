@@ -16,6 +16,10 @@ export type {
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // Types only: this package caches what the contract describes, with no opinion about it.
 export type {
+  AccountDenyClearInput,
+  AccountDenySaveInput,
+  AccountDto,
+  AccountSuspensionInput,
   AdjustedDto,
   AdjustmentClearInput,
   AdjustmentSaveInput,

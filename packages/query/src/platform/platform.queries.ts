@@ -125,6 +125,17 @@ export class PlatformQueries {
     });
   }
 
+  // By the address the operator typed, and disabled until there is one. Five seconds:
+  // this is the screen someone is on while an account is being locked.
+  public static account(client: ApiClient, email: string) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.account(email),
+      queryFn: () => client.platform.findAccount({ email }),
+      enabled: email.trim() !== "",
+      staleTime: 5_000,
+    });
+  }
+
   // Ten seconds, like the status read it sits beside: during an incident this is the
   // switch someone may have just thrown from another tab.
   public static moduleSwitches(client: ApiClient) {

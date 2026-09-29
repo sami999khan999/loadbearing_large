@@ -81,6 +81,9 @@ export class QueryKeys {
     entitlements: () => ["platform", "entitlement"] as const,
     entitlement: (organization: string) => ["platform", "entitlement", organization] as const,
     modules: () => ["platform", "module", "list"] as const,
+    // The prefix every looked-up account shares, so a suspend refreshes whichever is open.
+    accounts: () => ["platform", "account"] as const,
+    account: (email: string) => ["platform", "account", email] as const,
   };
 
   public static readonly rbac = {
