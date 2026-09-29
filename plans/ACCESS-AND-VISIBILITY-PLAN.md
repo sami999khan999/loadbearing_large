@@ -30,6 +30,9 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 
 ### Before picking up Phase 11 (2026-09-29)
 
+**Moving machines? Start with [`HANDOFF.md`](HANDOFF.md)** — setup, test data, how each phase was
+checked, and the traps that cost time.
+
 Pushed to `origin/dev`. To resume on another device:
 
 1. `git pull`, then `pnpm install`, then `pnpm db:migrate`. It applies `0046_account_suspension`
