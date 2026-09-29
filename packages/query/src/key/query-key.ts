@@ -28,6 +28,7 @@ export class QueryKeys {
   public static readonly widget = {
     all: () => ["widget"] as const,
     preferences: () => ["widget", "preferences"] as const,
+    preferencesOf: (userId: string) => ["widget", "preferences", userId] as const,
   };
 
   public static readonly notification = {
