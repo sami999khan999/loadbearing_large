@@ -1,4 +1,5 @@
 import {
+  AccountSuspendedError,
   type AppError,
   ConflictError,
   ForbiddenError,
@@ -32,6 +33,8 @@ const BY_CODE: Readonly<Record<string, () => AppError>> = {
   // page has copy for, and a 403 reads as "please sign in".
   NOT_A_MEMBER: () => new ForbiddenError("organization.switch"),
   INVITATION_NOT_CLAIMABLE: () => new NotFoundError("invitation", "token"),
+  // Ours, thrown by the session hook. Without it the 403 reads as the generic refusal.
+  ACCOUNT_SUSPENDED: () => new AccountSuspendedError(),
 };
 
 // Where a foreign error shape becomes one of ours. Not cosmetic: anything that is not an
