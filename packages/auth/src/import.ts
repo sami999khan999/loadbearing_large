@@ -12,6 +12,7 @@ export {
   Principal,
   type RequestHeaders,
   type ResolvedSession,
+  SessionGateway,
   SessionResolver,
 } from "@loadbearing/application";
 

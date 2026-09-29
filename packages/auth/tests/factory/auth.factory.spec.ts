@@ -40,6 +40,10 @@ class StubMembershipReader extends MembershipReader {
   public override ownedCount(): Promise<number> {
     return unreachable();
   }
+
+  public override isSuspended(): Promise<boolean> {
+    return unreachable();
+  }
 }
 
 class StubMembershipEnroller extends MembershipEnroller {
@@ -272,5 +276,33 @@ describe("AuthFactory — change of email", () => {
     } as never);
 
     expect(sent).toEqual(["old@example.com"]);
+  });
+});
+
+describe("AuthFactory — a suspended account", () => {
+  // The enroller is left unreachable on purpose: in bootstrap mode it hands a user with no
+  // active membership their tenant back, which is how a suspend would open a session.
+  it("refuses the session with ACCOUNT_SUSPENDED before any tenant is resolved", async () => {
+    class SuspendedReader extends StubMembershipReader {
+      public override isSuspended(): Promise<boolean> {
+        return Promise.resolve(true);
+      }
+    }
+
+    const options = AuthFactory.create(
+      BASE,
+      { client: {} } as unknown as Database,
+      cache,
+      new SuspendedReader(),
+      new StubMembershipEnroller(),
+      new StubAuthMailer(),
+      new StubInvitationClaimer(),
+      new StubOrganizationFounder(),
+    ).options;
+
+    const before = options.databaseHooks?.session?.create?.before;
+    await expect(
+      before?.({ userId: "018f8c00-0000-7000-8000-000000000001" } as never, null as never),
+    ).rejects.toMatchObject({ body: { code: "ACCOUNT_SUSPENDED" } });
   });
 });

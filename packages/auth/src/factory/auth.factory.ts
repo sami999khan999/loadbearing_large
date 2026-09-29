@@ -1,4 +1,5 @@
 import {
+  APIError,
   type BetterAuthOptions,
   bearer,
   betterAuth,
@@ -199,6 +200,15 @@ export class AuthFactory {
             // so no membership means a failed sign-in, not an unscoped principal.
             before: async (session, context) => {
               const userId = session.userId as UserId;
+
+              // Thrown, not `false`: the password was right, so saying why costs nothing.
+              // Before `enrol` too, which would otherwise hand the bootstrap tenant back.
+              if (await memberships.isSuspended(userId)) {
+                throw new APIError("FORBIDDEN", {
+                  code: "ACCOUNT_SUSPENDED",
+                  message: "This account has been suspended.",
+                });
+              }
 
               // Not a `user.create.after` hook: Better Auth queues those until the whole
               // sign-up endpoint has finished, which is after this one has refused.

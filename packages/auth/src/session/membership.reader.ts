@@ -27,4 +27,8 @@ export abstract class MembershipReader {
   // How many tenants this person owns. A count rather than `organizationsFor().length`:
   // the cap is checked on a write path, and that read is capped itself.
   public abstract ownedCount(userId: UserId): Promise<number>;
+
+  // The platform's suspend, asked before the tenant is resolved: the readers above already
+  // answer a suspended user as a member of nothing, and sign-in would say only "failed".
+  public abstract isSuspended(userId: UserId): Promise<boolean>;
 }

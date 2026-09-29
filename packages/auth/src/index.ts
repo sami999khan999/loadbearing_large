@@ -7,6 +7,7 @@ export { type AuthConfig, AuthFactory, type AuthInstance } from "./factory/index
 export { AuthMailer, type MailRecipient } from "./mail/index.js";
 export { CapabilityCache, PrincipalBuilder } from "./principal/index.js";
 export {
+  BetterAuthSessionGateway,
   BetterAuthSessionResolver,
   InvitationClaimer,
   InvitationClaimingEnroller,

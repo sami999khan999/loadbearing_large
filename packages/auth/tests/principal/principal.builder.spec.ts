@@ -48,6 +48,10 @@ class StubMemberships extends MembershipReader {
   public override ownedCount(): Promise<number> {
     return Promise.resolve(0);
   }
+
+  public override isSuspended(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
 }
 
 async function build(options: {
