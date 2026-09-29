@@ -369,7 +369,7 @@ jobs:
 
 ---
 
-## Step 26.4 — The thirty architectural assertions
+## Step 26.4 — The thirty-one architectural assertions
 
 Types cannot express "this package must not import that one across a bundle boundary". Twenty-nine greps can.
 
@@ -1075,6 +1075,24 @@ braces is what makes the grep sound.
 Comments are stripped first, so a key named in a comment places nothing. The fragments are read
 through the widget barrel's spreads, as §24 and §28 read theirs.
 
+### 31 — Every flag is live
+
+```js
+// fail if a flag in packages/permissions/src/flag is past its `expiresOn` (UTC), or if its
+// key, quoted, appears in no src/ file outside that folder
+```
+
+A flag is a rollout, and a rollout ends: the code keeps one branch and the flag is deleted. One
+past its date has become a permanent fork that nobody is reviewing, and one no code reads switches
+nothing at all. Both compile, lint and pass every test, which is why this is a grep.
+
+**Zero flags passes; it does not skip.** No rollout in flight is the state the rule exists to reach,
+and reporting it as unverified would make the goal look like a gap.
+
+It landed with the first flag's first reader. `widget.dismissal` was declared in Phase 2 of the
+access and visibility plan and read by nothing until the widget preference use-cases, so a check
+landed with the declaration would have failed its own phase.
+
 ## Step 26.4b — `check:contrast`, the gate that is not a grep
 
 ```bash
@@ -1136,10 +1154,10 @@ found one more — `topLevelAwait` counted the word inside a quoted string, so `
 in a bundled barrel would have failed the build for nothing.
 
 `check-architecture.spec.mjs` runs the real script against fixture trees, one per assertion, each
-tree violating exactly one thing. It needs no `ROOT` parameter threaded through thirty
+tree violating exactly one thing. It needs no `ROOT` parameter threaded through thirty-one
 assertions: the script derives `ROOT` from its own location, so a fixture is a temporary directory
-with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-seven of the
-thirty are covered both ways — the tree that violates it fails, and the tree that does not
+with a copy of the script under `tooling/scripts/` and a few files around it. Twenty-eight of the
+thirty-one are covered both ways — the tree that violates it fails, and the tree that does not
 passes. Assertion 8 is the exception, because it greps a built `apps/web/.output` and building one
 in a fixture is not a unit test.
 
