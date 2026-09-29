@@ -48,6 +48,7 @@ export {
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
+export { DashboardZone, type DashboardZoneProps, prefetchDashboard } from "./dashboard/index.js";
 export { DocumentSearch, IndexDocumentForm } from "./document/index.js";
 export { type ErrorMessage, useErrorMessage } from "./error/index.js";
 export {
@@ -142,3 +143,4 @@ export {
   type RoleMatrixProps,
   useRoleFailure,
 } from "./rbac/index.js";
+export { useWidgetVisibility, Widget, type WidgetProps, widgetFacts } from "./widget/index.js";

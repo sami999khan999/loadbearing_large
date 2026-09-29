@@ -15,9 +15,9 @@ export type {
   Translator,
 } from "@loadbearing/content";
 // ── @loadbearing/content ─────────────────────────────────────────────────────
-// `ErrorCopy` is the only value taken from here: it is where a failure gets words, and
-// taking the map instead would put the fallback rule in every call site.
-export { ErrorCopy } from "@loadbearing/content";
+// `ErrorCopy` rather than its map: that map has a fallback rule. The widget maps are taken
+// whole, because they are total over the registry and have none.
+export { ErrorCopy, WIDGET_COPY, ZONE_COPY } from "@loadbearing/content";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The shapes the server returns, plus the one value: `Password` carries the bounds the
 // server enforces, so a form cannot advertise a different floor.
@@ -66,11 +66,17 @@ export {
   type CapabilitySetDto,
   CORE_MODULE,
   type FlagKey,
+  type InlineWidgetKey,
   type ModuleKey,
   ModuleRegistry,
   type PermissionKey,
   PermissionRegistry,
   type PermissionScope,
+  type WidgetFacts,
+  type WidgetKey,
+  WidgetRegistry,
+  type WidgetVisibility,
+  type ZoneWidgetKey,
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
@@ -94,6 +100,7 @@ export {
   OverrideQueries,
   PlatformMutations,
   PlatformQueries,
+  type QueryRuntime,
   RoleMutations,
   RoleQueries,
   SessionMutations,
@@ -121,6 +128,7 @@ export {
   StatusBadge,
   type TableColumn,
   Textarea,
+  Zone,
 } from "@loadbearing/ui";
 
 // ── react ────────────────────────────────────────────────────────────────────

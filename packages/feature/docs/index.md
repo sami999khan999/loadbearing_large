@@ -133,7 +133,7 @@ gets `CapabilitySet.empty()`, which denies everything. There is no loading state
 | 1 | `Authorizer.assert()` in the use-case — **the real gate** | [`application`](../../application/docs/index.md) |
 | 2 | `principalMiddleware` in the oRPC handler | `apps/web` |
 | 3 | the route guard — stops the page rendering | `apps/web` |
-| 4 | `<Can>` and `SessionGuard` — hide affordances that would fail | here and `ui` |
+| 4 | `<Can>`, `<Widget>` and `SessionGuard` — hide affordances that would fail | here and `ui` |
 
 Removing a permission from a role must remove the nav item **and** return `FORBIDDEN`. Both, every
 time. UI-only is security theatre; API-only is a screen full of buttons that error.
@@ -142,6 +142,19 @@ time. UI-only is security theatre; API-only is a screen full of buttons that err
 passes `() => navigate({ to: "/sign-in" })`, the desktop shell passes its own. The component knows
 *that* it should redirect, never *how* — and a spec asserts the callback fires and the children do
 not render.
+
+## A card on the dashboard is the registry's, never the page's
+
+`DashboardZone` asks `WidgetRegistry` which widgets `dashboard.main` holds and which of them this
+session may see, then renders only those. A hidden card is **not mounted**, so its query is never
+issued — hiding is not `display: none`. `prefetchDashboard` runs the same visibility for the route's
+loader, so nothing is fetched ahead of a render that would not use it.
+
+`DASHBOARD_WIDGETS`, the map from key to component, is typed total over the zone and is **not
+exported**: nothing outside can render a card without asking the registry first. Its titles come
+from `WIDGET_COPY` in `content`, total over every widget, so a widget without a title does not
+compile. `<Widget>` is the inline form, for a unit outside any zone; its permission is the
+registry's, which is why it takes no permission prop.
 
 ## Two things worth copying from `SignInForm`
 
