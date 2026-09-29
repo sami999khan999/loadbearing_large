@@ -22,6 +22,9 @@ export { ErrorCopy } from "@loadbearing/content";
 // The shapes the server returns, plus the one value: `Password` carries the bounds the
 // server enforces, so a form cannot advertise a different floor.
 export {
+  type AccountDenyDto,
+  type AccountDto,
+  type AccountMembershipDto,
   type ActivityPointDto,
   type AdjustmentDto,
   type ApiKeyDto,

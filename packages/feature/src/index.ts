@@ -98,6 +98,7 @@ export {
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
 export {
+  AccountPanel,
   DeleteTenantPanel,
   FlagList,
   ModuleSwitchPanel,
