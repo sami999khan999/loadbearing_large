@@ -1798,6 +1798,50 @@ assert("every inline widget is placed by a literal key", (failures) => {
   }
 });
 
+// ── 31 — every flag is live ────────────────────────────────────────────────
+//
+// A flag is a rollout, and a rollout ends: the code keeps one branch and the flag is
+// deleted. One past its `expiresOn` has become a permanent fork nobody is reviewing, and
+// one that no code reads switches nothing — both are debt the build should say out loud.
+
+assert("every flag is live", (failures) => {
+  const flagDir = join(ROOT, "packages/permissions/src/flag");
+  const declared = spreadFragments(flagDir);
+  if (!declared) return "packages/permissions has no flag barrel yet";
+
+  const flags = new Map();
+  for (const fragment of declared.fragments) {
+    if (!existsSync(fragment)) {
+      failures.push(`${rel(declared.barrel)}: spreads a fragment that is not on disk`);
+      continue;
+    }
+    const source = withoutComments(readFileSync(fragment, "utf8"));
+    for (const [, key, body] of source.matchAll(/"([a-z0-9._-]+)":\s*\{([^}]*)\}/g)) {
+      flags.set(key, /expiresOn:\s*"(\d{4}-\d{2}-\d{2})"/.exec(body ?? "")?.[1] ?? "");
+    }
+  }
+
+  // Zero flags passes rather than skips: no rollout in flight is the state to reach.
+  if (flags.size === 0) return;
+
+  // UTC, as the dates are written: a flag expiring today is live until tomorrow everywhere.
+  const today = new Date().toISOString().slice(0, 10);
+  const sources = sourceDirs()
+    .flatMap((dir) => walk(join(dir, "src"), [".ts", ".tsx"]))
+    .filter((file) => !file.startsWith(flagDir))
+    .map((file) => withoutComments(readFileSync(file, "utf8")));
+
+  for (const [key, expiresOn] of [...flags].sort()) {
+    if (!expiresOn) failures.push(`${key}: declares no \`expiresOn\``);
+    else if (expiresOn < today)
+      failures.push(`${key}: expired on ${expiresOn} — ship one branch and delete it`);
+
+    if (!sources.some((source) => source.includes(`"${key}"`))) {
+      failures.push(`${key}: no code outside the flag fragments reads it`);
+    }
+  }
+});
+
 let failed = 0;
 let skippedCount = 0;
 
