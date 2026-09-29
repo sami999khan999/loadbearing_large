@@ -233,4 +233,28 @@ export const platform = {
   "platform.modules.disable": "বন্ধ করুন",
   "platform.modules.enable": "আবার চালু করুন",
   "platform.modules.reason": "কারণ",
+
+  // ── accounts (`AX6.8`) ──
+  "platform.accounts.title": "অ্যাকাউন্ট",
+  "platform.accounts.description":
+    "ঠিকানা দিয়ে একটি অ্যাকাউন্ট খুঁজুন, এটি যে সব প্রতিষ্ঠানের সদস্য তা দেখুন, এবং অ্যাকাউন্টটি ঝুঁকিতে পড়লে একবারে সব জায়গায় আটকে দিন।",
+  "platform.account.lookup": "ইমেইল ঠিকানা",
+  "platform.account.active": "সক্রিয়",
+  "platform.account.suspendedOn": "{date} থেকে স্থগিত",
+  "platform.account.memberships": "প্রতিষ্ঠান",
+  "platform.account.memberships.none": "এই অ্যাকাউন্টটি কোনো প্রতিষ্ঠানের সদস্য নয়।",
+  "platform.account.column.organization": "প্রতিষ্ঠান",
+  "platform.account.column.role": "ভূমিকা",
+  "platform.account.column.permission": "অনুমতি",
+  "platform.account.column.reason": "কারণ",
+  "platform.account.deactivated": "প্রতিষ্ঠান দ্বারা নিষ্ক্রিয়",
+  "platform.account.reason": "কারণ (এটি যে সব প্রতিষ্ঠানের সদস্য, তারা সবাই পড়তে পারবে)",
+  "platform.account.suspend": "সব জায়গায় স্থগিত করুন",
+  "platform.account.reinstate": "পুনর্বহাল করুন",
+  "platform.account.denies": "প্ল্যাটফর্ম দ্বারা প্রত্যাখ্যাত",
+  "platform.account.denies.none": "প্ল্যাটফর্ম কিছুই প্রত্যাখ্যান করেনি।",
+  "platform.account.clear": "মুছুন",
+  "platform.account.deny": "প্রত্যাখ্যান করুন",
+  "platform.account.deny.organization": "প্রতিষ্ঠানে",
+  "platform.account.denied": "প্রত্যাখ্যাত: {permissions}",
 } as const;
