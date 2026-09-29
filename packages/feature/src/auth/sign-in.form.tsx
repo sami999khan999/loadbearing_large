@@ -1,3 +1,4 @@
+import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   type AuthClient,
@@ -27,6 +28,10 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   const signIn = SessionMutations.useSignIn(auth);
+  const describe = useErrorMessage();
+  // The one refusal that names its reason: the password was right, so it discloses nothing.
+  const failure = describe(signIn.error);
+  const suspended = failure?.envelope.code === "ACCOUNT_SUSPENDED";
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -79,7 +84,7 @@ export function SignInForm({ auth, onSuccess, onNeedsTwoFactor }: SignInFormProp
       }
       {signIn.isError && !needsTwoFactor ? (
         <p role="alert" className="ui-field__error">
-          {t("auth.signInFailed")}
+          {suspended ? failure.message : t("auth.signInFailed")}
         </p>
       ) : null}
 
