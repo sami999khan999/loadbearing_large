@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–8 done 2026-09-29;
-next is Phase 9** (it needs Phase 8). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–9 done 2026-09-29;
+next is Phase 10** (it needs Phase 9). Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -23,12 +23,12 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 |---|---|
 | 1 | `AX1.8` — deferred, not blocking |
 | 2 | `AX2.11` — a docs listing, not blocking |
-| 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
+| 3 | `AX3.10`, `AX3.12` — neither blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 7 | `AX7.5` — a colour-rule decision, not blocking |
-| 9–11 | all |
+| 10–11 | all |
 
-### Before picking up Phase 9 (2026-09-29)
+### Before picking up Phase 10 (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
@@ -37,8 +37,9 @@ Pushed to `origin/dev`. To resume on another device:
 2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
    tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
    procedure.
-3. Pick up at Phase 9, widget preferences behind `widget.dismissal`. Nothing blocking is open
-   in Phases 6–8. `widgetFacts` passes empty preference sets today; Phase 9 fills them.
+3. Run `pnpm db:migrate` again for `0047` and `0048`: the new table, a child partition per
+   tenant, and `widget.default.manage` for existing admins and owners.
+4. Pick up at Phase 10, the widget inspector. Nothing blocking is open in Phases 6–9.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -55,7 +56,7 @@ Useful to know:
 ```bash
 pnpm build:packages && pnpm --filter @loadbearing/web build && pnpm --filter @loadbearing/worker build
 pnpm --filter @loadbearing/realtime build
-pnpm check:architecture      # 30/30 today; 31/31 after Phase 9; no "○ skipped"
+pnpm check:architecture      # 31/31; no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm check:contrast          # after Phase 7
 pnpm infra:up && pnpm db:migrate && pnpm db:seed && pnpm dev
@@ -532,7 +533,7 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   `QueryKeys.platform.flags()`, and copy in `content/src/message/{en,bn}/platform.ts`.
   Spec: `feature/tests/platform/flag.list.spec.tsx`.
   done: 2026-09-28
-- [ ] `AX3.7` **§31 — every flag is live** — **Depends on** `AX9.4`, and is built with Phase 9
+- [x] `AX3.7` **§31 — every flag is live** — **Depends on** `AX9.4`, and is built with Phase 9
   (`RV.11`). `widget.dismissal` is declared in `AX2.2` and has no reader in `src/` until `AX9.4`,
   so a check landed here would fail its own phase. `check-architecture.mjs` reads
   `flag/index.ts` with `spreadFragments`. It fails when a flag's `expiresOn` is before today
@@ -541,6 +542,8 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   - The spec gets fixtures that fail and pass, and the count at `:142` becomes 31.
   - The count moves in the places `AX8.7` moved it to 30, plus a new `### 31` section.
   - Verified by setting an expiry in the past and watching it fail.
+  done: 2026-09-29. Landed with the first flag's reader, as planned. Verified by setting `widget.dismissal`'s
+  expiry to 2026-01-01 and watching it fail, then restoring it. Four fixture specs.
 
 **Recorded while executing Phase 3.**
 
@@ -1209,7 +1212,7 @@ Bob's deny was cleared afterwards.
 **Goal.** A user hides a dismissible card and brings it back. An org admin hides one for everyone,
 and a user cannot bring that back. The whole capability rolls out behind `widget.dismissal`.
 
-- [ ] `AX9.1` **Table** — `pg/schema/widget.schema.ts`, `widget_preferences`:
+- [x] `AX9.1` **Table** — `pg/schema/widget.schema.ts`, `widget_preferences`:
   - Columns: `id`, `organization_id`, `user_id` (null means the org default), `widget` and
     `created_at`, with primary key `(id, organization_id)`.
   - Two partial unique indexes, split on `user_id IS NULL`, because a nullable column in one unique
@@ -1221,9 +1224,12 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   Migration `0047_widget_preferences.sql` through `db:generate`, which writes the partition DDL.
   Existing tenants' child partitions come from `migrate.ts`; tenant move, export and drop all
   derive from the allowlist. The `tenant-partition` spec counts are updated.
-- [ ] `AX9.2` **Adapter** — `WidgetPreferenceRepository` port, `pg-widget-preference.repository.ts`
+  done: 2026-09-29. `0047` through `drizzle-kit generate` and `partition-ddl.ts`; `db:migrate` created one child
+  per tenant on both nodes. The spec counts derive from the allowlist, so only prose said seven.
+- [x] `AX9.2` **Adapter** — `WidgetPreferenceRepository` port, `pg-widget-preference.repository.ts`
   (routed) with its spec, and the fake.
-- [ ] `AX9.3` **Keys** — `core.widget.customize` in the **`core`** module, and
+  done: 2026-09-29
+- [x] `AX9.3` **Keys** — `core.widget.customize` in the **`core`** module, and
   `widget.default.manage` in a new `widget` module (`RV.12`). Core-ness is
   `PermissionMeta.module === "core"` (`capability-set.ts:206`), so a key in the `widget` module
   would be held by nobody until a role granted it.
@@ -1231,7 +1237,9 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   - A nav item in `nav.data.ts`, with `nav.widgets` copy.
   - `SystemRoleSeed`: `admin` gets `widget.default.manage`.
   - Migration `0048_widget_grants.sql`.
-- [ ] `AX9.4` **Rules and use-cases** — `application/src/widget/widget.rules.ts`
+  done: 2026-09-29. `0048` picks the roles by what they hold (`rbac.role.manage`), as `0045` did: every admin
+  and owner on this machine received it.
+- [x] `AX9.4` **Rules and use-cases** — `application/src/widget/widget.rules.ts`
   (`assertDismissible`: a required widget is refused, and a user cannot restore an admin-hidden
   one).
   - `get-widget-preferences`: your own under `core.widget.customize`; another member's under
@@ -1240,7 +1248,9 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
     Not audited — it is cosmetic.
   - `update-widget-default`: the flag, then `widget.default.manage`. Audited as
     `widget.default.hidden` / `widget.default.restored`.
-- [ ] `AX9.5` **Transport and client data** — the contracts subject `widget/`:
+  done: 2026-09-29. `get-widget-preferences` is not behind the flag: it only reads the caller's own rows, and the
+  zone ignores them while the flag is off.
+- [x] `AX9.5` **Transport and client data** — the contracts subject `widget/`:
   - `widget.preferences` — GET `/widgets/preferences`;
   - `widget.preferencesOf` — GET `/widgets/preferences/{userId}`;
   - `widget.updatePreference` — PUT `/widgets/preferences`;
@@ -1249,17 +1259,21 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   Plus `catalog/widget.{permissions,actions}.ts`, the api-client accessor,
   `server/orpc/widget.router.ts`, composition, `query/src/widget/widget.{queries,mutations}.ts`
   and `QueryKeys.widget`.
-- [ ] `AX9.6` **The flag becomes client-gating** — declare `core.hidden-widgets` (zone
+  done: 2026-09-29. The api-client accessor is one getter; `ApiClient` names each subject.
+- [x] `AX9.6` **The flag becomes client-gating** — declare `core.hidden-widgets` (zone
   `dashboard.main`, flag `widget.dismissal`, required, order 90): the tray of hidden cards. From
   here `widget.dismissal` is in the session on-set for orgs that have it.
-- [ ] `AX9.7` **Screens** —
+  done: 2026-09-29. Its permission is `core.widget.customize`, not `null`, so the tray follows the key that
+  lets someone hide a card at all.
+- [x] `AX9.7` **Screens** —
   - `DashboardZone` shows a Hide action on a dismissible card, when the flag is on and the user
     holds `core.widget.customize`, and applies preferences only while the flag is on.
   - `widget/hidden-widget.list.tsx` is the tray: restore buttons, with admin-hidden rows locked.
   - `widget/widget-default.form.tsx` sits on the new route `settings/widgets.tsx`, and states that
     **hiding a card is not removing access**.
   - The dashboard loader ensures preferences, when the flag is on, before it prefetches.
-- [ ] `AX9.8` **Specs** —
+  done: 2026-09-29. The zone holds every card until preferences arrive: see `AX9.9`.
+- [x] `AX9.8` **Specs** —
   - Application: flag off gives `NOT_FOUND` with no flag key; a required widget is refused; a user
     cannot restore an admin-hidden card.
   - Infrastructure: the repository.
@@ -1267,6 +1281,31 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   
   **Docs:** `infrastructure/docs/reference/partitions.md`, the partitioned-table count in
   `tenant-partition.seed.ts`'s comment, and `packages/application/docs/`.
+  done: 2026-09-29
+
+**Recorded while executing Phase 9.**
+
+- [x] `AX9.9` **A zone drew its cards before it knew which were hidden.** With the flag on and the
+  preferences still loading, the first render had nothing hidden, so a card the person had hidden
+  mounted, issued its query, then vanished. The loader ensures preferences first, so the running
+  app never showed it, but the component must not depend on that. `useWidgetPreferences` now
+  answers `ready`, and the zone renders no card until it is true. A feature spec caught it.
+  done: 2026-09-29
+- [x] `AX9.10` **Four `permissions` specs pinned the state before this phase.** The flag was
+  server-only, the module list had no `widget`, and the zone held two widgets. Each was updated to
+  the new state, not loosened: the flag spec now asserts `clientGating()` is exactly
+  `["widget.dismissal"]`.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`, `widget.dismissal` on for Walk Co alone:
+1. Bob hid the member card: after a reload his dashboard showed "Go to" and "Hidden cards", and the
+   tray offered "Show Members again". He restored it, and it came back.
+2. Alice hid it for everyone: bob's tray showed it locked, his restore answered `CONFLICT`, and the
+   tier logged `widget.default.hidden`.
+3. In Bob Co, without the flag, the dashboard had no Hide action and the update answered `NOT_FOUND`.
+4. Walk Co's page named `widget.dismissal` in its session payload; Bob Co's did not.
+5. `check:architecture` 31/31, `check:contrast` green, and every suite passes.
+Everything was put back: the rows deleted, the default restored, the flag's target removed.
 
 **Exit.** On the running app, with `widget.dismissal` on for one org:
 1. Hide the member card: it is gone after a reload and listed in the tray. Restore it.
@@ -1379,6 +1418,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 9 done: `widget_preferences` (`0047`, partitioned per tenant), the keys and `0048`, the preference and default use-cases behind `widget.dismissal`, the tray widget that makes the flag client-gating, the Hide action, the tray and `/settings/widgets`, and `check-architecture` §31 (`AX3.7`). Exit verified in the running app. `AX9.9`–`AX9.10` recorded |
 | 2026-09-29 | @sami | Phase 8 done: `<Widget>`, `DashboardZone` and `prefetchDashboard`, the `widget` namespace and `WIDGET_COPY`, `/dashboard` with `/` redirecting a session to it, the bell as an inline widget, and `check-architecture` §30. Exit verified in the running app and the browser |
 | 2026-09-29 | @sami | Phase 7 done: `<Zone>` in `ui`, its styles, the kitchen-sink section and docs. Exit verified in all nine theme-and-mode pairs. `AX7.4` fixed, `AX7.5` recorded: tinted badges take the wrong hue |
 | 2026-09-29 | @sami | Phase 6 done: the `/platform/accounts` panel (`AX6.8`) and the recovery path (`AX6.9`). Exit verified in the running app, the API key included. Next is Phase 7 |
