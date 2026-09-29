@@ -25,6 +25,11 @@ export class QueryKeys {
     activity: (days: number) => ["analytics", "activity", days] as const,
   };
 
+  public static readonly widget = {
+    all: () => ["widget"] as const,
+    preferences: () => ["widget", "preferences"] as const,
+  };
+
   public static readonly notification = {
     all: () => ["notification"] as const,
     // The cursor is *not* in the key. It lives in the page data, and a key that carried

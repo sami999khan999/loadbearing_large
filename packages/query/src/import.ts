@@ -91,6 +91,7 @@ export type {
   TypingInput,
   UpdateNotificationPreferenceInput,
   UpdateRoleInput,
+  WidgetPreferenceUpdateInput,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────

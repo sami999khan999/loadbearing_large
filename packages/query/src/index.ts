@@ -42,3 +42,4 @@ export {
   useAppQuery,
 } from "./runtime/index.js";
 export { SessionMutations } from "./session/index.js";
+export { WidgetMutations, WidgetQueries } from "./widget/index.js";
