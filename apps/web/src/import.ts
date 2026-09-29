@@ -44,6 +44,7 @@ export {
   CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
+  DashboardZone,
   DeleteTenantPanel,
   DocumentSearch,
   EffectivePermissionsInspector,
@@ -55,7 +56,6 @@ export {
   InviteMemberForm,
   LinkedAccountList,
   MemberAccessPanel,
-  MemberCount,
   MemberList,
   MessageComposer,
   MessageList,
@@ -73,6 +73,7 @@ export {
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  prefetchDashboard,
   ReplicaSwitchPanel,
   ResetPasswordForm,
   RestorePartitionPanel,
@@ -98,6 +99,8 @@ export {
   useMessages,
   useSession,
   VerifyEmailNotice,
+  Widget,
+  widgetFacts,
 } from "@loadbearing/feature";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
@@ -110,6 +113,7 @@ export {
   FlagRegistry,
   type PermissionKey,
   ROUTES,
+  WidgetRegistry,
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────

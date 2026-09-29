@@ -2,7 +2,6 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouter } from "@tanstack
 import { Endpoint } from "~/endpoint.js";
 import {
   AuthClient,
-  Can,
   CapabilitySet,
   type ClientNamespace,
   ModuleNav,
@@ -17,6 +16,9 @@ import {
   useCapabilities,
   useMemo,
   useMessages,
+  Widget,
+  WidgetRegistry,
+  widgetFacts,
 } from "~/import.js";
 import { Pending } from "~/route/-boundary.js";
 import { RouteGuard } from "~/route/-guard.js";
@@ -36,11 +38,16 @@ export const Route = createFileRoute("/(app)/_authenticated")({
   // The menu is content, so it is loaded like content. Both in parallel: neither
   // depends on the other and the header needs both before it renders.
   loader: async ({ context }) => {
-    // Gated on the same key `<Can>` checks below, so a member without the inbox issues
-    // no count query at all rather than a request the procedure refuses.
-    const counted = CapabilitySet.from(context.capabilities).can("notification.inbox.read")
-      ? context.queryClient.ensureQueryData(NotificationQueries.unreadCount(context.api))
-      : Promise.resolve(null);
+    // The registry's answer for the same widget `<Widget>` renders below, so a member who
+    // cannot see the bell issues no count query rather than one the procedure refuses.
+    const bell = WidgetRegistry.instance.visibilityOf(
+      "notification.bell",
+      widgetFacts(CapabilitySet.from(context.capabilities), context.flags),
+    );
+    const counted =
+      bell === "visible"
+        ? context.queryClient.ensureQueryData(NotificationQueries.unreadCount(context.api))
+        : Promise.resolve(null);
 
     // The logo goes through `ContentSource.media()` rather than importing the file:
     // content records hold `"brand.logo"`, never a path, so a CDN is one adapter.
@@ -103,11 +110,11 @@ function AuthenticatedLayout() {
           onCreate={() => void navigate({ to: "/organization/new" })}
         />
         {
-          // Beside the switcher rather than in `ModuleNav`: the bell is a count, not a
-          // destination in a list, and it is on every page in this subtree.
-          <Can permission="notification.inbox.read" capabilities={capabilities}>
+          // An inline widget, not a `<Can>`: the registry names its permission, and the
+          // literal key is what `check-architecture` §30 finds to prove it is placed.
+          <Widget widget="notification.bell">
             <NotificationBell href={ROUTES.notification.inbox} />
-          </Can>
+          </Widget>
         }
         {
           // Ungated on purpose: your own account and security pages need no capability,
