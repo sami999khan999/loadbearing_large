@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 done 2026-09-29; next is
-Phase 7** (it needs only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6 and 7 done 2026-09-29;
+next is Phase 8** (it needs Phases 3 and 7). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -25,9 +25,10 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 2 | `AX2.11` — a docs listing, not blocking |
 | 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
-| 7–11 | all |
+| 7 | `AX7.5` — a colour-rule decision, not blocking |
+| 8–11 | all |
 
-### Before picking up Phase 7 (2026-09-29)
+### Before picking up Phase 8 (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
@@ -36,7 +37,8 @@ Pushed to `origin/dev`. To resume on another device:
 2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
    tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
    procedure.
-3. Pick up at Phase 7, `<Zone>` in `ui`. Nothing in Phase 6 is open.
+3. Pick up at Phase 8, `<Widget>`, the dashboard zone and `/dashboard`. Nothing blocking is
+   open in Phases 6 or 7.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -1073,18 +1075,46 @@ by hand.
 
 **Goal.** A layout primitive that knows nothing: no registry, no session, no domain noun.
 
-- [ ] `AX7.1` **The component** — `packages/ui/src/zone/{index.ts,zone.tsx}`:
+- [x] `AX7.1` **The component** — `packages/ui/src/zone/{index.ts,zone.tsx}`:
   - `Zone({ label, items, empty })`, with `ZoneItem { key, title, content, action? }`.
   - Markup: `<section className="ui-zone" aria-label>`, then `ui-zone__item`, `__header`,
     `__title` and `__action`.
   - **`items`, not children** — that is what makes "`<Can>` as a direct child of a zone"
     unwritable, with no lint rule.
   - An empty list renders `empty`, or nothing.
-- [ ] `AX7.2` **Styles** — `src/theme/class/zone.css`: an auto-fill grid on the spacing tokens, with
+  done: 2026-09-29. `empty` renders inside the same labelled region, so it keeps its name. Each
+  unit is an `<article>` whose title is an `<h2>`: the zone has no visible heading of its own.
+- [x] `AX7.2` **Styles** — `src/theme/class/zone.css`: an auto-fill grid on the spacing tokens, with
   colour only through the twelve `var()` names. One `@import` goes in `theme/class.css`.
-- [ ] `AX7.3` **Proof** — a Zone section in the kitchen sink. Spec
+  done: 2026-09-29. `minmax(min(100%, 18rem), 1fr)`, so one column on a phone never overflows.
+  The item is a block rather than a flex column: see `AX7.4`.
+- [x] `AX7.3` **Proof** — a Zone section in the kitchen sink. Spec
   `packages/ui/tests/zone/zone.spec.tsx`: order, label, empty state, the action slot.
   **Docs:** `packages/ui/docs/index.md`.
+  done: 2026-09-29. Six specs, a kitchen-sink section with an action and an empty zone, and a
+  docs section on why `items` is not `children`.
+
+**Recorded while executing Phase 7.**
+
+- [x] `AX7.4` **A flex column stretched an inline badge across the card.** The first cut made
+  `ui-zone__item` a flex column, whose default `align-items: stretch` widened a `StatusBadge` to
+  the whole unit. A layout primitive must not reshape what it is handed, so the item is a block
+  and only the header is flex. Seen in the kitchen sink; the badge went from the card's width to
+  62 px.
+  done: 2026-09-29
+- [ ] `AX7.5` **Every tinted `StatusBadge` shows the wrong hue — not this plan's, and not
+  blocking.** `status-badge.css` mixes `color-mix(in oklch, var(--success) 14%, var(--surface))`.
+  In oklch the hue is interpolated too, so the tint's hue lands near the surface's. The light
+  themes write `--surface` as `oklch(1 0 0)`, hue 0 rather than `none`, so every light theme's
+  success tint is hue 21.7, red. Each dark theme's lands on its own surface hue: slate 245, ocean
+  202, plum 306, midnight 267, and forest 155 only because forest's surface is green. Measured in
+  the kitchen sink on 2026-09-29. `check:contrast` cannot see it: the text still reads. Mixing
+  `in oklab` avoids the hue path. `color.md` prescribes `in oklch` for derived states, so the fix
+  is a colour-rule decision, recorded here for `packages/ui/docs/reference/palette.md`.
+
+**Exit verified 2026-09-29.** `check:contrast` green. The kitchen sink rendered both zones in all
+nine theme-and-mode pairs, side by side in one capture. Gate 22's domain-noun grep finds nothing.
+Every suite passes.
 
 **Exit.** `pnpm check:contrast` green. The kitchen sink shows the zone in every theme and mode.
 Documented setup gate 22's domain-noun grep still finds nothing. Every suite is green.
@@ -1328,6 +1358,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 7 done: `<Zone>` in `ui`, its styles, the kitchen-sink section and docs. Exit verified in all nine theme-and-mode pairs. `AX7.4` fixed, `AX7.5` recorded: tinted badges take the wrong hue |
 | 2026-09-29 | @sami | Phase 6 done: the `/platform/accounts` panel (`AX6.8`) and the recovery path (`AX6.9`). Exit verified in the running app, the API key included. Next is Phase 7 |
 | 2026-09-29 | @sami | `AX6.7` done: `suspended` on the member entity and a "Suspended by the platform" badge. Next is `AX6.8` |
 | 2026-09-29 | @sami | `AX6.6` done: `platform.account.*`, five account use-cases, `PgAccountRepository`, the procedures, and `container.accounts`. Walked in the running app. `AX6.12` closed, `AX6.13` recorded. Next is `AX6.7` |
