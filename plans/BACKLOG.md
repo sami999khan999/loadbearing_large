@@ -32,8 +32,8 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
-| 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 9 | — |
-| 14 | Code review of 2026-09-28, and the plan's review before it starts | 8 | 8 |
+| 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
+| 14 | Code review of 2026-09-28, and the plan's review before it starts | 6 | 10 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -198,10 +198,6 @@ on 2026-09-30.
   the cascade — but §18 reads only `index()` and `uniqueIndex()` and would fail that table.
   Found with `feature_flag_organizations`, which went back to a plain unique index before `0042`
   shipped. **Fix:** teach §18 to read `primaryKey({ columns })`, with a fixture each way. — `archive/ACCESS-AND-VISIBILITY-PLAN.md:570`
-- [ ] `AX11.4` **The kitchen sink's appearance picker writes a stale theme.** Its buttons read the
-  load-time `appearanceSnapshot`, so Ocean then Dark renders Slate/dark. A dev route and the only
-  theme picker, so nothing that ships is affected. **Fix:** read `appearance.current` at click
-  time, as `LocaleSwitcher` does. — `archive/ACCESS-AND-VISIBILITY-PLAN.md:1414`
 
 ### Not blocking
 
@@ -277,13 +273,6 @@ are as of `2ee420a`. Each was checked against the code, and the scenario says wh
   `notification.list.tsx:93`. The rest are in specs. **Fix:** cut each one to two lines, with the
   argument in `docs/reference/`. Then make §14 fail a separator whose line above does not end a
   sentence.
-- [ ] `RV.8` **A relative import without `.js`.** `apps/web/src/router.tsx:16` imports
-  `./route-tree.gen`. `docs/ai/rules/imports.md` says `.js` on every relative import. **Fix:** add
-  the extension, or record the generated file as an exemption where the rule lists its three.
-- [ ] `RV.9` **§29's comments still say three readers.** At `tooling/scripts/check-architecture.mjs:1682`,
-  the comment reads "parsed in three places", and the spec says "The rule all three carry"
-  (`tooling/scripts/tests/check-architecture.spec.mjs:1234`). There are four readers since
-  `apps/realtime`.
 
 ### The access and visibility plan — improvements before Phase 1
 

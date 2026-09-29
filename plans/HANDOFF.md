@@ -14,12 +14,12 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
 
 - **The plan is built and archived (2026-09-30).** Phases 1–11 are done. The hand walk
   (`AX11.3`) passed every Exit line, and the whole-plan verification passed.
-- **What is open is boxed in [`BACKLOG.md`](BACKLOG.md) §13**, nine items:
+- **What is open is boxed in [`BACKLOG.md`](BACKLOG.md) §13**, eight items:
   - `AX11.2`, the flag's retirement, waits on its trigger.
-  - Three bugs: `AX7.5` (badge hue), `AX3.10` (§18 and primary keys), and `AX11.4` (the kitchen
-    sink's picker).
+  - Two bugs: `AX7.5` (badge hue) and `AX3.10` (§18 and primary keys). `AX11.4` closed
+    2026-09-30.
   - Five small items that block nothing.
-- **`check:architecture` is 31/31.** `pnpm test` runs 2,032 tests and `pnpm smoke` 54.
+- **`check:architecture` is 31/31.** `pnpm test` runs 2,033 tests and `pnpm smoke` 54.
 
 ## Setting up a new machine
 

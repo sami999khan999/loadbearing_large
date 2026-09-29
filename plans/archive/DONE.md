@@ -1,6 +1,6 @@
 ---
 title: Backlog — closed
-updated: 2026-09-26
+updated: 2026-09-30
 owner: sami
 schema: backlog/v1
 source: split out of plans/BACKLOG.md on 2026-09-22
@@ -1342,6 +1342,18 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
 
 ---
 
+## 13. Access and visibility plan — closed so far
+
+The bodies are in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md), by ID.
+
+- [x] `AX11.4` **The kitchen sink's appearance picker wrote a stale theme** `done: 2026-09-30` — its
+  buttons read the load-time `appearanceSnapshot`, so Ocean then Dark rendered Slate/dark. The
+  page now holds the snapshot in state and sets it from `appearance.current` after each choice.
+  Proof: in headless Chrome, Ocean then Dark renders `ocean/dark`, and the "rendering" line
+  follows each click. Before the fix the same clicks gave `slate/dark`.
+
+---
+
 ## 14. Code review of 2026-09-28 — closed so far
 
 `RV.1` is a code fix. `RV.10`–`RV.16` were changes to `ACCESS-AND-VISIBILITY-PLAN.md`, made
@@ -1376,6 +1388,13 @@ before its first box was ticked; their proof is the plan's text, and the item ID
   covers suspension. The fix itself is `RV.1`, closed the same day, above.
 - [x] `RV.16` **"Running it again" skipped the realtime build** `done: 2026-09-28` — both
   verification blocks build `@loadbearing/realtime`.
+- [x] `RV.8` **A relative import without `.js`** `done: 2026-09-30` — `apps/web/src/router.tsx:16`
+  now imports `./route-tree.gen.js`. A sweep of every `src` and `tests` tree found no other
+  extensionless relative import. Proof: `pnpm --filter @loadbearing/web typecheck` and `build` pass.
+- [x] `RV.9` **§29's comments said three readers** `done: 2026-09-30` — the comment says four, and
+  the spec's fixture was missing the fourth too. It now carries `apps/realtime/src/env.ts`, with a
+  case where that copy drifts. Proof: 145 tests in `tooling/scripts`, and the new case fails when
+  `apps/realtime/src/env.ts` is taken out of `SHARD_READERS`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
@@ -1609,6 +1628,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | **Three quick closes: `RV.8`, `RV.9` and `AX11.4`.** The route-tree import takes `.js`. §29's comment and spec count four shard readers, and the spec proves the realtime copy. The kitchen sink's picker keeps the theme a mode click leaves alone |
 | 2026-09-29 | @sami | **`BACKLOG.md` §13 carries its two open bugs**, `AX7.5` (tinted badges take the wrong hue) and `AX3.10` (§18 ignores a primary key), and ticks Phases 1–9, which are done |
 | 2026-09-28 | @sami | **`RV.1` fixed: an open conversation stream re-reads its principal.** A deactivated member's stream now ends within a minute, as does one whose role loses `messaging.conversation.read`. `PrincipalBuilder.refresh` is the new read; an API key only narrows |
 | 2026-09-28 | @sami | **§14's seven plan items closed**: `RV.10`–`RV.16` folded into `ACCESS-AND-VISIBILITY-PLAN.md` before its Phase 1, which is now done. `RV.11` took the option of building flag liveness with Phase 9. `RV.1`–`RV.9` stay open |
