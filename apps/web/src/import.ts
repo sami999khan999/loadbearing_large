@@ -153,6 +153,7 @@ export {
   StatusBadge,
   type ThemeKey,
   ThemeRegistry,
+  Zone,
 } from "@loadbearing/ui";
 
 // ── @loadbearing/ui — stylesheets ────────────────────────────────────────────
