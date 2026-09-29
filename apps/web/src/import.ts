@@ -33,6 +33,7 @@ export { ConversationEntity } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
+  AccountPanel,
   ActiveSessionList,
   ActivityTrendPanel,
   ApiKeyList,
