@@ -1,6 +1,7 @@
 import { useSession } from "../auth/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
+  Button,
   type CapabilitySet,
   EmptyState,
   type FlagKey,
@@ -8,8 +9,12 @@ import {
   type NavItem,
   type QueryRuntime,
   type ReactNode,
+  useApiClient,
   useMemo,
   WIDGET_COPY,
+  WidgetMutations,
+  type WidgetPreferencesDto,
+  WidgetQueries,
   WidgetRegistry,
   ZONE_COPY,
   Zone,
@@ -17,7 +22,7 @@ import {
 } from "../import.js";
 import { MemberCount } from "../member/index.js";
 import { ModuleNav, type ModuleNavProps } from "../nav/index.js";
-import { widgetFacts } from "../widget/index.js";
+import { DISMISSAL, HiddenWidgetList, useWidgetPreferences, widgetFacts } from "../widget/index.js";
 
 const ZONE = "dashboard.main";
 
@@ -57,6 +62,7 @@ const DASHBOARD_WIDGETS = {
     prefetch: (queryClient, client) =>
       queryClient.ensureQueryData(MemberQueries.list(client, MEMBER_PAGE)),
   },
+  "core.hidden-widgets": { component: () => <HiddenWidgetList zone={ZONE} /> },
 } as const satisfies Record<DashboardWidgetKey, DashboardWidget>;
 
 const isDashboardWidget = (key: string): key is DashboardWidgetKey =>
@@ -67,8 +73,9 @@ const isDashboardWidget = (key: string): key is DashboardWidgetKey =>
 function visibleWidgets(
   capabilities: CapabilitySet,
   flags: Iterable<FlagKey>,
+  preferences: WidgetPreferencesDto | undefined,
 ): readonly DashboardWidgetKey[] {
-  const facts = widgetFacts(capabilities, flags);
+  const facts = widgetFacts(capabilities, flags, preferences ? { preferences } : {});
   return WidgetRegistry.instance
     .forZone(ZONE)
     .filter(isDashboardWidget)
@@ -77,31 +84,59 @@ function visibleWidgets(
 
 export function DashboardZone(props: DashboardZoneProps) {
   const { t } = useMessages("widget");
+  const client = useApiClient();
   const { capabilities, flags } = useSession();
-  const keys = useMemo(() => visibleWidgets(capabilities, flags), [capabilities, flags]);
+  const { ready, preferences } = useWidgetPreferences();
+  const hide = WidgetMutations.useUpdatePreference(client);
+  const keys = useMemo(
+    () => visibleWidgets(capabilities, flags, preferences),
+    [capabilities, flags, preferences],
+  );
+
+  // A Hide action only while the rollout is on for this org, and only on a card a person
+  // may hide. The nav and the tray are required.
+  const canHide = flags.has(DISMISSAL) && capabilities.can("core.widget.customize");
+  if (!ready) return null;
 
   return (
     <Zone
       label={t(ZONE_COPY[ZONE])}
       items={keys.map((key) => {
         const Card = DASHBOARD_WIDGETS[key].component;
-        return { key, title: t(WIDGET_COPY[key]), content: <Card {...props} /> };
+        const title = t(WIDGET_COPY[key]);
+        const action =
+          canHide && WidgetRegistry.instance.isDismissible(key) ? (
+            <Button
+              variant="ghost"
+              aria-label={t("widget.hideCard", { title })}
+              disabled={hide.isPending}
+              onClick={() => hide.mutate({ widget: key, hidden: true })}
+            >
+              {t("widget.hide")}
+            </Button>
+          ) : undefined;
+        return { key, title, content: <Card {...props} />, ...(action ? { action } : {}) };
       })}
       empty={<EmptyState title={t("widget.zone.empty")} />}
     />
   );
 }
 
-// The route's half: the same visibility the zone will compute, so a hidden card's query is
-// never issued ahead of a render that will not mount it.
+// The route's half: the same visibility the zone will compute, preferences included, so a
+// hidden card's query is never issued ahead of a render that will not mount it.
 export async function prefetchDashboard(
   queryClient: QueryRuntime["queryClient"],
   client: QueryRuntime["apiClient"],
   capabilities: CapabilitySet,
   flags: Iterable<FlagKey>,
 ): Promise<void> {
+  const on = new Set(flags);
+  const preferences = on.has(DISMISSAL)
+    ? await queryClient.ensureQueryData(WidgetQueries.preferences(client))
+    : undefined;
+
   await Promise.all(
-    visibleWidgets(capabilities, flags).map((key) => {
+    visibleWidgets(capabilities, on, preferences).map((key) => {
       const widget: DashboardWidget = DASHBOARD_WIDGETS[key];
       return widget.prefetch ? widget.prefetch(queryClient, client) : Promise.resolve();
     }),

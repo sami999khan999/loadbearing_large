@@ -143,4 +143,17 @@ export {
   type RoleMatrixProps,
   useRoleFailure,
 } from "./rbac/index.js";
-export { useWidgetVisibility, Widget, type WidgetProps, widgetFacts } from "./widget/index.js";
+export {
+  DISMISSAL,
+  HiddenWidgetList,
+  type HiddenWidgetListProps,
+  useWidgetPreferences,
+  useWidgetVisibility,
+  Widget,
+  WidgetDefaultForm,
+  type WidgetDefaultFormProps,
+  type WidgetFactOptions,
+  type WidgetPreferenceState,
+  type WidgetProps,
+  widgetFacts,
+} from "./widget/index.js";

@@ -8,7 +8,11 @@ export function useWidgetVisibility(widget: WidgetKey, goalId?: string): WidgetV
   const { capabilities, flags } = useSession();
 
   return useMemo(
-    () => WidgetRegistry.instance.visibilityOf(widget, widgetFacts(capabilities, flags, goalId)),
+    () =>
+      WidgetRegistry.instance.visibilityOf(
+        widget,
+        widgetFacts(capabilities, flags, goalId === undefined ? {} : { goalId }),
+      ),
     [widget, goalId, capabilities, flags],
   );
 }

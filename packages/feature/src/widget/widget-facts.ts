@@ -1,21 +1,27 @@
-import type { CapabilitySet, FlagKey, WidgetFacts } from "../import.js";
+import type { CapabilitySet, FlagKey, WidgetFacts, WidgetPreferencesDto } from "../import.js";
 
-// No preference can hide anything yet: the rows arrive with the zone's route in Phase 9, and
-// an inline widget is required, so it never reads them at all.
-const NO_PREFERENCES: ReadonlySet<string> = new Set<string>();
+// No row yet: nothing hidden. An inline widget is required, so it never reads them at all.
+const NONE: ReadonlySet<string> = new Set<string>();
+
+export interface WidgetFactOptions {
+  readonly goalId?: string;
+  // Only while `widget.dismissal` is on for this org: off, a stored row hides nothing.
+  readonly preferences?: WidgetPreferencesDto;
+}
 
 // The facts a render or a loader has in hand, in the shape `visibilityOf` reads. One place,
-// so the header's bell and its loader's prefetch cannot answer differently.
+// so a zone, its tray and its loader's prefetch cannot answer differently.
 export function widgetFacts(
   capabilities: CapabilitySet,
   flags: Iterable<FlagKey>,
-  goalId?: string,
+  options: WidgetFactOptions = {},
 ): WidgetFacts {
+  const { goalId, preferences } = options;
   return {
     capabilities,
     flags: new Set(flags),
-    hiddenByAdmin: NO_PREFERENCES,
-    hiddenByUser: NO_PREFERENCES,
+    hiddenByAdmin: preferences ? new Set(preferences.hiddenByAdmin) : NONE,
+    hiddenByUser: preferences ? new Set(preferences.hiddenByUser) : NONE,
     ...(goalId === undefined ? {} : { goalId }),
   };
 }

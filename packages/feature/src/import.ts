@@ -55,6 +55,7 @@ export {
   type ShardTenantDto,
   type TenantStorageMonthDto,
   type TenantStorageRowDto,
+  type WidgetPreferencesDto,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ export {
   type WidgetKey,
   WidgetRegistry,
   type WidgetVisibility,
+  type ZoneKey,
   type ZoneWidgetKey,
 } from "@loadbearing/permissions";
 
@@ -107,6 +109,8 @@ export {
   useApiClient,
   useAppInfiniteQuery,
   useAppQuery,
+  WidgetMutations,
+  WidgetQueries,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
