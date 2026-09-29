@@ -4,6 +4,9 @@ const OOP_PACKAGES = [
   "packages/{core,permissions,errors,observability,contracts,application,infrastructure,auth,composition,api-server,api-client,asset,content}/src/**/*.ts",
 ];
 
+const LAZY_MESSAGE =
+  "Never lazy-load by permission (docs/opinions/visibility.md, rule 9). The bundle is not a secret, so a lazy() hides nothing and adds a waterfall to the allowed path. Route splitting is the router's.";
+
 export default tseslint.config(
   {
     ignores: [
@@ -97,6 +100,30 @@ export default tseslint.config(
                 "The email namespace is server-only. Components take a MessageStore; they never build a ContentSource.",
             },
           ],
+        },
+      ],
+    },
+  },
+
+  // ── never lazy-load by permission (docs/opinions/visibility.md, rule 9) ──
+  // Route splitting is the router's; a component-level lazy() only adds a waterfall.
+  {
+    files: ["packages/feature/src/**/*.{ts,tsx}", "apps/web/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ImportDeclaration[source.value='react'] > ImportSpecifier[imported.name='lazy']",
+          message: LAZY_MESSAGE,
+        },
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name='lazy']",
+          message: LAZY_MESSAGE,
+        },
+        {
+          selector: "MemberExpression[object.name='React'][property.name='lazy']",
+          message: LAZY_MESSAGE,
         },
       ],
     },

@@ -114,5 +114,5 @@ tenant owner is
 | `<Can>` is never a zone's direct child | the type: `<Zone>` takes `items`, not children |
 | Rules 1 and 4 | Review |
 
-None of these is built yet; each arrives with the code it guards. Until then this page is the rule,
-and review is the check.
+Every row but the last is built. Rules 1 and 4 are judgements about a design, and no check can
+make them.

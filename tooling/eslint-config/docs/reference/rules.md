@@ -1,6 +1,6 @@
 ---
 title: rules
-description: The four blocks in the config — ignores, typed rules, the OOP shape assertions, and the two bans that need type-import nuance.
+description: The blocks in the config — ignores, typed rules, the OOP shape assertions, the two bans that need type-import nuance, and the lazy() ban.
 ---
 
 # Rules
@@ -222,6 +222,36 @@ content field, a CMS edit would be a privilege escalation.
 
 **The pattern across both:** Biome handles bans that are "this whole module, no exceptions";
 ESLint handles the ones needing named-export or type-import nuance.
+
+---
+
+## The `lazy()` ban — `packages/feature` and `apps/web`
+
+```js
+files: ["packages/feature/src/**/*.{ts,tsx}", "apps/web/src/**/*.{ts,tsx}"],
+rules: { "no-restricted-syntax": ["error",
+  { selector: "ImportDeclaration[source.value='react'] > ImportSpecifier[imported.name='lazy']" },
+  { selector: "CallExpression[callee.type='Identifier'][callee.name='lazy']" },
+  { selector: "MemberExpression[object.name='React'][property.name='lazy']" },
+]}
+```
+
+Rule 9 of [visibility](../../../../docs/opinions/visibility.md): **never lazy-load by
+permission.** The bundle is not a secret, so a `lazy()` keyed on a permission hides nothing. It
+only adds a network waterfall to the one path the user is allowed to take. No type can hold the
+rule, which is why it is a lint.
+
+Three selectors, because there are three ways to spell it. The import catches `lazy as load`.
+The call catches a `lazy` from anywhere else. The member expression catches `React.lazy`.
+
+**The ban costs nothing.** Route splitting belongs to the router. TanStack's
+`lazyRouteComponent` and `createLazyFileRoute` have different names and pass. Neither tree
+held a `lazy()` when the ban landed.
+
+> [!NOTE]
+> Neither glob sits inside `OOP_PACKAGES`, and that matters. Flat config replaces a rule's
+> options rather than merging them. If the two blocks overlapped, whichever came later would
+> silently drop the other's selectors.
 
 ---
 
