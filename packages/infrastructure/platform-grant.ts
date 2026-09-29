@@ -25,8 +25,24 @@ const outcome = await database.client.transaction(async (tx) =>
   // `catalog`: every table this touches is one — `users`, `organizations`, `roles`,
   // `memberships`. See `application/src/primitive/shard.ts`.
   scope.within(tx, "catalog", async () => {
-    const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
+    const [user] = await tx
+      .select({ id: users.id, suspendedAt: users.suspendedAt })
+      .from(users)
+      .where(eq(users.email, email));
     if (!user) throw new Error(`No user with email ${email}. They have to sign up first.`);
+
+    // Loud, and before any write: a grant to a suspended account holds nothing, and would
+    // look like success. This script is the recovery path when no admin is left (`AX6.9`).
+    if (user.suspendedAt) {
+      throw new Error(
+        [
+          `${email} is suspended by the platform (since ${user.suspendedAt.toISOString()}).`,
+          "Reinstate them at /platform/accounts. With no platform admin left to do that, by hand:",
+          `  UPDATE users SET suspended_at = NULL WHERE email = '${email}';`,
+          "then run this again.",
+        ].join("\n"),
+      );
+    }
 
     const [organization] = await tx
       .select({ id: organizations.id, slug: organizations.slug })
