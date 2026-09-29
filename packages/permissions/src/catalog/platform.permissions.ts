@@ -89,4 +89,17 @@ export const platformPermissions = {
     module: "platform",
     label: "Delete and export a tenant",
   },
+  // `account`, not `principal`: a `Principal` is the per-request class, and these act on
+  // the `users` row every tenant shares.
+  "platform.account.read": {
+    scope: "platform",
+    module: "platform",
+    label: "Look up an account across organizations",
+  },
+  "platform.account.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Suspend an account, and deny one person a permission",
+    requires: ["platform.account.read"],
+  },
 } as const satisfies Record<string, PermissionMeta>;
