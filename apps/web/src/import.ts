@@ -46,6 +46,7 @@ export {
   CreateRoleForm,
   DashboardZone,
   DeleteTenantPanel,
+  DISMISSAL,
   DocumentSearch,
   EffectivePermissionsInspector,
   FlagList,
@@ -100,6 +101,7 @@ export {
   useSession,
   VerifyEmailNotice,
   Widget,
+  WidgetDefaultForm,
   widgetFacts,
 } from "@loadbearing/feature";
 
@@ -131,6 +133,7 @@ export {
   useApiClient,
   useAppQuery,
   useConversationStream,
+  WidgetQueries,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
