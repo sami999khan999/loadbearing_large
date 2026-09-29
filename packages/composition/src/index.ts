@@ -36,6 +36,7 @@ export {
   InMemoryTenantMoveGateway,
   InMemoryTenantRetentionPolicyRepository,
   InMemoryVectorStore,
+  InMemoryWidgetPreferenceRepository,
   type PublishedEvent,
   type PublishedFrame,
   type PublishedJob,

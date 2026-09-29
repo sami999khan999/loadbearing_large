@@ -56,6 +56,7 @@ import {
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GetWidgetPreferencesUseCase,
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -146,6 +147,7 @@ import {
   PgUnitOfWork,
   PgUserReader,
   PgVectorStore,
+  PgWidgetPreferenceRepository,
   type PlatformPolicyRepository,
   type PlatformReader,
   PreviewRetentionChangeUseCase,
@@ -217,6 +219,8 @@ import {
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
+  UpdateWidgetDefaultUseCase,
+  UpdateWidgetPreferenceUseCase,
   type VectorStore,
   WatchConversationUseCase,
 } from "../import.js";
@@ -519,6 +523,13 @@ export class Container {
   // Whether a flag is on for an org. Read by `fetchSession` on every document request,
   // and by a use-case before its permission check when a flag guards it.
   public readonly flags: FlagCache;
+  // Hiding a dashboard card: one person's, or the org's for everyone. Behind
+  // `widget.dismissal`, which each use-case asks before its permission.
+  public readonly widget: {
+    readonly preferences: GetWidgetPreferencesUseCase;
+    readonly updatePreference: UpdateWidgetPreferenceUseCase;
+    readonly updateDefault: UpdateWidgetDefaultUseCase;
+  };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -1168,6 +1179,30 @@ export class Container {
     // The directory's own lookup, shared by every screen that takes an id or a slug.
     const tenantLookup = new PgShardMapReader(this.cluster, this.transactions, this.shards);
     this.flags = new FlagCache(flagRepository, this.cache);
+    const widgetPreferences = new PgWidgetPreferenceRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.widget = {
+      preferences: new GetWidgetPreferencesUseCase(
+        this.authorizer,
+        widgetPreferences,
+        this.tenantMemberships,
+      ),
+      updatePreference: new UpdateWidgetPreferenceUseCase(
+        this.authorizer,
+        this.flags,
+        widgetPreferences,
+      ),
+      updateDefault: new UpdateWidgetDefaultUseCase(
+        this.authorizer,
+        this.flags,
+        widgetPreferences,
+        this.activity,
+        this.routedUnitOfWork,
+      ),
+    };
     this.retentionPolicies = new PgRetentionPolicyRepository(
       this.cluster,
       this.transactions,

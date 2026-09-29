@@ -62,6 +62,7 @@ export {
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GetWidgetPreferencesUseCase,
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -201,9 +202,13 @@ export {
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
+  UpdateWidgetDefaultUseCase,
+  UpdateWidgetPreferenceUseCase,
   UserReader,
   VectorStore,
   WatchConversationUseCase,
+  WidgetPreferenceRepository,
+  type WidgetPreferences,
 } from "@loadbearing/application";
 
 // ── @loadbearing/auth ────────────────────────────────────────────────────────
@@ -312,6 +317,7 @@ export {
   PgUnitOfWork,
   PgUserReader,
   PgVectorStore,
+  PgWidgetPreferenceRepository,
   RedisCacheStore,
   RedisConnection,
   RedisRateLimitStore,
