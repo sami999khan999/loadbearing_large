@@ -13,7 +13,7 @@ import {
   MessageStore,
   StaticContentSource,
 } from "./import.js";
-import { routeTree } from "./route-tree.gen";
+import { routeTree } from "./route-tree.gen.js";
 import { serverTransport } from "./server/rpc-transport.js";
 import { type AppearanceSnapshot, AppearanceStore } from "./store/appearance.store.js";
 import { type SessionSnapshot, SessionStore } from "./store/session.store.js";
