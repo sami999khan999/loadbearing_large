@@ -33,7 +33,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
-| 14 | Code review of 2026-09-28, and the plan's review before it starts | 6 | 10 |
+| 14 | Code review of 2026-09-28, and the plan's review before it starts | 4 | 12 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -246,21 +246,6 @@ are as of `2ee420a`. Each was checked against the code, and the scenario says wh
   can also overlap when one takes longer than the interval. **Fix:** batch the check per process,
   one query for all open streams per tick, and correct the comment and the pool sizing in
   `apps/realtime/docs/reference/env.md`.
-- [ ] `RV.5` **Mail dedupe outlives BullMQ's completed-job cap only briefly.** `QueuedMailPublisher`
-  turns `dedupeKey` into a `jobId` (`packages/composition/src/mail/queued-mail.publisher.ts:49`),
-  but BullMQ only dedupes while the job still exists. `removeOnComplete` is
-  `{ age: 3_600, count: 1_000 }` (`bullmq-queue.publisher.ts:62`). Take a digest run over a tenant
-  with more than 1 000 recipients that fails on a later page and retries. The earlier pages' jobs
-  have already been trimmed, so those people get the morning's digest twice. The spec
-  "keys the send on the day, so a retry is one message" passes only because
-  `RecordingMailPublisher` dedupes forever. **Fix:** keep completed mail jobs longer than the
-  longest retry window, or dedupe on a Redis key with its own TTL.
-- [ ] `RV.6` **Per-command failures inside `MULTI` are silent.** At `redis-realtime.publisher.ts:32-37`,
-  ioredis `exec()` resolves with `[error, result]` pairs, so a failed `XADD` is neither thrown nor
-  logged, and `realtime.publish.failed` never fires. The frame is then missing from the log, so a
-  resume turns into a resync. The rate limit store reads the pairs deliberately
-  (`redis-rate-limit.store.ts:19`); the publisher does not. **Fix:** check the pairs and emit the
-  failure line.
 - [ ] `RV.7` **`// ──` separators split a sentence to pass §14.** The rule is two comment lines, and
   a separator ends a run so that "two comment lines either side of a separator are two comments"
   (`docs/opinions/comments.md:178`). In 22 places the separator falls mid-sentence, so each is one

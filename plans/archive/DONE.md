@@ -1388,6 +1388,19 @@ before its first box was ticked; their proof is the plan's text, and the item ID
   covers suspension. The fix itself is `RV.1`, closed the same day, above.
 - [x] `RV.16` **"Running it again" skipped the realtime build** `done: 2026-09-28` — both
   verification blocks build `@loadbearing/realtime`.
+- [x] `RV.5` **Mail dedupe outlived BullMQ's completed-job cap only briefly** `done: 2026-09-30` — a
+  `dedupeKey` was the job id, which holds only while the completed job is kept, and the cap is a
+  thousand. The port gains `onceWithin: { id, seconds }`, which BullMQ holds as its own key with a
+  TTL, and `QueuedMailPublisher` gives every keyed mail a day. Proof: a probe against the running
+  queue showed a job id letting the repeat through once the completed job was trimmed, and the
+  TTL key holding. `redis.smoke.spec.ts` pins it with a real worker trimming on completion, and it
+  fails when the TTL is taken out of the adapter. Two cases in `queued-mail.spec.ts` and
+  `fake.spec.ts` pin the mail options and the fake.
+- [x] `RV.6` **Per-command failures inside `MULTI` were silent** `done: 2026-09-30` —
+  `RedisRealtimePublisher` now reads `exec`'s `[error, result]` pairs and a null, and throws the
+  first error into the catch that emits `realtime.publish.failed`. Proof: three cases in
+  `tests/redis/redis-realtime.publisher.spec.ts`, two of which fail on the old code. The only
+  other `MULTI` is the rate-limit store, which reads the pairs and fails open on purpose.
 - [x] `RV.8` **A relative import without `.js`** `done: 2026-09-30` — `apps/web/src/router.tsx:16`
   now imports `./route-tree.gen.js`. A sweep of every `src` and `tests` tree found no other
   extensionless relative import. Proof: `pnpm --filter @loadbearing/web typecheck` and `build` pass.
@@ -1628,6 +1641,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | **`RV.5` and `RV.6` closed.** Mail dedupes for a day through the new `onceWithin`, so a retried digest over a big tenant sends once. A failed command inside the realtime `MULTI` is logged rather than passing as sent |
 | 2026-09-30 | @sami | **Three quick closes: `RV.8`, `RV.9` and `AX11.4`.** The route-tree import takes `.js`. §29's comment and spec count four shard readers, and the spec proves the realtime copy. The kitchen sink's picker keeps the theme a mode click leaves alone |
 | 2026-09-29 | @sami | **`BACKLOG.md` §13 carries its two open bugs**, `AX7.5` (tinted badges take the wrong hue) and `AX3.10` (§18 ignores a primary key), and ticks Phases 1–9, which are done |
 | 2026-09-28 | @sami | **`RV.1` fixed: an open conversation stream re-reads its principal.** A deactivated member's stream now ends within a minute, as does one whose role loses `messaging.conversation.read`. `PrincipalBuilder.refresh` is the new read; an API key only narrows |
