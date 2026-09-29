@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.7`
-are done, and next is `AX6.8`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 done 2026-09-29; next is
+Phase 7** (it needs only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -25,9 +25,9 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 2 | `AX2.11` — a docs listing, not blocking |
 | 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
-| 6–11 | all |
+| 7–11 | all |
 
-### Where Phase 6 stopped (2026-09-29)
+### Before picking up Phase 7 (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
@@ -36,13 +36,7 @@ Pushed to `origin/dev`. To resume on another device:
 2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
    tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
    procedure.
-3. Pick up at `AX6.8`, the `/platform/accounts` panel over the account procedures. `AX6.9`
-   comes last.
-4. Seen in the running app already: a suspended user's open session answers `UNAUTHORIZED`, a
-   right password answers `403 ACCOUNT_SUSPENDED`, a wrong one stays generic, and a held stream
-   closes within 60 s. Through `AX6.6`'s procedures: a suspend deletes the sessions and their
-   Redis copies and audits in the tier and each tenant, and the tenant's clear of a platform deny
-   answers 409. Still to see: an API key the user issued is refused.
+3. Pick up at Phase 7, `<Zone>` in `ui`. Nothing in Phase 6 is open.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -1007,13 +1001,20 @@ audited, and visible inside the tenant.
   done: 2026-09-29. `suspended` rides the `users` join the member reads already make, so no
   query was added. The locked platform row had shipped with Phase 5. Seen in the running app:
   bob read `suspended: true` in alice's member list while suspended, and `false` after.
-- [ ] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
+- [x] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
   memberships, suspend and reinstate with a reason, per-org denies), the route, and copy.
-- [ ] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
+  done: 2026-09-29. The route guards on `platform.account.read`, and every control renders only
+  for `platform.account.manage`. The panel annotates its data with `AccountDto` as `MemberList`
+  does: the branded ids reach `feature` as an error type otherwise, which `tsc` does not see and
+  ESLint does. Seen live: alice gets the page, and bob is sent to `/forbidden`.
+- [x] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
   loudly, naming the reinstate route. `AX6.6` refuses a self-suspend and the last admin's lockout,
   so this is for what those miss: two admins suspending each other, or an operator reinstating by
   hand with nobody left to use the route (`RV.14`). **Docs:** `platform-scope.md`, and
   `auth/docs/reference/{principal-builder,enrolment}.md`.
+  done: 2026-09-29. `platform:grant` refuses before any write, and prints the route and the one
+  `UPDATE` that reinstates by hand. It does not reinstate itself: the only unaudited change is
+  one somebody typed on purpose. Run against a suspended carol, then carol put back.
 
 **Recorded while executing Phase 6.**
 
@@ -1042,6 +1043,20 @@ audited, and visible inside the tenant.
   run through the catalog unit of work from the tier's request, and the account's denies come
   back in the same read as its memberships.
   done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`, alice (platform admin) and bob:
+1. Bob suspended: his session answered `UNAUTHORIZED` at once, his held conversation stream
+   closed 55 s later, and a right password answered `403 ACCOUNT_SUSPENDED` while a wrong one
+   stayed generic. The suspend deleted his sessions and their Redis copies, and audited in the
+   tier and both his tenants. An API key alice issued answered `UNAUTHORIZED` while she was
+   suspended, and worked again after.
+2. Reinstated, bob signed in again.
+3. A platform deny appeared in the tenant's override list as `authority: platform`, and alice's
+   clear as the org's owner answered 409. The platform's own clear removed it.
+4. `check:architecture` 29/29, `check:contrast` green, and every suite passes.
+Everything was put back: bob and alice reinstated, the platform denies cleared, the test key
+revoked. One `account.suspended` row has no reinstate beside it, from a check that reinstated
+by hand.
 
 **Exit.** On the running app:
 1. Suspend a signed-in member with a conversation open: the page falls back to signed-out on its
@@ -1313,6 +1328,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 6 done: the `/platform/accounts` panel (`AX6.8`) and the recovery path (`AX6.9`). Exit verified in the running app, the API key included. Next is Phase 7 |
 | 2026-09-29 | @sami | `AX6.7` done: `suspended` on the member entity and a "Suspended by the platform" badge. Next is `AX6.8` |
 | 2026-09-29 | @sami | `AX6.6` done: `platform.account.*`, five account use-cases, `PgAccountRepository`, the procedures, and `container.accounts`. Walked in the running app. `AX6.12` closed, `AX6.13` recorded. Next is `AX6.7` |
 | 2026-09-29 | @sami | Phase 6 continued: sign-in answers `ACCOUNT_SUSPENDED` (`AX6.3`), `SessionGateway` and its Better Auth adapter (`AX6.4`), the stream closing on a suspend proven live (`AX6.5`). `AX6.10`–`AX6.12` recorded. Next is `AX6.6` |
