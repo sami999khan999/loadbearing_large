@@ -1388,6 +1388,11 @@ before its first box was ticked; their proof is the plan's text, and the item ID
   covers suspension. The fix itself is `RV.1`, closed the same day, above.
 - [x] `RV.16` **"Running it again" skipped the realtime build** `done: 2026-09-28` — both
   verification blocks build `@loadbearing/realtime`.
+- [x] `RV.2` **Typing and resync frames became the client's resume point** `done: 2026-09-30` —
+  `RealtimeStream.run` now moves `lastEventId` only on a frame whose `kind` is `event`, the only
+  kind the replay log holds. Proof: a case in `packages/query/tests/realtime/realtime-stream.spec.ts`
+  that sends an event, a typing frame and a resync, and expects the reopen to carry the event's id.
+  It fails on the old code.
 - [x] `RV.5` **Mail dedupe outlived BullMQ's completed-job cap only briefly** `done: 2026-09-30` — a
   `dedupeKey` was the job id, which holds only while the completed job is kept, and the cap is a
   thousand. The port gains `onceWithin: { id, seconds }`, which BullMQ holds as its own key with a
@@ -1641,6 +1646,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | **`RV.2` closed.** Only an event frame moves the client's resume point, so a reopen in a busy conversation replays rather than resyncing |
 | 2026-09-30 | @sami | **`RV.5` and `RV.6` closed.** Mail dedupes for a day through the new `onceWithin`, so a retried digest over a big tenant sends once. A failed command inside the realtime `MULTI` is logged rather than passing as sent |
 | 2026-09-30 | @sami | **Three quick closes: `RV.8`, `RV.9` and `AX11.4`.** The route-tree import takes `.js`. §29's comment and spec count four shard readers, and the spec proves the realtime copy. The kitchen sink's picker keeps the theme a mode click leaves alone |
 | 2026-09-29 | @sami | **`BACKLOG.md` §13 carries its two open bugs**, `AX7.5` (tinted badges take the wrong hue) and `AX3.10` (§18 ignores a primary key), and ticks Phases 1–9, which are done |

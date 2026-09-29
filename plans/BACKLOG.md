@@ -33,7 +33,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
-| 14 | Code review of 2026-09-28, and the plan's review before it starts | 4 | 12 |
+| 14 | Code review of 2026-09-28, and the plan's review before it starts | 3 | 13 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -223,13 +223,6 @@ are as of `2ee420a`. Each was checked against the code, and the scenario says wh
 
 ### Code
 
-- [ ] `RV.2` **Typing and resync frames become the client's resume point.** At
-  `packages/query/src/realtime/realtime-stream.ts:48`, `lastEventId = frame.id` runs for every
-  frame. A typing frame is never logged (`redis-realtime.publisher.ts:24`), and a resync's id is a
-  fresh `Uuid.v7()` that is never logged either. After either one, the next reopen at the
-  thirty-minute age or a drain always finds nothing in `RealtimeLog.since`. So it is always a
-  resync, and a resync refetches every list the table names. That happens in every busy
-  conversation, since typing is the most frequent frame. **Fix:** track only `kind === "event"` ids.
 - [ ] `RV.3` **Every fanned-out frame writes a replay log per member.** `MessagingRealtimeSubscriber`
   publishes one `conversation.changed` per member to each user channel, and
   `RedisRealtimePublisher.publish` turns each one into `XADD` + `EXPIRE` on
