@@ -7,6 +7,7 @@ import { organizationRoutes } from "./organization.routes.js";
 import { platformRoutes } from "./platform.routes.js";
 import { rbacRoutes } from "./rbac.routes.js";
 import { shellRoutes } from "./shell.routes.js";
+import { widgetRoutes } from "./widget.routes.js";
 
 // Every declared path is rooted — a missing leading slash fails to compile.
 export type RoutePath = `/${string}`;
@@ -23,6 +24,7 @@ export const ROUTES = {
   messaging: messagingRoutes,
   analytics: analyticsRoutes,
   platform: platformRoutes,
+  widget: widgetRoutes,
 } as const;
 
 // Union of every path the table declares. `Extract<…, string>` so a group may later hold

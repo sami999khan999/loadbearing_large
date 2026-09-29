@@ -45,9 +45,9 @@ describe("FlagRegistry", () => {
     expect(flags.clientGating()).toEqual(flags.all().filter((key) => named.has(key)));
   });
 
-  // No widget names `widget.dismissal` until the tray lands with Phase 9, so today it is
-  // a server-only flag, which is the case Phase 3's exit proves.
-  it("keeps widget.dismissal server-only until a widget names it", () => {
-    expect(flags.isClientGating("widget.dismissal")).toBe(false);
+  // `AX9.6`: the hidden-card tray names it, and that alone is what makes it client-gating.
+  it("makes widget.dismissal client-gating once a widget names it", () => {
+    expect(flags.isClientGating("widget.dismissal")).toBe(true);
+    expect(flags.clientGating()).toEqual(["widget.dismissal"]);
   });
 });

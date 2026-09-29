@@ -87,7 +87,11 @@ describe("WidgetRegistry — declarations", () => {
       expect(orders).toEqual([...orders].sort((a, b) => a - b));
       expect(new Set(orders).size).toBe(orders.length);
     }
-    expect(widgets.forZone("dashboard.main")).toEqual(["core.module-nav", "member.count"]);
+    expect(widgets.forZone("dashboard.main")).toEqual([
+      "core.module-nav",
+      "member.count",
+      "core.hidden-widgets",
+    ]);
   });
 
   it("opens every widget key with a module the catalog knows", () => {
@@ -121,7 +125,7 @@ describe("WidgetRegistry — declarations", () => {
 
   it("splits the keys by where they are placed", () => {
     expectTypeOf<ZoneWidgetKey<"dashboard.main">>().toEqualTypeOf<
-      "core.module-nav" | "member.count"
+      "core.module-nav" | "member.count" | "core.hidden-widgets"
     >();
     expectTypeOf<InlineWidgetKey>().toEqualTypeOf<"notification.bell">();
   });
