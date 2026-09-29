@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–9 done 2026-09-29;
-next is Phase 10** (it needs Phase 9). Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–10 done 2026-09-29;
+next is Phase 11**, the last. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -26,9 +26,9 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 3 | `AX3.10`, `AX3.12` — neither blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 7 | `AX7.5` — a colour-rule decision, not blocking |
-| 10–11 | all |
+| 11 | all |
 
-### Before picking up Phase 10 (2026-09-29)
+### Before picking up Phase 11 (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
@@ -39,7 +39,8 @@ Pushed to `origin/dev`. To resume on another device:
    procedure.
 3. Run `pnpm db:migrate` again for `0047` and `0048`: the new table, a child partition per
    tenant, and `widget.default.manage` for existing admins and owners.
-4. Pick up at Phase 10, the widget inspector. Nothing blocking is open in Phases 6–9.
+4. Pick up at Phase 11: lint, the flag's retirement, and the whole-plan check. Nothing blocking
+   is open in Phases 6–10. `AX7.5` and `AX3.10` are bugs, filed in `BACKLOG.md` §13.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
@@ -1321,17 +1322,30 @@ Everything was put back: the rows deleted, the default restored, the flag's targ
 
 **Goal.** "Where did my card go?" has a one-word answer on one screen.
 
-- [ ] `AX10.1` **`WidgetInspector`** — `feature/src/widget/widget.inspector.tsx`,
+- [x] `AX10.1` **`WidgetInspector`** — `feature/src/widget/widget.inspector.tsx`,
   `WidgetInspector({ userId? })`: every registered widget, with its `WidgetVisibility` and its
   reason in words.
   - **Your own view** uses the session's capabilities and flags and your preferences.
   - **Another member's view** uses `RoleQueries.effective` (already masked) and
     `WidgetQueries.preferencesOf`. It uses the viewer's flag set, which is right: they are in the
     same org, and every flag a widget names is client-gating.
-- [ ] `AX10.2` **Where it shows** — in `MemberAccessPanel`, behind `rbac.effective.inspect`, and as
+  done: 2026-09-29. A denied row names the key it needs — `denied — member.read` — and a stored row for a
+  widget the code dropped is listed as `unregistered`. The conversion from the API's capabilities
+  moved to `rbac/capabilities-from-wire.ts`, shared with `EffectivePermissionsInspector`.
+- [x] `AX10.2` **Where it shows** — in `MemberAccessPanel`, behind `rbac.effective.inspect`, and as
   a "Why is something missing?" disclosure on the hidden-cards tray. Copy under `widget.reason.*`.
-- [ ] `AX10.3` **Spec** — `feature/tests/widget/widget.inspector.spec.tsx`: one row per kind,
+  done: 2026-09-29. The members route loads the `widget` namespace too. The tray's disclosure lists every
+  card, because a card missing for want of a key is not in the tray at all.
+- [x] `AX10.3` **Spec** — `feature/tests/widget/widget.inspector.spec.tsx`: one row per kind,
   including `unregistered` from a stale preference row.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** in the browser, alice inspecting bob from the members page:
+1. With `member.read` denied to bob, the inspector's row read "Members — denied — member.read".
+2. With the deny cleared, `widget.dismissal` on for Walk Co and the card hidden for everyone, it
+   read "Members — hidden-by-admin", and the tray's own row turned from `hidden-by-flag` to `visible`.
+3. `check:architecture` 31/31, `check:contrast` green, and every suite passes.
+Everything was put back: the deny cleared, the card restored, the flag's target removed.
 
 **Exit.** For a member missing the member card, the inspector says `denied — member.read`. After
 an admin hides the card, it says `hidden-by-admin`. Every suite is green.
@@ -1418,6 +1432,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 10 done: `WidgetInspector` for your own view and another member's, in the member access panel and behind the tray's "Why is something missing?". Exit verified in the browser |
 | 2026-09-29 | @sami | Phase 9 done: `widget_preferences` (`0047`, partitioned per tenant), the keys and `0048`, the preference and default use-cases behind `widget.dismissal`, the tray widget that makes the flag client-gating, the Hide action, the tray and `/settings/widgets`, and `check-architecture` §31 (`AX3.7`). Exit verified in the running app. `AX9.9`–`AX9.10` recorded |
 | 2026-09-29 | @sami | Phase 8 done: `<Widget>`, `DashboardZone` and `prefetchDashboard`, the `widget` namespace and `WIDGET_COPY`, `/dashboard` with `/` redirecting a session to it, the bell as an inline widget, and `check-architecture` §30. Exit verified in the running app and the browser |
 | 2026-09-29 | @sami | Phase 7 done: `<Zone>` in `ui`, its styles, the kitchen-sink section and docs. Exit verified in all nine theme-and-mode pairs. `AX7.4` fixed, `AX7.5` recorded: tinted badges take the wrong hue |

@@ -32,7 +32,7 @@ still being built, which its section here names.
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
-| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 4 | — |
+| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 3 | — |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 8 | 8 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
@@ -170,7 +170,7 @@ Built on 2026-09-26 and archived; every body is on its item in
 
 ## 13. Access and visibility plan — `ACCESS-AND-VISIBILITY-PLAN.md`
 
-Agreed 2026-09-27; Phases 1–9 done 2026-09-28 and 2026-09-29. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
+Agreed 2026-09-27; Phases 1–10 done 2026-09-28 and 2026-09-29. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
 boxes live in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) while it is being
 built, and whatever is open when it is archived comes back here. The decisions are its
 "Decisions recorded up front"; extensions were scrapped the same day.
@@ -184,7 +184,7 @@ built, and whatever is open when it is archived comes back here. The decisions a
 - [x] Phase 7 — `<Zone>` in `ui` (`AX7.1`–`AX7.3`)
 - [x] Phase 8 — `<Widget>`, the dashboard zone, `/dashboard`, and §30 (`AX8.1`–`AX8.8`)
 - [x] Phase 9 — widget preferences, rolled out behind `widget.dismissal` (`AX9.1`–`AX9.8`)
-- [ ] Phase 10 — the widget inspector (`AX10.1`–`AX10.3`)
+- [x] Phase 10 — the widget inspector (`AX10.1`–`AX10.3`)
 - [ ] Phase 11 — lint, the flag's retirement, the hand walk (`AX11.1`–`AX11.3`)
 
 ### Bugs found while building it, not yet fixed
