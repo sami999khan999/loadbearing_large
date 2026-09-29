@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-09-28
+updated: 2026-09-29
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -32,7 +32,7 @@ still being built, which its section here names.
 | 10 | Code review of 2026-09-25 — [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) | 2 | 47 |
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
-| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 72 | — |
+| 13 | Access and visibility plan — [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | 4 | — |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 8 | 8 |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
@@ -170,22 +170,43 @@ Built on 2026-09-26 and archived; every body is on its item in
 
 ## 13. Access and visibility plan — `ACCESS-AND-VISIBILITY-PLAN.md`
 
-Agreed 2026-09-27, not started. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
+Agreed 2026-09-27; Phases 1–9 done 2026-09-28 and 2026-09-29. Seventy-two items in eleven phases, IDs `AX<phase>.<n>`; the
 boxes live in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) while it is being
 built, and whatever is open when it is archived comes back here. The decisions are its
 "Decisions recorded up front"; extensions were scrapped the same day.
 
-- [ ] Phase 1 — the rules, written before the first fragment (`AX1.1`–`AX1.6`)
-- [ ] Phase 2 — the kernel in `permissions`: requirements, flags, widgets, zones, the mask (`AX2.1`–`AX2.7`)
-- [ ] Phase 3 — flags end to end, and `check-architecture` §30 (`AX3.1`–`AX3.7`)
-- [ ] Phase 4 — entitlement: plans, adjustments, the module kill switch (`AX4.1`–`AX4.9`)
-- [ ] Phase 5 — per-user overrides: expiring grants, permanent denies, the drift overlay (`AX5.1`–`AX5.9`)
-- [ ] Phase 6 — the platform deny and the account suspend (`AX6.1`–`AX6.9`)
-- [ ] Phase 7 — `<Zone>` in `ui` (`AX7.1`–`AX7.3`)
-- [ ] Phase 8 — `<Widget>`, the dashboard zone, `/dashboard`, and §31 (`AX8.1`–`AX8.8`)
-- [ ] Phase 9 — widget preferences, rolled out behind `widget.dismissal` (`AX9.1`–`AX9.8`)
+- [x] Phase 1 — the rules, written before the first fragment (`AX1.1`–`AX1.6`)
+- [x] Phase 2 — the kernel in `permissions`: requirements, flags, widgets, zones, the mask (`AX2.1`–`AX2.7`)
+- [x] Phase 3 — flags end to end, and `check-architecture` §31, built with Phase 9 (`AX3.1`–`AX3.7`)
+- [x] Phase 4 — entitlement: plans, adjustments, the module kill switch (`AX4.1`–`AX4.9`)
+- [x] Phase 5 — per-user overrides: expiring grants, permanent denies, the drift overlay (`AX5.1`–`AX5.9`)
+- [x] Phase 6 — the platform deny and the account suspend (`AX6.1`–`AX6.9`)
+- [x] Phase 7 — `<Zone>` in `ui` (`AX7.1`–`AX7.3`)
+- [x] Phase 8 — `<Widget>`, the dashboard zone, `/dashboard`, and §30 (`AX8.1`–`AX8.8`)
+- [x] Phase 9 — widget preferences, rolled out behind `widget.dismissal` (`AX9.1`–`AX9.8`)
 - [ ] Phase 10 — the widget inspector (`AX10.1`–`AX10.3`)
 - [ ] Phase 11 — lint, the flag's retirement, the hand walk (`AX11.1`–`AX11.3`)
+
+### Bugs found while building it, not yet fixed
+
+Filed here now rather than when the plan is archived, because neither is the plan's own work.
+The full text stays under each ID in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md).
+
+- [ ] `AX7.5` **Every tinted `StatusBadge` shows the wrong hue.** `status-badge.css` mixes each
+  status colour into `--surface` with `color-mix(in oklch, …)`, which interpolates the hue too.
+  Measured in the kitchen sink on 2026-09-29: the success tint is hue 21.7, red, in every light
+  theme, because their `--surface` is `oklch(1 0 0)` with hue 0 rather than `none`. In each dark
+  theme it lands on the surface's own hue: slate 245, ocean 202, plum 306, midnight 267. Forest
+  reads right only because its surface is green. `check:contrast` cannot see it, since the text
+  still reads. **Fix:** mix `in oklab`, which has no hue path. That contradicts `color.md`, which
+  prescribes `in oklch` for derived states, so the rule and `packages/ui/docs/reference/palette.md`
+  change with it. Check the hover mixes of `--primary` into `--fg` in the same pass, and
+  re-measure all nine theme-and-mode pairs.
+- [ ] `AX3.10` **`check-architecture` §18 does not count a primary key as an index.** Postgres
+  backs a primary key with a unique index, so a composite key leading with a foreign key serves
+  the cascade — but §18 reads only `index()` and `uniqueIndex()` and would fail that table.
+  Found with `feature_flag_organizations`, which went back to a plain unique index before `0042`
+  shipped. **Fix:** teach §18 to read `primaryKey({ columns })`, with a fixture each way.
 
 ---
 

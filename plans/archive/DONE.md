@@ -1609,6 +1609,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | **`BACKLOG.md` §13 carries its two open bugs**, `AX7.5` (tinted badges take the wrong hue) and `AX3.10` (§18 ignores a primary key), and ticks Phases 1–9, which are done |
 | 2026-09-28 | @sami | **`RV.1` fixed: an open conversation stream re-reads its principal.** A deactivated member's stream now ends within a minute, as does one whose role loses `messaging.conversation.read`. `PrincipalBuilder.refresh` is the new read; an API key only narrows |
 | 2026-09-28 | @sami | **§14's seven plan items closed**: `RV.10`–`RV.16` folded into `ACCESS-AND-VISIBILITY-PLAN.md` before its Phase 1, which is now done. `RV.11` took the option of building flag liveness with Phase 9. `RV.1`–`RV.9` stay open |
 | 2026-09-28 | @sami | **`BACKLOG.md` §14 opened: sixteen `RV.*` items.** Nine come from reviewing the code changed since `14d49db`: a deactivated member's conversation stream never ends, typing and resync frames used as the resume point, the replay log per fanned-out member, per-stream revalidation queries, mail dedupe outliving BullMQ's completed cap, silent `MULTI` failures, separators splitting sentences, a missing `.js`, and a stale §29 comment. Seven are improvements to `ACCESS-AND-VISIBILITY-PLAN.md` before it starts |
