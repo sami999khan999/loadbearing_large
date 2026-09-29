@@ -13,6 +13,7 @@ const VALID: MemberDto = {
   roleName: "Owner",
   joinedAt: new Date("2026-09-03T00:00:00Z"),
   deactivated: false,
+  suspended: false,
   exceptions: 0,
 };
 
