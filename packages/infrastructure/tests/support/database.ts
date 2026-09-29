@@ -55,7 +55,7 @@ export const seedTenant = async (database: Database, organizationId: Organizatio
 };
 
 // And the inverse, for a spec that deletes the organization it founded: a dropped tenant
-// leaves seven partitions behind, and the next run of the same spec attaches over them.
+// leaves its partitions behind, and the next run of the same spec attaches over them.
 export const dropTenant = async (database: Database, organizationId: OrganizationId) => {
   const scope = new TransactionScope();
   const unitOfWork = new PgUnitOfWork(DatabaseCluster.single(database), scope, shards, "catalog");

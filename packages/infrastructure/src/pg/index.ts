@@ -51,6 +51,7 @@ export {
   PgTenantStorageReader,
   PgUserReader,
   PgVectorStore,
+  PgWidgetPreferenceRepository,
 } from "./repository/index.js";
 export {
   type OpenTransaction,
