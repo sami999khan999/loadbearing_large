@@ -1,5 +1,5 @@
 import { RealtimeChannels } from "@loadbearing/application";
-import { Queue } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import { afterAll, describe, expect, inject, it } from "vitest";
 import { BullMqQueuePublisher } from "../../src/bullmq/index.js";
 import type { RealtimeMessage } from "../../src/import.js";
@@ -242,6 +242,48 @@ describe("QueuePublisher against the running queue instance", () => {
       expect((await waiting()).map((job) => job.data.inFlight)).toEqual([3]);
     } finally {
       for (const job of await waiting()) await job.remove();
+      await reader.close();
+      await publisher.close();
+    }
+  });
+
+  // `RV.5`. The job completes and is trimmed at once, as a big digest's early pages are.
+  // `job.remove()` would not do: it deletes the dedupe key too, which trimming does not.
+  it("dedupes a onceWithin id after its job completed and was trimmed", async () => {
+    const name = `${SMOKE_QUEUE}-once-within-${Date.now()}`;
+    const publisher = new BullMqQueuePublisher(redis.queueClient());
+    const reader = new Queue(name, { connection: redis.queueClient() });
+    const ran: number[] = [];
+    const worker = new Worker(name, (job) => Promise.resolve(void ran.push(job.data.n)), {
+      connection: redis.queueClient(),
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 1_000));
+    const once = (n: number) =>
+      publisher.publish(
+        name,
+        { n },
+        { onceWithin: { id: "mail", seconds: 3 }, removeOnCompleteAgeSeconds: 0 },
+      );
+
+    try {
+      await once(1);
+      await settle();
+      expect(await reader.getJobCounts("completed", "waiting")).toMatchObject({
+        completed: 0,
+        waiting: 0,
+      });
+
+      await once(2);
+      await settle();
+      expect(ran).toEqual([1]);
+
+      await new Promise((resolve) => setTimeout(resolve, 2_200));
+      await once(3);
+      await settle();
+      expect(ran).toEqual([1, 3]);
+    } finally {
+      await worker.close();
+      await reader.obliterate({ force: true });
       await reader.close();
       await publisher.close();
     }
