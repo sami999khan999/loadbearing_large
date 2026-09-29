@@ -43,6 +43,7 @@ export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";
 export { RealtimeSubscriber, type SubscribeOptions } from "./realtime.subscriber.js";
 export { type RelayedActivity, RelayedActivityStore } from "./relayed-activity.store.js";
+export { SessionGateway } from "./session.gateway.js";
 export {
   type RequestHeaders,
   type ResolvedSession,

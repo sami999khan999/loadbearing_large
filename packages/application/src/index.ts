@@ -304,6 +304,7 @@ export {
   type ResolvedSession,
   type RestoredMonth,
   type SearchHit,
+  SessionGateway,
   SessionResolver,
   type ShardAssignment,
   ShardAssignmentRepository,
