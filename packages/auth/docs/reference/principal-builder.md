@@ -47,6 +47,10 @@ The builder throws nothing. `principalMiddleware` in `apps/web` turns `null` int
 named grant list. Keeping the decision at the call site is what lets one builder serve a transport
 that answers 401 and a process that has no HTTP.
 
+A suspended account is `null` too, and needs no branch here. `MembershipReader.isActive` joins
+`users` and answers no once `suspended_at` is set, so a suspend reaches the builder, `refresh`
+and an API key's issuer through the one check every path already makes.
+
 ## `refresh` re-reads a principal a stream is holding
 
 A request builds its principal and drops it within milliseconds. A stream builds one and holds it
