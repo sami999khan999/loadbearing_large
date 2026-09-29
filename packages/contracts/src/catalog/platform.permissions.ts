@@ -45,6 +45,11 @@ export const platformProcedurePermissions = {
   "platform.adjustEntitlement": "platform.entitlement.manage",
   "platform.clearAdjustment": "platform.entitlement.manage",
   // Read under status: which modules are down is status, read by the people on call.
+  "platform.findAccount": "platform.account.read",
+  "platform.suspendAccount": "platform.account.manage",
+  "platform.reinstateAccount": "platform.account.manage",
+  "platform.denyAccountPermission": "platform.account.manage",
+  "platform.clearAccountDeny": "platform.account.manage",
   "platform.moduleSwitches": "platform.status.read",
   "platform.updateModuleSwitch": "platform.module.manage",
 } as const satisfies Record<string, PermissionKey>;
