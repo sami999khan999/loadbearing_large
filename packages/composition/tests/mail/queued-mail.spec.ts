@@ -40,7 +40,7 @@ describe("QueuedMailPublisher", () => {
 
     expect(batches).toEqual([2]);
     const jobs = queue.publishedTo(QueueName.MAIL);
-    expect(jobs.map((job) => job.options?.jobId)).toEqual(["n_a", "n_b"]);
+    expect(jobs.map((job) => job.options?.onceWithin?.id)).toEqual(["n_a", "n_b"]);
     expect(jobs.every((job) => job.options?.name === "send")).toBe(true);
   });
 
@@ -83,7 +83,9 @@ describe("QueuedMailPublisher", () => {
     expect(high?.options?.priority).toBeLessThan(normal?.options?.priority ?? 0);
   });
 
-  it("turns a dedupeKey into the job id and omits it otherwise", async () => {
+  // A day, and not a job id: the job id held only while the completed job was kept, so a
+  // digest past a thousand recipients re-sent the earlier pages on a retry (`RV.5`).
+  it("turns a dedupeKey into a day-long onceWithin and omits it otherwise", async () => {
     const { queue, mail } = build();
     const base = {
       to: "a@example.test",
@@ -97,10 +99,28 @@ describe("QueuedMailPublisher", () => {
     await mail.publish({ ...base, template: "auth.reset" });
 
     const [withKey, without] = queue.publishedTo(QueueName.MAIL);
-    expect(withKey?.options?.jobId).toBe("verify-1");
-    // Absent rather than undefined-valued: BullMQ generates an id when none is given, and
-    // an explicit `undefined` is the same thing said less clearly.
-    expect(without?.options).not.toHaveProperty("jobId");
+    expect(withKey?.options?.onceWithin).toEqual({ id: "verify-1", seconds: 86_400 });
+    expect(withKey?.options).not.toHaveProperty("jobId");
+    // Absent rather than undefined-valued: the adapter spreads it only when it is there.
+    expect(without?.options).not.toHaveProperty("onceWithin");
+  });
+
+  it("publishes a repeated dedupeKey once", async () => {
+    const { queue, mail } = build();
+    const request = {
+      template: "auth.verify" as const,
+      to: "a@example.test",
+      locale: "en" as const,
+      organizationId: null,
+      userId: null,
+      params: { url: "https://example.test/v" },
+      dedupeKey: "verify-1",
+    };
+
+    await mail.publish(request);
+    await mail.publish(request);
+
+    expect(queue.publishedTo(QueueName.MAIL)).toHaveLength(1);
   });
 });
 
