@@ -12,6 +12,7 @@ export {
   type ShardConfig,
 } from "./primitive/index.js";
 export {
+  PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,

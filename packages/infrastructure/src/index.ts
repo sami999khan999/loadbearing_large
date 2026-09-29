@@ -22,6 +22,7 @@ export {
   type DrizzleClient,
   KeysetCursor,
   type OpenTransaction,
+  PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
