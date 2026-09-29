@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1` and
-`AX6.2` are done, and next is `AX6.3`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.5`
+are done, and next is `AX6.6`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -27,22 +27,26 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 6–11 | all |
 
-### Where Phase 6 stopped (2026-09-28, 18:10 Asia/Dhaka)
+### Where Phase 6 stopped (2026-09-29)
 
 Pushed to `origin/dev`. To resume on another device:
 
 1. `git pull`, then `pnpm install`, then `pnpm db:migrate`. It applies `0046_account_suspension`
    on every node. Without it, sign-in fails on the missing `users.suspended_at`.
-2. Pick up at `AX6.3`, the sign-in hook and `ACCOUNT_SUSPENDED`. `AX6.4`–`AX6.9` follow in order.
-   `AX6.6` needs `AX6.4`'s `SessionGateway`, and `AX6.7`–`AX6.8` need `AX6.6`'s procedures.
-3. The Phase 6 exit walk still has to prove `AX6.2`'s four consequences in the running app:
-   session anonymous, principal refused, API key refused, stream closed.
+2. Pick up at `AX6.6`, the account use-cases and keys. It wires `BetterAuthSessionGateway`
+   (`AX6.4`), which must be built inside the container's `if (config.auth)` block because the
+   worker has no auth. `AX6.7`–`AX6.8` need its procedures, and `AX6.9` comes last.
+3. Seen in the running app already: a suspended user's open session answers `UNAUTHORIZED`, a
+   right password answers `403 ACCOUNT_SUSPENDED`, a wrong one stays generic, and a held stream
+   closes within 60 s. Still to see: an API key the user issued is refused.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
   that migration's snapshot JSON. Confirm with a plain `generate`, which must report no changes.
 - Test accounts `alice`, `bob` and `carol` `@example.test`, password `Correct-Horse-9`. Alice is
   the platform admin. The web app runs on port 13000.
+- If Docker Desktop was stopped, start it and wait for every `ratchet-*` container to report
+  healthy before running the infrastructure suite, or its specs fail on connection.
 - Stopping `pnpm dev` leaves node processes behind. Kill them by repo path **and** by ports
   13000–13009, because the vite process names no repo path.
 
@@ -935,16 +939,22 @@ audited, and visible inside the tenant.
   Spec: `infrastructure/tests/rbac/pg-membership.reader.spec.ts`.
   done: 2026-09-28, the reader and its spec. The four consequences above follow from the reader
   and are **not yet seen in the running app**. Phase 6's exit walk checks them.
-- [ ] `AX6.3` **Sign-in says why** — a Better Auth session-create hook refuses a suspended user with
+- [x] `AX6.3` **Sign-in says why** — a Better Auth session-create hook refuses a suspended user with
   the new error code `ACCOUNT_SUSPENDED`. The code goes in `errors`, and its copy in `content`
   (`en`, `bn`); `Record<ErrorCode, ShellMessageKey>` will not compile without the copy. Verify the
   hook's shape against the pinned Better Auth version before writing it.
-- [ ] `AX6.4` **Ending live sessions** — a `SessionGateway` port (`revokeAll(userId)`) in
+  done: 2026-09-29. The existing `session.create.before` hook throws `APIError` with the code,
+  checked against 1.6.26. It asks `MembershipReader.isSuspended` **before** `enrol`: see `AX6.11`.
+  The api-client normalizer maps the code, and the sign-in form shows the copy for it alone.
+- [x] `AX6.4` **Ending live sessions** — a `SessionGateway` port (`revokeAll(userId)`) in
   `application/src/port/`, and `BetterAuthSessionGateway` in `packages/auth`, through Better
   Auth's own adapter so its Redis secondary-storage copy goes too. A raw `DELETE FROM sessions`
   would leave that copy working. Verify the adapter method against the pinned version. Add a
   recording fake.
-- [ ] `AX6.5` **Open streams re-read permissions** — the conversation stream's revalidation in
+  done: 2026-09-29. `internalAdapter.deleteUserSessions(userId)`, reached through `auth.$context`,
+  clears secondary storage and then the rows (1.6.26). The fake is `RecordingSessionGateway`, which
+  `TestContainer` exposes as `signOuts`. Nothing calls it yet; `AX6.6` wires it.
+- [x] `AX6.5` **Open streams re-read permissions** — the conversation stream's revalidation in
   `packages/api-server/src/router/realtime.router.ts:98` re-runs `watch.execute` with the principal
   captured at open, so no deny, kill switch, plan change or suspend ever closed it. **The fix is
   not this phase's** (`RV.15`): it is a live gap today (`RV.1`, a deactivated member keeps their
@@ -952,6 +962,10 @@ audited, and visible inside the tenant.
   `RV.1`'s fix. What stays here is the proof that it covers suspension: a suspended user's open
   conversation stream closes at its next revalidation.
   Spec: `apps/web/tests/server/realtime.stream.spec.ts`. **Docs:** `packages/api-server/docs/`.
+  done: 2026-09-29, proven live rather than by a new web spec. `apps/web` does not depend on
+  `auth`, and each link already has a spec: the reader (`AX6.2`), `PrincipalBuilder.refresh`
+  answering null for an inactive member, and the stream ending on a null. Against `pnpm dev`,
+  bob's held conversation stream closed 55 s after the suspend. `router.md` says so.
 - [ ] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
   `platform.account.*`, not `platform.principal.*`: `Principal` is the per-request class, and the
   suspend acts on the `users` row. Use-cases in `application/src/platform/`:
@@ -988,6 +1002,25 @@ audited, and visible inside the tenant.
   so this is for what those miss: two admins suspending each other, or an operator reinstating by
   hand with nobody left to use the route (`RV.14`). **Docs:** `platform-scope.md`, and
   `auth/docs/reference/{principal-builder,enrolment}.md`.
+
+**Recorded while executing Phase 6.**
+
+- [x] `AX6.10` **Three specs raced the Docker VM's clock.** Each wrote an expiry one second in the
+  past and asked Postgres whether `expires_at > now()`. After the host slept, the VM ran about a
+  second behind, so the lapsed row read live. The margin is now a minute in
+  `pg-member.repository.spec.ts`, `pg-capability.repository.spec.ts` and
+  `pg-permission-override.repository.spec.ts`. **The rule:** never compare a host time with
+  `now()` inside a second.
+  done: 2026-09-29
+- [x] `AX6.11` **The suspend check runs before `enrol`, not after the reader says no.** After
+  `AX6.2`, `activeOrganizationFor` answers null for a suspended user, and the hook's fallback is
+  `enroller.enrol`. In `bootstrap` mode that finds the existing membership and hands the tenant
+  back, which would open a session for a suspended account. The factory spec leaves `enrol`
+  unreachable to hold that order.
+  done: 2026-09-29
+- [ ] `AX6.12` **A suspended user's session row outlives the suspend until `AX6.6`.** Better
+  Auth's `get-session` still answers with it, though every procedure answers `UNAUTHORIZED`. The
+  suspend use-case's `revokeAll` closes this.
 
 **Exit.** On the running app:
 1. Suspend a signed-in member with a conversation open: the page falls back to signed-out on its
@@ -1259,6 +1292,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 6 continued: sign-in answers `ACCOUNT_SUSPENDED` (`AX6.3`), `SessionGateway` and its Better Auth adapter (`AX6.4`), the stream closing on a suspend proven live (`AX6.5`). `AX6.10`–`AX6.12` recorded. Next is `AX6.6` |
 | 2026-09-28 | @sami | Phase 6 started: `users.deactivated_at` renamed to `suspended_at` (`0046`, custom migration plus snapshot rename), and `PgMembershipReader` refuses a suspended account in all four readers (`AX6.1`, `AX6.2`). Stopped before `AX6.3`; handoff in "Where Phase 6 stopped" |
 | 2026-09-28 | @sami | Phase 5 done: override expiry, authority and CHECKs (`0044`), grants to existing roles (`0045`), `explainFor` with the fold in `application`, five override use-cases, the drift counts, the access panel and the inspector's sources. Exit verified in the running app. `AX5.10`–`AX5.14` recorded |
 | 2026-09-28 | @sami | Phase 4 done: plans, adjustments and the kill switch (`0043`), the mask inside resolution at four queries, `invalidateAll`, eleven use-cases, the platform screens and the role editor's ceiling. `RV.10`, `RV.13`, `RV.14` built. Exit verified in the running app. `AX1.9` done; `AX4.10`–`AX4.16` recorded |
