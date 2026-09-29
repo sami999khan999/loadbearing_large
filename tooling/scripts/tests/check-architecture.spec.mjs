@@ -1,7 +1,7 @@
 // Each assertion run against a tree that violates it, and against one that does not.
 //
 // The script derives ROOT from its own location, so a fixture is a temporary tree with a
-// copy of it under `tooling/scripts/` — no ROOT parameter to thread through twenty-nine
+// copy of it under `tooling/scripts/` — no ROOT parameter to thread through thirty
 // assertions, and the thing under test is the file the repository actually runs.
 
 // @ts-check
@@ -139,7 +139,7 @@ describe("the fixture harness", () => {
   it("reports every assertion, and none of them fails on a clean tree", () => {
     const results = run();
 
-    expect(results).toHaveLength(29);
+    expect(results).toHaveLength(30);
     for (const { name, status } of results) {
       expect(status, `${name} failed on the base fixture`).not.toBe("✗");
     }
@@ -1285,6 +1285,60 @@ describe("29 — the four shard readers run one algorithm", () => {
   });
 
   it("skips a tree with no shard reader on it", () => {
+    expect(entry(run(), NAME).status).toBe("○");
+  });
+});
+
+describe("30 — every inline widget is placed by a literal key", () => {
+  const NAME = "every inline widget is placed by a literal key";
+
+  // One zone widget, which its zone places, and one inline widget, which only a literal
+  // `<Widget>` can.
+  const tree = (placement) => ({
+    "packages/permissions/package.json": PKG("permissions"),
+    "packages/permissions/src/widget/index.ts":
+      'import { memberWidgets } from "./member.widgets.js";\n' +
+      "export const WIDGETS = { ...memberWidgets } as const;\n",
+    "packages/permissions/src/widget/member.widgets.ts":
+      "export const memberWidgets = {\n" +
+      '  "member.count": { zone: "dashboard.main", permission: "member.read", order: 20 },\n' +
+      '  "notification.bell": { permission: "notification.inbox.read" },\n' +
+      "} as const;\n",
+    "apps/web/package.json": PKG("web"),
+    "apps/web/src/route/layout.tsx": placement,
+  });
+
+  const PLACED = 'export const Header = () => <Widget widget="notification.bell"><b /></Widget>;\n';
+
+  it("accepts an inline widget placed by its literal key", () => {
+    passes(run(tree(PLACED)), NAME);
+  });
+
+  it("catches an inline widget nothing places", () => {
+    fails(run(tree("export const Header = () => <b />;\n")), NAME, "notification.bell");
+  });
+
+  // A key from an expression proves nothing, and inside a loop over runtime data it places
+  // whatever the data says.
+  it("catches a key read from an expression", () => {
+    fails(
+      run(tree("export const Header = ({ key }) => <Widget widget={key}><b /></Widget>;\n")),
+      NAME,
+      "place a widget by its literal key",
+    );
+  });
+
+  // A zone widget is placed by its zone, and a comment naming a key places nothing.
+  it("needs no <Widget> for a zone widget, and does not count a comment", () => {
+    passes(run(tree(`// <Widget widget="member.count">\n${PLACED}`)), NAME);
+    fails(
+      run(tree('// <Widget widget="notification.bell">\nexport const Header = () => <b />;\n')),
+      NAME,
+      "notification.bell",
+    );
+  });
+
+  it("skips a tree with no widget barrel", () => {
     expect(entry(run(), NAME).status).toBe("○");
   });
 });
