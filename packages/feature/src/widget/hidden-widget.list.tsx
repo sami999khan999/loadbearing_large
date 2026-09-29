@@ -13,6 +13,7 @@ import {
   type ZoneKey,
 } from "../import.js";
 import { useWidgetPreferences } from "./use-widget-preferences.js";
+import { WidgetInspector } from "./widget.inspector.js";
 import { widgetFacts } from "./widget-facts.js";
 
 export interface HiddenWidgetListProps {
@@ -39,7 +40,23 @@ export function HiddenWidgetList({ zone }: HiddenWidgetListProps) {
       .filter((row) => row.visibility === "hidden-by-admin" || row.visibility === "hidden-by-user");
   }, [zone, capabilities, flags, preferences]);
 
-  if (rows.length === 0) return <p>{t("widget.hidden.none")}</p>;
+  // Every card, not only the hidden ones: a card missing for want of a permission is not in
+  // this list at all, and that is the question the disclosure answers.
+  const why = (
+    <details>
+      <summary>{t("widget.reason.disclosure")}</summary>
+      <WidgetInspector />
+    </details>
+  );
+
+  if (rows.length === 0) {
+    return (
+      <>
+        <p>{t("widget.hidden.none")}</p>
+        {why}
+      </>
+    );
+  }
 
   return (
     <>
@@ -66,6 +83,7 @@ export function HiddenWidgetList({ zone }: HiddenWidgetListProps) {
         })}
       </ul>
       {restore.isError ? <Callout tone="danger">{describe(restore.error)?.message}</Callout> : null}
+      {why}
     </>
   );
 }

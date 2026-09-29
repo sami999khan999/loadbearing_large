@@ -1,3 +1,4 @@
+export { capabilitiesFromWire } from "./capabilities-from-wire.js";
 export { CreateRoleForm } from "./create-role.form.js";
 export {
   EffectivePermissionsInspector,

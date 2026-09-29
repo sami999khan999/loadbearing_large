@@ -153,6 +153,8 @@ export {
   WidgetDefaultForm,
   type WidgetDefaultFormProps,
   type WidgetFactOptions,
+  WidgetInspector,
+  type WidgetInspectorProps,
   type WidgetPreferenceState,
   type WidgetProps,
   widgetFacts,
