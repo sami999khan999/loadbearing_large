@@ -7,7 +7,7 @@ const MAX_DELAY_MS = 30_000;
 // A stream that stayed up this long was healthy, so the next failure starts from the bottom.
 const HEALTHY_AFTER_MS = 60_000;
 
-export interface RealtimeStreamOptions<T extends { readonly id: string }> {
+export interface RealtimeStreamOptions<T extends { readonly id: string; readonly kind: string }> {
   // `lastEventId` is set on every reopen, which is what makes the server answer `resync`.
   readonly open: (
     signal: AbortSignal,
@@ -23,7 +23,7 @@ export interface RealtimeStreamOptions<T extends { readonly id: string }> {
 export class RealtimeStream {
   private constructor() {}
 
-  public static async run<T extends { readonly id: string }>(
+  public static async run<T extends { readonly id: string; readonly kind: string }>(
     options: RealtimeStreamOptions<T>,
   ): Promise<void> {
     const { signal } = options;
@@ -45,7 +45,9 @@ export class RealtimeStream {
 
         for await (const frame of stream) {
           if (signal.aborted) return;
-          lastEventId = frame.id;
+          // Only an event is in the server's replay log. A typing or resync id resumed from
+          // nothing, so every reopen in a busy conversation became a full resync.
+          if (frame.kind === "event") lastEventId = frame.id;
           options.onFrame(frame);
         }
 

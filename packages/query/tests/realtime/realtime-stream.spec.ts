@@ -4,9 +4,10 @@ import { RealtimeStream } from "../../src/realtime/realtime-stream.js";
 
 interface Frame {
   readonly id: string;
+  readonly kind: string;
 }
 
-const FRAME_A = { id: "00000000-0000-7000-8000-00000000000a" };
+const FRAME_A = { id: "00000000-0000-7000-8000-00000000000a", kind: "event" };
 
 // Yields its frames and then ends cleanly, the way a stream at its maximum age does.
 const ending = (frames: readonly Frame[]) =>
@@ -49,6 +50,22 @@ describe("RealtimeStream", () => {
       return calls.length === 1 ? ending([FRAME_A]) : parked();
     });
     const { controller } = start(open);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(calls).toEqual([undefined, FRAME_A.id]);
+    controller.abort();
+  });
+
+  // `RV.2`: neither is in the replay log, so resuming from one always came back as a resync.
+  it("resumes from the last event, not from a typing or resync frame after it", async () => {
+    const calls: (string | undefined)[] = [];
+    const typing = { id: "00000000-0000-7000-8000-00000000000b", kind: "typing" };
+    const resync = { id: "00000000-0000-7000-8000-00000000000c", kind: "resync" };
+    const { controller } = start((_signal, lastEventId) => {
+      calls.push(lastEventId);
+      return calls.length === 1 ? ending([FRAME_A, typing, resync]) : parked();
+    });
 
     await vi.advanceTimersByTimeAsync(1_000);
 
