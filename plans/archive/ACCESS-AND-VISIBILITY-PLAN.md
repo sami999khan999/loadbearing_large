@@ -10,8 +10,9 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–10 done 2026-09-29;
-next is Phase 11**, the last. Written and agreed 2026-09-27, and
+**Built. Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–10 done
+2026-09-29, and Phase 11 on 2026-09-30, apart from `AX11.2`, which waits on its trigger.
+Archived 2026-09-30**; what is open is boxed in `BACKLOG.md` §13. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -26,11 +27,11 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 | 3 | `AX3.10`, `AX3.12` — neither blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
 | 7 | `AX7.5` — a colour-rule decision, not blocking |
-| 11 | `AX11.2` — waits on its trigger; `AX11.3` — needs a running stack |
+| 11 | `AX11.2` — waits on its trigger; `AX11.4` — a dev page's picker, not blocking |
 
 ### Before picking up Phase 11 (2026-09-29)
 
-**Moving machines? Start with [`HANDOFF.md`](HANDOFF.md)** — setup, test data, how each phase was
+**Moving machines? Start with [`HANDOFF.md`](../HANDOFF.md)** — setup, test data, how each phase was
 checked, and the traps that cost time.
 
 Pushed to `origin/dev`. To resume on another device:
@@ -1379,13 +1380,62 @@ flag should be, and the plan is walked end to end.
   proves the path. **Trigger:** the rollout is complete, and in any case before its `expiresOn`.
   2026-09-30: not due. `expiresOn` is 2027-03-31, and `HANDOFF.md` records the flag off with no
   targets, so the rollout has not started. Left open rather than forced ahead of its trigger.
-- [ ] `AX11.3` **The hand walk** — every Exit line above, in one session, against
+- [x] `AX11.3` **The hand walk** — every Exit line above, in one session, against
   `pnpm infra:up && pnpm dev`, as one platform admin, one org admin and one member. Record the
   timestamps in this item's `done:` line.
-  unverified: needs a running stack and a browser; not run unattended.
+  done: 2026-09-30, 18:53:34Z–19:13:08Z on 2026-09-29 UTC (00:53–01:13 Asia/Dhaka). Alice was
+  the platform admin, bob the owner of his own org "Bob", and carol a member there, invited. Carol's
+  own org stood in for the org without the flag. Driven by `curl` jars, plus headless Chrome over
+  the DevTools protocol, since the browser extension was not connected. Every line passed:
+  - **3.** The target showed in `listFlags`. Phase 3's payload line is Phase 9's line 4.
+  - **4.** Moving Bob to a plan without `analytics.activity.read` gave 403 at once. The nav lost
+    "Activity", and the role matrix showed the key "Not included in your plan". Moving back
+    restored it with no role edit. A two-minute trial `add` worked and gave 403 again 23 s after
+    expiry. The `messaging` switch took conversations (403) and the nav item from both tenants.
+  - **5.** A deny of `member.invite` on an admin answered 403 the same second, and "Send
+    invitation" went. A two-minute grant read "Member + 1 exception" and gave 403 again 55 s
+    after expiry. An un-entitled grant was refused outright (403), and an entitled grant was
+    masked by the plan and restored after it.
+  - **6.** Both realtime streams closed 55.4 s after the suspend. The reload fell to `/sign-in`,
+    and the form said "This account has been suspended." After a reinstate the same form reached
+    `/dashboard`. A platform deny read "Set by the platform — contact support", and the org
+    admin's clear answered 409.
+  - **7.** The Zone section rendered in all nine theme-and-mode pairs, and gate 22's grep found
+    nothing. The theme was set by cookie and reload, because of `AX11.4`.
+  - **8.** `/` redirected to `/dashboard` with the header, the nav and the cards. A member denied
+    `member.read` got no Members card and made no `member.list` request. Signed out, `/` stayed.
+  - **9.** Hide, the tray, Show again; the admin default, with the member's restore answering
+    409; no Hide and a 404 naming no flag in the other org; the flag in one payload only.
+  - **10.** The inspector read `denied — member.read`, then `hidden-by-admin`.
+
+  Everything was put back: no preferences, overrides, adjustments or suspensions, `walk-basic`
+  deleted, every org on `unlimited`, and the flag off with no targets. The users, the two
+  personal orgs, carol's membership of "Bob" and one empty DM remain as test data.
+- [ ] `AX11.4` **The kitchen sink's appearance picker writes a stale theme.** Found by the walk.
+  Its buttons read `theme` and `preference` from `appearanceSnapshot`, which is route context
+  and never changes after load. So clicking Ocean and then Dark renders Slate/dark, and the
+  "rendering …" line and the highlighted button never move. It is the only theme picker, and a
+  dev route, so nothing that ships is affected. `LocaleSwitcher` reads `appearance.current` at
+  click time and is right. **Fix:** do the same here, and re-render the page on a choice.
 
 **Exit.** The whole-plan verification below passes, and `BACKLOG.md` §13 carries only what is still
 open.
+
+**Exit verified 2026-09-30.** Every command in the block below passed. The results:
+
+| Check | Result |
+|---|---|
+| `check:architecture` | 31/31, none skipped |
+| `pnpm test` | 2,032 tests in 20 packages |
+| `pnpm smoke` | 54/54 |
+| `check:contrast`, typecheck, lint | green |
+
+Three smoke files skip unless a scale switch is set. The switches are `TENANT_CEILING`,
+`FAN_OUT_SCALE` and the routed one, and none is this plan's.
+
+Smoke needs the `analytics` and `cold-tier` profiles running when `.env` names ClickHouse and
+a cold tier. So does the analytics procedure, which answers 500 without ClickHouse, whatever
+`ANALYTICS_DRIVER` says. Neither is this plan's.
 
 ---
 
@@ -1441,6 +1491,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | `AX11.3` done: the hand walk, every Exit line, in one session. The whole-plan verification passed. `AX11.4` recorded. Archived, with the open items boxed in `BACKLOG.md` §13 |
 | 2026-09-30 | @sami | `AX11.1` done: ESLint bans `lazy()` in `feature` and `apps/web`, proven by writing the violation. `AX11.2` checked and left open: its trigger has not arrived |
 | 2026-09-29 | @sami | Phase 10 done: `WidgetInspector` for your own view and another member's, in the member access panel and behind the tray's "Why is something missing?". Exit verified in the browser |
 | 2026-09-29 | @sami | Phase 9 done: `widget_preferences` (`0047`, partitioned per tenant), the keys and `0048`, the preference and default use-cases behind `widget.dismissal`, the tray widget that makes the flag client-gating, the Hide action, the tray and `/settings/widgets`, and `check-architecture` §31 (`AX3.7`). Exit verified in the running app. `AX9.9`–`AX9.10` recorded |

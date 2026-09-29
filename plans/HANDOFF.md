@@ -6,22 +6,20 @@ owner: sami
 
 # Handoff
 
-Everything needed to continue [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) on
-another machine. The plan holds the item-by-item record; this file holds what lives nowhere else —
+Everything needed to pick up what [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md)
+left open, on any machine. The plan holds the item-by-item record; this file holds what lives nowhere else —
 machine setup, test data, how each phase was checked, and the traps that cost time.
 
 ## Where it stands
 
-- **Branch `dev`, last commit `aa1a41fc`**, pushed to `origin`
-  (`github.com/prodicle/loadbearing_tanstack_start_kit`; GitHub redirects it to
-  `ParentPlaceholderOrg/loadbearing_tanstack_start`, and pushing through the redirect works).
-- **Phases 1–10 are done**, each with an "Exit verified" note in the plan.
-- **Next is Phase 11**, the last one. See "What is next" below.
-- **`check:architecture` is 31/31.** §30 (every inline widget is placed by a literal key) and §31
-  (every flag is live) arrived with Phases 8 and 9.
-- **Two bugs are open, filed in [`BACKLOG.md`](BACKLOG.md) §13.**
-  - `AX7.5`: tinted status badges show the wrong hue.
-  - `AX3.10`: §18 ignores a primary key.
+- **The plan is built and archived (2026-09-30).** Phases 1–11 are done. The hand walk
+  (`AX11.3`) passed every Exit line, and the whole-plan verification passed.
+- **What is open is boxed in [`BACKLOG.md`](BACKLOG.md) §13**, nine items:
+  - `AX11.2`, the flag's retirement, waits on its trigger.
+  - Three bugs: `AX7.5` (badge hue), `AX3.10` (§18 and primary keys), and `AX11.4` (the kitchen
+    sink's picker).
+  - Five small items that block nothing.
+- **`check:architecture` is 31/31.** `pnpm test` runs 2,032 tests and `pnpm smoke` 54.
 
 ## Setting up a new machine
 
@@ -32,7 +30,7 @@ git clone https://github.com/prodicle/loadbearing_tanstack_start_kit.git && cd l
 git checkout dev && git pull
 pnpm install
 cp .env.example .env            # first time only; then diff them, below
-pnpm infra:up                    # postgres ×2 nodes, pgbouncer, 2× redis, minio, mailpit, loki
+pnpm infra:up                    # postgres, pgbouncer, 2× redis, minio, mailpit, loki — see below
 pnpm db:migrate                  # every node; creates every tenant's partitions
 pnpm db:seed                     # grants platform keys (incl. platform.account.*) to platform_admin
 pnpm build:packages && pnpm --filter @loadbearing/web build   # before typecheck: the route tree is generated
@@ -41,6 +39,12 @@ pnpm typecheck && pnpm lint && pnpm test
 pnpm dev                         # web on http://localhost:13000, Mailpit on :18025
 ```
 
+- **`infra:up` alone is not enough for a `.env` that names more nodes.** One that sets
+  `DATABASE_SHARD_1_*`, `DATABASE_REPLICA_URL`, `CLICKHOUSE_URL` and a cold tier needs every
+  matching profile, or `db:migrate` fails dialling 15433, and smoke and the analytics procedure
+  fail on `fetch failed`:
+  `node tooling/scripts/compose.mjs --profile observability --profile sharded --profile replica --profile analytics --profile cold-tier up -d`,
+  then `pnpm ch:migrate`.
 - **`.env` drifts behind `.env.example`, and nothing catches it.** Check it with:
   `comm -23 <(grep -oE "^[A-Z_]+=" .env.example | sort -u) <(grep -oE "^[A-Z_]+=" .env | sort -u)`.
 - **Ports are the well-known ones with a `1` in front:**
@@ -57,12 +61,18 @@ pnpm dev                         # web on http://localhost:13000, Mailpit on :18
   and roles; the users come from signing up.
   1. Sign up `alice@example.test`, `bob@example.test` and `carol@example.test`, all with password
      `Correct-Horse-9`.
-  2. Verify each in Mailpit.
+  2. Verify each in Mailpit. Mailpit's text part ends each line in `\r`, so strip it before
+     following a link with `curl`.
   3. Make alice the platform admin: `pnpm platform:grant alice@example.test`.
+  4. Sign each one in. Under `AUTH_ENROLMENT_MODE=personal` that first sign-in founds an org of
+     their own. Alice gets none, because the grant already gave her a membership.
+  5. For a member, have bob invite carol (`member/invite`). Carol then accepts through
+     `POST /api/auth/invitation/accept` with the token from the mail, since she already has an org.
 
 ## The test data on the original machine
 
-The walks used these; ids differ on a fresh database.
+The walks up to Phase 10 used these; ids differ on a fresh database. The `AX11.3` walk ran on a
+second machine, with alice as platform admin, bob owning "Bob", and carol a member there.
 
 | Org | Id | Who |
 |---|---|---|
@@ -100,6 +110,9 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
 
 - **A page's server-rendered HTML** (`curl -b alice.jar $BASE/dashboard`) shows the zone cards, as
   `class="ui-zone__title"`, and the session payload.
+- **Without the browser extension, drive headless Chrome over the DevTools protocol.** Node's
+  built-in `WebSocket` is enough. Copy the cookie jar in with `Network.setCookie`, then record
+  `Network.requestWillBeSent`. That is how `AX11.3` checked the network panel lines.
 - **For "no request was made", use the browser's network panel.** Sign in there by calling
   `fetch('/api/auth/sign-in/email', …)` from the page, not by typing into the form.
 
@@ -146,6 +159,9 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
   first.
 - **Git Bash has no time-zone database.** Use
   `node -e 'console.log(new Date().toLocaleTimeString("en-GB",{timeZone:"Asia/Dhaka"}))'`.
+- **`pnpm dev` can die mid-session.** On 2026-09-30 the web process got SIGTERM with no cause
+  in its log, and `--parallel` took the worker and realtime down with it. Check the task, restart
+  it, and redo the step that came back empty.
 - **Stopping `pnpm dev` leaves node processes listening.**
   - Kill them by repo path in the command line, and also by ports 13000–13009: the vite process
     has no repo path in its command line.
@@ -157,32 +173,12 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
   - Biome `overrides` replace rule options rather than merging them, and its `noRestrictedImports`
     flags `import type` too.
 
-## What is next — Phase 11
+## What is next
 
-The full text is in the plan.
-
-1. **`AX11.1`** — done 2026-09-30. An ESLint `no-restricted-syntax` ban on `lazy(` and `React.lazy` in
-   `packages/feature/src` and `apps/web/src`.
-   - Its message names `docs/opinions/visibility.md`.
-   - Verify it by writing the violation.
-   - Docs: `tooling/eslint-config/docs/reference/rules.md`, and the enforcement table in
-     `docs/opinions/index.md` (§30, §31, this rule).
-2. **`AX11.2`** — retire `widget.dismissal` once it has been on for every org, and in any case
-   before its `expiresOn` of 2027-03-31.
-   - Remove the flag's entry in `packages/permissions/src/flag/widget.flags.ts`.
-   - Remove the `flag` field on `core.hidden-widgets`.
-   - Remove both `assertOn` calls in `packages/application/src/widget/`.
-   - Remove `DISMISSAL`'s checks in `packages/feature/src/widget/`.
-   - §31 passes with zero flags.
-   - **This has a trigger; it is not work to do now.** Say so rather than forcing it.
-3. **`AX11.3`** — the hand walk: every Exit line in one session, as a platform admin, an org
-   admin and a member. Record the timestamps in its `done:` line.
-
-Then the plan's "Exit":
-1. Run the whole-plan verification block.
-2. Move the plan to `plans/archive/` with a row in `plans/archive/index.md`.
-3. Leave only what is still open in `BACKLOG.md` §13: `AX7.5`, `AX3.10`, and the non-blocking
-   items `AX1.8`, `AX2.11`, `AX3.12`, `AX4.15` and `AX4.16`.
+Nothing in this plan. Pick from `BACKLOG.md` §13. The two with a date or a decision attached:
+1. **`AX11.2`** — retire `widget.dismissal` once it is on for every org, and in any case before
+   2027-03-31. Its body lists the five places.
+2. **`AX7.5`** — waits on the decision below.
 
 ## Open decisions for the owner
 

@@ -22,6 +22,7 @@ a summary.
 | File | What it holds | Moved |
 |---|---|---|
 | [`DONE.md`](DONE.md) | **The only file here that grows.** Every entry `BACKLOG.md` has closed — 84 of them — with the proof each was ticked on, and that file's changelog | 2026-09-22 |
+| [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) | Eleven phases of access and visibility — flags, entitlement plans and the module kill switch, per-user overrides, the platform deny and account suspend, `<Zone>`, `<Widget>` and `/dashboard`, widget preferences, the inspector and the `lazy()` ban. Built 2026-09-28 to 2026-09-30, and walked end to end; what is left is `BACKLOG.md` §13 | 2026-09-30 |
 | [`REVIEW-2026-09-25.md`](REVIEW-2026-09-25.md) | Forty-nine findings from five reviews of `dev` at `b58e748` — bugs, scaling limits, leaks and security. The bodies only: every box is in `BACKLOG.md` §10, pointing at a line here | 2026-09-26 |
 | [`COMMUNICATION-PERFORMANCE-PLAN.md`](COMMUNICATION-PERFORMANCE-PLAN.md) | Seven phases that took realtime, messaging, notifications and email off the web app's path — the `apps/realtime` stream process, `packages/api-server`, the outbox lease, batched fan-out and digest, longer retries. Built 2026-09-26; what is left is `BACKLOG.md` §12 | 2026-09-26 |
 | [`COMMUNICATION.md`](COMMUNICATION.md) | Messaging, email and notification features deferred whole on 2026-09-22, the decisions reached for them, and three things their older entries get wrong. Every item is a box in `BACKLOG.md` §11 | 2026-09-26 |
