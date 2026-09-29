@@ -11,6 +11,7 @@ export const member: NamespaceBundle<"member"> = {
   "member.column.joined": "যোগদান",
   "member.badge.owner": "মালিক",
   "member.badge.deactivated": "নিষ্ক্রিয়",
+  "member.badge.suspended": "প্ল্যাটফর্ম দ্বারা স্থগিত",
   "member.empty": "এখনও কেউ নেই।",
 
   "member.invitation.title": "অপেক্ষমাণ আমন্ত্রণ",

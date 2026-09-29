@@ -7,6 +7,7 @@ export const member = {
   "member.column.joined": "Joined",
   "member.badge.owner": "Owner",
   "member.badge.deactivated": "Deactivated",
+  "member.badge.suspended": "Suspended by the platform",
   "member.empty": "Nobody here yet.",
 
   "member.invitation.title": "Pending invitations",
