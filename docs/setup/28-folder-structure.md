@@ -715,6 +715,14 @@ packages/feature/src/
 │   ├── index.ts
 │   ├── permission-matrix.tsx          → PermissionMatrix
 │   └── effective-permissions.inspector.tsx
+├── widget/
+│   ├── index.ts
+│   ├── widget.tsx                     → Widget   (inline units, by literal key: §30)
+│   ├── use-widget-visibility.ts       → useWidgetVisibility
+│   └── widget-facts.ts                → widgetFacts
+├── dashboard/
+│   ├── index.ts
+│   └── dashboard-zone.tsx             → DashboardZone, prefetchDashboard   (never the map)
 └── <slice>/
     ├── index.ts
     └── <slice>-board.tsx              → <Slice>Board
@@ -784,6 +792,7 @@ apps/web/
 │       ├── (app)/                      ← the product surface, all of it gated
 │       │   ├── _authenticated.tsx      ← requireSession() + <Outlet />  (pathless)
 │       │   └── _authenticated/
+│       │       ├── dashboard.tsx       ← /dashboard  (where a signed-in `/` lands)
 │       │       ├── settings/
 │       │       │   ├── account.tsx     ← /settings/account
 │       │       │   ├── security.tsx    ← /settings/security

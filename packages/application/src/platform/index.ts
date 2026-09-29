@@ -1,8 +1,19 @@
 export {
+  type AccountDeny,
+  type AccountMembership,
+  type AccountRecord,
+  AccountRepository,
+} from "./account.repository.js";
+export { AccountRules } from "./account.rules.js";
+export {
   type AdjustEntitlementInput,
   AdjustEntitlementUseCase,
 } from "./adjust-entitlement.use-case.js";
 export { type AssignPlanInput, AssignPlanUseCase } from "./assign-plan.use-case.js";
+export {
+  type ClearAccountDenyInput,
+  ClearAccountDenyUseCase,
+} from "./clear-account-deny.use-case.js";
 export {
   type ClearEntitlementAdjustmentInput,
   ClearEntitlementAdjustmentUseCase,
@@ -13,6 +24,10 @@ export {
   type DeleteRequested,
 } from "./delete-organization.use-case.js";
 export { type DeletePlanInput, DeletePlanUseCase } from "./delete-plan.use-case.js";
+export {
+  type DenyAccountPermissionInput,
+  DenyAccountPermissionUseCase,
+} from "./deny-account-permission.use-case.js";
 export {
   type AdjustmentInput,
   type AdjustmentRecord,
@@ -31,6 +46,7 @@ export {
   ExportOrganizationUseCase,
   type ExportRequested,
 } from "./export-organization.use-case.js";
+export { type FindAccountInput, FindAccountUseCase } from "./find-account.use-case.js";
 export {
   type GetOrganizationEntitlementInput,
   GetOrganizationEntitlementUseCase,
@@ -117,6 +133,10 @@ export {
   ReclaimMoveSourcesUseCase,
 } from "./reclaim-move-sources.use-case.js";
 export {
+  type ReinstateAccountInput,
+  ReinstateAccountUseCase,
+} from "./reinstate-account.use-case.js";
+export {
   type RelocatedTenant,
   type RelocateTenantInput,
   RelocateTenantUseCase,
@@ -145,6 +165,10 @@ export {
   type ShardTenant,
   type ShardTenantPage,
 } from "./shard-map.reader.js";
+export {
+  type SuspendAccountInput,
+  SuspendAccountUseCase,
+} from "./suspend-account.use-case.js";
 export { type SwitchModuleInput, SwitchModuleUseCase } from "./switch-module.use-case.js";
 export { type TenantRecord, TenantRepository } from "./tenant.repository.js";
 export {

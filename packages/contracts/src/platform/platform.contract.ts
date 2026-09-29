@@ -273,6 +273,53 @@ export class PlatformContract {
     permission: z.string().trim().min(1).max(128),
   });
 
+  // ── accounts (`AX6.6`) ─────────────────────────────────────────────────────
+  public static readonly accountQuery = z.object({ email: z.string().trim().email().max(254) });
+
+  public static readonly accountMembership = z.object({
+    organizationId: Identifiers.organizationId,
+    name: z.string(),
+    slug: z.string(),
+    roleName: z.string(),
+    deactivated: z.boolean(),
+  });
+
+  public static readonly accountDeny = z.object({
+    id: z.string(),
+    organizationId: Identifiers.organizationId,
+    permission: z.string(),
+    reason: z.string().nullable(),
+    createdAt: z.date(),
+  });
+
+  public static readonly account = z.object({
+    userId: Identifiers.userId,
+    email: z.string(),
+    name: z.string(),
+    suspendedAt: z.date().nullable(),
+    memberships: z.array(PlatformContract.accountMembership).readonly(),
+    denies: z.array(PlatformContract.accountDeny).readonly(),
+  });
+
+  // A reason on both: each is audited in every tenant the account belongs to, and an
+  // admin there reads why before they read anything else.
+  public static readonly accountSuspension = z.object({
+    userId: Identifiers.userId,
+    reason: z.string().trim().min(1).max(500),
+  });
+
+  public static readonly accountDenySave = z.object({
+    userId: Identifiers.userId,
+    organizationId: Identifiers.organizationId,
+    permission: z.string().trim().min(1).max(128),
+    reason: z.string().trim().min(1).max(500),
+  });
+
+  public static readonly accountDenyClear = z.object({
+    organizationId: Identifiers.organizationId,
+    overrideId: z.string().min(1).max(64),
+  });
+
   public static readonly moduleSwitch = z.object({
     module: z.string(),
     enabled: z.boolean(),
@@ -493,6 +540,13 @@ export type PlanAssignInput = z.infer<typeof PlatformContract.planAssign>;
 export type AdjustmentSaveInput = z.infer<typeof PlatformContract.adjustmentSave>;
 export type AdjustedDto = z.infer<typeof PlatformContract.adjusted>;
 export type AdjustmentClearInput = z.infer<typeof PlatformContract.adjustmentClear>;
+export type AccountDto = z.infer<typeof PlatformContract.account>;
+export type AccountMembershipDto = z.infer<typeof PlatformContract.accountMembership>;
+export type AccountDenyDto = z.infer<typeof PlatformContract.accountDeny>;
+export type AccountQueryInput = z.infer<typeof PlatformContract.accountQuery>;
+export type AccountSuspensionInput = z.infer<typeof PlatformContract.accountSuspension>;
+export type AccountDenySaveInput = z.infer<typeof PlatformContract.accountDenySave>;
+export type AccountDenyClearInput = z.infer<typeof PlatformContract.accountDenyClear>;
 export type ModuleSwitchDto = z.infer<typeof PlatformContract.moduleSwitch>;
 export type ModuleSwitchUpdateInput = z.infer<typeof PlatformContract.moduleSwitchUpdate>;
 export type FlagTargetDto = z.infer<typeof PlatformContract.flagTarget>;

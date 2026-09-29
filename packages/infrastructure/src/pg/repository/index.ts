@@ -1,5 +1,7 @@
 // Every concrete Postgres adapter, one file each, flat: they are all the same kind of
 // thing, and the subject that earns a folder is the external system one level up.
+
+export { PgAccountRepository } from "./pg-account.repository.js";
 export { PgActivityLogger } from "./pg-activity.logger.js";
 export { PgActivityReplayReader } from "./pg-activity-replay.reader.js";
 export { PgApiKeyRepository } from "./pg-api-key.repository.js";
@@ -38,3 +40,4 @@ export { PgTenantRetentionPolicyRepository } from "./pg-tenant-retention-policy.
 export { PgTenantStorageReader } from "./pg-tenant-storage.reader.js";
 export { PgUserReader } from "./pg-user.reader.js";
 export { PgVectorStore } from "./pg-vector.store.js";
+export { PgWidgetPreferenceRepository } from "./pg-widget-preference.repository.js";

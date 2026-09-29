@@ -19,6 +19,7 @@ const ITEMS = [
   { module: "notification", labelKey: "nav.notifications", icon: "bell", order: 50 },
   { module: "messaging", labelKey: "nav.messages", icon: "chat", order: 60 },
   { module: "analytics", labelKey: "nav.analytics", icon: "check", order: 70 },
+  { module: "widget", labelKey: "nav.widgets", icon: "check", order: 80 },
   // Last, and invisible to everyone but a platform admin: `ModuleRegistry.isVisible`
   // calls `can()`, and a tenant's wildcard does not reach the platform scope.
   { module: "platform", labelKey: "nav.platform", icon: "key", order: 90 },

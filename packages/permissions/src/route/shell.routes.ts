@@ -4,6 +4,8 @@ import type { RoutePath } from "./index.js";
 // edit this file, which is what separates it from the fragments beside it.
 export const shellRoutes = {
   home: "/",
+  // Where a signed-in visitor to `home` is sent. `home` stays the landing page for everyone else.
+  dashboard: "/dashboard",
   signIn: "/sign-in",
   signUp: "/sign-up",
   // The two halves of a password reset. `resetPassword` is where Better Auth redirects

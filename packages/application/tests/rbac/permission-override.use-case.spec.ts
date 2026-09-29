@@ -64,6 +64,7 @@ const member = (userId: UserId, roleId: RoleId): MemberRecord => ({
   roleName: "x",
   joinedAt: NOW,
   deactivated: false,
+  suspended: false,
   exceptions: 0,
 });
 

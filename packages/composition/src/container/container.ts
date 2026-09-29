@@ -10,11 +10,13 @@ import {
   AuthFactory,
   type AuthInstance,
   Authorizer,
+  BetterAuthSessionGateway,
   BetterAuthSessionResolver,
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
   ChangeMemberRoleUseCase,
+  ClearAccountDenyUseCase,
   ClearEntitlementAdjustmentUseCase,
   ClearPermissionOverrideUseCase,
   ClickHouseAnalyticsProjector,
@@ -37,6 +39,7 @@ import {
   DeletePlanUseCase,
   DeleteRoleUseCase,
   DeliverNotificationUseCase,
+  DenyAccountPermissionUseCase,
   DenyPermissionOverrideUseCase,
   type DomainEventPublisher,
   EditMessageUseCase,
@@ -45,6 +48,7 @@ import {
   ExpireEntitlementAdjustmentsUseCase,
   ExpirePermissionOverridesUseCase,
   ExportOrganizationUseCase,
+  FindAccountUseCase,
   FlagCache,
   GetActivityTrendUseCase,
   GetConversationUseCase,
@@ -52,6 +56,7 @@ import {
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
+  GetWidgetPreferencesUseCase,
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -102,6 +107,7 @@ import {
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
+  PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
@@ -141,6 +147,7 @@ import {
   PgUnitOfWork,
   PgUserReader,
   PgVectorStore,
+  PgWidgetPreferenceRepository,
   type PlatformPolicyRepository,
   type PlatformReader,
   PreviewRetentionChangeUseCase,
@@ -159,6 +166,7 @@ import {
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  ReinstateAccountUseCase,
   type RelayedActivityStore,
   RelocateTenantUseCase,
   RemoveConversationMemberUseCase,
@@ -193,6 +201,7 @@ import {
   type StorageGateway,
   type StoragePolicyGateway,
   SubscriberRegistry,
+  SuspendAccountUseCase,
   SwitchModuleUseCase,
   SystemClock,
   type TenantMembershipReader,
@@ -210,6 +219,8 @@ import {
   UpdateRetentionPolicyUseCase,
   UpdateRoleUseCase,
   UpdateTenantRetentionUseCase,
+  UpdateWidgetDefaultUseCase,
+  UpdateWidgetPreferenceUseCase,
   type VectorStore,
   WatchConversationUseCase,
 } from "../import.js";
@@ -229,6 +240,16 @@ interface ApiKeyUseCases {
   readonly listApiKeys: ListApiKeysUseCase;
   readonly createApiKey: CreateApiKeyUseCase;
   readonly revokeApiKey: RevokeApiKeyUseCase;
+}
+
+// The platform's account use-cases (`AX6.6`). Auth-only, because a suspend ends the
+// account's sessions, and only a process with Better Auth holds them.
+export interface AccountUseCases {
+  readonly findAccount: FindAccountUseCase;
+  readonly suspendAccount: SuspendAccountUseCase;
+  readonly reinstateAccount: ReinstateAccountUseCase;
+  readonly denyAccountPermission: DenyAccountPermissionUseCase;
+  readonly clearAccountDeny: ClearAccountDenyUseCase;
 }
 
 // The member slice's use-cases. Named so the getter can say what is absent rather than
@@ -442,6 +463,7 @@ export class Container {
   // Inside `auth`'s block below, because a key is issued *by* someone: without an auth
   // config there is no principal to be the issuer.
   private readonly apiKeyUseCases: ApiKeyUseCases | undefined;
+  private readonly accountUseCases: AccountUseCases | undefined;
   // Named `platformAdmin` rather than `platform`, which is the reader beside it: one is
   // "which organization is the tier" and the other is what an admin may do to it.
   public readonly platformAdmin: {
@@ -501,6 +523,13 @@ export class Container {
   // Whether a flag is on for an org. Read by `fetchSession` on every document request,
   // and by a use-case before its permission check when a flag guards it.
   public readonly flags: FlagCache;
+  // Hiding a dashboard card: one person's, or the org's for everyone. Behind
+  // `widget.dismissal`, which each use-case asks before its permission.
+  public readonly widget: {
+    readonly preferences: GetWidgetPreferencesUseCase;
+    readonly updatePreference: UpdateWidgetPreferenceUseCase;
+    readonly updateDefault: UpdateWidgetDefaultUseCase;
+  };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
   public readonly retentionPolicies: RetentionPolicyRepository;
@@ -1082,6 +1111,53 @@ export class Container {
           this.clock,
         ),
       };
+
+      // Catalog throughout: `users`, memberships and overrides all live there, so no
+      // account change needs placing on a tenant's node.
+      const accounts = new PgAccountRepository(this.cluster, this.transactions, this.shards);
+      const accountOverrides = new PgPermissionOverrideRepository(
+        this.cluster,
+        this.transactions,
+        this.shards,
+      );
+      this.accountUseCases = {
+        findAccount: new FindAccountUseCase(this.authorizer, accounts),
+        suspendAccount: new SuspendAccountUseCase(
+          this.authorizer,
+          accounts,
+          this.platform,
+          this.capabilities,
+          new BetterAuthSessionGateway(this.authInstance),
+          this.activity,
+          this.catalogUnitOfWork,
+          this.clock,
+        ),
+        reinstateAccount: new ReinstateAccountUseCase(
+          this.authorizer,
+          accounts,
+          this.platform,
+          this.capabilities,
+          this.activity,
+          this.catalogUnitOfWork,
+        ),
+        denyAccountPermission: new DenyAccountPermissionUseCase(
+          this.authorizer,
+          accounts,
+          accountOverrides,
+          this.platform,
+          this.capabilities,
+          this.activity,
+          this.catalogUnitOfWork,
+        ),
+        clearAccountDeny: new ClearAccountDenyUseCase(
+          this.authorizer,
+          accountOverrides,
+          this.platform,
+          this.capabilities,
+          this.activity,
+          this.catalogUnitOfWork,
+        ),
+      };
     }
 
     this.activityReplay = new PgActivityReplayReader(this.cluster, this.transactions, this.shards);
@@ -1103,6 +1179,30 @@ export class Container {
     // The directory's own lookup, shared by every screen that takes an id or a slug.
     const tenantLookup = new PgShardMapReader(this.cluster, this.transactions, this.shards);
     this.flags = new FlagCache(flagRepository, this.cache);
+    const widgetPreferences = new PgWidgetPreferenceRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    this.widget = {
+      preferences: new GetWidgetPreferencesUseCase(
+        this.authorizer,
+        widgetPreferences,
+        this.tenantMemberships,
+      ),
+      updatePreference: new UpdateWidgetPreferenceUseCase(
+        this.authorizer,
+        this.flags,
+        widgetPreferences,
+      ),
+      updateDefault: new UpdateWidgetDefaultUseCase(
+        this.authorizer,
+        this.flags,
+        widgetPreferences,
+        this.activity,
+        this.routedUnitOfWork,
+      ),
+    };
     this.retentionPolicies = new PgRetentionPolicyRepository(
       this.cluster,
       this.transactions,
@@ -1519,6 +1619,13 @@ export class Container {
       throw new Error("This container was built without an auth config.");
     }
     return this.apiKeyUseCases;
+  }
+
+  public get accounts(): AccountUseCases {
+    if (!this.accountUseCases) {
+      throw new Error("This container was built without an auth config.");
+    }
+    return this.accountUseCases;
   }
 
   public get member(): MemberUseCases {

@@ -14,22 +14,7 @@ import {
   useAppQuery,
   useMemo,
 } from "../import.js";
-
-// The API returns raw strings, as `RoleMatrix` also receives them: a permission the
-// catalog no longer knows is a stale row, and this is where it stops being trusted.
-function fromWire(dto: CapabilitiesDto): CapabilitySet {
-  const registry = PermissionRegistry.instance;
-  const scoped = (set: CapabilitiesDto["org"]) => ({
-    grants: set.grants.filter((key) => registry.isKnown(key)),
-    denies: set.denies.filter((key) => registry.isKnown(key)),
-  });
-
-  return CapabilitySet.from({
-    wildcard: dto.wildcard,
-    org: scoped(dto.org),
-    goals: Object.fromEntries(Object.entries(dto.goals).map(([id, set]) => [id, scoped(set)])),
-  });
-}
+import { capabilitiesFromWire } from "./capabilities-from-wire.js";
 
 type Source = "role" | "override" | "denied" | "platform" | "plan";
 
@@ -75,7 +60,7 @@ export function EffectivePermissionsInspector({
   const other = useAppQuery({ ...RoleQueries.effective(client, userId ?? ""), enabled: !!userId });
 
   const capabilities = useMemo(
-    () => (userId ? (other.data ? fromWire(other.data.capabilities) : null) : own),
+    () => (userId ? (other.data ? capabilitiesFromWire(other.data.capabilities) : null) : own),
     [userId, other.data, own],
   );
 

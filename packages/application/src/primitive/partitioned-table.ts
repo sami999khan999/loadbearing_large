@@ -6,6 +6,7 @@ const CONVERSATIONS = "conversations";
 const CONVERSATION_MEMBERS = "conversation_members";
 const NOTIFICATION_PREFERENCES = "notification_preferences";
 const DOCUMENT_CHUNKS = "document_chunks";
+const WIDGET_PREFERENCES = "widget_preferences";
 
 // The column the table is ranged by. A closed union rather than `string`: it is inlined
 // into DDL and into every predicate that wants a partition pruned.
@@ -88,6 +89,13 @@ const ALL = Object.freeze([
     column: null,
     retentionMonths: null,
   }),
+  // Which cards a person hid. It grows with the members, not the calendar: no month level.
+  Object.freeze({
+    name: WIDGET_PREFERENCES,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
 ] as const) satisfies readonly PartitionedTableEntry[];
 
 // A closed union rather than `string`: Postgres accepts no bind parameters in DDL, so
@@ -126,6 +134,7 @@ export class PartitionedTable {
   public static readonly CONVERSATION_MEMBERS = CONVERSATION_MEMBERS;
   public static readonly NOTIFICATION_PREFERENCES = NOTIFICATION_PREFERENCES;
   public static readonly DOCUMENT_CHUNKS = DOCUMENT_CHUNKS;
+  public static readonly WIDGET_PREFERENCES = WIDGET_PREFERENCES;
 
   public static readonly ALL = ALL;
 

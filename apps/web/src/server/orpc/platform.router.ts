@@ -118,6 +118,42 @@ export class PlatformRouter {
       context.container.platformAdmin.organizationEntitlement.execute(context.principal, input),
   );
 
+  // Placed on the tier like every platform request: accounts, memberships and overrides
+  // are all catalog, so nothing here has a tenant node to reach.
+  public static readonly findAccount = authed.platform.findAccount.handler(({ input, context }) =>
+    context.container.accounts.findAccount.execute(context.principal, input),
+  );
+
+  public static readonly suspendAccount = authed.platform.suspendAccount.handler(
+    async ({ input, context }) => {
+      await context.container.accounts.suspendAccount.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly reinstateAccount = authed.platform.reinstateAccount.handler(
+    async ({ input, context }) => {
+      await context.container.accounts.reinstateAccount.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly denyAccountPermission = authed.platform.denyAccountPermission.handler(
+    async ({ input, context }) => ({
+      permissions: await context.container.accounts.denyAccountPermission.execute(
+        context.principal,
+        input,
+      ),
+    }),
+  );
+
+  public static readonly clearAccountDeny = authed.platform.clearAccountDeny.handler(
+    async ({ input, context }) => {
+      await context.container.accounts.clearAccountDeny.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   public static readonly assignPlan = authed.platform.assignPlan.handler(
     async ({ input, context }) => {
       await context.container.platformAdmin.assignPlan.execute(context.principal, input);
@@ -223,6 +259,11 @@ export class PlatformRouter {
     deletePlan: PlatformRouter.deletePlan,
     updateDefaultPlan: PlatformRouter.updateDefaultPlan,
     organizationEntitlement: PlatformRouter.organizationEntitlement,
+    findAccount: PlatformRouter.findAccount,
+    suspendAccount: PlatformRouter.suspendAccount,
+    reinstateAccount: PlatformRouter.reinstateAccount,
+    denyAccountPermission: PlatformRouter.denyAccountPermission,
+    clearAccountDeny: PlatformRouter.clearAccountDeny,
     assignPlan: PlatformRouter.assignPlan,
     adjustEntitlement: PlatformRouter.adjustEntitlement,
     clearAdjustment: PlatformRouter.clearAdjustment,

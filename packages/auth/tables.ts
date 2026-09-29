@@ -44,6 +44,10 @@ class UnusedMembershipReader extends MembershipReader {
   public override ownedCount(): Promise<number> {
     return unreachable();
   }
+
+  public override isSuspended(): Promise<boolean> {
+    return unreachable();
+  }
 }
 
 class UnusedMembershipEnroller extends MembershipEnroller {

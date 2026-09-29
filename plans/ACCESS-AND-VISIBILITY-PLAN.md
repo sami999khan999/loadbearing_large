@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1` and
-`AX6.2` are done, and next is `AX6.3`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phases 6–10 done 2026-09-29;
+next is Phase 11**, the last. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -23,26 +23,35 @@ becomes boxes in `BACKLOG.md` §13, as `COMMUNICATION-PERFORMANCE-PLAN.md` did.
 |---|---|
 | 1 | `AX1.8` — deferred, not blocking |
 | 2 | `AX2.11` — a docs listing, not blocking |
-| 3 | `AX3.7` (built with Phase 9), `AX3.10`, `AX3.12` — neither of the last two blocks |
+| 3 | `AX3.10`, `AX3.12` — neither blocks |
 | 4 | `AX4.15`, `AX4.16` — neither blocks |
-| 6–11 | all |
+| 7 | `AX7.5` — a colour-rule decision, not blocking |
+| 11 | all |
 
-### Where Phase 6 stopped (2026-09-28, 18:10 Asia/Dhaka)
+### Before picking up Phase 11 (2026-09-29)
+
+**Moving machines? Start with [`HANDOFF.md`](HANDOFF.md)** — setup, test data, how each phase was
+checked, and the traps that cost time.
 
 Pushed to `origin/dev`. To resume on another device:
 
 1. `git pull`, then `pnpm install`, then `pnpm db:migrate`. It applies `0046_account_suspension`
    on every node. Without it, sign-in fails on the missing `users.suspended_at`.
-2. Pick up at `AX6.3`, the sign-in hook and `ACCOUNT_SUSPENDED`. `AX6.4`–`AX6.9` follow in order.
-   `AX6.6` needs `AX6.4`'s `SessionGateway`, and `AX6.7`–`AX6.8` need `AX6.6`'s procedures.
-3. The Phase 6 exit walk still has to prove `AX6.2`'s four consequences in the running app:
-   session anonymous, principal refused, API key refused, stream closed.
+2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
+   tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
+   procedure.
+3. Run `pnpm db:migrate` again for `0047` and `0048`: the new table, a child partition per
+   tenant, and `widget.default.manage` for existing admins and owners.
+4. Pick up at Phase 11: lint, the flag's retirement, and the whole-plan check. Nothing blocking
+   is open in Phases 6–10. `AX7.5` and `AX3.10` are bugs, filed in `BACKLOG.md` §13.
 
 Useful to know:
 - A drizzle rename needs `drizzle-kit generate --custom`, hand-written SQL, and the same rename in
   that migration's snapshot JSON. Confirm with a plain `generate`, which must report no changes.
 - Test accounts `alice`, `bob` and `carol` `@example.test`, password `Correct-Horse-9`. Alice is
   the platform admin. The web app runs on port 13000.
+- If Docker Desktop was stopped, start it and wait for every `ratchet-*` container to report
+  healthy before running the infrastructure suite, or its specs fail on connection.
 - Stopping `pnpm dev` leaves node processes behind. Kill them by repo path **and** by ports
   13000–13009, because the vite process names no repo path.
 
@@ -51,7 +60,7 @@ Useful to know:
 ```bash
 pnpm build:packages && pnpm --filter @loadbearing/web build && pnpm --filter @loadbearing/worker build
 pnpm --filter @loadbearing/realtime build
-pnpm check:architecture      # 29/29 today; 30/30 after Phase 8; 31/31 after Phase 9; no "○ skipped"
+pnpm check:architecture      # 31/31; no "○ skipped"
 pnpm typecheck && pnpm lint && pnpm test
 pnpm check:contrast          # after Phase 7
 pnpm infra:up && pnpm db:migrate && pnpm db:seed && pnpm dev
@@ -528,7 +537,7 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   `QueryKeys.platform.flags()`, and copy in `content/src/message/{en,bn}/platform.ts`.
   Spec: `feature/tests/platform/flag.list.spec.tsx`.
   done: 2026-09-28
-- [ ] `AX3.7` **§31 — every flag is live** — **Depends on** `AX9.4`, and is built with Phase 9
+- [x] `AX3.7` **§31 — every flag is live** — **Depends on** `AX9.4`, and is built with Phase 9
   (`RV.11`). `widget.dismissal` is declared in `AX2.2` and has no reader in `src/` until `AX9.4`,
   so a check landed here would fail its own phase. `check-architecture.mjs` reads
   `flag/index.ts` with `spreadFragments`. It fails when a flag's `expiresOn` is before today
@@ -537,6 +546,8 @@ it answers `NOT_FOUND` when it is off. The browser learns only the on-set of fla
   - The spec gets fixtures that fail and pass, and the count at `:142` becomes 31.
   - The count moves in the places `AX8.7` moved it to 30, plus a new `### 31` section.
   - Verified by setting an expiry in the past and watching it fail.
+  done: 2026-09-29. Landed with the first flag's reader, as planned. Verified by setting `widget.dismissal`'s
+  expiry to 2026-01-01 and watching it fail, then restoring it. Four fixture specs.
 
 **Recorded while executing Phase 3.**
 
@@ -935,16 +946,22 @@ audited, and visible inside the tenant.
   Spec: `infrastructure/tests/rbac/pg-membership.reader.spec.ts`.
   done: 2026-09-28, the reader and its spec. The four consequences above follow from the reader
   and are **not yet seen in the running app**. Phase 6's exit walk checks them.
-- [ ] `AX6.3` **Sign-in says why** — a Better Auth session-create hook refuses a suspended user with
+- [x] `AX6.3` **Sign-in says why** — a Better Auth session-create hook refuses a suspended user with
   the new error code `ACCOUNT_SUSPENDED`. The code goes in `errors`, and its copy in `content`
   (`en`, `bn`); `Record<ErrorCode, ShellMessageKey>` will not compile without the copy. Verify the
   hook's shape against the pinned Better Auth version before writing it.
-- [ ] `AX6.4` **Ending live sessions** — a `SessionGateway` port (`revokeAll(userId)`) in
+  done: 2026-09-29. The existing `session.create.before` hook throws `APIError` with the code,
+  checked against 1.6.26. It asks `MembershipReader.isSuspended` **before** `enrol`: see `AX6.11`.
+  The api-client normalizer maps the code, and the sign-in form shows the copy for it alone.
+- [x] `AX6.4` **Ending live sessions** — a `SessionGateway` port (`revokeAll(userId)`) in
   `application/src/port/`, and `BetterAuthSessionGateway` in `packages/auth`, through Better
   Auth's own adapter so its Redis secondary-storage copy goes too. A raw `DELETE FROM sessions`
   would leave that copy working. Verify the adapter method against the pinned version. Add a
   recording fake.
-- [ ] `AX6.5` **Open streams re-read permissions** — the conversation stream's revalidation in
+  done: 2026-09-29. `internalAdapter.deleteUserSessions(userId)`, reached through `auth.$context`,
+  clears secondary storage and then the rows (1.6.26). The fake is `RecordingSessionGateway`, which
+  `TestContainer` exposes as `signOuts`. Nothing calls it yet; `AX6.6` wires it.
+- [x] `AX6.5` **Open streams re-read permissions** — the conversation stream's revalidation in
   `packages/api-server/src/router/realtime.router.ts:98` re-runs `watch.execute` with the principal
   captured at open, so no deny, kill switch, plan change or suspend ever closed it. **The fix is
   not this phase's** (`RV.15`): it is a live gap today (`RV.1`, a deactivated member keeps their
@@ -952,7 +969,11 @@ audited, and visible inside the tenant.
   `RV.1`'s fix. What stays here is the proof that it covers suspension: a suspended user's open
   conversation stream closes at its next revalidation.
   Spec: `apps/web/tests/server/realtime.stream.spec.ts`. **Docs:** `packages/api-server/docs/`.
-- [ ] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
+  done: 2026-09-29, proven live rather than by a new web spec. `apps/web` does not depend on
+  `auth`, and each link already has a spec: the reader (`AX6.2`), `PrincipalBuilder.refresh`
+  answering null for an inactive member, and the stream ending on a null. Against `pnpm dev`,
+  bob's held conversation stream closed 55 s after the suspend. `router.md` says so.
+- [x] `AX6.6` **Use-cases and keys** — keys `platform.account.read` and `platform.account.manage`.
   `platform.account.*`, not `platform.principal.*`: `Principal` is the per-request class, and the
   suspend acts on the `users` row. Use-cases in `application/src/platform/`:
   - `find-account`: the user's memberships, whether they are suspended, and their platform denies
@@ -977,17 +998,74 @@ audited, and visible inside the tenant.
   
   Actions `account.suspended` and `account.reinstated`. A platform deny reuses `override.denied`
   with `authority` in its payload.
-- [ ] `AX6.7` **Visible inside the tenant** — `member.entity.ts` gains `suspended`, and the member
+  done: 2026-09-29. `PgAccountRepository` reads the account, its memberships and the platform's
+  denies, and counts live holders of the recovery key in one statement. The use-cases live in the
+  container's auth block as `container.accounts`, because the suspend needs Better Auth's
+  sessions. `clear-account-deny` refuses an org's own exception with 409, the mirror of the
+  tenant's clear refusing a platform deny. See `AX6.13`.
+- [x] `AX6.7` **Visible inside the tenant** — `member.entity.ts` gains `suspended`, and the member
   list shows a "Suspended by the platform" badge. Platform deny rows are locked in the override
   list with "Set by the platform — contact support". Otherwise an admin wastes an afternoon trying
   to restore someone.
-- [ ] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
+  done: 2026-09-29. `suspended` rides the `users` join the member reads already make, so no
+  query was added. The locked platform row had shipped with Phase 5. Seen in the running app:
+  bob read `suspended: true` in alice's member list while suspended, and `false` after.
+- [x] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
   memberships, suspend and reinstate with a reason, per-org denies), the route, and copy.
-- [ ] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
+  done: 2026-09-29. The route guards on `platform.account.read`, and every control renders only
+  for `platform.account.manage`. The panel annotates its data with `AccountDto` as `MemberList`
+  does: the branded ids reach `feature` as an error type otherwise, which `tsc` does not see and
+  ESLint does. Seen live: alice gets the page, and bob is sent to `/forbidden`.
+- [x] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
   loudly, naming the reinstate route. `AX6.6` refuses a self-suspend and the last admin's lockout,
   so this is for what those miss: two admins suspending each other, or an operator reinstating by
   hand with nobody left to use the route (`RV.14`). **Docs:** `platform-scope.md`, and
   `auth/docs/reference/{principal-builder,enrolment}.md`.
+  done: 2026-09-29. `platform:grant` refuses before any write, and prints the route and the one
+  `UPDATE` that reinstates by hand. It does not reinstate itself: the only unaudited change is
+  one somebody typed on purpose. Run against a suspended carol, then carol put back.
+
+**Recorded while executing Phase 6.**
+
+- [x] `AX6.10` **Three specs raced the Docker VM's clock.** Each wrote an expiry one second in the
+  past and asked Postgres whether `expires_at > now()`. After the host slept, the VM ran about a
+  second behind, so the lapsed row read live. The margin is now a minute in
+  `pg-member.repository.spec.ts`, `pg-capability.repository.spec.ts` and
+  `pg-permission-override.repository.spec.ts`. **The rule:** never compare a host time with
+  `now()` inside a second.
+  done: 2026-09-29
+- [x] `AX6.11` **The suspend check runs before `enrol`, not after the reader says no.** After
+  `AX6.2`, `activeOrganizationFor` answers null for a suspended user, and the hook's fallback is
+  `enroller.enrol`. In `bootstrap` mode that finds the existing membership and hands the tenant
+  back, which would open a session for a suspended account. The factory spec leaves `enrol`
+  unreachable to hold that order.
+  done: 2026-09-29
+- [x] `AX6.12` **A suspended user's session row outlives the suspend until `AX6.6`.** Better
+  Auth's `get-session` still answers with it, though every procedure answers `UNAUTHORIZED`. The
+  suspend use-case's `revokeAll` closes this.
+  done: 2026-09-29. After a suspend the rows and the Redis copy are gone, and `get-session` with
+  `disableCookieCache` answers null. Only the signed cookie cache still answers, for at most
+  60 s, and during that window every procedure already answers `UNAUTHORIZED`.
+- [x] `AX6.13` **`permission_overrides` is catalog, so no account change is placed.** The
+  platform deny was first built to run on the target tenant's node, on the belief that overrides
+  are per tenant. `shard.ts` lists them as catalog, like the rest of RBAC. So the deny and clear
+  run through the catalog unit of work from the tier's request, and the account's denies come
+  back in the same read as its memberships.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`, alice (platform admin) and bob:
+1. Bob suspended: his session answered `UNAUTHORIZED` at once, his held conversation stream
+   closed 55 s later, and a right password answered `403 ACCOUNT_SUSPENDED` while a wrong one
+   stayed generic. The suspend deleted his sessions and their Redis copies, and audited in the
+   tier and both his tenants. An API key alice issued answered `UNAUTHORIZED` while she was
+   suspended, and worked again after.
+2. Reinstated, bob signed in again.
+3. A platform deny appeared in the tenant's override list as `authority: platform`, and alice's
+   clear as the org's owner answered 409. The platform's own clear removed it.
+4. `check:architecture` 29/29, `check:contrast` green, and every suite passes.
+Everything was put back: bob and alice reinstated, the platform denies cleared, the test key
+revoked. One `account.suspended` row has no reinstate beside it, from a check that reinstated
+by hand.
 
 **Exit.** On the running app:
 1. Suspend a signed-in member with a conversation open: the page falls back to signed-out on its
@@ -1004,18 +1082,46 @@ audited, and visible inside the tenant.
 
 **Goal.** A layout primitive that knows nothing: no registry, no session, no domain noun.
 
-- [ ] `AX7.1` **The component** — `packages/ui/src/zone/{index.ts,zone.tsx}`:
+- [x] `AX7.1` **The component** — `packages/ui/src/zone/{index.ts,zone.tsx}`:
   - `Zone({ label, items, empty })`, with `ZoneItem { key, title, content, action? }`.
   - Markup: `<section className="ui-zone" aria-label>`, then `ui-zone__item`, `__header`,
     `__title` and `__action`.
   - **`items`, not children** — that is what makes "`<Can>` as a direct child of a zone"
     unwritable, with no lint rule.
   - An empty list renders `empty`, or nothing.
-- [ ] `AX7.2` **Styles** — `src/theme/class/zone.css`: an auto-fill grid on the spacing tokens, with
+  done: 2026-09-29. `empty` renders inside the same labelled region, so it keeps its name. Each
+  unit is an `<article>` whose title is an `<h2>`: the zone has no visible heading of its own.
+- [x] `AX7.2` **Styles** — `src/theme/class/zone.css`: an auto-fill grid on the spacing tokens, with
   colour only through the twelve `var()` names. One `@import` goes in `theme/class.css`.
-- [ ] `AX7.3` **Proof** — a Zone section in the kitchen sink. Spec
+  done: 2026-09-29. `minmax(min(100%, 18rem), 1fr)`, so one column on a phone never overflows.
+  The item is a block rather than a flex column: see `AX7.4`.
+- [x] `AX7.3` **Proof** — a Zone section in the kitchen sink. Spec
   `packages/ui/tests/zone/zone.spec.tsx`: order, label, empty state, the action slot.
   **Docs:** `packages/ui/docs/index.md`.
+  done: 2026-09-29. Six specs, a kitchen-sink section with an action and an empty zone, and a
+  docs section on why `items` is not `children`.
+
+**Recorded while executing Phase 7.**
+
+- [x] `AX7.4` **A flex column stretched an inline badge across the card.** The first cut made
+  `ui-zone__item` a flex column, whose default `align-items: stretch` widened a `StatusBadge` to
+  the whole unit. A layout primitive must not reshape what it is handed, so the item is a block
+  and only the header is flex. Seen in the kitchen sink; the badge went from the card's width to
+  62 px.
+  done: 2026-09-29
+- [ ] `AX7.5` **Every tinted `StatusBadge` shows the wrong hue — not this plan's, and not
+  blocking.** `status-badge.css` mixes `color-mix(in oklch, var(--success) 14%, var(--surface))`.
+  In oklch the hue is interpolated too, so the tint's hue lands near the surface's. The light
+  themes write `--surface` as `oklch(1 0 0)`, hue 0 rather than `none`, so every light theme's
+  success tint is hue 21.7, red. Each dark theme's lands on its own surface hue: slate 245, ocean
+  202, plum 306, midnight 267, and forest 155 only because forest's surface is green. Measured in
+  the kitchen sink on 2026-09-29. `check:contrast` cannot see it: the text still reads. Mixing
+  `in oklab` avoids the hue path. `color.md` prescribes `in oklch` for derived states, so the fix
+  is a colour-rule decision, recorded here for `packages/ui/docs/reference/palette.md`.
+
+**Exit verified 2026-09-29.** `check:contrast` green. The kitchen sink rendered both zones in all
+nine theme-and-mode pairs, side by side in one capture. Gate 22's domain-noun grep finds nothing.
+Every suite passes.
 
 **Exit.** `pnpm check:contrast` green. The kitchen sink shows the zone in every theme and mode.
 Documented setup gate 22's domain-noun grep still finds nothing. Every suite is green.
@@ -1027,19 +1133,23 @@ Documented setup gate 22's domain-noun grep still finds nothing. Every suite is 
 **Goal.** A signed-in user lands on `/dashboard`. Its cards come from the registry. A hidden card
 never mounts and never fetches. The header bell is an inline widget.
 
-- [ ] `AX8.1` **`<Widget>`** — `feature/src/widget/{widget.tsx,use-widget-visibility.ts}`:
+- [x] `AX8.1` **`<Widget>`** — `feature/src/widget/{widget.tsx,use-widget-visibility.ts}`:
   - `Widget({ widget: InlineWidgetKey, goalId?, fallback?, children })`.
   - It checks the flag and the permission; there is **no permission prop**.
   - It returns its children bare, like `<Can>`, and neither wraps the other.
   
   Spec: `feature/tests/widget/widget.spec.tsx`.
-- [ ] `AX8.2` **`DashboardZone`** — `feature/src/dashboard/dashboard-zone.tsx`:
+  done: 2026-09-29. Beside them, `widget-facts.ts` builds the facts `visibilityOf` reads, so the
+  header's `<Widget>` and its loader's prefetch gate cannot answer differently.
+- [x] `AX8.2` **`DashboardZone`** — `feature/src/dashboard/dashboard-zone.tsx`:
   - `DASHBOARD_WIDGETS` `satisfies Record<ZoneWidgetKey<"dashboard.main">, { component; prefetch? }>`,
     total over the zone.
   - `DashboardZone` builds the `<Zone>` items from `forZone`, keeping only `visible` ones.
   - `prefetchDashboard(...)` prefetches for visible widgets only.
   - The barrel exports `DashboardZone` and `prefetchDashboard`, **never the map**.
-- [ ] `AX8.3` **Copy** — the `widget` namespace:
+  done: 2026-09-29. The prefetch takes the client types off `QueryRuntime`, so `feature` still names
+  no cache library.
+- [x] `AX8.3` **Copy** — the `widget` namespace:
   - `namespace.ts`: `NamespaceShape`, `ClientNamespace` and `CLIENT_NAMESPACES`, which also gets
     the missing `"account"`;
   - loaders in `catalog.ts`;
@@ -1047,22 +1157,27 @@ never mounts and never fetches. The header bell is an inline widget.
   
   A new `message/widget-copy.ts` holds `WIDGET_COPY: Record<WidgetKey, NamespaceKeys["widget"]>`,
   on the `error-copy.ts` pattern, so a widget without a title does not compile.
-- [ ] `AX8.4` **The route** — `ROUTES` gains `/dashboard` (in `shell.routes.ts` beside `home`).
+  done: 2026-09-29. A `ZONE_COPY` beside it names each zone for a screen reader.
+- [x] `AX8.4` **The route** — `ROUTES` gains `/dashboard` (in `shell.routes.ts` beside `home`).
   - New `route/(app)/_authenticated/dashboard.tsx`, with messages `["nav", "widget"]`. Its loader
     loads the nav, then calls `prefetchDashboard`.
   - `(shell)/index.tsx` gains a `beforeLoad` that sends a signed-in user to `/dashboard`, and
     loses `MemberCount`, `ModuleNav` and the member prefetch.
-- [ ] `AX8.5` **The bell** — in `_authenticated.tsx`, `<Can permission="notification.inbox.read">`
+  done: 2026-09-29
+- [x] `AX8.5` **The bell** — in `_authenticated.tsx`, `<Can permission="notification.inbox.read">`
   around the bell becomes `<Widget widget="notification.bell">`. The loader's prefetch gate
   uses `visibilityOf`.
-- [ ] `AX8.6` **Specs** — `feature/tests/dashboard/dashboard-zone.spec.tsx`:
+  done: 2026-09-29
+- [x] `AX8.6` **Specs** — `feature/tests/dashboard/dashboard-zone.spec.tsx`:
   - the map's keys equal `forZone("dashboard.main")` — a runtime backstop to the type;
   - a denied widget and a flag-hidden widget do not mount, **and the fake client's `member.list`
     is never called**;
   - `prefetchDashboard` skips both.
   
   `apps/web/tests/route/routes.spec.ts` passes with the new route.
-- [ ] `AX8.7` **§30 — every inline widget is placed by a literal key** — every fragment entry with
+  done: 2026-09-29. No widget names a flag yet, so the flag-hidden cases force the registry's answer
+  with a spy: what is under test is that any answer but `visible` keeps the card unmounted.
+- [x] `AX8.7` **§30 — every inline widget is placed by a literal key** — every fragment entry with
   no zone must appear as `widget="<key>"` in `packages/feature/src` or `apps/web/src`. Any
   `<Widget … widget={` fails, which also forbids a `<Widget>` inside a loop over runtime data.
   Verified by writing each violation.
@@ -1071,9 +1186,21 @@ never mounts and never fetches. The header bell is an inline widget.
   - The count moves in `AGENTS.md:24`, `docs/ai/rules/workflow.md` (`:14`, `:43` and the prose
     list), and `docs/setup/26-hygiene-and-ci.md` (`:372`, `:1118`, `:1121`, plus a new `### 30`
     section after `:1030`).
-- [ ] `AX8.8` **Docs** — `apps/web/docs/reference/enforcement-surfaces.md`: surface 4 now has two
+  done: 2026-09-29. Written into the real tree both ways: a `widget={…}` and the bell removed each
+  failed it, and the file was restored. Five fixture specs.
+- [x] `AX8.8` **Docs** — `apps/web/docs/reference/enforcement-surfaces.md`: surface 4 now has two
   forms, `<Can>` and `<Widget>`, and neither is the gate. Also `docs/setup/28-folder-structure.md`
   and `packages/feature/docs/`.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`:
+1. Signed out, `/` rendered the landing page. Alice's `/` answered 307 to `/dashboard`, which
+   rendered two cards, "Go to" and "Members: 2", under the header and its nav.
+2. With `member.read` denied to bob in alice's org, his dashboard rendered one card, and its
+   dehydrated state held no member list. In the browser, a full load and a client-side trip away
+   and back sent no `/api/rpc` request at all; a `fetch` of `/api/health` showed the capture was on.
+3. `check:architecture` 30/30, `check:contrast` green, and every suite passes.
+Bob's deny was cleared afterwards.
 
 **Exit.** On the running app:
 1. A signed-in user who opens `/` lands on `/dashboard`, with the header, the nav and two cards.
@@ -1089,7 +1216,7 @@ never mounts and never fetches. The header bell is an inline widget.
 **Goal.** A user hides a dismissible card and brings it back. An org admin hides one for everyone,
 and a user cannot bring that back. The whole capability rolls out behind `widget.dismissal`.
 
-- [ ] `AX9.1` **Table** — `pg/schema/widget.schema.ts`, `widget_preferences`:
+- [x] `AX9.1` **Table** — `pg/schema/widget.schema.ts`, `widget_preferences`:
   - Columns: `id`, `organization_id`, `user_id` (null means the org default), `widget` and
     `created_at`, with primary key `(id, organization_id)`.
   - Two partial unique indexes, split on `user_id IS NULL`, because a nullable column in one unique
@@ -1101,9 +1228,12 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   Migration `0047_widget_preferences.sql` through `db:generate`, which writes the partition DDL.
   Existing tenants' child partitions come from `migrate.ts`; tenant move, export and drop all
   derive from the allowlist. The `tenant-partition` spec counts are updated.
-- [ ] `AX9.2` **Adapter** — `WidgetPreferenceRepository` port, `pg-widget-preference.repository.ts`
+  done: 2026-09-29. `0047` through `drizzle-kit generate` and `partition-ddl.ts`; `db:migrate` created one child
+  per tenant on both nodes. The spec counts derive from the allowlist, so only prose said seven.
+- [x] `AX9.2` **Adapter** — `WidgetPreferenceRepository` port, `pg-widget-preference.repository.ts`
   (routed) with its spec, and the fake.
-- [ ] `AX9.3` **Keys** — `core.widget.customize` in the **`core`** module, and
+  done: 2026-09-29
+- [x] `AX9.3` **Keys** — `core.widget.customize` in the **`core`** module, and
   `widget.default.manage` in a new `widget` module (`RV.12`). Core-ness is
   `PermissionMeta.module === "core"` (`capability-set.ts:206`), so a key in the `widget` module
   would be held by nobody until a role granted it.
@@ -1111,7 +1241,9 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   - A nav item in `nav.data.ts`, with `nav.widgets` copy.
   - `SystemRoleSeed`: `admin` gets `widget.default.manage`.
   - Migration `0048_widget_grants.sql`.
-- [ ] `AX9.4` **Rules and use-cases** — `application/src/widget/widget.rules.ts`
+  done: 2026-09-29. `0048` picks the roles by what they hold (`rbac.role.manage`), as `0045` did: every admin
+  and owner on this machine received it.
+- [x] `AX9.4` **Rules and use-cases** — `application/src/widget/widget.rules.ts`
   (`assertDismissible`: a required widget is refused, and a user cannot restore an admin-hidden
   one).
   - `get-widget-preferences`: your own under `core.widget.customize`; another member's under
@@ -1120,7 +1252,9 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
     Not audited — it is cosmetic.
   - `update-widget-default`: the flag, then `widget.default.manage`. Audited as
     `widget.default.hidden` / `widget.default.restored`.
-- [ ] `AX9.5` **Transport and client data** — the contracts subject `widget/`:
+  done: 2026-09-29. `get-widget-preferences` is not behind the flag: it only reads the caller's own rows, and the
+  zone ignores them while the flag is off.
+- [x] `AX9.5` **Transport and client data** — the contracts subject `widget/`:
   - `widget.preferences` — GET `/widgets/preferences`;
   - `widget.preferencesOf` — GET `/widgets/preferences/{userId}`;
   - `widget.updatePreference` — PUT `/widgets/preferences`;
@@ -1129,17 +1263,21 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   Plus `catalog/widget.{permissions,actions}.ts`, the api-client accessor,
   `server/orpc/widget.router.ts`, composition, `query/src/widget/widget.{queries,mutations}.ts`
   and `QueryKeys.widget`.
-- [ ] `AX9.6` **The flag becomes client-gating** — declare `core.hidden-widgets` (zone
+  done: 2026-09-29. The api-client accessor is one getter; `ApiClient` names each subject.
+- [x] `AX9.6` **The flag becomes client-gating** — declare `core.hidden-widgets` (zone
   `dashboard.main`, flag `widget.dismissal`, required, order 90): the tray of hidden cards. From
   here `widget.dismissal` is in the session on-set for orgs that have it.
-- [ ] `AX9.7` **Screens** —
+  done: 2026-09-29. Its permission is `core.widget.customize`, not `null`, so the tray follows the key that
+  lets someone hide a card at all.
+- [x] `AX9.7` **Screens** —
   - `DashboardZone` shows a Hide action on a dismissible card, when the flag is on and the user
     holds `core.widget.customize`, and applies preferences only while the flag is on.
   - `widget/hidden-widget.list.tsx` is the tray: restore buttons, with admin-hidden rows locked.
   - `widget/widget-default.form.tsx` sits on the new route `settings/widgets.tsx`, and states that
     **hiding a card is not removing access**.
   - The dashboard loader ensures preferences, when the flag is on, before it prefetches.
-- [ ] `AX9.8` **Specs** —
+  done: 2026-09-29. The zone holds every card until preferences arrive: see `AX9.9`.
+- [x] `AX9.8` **Specs** —
   - Application: flag off gives `NOT_FOUND` with no flag key; a required widget is refused; a user
     cannot restore an admin-hidden card.
   - Infrastructure: the repository.
@@ -1147,6 +1285,31 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
   
   **Docs:** `infrastructure/docs/reference/partitions.md`, the partitioned-table count in
   `tenant-partition.seed.ts`'s comment, and `packages/application/docs/`.
+  done: 2026-09-29
+
+**Recorded while executing Phase 9.**
+
+- [x] `AX9.9` **A zone drew its cards before it knew which were hidden.** With the flag on and the
+  preferences still loading, the first render had nothing hidden, so a card the person had hidden
+  mounted, issued its query, then vanished. The loader ensures preferences first, so the running
+  app never showed it, but the component must not depend on that. `useWidgetPreferences` now
+  answers `ready`, and the zone renders no card until it is true. A feature spec caught it.
+  done: 2026-09-29
+- [x] `AX9.10` **Four `permissions` specs pinned the state before this phase.** The flag was
+  server-only, the module list had no `widget`, and the zone held two widgets. Each was updated to
+  the new state, not loosened: the flag spec now asserts `clientGating()` is exactly
+  `["widget.dismissal"]`.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** against `pnpm dev`, `widget.dismissal` on for Walk Co alone:
+1. Bob hid the member card: after a reload his dashboard showed "Go to" and "Hidden cards", and the
+   tray offered "Show Members again". He restored it, and it came back.
+2. Alice hid it for everyone: bob's tray showed it locked, his restore answered `CONFLICT`, and the
+   tier logged `widget.default.hidden`.
+3. In Bob Co, without the flag, the dashboard had no Hide action and the update answered `NOT_FOUND`.
+4. Walk Co's page named `widget.dismissal` in its session payload; Bob Co's did not.
+5. `check:architecture` 31/31, `check:contrast` green, and every suite passes.
+Everything was put back: the rows deleted, the default restored, the flag's target removed.
 
 **Exit.** On the running app, with `widget.dismissal` on for one org:
 1. Hide the member card: it is gone after a reload and listed in the tray. Restore it.
@@ -1162,17 +1325,30 @@ and a user cannot bring that back. The whole capability rolls out behind `widget
 
 **Goal.** "Where did my card go?" has a one-word answer on one screen.
 
-- [ ] `AX10.1` **`WidgetInspector`** — `feature/src/widget/widget.inspector.tsx`,
+- [x] `AX10.1` **`WidgetInspector`** — `feature/src/widget/widget.inspector.tsx`,
   `WidgetInspector({ userId? })`: every registered widget, with its `WidgetVisibility` and its
   reason in words.
   - **Your own view** uses the session's capabilities and flags and your preferences.
   - **Another member's view** uses `RoleQueries.effective` (already masked) and
     `WidgetQueries.preferencesOf`. It uses the viewer's flag set, which is right: they are in the
     same org, and every flag a widget names is client-gating.
-- [ ] `AX10.2` **Where it shows** — in `MemberAccessPanel`, behind `rbac.effective.inspect`, and as
+  done: 2026-09-29. A denied row names the key it needs — `denied — member.read` — and a stored row for a
+  widget the code dropped is listed as `unregistered`. The conversion from the API's capabilities
+  moved to `rbac/capabilities-from-wire.ts`, shared with `EffectivePermissionsInspector`.
+- [x] `AX10.2` **Where it shows** — in `MemberAccessPanel`, behind `rbac.effective.inspect`, and as
   a "Why is something missing?" disclosure on the hidden-cards tray. Copy under `widget.reason.*`.
-- [ ] `AX10.3` **Spec** — `feature/tests/widget/widget.inspector.spec.tsx`: one row per kind,
+  done: 2026-09-29. The members route loads the `widget` namespace too. The tray's disclosure lists every
+  card, because a card missing for want of a key is not in the tray at all.
+- [x] `AX10.3` **Spec** — `feature/tests/widget/widget.inspector.spec.tsx`: one row per kind,
   including `unregistered` from a stale preference row.
+  done: 2026-09-29
+
+**Exit verified 2026-09-29** in the browser, alice inspecting bob from the members page:
+1. With `member.read` denied to bob, the inspector's row read "Members — denied — member.read".
+2. With the deny cleared, `widget.dismissal` on for Walk Co and the card hidden for everyone, it
+   read "Members — hidden-by-admin", and the tray's own row turned from `hidden-by-flag` to `visible`.
+3. `check:architecture` 31/31, `check:contrast` green, and every suite passes.
+Everything was put back: the deny cleared, the card restored, the flag's target removed.
 
 **Exit.** For a member missing the member card, the inspector says `denied — member.read`. After
 an admin hides the card, it says `hidden-by-admin`. Every suite is green.
@@ -1259,6 +1435,14 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | Phase 10 done: `WidgetInspector` for your own view and another member's, in the member access panel and behind the tray's "Why is something missing?". Exit verified in the browser |
+| 2026-09-29 | @sami | Phase 9 done: `widget_preferences` (`0047`, partitioned per tenant), the keys and `0048`, the preference and default use-cases behind `widget.dismissal`, the tray widget that makes the flag client-gating, the Hide action, the tray and `/settings/widgets`, and `check-architecture` §31 (`AX3.7`). Exit verified in the running app. `AX9.9`–`AX9.10` recorded |
+| 2026-09-29 | @sami | Phase 8 done: `<Widget>`, `DashboardZone` and `prefetchDashboard`, the `widget` namespace and `WIDGET_COPY`, `/dashboard` with `/` redirecting a session to it, the bell as an inline widget, and `check-architecture` §30. Exit verified in the running app and the browser |
+| 2026-09-29 | @sami | Phase 7 done: `<Zone>` in `ui`, its styles, the kitchen-sink section and docs. Exit verified in all nine theme-and-mode pairs. `AX7.4` fixed, `AX7.5` recorded: tinted badges take the wrong hue |
+| 2026-09-29 | @sami | Phase 6 done: the `/platform/accounts` panel (`AX6.8`) and the recovery path (`AX6.9`). Exit verified in the running app, the API key included. Next is Phase 7 |
+| 2026-09-29 | @sami | `AX6.7` done: `suspended` on the member entity and a "Suspended by the platform" badge. Next is `AX6.8` |
+| 2026-09-29 | @sami | `AX6.6` done: `platform.account.*`, five account use-cases, `PgAccountRepository`, the procedures, and `container.accounts`. Walked in the running app. `AX6.12` closed, `AX6.13` recorded. Next is `AX6.7` |
+| 2026-09-29 | @sami | Phase 6 continued: sign-in answers `ACCOUNT_SUSPENDED` (`AX6.3`), `SessionGateway` and its Better Auth adapter (`AX6.4`), the stream closing on a suspend proven live (`AX6.5`). `AX6.10`–`AX6.12` recorded. Next is `AX6.6` |
 | 2026-09-28 | @sami | Phase 6 started: `users.deactivated_at` renamed to `suspended_at` (`0046`, custom migration plus snapshot rename), and `PgMembershipReader` refuses a suspended account in all four readers (`AX6.1`, `AX6.2`). Stopped before `AX6.3`; handoff in "Where Phase 6 stopped" |
 | 2026-09-28 | @sami | Phase 5 done: override expiry, authority and CHECKs (`0044`), grants to existing roles (`0045`), `explainFor` with the fold in `application`, five override use-cases, the drift counts, the access panel and the inspector's sources. Exit verified in the running app. `AX5.10`–`AX5.14` recorded |
 | 2026-09-28 | @sami | Phase 4 done: plans, adjustments and the kill switch (`0043`), the mask inside resolution at four queries, `invalidateAll`, eleven use-cases, the platform screens and the role editor's ceiling. `RV.10`, `RV.13`, `RV.14` built. Exit verified in the running app. `AX1.9` done; `AX4.10`–`AX4.16` recorded |

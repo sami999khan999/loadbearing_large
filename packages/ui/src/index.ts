@@ -31,3 +31,4 @@ export {
   type ThemeMeta,
   ThemeRegistry,
 } from "./theme/index.js";
+export { Zone, type ZoneItem, type ZoneProps } from "./zone/index.js";

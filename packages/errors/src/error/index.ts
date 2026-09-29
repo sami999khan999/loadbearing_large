@@ -1,3 +1,4 @@
+export { AccountSuspendedError } from "./account-suspended.error.js";
 export {
   AppError,
   type ErrorContext,

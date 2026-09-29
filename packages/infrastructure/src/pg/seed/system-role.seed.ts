@@ -59,6 +59,8 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       "messaging.conversation.manage",
       // The tenant's own activity is an administrator's view, not a member's.
       "analytics.activity.read",
+      // Hiding a card for everyone. Cosmetic, and still an administrator's call (`RV.12`).
+      "widget.default.manage",
     ],
   },
   {

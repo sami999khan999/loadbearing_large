@@ -124,6 +124,10 @@ export class ApiClient {
     return this.rpc.analytics;
   }
 
+  public get widget(): AppClient["widget"] {
+    return this.rpc.widget;
+  }
+
   // The escape hatch for a namespace with no accessor yet.
   public get raw(): AppClient {
     return this.rpc;

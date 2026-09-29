@@ -35,4 +35,8 @@ export const platformActions = {
   // Not a platform admin's doing — enrolment writes it — but it is the tenant
   // lifecycle, which is what the rest of this fragment is.
   "organization.created": { label: "Organization created" },
+  // Audited in the tier and in every tenant the account belongs to. A platform deny reuses
+  // `override.denied`, with `authority` in its payload.
+  "account.suspended": { label: "Account suspended by the platform" },
+  "account.reinstated": { label: "Account reinstated by the platform" },
 } as const;

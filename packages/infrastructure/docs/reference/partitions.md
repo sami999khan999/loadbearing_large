@@ -71,7 +71,7 @@ that drifts from it the first time the shape changes.
 
 **Created standalone, then attached** — never `create table … partition of`. That form takes an
 `ACCESS EXCLUSIVE` lock on the parent for the rest of the transaction, which would stall every read
-on all seven tables for the length of a signup. `ALTER TABLE … ATTACH PARTITION` takes
+on all eight tables for the length of a signup. `ALTER TABLE … ATTACH PARTITION` takes
 `SHARE UPDATE EXCLUSIVE`, which blocks nothing a request does, and an empty child attaches with no
 validation scan — **as long as no foreign key points out of the parent into another partitioned
 table.** One that does is validated on every attach and locks its target; see below.
@@ -106,9 +106,9 @@ fired. The nightly `orphans` job counts conversation ids that a member or a mess
 `PgTenantMoveGateway.dropOn` (the move's reclaim) both call it.
 
 - **No transaction around it.** Each `drop table` commits on its own, so a parent's
-  `ACCESS EXCLUSIVE` lasts one statement. In one transaction, a single reader on one table kept the
-  other six parents locked until it let go. The spec holds a reader open on one table and watches the
-  other six drop.
+  `ACCESS EXCLUSIVE` lasts one statement. In one transaction, a single reader on one table kept every
+  other parent locked until it let go. The spec holds a reader open on one table and watches the
+  rest drop.
 - **Fifty names to a statement**, so the parent's lock is taken once per batch. One at a time, the
   test teardown dropped two tenants a minute at 11 700 partitions; batched, 11 611 partitions took
   1 m 42 s (`4f45294`).
@@ -195,8 +195,9 @@ tenants. The prune pass reads every tenant's months of a table in one query for 
 Measured by `tests/smoke/tenant-ceiling.smoke.spec.ts`, which creates synthetic tenants through
 `TenantPartitionSeed`. **Postgres 17, 2026-09-24**, on a developer machine (Docker Desktop on
 Windows) that was **not idle** — builds ran beside both runs — so read a number that moved by less
-than twice with suspicion. Sixteen partitions per tenant: seven at the tenant level, plus three
-months under each of the three tables that carry a month level.
+than twice with suspicion. Sixteen partitions per tenant then: seven at the tenant level, plus three
+months under each of the three tables that carry a month level. `widget_preferences` has since made it
+eight at the tenant level; it takes no month level.
 
 **Before and after section 9's `PF.1`–`PF.5`**, same machine, same day:
 

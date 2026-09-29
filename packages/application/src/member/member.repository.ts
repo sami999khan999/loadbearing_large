@@ -10,6 +10,8 @@ export interface MemberRecord {
   readonly roleName: string;
   readonly joinedAt: Date;
   readonly deactivated: boolean;
+  // `users.suspended_at`: the platform's lock, in every tenant at once.
+  readonly suspended: boolean;
   // Live overrides — a role review's drift, read in the same statement as the member.
   readonly exceptions: number;
 }

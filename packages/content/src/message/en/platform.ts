@@ -287,4 +287,28 @@ export const platform = {
   "platform.modules.disable": "Switch off",
   "platform.modules.enable": "Switch back on",
   "platform.modules.reason": "Reason",
+
+  // ── accounts (`AX6.8`) ──
+  "platform.accounts.title": "Accounts",
+  "platform.accounts.description":
+    "Find an account by its address, see every organization it belongs to, and lock it everywhere at once when it is compromised.",
+  "platform.account.lookup": "Email address",
+  "platform.account.active": "Active",
+  "platform.account.suspendedOn": "Suspended since {date}",
+  "platform.account.memberships": "Organizations",
+  "platform.account.memberships.none": "This account belongs to no organization.",
+  "platform.account.column.organization": "Organization",
+  "platform.account.column.role": "Role",
+  "platform.account.column.permission": "Permission",
+  "platform.account.column.reason": "Reason",
+  "platform.account.deactivated": "Deactivated by the organization",
+  "platform.account.reason": "Reason (every organization it belongs to can read it)",
+  "platform.account.suspend": "Suspend everywhere",
+  "platform.account.reinstate": "Reinstate",
+  "platform.account.denies": "Denied by the platform",
+  "platform.account.denies.none": "Nothing denied by the platform.",
+  "platform.account.clear": "Clear",
+  "platform.account.deny": "Deny",
+  "platform.account.deny.organization": "In organization",
+  "platform.account.denied": "Denied: {permissions}",
 } as const;

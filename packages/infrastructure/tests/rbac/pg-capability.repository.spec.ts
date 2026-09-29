@@ -325,7 +325,7 @@ describe("PgCapabilityRepository — overrides", () => {
     const organizationId = await seedOrganizationId(database);
     const userId = await makeUser();
     await override(organizationId, userId, { permission: "member.read" });
-    await override(organizationId, userId, { expiresAt: new Date(Date.now() - 1_000) });
+    await override(organizationId, userId, { expiresAt: new Date(Date.now() - 60_000) });
 
     counter.count = 0;
     const explanation = await repository().explainFor(organizationId, userId);

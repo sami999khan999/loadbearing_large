@@ -48,6 +48,7 @@ export {
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
+export { DashboardZone, type DashboardZoneProps, prefetchDashboard } from "./dashboard/index.js";
 export { DocumentSearch, IndexDocumentForm } from "./document/index.js";
 export { type ErrorMessage, useErrorMessage } from "./error/index.js";
 export {
@@ -98,6 +99,7 @@ export {
   type OrganizationSwitcherProps,
 } from "./organization/index.js";
 export {
+  AccountPanel,
   DeleteTenantPanel,
   FlagList,
   ModuleSwitchPanel,
@@ -141,3 +143,19 @@ export {
   type RoleMatrixProps,
   useRoleFailure,
 } from "./rbac/index.js";
+export {
+  DISMISSAL,
+  HiddenWidgetList,
+  type HiddenWidgetListProps,
+  useWidgetPreferences,
+  useWidgetVisibility,
+  Widget,
+  WidgetDefaultForm,
+  type WidgetDefaultFormProps,
+  type WidgetFactOptions,
+  WidgetInspector,
+  type WidgetInspectorProps,
+  type WidgetPreferenceState,
+  type WidgetProps,
+  widgetFacts,
+} from "./widget/index.js";

@@ -31,6 +31,11 @@ describe("BetterAuthErrorNormalizer — mapped codes", () => {
     expect(error.fields).toEqual([{ field: "password", rule: "tooShort" }]);
   });
 
+  // A 403 would read as the generic refusal, and the person would retry a right password.
+  it("turns the session hook's suspension into its own code", () => {
+    expect(codeOf({ code: "ACCOUNT_SUSPENDED", status: 403 })).toBe("ACCOUNT_SUSPENDED");
+  });
+
   // The mapped code wins over the status: `USER_ALREADY_EXISTS` is a 4xx that would
   // otherwise fall through to a validation error.
   it("prefers the code over the status when both are present", () => {

@@ -254,7 +254,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Both tenants go whole — seven partitions and their months each — which takes every
+  // Both tenants go whole — every tenant partition and its months — which takes every
   // row this file wrote to a tenant-owned table with them.
   for (const organization of [organizationId, neighbour]) {
     await dropTenant(database, organization);

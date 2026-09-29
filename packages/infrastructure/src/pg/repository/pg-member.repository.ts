@@ -40,6 +40,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
         roleName: roles.name,
         joinedAt: memberships.createdAt,
         deactivatedAt: memberships.deactivatedAt,
+        suspendedAt: users.suspendedAt,
         exceptions: EXCEPTIONS,
       })
       .from(memberships)
@@ -66,6 +67,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
       roleName: row.roleName,
       joinedAt: row.joinedAt,
       deactivated: row.deactivatedAt !== null,
+      suspended: row.suspendedAt !== null,
       exceptions: row.exceptions,
     }));
 
@@ -88,6 +90,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
         roleName: roles.name,
         joinedAt: memberships.createdAt,
         deactivatedAt: memberships.deactivatedAt,
+        suspendedAt: users.suspendedAt,
         exceptions: EXCEPTIONS,
       })
       .from(memberships)
@@ -107,6 +110,7 @@ export class PgMemberRepository extends BaseRepository implements MemberReposito
       roleName: row.roleName,
       joinedAt: row.joinedAt,
       deactivated: row.deactivatedAt !== null,
+      suspended: row.suspendedAt !== null,
       exceptions: row.exceptions,
     };
   }

@@ -86,6 +86,11 @@ the stream for thirty minutes. `PrincipalBuilder.refresh` answers `null` for an 
 membership, and otherwise a principal built from the current capabilities, so a role edit that
 takes the read away ends the stream too.
 
+**A platform suspend ends both streams the same way.** `memberships.isActive` joins `users` and
+answers no once `suspended_at` is set, in every tenant at once, so neither check needs a branch for
+it. Measured against the running app: a held conversation stream closed 55 seconds after the
+suspend, at its next revalidation.
+
 `messaging.watch` is also what the conversation stream opens with. It used to open with
 `getConversation`, which loads the whole roster, an unread count and every member's name to answer
 a yes-or-no question — once per open, and it would have been once a minute per stream.

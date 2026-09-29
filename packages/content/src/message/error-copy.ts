@@ -11,6 +11,7 @@ export const ERROR_COPY: Readonly<Record<ErrorCode, ShellMessageKey>> = {
   CONFLICT: "error.conflict",
   BAD_REQUEST: "error.unexpected",
   TWO_FACTOR_REQUIRED: "error.twoFactorRequired",
+  ACCOUNT_SUSPENDED: "error.accountSuspended",
   RATE_LIMITED: "error.rateLimited",
   UNAVAILABLE: "error.unexpected",
   INTERNAL: "error.unexpected",

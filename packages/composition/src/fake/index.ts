@@ -25,6 +25,7 @@ export {
 export { InMemoryTenantRetentionPolicyRepository } from "./in-memory-tenant-retention-policy.repository.js";
 export { InMemoryUserReader } from "./in-memory-user.reader.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
+export { InMemoryWidgetPreferenceRepository } from "./in-memory-widget-preference.repository.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";
 export { RecordingCapabilityInvalidator } from "./recording-capability.invalidator.js";
 export {
@@ -46,6 +47,7 @@ export {
   RecordingRealtimePublisher,
 } from "./recording-realtime.publisher.js";
 export { RecordingRelayedActivityStore } from "./recording-relayed-activity.store.js";
+export { RecordingSessionGateway } from "./recording-session.gateway.js";
 export { StubEmbeddingProvider } from "./stub-embedding.provider.js";
 export { StubMailRenderer } from "./stub-mail.renderer.js";
 export { StubSessionResolver } from "./stub-session.resolver.js";

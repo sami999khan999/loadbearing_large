@@ -6,6 +6,7 @@ export const error = {
   "error.rateLimited": "Too many attempts. Please wait a moment and try again.",
   "error.unexpected": "Something went wrong. Please try again.",
   "error.twoFactorRequired": "Enter the code from your authenticator app to continue.",
+  "error.accountSuspended": "This account has been suspended. Contact support to restore it.",
   // Copy like any other — keyed, interpolated, translatable — which is why
   // `@loadbearing/errors` has no message field at all.
   "error.serverOnly":

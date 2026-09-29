@@ -6,6 +6,7 @@ import {
   PermissionOverrideForm,
   PermissionOverrideList,
 } from "../rbac/index.js";
+import { WidgetInspector } from "../widget/index.js";
 
 export interface MemberAccessPanelProps {
   readonly userId: string;
@@ -31,6 +32,7 @@ export function MemberAccessPanel({ userId, onClose }: MemberAccessPanelProps) {
       </Can>
       <Can permission="rbac.effective.inspect" capabilities={capabilities}>
         <EffectivePermissionsInspector userId={userId} />
+        <WidgetInspector userId={userId} />
       </Can>
       <Button variant="secondary" onClick={onClose}>
         {t("member.access.close")}

@@ -135,6 +135,32 @@ export class PlatformProcedures {
     .input(PlatformContract.adjustmentClear)
     .output(Envelope.acknowledged);
 
+  // By address in the query string, because that is what a support ticket carries.
+  public static readonly findAccount = oc
+    .route({ method: "GET", path: "/platform/accounts" })
+    .input(PlatformContract.accountQuery)
+    .output(PlatformContract.account);
+
+  public static readonly suspendAccount = oc
+    .route({ method: "POST", path: "/platform/accounts/suspend" })
+    .input(PlatformContract.accountSuspension)
+    .output(Envelope.acknowledged);
+
+  public static readonly reinstateAccount = oc
+    .route({ method: "POST", path: "/platform/accounts/reinstate" })
+    .input(PlatformContract.accountSuspension)
+    .output(Envelope.acknowledged);
+
+  public static readonly denyAccountPermission = oc
+    .route({ method: "POST", path: "/platform/accounts/denies" })
+    .input(PlatformContract.accountDenySave)
+    .output(PlatformContract.adjusted);
+
+  public static readonly clearAccountDeny = oc
+    .route({ method: "DELETE", path: "/platform/accounts/denies" })
+    .input(PlatformContract.accountDenyClear)
+    .output(Envelope.acknowledged);
+
   public static readonly moduleSwitches = oc
     .route({ method: "GET", path: "/platform/modules" })
     .output(PlatformContract.moduleSwitchList);
@@ -219,6 +245,11 @@ export class PlatformProcedures {
     deletePlan: PlatformProcedures.deletePlan,
     updateDefaultPlan: PlatformProcedures.updateDefaultPlan,
     organizationEntitlement: PlatformProcedures.organizationEntitlement,
+    findAccount: PlatformProcedures.findAccount,
+    suspendAccount: PlatformProcedures.suspendAccount,
+    reinstateAccount: PlatformProcedures.reinstateAccount,
+    denyAccountPermission: PlatformProcedures.denyAccountPermission,
+    clearAccountDeny: PlatformProcedures.clearAccountDeny,
     assignPlan: PlatformProcedures.assignPlan,
     adjustEntitlement: PlatformProcedures.adjustEntitlement,
     clearAdjustment: PlatformProcedures.clearAdjustment,

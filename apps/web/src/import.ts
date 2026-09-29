@@ -33,6 +33,7 @@ export { ConversationEntity } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
+  AccountPanel,
   ActiveSessionList,
   ActivityTrendPanel,
   ApiKeyList,
@@ -43,7 +44,9 @@ export {
   CreateApiKeyForm,
   CreateOrganizationForm,
   CreateRoleForm,
+  DashboardZone,
   DeleteTenantPanel,
+  DISMISSAL,
   DocumentSearch,
   EffectivePermissionsInspector,
   FlagList,
@@ -54,7 +57,6 @@ export {
   InviteMemberForm,
   LinkedAccountList,
   MemberAccessPanel,
-  MemberCount,
   MemberList,
   MessageComposer,
   MessageList,
@@ -72,6 +74,7 @@ export {
   ProjectionGapsPanel,
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
+  prefetchDashboard,
   ReplicaSwitchPanel,
   ResetPasswordForm,
   RestorePartitionPanel,
@@ -97,6 +100,9 @@ export {
   useMessages,
   useSession,
   VerifyEmailNotice,
+  Widget,
+  WidgetDefaultForm,
+  widgetFacts,
 } from "@loadbearing/feature";
 
 // ── @loadbearing/permissions ─────────────────────────────────────────────────
@@ -109,6 +115,7 @@ export {
   FlagRegistry,
   type PermissionKey,
   ROUTES,
+  WidgetRegistry,
 } from "@loadbearing/permissions";
 
 // ── @loadbearing/query ───────────────────────────────────────────────────────
@@ -126,6 +133,7 @@ export {
   useApiClient,
   useAppQuery,
   useConversationStream,
+  WidgetQueries,
 } from "@loadbearing/query";
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
@@ -152,6 +160,7 @@ export {
   StatusBadge,
   type ThemeKey,
   ThemeRegistry,
+  Zone,
 } from "@loadbearing/ui";
 
 // ── @loadbearing/ui — stylesheets ────────────────────────────────────────────

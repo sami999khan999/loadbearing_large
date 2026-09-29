@@ -25,6 +25,12 @@ export class QueryKeys {
     activity: (days: number) => ["analytics", "activity", days] as const,
   };
 
+  public static readonly widget = {
+    all: () => ["widget"] as const,
+    preferences: () => ["widget", "preferences"] as const,
+    preferencesOf: (userId: string) => ["widget", "preferences", userId] as const,
+  };
+
   public static readonly notification = {
     all: () => ["notification"] as const,
     // The cursor is *not* in the key. It lives in the page data, and a key that carried
@@ -81,6 +87,9 @@ export class QueryKeys {
     entitlements: () => ["platform", "entitlement"] as const,
     entitlement: (organization: string) => ["platform", "entitlement", organization] as const,
     modules: () => ["platform", "module", "list"] as const,
+    // The prefix every looked-up account shares, so a suspend refreshes whichever is open.
+    accounts: () => ["platform", "account"] as const,
+    account: (email: string) => ["platform", "account", email] as const,
   };
 
   public static readonly rbac = {

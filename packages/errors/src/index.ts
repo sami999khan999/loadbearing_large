@@ -5,6 +5,7 @@ export {
   type ErrorSeverity,
 } from "./catalog/index.js";
 export {
+  AccountSuspendedError,
   AppError,
   ConflictError,
   type ErrorContext,

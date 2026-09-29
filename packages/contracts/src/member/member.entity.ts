@@ -26,4 +26,10 @@ export class MemberEntity {
   public get active(): boolean {
     return !this.dto.deactivated;
   }
+
+  // Not folded into `active`: the membership is intact, and reinstating the account is
+  // the platform's call, so the list says whose lock it is.
+  public get suspended(): boolean {
+    return this.dto.suspended;
+  }
 }

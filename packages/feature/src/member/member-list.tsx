@@ -68,6 +68,12 @@ export function MemberList({ limit = 25, onOpenAccess }: MemberListProps) {
             ) : null}{" "}
             {row.deactivated ? (
               <StatusBadge tone="warning">{t("member.badge.deactivated")}</StatusBadge>
+            ) : null}{" "}
+            {
+              // Not the admin's to lift, so it says whose lock it is instead of offering one.
+            }
+            {row.suspended ? (
+              <StatusBadge tone="danger">{t("member.badge.suspended")}</StatusBadge>
             ) : null}
           </>
         ),

@@ -16,6 +16,7 @@ const MEMBER: MemberDto = {
   roleName: "Owner",
   joinedAt: new Date("2026-09-01T00:00:00.000Z"),
   deactivated: false,
+  suspended: false,
   exceptions: 0,
 };
 
@@ -65,6 +66,15 @@ describe("MemberList", () => {
 
     await waitFor(() => expect(screen.getByText("Ada")).toBeDefined());
     expect(screen.getByText("ada@example.test")).toBeDefined();
+  });
+
+  // `AX6.7`. Without it an admin spends an afternoon trying to restore someone whose lock
+  // is not theirs to lift.
+  it("says whose lock a suspended member is under", async () => {
+    await render(() => Promise.resolve({ items: [{ ...MEMBER, suspended: true }], total: 1 }));
+
+    await waitFor(() => expect(screen.getByText("Suspended by the platform")).toBeDefined());
+    expect(screen.queryByText("Deactivated")).toBeNull();
   });
 
   // The refusal arrives as the transport decoded it, not as an `AppError`. Every other

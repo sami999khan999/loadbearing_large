@@ -1,5 +1,10 @@
 import type { AuthClient } from "@loadbearing/api-client";
-import { InternalError, TwoFactorRequiredError, UnauthorizedError } from "@loadbearing/errors";
+import {
+  AccountSuspendedError,
+  InternalError,
+  TwoFactorRequiredError,
+  UnauthorizedError,
+} from "@loadbearing/errors";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SignInForm } from "../../src/auth/sign-in.form.js";
@@ -81,6 +86,19 @@ describe("SignInForm", () => {
       expect(screen.getByRole("alert").textContent).toBe("That email and password did not match.");
     });
     expect(onNeedsTwoFactor).not.toHaveBeenCalled();
+  });
+
+  // Told only after the password matched, so naming the reason is no enumeration oracle.
+  it("says the account is suspended rather than that the password was wrong", async () => {
+    await render(vi.fn().mockRejectedValue(new AccountSuspendedError()));
+
+    fillAndSubmit();
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe(
+        "This account has been suspended. Contact support to restore it.",
+      );
+    });
   });
 
   it("says it for a server failure too, rather than leaking the code", async () => {

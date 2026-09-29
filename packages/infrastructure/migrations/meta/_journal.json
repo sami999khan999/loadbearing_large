@@ -330,6 +330,20 @@
       "when": 1790596537870,
       "tag": "0046_account_suspension",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790678501592,
+      "tag": "0047_widget_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790678626621,
+      "tag": "0048_widget_grants",
+      "breakpoints": true
     }
   ]
 }

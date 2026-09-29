@@ -1,4 +1,7 @@
 import type {
+  AccountDenyClearInput,
+  AccountDenySaveInput,
+  AccountSuspensionInput,
   AdjustedDto,
   AdjustmentClearInput,
   AdjustmentSaveInput,
@@ -144,6 +147,35 @@ export class PlatformMutations {
     return useAppMutation<{ ok: true }, AdjustmentClearInput>({
       mutationFn: (input) => client.platform.clearAdjustment(input),
       invalidates: [QueryKeys.platform.entitlements()],
+    });
+  }
+
+  // The member lists too: the tenant shows the suspend on its own list (`AX6.7`).
+  public static useSuspendAccount(client: ApiClient) {
+    return useAppMutation<{ ok: true }, AccountSuspensionInput>({
+      mutationFn: (input) => client.platform.suspendAccount(input),
+      invalidates: [QueryKeys.platform.accounts(), QueryKeys.member.all()],
+    });
+  }
+
+  public static useReinstateAccount(client: ApiClient) {
+    return useAppMutation<{ ok: true }, AccountSuspensionInput>({
+      mutationFn: (input) => client.platform.reinstateAccount(input),
+      invalidates: [QueryKeys.platform.accounts(), QueryKeys.member.all()],
+    });
+  }
+
+  public static useDenyAccountPermission(client: ApiClient) {
+    return useAppMutation<AdjustedDto, AccountDenySaveInput>({
+      mutationFn: (input) => client.platform.denyAccountPermission(input),
+      invalidates: [QueryKeys.platform.accounts(), QueryKeys.override.all()],
+    });
+  }
+
+  public static useClearAccountDeny(client: ApiClient) {
+    return useAppMutation<{ ok: true }, AccountDenyClearInput>({
+      mutationFn: (input) => client.platform.clearAccountDeny(input),
+      invalidates: [QueryKeys.platform.accounts(), QueryKeys.override.all()],
     });
   }
 

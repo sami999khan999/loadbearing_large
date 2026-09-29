@@ -7,6 +7,7 @@ export const coreErrors = {
   CONFLICT: { retryable: false, severity: "expected" },
   BAD_REQUEST: { retryable: false, severity: "expected" },
   TWO_FACTOR_REQUIRED: { retryable: false, severity: "expected" },
+  ACCOUNT_SUSPENDED: { retryable: false, severity: "expected" },
   RATE_LIMITED: { retryable: true, severity: "expected" },
   UNAVAILABLE: { retryable: true, severity: "unexpected" },
   INTERNAL: { retryable: false, severity: "unexpected" },

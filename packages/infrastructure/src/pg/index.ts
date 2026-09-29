@@ -12,6 +12,7 @@ export {
   type ShardConfig,
 } from "./primitive/index.js";
 export {
+  PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
@@ -50,6 +51,7 @@ export {
   PgTenantStorageReader,
   PgUserReader,
   PgVectorStore,
+  PgWidgetPreferenceRepository,
 } from "./repository/index.js";
 export {
   type OpenTransaction,

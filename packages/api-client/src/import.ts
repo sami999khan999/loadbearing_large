@@ -8,6 +8,7 @@ export type { AppContract } from "@loadbearing/contracts";
 // The transport is where a foreign error shape becomes one of ours. Free to load:
 // `errors` carries no runtime dependency and no prose.
 export {
+  AccountSuspendedError,
   type AppError,
   ConflictError,
   ForbiddenError,

@@ -27,6 +27,12 @@ hook is the first moment a membership can exist and still be seen by the code th
 It costs nothing on the sign-in path: `activeOrganizationFor` answers on every session after the
 first, so `enrol` runs exactly once per user, ever.
 
+The hook asks `MembershipReader.isSuspended` first, and throws `ACCOUNT_SUSPENDED` rather than
+returning `false`. The order matters. A suspended user's `activeOrganizationFor` is null, and in
+`bootstrap` mode `enrol` would find their existing membership and hand the tenant straight back,
+opening a session for an account the platform locked. The password was right by then, so naming
+the reason tells nobody whether an address has an account.
+
 ## Three modes, one decorator, one binding
 
 `AUTH_ENROLMENT_MODE` picks one of three `MembershipEnroller` implementations, and `Container` is

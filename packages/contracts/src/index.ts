@@ -91,6 +91,13 @@ export {
   type OverrideWrittenDto,
 } from "./override/index.js";
 export {
+  type AccountDenyClearInput,
+  type AccountDenyDto,
+  type AccountDenySaveInput,
+  type AccountDto,
+  type AccountMembershipDto,
+  type AccountQueryInput,
+  type AccountSuspensionInput,
   type AdjustedDto,
   type AdjustmentClearInput,
   type AdjustmentDto,
@@ -199,3 +206,9 @@ export {
   RoleProcedures,
   type UpdateRoleInput,
 } from "./role/index.js";
+export {
+  WidgetContract,
+  type WidgetPreferencesDto,
+  type WidgetPreferenceUpdateInput,
+  WidgetProcedures,
+} from "./widget/index.js";

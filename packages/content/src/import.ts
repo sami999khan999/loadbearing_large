@@ -10,9 +10,9 @@ export { type IconName, type ImageKey, ImageManifest } from "@loadbearing/asset"
 export type { ErrorCode, ErrorEnvelope, FieldViolation } from "@loadbearing/errors";
 
 // ── @loadbearing/permissions ──────────────────────────────────────────
-// `ModuleKey` and nothing else. Content references the security surface and never
-// defines it; the two symbols that would let it are banned in ESLint.
-export type { ModuleKey } from "@loadbearing/permissions";
+// Key types only: content titles the security surface and never defines it, and the two
+// symbols that would let it are banned in ESLint. `WIDGET_COPY` is total over `WidgetKey`.
+export type { ModuleKey, WidgetKey, ZoneKey } from "@loadbearing/permissions";
 
 // ── zod ───────────────────────────────────────────────────────────────
 export { z } from "zod";

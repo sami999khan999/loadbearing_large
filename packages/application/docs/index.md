@@ -166,6 +166,19 @@ permitted scope in the signature means it cannot be forgotten — a caller must 
 It matters more once the store is remote. There is no join back to goal membership from ClickHouse or
 from Qdrant, so a scope that is not in the argument list does not exist.
 
+## A flag is asked before a permission
+
+The widget preference use-cases open with `flags.assertOn(actor, "widget.dismissal")`, and only then
+assert a key. The order is the point: a feature this organization does not have yet is not a
+feature the caller lacks a right to, so it answers `NOT_FOUND` rather than `FORBIDDEN`. The error
+carries no flag name, because `toJSON()` reaches the browser.
+
+**A preference is cosmetic, and the slice is built to say so.** Hiding a card writes a row nobody
+reads to decide what anyone may do. A person's own hide is not audited, since a row per click is a
+retention bill for nothing. An admin's hide for everyone is audited, because it is one person
+deciding what every other member sees. A required card is never hidden, and a person cannot bring
+back what an admin hid: `WidgetRules` holds both rules.
+
 ## Reference
 
 - [Authorizer](reference/authorizer.md) — the gate, the load-assert-work shape, and the one leak it accepts

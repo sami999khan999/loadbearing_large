@@ -66,6 +66,7 @@ describe("TestContainer", () => {
       "shardAssignments",
       "shardResolver",
       "sharding",
+      "signOuts",
       "storage",
       "storagePolicy",
       "tenantMemberships",

@@ -108,6 +108,23 @@ describe("PgMemberRepository", () => {
     expect(counter.count).toBe(2);
   });
 
+  // The platform's lock is on the account, so it shows in every tenant's list at once, and
+  // it rides the `users` join the list already makes rather than a third query.
+  it("reads the platform's suspend on the member, in the list and the single read", async () => {
+    const suspend = (at: Date | null) =>
+      database.client.update(users).set({ suspendedAt: at }).where(eq(users.id, grace));
+    await suspend(new Date());
+
+    try {
+      const listed = await repository().list(other, { limit: 25, offset: 0 });
+      expect(listed.items.find((m) => m.userId === grace)?.suspended).toBe(true);
+      expect((await repository().findByUser(other, grace))?.suspended).toBe(true);
+      expect((await repository().findByUser(acme, ada))?.suspended).toBe(false);
+    } finally {
+      await suspend(null);
+    }
+  });
+
   it("answers membership by address, case-insensitively and per tenant", async () => {
     const email = `${ada}@example.test`;
 
@@ -132,13 +149,13 @@ describe("PgMemberRepository and PgRoleRepository — exceptions", () => {
   });
 
   it("counts live overrides only, on the member and on the role", async () => {
-    await database.client
-      .insert(permissionOverrides)
-      .values([
-        row("analytics.activity.read", "grant", new Date(Date.now() + 3_600_000)),
-        row("member.invite", "deny", null),
-        row("member.read", "grant", new Date(Date.now() - 1_000)),
-      ]);
+    await database.client.insert(permissionOverrides).values([
+      row("analytics.activity.read", "grant", new Date(Date.now() + 3_600_000)),
+      row("member.invite", "deny", null),
+      // A minute, not a second: `now()` is the database's clock, and Docker's VM drifts
+      // a second behind the host after a sleep, which made a one-second lapse read live.
+      row("member.read", "grant", new Date(Date.now() - 60_000)),
+    ]);
 
     const [member] = (await repository().list(acme, { limit: 25, offset: 0 })).items;
     expect(member?.exceptions).toBe(2);

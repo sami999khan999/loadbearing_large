@@ -236,7 +236,7 @@ describe("PgMaintenanceGateway.dropTenantPartitions", () => {
   });
 
   // `PF.2`: one statement per table and no transaction around them. In one transaction,
-  // a reader on one table held the other six parents' ACCESS EXCLUSIVE until it let go.
+  // a reader on one table held every other parent's ACCESS EXCLUSIVE until it let go.
   it("drops the other tables while a reader holds one of them", async () => {
     const organizationId = await tenant();
     const reader = openDatabase();

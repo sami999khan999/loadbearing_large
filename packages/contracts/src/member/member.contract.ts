@@ -17,6 +17,8 @@ export class MemberContract {
     // shape the repository returns is the shape a component renders.
     joinedAt: z.date(),
     deactivated: z.boolean(),
+    // The platform's lock on the whole account. This tenant's admin sees it and cannot lift it.
+    suspended: z.boolean(),
     // Live per-person overrides: "Accountant + 2 exceptions" on the list.
     exceptions: z.number().int().nonnegative(),
   });

@@ -58,6 +58,10 @@ class StubMemberships extends MembershipReader {
   public override ownedCount(): Promise<number> {
     return Promise.resolve(0);
   }
+
+  public override isSuspended(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
 }
 
 function resolverFor(records: readonly ApiKeyRecord[], issuer: CapabilitySet, active = true) {
