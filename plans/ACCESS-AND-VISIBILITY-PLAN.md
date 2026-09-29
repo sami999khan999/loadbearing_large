@@ -10,8 +10,8 @@ source: tree at 8944903 (dev), 2026-09-27; three read-only surveys (the server a
 
 ## Resume here
 
-**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.6`
-are done, and next is `AX6.7`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
+**Phases 1–5 done 2026-09-28, and `RV.1` fixed the same day. Phase 6 is in progress: `AX6.1`–`AX6.7`
+are done, and next is `AX6.8`** (Phase 7 is also free, needing only Phase 1). `AX3.7` waits for Phase 9 by design. Written and agreed 2026-09-27, and
 corrected before Phase 1 by `BACKLOG.md` §14 `RV.10`–`RV.16`; `BACKLOG.md` §13 points here, one line per
 phase, and nothing else in `plans/` does. Tick boxes here while the plan is live. When it is built
 it moves to `plans/archive/` with a row in `plans/archive/index.md`, and whatever is still open
@@ -36,8 +36,8 @@ Pushed to `origin/dev`. To resume on another device:
 2. Run `pnpm db:seed` as well. The seed grants the two new `platform.account.*` keys to the
    tier's `platform_admin` role, and without it alice gets `FORBIDDEN` from every account
    procedure.
-3. Pick up at `AX6.7`, the tenant's view of a suspend and a platform deny. `AX6.8` is the
-   `/platform/accounts` panel over `container.accounts`, and `AX6.9` comes last.
+3. Pick up at `AX6.8`, the `/platform/accounts` panel over the account procedures. `AX6.9`
+   comes last.
 4. Seen in the running app already: a suspended user's open session answers `UNAUTHORIZED`, a
    right password answers `403 ACCOUNT_SUSPENDED`, a wrong one stays generic, and a held stream
    closes within 60 s. Through `AX6.6`'s procedures: a suspend deletes the sessions and their
@@ -1000,10 +1000,13 @@ audited, and visible inside the tenant.
   container's auth block as `container.accounts`, because the suspend needs Better Auth's
   sessions. `clear-account-deny` refuses an org's own exception with 409, the mirror of the
   tenant's clear refusing a platform deny. See `AX6.13`.
-- [ ] `AX6.7` **Visible inside the tenant** — `member.entity.ts` gains `suspended`, and the member
+- [x] `AX6.7` **Visible inside the tenant** — `member.entity.ts` gains `suspended`, and the member
   list shows a "Suspended by the platform" badge. Platform deny rows are locked in the override
   list with "Set by the platform — contact support". Otherwise an admin wastes an afternoon trying
   to restore someone.
+  done: 2026-09-29. `suspended` rides the `users` join the member reads already make, so no
+  query was added. The locked platform row had shipped with Phase 5. Seen in the running app:
+  bob read `suspended: true` in alice's member list while suspended, and `false` after.
 - [ ] `AX6.8` **`/platform/accounts`** — `feature/src/platform/account.panel.tsx` (search by email,
   memberships, suspend and reinstate with a reason, per-org denies), the route, and copy.
 - [ ] `AX6.9` **The recovery path** — `infrastructure/platform-grant.ts` refuses a suspended account
@@ -1310,6 +1313,7 @@ Each of these would need its own plan. The line after each is what it must respe
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-29 | @sami | `AX6.7` done: `suspended` on the member entity and a "Suspended by the platform" badge. Next is `AX6.8` |
 | 2026-09-29 | @sami | `AX6.6` done: `platform.account.*`, five account use-cases, `PgAccountRepository`, the procedures, and `container.accounts`. Walked in the running app. `AX6.12` closed, `AX6.13` recorded. Next is `AX6.7` |
 | 2026-09-29 | @sami | Phase 6 continued: sign-in answers `ACCOUNT_SUSPENDED` (`AX6.3`), `SessionGateway` and its Better Auth adapter (`AX6.4`), the stream closing on a suspend proven live (`AX6.5`). `AX6.10`–`AX6.12` recorded. Next is `AX6.6` |
 | 2026-09-28 | @sami | Phase 6 started: `users.deactivated_at` renamed to `suspended_at` (`0046`, custom migration plus snapshot rename), and `PgMembershipReader` refuses a suspended account in all four readers (`AX6.1`, `AX6.2`). Stopped before `AX6.3`; handoff in "Where Phase 6 stopped" |
