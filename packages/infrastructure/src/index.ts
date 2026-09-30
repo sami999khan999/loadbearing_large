@@ -29,6 +29,9 @@ export {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
+  PgDocGrantRepository,
+  PgDocPageRepository,
+  PgDocSpaceRepository,
   PgEntitlementRepository,
   PgFlagRepository,
   PgInvitationClaimer,
@@ -89,3 +92,4 @@ export {
   StorageKey,
 } from "./s3/index.js";
 export { type SmtpConfig, SmtpEmailSender } from "./smtp/index.js";
+export { UnifiedMarkdownRenderer } from "./unified/index.js";

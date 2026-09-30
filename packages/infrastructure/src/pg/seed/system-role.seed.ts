@@ -39,6 +39,15 @@ const MESSAGING: readonly PermissionKey[] = Object.freeze([
   "messaging.message.update",
 ]);
 
+// Reading is everyone's; writing, publishing and arranging spaces is `admin`'s, the same
+// line the roles themselves are drawn on.
+const DOC_AUTHOR: readonly PermissionKey[] = Object.freeze([
+  "doc.page.read",
+  "doc.page.write",
+  "doc.page.publish",
+  "doc.space.manage",
+]);
+
 // Frozen at module load rather than left a `static readonly`, which freezes the binding
 // and not the array — the shape `docs/ai/rules/classes.md` bans.
 const ROLES: readonly SystemRole[] = Object.freeze([
@@ -61,13 +70,14 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       "analytics.activity.read",
       // Hiding a card for everyone. Cosmetic, and still an administrator's call (`RV.12`).
       "widget.default.manage",
+      ...DOC_AUTHOR,
     ],
   },
   {
     key: "member",
     name: "Member",
     scope: "org",
-    permissions: ["member.read", ...NOTIFICATION, ...MESSAGING],
+    permissions: ["member.read", ...NOTIFICATION, ...MESSAGING, "doc.page.read"],
   },
   // Never `guest`: an inbox and a conversation are both things you hold, and a guest
   // holds no memberships to be notified about or to talk in.

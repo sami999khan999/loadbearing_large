@@ -288,3 +288,5 @@ variable came back undefined — which looks exactly like an unconfigured stack.
 - [Fan-out](reference/fan-out.md) — the three §6 paths measured against the running stack, which of
   the three costs nineteen of the twenty-four seconds, and what a `users` delete does to a
   partitioned table.
+- [The doc renderer](reference/doc-renderer.md) — the unified pipeline and why the sanitiser sits
+  where it does, what it lets through, and the type stub that keeps the DOM out of this package.
