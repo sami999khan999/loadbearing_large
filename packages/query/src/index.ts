@@ -3,6 +3,7 @@
 export { AccountMutations, AccountQueries } from "./account/index.js";
 export { AnalyticsQueries } from "./analytics/index.js";
 export { ApiKeyMutations, ApiKeyQueries } from "./apikey/index.js";
+export { DocMutations, DocQueries } from "./doc/index.js";
 export { DocumentMutations } from "./document/index.js";
 export { QueryKeys } from "./key/index.js";
 export { MemberMutations, MemberQueries } from "./member/index.js";
