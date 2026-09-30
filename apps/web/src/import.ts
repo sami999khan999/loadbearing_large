@@ -25,11 +25,21 @@ export {
   MessageStore,
   StaticContentSource,
 } from "@loadbearing/content";
-export type { OrganizationId, UserId } from "@loadbearing/contracts";
+export type {
+  DocNavNodeDto,
+  DocPageDraftDto,
+  DocPageId,
+  DocReadingDto,
+  DocSearchHitDto,
+  DocSpaceDto,
+  DocSpaceId,
+  OrganizationId,
+  UserId,
+} from "@loadbearing/contracts";
 // ── @loadbearing/contracts ───────────────────────────────────────────────────
 // The two branded ids `session.fn.ts` casts to, and the one entity a route asks a
 // question of. The shapes a component renders arrive through `@loadbearing/query`.
-export { ConversationEntity } from "@loadbearing/contracts";
+export { ConversationEntity, Identifiers } from "@loadbearing/contracts";
 
 // ── @loadbearing/feature ─────────────────────────────────────────────────────
 export {
@@ -47,6 +57,15 @@ export {
   DashboardZone,
   DeleteTenantPanel,
   DISMISSAL,
+  DocEditorForm,
+  DocGrantPanel,
+  DocNavTree,
+  DocPageTreeList,
+  DocReaderPanel,
+  DocRevisionList,
+  type DocSearchHit,
+  DocSpaceForm,
+  DocSpaceList,
   DocumentSearch,
   EffectivePermissionsInspector,
   FlagList,
@@ -97,6 +116,7 @@ export {
   TypingNotice,
   useCapabilities,
   useErrorMessage,
+  useIsPlatformOrganization,
   useMessages,
   useSession,
   VerifyEmailNotice,
@@ -124,6 +144,7 @@ export {
   ApiClientProvider,
   ApiKeyQueries,
   createQueryClient,
+  DocQueries,
   MemberQueries,
   MessagingQueries,
   NotificationQueries,
@@ -152,6 +173,7 @@ export {
   FontRegistry,
   Icon,
   Input,
+  type LinkAttributes,
   type ModeKey,
   type ModePreference,
   ModeRegistry,

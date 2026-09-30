@@ -1,11 +1,11 @@
 ---
 title: Server functions
-description: Why a *.fn.ts is half client, what that means for what it may import, and why the three shipped ones resolve state and decide nothing.
+description: Why a *.fn.ts is half client, what that means for what it may import, and why the four shipped ones resolve state and leave every decision to a use-case.
 ---
 
 # Server functions
 
-Three files: `session.fn.ts`, `appearance.fn.ts`, `invitation.fn.ts`. Plus `rpc-client.ts` and
+Four files: `session.fn.ts`, `appearance.fn.ts`, `invitation.fn.ts`, `doc.fn.ts`. Plus `rpc-client.ts` and
 `container.ts` beside them, which are not server functions but share their constraints.
 
 ## A server function is half client
@@ -17,7 +17,7 @@ everything below.
 it put `@tanstack/react-start/server` one hop from `__root.tsx`, and Start's import protection denied
 the build, naming the whole chain.
 
-So the three `*.fn.ts` files take:
+So the four `*.fn.ts` files take:
 
 - `~/import.ts` — the **client** surface;
 - `@tanstack/react-start` and `@tanstack/react-start/server` **directly**, because a re-exported
@@ -68,6 +68,23 @@ script in `__root.tsx` covers what it misses.
 yet. It returns the same three fields `InvitationClaimer.preview` does, restated so the route depends
 on this file and never on the server graph behind it. The claim itself happens through the auth
 endpoint, against a session, where the claimer decides.
+
+**`fetchPlatformDocReading` and `fetchPlatformDocSpaces`** serve the platform's public and granted
+docs to anyone. Unlike `fetchSession` they resolve the viewer through `PrincipalBuilder` — the
+authorization path — because what they return depends on who is asking: a `granted` space opens
+to a grant, and a grant is checked against a principal. The decision is still not theirs.
+`ReadPlatformDocUseCase` makes it, and a space the viewer may not read is the same `null` as one
+that does not exist.
+
+They are also the one place a request is placed with no principal of the organization it reads:
+`container.placedAt(platformOrganization, …)` puts the read on the platform organization's node,
+because that is where its spaces are routed. See
+[`doc.md`](../../../../packages/application/docs/reference/doc.md).
+
+Each returns a `cacheable` flag beside its data — true only for a request carrying no cookie and no
+credential — and the route's `headers` turns it into `public, s-maxage=60` or `private, no-store`.
+The root route serialises the session into every page, so a shared cache may keep only a page
+rendered for nobody.
 
 ## `container.ts`: one per process, at module scope
 

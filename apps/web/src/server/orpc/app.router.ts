@@ -1,6 +1,9 @@
 import { RealtimeRouter } from "../import.js";
 import { AnalyticsRouter } from "./analytics.router.js";
 import { ApiKeyRouter } from "./api-key.router.js";
+import { DocGrantRouter } from "./doc-grant.router.js";
+import { DocPageRouter } from "./doc-page.router.js";
+import { DocSpaceRouter } from "./doc-space.router.js";
 import { DocumentRouter } from "./document.router.js";
 import { MemberRouter } from "./member.router.js";
 import { MessageRouter } from "./message.router.js";
@@ -26,4 +29,7 @@ export const appRouter = {
   analytics: AnalyticsRouter.all,
   override: OverrideRouter.all,
   widget: WidgetRouter.all,
+  docSpace: DocSpaceRouter.all,
+  docPage: DocPageRouter.all,
+  docGrant: DocGrantRouter.all,
 };
