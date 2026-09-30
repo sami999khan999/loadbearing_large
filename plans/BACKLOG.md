@@ -235,10 +235,13 @@ are as of `2ee420a`. Each was checked against the code, and the scenario says wh
   (`packages/api-server/src/router/stream-revalidation.ts:14`) runs `isActive` or `findMembership`
   every 60 s for each stream. At 10 000 streams that is ~170 queries a second against
   `apps/realtime`'s `DATABASE_POOL_MAX` default of 5. The comment beside that default
-  (`apps/realtime/src/env.ts:14-15`) still says "once per stream opened, never per frame". The checks
-  can also overlap when one takes longer than the interval. **Fix:** batch the check per process,
-  one query for all open streams per tick, and correct the comment and the pool sizing in
-  `apps/realtime/docs/reference/env.md`.
+  (`apps/realtime/src/env.ts:14-15`) said "once per stream opened, never per frame". The checks
+  could also overlap when one took longer than the interval. **The safe half closed 2026-09-30:** a
+  tick is skipped while the last check is still out, and the comment and the pool sizing in
+  `apps/realtime/docs/reference/env.md` now say what it costs. **Open:** batch the check per
+  process, one query for all open streams per tick. The user stream's `isActive` batches easily;
+  the conversation stream's principal refresh and membership check span tenants and nodes, and
+  every query must stay scoped to one tenant, so it needs a design first.
 - [ ] `RV.7` **`// ──` separators split a sentence to pass §14.** The rule is two comment lines, and
   a separator ends a run so that "two comment lines either side of a separator are two comments"
   (`docs/opinions/comments.md:178`). In 22 places the separator falls mid-sentence, so each is one
