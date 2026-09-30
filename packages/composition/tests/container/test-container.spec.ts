@@ -53,6 +53,7 @@ describe("TestContainer", () => {
       "mailPublisher",
       "mailRenderer",
       "maintenance",
+      "markdownRenderer",
       "organizations",
       "outbox",
       "partitionArchive",

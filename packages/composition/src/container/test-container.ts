@@ -31,6 +31,7 @@ import {
   RecordingSessionGateway,
   StubEmbeddingProvider,
   StubMailRenderer,
+  StubMarkdownRenderer,
   StubSessionResolver,
 } from "../fake/index.js";
 import {
@@ -51,6 +52,7 @@ import {
   type MailPublisher,
   type MailRenderer,
   type MaintenanceGateway,
+  type MarkdownRenderer,
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
@@ -98,6 +100,7 @@ export interface TestPorts {
   readonly logs: LogReader;
   readonly mailPublisher: MailPublisher;
   readonly mailRenderer: MailRenderer;
+  readonly markdownRenderer: MarkdownRenderer;
   readonly maintenance: MaintenanceGateway;
   readonly organizations: OrganizationReader;
   readonly outbox: OutboxGateway;
@@ -167,6 +170,7 @@ export class TestContainer {
       logs: overrides.logs ?? new InMemoryLogReader(),
       mailPublisher: overrides.mailPublisher ?? new RecordingMailPublisher(),
       mailRenderer: overrides.mailRenderer ?? new StubMailRenderer(),
+      markdownRenderer: overrides.markdownRenderer ?? new StubMarkdownRenderer(),
       maintenance: overrides.maintenance ?? new RecordingMaintenanceGateway(),
       organizations: overrides.organizations ?? new InMemoryOrganizationReader(),
       outbox: overrides.outbox ?? new InMemoryOutboxGateway(),
