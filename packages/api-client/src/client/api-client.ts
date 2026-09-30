@@ -128,6 +128,18 @@ export class ApiClient {
     return this.rpc.widget;
   }
 
+  public get docSpace(): AppClient["docSpace"] {
+    return this.rpc.docSpace;
+  }
+
+  public get docPage(): AppClient["docPage"] {
+    return this.rpc.docPage;
+  }
+
+  public get docGrant(): AppClient["docGrant"] {
+    return this.rpc.docGrant;
+  }
+
   // The escape hatch for a namespace with no accessor yet.
   public get raw(): AppClient {
     return this.rpc;
