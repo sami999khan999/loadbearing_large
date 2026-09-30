@@ -19,7 +19,16 @@ machine setup, test data, how each phase was checked, and the traps that cost ti
   - Two bugs: `AX7.5` (badge hue) and `AX3.10` (§18 and primary keys). `AX11.4` closed
     2026-09-30.
   - Five small items that block nothing.
-- **`check:architecture` is 31/31.** `pnpm test` runs 2,033 tests and `pnpm smoke` 54.
+- **`check:architecture` is 31/31.** `pnpm test` runs 2,039 tests and `pnpm smoke` 55.
+- **Then the backlog, 2026-09-30.** Six items closed, each with a spec that fails without it, and
+  each moved to `archive/DONE.md` with its proof:
+  - `RV.8`, the route-tree import, and `RV.9`, §29 and its spec counting four shard readers.
+  - `AX11.4`, the kitchen sink's picker.
+  - `RV.6`, a failed command inside the realtime `MULTI` is logged rather than dropped.
+  - `RV.5`, mail dedupes for a day through the new `onceWithin` port option.
+  - `RV.2`, only an event frame moves the client's resume point.
+- **Stopped at `BACKLOG.md` §14's last three**, `RV.3`, `RV.4` and `RV.7`. Each waits on a
+  decision, below.
 
 ## Setting up a new machine
 
@@ -175,12 +184,36 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
 
 ## What is next
 
-Nothing in this plan. Pick from `BACKLOG.md` §13. The two with a date or a decision attached:
-1. **`AX11.2`** — retire `widget.dismissal` once it is on for every org, and in any case before
-   2027-03-31. Its body lists the five places.
-2. **`AX7.5`** — waits on the decision below.
+Where the work stopped on 2026-09-30, in the order it was going to be taken:
+
+1. **`RV.4`, stream revalidation.** Every open stream runs a database query each minute, about
+   170 a second at 10 000 streams, on a pool of five.
+   - Safe to do at once: stop a check starting while the last one is still running. Correct the
+     "once per stream opened" comment at `apps/realtime/src/env.ts:14-15` and the pool sizing in
+     `apps/realtime/docs/reference/env.md`.
+   - Needs a design first: one query per tick. The user stream's `isActive` batches easily. The
+     conversation stream's principal refresh and membership check span tenants and nodes, and
+     every query must stay scoped to one tenant.
+2. **`RV.3`, the replay log per member.** Pick one of the two fixes, below.
+3. **`RV.7`, 22 comments split by a `// ──` separator mid-sentence.** Mechanical, and touches many
+   packages: cut each to two lines, then make §14 fail a separator whose line above does not end
+   a sentence.
+
+The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` before 2027-03-31,
+`S.2`, `S.3`, `26.8`, `CP7.9`, and the communication features in §11.
+
+**The machine was left running**, and nothing on it needs undoing:
+- `pnpm dev` stopped on its own (SIGTERM). The containers are up with the `observability`,
+  `sharded`, `replica`, `analytics` and `cold-tier` profiles.
+- The test data is alice, bob and carol, the "Bob" and "Carol" orgs, and one empty DM. The flag
+  is off, with no targets.
 
 ## Open decisions for the owner
 
 - **`AX7.5`:** switching the badge tints (and possibly the hover mixes) to `color-mix(in oklab, …)`.
   That changes a rule in `docs/ai/rules/color.md`, so it waits for a yes.
+- **`RV.3`:** there are two ways to fix it.
+  - Skip the replay log for per-member fan-out frames. They are list invalidations only, so a
+    reconnecting member resyncs instead of replaying them.
+  - Or measure the cost first, at `26.8`'s 25 000-member scale, which needs hardware.
+- **`RV.4`:** whether to do the safe half now and design the batched check separately.
