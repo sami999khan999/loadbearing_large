@@ -33,6 +33,8 @@ export const FIELD_RULE_COPY: Readonly<Record<string, ShellMessageKey>> = {
   past: "error.field.past",
   range: "error.field.range",
   min: "error.field.min",
+  // A unique slug, a path two pages would share. The domain's own, not a schema's.
+  taken: "error.field.taken",
 };
 
 // The seam an error page, boundary, or toast calls. Writes the unknown-rule fallback once.

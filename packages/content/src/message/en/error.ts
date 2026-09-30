@@ -20,4 +20,5 @@ export const error = {
   "error.field.past": "{field} must be in the past.",
   "error.field.range": "{field} is outside the range we allow.",
   "error.field.min": "{field} is below the smallest value we allow.",
+  "error.field.taken": "{field} is already in use.",
 } as const;
