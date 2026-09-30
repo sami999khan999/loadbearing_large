@@ -13,6 +13,7 @@ const THEMES = {
   forest: { label: "Forest", modes: ["light", "dark"] },
   plum: { label: "Plum", modes: ["light", "dark"] },
   midnight: { label: "Midnight", modes: ["dark"] },
+  graphite: { label: "Graphite", modes: ["light", "dark"] },
 } as const satisfies Record<string, ThemeMeta>;
 
 export type ThemeKey = keyof typeof THEMES;

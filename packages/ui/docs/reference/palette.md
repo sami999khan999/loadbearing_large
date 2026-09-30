@@ -66,7 +66,7 @@ original hand-written palette.
 ## Contrast is checked, not reviewed
 
 `pnpm check:contrast` runs in CI after `check:architecture` and asserts WCAG AA over every pairing
-the class layer actually produces — 117 of them across five themes. Two consequences worth knowing
+the class layer actually produces — 143 of them across six themes. Two consequences worth knowing
 before authoring a theme:
 
 - **`--fg-muted` is bounded by `--muted`, not by `--bg`.** A placeholder sits inside an input. That
@@ -95,7 +95,7 @@ Then run `pnpm check:contrast`, and open `/kitchen-sink` in `apps/web` to look a
 
 ## Cost
 
-Five themes, nine mode blocks, 108 colours: **4.8 KB raw, 1.1 KB gzipped**, one stylesheet, one
+Six themes, eleven mode blocks, 132 colours: **5.0 KB raw, 0.7 KB gzipped** once comments are stripped, one stylesheet, one
 request. The class layer is another 1.3 KB gzipped and is a separate link you can drop.
 
 Every theme ships to every user rather than being fetched on demand, because a lazily loaded theme

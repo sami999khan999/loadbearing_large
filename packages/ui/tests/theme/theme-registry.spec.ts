@@ -4,7 +4,14 @@ import { ThemeRegistry } from "../../src/theme/theme-registry.js";
 
 describe("ThemeRegistry", () => {
   it("names every palette the stylesheet declares", () => {
-    expect(ThemeRegistry.all()).toEqual(["slate", "ocean", "forest", "plum", "midnight"]);
+    expect(ThemeRegistry.all()).toEqual([
+      "slate",
+      "ocean",
+      "forest",
+      "plum",
+      "midnight",
+      "graphite",
+    ]);
   });
 
   it("defaults to the palette that also seeds :root", () => {

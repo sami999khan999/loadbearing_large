@@ -15,7 +15,7 @@ description: Every colour is one of the twelve custom properties, read as var().
 
   A hex, `rgb()`, `hsl()`, a colour keyword, or a bare `oklch()` outside
   `packages/ui/src/theme/color/` ignores the theme. It compiles, it lints, it reviews clean, and it
-  is wrong in four of the five themes and in every dark mode.
+  is wrong in five of the six themes and in every dark mode.
 
 - **`src/theme/color/<theme>.css` is the only file that may write a themed colour** — one per theme,
   all twelve names, once per mode. Writing there is adding a *theme*; it is never how a colour
@@ -24,7 +24,7 @@ description: Every colour is one of the twelve custom properties, read as var().
 
 - **Two exceptions, and neither is a precedent.** `token/shadow.css` writes
   `oklch(0 0 0 / <alpha>)` — a shadow is opacity over what is behind it, which is why three values
-  are right in all five themes. And `packages/composition/src/mail/mail-layout.ts` writes a frozen
+  are right in all six themes. And `packages/composition/src/mail/mail-layout.ts` writes a frozen
   set of sRGB hexes, because **a mail client resolves no CSS custom property and honours no
   `<style>` block reliably**: `var(--primary)` in an email renders as nothing at all. The values
   are slate-light converted to sRGB, they are inline on the element, and they are not the twelve —
@@ -45,7 +45,7 @@ description: Every colour is one of the twelve custom properties, read as var().
   `--bg`; tint them into `--surface` as `status-badge.css` does. `--danger` is the only status
   colour that clears AA as a foreground.
 
-**This is checked** — `pnpm check:contrast` asserts WCAG AA over the 117 pairings the class layer
+**This is checked** — `pnpm check:contrast` asserts WCAG AA over the 143 pairings the class layer
 produces and fails on a missing name or a value outside sRGB. It cannot see a literal written
 somewhere it does not look, which is why this is also a rule.
 

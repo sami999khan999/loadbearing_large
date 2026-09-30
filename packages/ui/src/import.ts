@@ -14,6 +14,8 @@ export type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
 export type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
   ReactElement,
   ReactNode,
   Ref,
@@ -23,6 +25,7 @@ export {
   Children,
   cloneElement,
   isValidElement,
+  useCallback,
   useEffect,
   useId,
   useMemo,

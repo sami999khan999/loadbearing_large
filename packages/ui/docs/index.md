@@ -48,6 +48,9 @@ packages/ui/
     │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
     │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
     ├── button/…               → Button, ButtonVariant
+    ├── card/…                 → Card, CardGrid
+    ├── code-block/…           → CodeBlock
+    ├── command-dialog/…       → CommandDialog, SearchTrigger, useHotkey
     ├── callout/…              → Callout, CalloutTone
     ├── can/can.tsx            → Can
     ├── code-list/…            → CodeList
@@ -57,8 +60,14 @@ packages/ui/
     ├── format/…               → DateFormat
     ├── icon/icon.tsx          → Icon
     ├── input/…                → Input
+    ├── menu/…                 → Menu
+    ├── nav-tree/…             → NavTree, LinkAttributes
+    ├── prose/…                → Prose
     ├── qr-code/…              → QrCode
+    ├── sidebar/…              → Sidebar
     ├── status-badge/…         → StatusBadge, BadgeTone
+    ├── theme-toggle/…         → ThemeToggle
+    ├── toc/…                  → Toc
     └── zone/…                 → Zone, ZoneItem
 ```
 
@@ -200,6 +209,11 @@ headless library — Radix or Ark — which is a package that lands in the clien
 consumer and therefore a decision, not a file. One catalog line in the React-scoped group plus one
 wrapper here when that is made. A dialog that traps focus incorrectly is worse than one that does not
 exist, because the first ships.
+
+**`CommandDialog` is not the exception either.** It is the native `<dialog>` opened with
+`showModal()`, and the browser supplies the trap, the inert background and Escape. That is a headless
+primitive that ships in every engine rather than in the bundle. See
+[Documentation primitives](reference/docs-primitives.md).
 
 **`Popover` is not the exception to that**, and the distinction is worth stating because the two
 look alike. A popover is non-modal: the page behind it stays live, Tab moves out of it, and
