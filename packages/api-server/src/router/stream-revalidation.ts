@@ -11,13 +11,22 @@ export class StreamRevalidation {
     everyMs: number,
   ): { readonly signal: AbortSignal; readonly stop: () => void } {
     const revoked = new AbortController();
+    let checking = false;
     const timer = setInterval(() => {
-      allowed().then(
-        (ok) => {
-          if (!ok) revoked.abort();
-        },
-        () => undefined,
-      );
+      // A tick while the last check is still out is skipped: under a slow pool, stacking
+      // them would queue one more query per stream per interval onto the same five.
+      if (checking) return;
+      checking = true;
+      allowed()
+        .then(
+          (ok) => {
+            if (!ok) revoked.abort();
+          },
+          () => undefined,
+        )
+        .finally(() => {
+          checking = false;
+        });
     }, everyMs);
     timer.unref();
 

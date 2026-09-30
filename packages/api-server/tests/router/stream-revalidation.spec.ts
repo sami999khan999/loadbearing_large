@@ -56,4 +56,25 @@ describe("StreamRevalidation", () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(allowed).not.toHaveBeenCalled();
   });
+
+  // `RV.4`. A check slower than the interval queued a second one behind it, per stream,
+  // on a pool of five.
+  it("starts no check while the last one is still out", async () => {
+    let finish: (ok: boolean) => void = () => undefined;
+    const allowed = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const watched = StreamRevalidation.watch(new AbortController().signal, allowed, 1_000);
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(allowed).toHaveBeenCalledTimes(1);
+
+    finish(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(allowed).toHaveBeenCalledTimes(2);
+    watched.stop();
+  });
 });
