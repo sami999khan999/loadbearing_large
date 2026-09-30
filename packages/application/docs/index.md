@@ -191,3 +191,6 @@ back what an admin hid: `WidgetRules` holds both rules.
 
 - [Messaging](reference/messaging.md) — the direct key, unread computed rather than
   counted, and where the send dedupe went when `messages` took a month level.
+
+- [Docs](reference/doc.md) — why the platform's docs are the platform organization's rows, a
+  page rendered once and read from one row, and who may read a public or granted space.

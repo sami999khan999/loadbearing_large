@@ -26,6 +26,11 @@ export {
   type SweepOutcome,
   type TenantRunway,
 } from "./maintenance.gateway.js";
+export {
+  MarkdownRenderer,
+  type RenderedMarkdown,
+  type RenderedSection,
+} from "./markdown.renderer.js";
 export { OrganizationReader } from "./organization.reader.js";
 export { OutboxGateway } from "./outbox.gateway.js";
 export {

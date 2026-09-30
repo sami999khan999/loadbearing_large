@@ -7,6 +7,10 @@ const CONVERSATION_MEMBERS = "conversation_members";
 const NOTIFICATION_PREFERENCES = "notification_preferences";
 const DOCUMENT_CHUNKS = "document_chunks";
 const WIDGET_PREFERENCES = "widget_preferences";
+const DOC_SPACES = "doc_spaces";
+const DOC_PAGES = "doc_pages";
+const DOC_REVISION = "doc_revision";
+const DOC_SECTIONS = "doc_sections";
 
 // The column the table is ranged by. A closed union rather than `string`: it is inlined
 // into DDL and into every predicate that wants a partition pruned.
@@ -96,6 +100,34 @@ const ALL = Object.freeze([
     column: null,
     retentionMonths: null,
   }),
+  // Docs grow with what a tenant writes, not with the calendar, so three of the four take
+  // no month level. The platform's public spaces are rows here under its organization.
+  Object.freeze({
+    name: DOC_SPACES,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
+  Object.freeze({
+    name: DOC_PAGES,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
+  // Every publish appends one. Never dropped by the calendar: the live page is a snapshot
+  // on `doc_pages`, so the month level is an archive path and not a retention policy.
+  Object.freeze({
+    name: DOC_REVISION,
+    tenantKey: "organization_id",
+    column: "created_at",
+    retentionMonths: null,
+  }),
+  Object.freeze({
+    name: DOC_SECTIONS,
+    tenantKey: "organization_id",
+    column: null,
+    retentionMonths: null,
+  }),
 ] as const) satisfies readonly PartitionedTableEntry[];
 
 // A closed union rather than `string`: Postgres accepts no bind parameters in DDL, so
@@ -135,6 +167,10 @@ export class PartitionedTable {
   public static readonly NOTIFICATION_PREFERENCES = NOTIFICATION_PREFERENCES;
   public static readonly DOCUMENT_CHUNKS = DOCUMENT_CHUNKS;
   public static readonly WIDGET_PREFERENCES = WIDGET_PREFERENCES;
+  public static readonly DOC_SPACES = DOC_SPACES;
+  public static readonly DOC_PAGES = DOC_PAGES;
+  public static readonly DOC_REVISION = DOC_REVISION;
+  public static readonly DOC_SECTIONS = DOC_SECTIONS;
 
   public static readonly ALL = ALL;
 
