@@ -47,6 +47,7 @@ describe("ModuleRegistry", () => {
       "messaging",
       "analytics",
       "widget",
+      "doc",
     ]);
   });
 

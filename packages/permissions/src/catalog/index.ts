@@ -2,6 +2,7 @@ import { aiPermissions } from "./ai.permissions.js";
 import { analyticsPermissions } from "./analytics.permissions.js";
 import { apiKeyPermissions } from "./apikey.permissions.js";
 import { corePermissions } from "./core.permissions.js";
+import { docPermissions } from "./doc.permissions.js";
 import { memberPermissions } from "./member.permissions.js";
 import { messagingPermissions } from "./messaging.permissions.js";
 import { notificationPermissions } from "./notification.permissions.js";
@@ -21,4 +22,5 @@ export const CATALOG = {
   ...analyticsPermissions,
   ...platformPermissions,
   ...widgetPermissions,
+  ...docPermissions,
 } as const;
