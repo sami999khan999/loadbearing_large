@@ -1231,7 +1231,7 @@ describe("28 — every permission in the catalog gates a procedure", () => {
 describe("29 — the four shard readers run one algorithm", () => {
   const NAME = "the four shard readers run one algorithm";
 
-  // The rule all three carry, written once here. A fixture varies one copy of it.
+  // The rule all four carry, written once here. A fixture varies one copy of it.
   const reader = (guard) =>
     [
       "const shardsFromEnv = () => {",
@@ -1248,17 +1248,24 @@ describe("29 — the four shard readers run one algorithm", () => {
       "",
     ].join("\n");
 
-  const trees = (web, worker, script) => ({
+  const trees = (web, worker, script, realtime = 1) => ({
     "apps/web/package.json": PKG("web"),
     "apps/web/src/env.ts": reader(web),
     "apps/worker/package.json": PKG("worker"),
     "apps/worker/src/env.ts": reader(worker),
+    "apps/realtime/package.json": PKG("realtime"),
+    "apps/realtime/src/env.ts": reader(realtime),
     "packages/infrastructure/package.json": PKG("infrastructure"),
     "packages/infrastructure/shard-env.ts": reader(script),
   });
 
-  it("accepts three copies of one rule", () => {
+  it("accepts four copies of one rule", () => {
     passes(run(trees(1, 1, 1)), NAME);
+  });
+
+  // The fourth copy, which the comment and this fixture once left out.
+  it("catches the realtime copy parsing differently", () => {
+    fails(run(trees(1, 1, 1, 0)), NAME, "apps/realtime/src/env.ts");
   });
 
   // The drift that happened: the scripts' copy and the apps' copies disagreed about an

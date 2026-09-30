@@ -571,6 +571,8 @@ export class BullMqQueuePublisher extends QueuePublisher {
 
 **`jobId` is the deduplication key**, and it comes from the port because idempotency is a domain rule. `jobId: "embed:receipt:<id>"` means enqueuing twice produces one job — which is exactly what you want when a retry re-publishes.
 
+**A `jobId` holds only while the job is kept.** Once the completed set trims it, which the count cap does early on a busy queue, the same id enqueues again. Two more options cover what that cannot. `inFlightId` holds while a job is waiting or running and frees at once, for an operator's request. `onceWithin: { id, seconds }` holds for a fixed window whether the job finished or not, because BullMQ keeps it as its own key with a TTL. Mail uses it, with a day (`RV.5`).
+
 **Exponential backoff from the first attempt.** A downstream service that is down does not recover faster because you retried three times in two seconds.
 
 **Consumers live in `apps/worker`, not here.** This package publishes. See [25](25-worker-app.md).

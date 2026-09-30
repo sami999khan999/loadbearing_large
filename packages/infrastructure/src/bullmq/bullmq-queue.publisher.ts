@@ -55,6 +55,12 @@ export class BullMqQueuePublisher extends QueuePublisher {
       // BullMQ's simple mode: the key is released when the job completes or fails, so a
       // repeat request after the first has finished is a new job rather than a no-op.
       ...(options?.inFlightId === undefined ? {} : { deduplication: { id: options.inFlightId } }),
+      // Throttle mode: the key is its own Redis entry with a TTL, so it outlives the job.
+      ...(options?.onceWithin === undefined
+        ? {}
+        : {
+            deduplication: { id: options.onceWithin.id, ttl: options.onceWithin.seconds * 1_000 },
+          }),
       // Jittered, so the jobs one outage failed together do not all retry together.
       backoff: { ...BACKOFF },
       // Mandatory, not tuning. BullMQ keeps completed jobs forever by default, and

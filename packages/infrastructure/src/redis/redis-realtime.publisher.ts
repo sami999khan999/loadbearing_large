@@ -29,12 +29,17 @@ export class RedisRealtimePublisher implements RealtimePublisher {
       // Logged before it is published, in one `MULTI`: a stream that resumes on this
       // frame's id has to find it in the log, or it falls back to a resync.
       const key = RealtimeLog.keyOf(channel);
-      await this.redis
+      const results = await this.redis
         .multi()
         .xadd(key, "MAXLEN", "~", RealtimeLog.LENGTH, "*", "m", payload)
         .expire(key, RealtimeLog.TTL_SECONDS)
         .publish(channel, payload)
         .exec();
+
+      // `exec` resolves with an `[error, result]` pair per command rather than throwing, so
+      // a failed `XADD` would otherwise pass as a sent frame. Null is an aborted transaction.
+      const failed = results?.find(([error]) => error !== null)?.[0];
+      if (!results || failed) throw failed ?? new Error("MULTI aborted");
     } catch {
       // The channel is per-person and would be a high-cardinality field on a line the
       // whole tenant produces. What matters is which event stopped arriving.

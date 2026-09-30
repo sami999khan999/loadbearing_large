@@ -1,27 +1,34 @@
 ---
 title: Handoff — where the access and visibility plan stands, and how to pick it up anywhere
-updated: 2026-09-29
+updated: 2026-09-30
 owner: sami
 ---
 
 # Handoff
 
-Everything needed to continue [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.md) on
-another machine. The plan holds the item-by-item record; this file holds what lives nowhere else —
+Everything needed to pick up what [`ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md)
+left open, on any machine. The plan holds the item-by-item record; this file holds what lives nowhere else —
 machine setup, test data, how each phase was checked, and the traps that cost time.
 
 ## Where it stands
 
-- **Branch `dev`, last commit `aa1a41fc`**, pushed to `origin`
-  (`github.com/prodicle/loadbearing_tanstack_start_kit`; GitHub redirects it to
-  `ParentPlaceholderOrg/loadbearing_tanstack_start`, and pushing through the redirect works).
-- **Phases 1–10 are done**, each with an "Exit verified" note in the plan.
-- **Next is Phase 11**, the last one. See "What is next" below.
-- **`check:architecture` is 31/31.** §30 (every inline widget is placed by a literal key) and §31
-  (every flag is live) arrived with Phases 8 and 9.
-- **Two bugs are open, filed in [`BACKLOG.md`](BACKLOG.md) §13.**
-  - `AX7.5`: tinted status badges show the wrong hue.
-  - `AX3.10`: §18 ignores a primary key.
+- **The plan is built and archived (2026-09-30).** Phases 1–11 are done. The hand walk
+  (`AX11.3`) passed every Exit line, and the whole-plan verification passed.
+- **What is open is boxed in [`BACKLOG.md`](BACKLOG.md) §13**, eight items:
+  - `AX11.2`, the flag's retirement, waits on its trigger.
+  - Two bugs: `AX7.5` (badge hue) and `AX3.10` (§18 and primary keys). `AX11.4` closed
+    2026-09-30.
+  - Five small items that block nothing.
+- **`check:architecture` is 31/31.** `pnpm test` runs 2,039 tests and `pnpm smoke` 55.
+- **Then the backlog, 2026-09-30.** Six items closed, each with a spec that fails without it, and
+  each moved to `archive/DONE.md` with its proof:
+  - `RV.8`, the route-tree import, and `RV.9`, §29 and its spec counting four shard readers.
+  - `AX11.4`, the kitchen sink's picker.
+  - `RV.6`, a failed command inside the realtime `MULTI` is logged rather than dropped.
+  - `RV.5`, mail dedupes for a day through the new `onceWithin` port option.
+  - `RV.2`, only an event frame moves the client's resume point.
+- **Stopped at `BACKLOG.md` §14's last three**, `RV.3`, `RV.4` and `RV.7`. Each waits on a
+  decision, below.
 
 ## Setting up a new machine
 
@@ -32,7 +39,7 @@ git clone https://github.com/prodicle/loadbearing_tanstack_start_kit.git && cd l
 git checkout dev && git pull
 pnpm install
 cp .env.example .env            # first time only; then diff them, below
-pnpm infra:up                    # postgres ×2 nodes, pgbouncer, 2× redis, minio, mailpit, loki
+pnpm infra:up                    # postgres, pgbouncer, 2× redis, minio, mailpit, loki — see below
 pnpm db:migrate                  # every node; creates every tenant's partitions
 pnpm db:seed                     # grants platform keys (incl. platform.account.*) to platform_admin
 pnpm build:packages && pnpm --filter @loadbearing/web build   # before typecheck: the route tree is generated
@@ -41,6 +48,12 @@ pnpm typecheck && pnpm lint && pnpm test
 pnpm dev                         # web on http://localhost:13000, Mailpit on :18025
 ```
 
+- **`infra:up` alone is not enough for a `.env` that names more nodes.** One that sets
+  `DATABASE_SHARD_1_*`, `DATABASE_REPLICA_URL`, `CLICKHOUSE_URL` and a cold tier needs every
+  matching profile, or `db:migrate` fails dialling 15433, and smoke and the analytics procedure
+  fail on `fetch failed`:
+  `node tooling/scripts/compose.mjs --profile observability --profile sharded --profile replica --profile analytics --profile cold-tier up -d`,
+  then `pnpm ch:migrate`.
 - **`.env` drifts behind `.env.example`, and nothing catches it.** Check it with:
   `comm -23 <(grep -oE "^[A-Z_]+=" .env.example | sort -u) <(grep -oE "^[A-Z_]+=" .env | sort -u)`.
 - **Ports are the well-known ones with a `1` in front:**
@@ -57,12 +70,18 @@ pnpm dev                         # web on http://localhost:13000, Mailpit on :18
   and roles; the users come from signing up.
   1. Sign up `alice@example.test`, `bob@example.test` and `carol@example.test`, all with password
      `Correct-Horse-9`.
-  2. Verify each in Mailpit.
+  2. Verify each in Mailpit. Mailpit's text part ends each line in `\r`, so strip it before
+     following a link with `curl`.
   3. Make alice the platform admin: `pnpm platform:grant alice@example.test`.
+  4. Sign each one in. Under `AUTH_ENROLMENT_MODE=personal` that first sign-in founds an org of
+     their own. Alice gets none, because the grant already gave her a membership.
+  5. For a member, have bob invite carol (`member/invite`). Carol then accepts through
+     `POST /api/auth/invitation/accept` with the token from the mail, since she already has an org.
 
 ## The test data on the original machine
 
-The walks used these; ids differ on a fresh database.
+The walks up to Phase 10 used these; ids differ on a fresh database. The `AX11.3` walk ran on a
+second machine, with alice as platform admin, bob owning "Bob", and carol a member there.
 
 | Org | Id | Who |
 |---|---|---|
@@ -100,6 +119,9 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
 
 - **A page's server-rendered HTML** (`curl -b alice.jar $BASE/dashboard`) shows the zone cards, as
   `class="ui-zone__title"`, and the session payload.
+- **Without the browser extension, drive headless Chrome over the DevTools protocol.** Node's
+  built-in `WebSocket` is enough. Copy the cookie jar in with `Network.setCookie`, then record
+  `Network.requestWillBeSent`. That is how `AX11.3` checked the network panel lines.
 - **For "no request was made", use the browser's network panel.** Sign in there by calling
   `fetch('/api/auth/sign-in/email', …)` from the page, not by typing into the form.
 
@@ -146,6 +168,9 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
   first.
 - **Git Bash has no time-zone database.** Use
   `node -e 'console.log(new Date().toLocaleTimeString("en-GB",{timeZone:"Asia/Dhaka"}))'`.
+- **`pnpm dev` can die mid-session.** On 2026-09-30 the web process got SIGTERM with no cause
+  in its log, and `--parallel` took the worker and realtime down with it. Check the task, restart
+  it, and redo the step that came back empty.
 - **Stopping `pnpm dev` leaves node processes listening.**
   - Kill them by repo path in the command line, and also by ports 13000–13009: the vite process
     has no repo path in its command line.
@@ -157,34 +182,38 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
   - Biome `overrides` replace rule options rather than merging them, and its `noRestrictedImports`
     flags `import type` too.
 
-## What is next — Phase 11
+## What is next
 
-The full text is in the plan.
+Where the work stopped on 2026-09-30, in the order it was going to be taken:
 
-1. **`AX11.1`** — an ESLint `no-restricted-syntax` ban on `lazy(` and `React.lazy` in
-   `packages/feature/src` and `apps/web/src`.
-   - Its message names `docs/opinions/visibility.md`.
-   - Verify it by writing the violation.
-   - Docs: `tooling/eslint-config/docs/reference/rules.md`, and the enforcement table in
-     `docs/opinions/index.md` (§30, §31, this rule).
-2. **`AX11.2`** — retire `widget.dismissal` once it has been on for every org, and in any case
-   before its `expiresOn` of 2027-03-31.
-   - Remove the flag's entry in `packages/permissions/src/flag/widget.flags.ts`.
-   - Remove the `flag` field on `core.hidden-widgets`.
-   - Remove both `assertOn` calls in `packages/application/src/widget/`.
-   - Remove `DISMISSAL`'s checks in `packages/feature/src/widget/`.
-   - §31 passes with zero flags.
-   - **This has a trigger; it is not work to do now.** Say so rather than forcing it.
-3. **`AX11.3`** — the hand walk: every Exit line in one session, as a platform admin, an org
-   admin and a member. Record the timestamps in its `done:` line.
+1. **`RV.4`, stream revalidation.** Every open stream runs a database query each minute, about
+   170 a second at 10 000 streams, on a pool of five.
+   - Safe to do at once: stop a check starting while the last one is still running. Correct the
+     "once per stream opened" comment at `apps/realtime/src/env.ts:14-15` and the pool sizing in
+     `apps/realtime/docs/reference/env.md`.
+   - Needs a design first: one query per tick. The user stream's `isActive` batches easily. The
+     conversation stream's principal refresh and membership check span tenants and nodes, and
+     every query must stay scoped to one tenant.
+2. **`RV.3`, the replay log per member.** Pick one of the two fixes, below.
+3. **`RV.7`, 22 comments split by a `// ──` separator mid-sentence.** Mechanical, and touches many
+   packages: cut each to two lines, then make §14 fail a separator whose line above does not end
+   a sentence.
 
-Then the plan's "Exit":
-1. Run the whole-plan verification block.
-2. Move the plan to `plans/archive/` with a row in `plans/archive/index.md`.
-3. Leave only what is still open in `BACKLOG.md` §13: `AX7.5`, `AX3.10`, and the non-blocking
-   items `AX1.8`, `AX2.11`, `AX3.12`, `AX4.15` and `AX4.16`.
+The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` before 2027-03-31,
+`S.2`, `S.3`, `26.8`, `CP7.9`, and the communication features in §11.
+
+**The machine was left running**, and nothing on it needs undoing:
+- `pnpm dev` stopped on its own (SIGTERM). The containers are up with the `observability`,
+  `sharded`, `replica`, `analytics` and `cold-tier` profiles.
+- The test data is alice, bob and carol, the "Bob" and "Carol" orgs, and one empty DM. The flag
+  is off, with no targets.
 
 ## Open decisions for the owner
 
 - **`AX7.5`:** switching the badge tints (and possibly the hover mixes) to `color-mix(in oklab, …)`.
   That changes a rule in `docs/ai/rules/color.md`, so it waits for a yes.
+- **`RV.3`:** there are two ways to fix it.
+  - Skip the replay log for per-member fan-out frames. They are list invalidations only, so a
+    reconnecting member resyncs instead of replaying them.
+  - Or measure the cost first, at `26.8`'s 25 000-member scale, which needs hardware.
+- **`RV.4`:** whether to do the safe half now and design the batched check separately.

@@ -21,6 +21,7 @@ import {
   StatusBadge,
   type ThemeKey,
   ThemeRegistry,
+  useState,
   Zone,
 } from "~/import.js";
 
@@ -166,14 +167,16 @@ function Pair({ fg, bg, label }: { fg: string; bg: string; label: string }) {
 
 function KitchenSink() {
   const { appearance, appearanceSnapshot } = Route.useRouteContext();
-  const { theme, mode, preference, font } = appearanceSnapshot;
+  // State, not the route context: the context is fixed at load, so a mode click built on it
+  // put the loaded theme back.
+  const [current, setCurrent] = useState(appearanceSnapshot);
+  const { theme, mode, preference, font } = current;
 
-  // No state and no re-render: the picker writes three properties on <html> and the
-  // cascade does the rest.
   const choose = (next: ThemeKey, wanted: ModePreference, face: FontKey = font): void => {
     const prefersDark =
       typeof matchMedia === "function" && matchMedia("(prefers-color-scheme:dark)").matches;
     appearance.choose(next, wanted, prefersDark, face);
+    setCurrent(appearance.current);
   };
 
   return (

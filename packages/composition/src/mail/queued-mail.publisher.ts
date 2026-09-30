@@ -14,6 +14,10 @@ const PRIORITY = Object.freeze({ high: 1, normal: 5 });
 // cannot complete without, eight about ten for everything else.
 const ATTEMPTS = Object.freeze({ high: 10, normal: 8 });
 
+// A day: the digest's key names its day, and every automatic re-send lands inside it. A
+// job id held only while the completed job was kept. See docs/reference/mail-pipeline.md.
+const ONCE_WITHIN_SECONDS = 86_400;
+
 // The whole publisher. There is no row, no status and no sweep — see
 // docs/reference/mail-pipeline.md.
 export class QueuedMailPublisher extends MailPublisher {
@@ -46,7 +50,9 @@ export class QueuedMailPublisher extends MailPublisher {
     return {
       name: "send",
       // The caller's "send this once", expressed where BullMQ already enforces it.
-      ...(mail.dedupeKey === undefined ? {} : { jobId: mail.dedupeKey }),
+      ...(mail.dedupeKey === undefined
+        ? {}
+        : { onceWithin: { id: mail.dedupeKey, seconds: ONCE_WITHIN_SECONDS } }),
       priority: PRIORITY[priority],
       attempts: ATTEMPTS[priority],
     };

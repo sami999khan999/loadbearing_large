@@ -42,6 +42,15 @@ for a week, and `pnpm queue:replay mail` sends it again.
 recipients as one `addBulk` round trip, each job keeping the priority, attempts and dedupe key a
 single `publish` would have given it.
 
+**A `dedupeKey` holds for a day, not for as long as the job is kept.** It used to be the job id.
+BullMQ keeps at most a thousand completed jobs, so a digest over a bigger tenant that failed on a
+later page and retried re-sent the earlier pages, and those people got the morning's digest twice
+(`RV.5`). It is now `onceWithin`, which BullMQ holds as its own key with a TTL. A day covers every
+automatic re-send: the digest's key names its day, and an outbox delivery gives up after about three
+hours. The one path past it is `pnpm queue:replay` on a job failed more than a day ago, which an
+operator runs on purpose. The cost is one small key per keyed message for a day, on the queue
+instance.
+
 ## There is no delivery table, and that is a decision
 
 An earlier draft of this design wrote every outgoing message to a partitioned `mail_deliveries`
@@ -49,7 +58,7 @@ table with `status` and `attempts` columns before queueing it. That was removed,
 that compound:
 
 1. **BullMQ already supplies what those columns were re-implementing.** Retries, exponential backoff
-   and duplicate suppression by job id are queue behaviour. A `status` column beside them is a second
+   and duplicate suppression are queue behaviour. A `status` column beside them is a second
    state machine that can disagree with the first.
 2. **At scale, the mail provider is where a delivery record belongs.** A bounce, a complaint and a
    suppression list are things only the provider can tell you. A local table records what this

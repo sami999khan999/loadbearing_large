@@ -15,7 +15,10 @@ export class RecordingQueuePublisher extends QueuePublisher {
     // `jobId` dedup is modelled, because it is a domain rule rather than queue
     // configuration — a use-case that publishes twice under one id is a bug.
     const duplicate =
-      options?.jobId !== undefined && this.jobs.some((job) => job.options?.jobId === options.jobId);
+      (options?.jobId !== undefined &&
+        this.jobs.some((job) => job.options?.jobId === options.jobId)) ||
+      (options?.onceWithin !== undefined &&
+        this.jobs.some((job) => job.options?.onceWithin?.id === options.onceWithin?.id));
 
     if (!duplicate) this.jobs.push({ queue, payload, options });
     return Promise.resolve();

@@ -64,6 +64,15 @@ describe("RecordingQueuePublisher", () => {
 
     expect(queue.published()).toHaveLength(1);
   });
+
+  it("treats a repeated onceWithin id as a no-op, the way BullMQ does", async () => {
+    const queue = new RecordingQueuePublisher();
+    const once = { onceWithin: { id: "m1", seconds: 60 } };
+    await queue.publish("mail", { n: 1 }, once);
+    await queue.publish("mail", { n: 2 }, once);
+
+    expect(queue.published()).toHaveLength(1);
+  });
 });
 
 describe("RecordingMailPublisher", () => {
@@ -82,8 +91,8 @@ describe("RecordingMailPublisher", () => {
     expect(mail.published()[0]?.locale).toBe("en");
   });
 
-  // The same contract `RecordingQueuePublisher` keeps, because `dedupeKey` becomes the
-  // job id: a fake that ignored it would let "invite once" pass while it sent twice.
+  // The same contract `RecordingQueuePublisher` keeps, because `dedupeKey` becomes a
+  // `onceWithin` id: a fake that ignored it would let "invite once" pass while it sent twice.
   it("treats a repeated dedupeKey as a no-op, the way BullMQ does", async () => {
     const mail = new RecordingMailPublisher();
     const request = {
