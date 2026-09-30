@@ -1646,6 +1646,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-09-30 | @sami | **`BACKLOG.md` §15 opened: the docs capability, nine `DC.*` items.** Three things not built (a revision diff, semantic search, re-rendering on a renderer change), five gaps in what was (upload size, orphaned images, exports, bucket CORS, card icons) and one hand walk of the editing screens |
 | 2026-09-30 | @sami | **`RV.2` closed.** Only an event frame moves the client's resume point, so a reopen in a busy conversation replays rather than resyncing |
 | 2026-09-30 | @sami | **`RV.5` and `RV.6` closed.** Mail dedupes for a day through the new `onceWithin`, so a retried digest over a big tenant sends once. A failed command inside the realtime `MULTI` is logged rather than passing as sent |
 | 2026-09-30 | @sami | **Three quick closes: `RV.8`, `RV.9` and `AX11.4`.** The route-tree import takes `.js`. §29's comment and spec count four shard readers, and the spec proves the realtime copy. The kitchen sink's picker keeps the theme a mode click leaves alone |

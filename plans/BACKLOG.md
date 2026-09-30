@@ -34,6 +34,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 3 | 13 |
+| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 9 | — |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -259,6 +260,58 @@ are as of `2ee420a`. Each was checked against the code, and the scenario says wh
 
 All seven, `RV.10`–`RV.16`, were folded into `ACCESS-AND-VISIBILITY-PLAN.md` on 2026-09-28,
 before its first box was ticked. They are in [`archive/DONE.md`](archive/DONE.md) §14.
+
+---
+
+## 15. The docs capability — what is left
+
+Built 2026-09-30: public, granted and organization docs as one slice, with a Fumadocs-style
+reader, drafts and revisions, search, images and the `graphite` theme. The reasoning is in
+[`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) and
+[`packages/infrastructure/docs/reference/doc-renderer.md`](../packages/infrastructure/docs/reference/doc-renderer.md).
+IDs are `DC.<n>`, new, and each body is here because no archived plan holds it.
+
+### Not built
+
+- [ ] `DC.1` **No diff between revisions.** The history lists every publish and restores one into
+  the draft, but shows no comparison. **Fix:** a line diff of `doc_revision.markdown` against
+  the draft, computed in the browser from `docPage.revision`, which is already cached forever.
+- [ ] `DC.2` **No semantic search over docs.** Search is full text plus trigram titles. **Fix:**
+  a `doc.page.published` domain event, a subscriber that queues the page's sections into the
+  existing embedding pipeline with `sourceType: "doc"`, and a hybrid rank in `DocSearch`.
+  Organization docs only: `VectorStore` is tenant-scoped, and the platform's are one tenant.
+  Declare the event and its subscriber together, or §24 fails.
+- [ ] `DC.3` **Nothing re-renders a page when the renderer changes.** `doc_pages.renderer_version`
+  is written on every publish and read by nothing. **Fix:** a maintenance job that finds pages
+  whose version is below `UnifiedMarkdownRenderer.version`, renders `published_markdown` again and
+  rewrites the snapshot, without a new revision.
+
+### Gaps in what was built
+
+- [ ] `DC.4` **An upload's size is checked as declared, not as sent.** `docPage.upload` refuses a
+  declared size over 5 MB, but a presigned `PUT` does not bind the length, so a writer holding the
+  URL could send more for five minutes. **Fix:** a presigned `POST` with a `content-length-range`
+  condition, which needs a `StorageGateway` method.
+- [ ] `DC.5` **A page's images outlive the page.** A space delete and a tenant purge sweep their
+  prefix, but deleting one page leaves its images, since another page may link them. **Fix:** a
+  sweep that lists a space's prefix and deletes what no published or draft Markdown in the space
+  names.
+- [ ] `DC.6` **A tenant export leaves out doc images.** The export reads partitions; images live
+  only in the bucket under `doc/<organization>/`. **Fix:** copy that prefix into the export.
+- [ ] `DC.7` **A production bucket needs a CORS rule before images can be uploaded.** MinIO allows
+  every origin by default, so nothing here noticed. **Fix:** document the rule in
+  `docs/infra/` beside the bucket's other settings, and set it where the bucket is provisioned.
+- [ ] `DC.8` **Server-rendered cards carry no icon.** An icon is a `<use>` into a sprite whose URL
+  only the bundle knows. **Fix:** emit `data-icon` and let `Prose` fill it after mount.
+
+### Not checked
+
+- [ ] `DC.9` **The editing screens have not been walked by hand.** `/doc/manage`, a space's page
+  tree, the editor with autosave, preview, image upload and restore, and the grant panel are
+  covered by specs and typecheck but were never driven in a browser, because that needs a signed-in
+  user. The reader, search, theme switching, the 404s for private spaces and the cache headers were.
+  **Walk it** with the `HANDOFF.md` recipe: alice as platform admin with the platform organization
+  active, then bob in his own organization.
 
 ---
 
