@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-09-30
+updated: 2026-10-01
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -35,6 +35,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 3 | 13 |
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 9 | — |
+| 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 2 | — |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -312,6 +313,26 @@ IDs are `DC.<n>`, new, and each body is here because no archived plan holds it.
   user. The reader, search, theme switching, the 404s for private spaces and the cache headers were.
   **Walk it** with the `HANDOFF.md` recipe: alice as platform admin with the platform organization
   active, then bob in his own organization.
+
+---
+
+## 16. The UI stack from lite — what is left
+
+Ported 2026-10-01 from lite (`loadbearing_mini`, commits `192c27d..86d6637`, with the CI fixes
+`b4263aa`, `2890e0b`, `295014e`, `192c27d` and `24f8a04`). `packages/ui` styles every component
+with Tailwind utilities through `cn`, takes its behaviour from Base UI, and is grouped into
+`component/`, `theme/` and `style/`. The reasoning is in
+[`packages/ui/docs/index.md`](../packages/ui/docs/index.md). IDs are `UI.<n>`, new.
+
+- [ ] `UI.1` **Not walked by hand.** Specs, typecheck and `check:contrast` pass, but no browser
+  has looked. **Walk** `/kitchen-sink` in all six themes, light and dark; the keyboard on `Select`,
+  `Menu`, the popover, the command palette, `ThemeToggle`, `Dialog` and `AlertDialog`; the widget
+  dashboard and its zones; the messaging screens; the platform retention and restore panels; and
+  the doc reader in a space with its own theme, whose popovers must keep that theme.
+- [ ] `UI.2` **The sidebar drawer has no focus trap.** It is one element that is a column on a
+  wide screen, and Base UI's `Dialog` renders only while open, in a portal. **Fix:** render the
+  narrow-screen drawer as a separate `Dialog` holding the same navigation, or make the column
+  `inert`-aware.
 
 ---
 

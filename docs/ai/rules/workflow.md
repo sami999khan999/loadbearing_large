@@ -56,8 +56,8 @@ requires, a runnable script above `src/` that nothing typechecks, and a host por
 twice — a `*_PORT` and the URL that dials it, or the compose default and the template — that
 no longer agree, a permission the catalog declares that no procedure asserts, one of the
 four copies of the `DATABASE_SHARD_<n>_URL` reader parsing differently from the other three, an
-inline widget that no `<Widget widget="<key>">` places by its literal key, and a flag past its
-expiry or read by no code.
+inline widget that no `<Widget widget="<key>">` places by its literal key, a flag past its expiry
+or read by no code, and a colour outside the twelve in a class, a `style` prop or a stylesheet.
 
 **On a clean clone, run `pnpm build:packages && pnpm --filter @loadbearing/web build` before
 `pnpm typecheck`.** `apps/web/src/route-tree.gen.ts` is generated and gitignored; without it every
