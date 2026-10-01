@@ -130,9 +130,11 @@ export {
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
 export {
+  AlertDialog,
   type BadgeTone,
   Button,
   ByteFormat,
+  buttonClassName,
   Callout,
   Can,
   Card,
@@ -142,8 +144,10 @@ export {
   type CommandGroup,
   DataTable,
   DateFormat,
+  dataTableClassName,
   EmptyState,
   Field,
+  fieldClassName,
   Icon,
   type IconName,
   IconRegistry,
@@ -158,7 +162,9 @@ export {
   Prose,
   QrCode,
   ReaderLayout,
+  readerClassName,
   SearchTrigger,
+  Select,
   Sidebar,
   StatusBadge,
   type TableColumn,

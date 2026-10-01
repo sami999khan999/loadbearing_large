@@ -11,6 +11,7 @@ import {
   Input,
   PlatformMutations,
   PlatformQueries,
+  Select,
   StatusBadge,
   type TableColumn,
   useApiClient,
@@ -163,18 +164,13 @@ export function FlagList() {
           }}
         >
           <Field label={t("platform.flags.column.flag")} htmlFor="flag-target-key">
-            <select
+            <Select
               id="flag-target-key"
-              className="ui-input"
-              value={flagKey || declared[0]?.key}
-              onChange={(event) => setFlagKey(event.target.value)}
-            >
-              {declared.map((row) => (
-                <option key={row.key} value={row.key}>
-                  {row.key}
-                </option>
-              ))}
-            </select>
+              label={t("platform.flags.column.flag")}
+              value={flagKey || declared[0]?.key || null}
+              onValueChange={setFlagKey}
+              options={declared.map((row) => ({ value: row.key, label: row.key }))}
+            />
           </Field>
           <Field label={t("platform.flags.organization.label")} htmlFor="flag-target-organization">
             <Input

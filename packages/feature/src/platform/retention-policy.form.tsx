@@ -18,8 +18,8 @@ import {
 } from "../import.js";
 import { RetentionPreviewNotice } from "./retention-preview.notice.js";
 
-// Two buttons rather than a `<select>`: `ui` has no select primitive, and two options
-// is a choice a person can see rather than open — `MODES` in the notification form.
+// Two buttons rather than a `Select`: two options is a choice a person can see rather
+// than open — `MODES` in the notification form.
 const MODES = ["archive", "drop"] as const;
 
 // What the inputs hold while they are being edited. A row is only sent on save, so a

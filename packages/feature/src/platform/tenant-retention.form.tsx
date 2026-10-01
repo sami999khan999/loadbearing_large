@@ -8,6 +8,7 @@ import {
   type OrganizationId,
   PlatformMutations,
   type RetentionEntryDto,
+  Select,
   useApiClient,
   useCallback,
   useState,
@@ -67,18 +68,13 @@ export function TenantRetentionForm({ tables }: TenantRetentionFormProps) {
       </Field>
 
       <Field label={t("platform.restore.table")} htmlFor="tenant-retention-table">
-        <select
+        <Select
           id="tenant-retention-table"
-          className="ui-input"
+          label={t("platform.restore.table")}
           value={tableName}
-          onChange={(event) => setTableName(event.target.value)}
-        >
-          {tables.map((table) => (
-            <option key={table.tableName} value={table.tableName}>
-              {table.tableName}
-            </option>
-          ))}
-        </select>
+          onValueChange={setTableName}
+          options={tables.map((table) => ({ value: table.tableName, label: table.tableName }))}
+        />
       </Field>
 
       <Field label={t("platform.retention.hotMonths")} htmlFor="tenant-retention-hot">

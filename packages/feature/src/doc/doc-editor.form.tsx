@@ -2,15 +2,19 @@ import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
   Button,
+  buttonClassName,
   Callout,
   DocMutations,
   type DocPageDraftDto,
   Field,
   type FormEvent,
+  fieldClassName,
   IconRegistry,
   Input,
   Prose,
   type ReactNode,
+  readerClassName,
+  Select,
   StatusBadge,
   Textarea,
   useApiClient,
@@ -160,8 +164,8 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
   const failure = save.error ?? publish.error ?? preview.error ?? upload.error;
 
   return (
-    <form onSubmit={submit} noValidate className="ui-stack">
-      <div className="ui-reader__actions">
+    <form onSubmit={submit} noValidate className="ui-stack flex flex-col gap-3">
+      <div className={readerClassName.actions}>
         <StatusBadge
           tone={status === "published" ? "success" : status === "changed" ? "warning" : "neutral"}
         >
@@ -189,19 +193,16 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
         />
       </Field>
       <Field label={t("doc.page.icon")} htmlFor="doc-icon">
-        <select
+        <Select
           id="doc-icon"
-          className="ui-input"
+          label={t("doc.page.icon")}
           value={icon}
-          onChange={(event) => edit(setIcon)(event.target.value)}
-        >
-          <option value="">{t("doc.space.iconNone")}</option>
-          {IconRegistry.all().map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          onValueChange={edit(setIcon)}
+          options={[
+            { value: "", label: t("doc.space.iconNone") },
+            ...IconRegistry.all().map((name) => ({ value: name, label: name, icon: name })),
+          ]}
+        />
       </Field>
 
       {draft.kind === "link" ? (
@@ -226,7 +227,7 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
             />
           </Field>
 
-          <div className="ui-reader__actions" role="tablist">
+          <div className={readerClassName.actions} role="tablist">
             <Button
               variant={tab === "write" ? "secondary" : "ghost"}
               role="tab"
@@ -243,7 +244,7 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
             >
               {t("doc.editor.preview")}
             </Button>
-            <label className="ui-button ui-button--ghost">
+            <label className={buttonClassName("ghost")}>
               {upload.isPending ? t("doc.editor.imageUploading") : t("doc.editor.image")}
               <input
                 type="file"
@@ -283,7 +284,7 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
               copiedLabel={t("doc.code.copied")}
             />
           ) : (
-            <p className="ui-field__hint">{t("doc.editor.previewEmpty")}</p>
+            <p className={fieldClassName.hint}>{t("doc.editor.previewEmpty")}</p>
           )}
         </>
       ) : (
@@ -297,7 +298,7 @@ export function DocEditorForm({ draft, viewLink }: DocEditorFormProps) {
         </Callout>
       ) : null}
 
-      <div className="ui-reader__actions">
+      <div className={readerClassName.actions}>
         <Button type="submit" variant="secondary" disabled={save.isPending || !dirty}>
           {save.isPending ? t("doc.editor.saving") : t("doc.editor.save")}
         </Button>

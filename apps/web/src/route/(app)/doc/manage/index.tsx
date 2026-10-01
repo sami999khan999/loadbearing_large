@@ -5,6 +5,7 @@ import {
   DocQueries,
   type DocSpaceDto,
   DocSpaceForm,
+  readerClassName,
   StatusBadge,
   useApiClient,
   useAppQuery,
@@ -40,28 +41,28 @@ function DocManage() {
   const items: readonly DocSpaceDto[] = spaces.data?.items ?? [];
 
   return (
-    <main id="main" className="ui-reader__content">
-      <div className="ui-stack">
-        <nav className="ui-reader__actions">
+    <main id="main" className={readerClassName.content}>
+      <div className="ui-stack flex flex-col gap-3">
+        <nav className={readerClassName.actions}>
           <Link to="/doc">{t("doc.home.title")}</Link>
         </nav>
-        <header className="ui-reader__header">
-          <h1 className="ui-reader__title">{t("doc.manage.title")}</h1>
-          <p className="ui-reader__description">{t("doc.manage.description")}</p>
+        <header className={readerClassName.header}>
+          <h1 className={readerClassName.title}>{t("doc.manage.title")}</h1>
+          <p className={readerClassName.description}>{t("doc.manage.description")}</p>
         </header>
 
-        <section className="ui-stack" aria-labelledby="doc-spaces">
+        <section className="ui-stack flex flex-col gap-3" aria-labelledby="doc-spaces">
           <h2 id="doc-spaces">{t("doc.manage.spaces")}</h2>
           {items.length === 0 ? <p>{t("doc.manage.empty")}</p> : null}
           {items.map((space) => (
-            <details key={space.id} className="ui-stack">
+            <details key={space.id} className="ui-stack flex flex-col gap-3">
               <summary>
                 <strong>{space.title}</strong>{" "}
                 <StatusBadge tone={space.audience === "members" ? "neutral" : "accent"}>
                   {t(`doc.space.audience.${space.audience}`)}
                 </StatusBadge>
               </summary>
-              <div className="ui-reader__actions">
+              <div className={readerClassName.actions}>
                 <Link to="/doc/$space/$" params={{ space: space.slug, _splat: "" }}>
                   {t("doc.space.open")}
                 </Link>
@@ -81,7 +82,7 @@ function DocManage() {
         </section>
 
         {manage ? (
-          <section className="ui-stack" aria-labelledby="doc-new-space">
+          <section className="ui-stack flex flex-col gap-3" aria-labelledby="doc-new-space">
             <h2 id="doc-new-space">{t("doc.manage.new")}</h2>
             <DocSpaceForm platform={platform} />
           </section>

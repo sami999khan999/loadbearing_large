@@ -5,12 +5,14 @@ import {
   type DocReadingDto,
   type DocSpaceDto,
   EmptyState,
+  fieldClassName,
   Icon,
   NavTree,
   Popover,
   Prose,
   type ReactNode,
   ReaderLayout,
+  readerClassName,
   Sidebar,
   Toc,
   useEffect,
@@ -119,9 +121,9 @@ export function DocReaderPanel({
 
   const header = (
     <>
-      <h1 className="ui-reader__title">{page.title}</h1>
-      {page.description ? <p className="ui-reader__description">{page.description}</p> : null}
-      <div className="ui-reader__actions">
+      <h1 className={readerClassName.title}>{page.title}</h1>
+      {page.description ? <p className={readerClassName.description}>{page.description}</p> : null}
+      <div className={readerClassName.actions}>
         <DocCopyButton markdown={page.markdown} />
         {markdownHref || editHref ? (
           <Popover
@@ -134,7 +136,7 @@ export function DocReaderPanel({
               </>
             }
           >
-            <ul className="ui-stack">
+            <ul className="ui-stack flex flex-col gap-3">
               {markdownHref ? (
                 <li>
                   <a href={markdownHref} target="_blank" rel="noreferrer">
@@ -162,7 +164,7 @@ export function DocReaderPanel({
         : {})}
     >
       <Prose html={page.html} copyLabel={t("doc.code.copy")} copiedLabel={t("doc.code.copied")} />
-      <p className="ui-field__hint">
+      <p className={fieldClassName.hint}>
         {t("doc.updated", { date: DateFormat.day(page.publishedAt) })}
       </p>
     </ReaderLayout>

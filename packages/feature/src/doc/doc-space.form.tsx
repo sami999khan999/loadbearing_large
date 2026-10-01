@@ -9,6 +9,8 @@ import {
   Field,
   type FormEvent,
   Input,
+  readerClassName,
+  Select,
   ThemeRegistry,
   useApiClient,
   useState,
@@ -75,7 +77,7 @@ export function DocSpaceForm({ space, platform, onSaved, onDeleted }: DocSpaceFo
   };
 
   return (
-    <form onSubmit={submit} noValidate className="ui-stack">
+    <form onSubmit={submit} noValidate className="ui-stack flex flex-col gap-3">
       <Field label={t("doc.space.title")} htmlFor={`doc-space-title-${id}`}>
         <Input
           id={`doc-space-title-${id}`}
@@ -112,41 +114,36 @@ export function DocSpaceForm({ space, platform, onSaved, onDeleted }: DocSpaceFo
         htmlFor={`doc-space-audience-${id}`}
         {...(platform ? {} : { hint: t("doc.space.audience.hint") })}
       >
-        <select
+        <Select
           id={`doc-space-audience-${id}`}
-          className="ui-input"
+          label={t("doc.space.audience")}
           value={audience}
-          onChange={(event) => setAudience(event.target.value as DocSpaceAudience)}
-        >
-          {AUDIENCES.filter(
+          onValueChange={(next) => setAudience(next as DocSpaceAudience)}
+          options={AUDIENCES.filter(
             (option) => platform || option === "members" || option === audience,
-          ).map((option) => (
-            <option key={option} value={option}>
-              {t(`doc.space.audience.${option}`)}
-            </option>
-          ))}
-        </select>
+          ).map((option) => ({ value: option, label: t(`doc.space.audience.${option}`) }))}
+        />
       </Field>
       <Field label={t("doc.space.theme")} htmlFor={`doc-space-theme-${id}`}>
-        <select
+        <Select
           id={`doc-space-theme-${id}`}
-          className="ui-input"
+          label={t("doc.space.theme")}
           value={theme}
-          onChange={(event) => setTheme(event.target.value)}
-        >
-          <option value="">{t("doc.space.themeNone")}</option>
-          {ThemeRegistry.all().map((key) => (
-            <option key={key} value={key}>
-              {ThemeRegistry.meta(key).label}
-            </option>
-          ))}
-        </select>
+          onValueChange={setTheme}
+          options={[
+            { value: "", label: t("doc.space.themeNone") },
+            ...ThemeRegistry.all().map((key) => ({
+              value: key,
+              label: ThemeRegistry.meta(key).label,
+            })),
+          ]}
+        />
       </Field>
 
       {failure ? <Callout tone="danger">{describe(failure)?.message}</Callout> : null}
       {update.isSuccess ? <Callout tone="success">{t("doc.space.saved")}</Callout> : null}
 
-      <div className="ui-reader__actions">
+      <div className={readerClassName.actions}>
         <Button type="submit" disabled={pending || slug === "" || title.trim() === ""}>
           {space ? t("doc.space.save") : t("doc.space.create")}
         </Button>
