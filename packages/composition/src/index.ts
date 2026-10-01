@@ -54,6 +54,7 @@ export {
   RecordingSessionGateway,
   StubEmbeddingProvider,
   StubMailRenderer,
+  StubMarkdownRenderer,
   StubSessionResolver,
   type TenantMoveStep,
 } from "./fake/index.js";

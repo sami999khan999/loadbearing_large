@@ -186,14 +186,12 @@ psql() { docker exec ratchet-postgres-1 psql -U ratchet -d ratchet -tAc "$1"; }
 
 Where the work stopped on 2026-09-30, in the order it was going to be taken:
 
-1. **`RV.4`, stream revalidation.** Every open stream runs a database query each minute, about
-   170 a second at 10 000 streams, on a pool of five.
-   - Safe to do at once: stop a check starting while the last one is still running. Correct the
-     "once per stream opened" comment at `apps/realtime/src/env.ts:14-15` and the pool sizing in
-     `apps/realtime/docs/reference/env.md`.
-   - Needs a design first: one query per tick. The user stream's `isActive` batches easily. The
-     conversation stream's principal refresh and membership check span tenants and nodes, and
-     every query must stay scoped to one tenant.
+1. **`RV.4`, stream revalidation — its safe half is done (2026-09-30).** A check still
+   running when the next minute comes is now skipped, and the pool comment and
+   `apps/realtime/docs/reference/env.md` say what the checks cost. What is left needs a design:
+   one query per tick. The user stream's `isActive` batches easily. The conversation stream's
+   principal refresh and membership check span tenants and nodes, and every query must stay
+   scoped to one tenant.
 2. **`RV.3`, the replay log per member.** Pick one of the two fixes, below.
 3. **`RV.7`, 22 comments split by a `// ──` separator mid-sentence.** Mechanical, and touches many
    packages: cut each to two lines, then make §14 fail a separator whose line above does not end
@@ -216,4 +214,4 @@ The rest of `BACKLOG.md` waits on hardware, traffic or a trigger: `AX11.2` befor
   - Skip the replay log for per-member fan-out frames. They are list invalidations only, so a
     reconnecting member resyncs instead of replaying them.
   - Or measure the cost first, at `26.8`'s 25 000-member scale, which needs hardware.
-- **`RV.4`:** whether to do the safe half now and design the batched check separately.
+- **`RV.4`:** the design of the batched check. The safe half shipped on its own.

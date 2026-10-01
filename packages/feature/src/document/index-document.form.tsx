@@ -6,6 +6,7 @@ import {
   DocumentMutations,
   Field,
   type FormEvent,
+  Textarea,
   useApiClient,
   useState,
 } from "../import.js";
@@ -32,13 +33,8 @@ export function IndexDocumentForm() {
         htmlFor="document-text"
         hint={t("document.index.hint")}
       >
-        {
-          // A textarea, not `Input`: the design system has no multiline control yet, and
-          // a single-line field for a document is worse than an unstyled one.
-        }
-        <textarea
+        <Textarea
           id="document-text"
-          className="ui-input"
           rows={6}
           value={text}
           onChange={(event) => setText(event.target.value)}

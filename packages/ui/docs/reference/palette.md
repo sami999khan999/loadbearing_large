@@ -5,7 +5,7 @@ description: The twelve colour names every theme declares, why they are oklch, t
 
 # Palettes
 
-A theme is **one file in `src/theme/color/`** declaring twelve names, twice — once for light and
+A theme is **one file in `src/style/color/`** declaring twelve names, twice — once for light and
 once for dark. It names no component and it declares nothing structural. That is the whole contract.
 
 ## The twelve
@@ -66,13 +66,13 @@ original hand-written palette.
 ## Contrast is checked, not reviewed
 
 `pnpm check:contrast` runs in CI after `check:architecture` and asserts WCAG AA over every pairing
-the class layer actually produces — 117 of them across five themes. Two consequences worth knowing
+the components actually produce — 154 of them across six themes. Two consequences worth knowing
 before authoring a theme:
 
 - **`--fg-muted` is bounded by `--muted`, not by `--bg`.** A placeholder sits inside an input. That
   pairing is the tightest in the system, and it is what fixes light `--fg-muted` at `L 0.535`.
 - **`--success` and `--warning` are not text-safe on `--bg`.** At these lightnesses they land at
-  3.5:1 and 2.6:1. They are fills, and `status-badge.css` tints them into `--surface` rather than
+  3.5:1 and 2.6:1. They are fills, and `StatusBadge` tints them into `--surface` rather than
   filling with them, which puts `--fg` on a near-surface background instead. Only `--danger` clears
   AA as text, which is why the field error is the one place a status colour is a foreground.
 
@@ -80,9 +80,9 @@ before authoring a theme:
 
 Four steps, and none of them touch a component.
 
-1. **`src/theme/color/<name>.css`** — one block per mode, each declaring all twelve. Copy `slate.css`
+1. **`src/style/color/<name>.css`** — one block per mode, each declaring all twelve. Copy `slate.css`
    and rotate the hue; the lightness ladder is the part that should not move.
-2. **`src/theme/theme.css`** — one `@import` line, with the others, above every rule. Vite inlines
+2. **`src/style/index.css`** — one `@import` line, with the other colour files, above every rule. Vite inlines
    them, so the added file costs no extra request.
 3. **`src/theme/theme-registry.ts`** — one entry in `THEMES` with a `label` and the `modes` you
    actually wrote blocks for. Declaring a mode you did not write is how a page ends up with all
@@ -95,8 +95,9 @@ Then run `pnpm check:contrast`, and open `/kitchen-sink` in `apps/web` to look a
 
 ## Cost
 
-Five themes, nine mode blocks, 108 colours: **4.8 KB raw, 1.1 KB gzipped**, one stylesheet, one
-request. The class layer is another 1.3 KB gzipped and is a separate link you can drop.
+Six themes, eleven mode blocks, 132 colours: **5.0 KB raw, 0.7 KB gzipped** once comments are stripped, one stylesheet, one
+request. It is compiled into the app's one Tailwind stylesheet with the class layer and the
+utilities, so it costs no request of its own.
 
 Every theme ships to every user rather than being fetched on demand, because a lazily loaded theme
 costs a round trip and a visible flash at the exact moment somebody is looking at the colours. The
@@ -112,11 +113,11 @@ reaching an inbox renders as nothing at all — and most clients strip or ignore
 which is why every value there is inline on the element.
 
 The values are slate-light converted to sRGB, so a message looks like the product it came from. They
-are deliberately *not* derived from `theme/color/slate.css` at build time: a message is composed on
+are deliberately *not* derived from `style/color/slate.css` at build time: a message is composed on
 the server for a recipient who has no theme and no mode, so there is nothing to read a preference
 from, and a pipeline that tried would have to pick one anyway.
 
-`check:contrast` does not see them — it reads `packages/ui/src/theme/color/*.css` and nothing else.
+`check:contrast` does not see them — it reads `packages/ui/src/style/color/*.css` and nothing else.
 The pairings that matter there are white-on-primary for the button and `--fg` on `--surface` for the
 body, both of which clear AA at the values listed, and both of which are a review item rather than a
 gate.

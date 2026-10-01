@@ -67,6 +67,22 @@ export {
   type DailyCount,
   type DanglingConversations,
   type DeletedTenantSweep,
+  type DocDraftFields,
+  type DocGrantee,
+  type DocGrantRecord,
+  type DocGrantRepository,
+  type DocPageDraftRecord,
+  type DocPageNodeRecord,
+  type DocPagePublishedRecord,
+  type DocPageRepository,
+  type DocPublication,
+  type DocRevisionRecord,
+  type DocRevisionSummaryRecord,
+  type DocSearchMatch,
+  type DocSpaceFields,
+  type DocSpaceRecord,
+  type DocSpaceRepository,
+  type DocSpaceSummary,
   type DocumentChunk,
   type DomainEventPublisher,
   type EmailMessage,
@@ -88,6 +104,8 @@ export {
   type LogQuery,
   LogReader,
   type MaintenanceGateway,
+  // A value: the unified adapter extends it.
+  MarkdownRenderer,
   type MemberPage,
   type MemberRecord,
   type MemberRepository,
@@ -98,6 +116,8 @@ export {
   type ModuleSwitchRecord,
   type NewApiKey,
   type NewConversation,
+  type NewDocGrant,
+  type NewDocPage,
   type NewInvitation,
   type NewMessage,
   type NewNotification,
@@ -143,6 +163,8 @@ export {
   type Recipient,
   type RelayedActivity,
   type RelayedActivityStore,
+  type RenderedMarkdown,
+  type RenderedSection,
   type RestoredMonth,
   type RetentionPolicyRecord,
   type RetentionPolicyRepository,
@@ -201,6 +223,13 @@ export {
   type ConversationId,
   type ConversationKind,
   type ConversationMemberRole,
+  type DocGrantKind,
+  type DocNavNodeDto,
+  type DocPageId,
+  type DocPageKind,
+  type DocSpaceAudience,
+  type DocSpaceId,
+  type DocTocEntryDto,
   type DomainEvent,
   type DomainEventInput,
   type DomainEventName,
@@ -279,6 +308,7 @@ export {
   bigint,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -295,8 +325,13 @@ export {
   vector,
 } from "drizzle-orm/pg-core";
 
+// ── hast · mdast (types only) ────────────────────────────────────────────────
+export type { Element as HastElement, Nodes as HastNodes, Root as HastRoot } from "hast";
+// ── hast-util-to-string ──────────────────────────────────────────────────────
+export { toString as hastToString } from "hast-util-to-string";
 // ── ioredis ──────────────────────────────────────────────────────────────────
 export { Redis, type RedisOptions } from "ioredis";
+export type { Nodes as MdastNodes, Root as MdastRoot } from "mdast";
 
 // ── nodemailer ───────────────────────────────────────────────────────────────
 // Its types ship separately and are pinned to the same major: a `@types/nodemailer` a
@@ -305,3 +340,21 @@ export { createTransport, type Transporter } from "nodemailer";
 
 // ── pg ───────────────────────────────────────────────────────────────────────
 export { Pool } from "pg";
+
+// ── rehype · remark · unified ────────────────────────────────────────────────
+// The doc renderer's pipeline. Named here once, so a swap of Markdown library is this
+// block and `src/unified/`, and nothing else.
+export { default as rehypeHighlight } from "rehype-highlight";
+export {
+  default as rehypeSanitize,
+  defaultSchema,
+  type Options as SanitizeSchema,
+} from "rehype-sanitize";
+export { default as rehypeSlug } from "rehype-slug";
+export { default as rehypeStringify } from "rehype-stringify";
+export { default as remarkDirective } from "remark-directive";
+export { default as remarkGfm } from "remark-gfm";
+export { default as remarkParse } from "remark-parse";
+export { default as remarkRehype } from "remark-rehype";
+export { unified } from "unified";
+export { visit } from "unist-util-visit";

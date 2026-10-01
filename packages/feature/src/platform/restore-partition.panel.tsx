@@ -7,6 +7,7 @@ import {
   Input,
   PlatformMutations,
   type RetentionEntryDto,
+  Select,
   useApiClient,
   useState,
 } from "../import.js";
@@ -40,21 +41,16 @@ export function RestorePartitionPanel({ tables }: RestorePartitionPanelProps) {
 
       <Field label={t("platform.restore.table")} htmlFor="restore-table">
         {
-          // A `<select>` rather than free text, and the options are the tables the
+          // A `Select` rather than free text, and the options are the tables the
           // server would accept: a name typed by hand is a validation error at best.
         }
-        <select
+        <Select
           id="restore-table"
-          className="ui-input"
+          label={t("platform.restore.table")}
           value={tableName}
-          onChange={(event) => setTableName(event.target.value)}
-        >
-          {tables.map((table) => (
-            <option key={table.tableName} value={table.tableName}>
-              {table.tableName}
-            </option>
-          ))}
-        </select>
+          onValueChange={setTableName}
+          options={tables.map((table) => ({ value: table.tableName, label: table.tableName }))}
+        />
       </Field>
 
       <Field label={t("platform.restore.period")} htmlFor="restore-period">

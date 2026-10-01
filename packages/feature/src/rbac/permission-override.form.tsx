@@ -9,6 +9,7 @@ import {
   OverrideMutations,
   type PermissionKey,
   PermissionRegistry,
+  Select,
   useApiClient,
   useState,
 } from "../import.js";
@@ -64,29 +65,25 @@ export function PermissionOverrideForm({ userId }: PermissionOverrideFormProps) 
     >
       <h3>{t("role.override.form.title")}</h3>
       <Field label={t("role.override.form.permission")} htmlFor="override-permission">
-        <select
+        <Select
           id="override-permission"
-          className="ui-input"
+          label={t("role.override.form.permission")}
           value={permission}
-          onChange={(event) => setPermission(event.target.value)}
-        >
-          {OVERRIDABLE.map((key) => (
-            <option key={key} value={key}>
-              {key}
-            </option>
-          ))}
-        </select>
+          onValueChange={setPermission}
+          options={OVERRIDABLE.map((key) => ({ value: key, label: key }))}
+        />
       </Field>
       <Field label={t("role.override.form.effect")} htmlFor="override-effect">
-        <select
+        <Select
           id="override-effect"
-          className="ui-input"
+          label={t("role.override.form.effect")}
           value={effect}
-          onChange={(event) => setEffect(event.target.value === "deny" ? "deny" : "grant")}
-        >
-          <option value="grant">{t("role.override.form.grant")}</option>
-          <option value="deny">{t("role.override.form.deny")}</option>
-        </select>
+          onValueChange={(next) => setEffect(next === "deny" ? "deny" : "grant")}
+          options={[
+            { value: "grant", label: t("role.override.form.grant") },
+            { value: "deny", label: t("role.override.form.deny") },
+          ]}
+        />
       </Field>
       <Field label={t("role.override.form.reason")} htmlFor="override-reason">
         <Input

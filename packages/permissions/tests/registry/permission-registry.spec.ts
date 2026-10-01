@@ -35,6 +35,7 @@ describe("PermissionRegistry", () => {
       "analytics",
       "platform",
       "widget",
+      "doc",
     ]);
 
     const grouped = registry.modules().flatMap((module) => registry.byModule(module));

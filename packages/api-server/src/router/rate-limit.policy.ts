@@ -15,6 +15,14 @@ const LIMITS: Readonly<Record<string, RateLimit>> = Object.freeze({
   "document.index": { limit: 30, windowSeconds: 60 },
   "message.send": { limit: 60, windowSeconds: 60 },
   "conversation.create": { limit: 30, windowSeconds: 60 },
+  // Both run the Markdown renderer on up to 200,000 characters. The editor debounces its
+  // preview, so a client past this is not a person typing.
+  "docPage.preview": { limit: 120, windowSeconds: 60 },
+  // A query per debounced keystroke, each one a full-text and a trigram scan.
+  "docPage.search": { limit: 120, windowSeconds: 60 },
+  "docPage.publish": { limit: 30, windowSeconds: 60 },
+  // Each one is a signed URL for five megabytes of somebody's storage bill.
+  "docPage.upload": { limit: 60, windowSeconds: 3_600 },
 });
 
 export class RateLimitPolicy {

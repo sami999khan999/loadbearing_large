@@ -15,6 +15,7 @@ import {
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
+  CapabilitySet,
   ChangeMemberRoleUseCase,
   ClearAccountDenyUseCase,
   ClearEntitlementAdjustmentUseCase,
@@ -30,10 +31,14 @@ import {
   CountUnreadNotificationsUseCase,
   CreateApiKeyUseCase,
   CreateConversationUseCase,
+  CreateDocPageUseCase,
+  CreateDocSpaceUseCase,
   CreateRoleUseCase,
   type Database,
   DatabaseCluster,
   type DatabaseStats,
+  DeleteDocPageUseCase,
+  DeleteDocSpaceUseCase,
   DeleteMessageUseCase,
   DeleteOrganizationUseCase,
   DeletePlanUseCase,
@@ -41,6 +46,11 @@ import {
   DeliverNotificationUseCase,
   DenyAccountPermissionUseCase,
   DenyPermissionOverrideUseCase,
+  DocAccess,
+  DocCache,
+  DocImageSweep,
+  DocSearch,
+  DocTree,
   type DomainEventPublisher,
   EditMessageUseCase,
   type EmailSender,
@@ -52,6 +62,9 @@ import {
   FlagCache,
   GetActivityTrendUseCase,
   GetConversationUseCase,
+  GetDocPageUseCase,
+  GetDocRevisionUseCase,
+  GetDocSpaceUseCase,
   GetEntitlementUseCase,
   GetNotificationPreferencesUseCase,
   GetOrganizationEntitlementUseCase,
@@ -71,6 +84,10 @@ import {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
+  ListDocGrantsUseCase,
+  ListDocPagesUseCase,
+  ListDocRevisionsUseCase,
+  ListDocSpacesUseCase,
   ListFlagsUseCase,
   ListInvitationsUseCase,
   ListMembersUseCase,
@@ -79,6 +96,7 @@ import {
   ListNotificationsUseCase,
   ListPermissionOverridesUseCase,
   ListPlansUseCase,
+  ListPlatformDocSpacesUseCase,
   ListProjectionGapsUseCase,
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
@@ -94,16 +112,20 @@ import {
   type MaintenanceGateway,
   MarkAllNotificationsReadUseCase,
   MarkConversationReadUseCase,
+  type MarkdownRenderer,
   MarkNotificationReadUseCase,
   MemberRealtimeSubscriber,
   type MembershipEnroller,
   type MembershipReader,
   MessagingRealtimeSubscriber,
+  MoveDocPageUseCase,
   MoveTenantUseCase,
   NotificationSubscriber,
   NullMembershipEnroller,
   OpenAiEmbeddingProvider,
+  OpenDocImageUseCase,
   type OrganizationFounder,
+  type OrganizationId,
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
@@ -114,6 +136,9 @@ import {
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
+  PgDocGrantRepository,
+  PgDocPageRepository,
+  PgDocSpaceRepository,
   PgEntitlementRepository,
   PgFlagRepository,
   PgInvitationClaimer,
@@ -150,14 +175,18 @@ import {
   PgWidgetPreferenceRepository,
   type PlatformPolicyRepository,
   type PlatformReader,
+  PreviewDocPageUseCase,
   PreviewRetentionChangeUseCase,
-  type Principal,
+  Principal,
   PrincipalBuilder,
   type ProjectionPolicyRepository,
+  PublishDocPageUseCase,
   PurgeOrganizationUseCase,
   QueueDocumentIndexUseCase,
   type QueuePublisher,
   type RateLimitStore,
+  ReadDocPageUseCase,
+  ReadPlatformDocUseCase,
   type RealtimePublisher,
   type RealtimeSubscriber,
   ReclaimMoveSourcesUseCase,
@@ -174,17 +203,23 @@ import {
   type ReplicaHealth,
   ReprojectPartitionUseCase,
   ResendInvitationUseCase,
+  RestoreDocRevisionUseCase,
   RestorePartitionUseCase,
   type RetentionPolicyRepository,
   RevokeApiKeyUseCase,
+  RevokeDocGrantUseCase,
   RevokeInvitationUseCase,
   RevokePermissionUseCase,
   S3ColdArchiveReader,
   S3StorageGateway,
   S3StoragePolicyGateway,
+  SaveDocGrantUseCase,
+  SaveDocPageUseCase,
   SavePlanUseCase,
   SERVER_CATALOG,
+  SearchDocsUseCase,
   SearchDocumentsUseCase,
+  SearchPlatformDocsUseCase,
   SendMailUseCase,
   SendMessageUseCase,
   SendNotificationDigestUseCase,
@@ -210,8 +245,10 @@ import {
   ToggleProjectionUseCase,
   ToggleReplicaReadsUseCase,
   TransactionScope,
+  UnifiedMarkdownRenderer,
   type UnitOfWork,
   UpdateDefaultPlanUseCase,
+  UpdateDocSpaceUseCase,
   UpdateFlagTargetUseCase,
   UpdateFlagUseCase,
   UpdateNotificationPreferenceUseCase,
@@ -221,6 +258,8 @@ import {
   UpdateTenantRetentionUseCase,
   UpdateWidgetDefaultUseCase,
   UpdateWidgetPreferenceUseCase,
+  UploadDocImageUseCase,
+  type UserId,
   type VectorStore,
   WatchConversationUseCase,
 } from "../import.js";
@@ -305,6 +344,10 @@ export class Container {
   // Thirty minutes. A month of `activity_log` streamed to S3 is the only work in this
   // system that legitimately runs this long, and it holds one connection to do it.
   private static readonly DIRECT_STATEMENT_TIMEOUT_MS = 1_800_000;
+
+  // The worker's reserved system id, reused: an actor column holding a tenant id would read
+  // as a user, and a placement-only principal is never an actor anyway.
+  private static readonly PLACEMENT_USER_ID = "00000000-0000-7000-8000-000000000001";
 
   // The fallback behind the fallback: `platform_policy` overrides this, and the worker
   // passes its own from the environment. This is what a container built without one gets.
@@ -529,6 +572,41 @@ export class Container {
     readonly preferences: GetWidgetPreferencesUseCase;
     readonly updatePreference: UpdateWidgetPreferenceUseCase;
     readonly updateDefault: UpdateWidgetDefaultUseCase;
+  };
+  // Docs, the platform's public and granted spaces included: those are the platform
+  // organization's own rows, so one slice serves both. See docs/reference/container.md.
+  public readonly doc: {
+    readonly cache: DocCache;
+    readonly listSpaces: ListDocSpacesUseCase;
+    readonly getSpace: GetDocSpaceUseCase;
+    readonly createSpace: CreateDocSpaceUseCase;
+    readonly updateSpace: UpdateDocSpaceUseCase;
+    readonly deleteSpace: DeleteDocSpaceUseCase;
+    readonly read: ReadDocPageUseCase;
+    readonly tree: ListDocPagesUseCase;
+    readonly getPage: GetDocPageUseCase;
+    readonly createPage: CreateDocPageUseCase;
+    readonly savePage: SaveDocPageUseCase;
+    readonly publishPage: PublishDocPageUseCase;
+    readonly movePage: MoveDocPageUseCase;
+    readonly deletePage: DeleteDocPageUseCase;
+    readonly previewPage: PreviewDocPageUseCase;
+    readonly revisions: ListDocRevisionsUseCase;
+    readonly revision: GetDocRevisionUseCase;
+    readonly restoreRevision: RestoreDocRevisionUseCase;
+    // The platform's public and granted spaces. No principal required, so the caller
+    // places them with `placedAt`, at the platform organization's node.
+    readonly readPlatform: ReadPlatformDocUseCase;
+    readonly listPlatformSpaces: ListPlatformDocSpacesUseCase;
+    readonly listGrants: ListDocGrantsUseCase;
+    readonly saveGrant: SaveDocGrantUseCase;
+    readonly revokeGrant: RevokeDocGrantUseCase;
+    readonly search: SearchDocsUseCase;
+    readonly searchPlatform: SearchPlatformDocsUseCase;
+    readonly uploadImage: UploadDocImageUseCase;
+    // Like `readPlatform`, it takes no principal of the image's organization, and the
+    // caller places it at that organization's node.
+    readonly openImage: OpenDocImageUseCase;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -1203,6 +1281,7 @@ export class Container {
         this.routedUnitOfWork,
       ),
     };
+    this.doc = this.buildDoc();
     this.retentionPolicies = new PgRetentionPolicyRepository(
       this.cluster,
       this.transactions,
@@ -1237,6 +1316,7 @@ export class Container {
         this.analyticsProjector ?? null,
         this.tenantRetentionPolicies,
         this.shardResolver,
+        new DocImageSweep(this.storage),
       ),
       moveTenant: new MoveTenantUseCase(
         this.authorizer,
@@ -1708,6 +1788,21 @@ export class Container {
     );
   }
 
+  // Placed by organization alone, for a read that holds no principal of that organization:
+  // the platform's public docs. The principal is empty — it places, and asserts nothing.
+  public async placedAt<T>(
+    organizationId: OrganizationId,
+    work: () => Promise<T>,
+    options: { readonly replica?: boolean } = {},
+  ): Promise<T> {
+    const placer = Principal.system(
+      organizationId,
+      Container.PLACEMENT_USER_ID as UserId,
+      CapabilitySet.empty(),
+    );
+    return this.placed(placer, work, options);
+  }
+
   // Every node's standby, empty when none is configured — what the status panel reads.
   public async replicaHealth(): Promise<readonly ReplicaHealth[]> {
     return this.cluster.replicaHealth();
@@ -1841,6 +1936,95 @@ export class Container {
     } catch (error) {
       this.logger.failure(error, { closing: what });
     }
+  }
+
+  // Its own method because the slice is eighteen use-cases over four shared collaborators,
+  // and inline they would bury the constructor's order of construction.
+  private buildDoc(): Container["doc"] {
+    const spaces = new PgDocSpaceRepository(this.cluster, this.transactions, this.shards);
+    const pages = new PgDocPageRepository(this.cluster, this.transactions, this.shards);
+    const renderer: MarkdownRenderer = new UnifiedMarkdownRenderer();
+    const tree = new DocTree(pages, spaces);
+    const cache = new DocCache(this.cache, spaces, pages);
+    const grants = new PgDocGrantRepository(this.cluster, this.transactions, this.shards);
+    const access = new DocAccess(grants, this.cache);
+    const search = new DocSearch(pages, cache);
+    const images = new DocImageSweep(this.storage);
+    const auth = this.authorizer;
+    const uow = this.routedUnitOfWork;
+
+    return {
+      cache,
+      listSpaces: new ListDocSpacesUseCase(auth, spaces),
+      getSpace: new GetDocSpaceUseCase(auth, spaces),
+      createSpace: new CreateDocSpaceUseCase(auth, spaces, this.platform, this.activity, uow),
+      updateSpace: new UpdateDocSpaceUseCase(
+        auth,
+        spaces,
+        this.platform,
+        cache,
+        this.activity,
+        uow,
+      ),
+      deleteSpace: new DeleteDocSpaceUseCase(
+        auth,
+        spaces,
+        pages,
+        grants,
+        access,
+        cache,
+        this.activity,
+        uow,
+        images,
+      ),
+      read: new ReadDocPageUseCase(auth, cache),
+      tree: new ListDocPagesUseCase(auth, spaces, pages),
+      getPage: new GetDocPageUseCase(auth, pages),
+      createPage: new CreateDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
+      savePage: new SaveDocPageUseCase(auth, spaces, pages, tree, cache, uow),
+      publishPage: new PublishDocPageUseCase(
+        auth,
+        spaces,
+        pages,
+        renderer,
+        tree,
+        cache,
+        this.activity,
+        uow,
+      ),
+      movePage: new MoveDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
+      deletePage: new DeleteDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
+      previewPage: new PreviewDocPageUseCase(auth, renderer),
+      revisions: new ListDocRevisionsUseCase(auth, pages),
+      revision: new GetDocRevisionUseCase(auth, pages),
+      restoreRevision: new RestoreDocRevisionUseCase(auth, pages, this.activity, uow),
+      readPlatform: new ReadPlatformDocUseCase(this.platform, cache, access),
+      listPlatformSpaces: new ListPlatformDocSpacesUseCase(this.platform, spaces, access),
+      listGrants: new ListDocGrantsUseCase(auth, grants),
+      // The catalog unit of work: a grant is a catalog row, and its audit row is written
+      // in whichever transaction is open.
+      saveGrant: new SaveDocGrantUseCase(
+        auth,
+        grants,
+        access,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+        this.clock,
+      ),
+      search: new SearchDocsUseCase(auth, spaces, search),
+      uploadImage: new UploadDocImageUseCase(auth, spaces, this.storage),
+      openImage: new OpenDocImageUseCase(this.platform, spaces, access, this.storage),
+      searchPlatform: new SearchPlatformDocsUseCase(this.platform, spaces, access, search),
+      revokeGrant: new RevokeDocGrantUseCase(
+        auth,
+        grants,
+        access,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+    };
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The

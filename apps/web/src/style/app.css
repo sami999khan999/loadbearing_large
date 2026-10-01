@@ -1,0 +1,16 @@
+/* The one stylesheet the app links. Tailwind compiles it: the kit's theme is Tailwind's
+   theme, and utilities are generated for the classes the sources below actually use.
+
+   No Preflight: it resets the list and heading defaults the Markdown stylesheets in
+   @loadbearing/ui rely on, and the utilities work without it. */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@import "@loadbearing/ui/style.css";
+
+/* Outside this app's root, so Tailwind's own detection never reaches them. */
+@source "../../../../packages/ui/src";
+@source "../../../../packages/feature/src";

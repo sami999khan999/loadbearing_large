@@ -1,5 +1,10 @@
 {
   "extends": "@loadbearing/tsconfig/library.json",
+  "compilerOptions": {
+    "paths": {
+      "highlight.js": ["./highlight-js.d.ts"]
+    }
+  },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",

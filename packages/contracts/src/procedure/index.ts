@@ -1,5 +1,6 @@
 import { AnalyticsProcedures } from "../analytics/index.js";
 import { ApiKeyProcedures } from "../apikey/index.js";
+import { DocGrantProcedures, DocPageProcedures, DocSpaceProcedures } from "../doc/index.js";
 import { DocumentProcedures } from "../document/index.js";
 import type { AnyContractRouter } from "../import.js";
 import { MemberProcedures } from "../member/index.js";
@@ -26,6 +27,9 @@ export const contract = {
   analytics: AnalyticsProcedures.all,
   override: OverrideProcedures.all,
   widget: WidgetProcedures.all,
+  docSpace: DocSpaceProcedures.all,
+  docPage: DocPageProcedures.all,
+  docGrant: DocGrantProcedures.all,
 } as const satisfies AnyContractRouter;
 
 export type AppContract = typeof contract;

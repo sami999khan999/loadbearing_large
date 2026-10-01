@@ -44,11 +44,37 @@ export {
   type TwoFactorFormProps,
   useCapabilities,
   useFlags,
+  useIsPlatformOrganization,
   useSession,
   VerifyEmailNotice,
   type VerifyEmailNoticeProps,
 } from "./auth/index.js";
 export { DashboardZone, type DashboardZoneProps, prefetchDashboard } from "./dashboard/index.js";
+export {
+  type DocAppearance,
+  DocAppearancePanel,
+  DocCopyButton,
+  DocEditorForm,
+  type DocEditorFormProps,
+  DocGrantPanel,
+  type DocGrantPanelProps,
+  DocNavTree,
+  DocPageTreeList,
+  type DocPageTreeListProps,
+  DocReaderPanel,
+  type DocReaderPanelProps,
+  DocRevisionList,
+  type DocRevisionListProps,
+  type DocSearchHit,
+  DocSearchPanel,
+  type DocSearchPanelProps,
+  DocSpaceForm,
+  type DocSpaceFormProps,
+  DocSpaceList,
+  type DocSpaceListProps,
+  DocSpaceSwitcherButton,
+  type RenderDocLink,
+} from "./doc/index.js";
 export { DocumentSearch, IndexDocumentForm } from "./document/index.js";
 export { type ErrorMessage, useErrorMessage } from "./error/index.js";
 export {

@@ -1,3 +1,4 @@
+import { DocImageKey, type DocImageSweep } from "../doc/index.js";
 import { CapabilitySet, type OrganizationId, type UserId } from "../import.js";
 import type {
   ActivityLogger,
@@ -49,6 +50,9 @@ export class PurgeOrganizationUseCase {
     // The placement cache. Its TTL is deliberately long, so without this a deleted
     // tenant keeps resolving to a node for up to five minutes after its rows are gone.
     private readonly shards: ShardResolver,
+    // The tenant's doc images. Their prefix is the only index they have, so no partition
+    // drop reaches them and nothing else would ever delete them.
+    private readonly images: DocImageSweep | null = null,
   ) {}
 
   public async execute(input: PurgeOrganizationInput): Promise<PurgedOrganization> {
@@ -66,6 +70,7 @@ export class PurgeOrganizationUseCase {
     // What the foreign key dropped in `24.1` used to do. `outbox_event` has no tenant
     // level, so the partition drop above never reaches its rows.
     const outboxRows = await this.outbox.deleteFor(input.organizationId);
+    const images = (await this.images?.sweep(DocImageKey.tenantPrefix(input.organizationId))) ?? 0;
 
     // `system`, and with no capabilities: this actor authorizes nothing, it only names
     // who asked. The permission was asserted when the job was queued.
@@ -92,6 +97,7 @@ export class PurgeOrganizationUseCase {
         archivedObjects: archived,
         partitions: partitions.length,
         outboxRows,
+        images,
       });
     });
 

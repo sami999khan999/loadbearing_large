@@ -38,6 +38,9 @@ const CATALOG = Object.freeze([
   "plan_permissions",
   "entitlement_adjustments",
   "disabled_modules",
+  // Who outside the platform may read a granted doc space. Read before a request is
+  // placed, and it names organizations, people and plans across every tenant.
+  "doc_space_grants",
 ] as const);
 
 // Present on every physical database and written in whichever transaction is open.

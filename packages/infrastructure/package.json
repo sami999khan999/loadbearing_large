@@ -36,6 +36,8 @@
     "@loadbearing/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "@types/nodemailer": "catalog:",
+    "@types/hast": "catalog:",
+    "@types/mdast": "catalog:",
     "@types/pg": "catalog:",
     "drizzle-kit": "catalog:",
     "rimraf": "catalog:",
@@ -57,8 +59,19 @@
     "@loadbearing/permissions": "workspace:*",
     "bullmq": "catalog:",
     "drizzle-orm": "catalog:",
+    "hast-util-to-string": "catalog:",
     "ioredis": "catalog:",
     "nodemailer": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "rehype-highlight": "catalog:",
+    "rehype-sanitize": "catalog:",
+    "rehype-slug": "catalog:",
+    "rehype-stringify": "catalog:",
+    "remark-directive": "catalog:",
+    "remark-gfm": "catalog:",
+    "remark-parse": "catalog:",
+    "remark-rehype": "catalog:",
+    "unified": "catalog:",
+    "unist-util-visit": "catalog:"
   }
 }

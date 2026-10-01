@@ -28,40 +28,34 @@ packages/ui/
 └── src/
     ├── index.ts               ← "use client" on line 1
     ├── import.ts              ← every external symbol. Two workspace entries, both type-only
-    ├── theme/
+    ├── component/             ← every exported component, one folder each
+    │   ├── index.ts           ← names every component export
+    │   ├── icon/              → Icon
+    │   ├── can/               → Can
+    │   ├── data-table/        → DataTable, DataTable.Skeleton
+    │   ├── button/ · field/ · input/ · status-badge/ · empty-state/ …
+    │   └── dialog/            → Dialog, AlertDialog, on Base UI (Step 22.5)
+    ├── theme/                 ← TypeScript only
     │   ├── index.ts
-    │   ├── theme.css          ← entry: @imports token/ and color/
-    │   ├── class.css          ← entry: @imports class/. Exported separately
-    │   ├── token/             ← the sizes. No index.ts: no modules
-    │   │   └── typography.css · space.css · radius.css · shadow.css · motion.css
-    │   ├── color/             ← one file per theme; the twelve names, in oklch
-    │   │   ├── slate.css      ← the default; also seeds :root
-    │   │   ├── ocean.css · forest.css · plum.css
-    │   │   └── midnight.css   ← dark only
-    │   ├── class/             ← one file per component; styles the ui-* hooks
-    │   │   └── base.css · button.css · input.css · field.css · …
     │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
     │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
-    │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
-    ├── icon/
-    │   ├── index.ts
-    │   └── icon.tsx           → Icon
-    ├── can/
-    │   ├── index.ts
-    │   └── can.tsx            → Can
-    ├── data-table/
-    │   ├── index.ts
-    │   └── data-table.tsx     → DataTable, DataTable.Skeleton
-    ├── empty-state/ …         → EmptyState
-    ├── status-badge/ …        → StatusBadge, BadgeTone
-    ├── button/ …              → Button, ButtonVariant
-    ├── field/ …               → Field
-    ├── input/ …               → Input
-    └── dialog/ …              ☐ needs a headless library — see Step 22.5
+    │   ├── font-registry.ts   → FontRegistry, FontKey, FontMeta
+    │   └── theme-scope.tsx    → ThemeScope
+    ├── style/                 ← every stylesheet. No index.ts: no modules
+    │   ├── index.css          ← the one entry, exported as `./style.css`
+    │   ├── token.css          ← the sizes, as Tailwind theme blocks
+    │   ├── color/             ← one file per theme; the twelve names, in oklch
+    │   │   ├── slate.css      ← the default; also seeds :root
+    │   │   ├── ocean.css · forest.css · plum.css · graphite.css
+    │   │   └── midnight.css   ← dark only
+    │   ├── tailwind.css       ← the twelve as Tailwind's palette
+    │   ├── base.css
+    │   └── markdown/          ← callout.css · card.css · code-block.css · prose.css
+    ├── class-name/            → cn
+    └── format/                → DateFormat, ByteFormat
 ```
 
-**`theme/token/`, `theme/color/` and `theme/class/` have no `index.ts`.** They hold stylesheets and
-no modules, so there is nothing for a barrel to name — the same exemption the binary directories in
+**`style/` and the folders under it have no `index.ts`.** They hold stylesheets and no modules, so there is nothing for a barrel to name — the same exemption the binary directories in
 `asset` have ([Folders](../opinions/folders.md)).
 
 ---
@@ -75,7 +69,7 @@ no modules, so there is nothing for a barrel to name — the same exemption the 
 
 ## Step 22.1 — Tokens
 
-**`packages/ui/src/theme/token/`**
+**`packages/ui/src/style/token.css`**
 
 ```css
 @import "@loadbearing/asset/font.css";
@@ -123,7 +117,7 @@ no modules, so there is nothing for a barrel to name — the same exemption the 
 }
 ```
 
-**Shown as one block for reading; on disk it is five files** — `typography.css`, `space.css`, `radius.css`, `shadow.css`, `motion.css` — under `token/`, and `theme.css` `@import`s them. Vite inlines the imports, so the split costs nothing at runtime.
+**On disk this is one file, `style/token.css`**, one section per kind of size, each a Tailwind `@theme` block with its namespace reset.
 
 **Colours are not here.** They live in `color/*.css` under `[data-theme][data-mode]` selectors, because they are the thing that varies. Type scale, spacing, and radii are structural and stay constant across themes — a dark theme is not a different spacing system.
 
@@ -135,7 +129,7 @@ no modules, so there is nothing for a barrel to name — the same exemption the 
 
 ## Step 22.2 — Themes
 
-**`packages/ui/src/theme/color/slate.css`** — one file per theme, twelve names, twice.
+**`packages/ui/src/style/color/slate.css`** — one file per theme, twelve names, twice.
 
 ```css
 :root,
@@ -225,7 +219,7 @@ export class ThemeRegistry {
 
 ## Step 22.3 — `<Icon>`
 
-**`packages/ui/src/icon/icon.tsx`**
+**`packages/ui/src/component/icon/icon.tsx`**
 
 > [!IMPORTANT]
 > **`import spriteUrl from "…/sprite.svg"` needs an ambient declaration in *this* package.**
@@ -277,7 +271,7 @@ Four lines of real content, and it is the entire icon system.
 
 The permission-gating component. It lives in `ui` rather than `feature` because it is a pure conditional with no domain knowledge — it takes a `CapabilitySet` as a prop.
 
-**`packages/ui/src/can/can.tsx`**
+**`packages/ui/src/component/can/can.tsx`**
 
 ```tsx
 import type { CapabilitySet, PermissionKey } from "@loadbearing/permissions";
@@ -334,7 +328,7 @@ text does nothing — and making it mandatory is what stops that shipping.
 > `main:focus` clears the ring the base rule would otherwise draw: the anchor moves focus to a whole
 > page region programmatically, and outlining the region is noise rather than information.
 
-**`packages/ui/src/empty-state/empty-state.tsx`**
+**`packages/ui/src/component/empty-state/empty-state.tsx`**
 
 ```tsx
 import type { IconName } from "@loadbearing/asset";
@@ -369,25 +363,15 @@ That constraint has a design consequence worth stating: an empty state is an inv
 1. **Props in, markup out.** No fetching, no context beyond theme, no global state.
 2. **Forward the ref and spread the rest.** `forwardRef` plus `...rest` onto the root element means a caller can attach a tooltip or a test id without you anticipating it.
 3. **Keyboard and focus, always.** Visible focus ring using `--focus-ring`, `Escape` closes overlays, focus is trapped in a modal and restored on close. Retrofitting this across thirty components later is a project; doing it per component as you write it is a minute each.
-4. **Use headless primitives for anything with complex interaction semantics.** Dialogs, popovers, comboboxes, and menus have genuinely hard focus and ARIA requirements. Radix or Ark handle them correctly. Write your own only for things that are actually simple.
+4. **Use headless primitives for anything with complex interaction semantics.** Dialogs, popovers, comboboxes, and menus have genuinely hard focus and ARIA requirements. Base UI (`@base-ui/react`) handles them correctly, and this kit uses it. Write your own only for things that are actually simple.
 
 > [!IMPORTANT]
-> **`Dialog` is the one component this step does not deliver, and rule 4 is why.** A dialog needs a
-> focus trap, an inert background, restored focus on close, `Escape` handling, and correct
-> `aria-modal` semantics. Hand-rolling it is exactly what rule 4 forbids, so it waits on a library
-> choice this document deliberately leaves open — and that choice is not a file, it is a package that
-> lands in the client bundle of every consumer.
->
-> Pick one, add it to the **React-scoped** group of the catalog in
-> [03](03-workspace-and-catalogs.md), and wrap it here:
->
-> ```yaml
-> "@radix-ui/react-dialog": ^1.1.0   # or @ark-ui/react
-> ```
->
-> Until then `packages/ui` exports no `Dialog`, and the barrel below says so. That is better than a
-> stub: a dialog that traps focus incorrectly is worse than one that does not exist, because the first
-> ships and the second fails a build.
+> **Rule 4 is a library choice, and this kit made it: Base UI.** A dialog needs a focus trap, an inert
+> background, restored focus on close, `Escape` handling, and correct `aria-modal` semantics, and
+> hand-rolling that is what rule 4 forbids. `@base-ui/react` sits in the **React-scoped** group of
+> the catalog in [03](03-workspace-and-catalogs.md), and `Dialog`, `AlertDialog`, `Popover`,
+> `Select`, `Tooltip` and `ThemeToggle` wrap it. Styling is Tailwind utilities in each component,
+> through `cn`. See [`packages/ui/docs`](../../packages/ui/docs/index.md).
 
 ---
 
@@ -438,20 +422,16 @@ export {
 } from "./theme/index.js";
 ```
 
-**No `Dialog` line yet** — see the note under Step 22.5. Adding it is one export and one wrapper
-once the headless library is chosen.
-
-**`token/`, `color/` and `class/` are absent on purpose** — they ship CSS, not JavaScript, and reach the app through the `./theme.css` and `./class.css` exports below rather than through this file.
+**`style/` is absent on purpose** — it ships CSS, not JavaScript, and reaches the app through the `./style.css` export below rather than through this file.
 
 CSS is imported by the app, not re-exported here:
 
 ```ts
-// apps/web/src/route/__root.tsx
-import "@loadbearing/ui/theme.css";
-import "@loadbearing/ui/class.css";
+/* apps/web/src/style/app.css, the app's Tailwind entry */
+@import "@loadbearing/ui/style.css";
 ```
 
-Add those two side-effect exports to `packages/ui/package.json` the same way `asset` does
+Add that side-effect export to `packages/ui/package.json` the same way `asset` does
 ([19](19-asset-package.md)), along with `"sideEffects": ["*.css"]` — the JavaScript here is
 tree-shakeable and the stylesheets are not, and a blanket `false` would let a bundler drop them.
 
@@ -471,7 +451,7 @@ tree-shakeable and the stylesheets are not, and a blanket `false` would let a bu
 ## ✅ Gate
 
 ```bash
-grep -rniE "task|goal|invoice|lead" packages/ui/src --include=*.tsx --include=*.ts   | grep -v "src/can/can.tsx"
+grep -rniE "task|goal|invoice|\blead\b" packages/ui/src --include=*.tsx --include=*.ts   | grep -v "src/can/can.tsx"
 ```
 
 Returns nothing. No domain nouns in the design system.

@@ -1,25 +1,101 @@
 "use client";
 
-export { Button, type ButtonProps, type ButtonVariant } from "./button/index.js";
-export { Callout, type CalloutProps, type CalloutTone } from "./callout/index.js";
-export { Can, type CanProps } from "./can/index.js";
-export { CodeList, type CodeListProps } from "./code-list/index.js";
+export { cn } from "./class-name/index.js";
 export {
+  AlertDialog,
+  type AlertDialogProps,
+  type BadgeTone,
+  Button,
+  type ButtonProps,
+  type ButtonVariant,
+  buttonClassName,
+  Callout,
+  type CalloutProps,
+  type CalloutTone,
+  Can,
+  type CanProps,
+  Card,
+  CardGrid,
+  type CardGridProps,
+  type CardProps,
+  CodeBlock,
+  type CodeBlockProps,
+  CodeList,
+  type CodeListProps,
+  CommandDialog,
+  type CommandDialogProps,
+  type CommandGroup,
+  type CommandItem,
   DataTable,
   type DataTableProps,
   type DataTableSkeletonProps,
+  Dialog,
+  type DialogProps,
+  dataTableClassName,
+  EmptyState,
+  type EmptyStateProps,
+  Field,
+  type FieldProps,
+  fieldClassName,
+  type HotkeyOptions,
+  Icon,
+  type IconName,
+  type IconProps,
+  IconRegistry,
+  Input,
+  type InputProps,
+  inputClassName,
+  type LinkAttributes,
+  Menu,
+  type MenuOption,
+  type MenuProps,
+  NavTree,
+  type NavTreeKind,
+  type NavTreeNode,
+  type NavTreeProps,
+  Popover,
+  type PopoverAlign,
+  type PopoverProps,
+  Prose,
+  type ProseProps,
+  QrCode,
+  type QrCodeProps,
+  ReaderLayout,
+  type ReaderLayoutProps,
+  type RenderCommandLink,
+  type RenderNavLink,
+  readerClassName,
+  SearchTrigger,
+  type SearchTriggerProps,
+  Select,
+  type SelectOption,
+  type SelectProps,
+  type SelectVariant,
+  Sidebar,
+  type SidebarProps,
+  StatusBadge,
+  type StatusBadgeProps,
   type TableColumn,
   type TableRow,
-} from "./data-table/index.js";
-export { EmptyState, type EmptyStateProps } from "./empty-state/index.js";
-export { Field, type FieldProps } from "./field/index.js";
-export { ByteFormat, DateFormat } from "./format/index.js";
-export { Icon, type IconName, type IconProps, IconRegistry } from "./icon/index.js";
-export { Input, type InputProps } from "./input/index.js";
-export { Popover, type PopoverAlign, type PopoverProps } from "./popover/index.js";
-export { QrCode, type QrCodeProps } from "./qr-code/index.js";
-export { type BadgeTone, StatusBadge, type StatusBadgeProps } from "./status-badge/index.js";
-export { Textarea, type TextareaProps } from "./textarea/index.js";
+  Textarea,
+  type TextareaProps,
+  ThemeToggle,
+  type ThemeToggleProps,
+  Toc,
+  type TocItem,
+  type TocProps,
+  Tooltip,
+  type TooltipProps,
+  textareaClassName,
+  useHotkey,
+  Zone,
+  type ZoneItem,
+  type ZoneProps,
+} from "./component/index.js";
+export {
+  ByteFormat,
+  DateFormat,
+} from "./format/index.js";
 export {
   type FontKey,
   type FontMeta,
@@ -30,5 +106,7 @@ export {
   type ThemeKey,
   type ThemeMeta,
   ThemeRegistry,
+  ThemeScope,
+  type ThemeScopeProps,
+  usePortalContainer,
 } from "./theme/index.js";
-export { Zone, type ZoneItem, type ZoneProps } from "./zone/index.js";

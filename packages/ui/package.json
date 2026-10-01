@@ -11,8 +11,7 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./theme.css": "./src/theme/theme.css",
-    "./class.css": "./src/theme/class.css"
+    "./style.css": "./src/style/index.css"
   },
   "files": [
     "dist"
@@ -44,7 +43,10 @@
     "react-dom": "catalog:react"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@loadbearing/asset": "workspace:*",
+    "clsx": "catalog:",
+    "tailwind-merge": "catalog:",
     "uqr": "catalog:"
   },
   "sideEffects": [

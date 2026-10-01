@@ -19,8 +19,8 @@ different routing shell.
 | | |
 | --- | --- |
 | **Package** | `@loadbearing/ui` (private, never published) |
-| **Entrypoint** | `src/index.ts` (opens with `"use client"`), plus `./theme.css` and `./class.css` |
-| **Depends on** | `@loadbearing/asset` — **the only runtime workspace dependency** |
+| **Entrypoint** | `src/index.ts` (opens with `"use client"`), plus `./style.css` |
+| **Depends on** | `@loadbearing/asset`, the only runtime workspace dependency; `@base-ui/react` for behaviour, and `clsx` with `tailwind-merge` behind `cn` |
 | **Type-only** | `@loadbearing/permissions`, a `devDependency` because both imports are erased |
 | **Peers** | `react`, `react-dom` |
 | **Used by** | `feature`, `apps/web` |
@@ -36,51 +36,55 @@ packages/ui/
 ├── ui.d.ts                    ← declare module "*.svg"; named in tsconfig `include`
 ├── vitest.setup.ts            ← afterEach(cleanup)
 └── src/
-    ├── index.ts               ← "use client" on line 1
-    ├── import.ts              ← two workspace entries, both type-only but one
-    ├── theme/
-    │   ├── theme.css          ← entry: @imports token/ and color/
-    │   ├── class.css          ← entry: @imports class/. A separate export
-    │   ├── token/*.css        ← typography, space, radius, shadow, motion
-    │   ├── color/*.css        ← one per theme; the twelve names, in oklch
-    │   ├── class/*.css        ← one per component; styles the ui-* hooks
+    ├── index.ts               ← "use client" on line 1; re-exports the four groups below
+    ├── import.ts              ← every outside module, written once
+    ├── component/             ← every exported component, one folder each
+    │   ├── index.ts           ← names every component export
+    │   ├── button/ … zone/    ← 27 folders, each with its own index.ts
+    ├── theme/                 ← TypeScript only
     │   ├── theme-registry.ts  → ThemeRegistry, ThemeKey, ThemeMeta
     │   ├── mode-registry.ts   → ModeRegistry, ModeKey, ModePreference
-    │   └── font-registry.ts   → FontRegistry, FontKey, FontMeta
-    ├── button/…               → Button, ButtonVariant
-    ├── callout/…              → Callout, CalloutTone
-    ├── can/can.tsx            → Can
-    ├── code-list/…            → CodeList
-    ├── data-table/…           → DataTable, DataTable.Skeleton
-    ├── empty-state/…          → EmptyState
-    ├── field/…                → Field
-    ├── format/…               → DateFormat
-    ├── icon/icon.tsx          → Icon
-    ├── input/…                → Input
-    ├── qr-code/…              → QrCode
-    ├── status-badge/…         → StatusBadge, BadgeTone
-    └── zone/…                 → Zone, ZoneItem
+    │   ├── font-registry.ts   → FontRegistry, FontKey, FontMeta
+    │   └── theme-scope.tsx    → ThemeScope, usePortalContainer
+    ├── style/                 ← every stylesheet, and nothing else
+    │   ├── index.css          ← the one entry, exported as `./style.css`
+    │   ├── token.css          ← the sizes, as Tailwind theme blocks
+    │   ├── color/*.css        ← one per theme; the twelve names, in oklch
+    │   ├── tailwind.css       ← the twelve as Tailwind's palette; the `dark` variant
+    │   ├── base.css           ← the page, the focus ring, the skip link
+    │   └── markdown/*.css     ← callout, card, code-block, prose
+    ├── class-name/            → cn
+    └── format/                → DateFormat, ByteFormat
 ```
 
-One folder per exported component, which is the third folder shape in the repository —
-`ui` is neither role-organised nor subject-organised ([Folders](../../../docs/opinions/folders.md)).
+**Four groups, each answering one question.** `component/` is what a caller renders, one folder per
+exported component. `theme/` is how a theme is chosen and scoped. `style/` is what the page looks
+like where no component's utilities reach. `class-name/` and `format/` are the two helpers every
+component may use. `ui` is the third folder shape in the repository, neither role-organised nor
+subject-organised ([Folders](../../../docs/opinions/folders.md)).
 
-## Three folders, and one rule about which is which
+## The stylesheets, and what each may reference
 
-`theme/` divides by what a file is allowed to reference, and the rule reads in one direction:
+Components style themselves with Tailwind utilities, so `style/` holds only what a utility cannot
+express. The rule reads in one direction:
 
-| Folder | Holds | May reference |
+| File | Holds | May reference |
 |---|---|---|
-| `token/` | sizes — type, space, radius, shadow, motion | nothing |
-| `color/` | one file per theme; the twelve colour names | nothing |
-| `class/` | one file per component; the `ui-*` rules | `token/` and `color/`, only as `var()` |
+| `token.css` | sizes — type, space, radius, shadow, motion | nothing |
+| `color/*.css` | one file per theme; the twelve colour names | nothing |
+| `tailwind.css` | the twelve as Tailwind colours, and `dark:` | `color/`, only as `var()` |
+| `base.css`, `markdown/*.css` | the page, and HTML the Markdown renderer writes | the rest, only as `var()` |
 
-`token/` names no colour — **a dark theme is not a different spacing system**. `color/` names no
-component. `class/` declares no literal value of its own: a hex or a pixel appearing there is a
-token that was never added. A rule in the wrong folder is visible from its content alone.
+`token.css` names no colour — **a dark theme is not a different spacing system**. A colour file
+names no component. `base.css` and `markdown/` declare no literal value of their own: a hex there is
+a token that was never added, and `check-architecture` §32 fails on it. `markdown/` exists because
+stored doc HTML carries `ui-callout`, `ui-card` and `ui-prose`, and React never renders it, so no
+utility can reach it.
 
-`token/` and `color/` ship together as `./theme.css`; `class/` ships as `./class.css`, so an app
-that wants the tokens and its own design drops one link and keeps the rest.
+`style/index.css` is Tailwind source, never linked alone. The app's entry,
+[`apps/web/src/style/app.css`](../../../apps/web/src/style/app.css), imports it as
+`@loadbearing/ui/style.css` and compiles it with the utilities into one stylesheet. `base.css` and
+`markdown/` sit in the `components` layer, so a utility passed in `className` beats them.
 
 ## A theme and a mode are two axes
 
@@ -192,27 +196,39 @@ phone, and colours come only through the twelve names.
    in a diff and announces nothing — every form in `feature` inherited exactly that. The child's own
    `aria-describedby` is joined rather than replaced, because the attribute is a list.
 
-## Three things this package does not have
+## Behaviour comes from Base UI
 
-**No `Dialog`.** A dialog needs a focus trap, an inert background, restored focus on close, `Escape`
-handling and correct `aria-modal` semantics. Hand-rolling it is what rule 4 forbids, so it waits on a
-headless library — Radix or Ark — which is a package that lands in the client bundle of every
-consumer and therefore a decision, not a file. One catalog line in the React-scoped group plus one
-wrapper here when that is made. A dialog that traps focus incorrectly is worse than one that does not
-exist, because the first ships.
+Rule 4 says to use a headless library for anything with hard interaction semantics, and that
+library is [Base UI](https://base-ui.com) (`@base-ui/react`), one line in the React-scoped group
+of the catalog. It owns focus traps, inert backgrounds, restored focus, `Escape`, dismissal,
+roving focus and ARIA. This package owns the markup's styling and the props.
 
-**`Popover` is not the exception to that**, and the distinction is worth stating because the two
-look alike. A popover is non-modal: the page behind it stays live, Tab moves out of it, and
-nothing is inerted. There is no trap to get wrong, which is exactly why one could be written here
-and a dialog could not. See [Popover](reference/popover.md) for what it deliberately is not, and
-for why it is React state rather than the native `popover` attribute.
+| Component | Base UI part | What it took over |
+| --- | --- | --- |
+| `Popover` | `Popover` | Escape, outside press, focus in and back, trigger ARIA |
+| `Select`, `Menu` | `Select` | the listbox: arrows, Home and End, typeahead, a hidden input for forms |
+| `ThemeToggle` | `RadioGroup` | a real radio group, with arrow keys and one tab stop |
+| `CommandDialog` | `Dialog` | the modal trap, the inert page, Escape, focus return |
+| `Dialog`, `AlertDialog` | `Dialog`, `AlertDialog` | as above; an alert dialog starts on Cancel and ignores the backdrop |
+| `Tooltip` | `Tooltip` | hover and focus delays, Escape, the description link |
+
+Three stayed hand-written, each for a stated reason:
+- **`Field`** has no interaction to take over. Base UI's `Field` would also require its own
+  control inside, which every native control would then have to become.
+- **`Sidebar`'s drawer** is one element that is a column on a wide screen, and Base UI's `Dialog`
+  renders only while open, in a portal.
+- **`CommandDialog`'s result list** follows the caller's router link on Enter, which is not
+  a select.
+
+**A portal leaves a nested theme.** A panel opened inside the doc reader would paint in the page's
+theme, so [`ThemeScope`](../src/theme/theme-scope.tsx) renders the scoped `data-theme` and
+hands its element to every portal inside it. See [Popover](reference/popover.md).
 
 **No Storybook, and no `*.stories.tsx`.** Doc 22 offers Storybook or a `/kitchen-sink` route in
 `apps/web` and says to pick one deliberately. The route is what was picked —
-`apps/web/src/route/(dev)/kitchen-sink.tsx` renders eleven of the twelve components against every
-theme and every mode, with no second build, no second dependency tree and no story files to keep in
-step with the components. `Can` is the twelfth and has nothing to show: it renders no element of
-its own.
+`apps/web/src/route/(dev)/kitchen-sink.tsx` renders every component against every theme and every
+mode, with no second build, no second dependency tree and no story files to keep in step with the
+components. `Can` is the exception and has nothing to show: it renders no element of its own.
 The component tests under `tests/`, on `jsdom` and `@testing-library/react`, are the other half: they
 assert *behaviour* where the route shows *appearance*.
 
@@ -227,11 +243,11 @@ assert *behaviour* where the route shows *appearance*.
 > adding a `dev` namespace to `ClientNamespace`, `NamespaceShape` and two catalog cells would be
 > structure built for nobody to read.
 
-**No third-party design system.** Every component carries a `ui-*` class, and those class names are
-the contract: `theme/class/*.css` is what they resolve to, exported separately from `theme.css` so a
-consumer can take the tokens and write its own look. Eleven of the twelve components have a
-stylesheet there; `Can` renders no element of its own. Keeping the hooks and the styling in two files is what
-makes a design pass a rewrite of one directory rather than of every component.
+**No third-party design system; Tailwind for styling, Base UI for behaviour.** Every component
+carries a `ui-*` class, and those class names are the contract that specs and callers select on.
+Each component writes its Tailwind utilities itself, through
+[`cn`](../src/class-name/class-name.ts), with its `ui-*` hook first and carrying no styles. A caller's
+`className` wins a conflict, because `cn` merges and drops the losing utility.
 
 ## Testing
 

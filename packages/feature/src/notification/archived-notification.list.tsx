@@ -9,6 +9,7 @@ import {
   Field,
   type NotificationDto,
   NotificationQueries,
+  Select,
   type TableColumn,
   useApiClient,
   useAppInfiniteQuery,
@@ -79,18 +80,16 @@ export function ArchivedNotificationList({ limit = 25 }: ArchivedNotificationLis
       <p>{t("notification.archived.description")}</p>
 
       <Field label={t("notification.archived.month")} htmlFor="archived-month">
-        <select
+        <Select
           id="archived-month"
-          className="ui-input"
-          value={chosen}
-          onChange={(event) => setPeriod(event.target.value)}
-        >
-          {(months.data ?? []).map((month) => (
-            <option key={month.period} value={month.period}>
-              {month.period}
-            </option>
-          ))}
-        </select>
+          label={t("notification.archived.month")}
+          value={chosen ?? null}
+          onValueChange={setPeriod}
+          options={(months.data ?? []).map((month) => ({
+            value: month.period,
+            label: month.period,
+          }))}
+        />
       </Field>
 
       {page.isPending ? <DataTable.Skeleton rows={3} columns={2} /> : null}

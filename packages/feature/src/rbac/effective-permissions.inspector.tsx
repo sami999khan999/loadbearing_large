@@ -2,8 +2,6 @@ import { useCapabilities } from "../auth/index.js";
 import { useErrorMessage } from "../error/index.js";
 import { useMessages } from "../i18n/index.js";
 import {
-  type CapabilitiesDto,
-  CapabilitySet,
   CORE_MODULE,
   type ExplanationDto,
   type PermissionKey,
@@ -72,7 +70,7 @@ export function EffectivePermissionsInspector({
   if (!capabilities || modules.length === 0) return <p>{t("state.empty")}</p>;
 
   return (
-    <div className="ui-stack">
+    <div className="ui-stack flex flex-col gap-3">
       {modules.map((module) => (
         <section key={module}>
           <h3>{module}</h3>

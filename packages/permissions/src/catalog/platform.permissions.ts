@@ -102,4 +102,11 @@ export const platformPermissions = {
     label: "Suspend an account, and deny one person a permission",
     requires: ["platform.account.read"],
   },
+  // Who outside the platform may read a `granted` doc space. Writing the docs themselves
+  // is the tenant `doc.*` keys, held in the platform organization like any other.
+  "platform.doc.grant": {
+    scope: "platform",
+    module: "platform",
+    label: "Grant organizations, people and plans access to private docs",
+  },
 } as const satisfies Record<string, PermissionMeta>;

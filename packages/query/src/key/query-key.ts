@@ -25,6 +25,24 @@ export class QueryKeys {
     activity: (days: number) => ["analytics", "activity", days] as const,
   };
 
+  // Mirrors the two procedure groups. `reading` is keyed by slug and path, which is what
+  // a reader has; the editor's keys are by id, which is what an author has.
+  public static readonly doc = {
+    all: () => ["doc"] as const,
+    spaces: () => ["doc", "space", "list"] as const,
+    space: (spaceId: string) => ["doc", "space", spaceId] as const,
+    readings: () => ["doc", "read"] as const,
+    reading: (space: string, path: string) => ["doc", "read", space, path] as const,
+    trees: () => ["doc", "tree"] as const,
+    tree: (spaceId: string) => ["doc", "tree", spaceId] as const,
+    page: (pageId: string) => ["doc", "page", pageId] as const,
+    revisions: (pageId: string) => ["doc", "page", pageId, "revisions"] as const,
+    revision: (pageId: string, revisionNo: number) =>
+      ["doc", "page", pageId, "revisions", revisionNo] as const,
+    allGrants: () => ["doc", "grant"] as const,
+    grants: (spaceId: string) => ["doc", "grant", spaceId] as const,
+  };
+
   public static readonly widget = {
     all: () => ["widget"] as const,
     preferences: () => ["widget", "preferences"] as const,
