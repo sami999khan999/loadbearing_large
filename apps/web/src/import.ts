@@ -159,14 +159,18 @@ export {
 
 // ── @loadbearing/ui ──────────────────────────────────────────────────────────
 export {
+  AlertDialog,
   type BadgeTone,
   Button,
   type ButtonVariant,
+  buttonClassName,
   Callout,
   type CalloutTone,
   Can,
   CodeList,
+  cn,
   DataTable,
+  Dialog,
   EmptyState,
   Field,
   type FontKey,
@@ -174,22 +178,23 @@ export {
   Icon,
   Input,
   type LinkAttributes,
+  Menu,
   type ModeKey,
   type ModePreference,
   ModeRegistry,
   Popover,
   QrCode,
+  readerClassName,
+  Select,
   StatusBadge,
+  Textarea,
   type ThemeKey,
   ThemeRegistry,
+  ThemeScope,
+  ThemeToggle,
+  Tooltip,
   Zone,
 } from "@loadbearing/ui";
-
-// ── @loadbearing/ui — stylesheets ────────────────────────────────────────────
-// The order they are written into <head> matters, not the order here: `class.css` reads
-// the token names `theme.css` defines.
-export { default as classCss } from "@loadbearing/ui/class.css?url";
-export { default as themeCss } from "@loadbearing/ui/theme.css?url";
 
 // ── @tanstack/react-query ────────────────────────────────────────────────────
 export {
