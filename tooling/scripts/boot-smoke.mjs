@@ -8,7 +8,8 @@
 
 // @ts-check
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootApp, freePort } from "./boot-app.mjs";
@@ -71,24 +72,49 @@ const fail = (why) => {
   process.exit(1);
 };
 
+// A probe or a shutdown that never answers would otherwise hold a CI job for hours.
+// On a hang it asks the child for a diagnostic report first: its libuv handles name the
+// socket or timer that is holding the process open.
+const REPORTS = mkdtempSync(join(tmpdir(), "boot-smoke-"));
+let running;
+setTimeout(async () => {
+  running?.child.kill("SIGUSR2");
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  running?.child.kill("SIGKILL");
+  const tail = running?.output().trim().split("\n").slice(-40).join("\n") ?? "";
+  const handles = readdirSync(REPORTS)
+    .flatMap((file) => JSON.parse(readFileSync(join(REPORTS, file), "utf8")).libuv ?? [])
+    .filter((handle) => handle.is_referenced && handle.type !== "loop")
+    .map((handle) => JSON.stringify(handle));
+  fail(
+    `did not finish within ${(3 * TIMEOUT_MS) / 1000}s${tail ? `, last output:\n${tail}` : ""}` +
+      (handles.length ? `\nactive handles:\n${handles.join("\n")}` : ""),
+  );
+}, 3 * TIMEOUT_MS).unref();
+
 // The line, not the socket, even for the web app: unlike the smoke suite this script
 // exists to assert that the app *says* it started. See `boot-app.mjs`.
 const booted = await bootApp({
   entry,
   started: app.started,
   cwd: ROOT,
-  env: app.probe ? { ...process.env, [app.portEnv ?? "PORT"]: String(port) } : process.env,
+  env: {
+    ...process.env,
+    ...(app.probe ? { [app.portEnv ?? "PORT"]: String(port) } : {}),
+    NODE_OPTIONS: `--report-on-signal --report-signal=SIGUSR2 --report-directory=${REPORTS}`,
+  },
   timeoutMs: TIMEOUT_MS,
 }).catch((error) => fail(error.message));
 
 const { child } = booted;
+running = booted;
 console.log(`✓ ${name}: booted`);
 
 // A request that completes, with a body, from the built bundle. `T-032` was a server
 // that imported cleanly, listened, and answered 500 on every page.
 async function serves() {
   const url = `http://127.0.0.1:${port}${app.probe}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   const body = await response.text();
 
   if (response.status !== 200) fail(`${app.probe} answered ${response.status}`);

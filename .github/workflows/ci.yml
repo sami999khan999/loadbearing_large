@@ -6,6 +6,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       # pgvector, not stock postgres:17 — 0001's `vector(1536)` column and its hnsw
       # index will not apply otherwise. The image ships the extension available; the
@@ -115,7 +116,10 @@ jobs:
       - run: pnpm --filter @loadbearing/web build
 
       - run: pnpm typecheck
+      # Type-aware ESLint over every package outgrows the runner's default Node heap.
       - run: pnpm lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       # packages/infrastructure's specs are integration tests against a real Postgres,
       # and they read the seeded organization rather than creating one. Without both
@@ -154,6 +158,7 @@ jobs:
   # Mailpit at all, because a `services:` block cannot express what they need.
   compose:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     # This job talks to the compose stack rather than to `services:` containers, so
     # every port here is a published host port and must match `.env.example` — §27.
@@ -171,6 +176,8 @@ jobs:
       # The one service no other job can reach. The smoke suite skips the log reader
       # by name when this is unset, so naming it here is what makes that half run.
       LOKI_URL: http://localhost:13100
+      # Mailpit's published port: `smoke:web` reads back the mail the worker sends.
+      SMTP_URL: smtp://localhost:11025
       APP: ci
       ENV: test
       PGPASSWORD: ratchet
@@ -230,6 +237,7 @@ jobs:
   # Advisories are filtered by GHSA id in pnpm 11 (`auditConfig.ignoreGhsas`), not CVE.
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
