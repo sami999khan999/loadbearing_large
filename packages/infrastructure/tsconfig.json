@@ -17,6 +17,7 @@
     "platform-grant.ts",
     "queue-replay.ts",
     "doc-bench.ts",
+    "doc-rerender.ts",
     "seed.ts",
     "shard-env.ts"
   ]

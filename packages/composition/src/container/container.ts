@@ -50,6 +50,7 @@ import {
   DocCache,
   DocFeaturePolicy,
   DocImageSweep,
+  DocRerender,
   DocSearch,
   DocTree,
   type DomainEventPublisher,
@@ -614,6 +615,8 @@ export class Container {
     // Like `readPlatform`, it takes no principal of the image's organization, and the
     // caller places it at that organization's node.
     readonly openImage: OpenDocImageUseCase;
+    // The worker's, off `pnpm doc:rerender`: every published page an older renderer wrote.
+    readonly rerender: DocRerender;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -2045,6 +2048,7 @@ export class Container {
         this.activity,
         this.catalogUnitOfWork,
       ),
+      rerender: new DocRerender(pages, renderer, cache, uow),
     };
   }
 
