@@ -1,6 +1,6 @@
 ---
 title: Backlog — closed
-updated: 2026-09-30
+updated: 2026-10-03
 owner: sami
 schema: backlog/v1
 source: split out of plans/BACKLOG.md on 2026-09-22
@@ -1646,6 +1646,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-03 | @sami | **`BACKLOG.md` §17 opened: lite's docs system and the platform organization, three `LP.*` items.** 28 commits from lite, `cdb88c15..3f5bcf1b`, checked by hand through the API. Open: a browser walk, the in-app reader sending HTML twice, and the benchmarks not run here |
 | 2026-09-30 | @sami | **`BACKLOG.md` §15 opened: the docs capability, nine `DC.*` items.** Three things not built (a revision diff, semantic search, re-rendering on a renderer change), five gaps in what was (upload size, orphaned images, exports, bucket CORS, card icons) and one hand walk of the editing screens |
 | 2026-09-30 | @sami | **`RV.2` closed.** Only an event frame moves the client's resume point, so a reopen in a busy conversation replays rather than resyncing |
 | 2026-09-30 | @sami | **`RV.5` and `RV.6` closed.** Mail dedupes for a day through the new `onceWithin`, so a retried digest over a big tenant sends once. A failed command inside the realtime `MULTI` is logged rather than passing as sent |
