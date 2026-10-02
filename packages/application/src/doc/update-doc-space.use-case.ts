@@ -9,6 +9,7 @@ import type { ActivityLogger, UnitOfWork } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
 import type { DocCache } from "./doc.cache.js";
 import { DocRules } from "./doc.rules.js";
+import type { DocFeaturePolicy } from "./doc-feature.policy.js";
 import { DocShape } from "./doc-shape.js";
 import type { DocSpaceRepository } from "./doc-space.repository.js";
 
@@ -18,6 +19,7 @@ export class UpdateDocSpaceUseCase {
     private readonly spaces: DocSpaceRepository,
     private readonly platform: PlatformReader,
     private readonly cache: DocCache,
+    private readonly features: DocFeaturePolicy,
     private readonly activity: ActivityLogger,
     private readonly unitOfWork: UnitOfWork,
   ) {}
@@ -27,15 +29,28 @@ export class UpdateDocSpaceUseCase {
     DocRules.assertSpaceSlug(input.slug);
     const isPlatform = actor.organizationId === (await this.platform.organizationId());
     DocRules.assertAudience(input.audience, isPlatform);
+    if (input.access !== undefined) await this.features.assertKnown(input.access);
 
     const { before, after } = await this.unitOfWork.run(async () => {
-      const current = await this.spaces.findById(actor.organizationId, input.spaceId);
-      if (!current) throw new NotFoundError("doc.space", input.spaceId);
+      const current = DocRules.assertVisible(
+        await this.spaces.findById(actor.organizationId, input.spaceId),
+        actor.userId,
+        "doc.space",
+        input.spaceId,
+      );
+      DocRules.assertAudienceChange(current, input.audience, actor.userId);
+      DocRules.assertMayOpen(actor, input.audience, current.audience);
 
+      // Left out keeps what is stored: an older client cannot clear a rule it never showed.
       const saved = await this.spaces.save(
         actor.organizationId,
         input.spaceId,
-        input,
+        {
+          ...input,
+          access: input.access === undefined ? current.access : input.access,
+          repositoryUrl:
+            input.repositoryUrl === undefined ? current.repositoryUrl : input.repositoryUrl,
+        },
         input.position,
       );
       if (!saved) throw new ValidationError([{ field: "slug", rule: "taken" }]);

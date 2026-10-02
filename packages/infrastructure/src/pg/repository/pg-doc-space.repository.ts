@@ -23,7 +23,10 @@ const SUMMARY = {
   description: docSpaces.description,
   icon: docSpaces.icon,
   audience: docSpaces.audience,
+  createdBy: docSpaces.createdBy,
   theme: docSpaces.theme,
+  access: docSpaces.access,
+  repositoryUrl: docSpaces.repositoryUrl,
   position: docSpaces.position,
   version: docSpaces.version,
   updatedAt: docSpaces.updatedAt,
@@ -139,6 +142,8 @@ export class PgDocSpaceRepository extends BaseRepository implements DocSpaceRepo
       icon: fields.icon,
       audience: fields.audience,
       theme: fields.theme,
+      access: fields.access,
+      repositoryUrl: fields.repositoryUrl,
     };
   }
 

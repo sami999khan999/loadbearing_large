@@ -41,7 +41,12 @@ it, and each has a different owner.
 
 - **The mount point is a zone, never a surface.** `ZoneKey`, `<Zone>`, `ui-zone`.
 - **A platform admin is not a tenant owner.** `wildcard` is never set in production, and a
-  platform admin gets no powers inside a tenant.
+  platform admin holds tenant powers only inside the platform organization, which is run like
+  any other — invites, roles, docs. In a customer tenant they hold only the role it gave them.
+
+**A doc's access link adds no mechanism.** A page or space linked to a module, permission, flag
+or plan is resolved through the first three above and hides as `NOT_FOUND` — see
+`packages/application/docs/reference/doc.md`.
 
 ---
 

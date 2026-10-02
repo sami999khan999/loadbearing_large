@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AccountPanel, type ClientNamespace, useMessages } from "~/import.js";
+import {
+  AccountPanel,
+  type ClientNamespace,
+  PLATFORM_ROUTE_PERMISSION,
+  useMessages,
+} from "~/import.js";
 import { RouteGuard } from "~/route/-guard.js";
 
 const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
@@ -7,7 +12,7 @@ const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
 // Read, not manage: support looks an account up far more often than it locks one. The
 // suspend and deny controls render only for `platform.account.manage`.
 export const Route = createFileRoute("/(app)/_authenticated/platform/accounts")({
-  beforeLoad: RouteGuard.requirePermission("platform.account.read"),
+  beforeLoad: RouteGuard.requirePermission(PLATFORM_ROUTE_PERMISSION.accounts),
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
   component: PlatformAccounts,

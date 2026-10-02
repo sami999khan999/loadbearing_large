@@ -5,6 +5,7 @@ import type { PermissionKey } from "../import.js";
 export const docProcedurePermissions = {
   "docSpace.list": "doc.page.read",
   "docSpace.get": "doc.page.read",
+  "docSpace.nav": "doc.page.read",
   "docSpace.create": "doc.space.manage",
   "docSpace.update": "doc.space.manage",
   "docSpace.remove": "doc.space.manage",
@@ -18,6 +19,7 @@ export const docProcedurePermissions = {
   "docPage.publish": "doc.page.publish",
   "docPage.move": "doc.page.write",
   "docPage.remove": "doc.page.write",
+  "docPage.accessOptions": "doc.page.write",
   "docPage.preview": "doc.page.write",
   "docPage.upload": "doc.page.write",
   "docPage.revisions": "doc.page.write",

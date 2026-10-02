@@ -1,18 +1,21 @@
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import {
-  buttonClassName,
+  type DocNavNodeDto,
   DocReaderPanel,
   type DocReadingDto,
   type DocSearchHit,
   type DocSpaceDto,
+  Icon,
   type ModeKey,
   type ReactNode,
   type ThemeKey,
   ThemeRegistry,
   ThemeScope,
+  useMemo,
   useState,
 } from "~/import.js";
-import { DocLink } from "~/route/-doc-link.js";
+import { DocLink, useDocLinkNavigation } from "~/route/-doc-link.js";
+import { ArticleHtmlStore } from "~/store/article-html.store.js";
 
 export interface DocReaderRouteProps {
   readonly reading: DocReadingDto;
@@ -22,6 +25,7 @@ export interface DocReaderRouteProps {
   readonly editHref?: string | null;
   readonly markdownHref?: string | null;
   readonly search?: (query: string) => Promise<readonly DocSearchHit[]>;
+  readonly loadNav?: () => Promise<readonly DocNavNodeDto[]>;
 }
 
 // Shared by both trees. It owns the palette: a space may open in its own theme, the
@@ -34,10 +38,15 @@ export function DocReaderRoute({
   editHref = null,
   markdownHref = null,
   search,
+  loadNav,
 }: DocReaderRouteProps) {
   const navigate = useNavigate();
+  useDocLinkNavigation();
   const { appearance, appearanceSnapshot } = useRouteContext({ from: "__root__" });
   const [picked, setPicked] = useState<{ theme: ThemeKey; mode: ModeKey } | null>(null);
+
+  // The HTML the hydration payload left out, read back from the server's markup.
+  const article = useMemo(() => ArticleHtmlStore.resolve(reading), [reading]);
 
   const spaceTheme = reading.space.theme;
   const theme =
@@ -51,7 +60,7 @@ export function DocReaderRoute({
     // The reader's own theme, and the element its popovers and search palette portal into.
     <ThemeScope theme={theme} mode={mode}>
       <DocReaderPanel
-        reading={reading}
+        reading={article}
         spaces={spaces}
         root={root}
         renderLink={DocLink.render}
@@ -67,13 +76,18 @@ export function DocReaderRoute({
           },
         }}
         brand={
-          <Link to={back.href} className={buttonClassName("ghost")}>
+          <Link
+            to={back.href}
+            className="ui-doc-brand inline-flex items-center gap-1 self-start rounded-md px-2 py-1 font-semibold text-fg text-sm no-underline transition-colors duration-(--duration-fast) hover:bg-muted"
+          >
+            <Icon name="chevron-right" size={14} className="rotate-180 text-fg-muted" />
             {back.label}
           </Link>
         }
         editHref={editHref}
         markdownHref={markdownHref}
         {...(search ? { search } : {})}
+        {...(loadNav ? { loadNav } : {})}
       />
     </ThemeScope>
   );

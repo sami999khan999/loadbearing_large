@@ -1,4 +1,5 @@
 import type {
+  DocAccessRuleDto,
   DocPageId,
   DocPageKind,
   DocSpaceId,
@@ -19,6 +20,8 @@ export interface DocPageNodeRecord {
   readonly title: string;
   readonly icon: string | null;
   readonly url: string | null;
+  // The page's own rule, added to its space's. Null is none.
+  readonly access: DocAccessRuleDto | null;
   readonly position: number;
   readonly draftVersion: number;
   // The draft version the live page was published from. Null is never published.
@@ -66,12 +69,29 @@ export interface DocDraftFields {
   readonly icon: string | null;
   readonly markdown: string;
   readonly url: string | null;
+  readonly access: DocAccessRuleDto | null;
 }
 
 export interface DocPublication {
   readonly title: string;
   readonly description: string | null;
   readonly markdown: string;
+  readonly html: string;
+  readonly toc: readonly DocTocEntryDto[];
+  readonly rendererVersion: number;
+}
+
+// A published page the current renderer did not write, with what re-rendering needs.
+export interface DocStalePageRecord {
+  readonly id: DocPageId;
+  readonly spaceId: DocSpaceId;
+  readonly title: string;
+  readonly description: string | null;
+  readonly markdown: string;
+  readonly revisionNo: number;
+}
+
+export interface DocRendering {
   readonly html: string;
   readonly toc: readonly DocTocEntryDto[];
   readonly rendererVersion: number;
@@ -152,6 +172,20 @@ export abstract class DocPageRepository {
   ): Promise<void>;
 
   // Replaces the page's search rows in one statement pair, inside the publish.
+  // Published pages rendered before `version`, oldest renderer first.
+  public abstract listStale(
+    organizationId: OrganizationId,
+    version: number,
+    limit: number,
+  ): Promise<readonly DocStalePageRecord[]>;
+
+  // The published HTML and outline only: no revision, no draft, no publish time moves.
+  public abstract saveRendering(
+    organizationId: OrganizationId,
+    pageId: DocPageId,
+    rendering: DocRendering,
+  ): Promise<void>;
+
   public abstract saveSections(
     organizationId: OrganizationId,
     spaceId: DocSpaceId,

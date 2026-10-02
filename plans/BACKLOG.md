@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-10-01
+updated: 2026-10-03
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -333,6 +333,38 @@ with Tailwind utilities through `cn`, takes its behaviour from Base UI, and is g
   wide screen, and Base UI's `Dialog` renders only while open, in a portal. **Fix:** render the
   narrow-screen drawer as a separate `Dialog` holding the same navigation, or make the column
   `inert`-aware.
+
+## 17. Lite's docs system and the platform organization — what is left
+
+Ported 2026-10-03 from lite (`loadbearing_mini`), as `cdb88c15..3f5bcf1b`, 28 commits each ending
+", from lite". The docs half is lite's `6dad856..8955fbb`: the owner audience, one process per
+core, large-space reads, access links, grouped search, reading aids, doc blocks, the repository
+link and Open in AI, renderer fixes, one React in the SSR build, HTML sent once and glass-scroll.
+The platform half is lite's `3046dc6..5468d6a`: `platform_admin` holds the whole catalog, so the
+platform organization is run like any other, behind the guards in
+[`platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md). Lite's migrations
+`0001` and `0003` are `0052` and `0053` here. IDs are `LP.<n>`, new.
+
+**Where the big kit differs.** `PLATFORM_ROUTE_PERMISSION` and the platform menu name all eight
+pages, retention, analytics, cold storage and shards included, and every page's guard reads its key
+from the table. `QueueName` joined `infrastructure`'s import surface for `doc-rerender.ts`.
+
+**Checked by hand through the API, 2026-10-03.** As the platform admin: create a role, grant it
+`doc.*` keys, invite a member into it. As that member: write, publish and delete a platform page;
+refused the status page, invites and opening a space. Moved to `member`, the same person loses
+doc writes. The last platform admin cannot demote themselves. An outsider gets `NOT_FOUND` on
+another organization's space. Server-rendered, `/platform` forwards to its first page, the menu
+lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
+
+- [ ] `LP.1` **Not walked in a browser.** **Walk** the platform menu, Change role on Members, the
+  role grid's platform column, the reader's sidebar scrollbar inside a themed space, and the
+  owner audience in the space form.
+- [ ] `LP.2` **The in-app reader still sends a page's HTML and markdown twice.** `/doc/<space>/…`
+  dehydrates both the query cache and the loader data. Lite's HTML-once change covered only the
+  public `/docs` reader, and lite has the same gap. **Fix:** strip the loader copy as
+  `/docs/$space/$` does.
+- [ ] `LP.3` **`pnpm doc:bench` and `pnpm bench` not run here.** The figures in `doc.md` are
+  lite's, from one node. **Measure** on the sharded profile before quoting them.
 
 ---
 

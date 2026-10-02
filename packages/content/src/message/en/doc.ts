@@ -15,6 +15,10 @@ export const doc = {
   "doc.sidebar.close": "Close navigation",
   "doc.switcher.label": "Documentation space",
   "doc.toc.title": "On this page",
+  "doc.breadcrumb.label": "Breadcrumb",
+  "doc.pager.label": "More pages",
+  "doc.pager.previous": "Previous",
+  "doc.pager.next": "Next",
   "doc.copy.markdown": "Copy Markdown",
   "doc.copy.copied": "Copied",
   "doc.code.copy": "Copy",
@@ -22,6 +26,10 @@ export const doc = {
   "doc.open.label": "Open",
   "doc.open.markdown": "View as Markdown",
   "doc.open.edit": "Edit this page",
+  "doc.open.chatgpt": "Open in ChatGPT",
+  "doc.open.claude": "Open in Claude",
+  "doc.open.prompt": "Read {url} and answer my questions about it.",
+  "doc.repository.label": "Source repository",
   "doc.updated": "Last published {date}",
   "doc.appearance.mode": "Colour mode",
   "doc.appearance.light": "Light",
@@ -37,6 +45,7 @@ export const doc = {
   "doc.search.loading": "Searching…",
   "doc.search.pages": "Pages",
   "doc.search.sections": "In the text",
+  "doc.search.inSpace": "In {space}",
 
   // ── managing spaces ──
   "doc.manage.title": "Manage docs",
@@ -53,6 +62,8 @@ export const doc = {
   "doc.space.iconNone": "No icon",
   "doc.space.audience": "Who can read it",
   "doc.space.audience.members": "Members of this organization",
+  // Nobody else sees that the space exists, an administrator included.
+  "doc.space.audience.owner": "Only me",
   "doc.space.audience.public": "Anyone, signed in or not",
   "doc.space.audience.granted": "Only the organizations, people and plans granted access",
   // Said beside the choice, because the obvious misreading is that a tenant can publish.
@@ -95,7 +106,7 @@ export const doc = {
   "doc.page.url": "Link address",
   "doc.page.markdown": "Content",
   "doc.page.markdownHint":
-    'Markdown. `> [!NOTE]` makes a callout; `::::cards` with `:::card{title="…" href="…"}` inside makes a card grid.',
+    'Markdown. `> [!NOTE]` makes a callout. `::::cards` around `:::card{title="…" href="…" icon="…"}` makes a card grid; `::::tabs` around `:::tab{title="…"}` makes tabs; `:::steps` numbers its `###` headings; `:::accordion{title="…"}` folds.',
   "doc.editor.write": "Write",
   "doc.editor.preview": "Preview",
   "doc.editor.previewEmpty": "Nothing to preview yet.",
@@ -143,4 +154,19 @@ export const doc = {
   "doc.revision.item": "Revision {revision}",
   "doc.revision.restore": "Restore to draft",
   "doc.revision.restored": "Revision {revision} is now the draft. Publish it to make it live.",
+  "doc.access.legend": "Access",
+  "doc.access.hint":
+    "Readers see this only when every link set here passes. Leave all four as None for no link.",
+  "doc.access.spaceHint":
+    "Every page in the space follows these links, and a page can add its own.",
+  "doc.access.module": "Module",
+  "doc.access.permission": "Permission",
+  "doc.access.flag": "Feature flag",
+  "doc.access.plan": "Plan",
+  "doc.access.none": "None",
+  "doc.access.unknown":
+    "This links to {key}, which no longer exists, so nobody can read it until it is changed.",
+  "doc.tree.linked": "Linked to a feature",
+  "doc.space.repository": "Repository URL",
+  "doc.space.repositoryHint": "An https link shown in the reader's sidebar. Leave empty for none.",
 } as const;

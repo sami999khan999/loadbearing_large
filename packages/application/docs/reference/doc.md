@@ -36,6 +36,25 @@ Its columns are `grantee_organization_id`, `grantee_user_id` and `grantee_plan_k
 `organization_id`. With that column, §17 would read the table as a tenant's and require every
 unique index to lead with it.
 
+## Who may write
+
+**Writing docs needs a membership in the organization that owns them.** Every write asserts its
+`doc.*` key against the actor's active organization, and every repository call is scoped to it, so
+another organization's ids are simply not found. `doc-write-authorization.spec.ts` pins this for
+each write.
+
+| Key | Lets a member |
+|---|---|
+| `doc.page.write` | add, edit, move and delete pages, upload images, restore a revision |
+| `doc.page.publish` | publish a page |
+| `doc.space.manage` | create, edit and delete spaces |
+
+**Platform docs are the platform organization's**, so the same keys held there write them. Its
+`platform_admin` holds every key, and a custom role such as "Docs editor" can hold just the doc
+keys. One extra rule: **moving a space onto `public` or `granted` also needs `platform.doc.grant`**
+(`DocRules.assertMayOpen`), because opening docs to the internet or to other tenants is a platform
+decision, not just arranging spaces. A space already open can still be edited without it.
+
 ## Who may read a space
 
 A space has an **audience**:
@@ -45,13 +64,34 @@ A space has an **audience**:
 | `members` | holders of `doc.page.read` in the owning organization | any organization |
 | `public` | anyone, signed in or not | the platform organization only |
 | `granted` | platform admins, and anyone a grant reaches | the platform organization only |
+| `owner` | its author, and nobody else | any organization |
 
 `DocRules.assertAudience` refuses `public` and `granted` anywhere else, so a tenant can never
 publish to the world.
 
-Inside an organization, the permission is the whole answer. A member with `doc.page.read` reads
-every one of the organization's spaces, whatever their audience. The audience only widens who
-*else* may read.
+Inside an organization, the permission is the answer for every audience but one. A member with
+`doc.page.read` reads every `members` space, and the other audiences only widen who *else* may
+read.
+
+**`owner` is the one audience that narrows.** An `owner` space is its author's alone, and
+`created_by` names the author. Everyone else is told it does not exist. That includes another
+member, an org admin, a platform admin and a signed-out visitor, and the answer is `NOT_FOUND`,
+never `FORBIDDEN`, so its slug cannot be probed. Every use-case that touches a space or one of its
+pages asks `DocRules.assertVisible` first. `list`, search and the tree filter with
+`DocRules.isVisible` before they rank or build anything, and `DocAccess.canRead` checks it before
+any grant. So an owner space never reaches `/llms.txt` or the public reader. A grant on one is
+refused (`error.field.private`), and only the author may switch a space to `owner`
+(`DocRules.assertAudienceChange`). `doc_spaces_owner_idx` covers the author's lookup.
+
+| Viewer | `members` | `public` | `granted` | `owner` |
+|---|---|---|---|---|
+| the author, a member | reads | reads | reads | reads |
+| another member | reads | reads | reads | `NOT_FOUND` |
+| an org or platform admin | reads | reads | reads | `NOT_FOUND` |
+| a signed-out visitor | `NOT_FOUND` | reads | `NOT_FOUND` | `NOT_FOUND` |
+
+The platform organization's `public` and `granted` spaces are read from outside through
+`DocAccess.canRead`. The table's middle two columns apply to them there.
 
 Outside it, `DocAccess.canRead` decides. A grant reaches a viewer three ways: to them by name, to
 their active organization, or to that organization's plan. **The plan is how a private space rides
@@ -65,6 +105,63 @@ narrower key to delete.
 
 **Not yours is not found.** A private space asked for by someone who may not read it is
 `NOT_FOUND`, never `FORBIDDEN`. Answering differently would let anyone probe for private slugs.
+
+## Access links: a doc that follows a feature
+
+The audience says who may open a space. An **access link** narrows it further, to readers who
+have a feature. A space or a page can link to four kinds of feature, stored as one rule in its
+`access` column:
+
+| Link | The reader passes when | Read through |
+|---|---|---|
+| `module` | the module is visible to them | its gate's permission, so the plan mask and a switched-off module apply |
+| `permission` | they hold the key | `CapabilitySet`, after roles, overrides, platform denies and the plan |
+| `flag` | the flag is on for their organization | `FlagCache.onFor`, one read per request |
+| `plan` | their organization is on that plan | `EntitlementRepository.findPlanOf`, cached 60 s as `doc:plan:<org>` |
+
+**Every link set must pass.** A page linked to a module and a plan needs both. A page's rule adds
+to its space's rule, never replaces it. A hidden page takes its children with it, and a section
+left with nothing disappears.
+
+**Hidden is not found.** A doc a reader fails is absent from the sidebar, search, the space
+switcher, `/llms.txt` and raw Markdown, and a direct link to it is `NOT_FOUND`, as an `owner` space
+is. Three more rules follow:
+- **Signed out passes no link.** A signed-out reader has no organization, plan or permission, so a
+  linked doc is for signed-in readers only. An unlinked public page is unchanged.
+- **A key that no longer exists fails closed.** The doc hides; it never opens.
+- **A reader from another organization is judged against their own.** A platform doc linked to the
+  `apikey` module shows to whoever's organization has it.
+
+| Reader | No link | `module: apikey` | `permission: rbac.role.manage` | `plan: team` |
+|---|---|---|---|---|
+| admin, on a plan with `apikey`, on `team` | reads | reads | reads | reads |
+| member, on a plan without `apikey`, on `free` | reads | `NOT_FOUND` | `NOT_FOUND` | `NOT_FOUND` |
+| signed out | reads (public only) | `NOT_FOUND` | `NOT_FOUND` | `NOT_FOUND` |
+
+`DocFeaturePolicy` holds the four checks. Module and permission links read the viewer's
+`CapabilitySet` in memory. The flag set and the plan are fetched only when a rule names one, once
+per request through `DocFeatureScope`, so **a reader of unlinked docs pays nothing**. A page's rule
+is copied onto its node in `doc_spaces.nav`, so filtering a tree reads no row per page.
+
+**Who may set a link.** `doc.space.manage` for a space and `doc.page.write` for a page. A link only
+narrows, so a writer cannot widen who reads a doc by setting one. `assertKnown` refuses a key no
+registry knows and a platform-scope permission, which no organization holds. It runs before the
+transaction, because a plan is a catalog row. A link is structure, like a slug: live on save, with
+the tree rebuilt in the same transaction. Leaving `access` out of a save keeps the stored rule.
+
+## Raw Markdown, Open in AI and the repository link
+
+`/api/doc/<space>/<path>` serves a page's Markdown source. It reads as nobody, so it answers only
+for a **public, unlinked** page. The reader offers three things for such a page, in its Open menu:
+the raw Markdown, **Open in ChatGPT** and **Open in Claude**. Each AI entry opens a new conversation
+with a prompt naming the page's absolute source URL, which that tool then fetches.
+
+Any other page offers none of the three. A members-only, granted or linked page would hand the
+tool a URL that answers 404. `DocNavTree.isLinked` checks the space, the page and every page above
+it, because a hidden parent hides its children.
+
+A space's `repository_url` is an `https` link, checked by the contract. When it is set, the
+sidebar footer shows a GitHub icon beside the theme controls. When it is null, nothing shows.
 
 ## A page is rendered once
 
@@ -103,9 +200,64 @@ tree alone:
 |---|---|---|
 | `doc:space:<org>:<slug>` | the space and its tree | 60 s, deleted after each commit that changes it |
 | `doc:page:<org>:<page>:<revision>` | a published page | one day; never stale, since a new revision is a new key |
+| `doc:spaces:<org>` | every space in the organization, without trees | 60 s, deleted with any space |
 
 **A warm page is zero queries, and a cold one is two.** Cache delete after commit, never inside
 the transaction: a reader between the delete and the commit would put the old row straight back.
+The platform organization is remembered for the life of the process, so the public reader asks
+for it once, not four times a page.
+
+## A large space costs a page read nothing extra
+
+**A page read carries the tree trimmed.** `DocRules.trimNav` keeps every section's pages and the
+children of the pages above the one being read. Every other branch is `folded: true` with no
+children. The reader fetches the whole tree once the page is up:
+- from `docSpace.nav` in an organization's docs;
+- from `/api/doc-nav/<space>?v=<version>` for the platform's.
+
+The version is in the request, so the answer never changes. The public URL is served
+`immutable` to anyone not signed in, and the browser and a CDN keep it. The sidebar renders only
+open branches, and an article lays out only the sections near the viewport.
+
+`pnpm doc:bench` measures it: a public 2,000-page space whose 20 largest pages sit at the
+200,000-character cap. It reports queries per request from `pg_stat_statements`. On 2026-10-01,
+on the development machine under heavy outside load (load average 11–15 on 4 cores), one web
+process:
+
+| Path | Before | After |
+|---|---|---|
+| Page read, warm | 28 req/s, 5 queries | 59 req/s, **0 queries** |
+| Page read, cold | 28 req/s, 6.2 queries | 54 req/s, 0.9 queries |
+| Page HTML, 2,000-page space | 347 KB | 97 KB |
+| Full tree, fetched once per version | in every page | 328 KB, 48 KB gzipped, `immutable` |
+| Search, p95 | 46 ms | 60 ms |
+| Render of the largest page | 792 ms | 563–1,201 ms, p95 7 ms |
+
+**The numbers above were flattered.** Until 2026-10-02 the production build could not
+server-render any page that used Base UI, so most of the page was drawn in the browser. A
+CommonJS shim loaded a second React. Each request failed early and cheaply, and the body arrived
+empty. Nitro now traces `react` and `react-dom` (`apps/web/vite.config.ts`), so there is one
+React and every page renders on the server. Measured again on 2026-10-02, one production
+process, same busy machine:
+
+| Path | Req/s |
+|---|---|
+| A page in a small space | 224–239 |
+| A page in the 2,000-page space, 501 links in its sidebar | 18 → 39 |
+| Raw Markdown | 287 |
+
+Two fixes moved the large-sidebar figure:
+- **`DocLink` parsed every link's path as a UUID**, to spot manage routes. A failed `safeParse`
+  builds an error with a stack, which was half the render. It now parses only manage paths.
+- **Reader links are plain anchors.** One delegated listener (`useDocLinkNavigation`) routes a
+  click and preloads on hover or focus. A router `<Link>` builds a location while it renders.
+
+**The article's HTML is in the response once.** The hydration payload carries `html: ""` for a
+doc reading, and the browser reads the HTML back from the server's markup. That is
+`ArticleHtmlStore` in `apps/web`. It keeps what it read by page and revision, so going back to the
+page still has it. The largest page is 1.1 MB raw, mostly a sidebar repeating one set of class
+names, and 59 KB gzipped. The Node server does not compress; the proxy does
+(`docs/infra/deployment.md`).
 
 ## Two authors, one page
 
@@ -146,6 +298,13 @@ matched by trigram, which is what finds "quik start".
 
 Excerpts come back as plain text, and nothing downstream renders them as HTML. The author
 wrote that text, and a `<script>` in a code sample is still just text in a search result.
+
+**The palette searches the whole docs, not the open space.** In `/doc` it covers every space of
+the organization the reader may see, and in `/docs` every platform space they may read. Spaces
+are filtered first, by audience and access links, then each hit's page is checked against the
+space's tree as this reader sees it, filtered once per search. So a hidden page, and anything
+under one, never appears. The open space's hits come first; every other space follows under its
+own name, in the order the server ranked them.
 
 ## Images
 

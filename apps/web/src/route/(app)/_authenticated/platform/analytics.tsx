@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Can,
   type ClientNamespace,
+  PLATFORM_ROUTE_PERMISSION,
   PlatformQueries,
   ProjectionGapsPanel,
   ProjectionPolicyForm,
@@ -18,7 +19,7 @@ const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
 // Read on the route, manage around the editor: seeing which actions reach the analytics
 // store is an operational question, and excluding one stops rows arriving from now on.
 export const Route = createFileRoute("/(app)/_authenticated/platform/analytics")({
-  beforeLoad: RouteGuard.requirePermission("platform.analytics.read"),
+  beforeLoad: RouteGuard.requirePermission(PLATFORM_ROUTE_PERMISSION.analytics),
   staticData: { messages: MESSAGES },
   // The retention read is **not** prefetched: it is gated on `platform.retention.read`,
   // which this route does not require, and prefetching it threw the whole page away.

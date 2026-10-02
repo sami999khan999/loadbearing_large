@@ -17,6 +17,9 @@ export {
 export {
   type CreateDocPageInput,
   type CreateDocSpaceInput,
+  DocAccessContract,
+  type DocAccessOptionsDto,
+  type DocAccessRuleDto,
   DocGrantContract,
   type DocGrantDto,
   type DocGrantKind,
@@ -46,6 +49,8 @@ export {
   DocSpaceContract,
   type DocSpaceDto,
   type DocSpaceListDto,
+  type DocSpaceNavDto,
+  type DocSpaceNavInput,
   DocSpaceProcedures,
   type DocSpaceRefInput,
   type DocSpaceViewDto,

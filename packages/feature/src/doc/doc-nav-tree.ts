@@ -1,4 +1,5 @@
 import {
+  type DocAccessRuleDto,
   type DocNavNodeDto,
   type DocSearchHitDto,
   type IconName,
@@ -13,6 +14,11 @@ export class DocNavTree {
   private constructor() {}
 
   // `base` is the space's own root — `/doc/guides` or `/docs/guides`.
+  // Whether a page read left any branch out, which is when the full tree is worth fetching.
+  public static isFolded(nav: readonly DocNavNodeDto[]): boolean {
+    return nav.some((node) => node.folded === true || DocNavTree.isFolded(node.children));
+  }
+
   public static toNodes(nav: readonly DocNavNodeDto[], base: string): NavTreeNode[] {
     return nav.map((node): NavTreeNode => {
       const icon = DocNavTree.icon(node.icon);
@@ -44,6 +50,29 @@ export class DocNavTree {
     });
   }
 
+  // Whether a link on the space, the page or a page above it hides this page from someone.
+  // Such a page is never fetchable signed out, so nothing outside may be sent to its source.
+  public static isLinked(
+    spaceAccess: DocAccessRuleDto | null,
+    nav: readonly DocNavNodeDto[],
+    pageId: string,
+  ): boolean {
+    if (DocNavTree.hasLink(spaceAccess)) return true;
+    const walk = (nodes: readonly DocNavNodeDto[]): boolean | null => {
+      for (const node of nodes) {
+        if (node.id === pageId) return DocNavTree.hasLink(node.access ?? null);
+        const below = walk(node.children);
+        if (below !== null) return below || DocNavTree.hasLink(node.access ?? null);
+      }
+      return null;
+    };
+    return walk(nav) ?? false;
+  }
+
+  private static hasLink(rule: DocAccessRuleDto | null): boolean {
+    return rule !== null && Object.values(rule).some((key) => key !== null);
+  }
+
   // Server matches as palette entries. A heading match opens at the heading, and its title
   // names the page it is on, since two pages can both have an "Installation".
   public static hits(items: readonly DocSearchHitDto[], root: string): DocSearchHit[] {
@@ -52,6 +81,8 @@ export class DocNavTree {
       title: hit.heading ? `${hit.title} › ${hit.heading}` : hit.title,
       href: `${root}/${hit.spaceSlug}/${hit.path}${hit.anchor ? `#${hit.anchor}` : ""}`,
       ...(hit.excerpt ? { excerpt: hit.excerpt } : {}),
+      spaceSlug: hit.spaceSlug,
+      spaceTitle: hit.spaceTitle,
     }));
   }
 

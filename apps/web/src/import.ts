@@ -88,6 +88,7 @@ export {
   OrganizationEntitlementPanel,
   OrganizationSwitcher,
   PlanList,
+  PlatformNav,
   PlatformStatusPanel,
   ProfileForm,
   ProjectionGapsPanel,
@@ -134,6 +135,7 @@ export {
   type FlagKey,
   FlagRegistry,
   type PermissionKey,
+  PLATFORM_ROUTE_PERMISSION,
   ROUTES,
   WidgetRegistry,
 } from "@loadbearing/permissions";
@@ -148,6 +150,7 @@ export {
   MemberQueries,
   MessagingQueries,
   NotificationQueries,
+  OrganizationMutations,
   PlatformQueries,
   RealtimeProvider,
   RoleQueries,
@@ -182,7 +185,9 @@ export {
   type ModeKey,
   type ModePreference,
   ModeRegistry,
+  PageScrollbar,
   Popover,
+  Prose,
   QrCode,
   readerClassName,
   Select,
@@ -203,6 +208,7 @@ export {
   hydrate,
   type QueryClient,
   QueryClientProvider,
+  useQueryClient,
 } from "@tanstack/react-query";
 
 // ── @tanstack/react-router ───────────────────────────────────────────────────
@@ -215,7 +221,7 @@ export { createRouter } from "@tanstack/react-router";
 export { createIsomorphicFn } from "@tanstack/react-start";
 
 // ── react ────────────────────────────────────────────────────────────────────
-export { type CSSProperties, type ReactNode, useMemo, useState } from "react";
+export { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
 
 // ── zod ──────────────────────────────────────────────────────────────────────
 // Search-parameter schemas only: a route validates what a browser put in its own URL

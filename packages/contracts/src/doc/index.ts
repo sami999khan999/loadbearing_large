@@ -1,4 +1,9 @@
 export {
+  DocAccessContract,
+  type DocAccessOptionsDto,
+  type DocAccessRuleDto,
+} from "./doc-access.contract.js";
+export {
   DocGrantContract,
   type DocGrantDto,
   type DocGrantKind,
@@ -46,6 +51,8 @@ export {
   DocSpaceContract,
   type DocSpaceDto,
   type DocSpaceListDto,
+  type DocSpaceNavDto,
+  type DocSpaceNavInput,
   type DocSpaceRefInput,
   type DocSpaceViewDto,
   type UpdateDocSpaceInput,

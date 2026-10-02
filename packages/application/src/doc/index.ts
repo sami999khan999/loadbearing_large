@@ -5,6 +5,7 @@ export { DeleteDocSpaceUseCase } from "./delete-doc-space.use-case.js";
 export { DocCache, type DocReading } from "./doc.cache.js";
 export { DocRules } from "./doc.rules.js";
 export { DocAccess } from "./doc-access.js";
+export { DocFeaturePolicy, type DocFeatureScope } from "./doc-feature.policy.js";
 export {
   type DocGrantee,
   type DocGrantRecord,
@@ -20,11 +21,14 @@ export {
   type DocPagePublishedRecord,
   DocPageRepository,
   type DocPublication,
+  type DocRendering,
   type DocRevisionRecord,
   type DocRevisionSummaryRecord,
   type DocSearchMatch,
+  type DocStalePageRecord,
   type NewDocPage,
 } from "./doc-page.repository.js";
+export { DocRerender } from "./doc-rerender.js";
 export { DocSearch } from "./doc-search.js";
 export { DocShape } from "./doc-shape.js";
 export {
@@ -37,6 +41,7 @@ export { DocTree } from "./doc-tree.js";
 export { GetDocPageUseCase } from "./get-doc-page.use-case.js";
 export { GetDocRevisionUseCase } from "./get-doc-revision.use-case.js";
 export { GetDocSpaceUseCase } from "./get-doc-space.use-case.js";
+export { ListDocAccessOptionsUseCase } from "./list-doc-access-options.use-case.js";
 export { ListDocGrantsUseCase } from "./list-doc-grants.use-case.js";
 export { ListDocPagesUseCase } from "./list-doc-pages.use-case.js";
 export { ListDocRevisionsUseCase } from "./list-doc-revisions.use-case.js";
@@ -50,8 +55,10 @@ export {
 } from "./open-doc-image.use-case.js";
 export { PreviewDocPageUseCase } from "./preview-doc-page.use-case.js";
 export { PublishDocPageUseCase } from "./publish-doc-page.use-case.js";
+export { ReadDocNavUseCase } from "./read-doc-nav.use-case.js";
 export { ReadDocPageUseCase } from "./read-doc-page.use-case.js";
 export { ReadPlatformDocUseCase } from "./read-platform-doc.use-case.js";
+export { ReadPlatformDocNavUseCase } from "./read-platform-doc-nav.use-case.js";
 export { RestoreDocRevisionUseCase } from "./restore-doc-revision.use-case.js";
 export { RevokeDocGrantUseCase } from "./revoke-doc-grant.use-case.js";
 export { SaveDocGrantUseCase } from "./save-doc-grant.use-case.js";

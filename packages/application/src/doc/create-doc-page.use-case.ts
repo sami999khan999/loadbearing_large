@@ -38,8 +38,12 @@ export class CreateDocPageUseCase {
     const id = Uuid.v7() as DocPageId;
 
     const { space, page } = await this.unitOfWork.run(async () => {
-      const found = await this.spaces.findById(organizationId, input.spaceId);
-      if (!found) throw new NotFoundError("doc.space", input.spaceId);
+      const found = DocRules.assertVisible(
+        await this.spaces.findById(organizationId, input.spaceId),
+        actor.userId,
+        "doc.space",
+        input.spaceId,
+      );
 
       const nodes = await this.pages.listBySpace(organizationId, input.spaceId);
       const position = nodes.filter((node) => node.parentId === input.parentId).length;
@@ -53,6 +57,7 @@ export class CreateDocPageUseCase {
         title: input.title,
         icon: input.icon,
         url: input.kind === "link" ? input.url : null,
+        access: null,
         position,
         draftVersion: 1,
         publishedDraftVersion: null,

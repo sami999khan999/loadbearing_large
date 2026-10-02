@@ -58,6 +58,12 @@ The names of *client-gating* flags — the ones some widget names — are in the
 flag is the wrong tool for a secret.** It controls when something ships, not who may know it
 exists.
 
+**A doc linked to a feature uses these same answers and adds no mechanism.** A page or space may
+link to a module, a permission, a flag or a plan. It is resolved through the flag, the entitlement
+mask and the permission above, every link must pass, and a doc a reader fails is `NOT_FOUND` —
+the docs' own rule that "not yours is not found" decides it, not `FORBIDDEN`. See
+`packages/application/docs/reference/doc.md`.
+
 ---
 
 ## The rules for a widget
@@ -98,7 +104,7 @@ The mount point is a **zone**, never a surface. The reasoning, and the grammar o
 zone keys, is on [Vocabulary](vocabulary.md). The four places a permission is checked are
 [enforcement surfaces](../../apps/web/docs/reference/enforcement-surfaces.md); `<Widget>` is a
 second form of the fourth, and like `<Can>` it is not the gate. Why a platform admin is not a
-tenant owner is
+tenant owner anywhere but in the platform organization, which is run like any other, is
 [platform scope](../../packages/permissions/docs/reference/platform-scope.md).
 
 ## Where these rules are enforced

@@ -124,6 +124,10 @@ services:
   web:
     build: { context: .., dockerfile: apps/web/Dockerfile }
     restart: unless-stopped
+    # One web process per core: rendering is single-threaded, and one process leaves the
+    # other cores idle. cluster.mjs forwards SIGTERM, drains each worker and restarts a
+    # crashed one. WEB_PROCESSES sets the count; processes x DATABASE_POOL_MAX < 200.
+    command: ["node", "apps/web/cluster.mjs"]
     env_file: [.env.production]
     environment:
       APP: web
@@ -239,9 +243,19 @@ example.com {
             flush_interval -1
         }
     }
-    reverse_proxy web:3000
+    # Compressed here and only here: an encoder buffers, and a buffered stream stalls.
+    handle {
+        encode zstd gzip
+        reverse_proxy web:3000
+    }
 }
 ```
+
+**Compress the web app's responses at the proxy.** The Node server sends them as they are. A
+large doc page is about 1.1 MB raw and 59 KB gzipped, because the sidebar repeats one set of class
+names per link. Leave the stream path out: an encoder buffers, and a buffered event stream reaches
+the tab late or never. Behind nginx, that is `gzip on` in the web location and not in the stream
+one.
 
 **The stream path goes to its own process.** Every open tab holds one or two streams for as long as it
 is open, and `apps/realtime` holds all of them so the web app's event loop holds none. The browser

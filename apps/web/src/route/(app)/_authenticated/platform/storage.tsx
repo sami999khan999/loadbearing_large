@@ -3,6 +3,7 @@ import {
   Can,
   type ClientNamespace,
   DeleteTenantPanel,
+  PLATFORM_ROUTE_PERMISSION,
   TenantExportPanel,
   TenantStorageList,
   useCapabilities,
@@ -15,7 +16,7 @@ const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
 // No loader prefetch: the list takes a filter the route does not know, so a loader
 // would warm a page the first render replaces.
 export const Route = createFileRoute("/(app)/_authenticated/platform/storage")({
-  beforeLoad: RouteGuard.requirePermission("platform.storage.read"),
+  beforeLoad: RouteGuard.requirePermission(PLATFORM_ROUTE_PERMISSION.storage),
   staticData: { messages: MESSAGES },
   loader: ({ context }) => context.messages.ensure(MESSAGES),
   component: PlatformStorage,
