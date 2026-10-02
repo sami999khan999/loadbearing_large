@@ -33,6 +33,8 @@ export {
   type ColdModeDto,
   type ConversationDto,
   ConversationEntity,
+  type DocAccessOptionsDto,
+  type DocAccessRuleDto,
   type DocGrantKind,
   type DocNavNodeDto,
   type DocPageDraftDto,

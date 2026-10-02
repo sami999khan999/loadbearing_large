@@ -224,6 +224,7 @@ export {
   type ConversationId,
   type ConversationKind,
   type ConversationMemberRole,
+  type DocAccessRuleDto,
   type DocGrantKind,
   type DocNavNodeDto,
   type DocPageId,

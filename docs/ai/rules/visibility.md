@@ -43,6 +43,10 @@ it, and each has a different owner.
 - **A platform admin is not a tenant owner.** `wildcard` is never set in production, and a
   platform admin gets no powers inside a tenant.
 
+**A doc's access link adds no mechanism.** A page or space linked to a module, permission, flag
+or plan is resolved through the first three above and hides as `NOT_FOUND` — see
+`packages/application/docs/reference/doc.md`.
+
 ---
 
 **The argument.**

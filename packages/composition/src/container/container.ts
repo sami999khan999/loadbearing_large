@@ -48,6 +48,7 @@ import {
   DenyPermissionOverrideUseCase,
   DocAccess,
   DocCache,
+  DocFeaturePolicy,
   DocImageSweep,
   DocSearch,
   DocTree,
@@ -84,6 +85,7 @@ import {
   ListApiKeysUseCase,
   ListArchivedNotificationsUseCase,
   ListConversationsUseCase,
+  ListDocAccessOptionsUseCase,
   ListDocGrantsUseCase,
   ListDocPagesUseCase,
   ListDocRevisionsUseCase,
@@ -586,6 +588,7 @@ export class Container {
     readonly deleteSpace: DeleteDocSpaceUseCase;
     readonly read: ReadDocPageUseCase;
     readonly readNav: ReadDocNavUseCase;
+    readonly accessOptions: ListDocAccessOptionsUseCase;
     readonly tree: ListDocPagesUseCase;
     readonly getPage: GetDocPageUseCase;
     readonly createPage: CreateDocPageUseCase;
@@ -1285,7 +1288,7 @@ export class Container {
         this.routedUnitOfWork,
       ),
     };
-    this.doc = this.buildDoc();
+    this.doc = this.buildDoc(entitlements);
     this.retentionPolicies = new PgRetentionPolicyRepository(
       this.cluster,
       this.transactions,
@@ -1944,7 +1947,7 @@ export class Container {
 
   // Its own method because the slice is eighteen use-cases over four shared collaborators,
   // and inline they would bury the constructor's order of construction.
-  private buildDoc(): Container["doc"] {
+  private buildDoc(entitlements: PgEntitlementRepository): Container["doc"] {
     const spaces = new PgDocSpaceRepository(this.cluster, this.transactions, this.shards);
     const pages = new PgDocPageRepository(this.cluster, this.transactions, this.shards);
     const renderer: MarkdownRenderer = new UnifiedMarkdownRenderer();
@@ -1952,20 +1955,22 @@ export class Container {
     const cache = new DocCache(this.cache, spaces, pages);
     const grants = new PgDocGrantRepository(this.cluster, this.transactions, this.shards);
     const access = new DocAccess(grants, this.cache);
-    const search = new DocSearch(pages, cache);
+    const features = new DocFeaturePolicy(this.flags, entitlements, this.cache);
+    const search = new DocSearch(pages, cache, features);
     const images = new DocImageSweep(this.storage);
     const auth = this.authorizer;
     const uow = this.routedUnitOfWork;
 
     return {
       cache,
-      listSpaces: new ListDocSpacesUseCase(auth, cache),
+      listSpaces: new ListDocSpacesUseCase(auth, cache, features),
       getSpace: new GetDocSpaceUseCase(auth, spaces),
       createSpace: new CreateDocSpaceUseCase(
         auth,
         spaces,
         this.platform,
         cache,
+        features,
         this.activity,
         uow,
       ),
@@ -1974,6 +1979,7 @@ export class Container {
         spaces,
         this.platform,
         cache,
+        features,
         this.activity,
         uow,
       ),
@@ -1988,12 +1994,13 @@ export class Container {
         uow,
         images,
       ),
-      read: new ReadDocPageUseCase(auth, cache),
-      readNav: new ReadDocNavUseCase(auth, cache),
+      read: new ReadDocPageUseCase(auth, cache, features),
+      readNav: new ReadDocNavUseCase(auth, cache, features),
+      accessOptions: new ListDocAccessOptionsUseCase(auth, features),
       tree: new ListDocPagesUseCase(auth, spaces, pages),
       getPage: new GetDocPageUseCase(auth, pages, spaces),
       createPage: new CreateDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
-      savePage: new SaveDocPageUseCase(auth, spaces, pages, tree, cache, uow),
+      savePage: new SaveDocPageUseCase(auth, spaces, pages, tree, cache, features, uow),
       publishPage: new PublishDocPageUseCase(
         auth,
         spaces,
@@ -2010,9 +2017,9 @@ export class Container {
       revisions: new ListDocRevisionsUseCase(auth, pages, spaces),
       revision: new GetDocRevisionUseCase(auth, pages, spaces),
       restoreRevision: new RestoreDocRevisionUseCase(auth, pages, spaces, this.activity, uow),
-      readPlatform: new ReadPlatformDocUseCase(this.platform, cache, access),
-      readPlatformNav: new ReadPlatformDocNavUseCase(this.platform, cache, access),
-      listPlatformSpaces: new ListPlatformDocSpacesUseCase(this.platform, cache, access),
+      readPlatform: new ReadPlatformDocUseCase(this.platform, cache, features, access),
+      readPlatformNav: new ReadPlatformDocNavUseCase(this.platform, cache, features, access),
+      listPlatformSpaces: new ListPlatformDocSpacesUseCase(this.platform, cache, access, features),
       listGrants: new ListDocGrantsUseCase(auth, grants),
       // The catalog unit of work: a grant is a catalog row, and its audit row is written
       // in whichever transaction is open.
@@ -2026,10 +2033,10 @@ export class Container {
         this.catalogUnitOfWork,
         this.clock,
       ),
-      search: new SearchDocsUseCase(auth, cache, search),
+      search: new SearchDocsUseCase(auth, cache, search, features),
       uploadImage: new UploadDocImageUseCase(auth, spaces, this.storage),
       openImage: new OpenDocImageUseCase(this.platform, spaces, access, this.storage),
-      searchPlatform: new SearchPlatformDocsUseCase(this.platform, cache, access, search),
+      searchPlatform: new SearchPlatformDocsUseCase(this.platform, cache, access, search, features),
       revokeGrant: new RevokeDocGrantUseCase(
         auth,
         grants,

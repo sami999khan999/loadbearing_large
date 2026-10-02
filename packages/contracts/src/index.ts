@@ -17,6 +17,9 @@ export {
 export {
   type CreateDocPageInput,
   type CreateDocSpaceInput,
+  DocAccessContract,
+  type DocAccessOptionsDto,
+  type DocAccessRuleDto,
   DocGrantContract,
   type DocGrantDto,
   type DocGrantKind,
