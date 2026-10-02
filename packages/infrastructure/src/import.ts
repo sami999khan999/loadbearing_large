@@ -78,6 +78,7 @@ export {
   type DocPublication,
   type DocRevisionRecord,
   type DocRevisionSummaryRecord,
+  DocRules,
   type DocSearchMatch,
   type DocSpaceFields,
   type DocSpaceRecord,

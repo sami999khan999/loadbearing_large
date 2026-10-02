@@ -203,6 +203,7 @@ export {
   hydrate,
   type QueryClient,
   QueryClientProvider,
+  useQueryClient,
 } from "@tanstack/react-query";
 
 // ── @tanstack/react-router ───────────────────────────────────────────────────

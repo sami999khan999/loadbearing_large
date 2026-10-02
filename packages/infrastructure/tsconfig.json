@@ -16,6 +16,7 @@
     "partitions.ts",
     "platform-grant.ts",
     "queue-replay.ts",
+    "doc-bench.ts",
     "seed.ts",
     "shard-env.ts"
   ]
