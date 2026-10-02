@@ -88,6 +88,7 @@ export {
   OrganizationEntitlementPanel,
   OrganizationSwitcher,
   PlanList,
+  PlatformNav,
   PlatformStatusPanel,
   ProfileForm,
   ProjectionGapsPanel,
@@ -134,6 +135,7 @@ export {
   type FlagKey,
   FlagRegistry,
   type PermissionKey,
+  PLATFORM_ROUTE_PERMISSION,
   ROUTES,
   WidgetRegistry,
 } from "@loadbearing/permissions";
@@ -148,6 +150,7 @@ export {
   MemberQueries,
   MessagingQueries,
   NotificationQueries,
+  OrganizationMutations,
   PlatformQueries,
   RealtimeProvider,
   RoleQueries,

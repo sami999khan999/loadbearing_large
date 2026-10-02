@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Can,
   type ClientNamespace,
+  PLATFORM_ROUTE_PERMISSION,
   PlatformQueries,
   RestorePartitionPanel,
   RetentionPolicyForm,
@@ -18,7 +19,7 @@ const MESSAGES = ["platform"] as const satisfies readonly ClientNamespace[];
 // Read on the route, manage around the editor: seeing how long data is kept is an
 // operational question, and shortening it destroys rows on the next run.
 export const Route = createFileRoute("/(app)/_authenticated/platform/retention")({
-  beforeLoad: RouteGuard.requirePermission("platform.retention.read"),
+  beforeLoad: RouteGuard.requirePermission(PLATFORM_ROUTE_PERMISSION.retention),
   staticData: { messages: MESSAGES },
   loader: ({ context }) =>
     Promise.all([
