@@ -183,6 +183,7 @@ export {
   type ModePreference,
   ModeRegistry,
   Popover,
+  Prose,
   QrCode,
   readerClassName,
   Select,
