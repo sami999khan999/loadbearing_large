@@ -1197,6 +1197,8 @@ export class Container {
           this.activity,
           this.catalogUnitOfWork,
           this.clock,
+          roles,
+          capabilityRepository,
         ),
       };
 
@@ -1630,6 +1632,7 @@ export class Container {
         this.capabilities,
         this.activity,
         this.catalogUnitOfWork,
+        this.platform,
       ),
       revokePermission: new RevokePermissionUseCase(
         this.authorizer,
@@ -1637,6 +1640,7 @@ export class Container {
         this.capabilities,
         this.activity,
         this.catalogUnitOfWork,
+        capabilityRepository,
       ),
     };
 
