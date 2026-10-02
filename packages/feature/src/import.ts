@@ -88,6 +88,8 @@ export {
   type PermissionKey,
   PermissionRegistry,
   type PermissionScope,
+  PLATFORM_ROUTE_PERMISSION,
+  ROUTES,
   type WidgetFacts,
   type WidgetKey,
   WidgetRegistry,

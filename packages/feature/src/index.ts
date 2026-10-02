@@ -133,6 +133,8 @@ export {
   PlanForm,
   type PlanFormProps,
   PlanList,
+  PlatformNav,
+  type PlatformNavProps,
   PlatformStatusPanel,
   ProjectionGapsPanel,
   ProjectionPolicyForm,

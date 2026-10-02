@@ -1,5 +1,18 @@
 export const platform = {
   "platform.title": "প্ল্যাটফর্ম",
+  "platform.nav.label": "প্ল্যাটফর্ম",
+  "platform.nav.status": "অবস্থা",
+  "platform.nav.retention": "সংরক্ষণকাল",
+  "platform.nav.analytics": "অ্যানালিটিক্স",
+  "platform.nav.storage": "কোল্ড স্টোরেজ",
+  "platform.nav.shards": "শার্ড",
+  "platform.nav.accounts": "অ্যাকাউন্ট",
+  "platform.nav.entitlements": "প্ল্যান ও অধিকার",
+  "platform.nav.flags": "ফিচার ফ্ল্যাগ",
+  "platform.nav.team": "টিম",
+  "platform.nav.roles": "ভূমিকা",
+  "platform.nav.docs": "ডক",
+  "platform.nav.open": "প্ল্যাটফর্ম প্রতিষ্ঠান খুলুন",
   "platform.subtitle":
     "যে সেটিংস কোনও একক টেন্যান্টের ঊর্ধ্বে। প্ল্যাটফর্ম প্রতিষ্ঠানে ভূমিকার মাধ্যমে পাওয়া যায়, আপনি যে টেন্যান্টে সাইন ইন করেছেন তার মাধ্যমে নয়।",
   "platform.status.title": "অবস্থা",
