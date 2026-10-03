@@ -52,6 +52,7 @@
     "ch:migrate": "pnpm --filter @loadbearing/infrastructure run ch:migrate",
     "platform:grant": "pnpm --filter @loadbearing/infrastructure run platform:grant",
     "queue:replay": "pnpm --filter @loadbearing/infrastructure run queue:replay",
+    "guide:publish": "node tooling/scripts/guide-publish.mjs",
     "bench": "node tooling/scripts/bench.mjs",
     "doc:bench": "pnpm --filter @loadbearing/infrastructure run doc:bench",
     "doc:rerender": "pnpm --filter @loadbearing/infrastructure run doc:rerender",
