@@ -30,6 +30,12 @@ export interface ConversationRecord extends ConversationHeader {
   readonly members: readonly ConversationMemberRecord[];
 }
 
+// One person in one room: what a held conversation stream is, to the membership check.
+export interface ConversationParticipant {
+  readonly conversationId: ConversationId;
+  readonly userId: UserId;
+}
+
 export interface ConversationPage {
   readonly items: readonly ConversationRecord[];
   readonly nextCursor: string | null;
@@ -65,6 +71,13 @@ export abstract class ConversationRepository {
     conversationId: ConversationId,
     userId: UserId,
   ): Promise<ConversationHeader | null>;
+
+  // `findMembership` for many pairs in one statement: the ones that are still members, of
+  // a conversation that still exists. One tenant per call, which is what keeps it routable.
+  public abstract findMemberships(
+    organizationId: OrganizationId,
+    participants: readonly ConversationParticipant[],
+  ): Promise<readonly ConversationParticipant[]>;
 
   public abstract findByDirectKey(
     organizationId: OrganizationId,
