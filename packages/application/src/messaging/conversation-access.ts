@@ -50,7 +50,7 @@ export class ConversationAccess {
     participants: readonly ConversationParticipant[],
   ): Promise<ReadonlySet<string>> {
     const found = await this.conversations.findMemberships(organizationId, participants);
-    return new Set(found.map(ConversationAccess.keyOf));
+    return new Set(found.map((pair) => ConversationAccess.keyOf(pair)));
   }
 
   public static keyOf(participant: ConversationParticipant): string {

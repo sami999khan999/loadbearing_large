@@ -1,4 +1,4 @@
-import type { Container, OrganizationId, UserId } from "../import.js";
+import type { Container, OrganizationId } from "../import.js";
 import type { HeldStream } from "./stream-revalidation.js";
 
 // What the minute's question is, for every stream one tenant holds (`RV.4`). Run placed on
@@ -18,7 +18,7 @@ export class HeldStreamCheck {
 
     return container.placed(first.principal, async () => {
       const active = await container.tenantMemberships.activeMemberIds(organizationId, [
-        ...new Set(held.map(({ principal }) => principal.userId as UserId)),
+        ...new Set(held.map(({ principal }) => principal.userId)),
       ]);
 
       const rooms = held.filter(({ conversationId }) => conversationId !== undefined);
