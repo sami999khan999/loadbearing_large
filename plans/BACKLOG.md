@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-10-03
+updated: 2026-10-10
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -34,8 +34,10 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 12 | Communication performance plan, what is left — [`archive/COMMUNICATION-PERFORMANCE-PLAN.md`](archive/COMMUNICATION-PERFORMANCE-PLAN.md) | 1 | 8 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 8 | 1 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 3 | 13 |
-| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 9 | — |
+| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 7 | 2 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 2 | — |
+| 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 3 | — |
+| 18 | Found while building | 1 | — |
 
 Sections 2, 4, 5, 7, 8 and 9 are closed in full: 45 defects, 6 buried items, 9 verifications, 3
 ledger rows, 6 doc fixes and 8 performance items. Their entries are in `archive/DONE.md` under the
@@ -270,7 +272,8 @@ Built 2026-09-30: public, granted and organization docs as one slice, with a Fum
 reader, drafts and revisions, search, images and the `graphite` theme. The reasoning is in
 [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) and
 [`packages/infrastructure/docs/reference/doc-renderer.md`](../packages/infrastructure/docs/reference/doc-renderer.md).
-IDs are `DC.<n>`, new, and each body is here because no archived plan holds it.
+IDs are `DC.<n>`, new, and each body is here because no archived plan holds it. `DC.3` and
+`DC.8` came built with §17's port from lite and are in [`archive/DONE.md`](archive/DONE.md) §15.
 
 ### Not built
 
@@ -282,10 +285,6 @@ IDs are `DC.<n>`, new, and each body is here because no archived plan holds it.
   existing embedding pipeline with `sourceType: "doc"`, and a hybrid rank in `DocSearch`.
   Organization docs only: `VectorStore` is tenant-scoped, and the platform's are one tenant.
   Declare the event and its subscriber together, or §24 fails.
-- [ ] `DC.3` **Nothing re-renders a page when the renderer changes.** `doc_pages.renderer_version`
-  is written on every publish and read by nothing. **Fix:** a maintenance job that finds pages
-  whose version is below `UnifiedMarkdownRenderer.version`, renders `published_markdown` again and
-  rewrites the snapshot, without a new revision.
 
 ### Gaps in what was built
 
@@ -302,8 +301,6 @@ IDs are `DC.<n>`, new, and each body is here because no archived plan holds it.
 - [ ] `DC.7` **A production bucket needs a CORS rule before images can be uploaded.** MinIO allows
   every origin by default, so nothing here noticed. **Fix:** document the rule in
   `docs/infra/` beside the bucket's other settings, and set it where the bucket is provisioned.
-- [ ] `DC.8` **Server-rendered cards carry no icon.** An icon is a `<use>` into a sprite whose URL
-  only the bundle knows. **Fix:** emit `data-icon` and let `Prose` fill it after mount.
 
 ### Not checked
 
@@ -365,6 +362,18 @@ lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
   `/docs/$space/$` does.
 - [ ] `LP.3` **`pnpm doc:bench` and `pnpm bench` not run here.** The figures in `doc.md` are
   lite's, from one node. **Measure** on the sharded profile before quoting them.
+
+## 18. Found while building
+
+- [ ] `BL.1` **`tooling/scripts` tests can end in a Vitest worker timeout.** Every test passes,
+  then Vitest reports `Error: [vitest-worker]: Timeout calling "onTaskUpdate"` and the run exits
+  1. A spec blocks the worker's event loop long enough (the fixture harness runs the architecture
+  check synchronously) that the progress RPC times out. Lite found it on 2026-09-30, twice with
+  other packages testing in parallel, and once here at the commit lite was cut from, run alone.
+  Lite's backlog holds the same ID and waits for this fix to port. **Did not reproduce
+  2026-10-10:** three runs, two beside lite's suite, all 151 passed and exited 0, so it is
+  intermittent. **Fix:** move the synchronous architecture-check runs in
+  `check-architecture.spec.mjs` off the worker's event loop, or give that spec its own pool.
 
 ---
 

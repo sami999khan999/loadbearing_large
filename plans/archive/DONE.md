@@ -1414,6 +1414,23 @@ before its first box was ticked; their proof is the plan's text, and the item ID
   case where that copy drifts. Proof: 145 tests in `tooling/scripts`, and the new case fails when
   `apps/realtime/src/env.ts` is taken out of `SHARD_READERS`.
 
+---
+
+## 15. The docs capability — closed so far
+
+Both came built with §17's port from lite and were found closed on 2026-10-10. The bodies are
+in this file's history of `BACKLOG.md` §15.
+
+- [x] `DC.3` **Nothing re-rendered a page when the renderer changed** `done: 2026-10-03` —
+  `DocRerender` finds pages whose `renderer_version` is null or below the renderer's, renders
+  `published_markdown` again and rewrites the snapshot without a new revision. Proof:
+  `packages/application/src/doc/doc-rerender.ts`, run by the `doc-rerender` case in
+  `apps/worker/src/consumer/maintenance.consumer.ts` and by `pnpm doc:rerender`.
+- [x] `DC.8` **Server-rendered cards carried no icon** `done: 2026-10-03` — the renderer emits
+  `data-icon`, and `Prose` fills each `.ui-card[data-icon]` through `Cards.icon` when the browser
+  is idle. Proof: `packages/ui/src/component/prose/prose.tsx` and
+  `packages/infrastructure/tests/doc/unified-markdown.renderer.spec.ts`.
+
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
 **Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
@@ -1646,6 +1663,8 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **`BACKLOG.md` §18 opened with `BL.1`, from lite.** The Vitest worker timeout at the end of the `tooling/scripts` run, which lite waits on this kit to fix. It did not reproduce in three runs today |
+| 2026-10-10 | @sami | **`DC.3` and `DC.8` closed, found built by §17's port from lite.** The re-render job and the card icons both arrived with lite's docs system; `BACKLOG.md`'s table now counts §15 as 7 open and lists §17 |
 | 2026-10-03 | @sami | **`BACKLOG.md` §17 opened: lite's docs system and the platform organization, three `LP.*` items.** 28 commits from lite, `cdb88c15..3f5bcf1b`, checked by hand through the API. Open: a browser walk, the in-app reader sending HTML twice, and the benchmarks not run here |
 | 2026-09-30 | @sami | **`BACKLOG.md` §15 opened: the docs capability, nine `DC.*` items.** Three things not built (a revision diff, semantic search, re-rendering on a renderer change), five gaps in what was (upload size, orphaned images, exports, bucket CORS, card icons) and one hand walk of the editing screens |
 | 2026-09-30 | @sami | **`RV.2` closed.** Only an event frame moves the client's resume point, so a reopen in a busy conversation replays rather than resyncing |
