@@ -223,6 +223,34 @@ describe("PgCapabilityRepository — entitlement", () => {
     expect([...set.toJSON().org.grants].sort()).toEqual([...ROLE_KEYS, "member.read"].sort());
   });
 
+  // `RV.4`. Held streams re-read their principals once a tenant per minute, so a hundred
+  // members must cost the four statements one does, and none may take another's grants.
+  it("resolves many members in the same four statements, each as `resolveFor` would", async () => {
+    const { organizationId, userId } = await tenant();
+    const other = await makeUser();
+    await database.client.insert(permissionOverrides).values({
+      id: Uuid.v7(),
+      organizationId: Identifiers.organizationId.parse(organizationId),
+      userId: other,
+      goalId: null,
+      permission: "analytics.activity.read",
+      effect: "deny",
+    });
+
+    counter.count = 0;
+    const resolved = await repository().resolveForAll(organizationId, [userId, other, userId]);
+
+    expect(counter.count).toBe(4);
+    expect([...resolved.keys()].sort()).toEqual([userId, other].sort());
+    for (const id of [userId, other]) {
+      expect(resolved.get(id)?.toJSON()).toEqual(
+        (await repository().resolveFor(organizationId, id)).toJSON(),
+      );
+    }
+    expect(resolved.get(userId)?.can("member.read")).toBe(true);
+    expect(resolved.get(other)?.can("member.read")).toBe(false);
+  });
+
   // Filtered, not deleted: the role row stays, so moving back restores it with no edit.
   it("masks a key the plan leaves out, and restores it when the org moves back", async () => {
     const { organizationId, userId } = await tenant();

@@ -137,6 +137,19 @@ describe("PgCapabilityRepository.resolvePlatformFor", () => {
     for (const key of PLATFORM_KEYS) expect(resolved.can(key), key).toBe(false);
   });
 
+  // `RV.4`. Many users in one call, still two statements, and nobody's grant on another's set.
+  it("resolves many users at once to what each alone resolves to", async () => {
+    const repository = new PgCapabilityRepository(DatabaseCluster.single(database), scope, shards);
+
+    const resolved = await repository.resolvePlatformForAll([admin, outsider, admin]);
+
+    expect([...resolved.keys()].sort()).toEqual([admin, outsider].sort());
+    expect(resolved.get(admin)?.toJSON()).toEqual(
+      (await repository.resolvePlatformFor(admin)).toJSON(),
+    );
+    for (const key of PLATFORM_KEYS) expect(resolved.get(outsider)?.can(key), key).toBe(false);
+  });
+
   // The axis is the platform one alone. A tenant key resolved here would be a grant the
   // merge in `PrincipalBuilder` silently widened.
   it("carries only the platform axis", async () => {
