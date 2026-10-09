@@ -1245,6 +1245,17 @@ unless it says otherwise.
   and `messaging.md` with `CR.37` and `CR.39`. Each re-read against the code on the day.
 - [x] `CR.49` **"Roughly a minute" was about 30 s** `done: 2026-09-26` — rewritten with `CR.13`.
 
+### 10.G Closed 2026-10-10
+
+- [x] `CR.33` **An index job carried its text through Redis** `done: 2026-10-10` — the text is
+  staged in the bucket under `embedding/<org>/<document>/<version>.txt` by `IndexTextStage`, and
+  the job carries only the key and the version. `IndexQueuedDocumentUseCase` reads it, indexes, then
+  deletes it; a failed job keeps it so `pnpm queue:replay` still works. The nightly `orphans` pass
+  sweeps keys older than a week across every listing page, and a tenant purge sweeps the prefix.
+  Old inline-text jobs are read for one release. Proof: `document.use-case.spec.ts` asserts the
+  payload has no text and the bucket holds it; `index-queued-document.use-case.spec.ts` asserts the
+  object goes after a success and stays after a throw. `6f197268..95777020`, `ef48f12d`.
+
 ---
 
 ## 11. Communication features — closed
@@ -1340,6 +1351,13 @@ machine. The scripts were throwaway and are not in the repository; the accounts 
   On the way it found the analytics flood fixed in the same commits: with ClickHouse down, `CR.20`'s
   keep-going walk logged a failure per tenant per run; three in a row now stop it.
 
+- [x] `CP7.9` **Web stops serving streams** `done: 2026-10-10` — `realtime.*` is gone from web's
+  `/api/rpc` handler and its stream keep-alive; the in-process server client keeps the router type
+  only to fit `AppClient`, since SSR opens no stream. The stream smoke spec boots `apps/realtime`'s
+  build on its own port, opens the stream there with web's cookie, and asserts web answers 404 for
+  `/api/rpc/realtime/stream`; CI builds realtime before `smoke:web`. Proof: the smoke spec, passing
+  against the built web, worker and realtime. `58895347`.
+
 ---
 
 ## 13. Access and visibility plan — closed so far
@@ -1351,6 +1369,29 @@ The bodies are in [`ACCESS-AND-VISIBILITY-PLAN.md`](ACCESS-AND-VISIBILITY-PLAN.m
   page now holds the snapshot in state and sets it from `appearance.current` after each choice.
   Proof: in headless Chrome, Ocean then Dark renders `ocean/dark`, and the "rendering" line
   follows each click. Before the fix the same clicks gave `slate/dark`.
+
+- [x] `AX7.5` **Every tinted `StatusBadge` showed the wrong hue** `done: 2026-10-10` — every
+  `color-mix` in `packages/ui` is `in oklab` now, and `color.md` and `palette.md` say why. Measured
+  at 14% into each `--surface`: in oklch, slate-dark success landed at hue 245 and plum-dark danger
+  at 338; in oklab every tint stays within 38° of its own hue, worst midnight success at 193
+  against 155. Light surfaces carry hue `none`, so the light-theme badges were right already; the
+  borders, mixed into a hued `--border`, were not. Proof: `check:contrast` and the measurement
+  script's table, in the commit. `ce81864f`.
+- [x] `AX3.10` **§18 did not count a primary key as an index** `done: 2026-10-10` —
+  `primaryKeysOf` in `source-text.mjs` reads `primaryKey({ columns })`, and §18 counts its first
+  column as leading. Proof: a fixture each way in `check-architecture.spec.mjs` and unit cases in
+  `source-text.spec.mjs`. `a73274ed`.
+- [x] `AX1.8` **"None longer than ~900 tokens" was false** `done: 2026-10-10` — the six places
+  that quoted a ceiling now state the measured one, ~1,750 for `data.md` and ~11,900 for all
+  fourteen, by characters over four. `e968ca77`.
+- [x] `AX2.11` **`packages/permissions/docs/index.md`'s tree was incomplete** `done: 2026-10-10`
+  — rewritten whole from `src` and `tests`. `8c7eae02`.
+- [x] `AX3.12` / `AX4.16` **`/platform/flags` and `/platform/entitlements` reachable by URL only**
+  `done: 2026-10-10` — found already closed: `packages/feature/src/platform/platform-nav.tsx`
+  lists both in the platform menu, added with §17's port.
+- [x] `AX4.15` **The `listFlags` handler copied readonly arrays** `done: 2026-10-10` — `targets`
+  and `items` are `.readonly()` in the contract and the handler returns them as they are; the
+  api-key router's `scopes` copy went the same way. `c57f217f`.
 
 ---
 
@@ -1414,6 +1455,19 @@ before its first box was ticked; their proof is the plan's text, and the item ID
   case where that copy drifts. Proof: 145 tests in `tooling/scripts`, and the new case fails when
   `apps/realtime/src/env.ts` is taken out of `SHARD_READERS`.
 
+- [x] `RV.4` **Stream revalidation was a query per open stream per minute** `done: 2026-10-10`
+  — one `StreamRevalidation` registry per process, one unref'd interval, streams grouped by tenant
+  and checked one tenant at a time inside `container.placed`, so every query stays on its tenant's
+  node. Per tenant a tick costs one `activeMemberIds`, one batched principal refresh through the
+  capability cache, and one `findMemberships` for the rooms: about three statements however many
+  streams are open. A tick is still skipped while the last is out, and only a `false` ends a
+  stream. Proof: `stream-revalidation.spec.ts` (grouping, unregister, in-flight skip, isolation),
+  the `HeldStreamCheck` spec, and query-count specs for the three batched reads.
+  `9aa97cb4..fc583a26`, `6fea8c25`.
+- [x] `RV.7` **`// ──` separators split a sentence to pass §14** `done: 2026-10-10` — the 21 split
+  comments are rejoined to two lines each, and §14 now fails a separator under a line that does
+  not end a sentence. Proof: fixtures both ways in `check-architecture.spec.mjs`. `04344a86`.
+
 ---
 
 ## 15. The docs capability — closed so far
@@ -1430,6 +1484,51 @@ in this file's history of `BACKLOG.md` §15.
   `data-icon`, and `Prose` fills each `.ui-card[data-icon]` through `Cards.icon` when the browser
   is idle. Proof: `packages/ui/src/component/prose/prose.tsx` and
   `packages/infrastructure/tests/doc/unified-markdown.renderer.spec.ts`.
+
+- [x] `DC.1` **No diff between revisions** `done: 2026-10-10` — each revision has a Compare action
+  that opens a line diff against the saved draft, fetched on open, with unchanged runs folded past
+  three lines of context. Proof: `doc-revision-diff.panel.spec.tsx`. `5cb112fe`.
+- [x] `DC.4` **An upload's size was checked as declared, not as sent** `done: 2026-10-10` —
+  `StorageGateway.presignPost` replaces `presignUpload`: a signed POST policy binds
+  `content-length-range` and the content type, and the browser sends `FormData`. Proof: against
+  MinIO, an over-limit body is refused with 400 and nothing stored, a wrong type with 403.
+  `a4d24ab7`.
+- [x] `DC.5` **A page's images outlived the page** `done: 2026-10-10` — deleting a page queues a
+  `doc-image-orphans` job for its space an hour later; `DocImageOrphans` deletes every image no
+  draft, published page or revision names, and skips any younger than an hour. `listPages` walks
+  past the thousand-key listing. Proof: application and consumer specs, and paging against MinIO.
+  `2fd9dbcc`. Archived revision months are not read: `RW.3`.
+- [x] `DC.6` **A tenant export left out doc images** `done: 2026-10-10` — `exportTenant` copies
+  every object under `doc/<org>/` to `export/<org>/<day>/doc-image/` and lists each in the
+  manifest. Proof: a MinIO spec checks the copies, checksums, the manifest, and that no other
+  tenant's images ride along. `e5d49a34`.
+- [x] `DC.7` **A production bucket needed a CORS rule** `done: 2026-10-10` —
+  `docs/infra/deployment.md` gives the rule, `POST` from the app origin, and the AWS CLI to set it.
+  MinIO refuses a per-bucket rule and answers every origin, so `minio-init` sets none and says
+  why. `35f5460f`.
+
+---
+
+## 16. The UI stack from lite — closed so far
+
+- [x] `UI.2` **The sidebar drawer had no focus trap** `done: 2026-10-10` — below `lg` the drawer
+  is a Base UI dialog in the themed portal, so it traps focus, makes the page inert, closes on
+  Escape and returns focus to the opener; at `lg` and up it stays the static aside. Proof:
+  `sidebar.spec.tsx`. `d67e0033`.
+
+## 17. Lite's docs system and the platform organization — closed so far
+
+- [x] `LP.2` **The in-app reader sent a page's HTML twice** `done: 2026-10-10` — its loader awaits
+  the query and returns nothing, as `/docs/$space/$` does, so the HTML rides only in the stripped
+  query cache. Proof: `apps/web/tests/route/doc-loader.spec.ts` fails on the old loader. Not
+  measured on a signed-in production page. `3509ecc7`.
+
+## 18. Found while building — closed
+
+- [x] `BL.1` **`tooling/scripts` tests could end in a Vitest worker timeout** `done: 2026-10-10` —
+  the fixture harness runs the check through an awaited `execFile`, so the worker's event loop
+  turns between runs. Proof: three runs beside lite's suite, all green. Lite closed the same ID
+  with the same change. `68ab698b`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
