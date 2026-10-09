@@ -58,9 +58,10 @@ export class PgNotificationRecipientReader
       .where(
         and(
           eq(memberships.organizationId, organizationId),
-          // A deactivated membership is somebody who cannot sign in. Mailing them is at
-          // best noise and at worst a message about a tenant they were removed from.
+          // A deactivated membership or a suspended account cannot sign in. Mailing them is
+          // noise at best, and at worst a message about a tenant they were removed from.
           isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
           afterUserId ? gt(memberships.userId, afterUserId) : undefined,
           holding ? this.grants(organizationId, holding) : undefined,
         ),
@@ -104,6 +105,7 @@ export class PgNotificationRecipientReader
           eq(memberships.organizationId, organizationId),
           eq(memberships.userId, userId),
           isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
         ),
       )
       .limit(1);
@@ -133,6 +135,7 @@ export class PgNotificationRecipientReader
           eq(memberships.organizationId, organizationId),
           inArray(memberships.userId, [...userIds]),
           isNull(memberships.deactivatedAt),
+          isNull(users.suspendedAt),
         ),
       );
 
