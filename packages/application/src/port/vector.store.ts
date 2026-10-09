@@ -49,12 +49,6 @@ export abstract class VectorStore {
     sourceId: string,
   ): Promise<IndexedSource | null>;
 
-  // Null when nothing is indexed under that source. One row, off the source index.
-  public abstract sourceOf(
-    organizationId: OrganizationId,
-    sourceId: string,
-  ): Promise<IndexedSource | null>;
-
   // Required so the permission filter runs on the input set: filtering results means the
   // model already saw what the actor cannot.
   public abstract search(
