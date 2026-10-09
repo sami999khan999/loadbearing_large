@@ -181,6 +181,7 @@ export {
   type RetentionPolicyRecord,
   type RetentionPolicyRepository,
   type RetentionStore,
+  type RoleDetails,
   type RolePage,
   type RoleRecord,
   type RoleRepository,

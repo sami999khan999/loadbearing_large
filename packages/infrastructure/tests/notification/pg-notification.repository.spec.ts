@@ -243,11 +243,12 @@ describe("PgNotificationRepository.unreadSubjectHolders", () => {
   it("names exactly the people holding an unread one about the subject", async () => {
     const [holder, fresh] = [await makeUser("Holder"), await makeUser("Fresh")];
     const subjectId = Uuid.v7();
+    const eventId = Uuid.v7();
     await repository.saveMany([
       {
         organizationId,
         userId: holder,
-        eventId: Uuid.v7(),
+        eventId,
         kind: "message.received",
         category: "messaging",
         params: {},
@@ -262,9 +263,19 @@ describe("PgNotificationRepository.unreadSubjectHolders", () => {
       [holder, fresh],
       "message.received",
       subjectId,
+      Uuid.v7(),
     );
 
     expect([...found]).toEqual([holder]);
+    // Not its own event's row: a retry must not suppress the recipient it already wrote.
+    const own = await repository.unreadSubjectHolders(
+      organizationId,
+      [holder],
+      "message.received",
+      subjectId,
+      eventId,
+    );
+    expect([...own]).toEqual([]);
     for (const id of [holder, fresh]) await database.client.delete(users).where(eq(users.id, id));
   });
 });

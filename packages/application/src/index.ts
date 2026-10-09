@@ -466,6 +466,7 @@ export {
   PermissionOverrideRules,
   type RevokePermissionInput,
   RevokePermissionUseCase,
+  type RoleDetails,
   type RolePage,
   type RoleRecord,
   RoleRepository,
