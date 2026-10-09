@@ -189,13 +189,22 @@ describe("the conversation stream's revalidation", () => {
     Object.assign(container, {
       principals: {
         fromHeaders: () => Promise.resolve(new Principal(ORG, USER, CapabilitySet.empty())),
-        refresh: () => Promise.resolve(refreshed),
+        refreshAll: (_organizationId: string, held: readonly Principal[]) =>
+          Promise.resolve(held.map(() => refreshed)),
+      },
+      tenantMemberships: {
+        activeMemberIds: (_organizationId: string, userIds: readonly string[]) =>
+          Promise.resolve(new Set(userIds)),
       },
       messaging: {
         watch: {
           execute: (principal: Principal) => {
             watched.push(principal);
             return Promise.resolve();
+          },
+          canWatchAll: (_organizationId: string, asks: readonly { actor: Principal }[]) => {
+            watched.push(...asks.map(({ actor }) => actor));
+            return Promise.resolve(asks.map(() => true));
           },
         },
       },
