@@ -1532,7 +1532,7 @@ in this file's history of `BACKLOG.md` §15.
 
 ## 19. Review of 2026-10-10 — closed so far
 
-Seventeen findings from two reviews of the code both kits share, each checked against the code
+Eighteen findings from two reviews of the code both kits share, each checked against the code
 before it was fixed, and ported to lite. One more, a cross-site GET reaching an RPC mutation, was
 false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless told not to.
 
@@ -1579,6 +1579,8 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
   Compare name their grant, revision or key, in en and bn. `09bdb44d`, `d9bafe1d`.
 - [x] `RW.23` **Focus fell to the page after revoking an API key** `done: 2026-10-10` — it moves
   to the keys region. `d9bafe1d`.
+- [x] `RW.6` **`VectorStore` declared `sourceOf` twice** `done: 2026-10-10` — since `88d3496b`;
+  one declaration went. Big kit only: lite's port never had the second.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 

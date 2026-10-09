@@ -36,7 +36,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 2 | 7 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
-| 19 | Review of 2026-10-10 | 6 | 17 |
+| 19 | Review of 2026-10-10 | 5 | 18 |
 
 Sections 2, 4, 5, 7, 8, 9, 12 and 18 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9` and `BL.1`. Their entries
@@ -271,7 +271,7 @@ lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
 
 Two reviewers read the code both kits share after the 2026-10-10 fixes. Of nineteen findings, one
 was false (oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET
-reaches a mutation) and seventeen are fixed, in [`archive/DONE.md`](archive/DONE.md) §19. IDs are
+reaches a mutation) and eighteen are fixed, in [`archive/DONE.md`](archive/DONE.md) §19. IDs are
 `RW.<n>`, new. Lite holds the shared ones under `BL.<n>` with the ID beside it.
 
 - [ ] `RW.1` **The doc editor drops unsaved edits without a word.** Autosave runs two seconds
@@ -299,8 +299,6 @@ reaches a mutation) and seventeen are fixed, in [`archive/DONE.md`](archive/DONE
   `PgPersonalOrganizationEnroller.enrol` now returns only an active membership; the bootstrap and
   claim paths were not read for the same pattern, and a suspended user with an active membership
   still enrols. **Check** both and decide what a suspended user's session should hold.
-- [ ] `RW.6` **`VectorStore` declares `sourceOf` twice**, in
-  `packages/application/src/port/vector.store.ts`. Harmless to the compiler, confusing to a reader. **Fix:** delete one.
 
 ---
 
