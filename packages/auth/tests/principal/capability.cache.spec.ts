@@ -213,3 +213,40 @@ describe("CapabilityCache — a fill racing the invalidation", () => {
     expect(store.entries.has(key)).toBe(false);
   });
 });
+
+// `RV.4`. Held streams re-read a tenant's members together, so the misses are resolved
+// together, and the hits and the misses share the one key layout `forUser` reads.
+describe("CapabilityCache.forUsers", () => {
+  const OTHER = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000012");
+  const ABSENT = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000013");
+
+  it("serves hits from the cache and resolves every miss in one batch", async () => {
+    const { cache, repository } = cacheWith(
+      new Map([
+        [`${ORG_A}:${USER}`, holding("rbac.role.read")],
+        [`${ORG_A}:${OTHER}`, holding("member.read")],
+      ]),
+    );
+    await cache.forUser(ORG_A, USER);
+
+    const sets = await cache.forUsers(ORG_A, [USER, OTHER, ABSENT, OTHER]);
+
+    expect(repository.batches).toEqual([[OTHER, ABSENT]]);
+    expect(sets.get(USER)?.can("rbac.role.read")).toBe(true);
+    expect(sets.get(OTHER)?.can("member.read")).toBe(true);
+    expect(sets.get(OTHER)?.can("rbac.role.read")).toBe(false);
+    // Resolved to nothing is an answer, and it is cached like one.
+    expect(sets.get(ABSENT)?.can("member.read")).toBe(false);
+    expect((await cache.forUser(ORG_A, OTHER)).can("member.read")).toBe(true);
+    expect(repository.calls).toHaveLength(1);
+  });
+
+  it("asks nothing when every user is cached", async () => {
+    const { cache, repository } = cacheWith(new Map([[`${ORG_A}:${USER}`, holding()]]));
+    await cache.forUser(ORG_A, USER);
+
+    await cache.forUsers(ORG_A, [USER]);
+
+    expect(repository.batches).toEqual([]);
+  });
+});
