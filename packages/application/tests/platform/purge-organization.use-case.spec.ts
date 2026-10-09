@@ -1,5 +1,6 @@
 import { Identifiers } from "@loadbearing/contracts";
 import { describe, expect, it } from "vitest";
+import type { DocImageSweep } from "../../src/doc/doc-image-sweep.js";
 import type { PlatformReader } from "../../src/platform/platform.reader.js";
 import { PurgeOrganizationUseCase } from "../../src/platform/purge-organization.use-case.js";
 import type { TenantRecord, TenantRepository } from "../../src/platform/tenant.repository.js";
@@ -158,6 +159,16 @@ interface Parts {
   readonly projector: FakeProjector | null;
   readonly tenantRetention: FakeTenantRetention;
   readonly shards: FakeShards;
+  readonly sweep: FakeSweep;
+}
+
+class FakeSweep {
+  public readonly prefixes: string[] = [];
+
+  public sweep(prefix: string): Promise<number> {
+    this.prefixes.push(prefix);
+    return Promise.resolve(0);
+  }
 }
 
 const build = (overrides: Partial<Parts> = {}) => {
@@ -171,6 +182,7 @@ const build = (overrides: Partial<Parts> = {}) => {
     projector: new FakeProjector(),
     tenantRetention: new FakeTenantRetention(),
     shards: new FakeShards(),
+    sweep: new FakeSweep(),
     ...overrides,
   };
 
@@ -195,6 +207,7 @@ const build = (overrides: Partial<Parts> = {}) => {
       parts.projector as unknown as AnalyticsProjector | null,
       parts.tenantRetention as unknown as TenantRetentionPolicyRepository,
       parts.shards as unknown as ShardResolver,
+      parts.sweep as unknown as DocImageSweep,
     ),
   };
 };
@@ -280,6 +293,15 @@ describe("PurgeOrganizationUseCase", () => {
       partitions: 3,
       outboxRows: 7,
     });
+  });
+
+  // Only a prefix names either, so nothing else would ever delete them: the doc images,
+  // and the index text a job still queued for this tenant would have read.
+  it("sweeps the tenant's doc images and staged index text", async () => {
+    const { parts, useCase } = build();
+    await useCase.execute(input);
+
+    expect(parts.sweep.prefixes).toEqual([`doc/${TENANT}/`, `embedding/${TENANT}/`]);
   });
 
   // No foreign key on that table, so nothing cascades. `deleteFor` had no caller at all,

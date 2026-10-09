@@ -169,6 +169,9 @@ export interface EventShape {
     readonly members: number;
     readonly messages: number;
   };
+  readonly "maintenance.index_text.swept": {
+    readonly objects: number;
+  };
   readonly "cold.partition.restored": {
     readonly table: string;
     readonly period: string;

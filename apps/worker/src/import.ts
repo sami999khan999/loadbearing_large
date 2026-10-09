@@ -9,6 +9,7 @@ export {
   ActivitySubject,
   type ArchivedPartition,
   type ColdMode,
+  type IndexDocumentJob,
   PartitionedTable,
   type PartitionedTableEntry,
   type PartitionedTableName,

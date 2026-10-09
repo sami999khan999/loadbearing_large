@@ -12,8 +12,11 @@ ServerOnly.assert("@loadbearing/application");
 
 export {
   type IndexDocumentInput,
+  type IndexDocumentJob,
   type IndexDocumentResult,
   IndexDocumentUseCase,
+  IndexQueuedDocumentUseCase,
+  IndexTextStage,
   type QueueDocumentIndexInput,
   QueueDocumentIndexUseCase,
   type QueuedDocumentIndex,
