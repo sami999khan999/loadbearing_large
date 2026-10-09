@@ -81,6 +81,8 @@ export {
   GrantPermissionUseCase,
   IndexDocumentUseCase,
   type IndexedSource,
+  IndexQueuedDocumentUseCase,
+  IndexTextStage,
   InspectEffectivePermissionsUseCase,
   InspectPlatformStatusUseCase,
   InspectShardMapUseCase,

@@ -1,18 +1,15 @@
 import { SystemPrincipal, withShard } from "../bootstrap/index.js";
-import { type Container, type Job, QueueName, type Redis, Worker } from "../import.js";
-
-interface EmbeddingJobData {
-  readonly organizationId: string;
-  readonly documentId: string;
-  readonly text: string;
-  readonly goalId?: string | null;
-  readonly sourceType?: string;
-  // Absent on a job queued before `CR.33`, which then indexes unconditionally.
-  readonly version?: number;
-}
+import {
+  type Container,
+  type IndexDocumentJob,
+  type Job,
+  QueueName,
+  type Redis,
+  Worker,
+} from "../import.js";
 
 // A thin adapter, exactly like an oRPC router. Everything worth testing lives in
-// `IndexDocumentUseCase`.
+// `IndexQueuedDocumentUseCase`.
 export class EmbeddingConsumer {
   public constructor(
     private readonly container: Container,
@@ -21,9 +18,9 @@ export class EmbeddingConsumer {
   ) {}
 
   public start(): Worker {
-    const worker = new Worker<EmbeddingJobData>(
+    const worker = new Worker<IndexDocumentJob>(
       QueueName.EMBEDDING,
-      async (job: Job<EmbeddingJobData>) => this.handle(job),
+      async (job: Job<IndexDocumentJob>) => this.handle(job),
       { connection: this.connection, concurrency: this.concurrency },
     );
 
@@ -64,18 +61,12 @@ export class EmbeddingConsumer {
 
   // Let it throw: BullMQ's retry is driven by rejection, so catching here turns a
   // retryable failure into permanent, silent data loss.
-  public async handle(job: Job<EmbeddingJobData>): Promise<void> {
+  public async handle(job: Job<IndexDocumentJob>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
 
     // `document_chunks` is routed, so the job is placed before the use-case runs.
     await withShard(this.container, job.data.organizationId, () =>
-      this.container.ai.indexDocument.execute(principal, {
-        documentId: job.data.documentId,
-        text: job.data.text,
-        goalId: job.data.goalId ?? null,
-        sourceType: job.data.sourceType ?? "document",
-        ...(job.data.version === undefined ? {} : { version: job.data.version }),
-      }),
+      this.container.ai.indexQueued.execute(principal, job.data),
     );
   }
 }
