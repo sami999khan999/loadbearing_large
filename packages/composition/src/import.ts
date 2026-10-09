@@ -47,6 +47,7 @@ export {
   DocAccess,
   DocCache,
   DocFeaturePolicy,
+  DocImageOrphans,
   DocImageSweep,
   DocRerender,
   DocSearch,
@@ -145,6 +146,7 @@ export {
   PlatformPolicyRepository,
   PlatformReader,
   type PlatformStatus,
+  type PresignedPost,
   PreviewDocPageUseCase,
   PreviewRetentionChangeUseCase,
   // A value: `placedAt` builds the empty principal a placement-only read needs.

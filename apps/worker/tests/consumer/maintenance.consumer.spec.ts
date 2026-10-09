@@ -45,6 +45,8 @@ const NOW = new Date("2026-08-15T00:00:00Z");
 const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
 const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
 const TENANTS = [FIRST, SECOND] as const;
+const SPACE = Identifiers.docSpaceId.parse("018f8c00-0000-7000-8000-000000000031");
+const OTHER_SPACE = Identifiers.docSpaceId.parse("018f8c00-0000-7000-8000-000000000032");
 const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000099");
 
 // A directory row nothing has moved. Spread under a key and a node.
@@ -327,6 +329,37 @@ describe("MaintenanceConsumer", () => {
     expect((await assignments.findByKey(Shard.keyOf(SECOND)))?.node).toBe(1);
     expect(emitted(h.logger, "tenant.move.completed")).toEqual([
       { organizationId: SECOND, fromNode: 0, toNode: 1, rows: 3 },
+    ]);
+  });
+
+  it("sweeps a space's unlinked images on the tenant's node and says how many went", async () => {
+    const h = harness();
+    const sweeps: unknown[][] = [];
+    const doc = {
+      imageOrphans: {
+        run: (...args: unknown[]) => {
+          sweeps.push(args);
+          return Promise.resolve(args[1] === SPACE ? 4 : 0);
+        },
+      },
+    };
+    const container = { ...h.container, doc } as unknown as Container;
+
+    await consumerFor(container).handle(
+      job("doc-image-orphans", { organizationId: SECOND, spaceId: SPACE }),
+    );
+    await consumerFor(container).handle(
+      job("doc-image-orphans", { organizationId: FIRST, spaceId: OTHER_SPACE }),
+    );
+
+    expect(h.placements).toEqual([SECOND, FIRST]);
+    expect(sweeps).toEqual([
+      [SECOND, SPACE],
+      [FIRST, OTHER_SPACE],
+    ]);
+    // Silent for the space with nothing to delete.
+    expect(emitted(h.logger, "doc.images.swept")).toEqual([
+      { organizationId: SECOND, spaceId: SPACE, images: 4 },
     ]);
   });
 
