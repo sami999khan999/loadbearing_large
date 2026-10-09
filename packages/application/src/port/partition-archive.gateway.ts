@@ -36,8 +36,8 @@ export interface RestoredMonth {
   readonly rowCount: number;
 }
 
-// One object of one export. `table` is the tenant-owned table it holds, or `catalog`
-// for the eighth object, which is every row the seven do not cover.
+// One object of one export. `table` is the tenant-owned table it holds, `catalog` for every
+// other row, or `doc-image` for an image copied as it was, whose `rowCount` is 0.
 export interface ExportedObject {
   readonly table: string;
   readonly key: string;
