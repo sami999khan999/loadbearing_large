@@ -440,6 +440,18 @@ describe("one tenant partition, for every read there is", () => {
       () => rooms.isMember(organizationId, conversationId, reader),
     ],
     [
+      "the held streams' membership check, on its members",
+      PartitionedTable.CONVERSATION_MEMBERS,
+      /join conversation_members/i,
+      () => rooms.findMemberships(organizationId, [{ conversationId, userId: reader }]),
+    ],
+    [
+      "the held streams' membership check, on its conversations",
+      PartitionedTable.CONVERSATIONS,
+      /join conversation_members/i,
+      () => rooms.findMemberships(organizationId, [{ conversationId, userId: reader }]),
+    ],
+    [
       "the member list",
       PartitionedTable.CONVERSATION_MEMBERS,
       /from "conversation_members"/i,

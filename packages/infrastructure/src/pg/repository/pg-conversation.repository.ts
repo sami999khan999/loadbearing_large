@@ -6,6 +6,7 @@ import {
   type ConversationMemberRecord,
   type ConversationMemberRole,
   type ConversationPage,
+  type ConversationParticipant,
   type ConversationRecord,
   type ConversationRepository,
   desc,
@@ -164,6 +165,34 @@ export class PgConversationRepository extends BaseRepository implements Conversa
       .limit(1);
 
     return row ? PgConversationRepository.toHeader(row.conversation) : null;
+  }
+
+  // Two array binds, not two per pair: ten thousand held streams would be twenty thousand
+  // parameters. The tenant is a constant on both tables, so each prunes to one partition.
+  public async findMemberships(
+    organizationId: OrganizationId,
+    participants: readonly ConversationParticipant[],
+  ): Promise<readonly ConversationParticipant[]> {
+    if (participants.length === 0) return [];
+
+    const found = await this.db.execute<{ conversation_id: string; user_id: string }>(sql`
+      select distinct m.conversation_id::text as conversation_id, m.user_id::text as user_id
+      from unnest(
+        ${sql.param(participants.map((entry) => entry.conversationId))}::uuid[],
+        ${sql.param(participants.map((entry) => entry.userId))}::uuid[]
+      ) as asked(conversation_id, user_id)
+      join conversation_members m
+        on m.organization_id = ${organizationId}
+        and m.conversation_id = asked.conversation_id
+        and m.user_id = asked.user_id
+      join conversations c
+        on c.organization_id = ${organizationId} and c.id = m.conversation_id
+    `);
+
+    return found.rows.map((row) => ({
+      conversationId: row.conversation_id as ConversationId,
+      userId: row.user_id as UserId,
+    }));
   }
 
   public async findByDirectKey(

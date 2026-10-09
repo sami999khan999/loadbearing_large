@@ -1,7 +1,8 @@
-import { type ConversationId, ForbiddenError } from "../import.js";
+import { type ConversationId, ForbiddenError, type OrganizationId } from "../import.js";
 import type { Principal } from "../primitive/index.js";
 import type {
   ConversationHeader,
+  ConversationParticipant,
   ConversationRecord,
   ConversationRepository,
 } from "./conversation.repository.js";
@@ -40,5 +41,19 @@ export class ConversationAccess {
     if (!conversation) throw new ForbiddenError("messaging.conversation.read");
 
     return conversation;
+  }
+
+  // `assertParticipant` for many at once, answering rather than throwing: which of these
+  // pairs are still in their room. One tenant per call, and one statement.
+  public async participating(
+    organizationId: OrganizationId,
+    participants: readonly ConversationParticipant[],
+  ): Promise<ReadonlySet<string>> {
+    const found = await this.conversations.findMemberships(organizationId, participants);
+    return new Set(found.map(ConversationAccess.keyOf));
+  }
+
+  public static keyOf(participant: ConversationParticipant): string {
+    return `${participant.conversationId}:${participant.userId}`;
   }
 }

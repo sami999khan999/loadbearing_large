@@ -262,6 +262,46 @@ describe("PgConversationRepository.findMembership", () => {
   });
 });
 
+// `RV.4`. Every held conversation stream asks this once a minute, so a tenant's worth of
+// them is one statement however many there are.
+describe("PgConversationRepository.findMemberships", () => {
+  it("answers every pair of a tenant in one statement, members only", async () => {
+    const asked = conversationIds.flatMap((conversationId) =>
+      [alice, bob, carol, dave].map((userId) => ({ conversationId, userId })),
+    );
+
+    const found = await repository.findMemberships(organizationId, asked);
+
+    expect(counter.count).toBe(1);
+    const key = (entry: { conversationId: string; userId: string }) =>
+      `${entry.conversationId}:${entry.userId}`;
+    expect(found.map(key).sort()).toEqual(
+      [
+        ...conversationIds.flatMap((id) =>
+          [alice, bob].map((userId) => ({ conversationId: id, userId })),
+        ),
+        { conversationId: conversationIds[3] as ConversationId, userId: carol },
+      ]
+        .map(key)
+        .sort(),
+    );
+  });
+
+  // The tenant is the query's, never the pair's: the same ids asked under another tenant
+  // find nothing, which is what keeps a stream from vouching for a room elsewhere.
+  it("finds nothing for the same pairs under another tenant", async () => {
+    const elsewhere = Identifiers.organizationId.parse(Uuid.v7());
+    const asked = [{ conversationId: conversationIds[0] as ConversationId, userId: alice }];
+
+    await expect(repository.findMemberships(elsewhere, asked)).resolves.toEqual([]);
+  });
+
+  it("asks nothing for no pairs", async () => {
+    await expect(repository.findMemberships(organizationId, [])).resolves.toEqual([]);
+    expect(counter.count).toBe(0);
+  });
+});
+
 describe("PgConversationRepository.touch", () => {
   // Two sends committing out of order: the older one must not become the latest.
   it("never moves the latest message backwards", async () => {
