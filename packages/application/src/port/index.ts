@@ -60,7 +60,7 @@ export {
   ShardAssignmentRepository,
 } from "./shard-assignment.repository.js";
 export { ShardingStrategy } from "./sharding.strategy.js";
-export { StorageGateway, type StoredObject } from "./storage.gateway.js";
+export { type PresignedPost, StorageGateway, type StoredObject } from "./storage.gateway.js";
 export {
   type ColdTier,
   type LifecycleRule,

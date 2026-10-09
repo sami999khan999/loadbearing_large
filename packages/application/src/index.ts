@@ -371,6 +371,7 @@ export {
   type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionEstimate,
+  type PresignedPost,
   type ProjectionCheckpoint,
   type ProjectionGap,
   type QueuedJob,

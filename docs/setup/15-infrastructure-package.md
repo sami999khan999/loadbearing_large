@@ -348,6 +348,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { StorageGateway, type StoredObject } from "@loadbearing/application";
 import { NotFoundError } from "@loadbearing/errors";
@@ -416,16 +417,23 @@ export class S3StorageGateway extends StorageGateway {
     }
   }
 
-  public override async presignUpload(
+  public override async presignPost(
     key: string,
     contentType: string,
+    maxBytes: number,
     expiresInSeconds: number,
-  ): Promise<string> {
-    return getSignedUrl(
-      this.s3,
-      new PutObjectCommand({ Bucket: this.config.bucket, Key: key, ContentType: contentType }),
-      { expiresIn: expiresInSeconds },
-    );
+  ): Promise<PresignedPost> {
+    const { url, fields } = await createPresignedPost(this.s3, {
+      Bucket: this.config.bucket,
+      Key: key,
+      Conditions: [
+        ["content-length-range", 1, maxBytes],
+        ["eq", "$Content-Type", contentType],
+      ],
+      Fields: { "Content-Type": contentType },
+      Expires: expiresInSeconds,
+    });
+    return { url, fields };
   }
 
   public override async presignDownload(key: string, expiresInSeconds: number): Promise<string> {
@@ -445,7 +453,7 @@ export class S3StorageGateway extends StorageGateway {
 
 The gateway supports both, and which one a feature uses is a domain decision:
 
-**Direct-to-S3 (default for user uploads).** The use-case authorizes, generates a key, returns a presigned PUT URL. The browser uploads straight to storage; the app server never sees the bytes. A second call confirms and writes the database row. This is what keeps a 50 MB receipt off your request path entirely.
+**Direct-to-S3 (default for user uploads).** The use-case authorizes, generates a key, returns a presigned POST form whose policy bounds the length. The browser uploads straight to storage; the app server never sees the bytes. A second call confirms and writes the database row. This is what keeps a 50 MB receipt off your request path entirely.
 
 **Through the server (for generated files).** A PDF the worker renders, an export the system builds. There is no browser involved and `put()` is the whole story.
 
@@ -699,7 +707,7 @@ key is a flake that only reproduces on a fast machine.
 `LOKI_URL` and `CLICKHOUSE_URL`, so a stack without them reports `skipped` in the summary — a suite
 that silently contains no tests is indistinguishable from one that ran.
 
-**This is the only exercised path three ports have.** `StorageGateway.presignUpload` and
+**This is the only exercised path three ports have.** `StorageGateway.presignPost` and
 `presignDownload` are used by the browser and by nothing in this repository, so a URL that is wrong
 is wrong in a browser and nowhere else: the suite signs one of each and actually fetches and PUTs
 through them. `QueuePublisher.publish` is the port's whole write surface, and the job is read back
