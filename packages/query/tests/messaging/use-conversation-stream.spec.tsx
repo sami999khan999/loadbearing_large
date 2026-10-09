@@ -59,10 +59,8 @@ describe("useConversationStream typing", () => {
   it("does not render the reader typing at themselves", async () => {
     const screen = render(tree(clientYielding([typing(ME), typing(THEM)]), ME));
 
-    // The reader's frame is yielded *first*, and this waits for the one after it. An
-    // ──
-    // assertion that the text is empty would pass before any frame landed at all, which
-    // is a spec that goes green against the defect it was written for.
+    // The reader's frame is yielded first and this waits for the next: asserting empty text
+    // would pass before any frame landed, going green against the very defect.
     await waitFor(() => expect(screen.getByTestId("typing").textContent).toBe(THEM));
     expect(screen.getByTestId("typing").textContent).not.toContain(ME);
   });

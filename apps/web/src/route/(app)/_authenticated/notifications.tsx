@@ -12,10 +12,8 @@ import { RouteGuard } from "~/route/-guard.js";
 
 const MESSAGES = ["notification"] as const satisfies readonly ClientNamespace[];
 
-// Passed to the component as well as to the loader: the query key is built from these,
-// so a default that lived only in `NotificationList` would silently prefetch a key
-// ──
-// nothing reads. `unreadOnly` is the filter's initial state, not a choice made here.
+// Shared by the loader and the component: a default kept only in `NotificationList`
+// would prefetch a query key nothing reads. `unreadOnly` is only the filter's start state.
 const PAGE = { limit: 25, unreadOnly: false } as const;
 
 // The same key `notification.list` is gated on: removing it has to hide the nav entry

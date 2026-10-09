@@ -315,11 +315,8 @@ export class AnalyticsConsumer {
     replica: boolean,
   ): Promise<{ projected: number; batches: number; lagMs: number } | null> {
     try {
-      // Placed *inside* the guard. Outside it a tenant with no `shard_assignments` row
-      // threw past this catch, so the run died on `queue.job.failed` and the line a
-      // ──
-      // projection dashboard filters on was never emitted. Per tenant rather than per
-      // node: the read side is routed `activity_log`, the write side one ClickHouse.
+      // Inside the guard, so a tenant with no `shard_assignments` row still logs its failure.
+      // Per tenant, not per node: reads hit the routed `activity_log`, writes one ClickHouse.
       return await withShard(
         this.container,
         organizationId,
@@ -331,9 +328,7 @@ export class AnalyticsConsumer {
       // failure line was never emitted (`CR.44`). Unknown is "not skipped".
       if (await this.skippedUnplaced(organizationId, "project").catch(() => false)) return null;
 
-      // Read after the throw rather than before it, so the failure line names where the
-      // destination actually stands rather than where this run hoped to start. Outside
-      // ──
+      // Read after the throw, so the failure line names where the destination stands. Outside
       // the shard scope on purpose: the checkpoint is ClickHouse, one for the deployment.
       const checkpoint = await this.container.projector
         .checkpoint(organizationId)
