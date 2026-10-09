@@ -36,10 +36,11 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 2 | 7 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
+| 19 | Review of 2026-10-10 | 6 | 17 |
 
 Sections 2, 4, 5, 7, 8, 9, 12 and 18 are closed in full: 45 defects, 6 buried items, 9
-verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9` and `BL.1`. Their entries are in `archive/DONE.md` under the
-same numbers.
+verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9` and `BL.1`. Their entries
+are in `archive/DONE.md` under the same numbers.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
@@ -47,7 +48,8 @@ a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a pr
 the shipped security defects among them, are closed. **Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Sections 13 to 17 are down to a trigger, hand walks, a benchmark and one deferred design**
-(`RV.3`, `DC.2`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`.
+(`RV.3`, `DC.2`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`. **Section 19**
+holds what the 2026-10-10 review found and did not fix.
 
 ---
 
@@ -102,7 +104,8 @@ application issues one. — `PF.7`, `archive/DONE.md` §9
 ## 10. Code review of 2026-09-25 — what is left of it
 
 Forty-eight of the forty-nine findings are closed and in [`archive/DONE.md`](archive/DONE.md) §10,
-each with its proof. This one was fixed in its main part and keeps a smaller one; the body is in [`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) at the line given.
+each with its proof. This one was fixed in its main part and keeps a smaller one; the body is in
+[`archive/REVIEW-2026-09-25.md`](archive/REVIEW-2026-09-25.md) at the line given.
 
 - [~] `CR.20` **A caught-up tenant still costs the projection three round trips.** The run now
   rotates its start, passes a failing tenant and stops paging once its budget is spent, so no
@@ -263,6 +266,41 @@ lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
   owner audience in the space form.
 - [ ] `LP.3` **`pnpm doc:bench` and `pnpm bench` not run here.** The figures in `doc.md` are
   lite's, from one node. **Measure** on the sharded profile before quoting them.
+
+## 19. Review of 2026-10-10 — what is left
+
+Two reviewers read the code both kits share after the 2026-10-10 fixes. Of nineteen findings, one
+was false (oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET
+reaches a mutation) and seventeen are fixed, in [`archive/DONE.md`](archive/DONE.md) §19. IDs are
+`RW.<n>`, new. Lite holds the shared ones under `BL.<n>` with the ID beside it.
+
+- [ ] `RW.1` **The doc editor drops unsaved edits without a word.** Autosave runs two seconds
+  after the last key (`packages/feature/src/doc/doc-editor.form.tsx`, `AUTOSAVE_MS`), and nothing
+  registers `beforeunload` or a router blocker. Leaving within two seconds, or restoring a
+  revision, which remounts the form, loses what was typed. **Fix:** block navigation and unload
+  while dirty, and flush `persist()` before a restore.
+- [ ] `RW.2` **A mail job carries a live invite, reset link or 2FA code.** `InviteMemberUseCase`
+  stores only `token_hash`, but `queued-invitation.mailer.ts` and `queued-auth.mailer.ts` put the
+  raw URL or code in the job's `params`, kept an hour after success and a week after the last
+  failure (`FAILED_KEEP`). A Redis dump or `queue:replay` tooling exposes them. **Fix:** render in
+  the producer, encrypt `params` under `MAIL_SECRET_KEY`, or keep failed mail jobs briefly.
+- [ ] `RW.3` **An archived `doc_revision` month makes its images look unlinked.** `DocImageOrphans`
+  reads only revisions still in Postgres, and `doc_revision` is a partitioned table the retention
+  pass can archive. Once a month is in cold storage, the next orphan sweep in that space deletes
+  the images only those revisions named, and restoring the month brings back broken links. Big
+  kit only: lite archives nothing. **Fix:** read `partition_archive` for the space's archived
+  months and keep every image key under them, or keep a space's images until its revisions'
+  retention expires.
+- [ ] `RW.4` **The exports screen cannot hand out the doc-image copies.** `DC.6` copies them into
+  the export, and `list-tenant-exports.use-case.ts` leaves `doc-image/` keys out of the list so a
+  tenant's thousands of images do not bury its tables. An operator gets the manifest, which names
+  them, but no download. **Fix:** a zip, or a presigned listing behind the manifest.
+- [ ] `RW.5` **Two enrolment paths were not checked for the deactivated-membership loop.**
+  `PgPersonalOrganizationEnroller.enrol` now returns only an active membership; the bootstrap and
+  claim paths were not read for the same pattern, and a suspended user with an active membership
+  still enrols. **Check** both and decide what a suspended user's session should hold.
+- [ ] `RW.6` **`VectorStore` declares `sourceOf` twice**, in
+  `packages/application/src/port/vector.store.ts`. Harmless to the compiler, confusing to a reader. **Fix:** delete one.
 
 ---
 

@@ -1530,6 +1530,56 @@ in this file's history of `BACKLOG.md` §15.
   turns between runs. Proof: three runs beside lite's suite, all green. Lite closed the same ID
   with the same change. `68ab698b`.
 
+## 19. Review of 2026-10-10 — closed so far
+
+Seventeen findings from two reviews of the code both kits share, each checked against the code
+before it was fixed, and ported to lite. One more, a cross-site GET reaching an RPC mutation, was
+false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless told not to.
+
+- [x] `RW.7` **`/api/doc-nav` cached an API key's private nav as public and immutable**
+  `done: 2026-10-10` — `DocNavCache` treats `cookie`, `authorization` and `x-api-key` as private
+  and names all three in `Vary`. Proof: `doc-nav-cache.spec.ts`. `df8d5f0a`.
+- [x] `RW.8` **Renaming a role could undo a concurrent grant or revoke** `done: 2026-10-10` —
+  `RoleRepository.saveDetails` writes name and description only, re-read inside the transaction.
+  Proof: "keeps a grant that landed between the read and the write". `92c67f5a`.
+- [x] `RW.9` **Doc tree edits were lock-free snapshots** `done: 2026-10-10` — create, move,
+  delete, publish and a structural save take `DocSpaceRepository.lock` first. Proof:
+  `doc-tree-lock.spec.ts`, "cannot both commit a cycle", fails with the lock off. `f4ff57c5`.
+- [x] `RW.10` **Deleting a role a pending invitation names was a driver 500** `done: 2026-10-10`
+  — invitations count as assignments, count and delete share a transaction, and an FK violation
+  maps to `ConflictError("role", "inUse")`. `da325da5`.
+- [x] `RW.11` **A notification retry skipped the mail and the frame** `done: 2026-10-10` — every
+  attempt sends to the full audience; mail dedupes on `notification_<event>_<user>`, and the
+  suppression read ignores the retry's own rows. `6d9df424`.
+- [x] `RW.12` **A stale index job could overwrite a newer one** `done: 2026-10-10` —
+  `VectorStore.lockSource` takes a transaction advisory lock on (org, document) before the version
+  check. Proof: `pg-vector.store.spec`, a second job for the same source waits. `e53986a2`.
+- [x] `RW.13` **Suspended users still got notifications** `done: 2026-10-10` — the three
+  recipient reads filter `users.suspended_at`. Proof: `pg-notification-recipient.reader.spec`.
+  `ce8201d4`.
+- [x] `RW.14` **The nightly expiry read every expiring row at once** `done: 2026-10-10` — 500 a
+  transaction until a short page, the cache flushed after each. `46b16cff`.
+- [x] `RW.15` **Enrolment could pin a session to a deactivated tenant** `done: 2026-10-10` —
+  `enrol` returns an active membership or null, never founding a second organization. Proof:
+  `pg-personal-organization.enroller.spec`. `622ec355`.
+- [x] `RW.16` **The editor's image picker could not be reached by keyboard** `done: 2026-10-10`
+  — a real button opens the hidden input. `89f55204`.
+- [x] `RW.17` **Write and Preview wore tab roles with no tab behaviour** `done: 2026-10-10` —
+  `aria-pressed` toggles in a labelled fieldset, the upload outside it. `89f55204`.
+- [x] `RW.18` **The page tree's delete confirm was silent and lost focus** `done: 2026-10-10` —
+  its label switches while confirming, blur and Escape reset it, focus lands on the tree.
+  `93248d37`.
+- [x] `RW.19` **Page tree moves could fire twice from stale positions** `done: 2026-10-10` — the
+  move and delete buttons are disabled while one is pending. `93248d37`.
+- [x] `RW.20` **Enter in the command palette fired during IME composition** `done: 2026-10-10`
+  — `isComposing` returns early. `5a68bccd`.
+- [x] `RW.21` **The doc copy button threw without a clipboard** `done: 2026-10-10` — guarded,
+  caught, and a failure message shows. `d9bafe1d`.
+- [x] `RW.22` **Row actions shared one accessible name** `done: 2026-10-10` — Revoke, Restore and
+  Compare name their grant, revision or key, in en and bn. `09bdb44d`, `d9bafe1d`.
+- [x] `RW.23` **Focus fell to the page after revoking an API key** `done: 2026-10-10` — it moves
+  to the keys region. `d9bafe1d`.
+
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
 **Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
@@ -1762,6 +1812,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's six open items, `RW.1`–`RW.6`, and closes `RW.7`–`RW.23`. Each fix landed here first and was ported to lite |
 | 2026-10-10 | @sami | **`BACKLOG.md` §18 opened with `BL.1`, from lite.** The Vitest worker timeout at the end of the `tooling/scripts` run, which lite waits on this kit to fix. It did not reproduce in three runs today |
 | 2026-10-10 | @sami | **`DC.3` and `DC.8` closed, found built by §17's port from lite.** The re-render job and the card icons both arrived with lite's docs system; `BACKLOG.md`'s table now counts §15 as 7 open and lists §17 |
 | 2026-10-03 | @sami | **`BACKLOG.md` §17 opened: lite's docs system and the platform organization, three `LP.*` items.** 28 commits from lite, `cdb88c15..3f5bcf1b`, checked by hand through the API. Open: a browser walk, the in-app reader sending HTML twice, and the benchmarks not run here |
