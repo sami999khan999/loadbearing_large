@@ -24,44 +24,66 @@ algorithm, and it loads anywhere.
 
 ```
 packages/permissions/
+├── package.json
+├── tsconfig.json
+├── tsup.config.ts
 ├── vitest.config.ts
 ├── src/
-│   ├── index.ts                     ← the public barrel; names only folder barrels
-│   ├── registry/                    ← no import.ts: this package takes nothing from outside
+│   ├── index.ts                         ← the public barrel; names only folder barrels
+│   ├── registry/                        ← no import.ts: this package takes nothing from outside
 │   │   ├── index.ts
-│   │   ├── permission-registry.ts   → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
-│   │   ├── module-registry.ts       → ModuleRegistry, ModuleKey, ModuleGate
-│   │   ├── flag-registry.ts         → FlagRegistry, FlagKey, FlagMeta
-│   │   └── widget-registry.ts       → WidgetRegistry, WidgetKey, ZoneKey, ZONES, WidgetVisibility, …
+│   │   ├── permission-registry.ts       → PermissionRegistry, PermissionKey, PermissionMeta, PermissionScope
+│   │   ├── module-registry.ts           → ModuleRegistry, ModuleKey, ModuleGate
+│   │   ├── flag-registry.ts             → FlagRegistry, FlagKey, FlagMeta
+│   │   └── widget-registry.ts           → WidgetRegistry, WidgetKey, ZoneKey, ZONES, WidgetVisibility, …
 │   ├── capability/
 │   │   ├── index.ts
-│   │   ├── capability-set.ts        → CapabilitySet, CapabilitySetDto, ScopedSetDto
-│   │   └── entitlement-mask.ts      → EntitlementMask, EntitlementInput
-│   ├── catalog/                     ← one fragment per slice, team-owned
-│   │   ├── index.ts                 ←   merges fragments (platform-owned)
-│   │   ├── core.permissions.ts      ←   held by every principal (rule 5)
-│   │   ├── platform.permissions.ts  ←   above the tenant; never in a tenant role
+│   │   ├── capability-set.ts            → CapabilitySet, CapabilitySetDto, ScopedSetDto
+│   │   └── entitlement-mask.ts          → EntitlementMask, EntitlementInput
+│   ├── catalog/                         ← one fragment per slice, team-owned
+│   │   ├── index.ts                     ←   merges fragments (platform-owned)
+│   │   ├── core.permissions.ts          ←   held by every principal (rule 5)
+│   │   ├── platform.permissions.ts      ←   above the tenant; never in a tenant role
 │   │   ├── rbac.permissions.ts
 │   │   ├── member.permissions.ts
 │   │   ├── apikey.permissions.ts
-│   │   └── ai.permissions.ts
-│   ├── gate/                        ← same pattern for nav gates
-│   │   ├── index.ts
-│   │   └── rbac.gate.ts
-│   ├── flag/                        ← same pattern for feature flags
-│   │   ├── index.ts                 → FLAGS
+│   │   ├── ai.permissions.ts
+│   │   ├── analytics.permissions.ts     ←   reading the tenant's own activity
+│   │   ├── doc.permissions.ts           ←   necessary, never sufficient: the space's audience decides too
+│   │   ├── messaging.permissions.ts     ←   plus membership of the conversation
+│   │   ├── notification.permissions.ts
+│   │   └── widget.permissions.ts        ←   hiding a card for the whole organization
+│   ├── gate/                            ← same pattern for nav gates
+│   │   ├── index.ts                     → GATES
+│   │   ├── analytics.gate.ts
+│   │   ├── doc.gate.ts
+│   │   ├── document.gate.ts
+│   │   ├── messaging.gate.ts
+│   │   ├── notification.gate.ts
+│   │   ├── platform.gate.ts             ←   one module for the whole platform tier
+│   │   ├── rbac.gate.ts
+│   │   └── widget.gate.ts
+│   ├── flag/                            ← same pattern for feature flags
+│   │   ├── index.ts                     → FLAGS
 │   │   └── widget.flags.ts
-│   ├── widget/                      ← same pattern for widgets
-│   │   ├── index.ts                 → WIDGETS
-│   │   ├── core.widgets.ts          ←   the nav: required, ungated
+│   ├── widget/                          ← same pattern for widgets
+│   │   ├── index.ts                     → WIDGETS
+│   │   ├── core.widgets.ts              ←   the nav: required, ungated
 │   │   ├── member.widgets.ts
-│   │   └── notification.widgets.ts  ←   the bell: inline
-│   └── route/                       ← same pattern for destinations
-│       ├── index.ts                 → ROUTES, AppRoute, RoutePath
-│       ├── shell.routes.ts          ←   platform-owned: home, sign-in, forbidden
+│   │   └── notification.widgets.ts      ←   the bell: inline
+│   └── route/                           ← same pattern for destinations
+│       ├── index.ts                     → ROUTES, AppRoute, RoutePath
+│       ├── shell.routes.ts              ←   platform-owned: home, sign-in, forbidden
+│       ├── account.routes.ts            ←   no gate: your own password is not a capability
+│       ├── organization.routes.ts       ←   no gate: founding your own tenant is not either
+│       ├── analytics.routes.ts
+│       ├── doc.routes.ts                ←   /doc behind the session, /docs public
+│       ├── document.routes.ts
+│       ├── messaging.routes.ts
+│       ├── notification.routes.ts
+│       ├── platform.routes.ts
 │       ├── rbac.routes.ts
-│       ├── account.routes.ts        ←   no gate: your own password is not a capability
-│       └── organization.routes.ts   ←   no gate: founding your own tenant is not either
+│       └── widget.routes.ts
 └── tests/
     ├── registry/
     │   ├── permission-registry.spec.ts
