@@ -33,10 +33,8 @@ export interface ConversationStreamState {
 export function useConversationStream(
   client: ApiClient,
   conversationId: string,
-  // The reader's own id, so their own keystrokes do not render as somebody typing at
-  // them. Filtered here rather than at the publisher: the frame is legitimately
-  // ──
-  // addressed to the whole channel, and every other member does want it.
+  // The reader's own id, so their keystrokes do not render as somebody typing at them.
+  // Filtered here, not at the publisher: every other member of the channel wants the frame.
   selfId?: string,
 ): ConversationStreamState {
   const queryClient = useQueryClient();
