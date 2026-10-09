@@ -47,6 +47,7 @@ export {
   DocAccess,
   DocCache,
   DocFeaturePolicy,
+  DocImageOrphans,
   DocImageSweep,
   DocRerender,
   DocSearch,

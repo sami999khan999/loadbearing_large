@@ -49,6 +49,7 @@ import {
   DocAccess,
   DocCache,
   DocFeaturePolicy,
+  DocImageOrphans,
   DocImageSweep,
   DocRerender,
   DocSearch,
@@ -617,6 +618,8 @@ export class Container {
     readonly openImage: OpenDocImageUseCase;
     // The worker's, off `pnpm doc:rerender`: every published page an older renderer wrote.
     readonly rerender: DocRerender;
+    // The worker's, queued by a page delete: a space's images that no text links any more.
+    readonly imageOrphans: DocImageOrphans;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -2020,7 +2023,16 @@ export class Container {
         uow,
       ),
       movePage: new MoveDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
-      deletePage: new DeleteDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
+      deletePage: new DeleteDocPageUseCase(
+        auth,
+        spaces,
+        pages,
+        tree,
+        cache,
+        this.activity,
+        uow,
+        this.queuePublisher,
+      ),
       previewPage: new PreviewDocPageUseCase(auth, renderer),
       revisions: new ListDocRevisionsUseCase(auth, pages, spaces),
       revision: new GetDocRevisionUseCase(auth, pages, spaces),
@@ -2054,6 +2066,7 @@ export class Container {
         this.catalogUnitOfWork,
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
+      imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
     };
   }
 

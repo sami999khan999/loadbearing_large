@@ -3,6 +3,7 @@ import {
   type ArchivedPartition,
   type ColdMode,
   type Container,
+  type DocSpaceId,
   type Job,
   type OrganizationId,
   PartitionedTable,
@@ -37,6 +38,12 @@ interface ExportJob {
 // is the system's, and the audit row for a delete has to name who asked for it.
 interface RerenderJob {
   readonly organizationId: OrganizationId;
+}
+
+// What `doc-image-orphans` carries: the space a page was deleted from.
+interface ImageOrphansJob {
+  readonly organizationId: OrganizationId;
+  readonly spaceId: DocSpaceId;
 }
 
 interface PurgeJob {
@@ -160,6 +167,8 @@ export class MaintenanceConsumer {
         return this.relocate(job.data as MoveJob);
       case "doc-rerender":
         return this.rerender(job.data as RerenderJob);
+      case "doc-image-orphans":
+        return this.imageOrphans(job.data as ImageOrphansJob);
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }
@@ -283,6 +292,19 @@ export class MaintenanceConsumer {
     this.container.logger.emit("doc.pages.rerendered", {
       organizationId: data.organizationId,
       pages,
+    });
+  }
+
+  // Queued by a page delete, one per space. Silent when every image is still linked.
+  private async imageOrphans(data: ImageOrphansJob): Promise<void> {
+    const images = await withShard(this.container, data.organizationId, () =>
+      this.container.doc.imageOrphans.run(data.organizationId, data.spaceId),
+    );
+    if (images === 0) return;
+    this.container.logger.emit("doc.images.swept", {
+      organizationId: data.organizationId,
+      spaceId: data.spaceId,
+      images,
     });
   }
 
