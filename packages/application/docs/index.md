@@ -56,7 +56,9 @@ packages/application/
 │   │   ├── unit-of-work.ts       → UnitOfWork
 │   │   └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
 │   ├── ai/
-│   │   └── index-document.use-case.ts  → IndexDocumentUseCase
+│   │   ├── index-document.use-case.ts  → IndexDocumentUseCase
+│   │   ├── index-queued-document.use-case.ts → IndexQueuedDocumentUseCase
+│   │   └── index-text-stage.ts         → IndexTextStage
 │   ├── mail/                    ← a slice with no repository: the queue is the state
 │   │   └── send-mail.use-case.ts       → SendMailUseCase, SendMailInput
 │   ├── member/                   ← a slice: its repository ports live with it
