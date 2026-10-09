@@ -1814,7 +1814,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
-| 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's six open items, `RW.1`–`RW.6`, and closes `RW.7`–`RW.23`. Each fix landed here first and was ported to lite |
+| 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's five open items, `RW.1`–`RW.5`, and closes `RW.6`–`RW.23`. Each fix landed here first and was ported to lite |
 | 2026-10-10 | @sami | **`BACKLOG.md` §18 opened with `BL.1`, from lite.** The Vitest worker timeout at the end of the `tooling/scripts` run, which lite waits on this kit to fix. It did not reproduce in three runs today |
 | 2026-10-10 | @sami | **`DC.3` and `DC.8` closed, found built by §17's port from lite.** The re-render job and the card icons both arrived with lite's docs system; `BACKLOG.md`'s table now counts §15 as 7 open and lists §17 |
 | 2026-10-03 | @sami | **`BACKLOG.md` §17 opened: lite's docs system and the platform organization, three `LP.*` items.** 28 commits from lite, `cdb88c15..3f5bcf1b`, checked by hand through the API. Open: a browser walk, the in-app reader sending HTML twice, and the benchmarks not run here |
