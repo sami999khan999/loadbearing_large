@@ -17,6 +17,8 @@ import type {
   PlanSaveInput,
   ProjectionToggleInput,
   ProjectionUpdateInput,
+  QueueAutoscaleInput,
+  QueuePauseInput,
   ReplicaToggleInput,
   ReprojectInput,
   ReprojectRequestedDto,
@@ -29,6 +31,10 @@ import type {
   TenantExportInput,
   TenantMoveInput,
   TenantRetentionUpdateInput,
+  WorkerProcessPauseInput,
+  WorkerProcessQueuesInput,
+  WorkerProcessRefInput,
+  WorkerQueuesChangedDto,
 } from "../import.js";
 import { QueryKeys } from "../key/index.js";
 import { useAppMutation } from "../runtime/index.js";
@@ -227,6 +233,43 @@ export class PlatformMutations {
     return useAppMutation<RestoreRequestedDto, RestoreInput>({
       mutationFn: (input) => client.platform.restorePartition(input),
       invalidates: [],
+    });
+  }
+
+  // Every worker change lands in the fleet read on the next poll anyway; invalidating
+  // shows it within the round trip instead of up to three seconds later.
+  public static usePauseQueue(client: ApiClient) {
+    return useAppMutation<{ ok: true }, QueuePauseInput>({
+      mutationFn: (input) => client.platform.pauseQueue(input),
+      invalidates: [QueryKeys.platform.workers()],
+    });
+  }
+
+  public static useSaveQueueAutoscale(client: ApiClient) {
+    return useAppMutation<{ ok: true }, QueueAutoscaleInput>({
+      mutationFn: (input) => client.platform.saveQueueAutoscale(input),
+      invalidates: [QueryKeys.platform.workers()],
+    });
+  }
+
+  public static usePauseWorker(client: ApiClient) {
+    return useAppMutation<{ ok: true }, WorkerProcessPauseInput>({
+      mutationFn: (input) => client.platform.pauseWorker(input),
+      invalidates: [QueryKeys.platform.workers()],
+    });
+  }
+
+  public static useSetWorkerQueues(client: ApiClient) {
+    return useAppMutation<WorkerQueuesChangedDto, WorkerProcessQueuesInput>({
+      mutationFn: (input) => client.platform.setWorkerQueues(input),
+      invalidates: [QueryKeys.platform.workers()],
+    });
+  }
+
+  public static useResetWorker(client: ApiClient) {
+    return useAppMutation<{ ok: true }, WorkerProcessRefInput>({
+      mutationFn: (input) => client.platform.resetWorker(input),
+      invalidates: [QueryKeys.platform.workers()],
     });
   }
 }
