@@ -55,6 +55,7 @@ export {
   PgUserReader,
   PgVectorStore,
   PgWidgetPreferenceRepository,
+  PgWorkerQueueSettingsRepository,
 } from "./repository/index.js";
 export {
   type OpenTransaction,

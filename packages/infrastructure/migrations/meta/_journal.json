@@ -379,6 +379,13 @@
       "when": 1790965503758,
       "tag": "0053_doc_access",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791650425156,
+      "tag": "0054_worker_queue_settings",
+      "breakpoints": true
     }
   ]
 }

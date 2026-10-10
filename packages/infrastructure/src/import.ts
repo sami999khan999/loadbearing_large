@@ -163,6 +163,8 @@ export {
   type ProjectionGap,
   type ProjectionPolicyRecord,
   type ProjectionPolicyRepository,
+  type QueueControlGateway,
+  type QueueCounts,
   type QueuedJob,
   // A value, not a type: the doc re-render script names the maintenance queue.
   QueueName,
@@ -222,6 +224,11 @@ export {
   type VectorStore,
   type WidgetPreferenceRepository,
   type WidgetPreferences,
+  type WorkerFleetGateway,
+  type WorkerProcessOverrides,
+  type WorkerProcessReport,
+  type WorkerQueueSettingsRecord,
+  type WorkerQueueSettingsRepository,
 } from "@loadbearing/application";
 
 // ── @loadbearing/content ─────────────────────────────────────────────────────

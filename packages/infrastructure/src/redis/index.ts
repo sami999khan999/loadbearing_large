@@ -6,3 +6,4 @@ export {
   type RedisRealtimeConfig,
   RedisRealtimeSubscriber,
 } from "./redis-realtime.subscriber.js";
+export { RedisWorkerFleetGateway } from "./redis-worker-fleet.gateway.js";
