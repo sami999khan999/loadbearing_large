@@ -24,6 +24,14 @@ On the first of the month both monthly jobs run, in this order and for these rea
 - **05:00 reconcile.** So on that one morning of the month it reads a window the retention pass has
   already finished with.
 
+## Every time is UTC
+
+BullMQ reads a cron pattern in the process's own timezone unless told otherwise, so a worker
+with `TZ` set, or on a host not set to UTC, ran each nightly job at that local hour. The digest's
+day is a UTC day, so its schedule could cover the wrong one. Each cron entry now passes
+`tz: "UTC"` through `UtcCron`. The `tz` is part of a repeatable entry's key, so registration first
+removes the entry an earlier version registered without it; otherwise both would run.
+
 ## A fixed job id is what makes registration idempotent
 
 Every schedule registers on **every boot**. Without a fixed id, each deploy adds another repeatable

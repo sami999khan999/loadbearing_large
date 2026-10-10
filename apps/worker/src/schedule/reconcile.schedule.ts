@@ -1,4 +1,5 @@
 import { type Container, Queue, QueueName, type Redis } from "../import.js";
+import { UtcCron } from "./utc-cron.js";
 
 // The daily count check between the audit trail and the derived store, at 05:00 so it
 // reads a window the archive job has finished with. See docs/reference/schedules.md.
@@ -15,11 +16,17 @@ export class ReconcileSchedule {
     const queue = new Queue(QueueName.ANALYTICS, { connection: this.connection });
 
     try {
+      await UtcCron.dropLocal(
+        queue,
+        "reconcile",
+        ReconcileSchedule.PATTERN,
+        ReconcileSchedule.JOB_ID,
+      );
       await queue.add(
         "reconcile",
         {},
         {
-          repeat: { pattern: ReconcileSchedule.PATTERN },
+          repeat: { pattern: ReconcileSchedule.PATTERN, tz: UtcCron.TZ },
           jobId: ReconcileSchedule.JOB_ID,
           removeOnComplete: 10,
           removeOnFail: 100,

@@ -49,6 +49,7 @@ import {
   DocAccess,
   DocCache,
   DocFeaturePolicy,
+  DocImageOrphans,
   DocImageSweep,
   DocRerender,
   DocSearch,
@@ -75,6 +76,8 @@ import {
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
+  IndexQueuedDocumentUseCase,
+  IndexTextStage,
   InspectEffectivePermissionsUseCase,
   InspectPlatformStatusUseCase,
   InspectShardMapUseCase,
@@ -104,6 +107,7 @@ import {
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
+  ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
   LocateTenantUseCase,
@@ -470,6 +474,8 @@ export class Container {
   // docs/reference/container.md.
   public readonly ai: {
     readonly indexDocument: IndexDocumentUseCase;
+    readonly indexQueued: IndexQueuedDocumentUseCase;
+    readonly indexText: IndexTextStage;
     readonly queueIndex: QueueDocumentIndexUseCase;
     readonly searchDocuments: SearchDocumentsUseCase;
   };
@@ -524,6 +530,7 @@ export class Container {
     readonly reclaimMoveSources: ReclaimMoveSourcesUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
+    readonly listExportImages: ListTenantExportImagesUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly inspectShardMap: InspectShardMapUseCase;
     readonly locateTenant: LocateTenantUseCase;
@@ -617,6 +624,8 @@ export class Container {
     readonly openImage: OpenDocImageUseCase;
     // The worker's, off `pnpm doc:rerender`: every published page an older renderer wrote.
     readonly rerender: DocRerender;
+    // The worker's, queued by a page delete: a space's images that no text links any more.
+    readonly imageOrphans: DocImageOrphans;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -1365,6 +1374,7 @@ export class Container {
         this.clock,
       ),
       listExports: new ListTenantExportsUseCase(this.authorizer, this.storage),
+      listExportImages: new ListTenantExportImagesUseCase(this.authorizer, this.storage),
       // `hasShardMoves` is read while this constructor runs, so whatever replaces its
       // literal has to be readable then — a field assigned later would be `undefined`.
       inspectShardMap: new InspectShardMapUseCase(
@@ -1645,20 +1655,26 @@ export class Container {
       ),
     };
 
+    const indexText = new IndexTextStage(this.storage);
+    const indexDocument = new IndexDocumentUseCase(
+      this.authorizer,
+      this.embeddings,
+      this.vectors,
+      this.activity,
+      this.routedUnitOfWork,
+    );
+
     this.ai = {
       // Run by the worker's consumer, off the queue the two below feed.
-      indexDocument: new IndexDocumentUseCase(
-        this.authorizer,
-        this.embeddings,
-        this.vectors,
-        this.activity,
-        this.routedUnitOfWork,
-      ),
+      indexDocument,
+      indexQueued: new IndexQueuedDocumentUseCase(indexDocument, indexText),
+      indexText,
       queueIndex: new QueueDocumentIndexUseCase(
         this.authorizer,
         this.queuePublisher,
         this.vectors,
         this.clock,
+        indexText,
       ),
       searchDocuments: new SearchDocumentsUseCase(
         this.authorizer,
@@ -2020,7 +2036,16 @@ export class Container {
         uow,
       ),
       movePage: new MoveDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
-      deletePage: new DeleteDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
+      deletePage: new DeleteDocPageUseCase(
+        auth,
+        spaces,
+        pages,
+        tree,
+        cache,
+        this.activity,
+        uow,
+        this.queuePublisher,
+      ),
       previewPage: new PreviewDocPageUseCase(auth, renderer),
       revisions: new ListDocRevisionsUseCase(auth, pages, spaces),
       revision: new GetDocRevisionUseCase(auth, pages, spaces),
@@ -2054,6 +2079,7 @@ export class Container {
         this.catalogUnitOfWork,
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
+      imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
     };
   }
 

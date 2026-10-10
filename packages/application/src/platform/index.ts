@@ -84,6 +84,11 @@ export {
   type RetentionPolicies,
 } from "./list-retention-policies.use-case.js";
 export {
+  type ListTenantExportImagesInput,
+  ListTenantExportImagesUseCase,
+  type TenantExportImage,
+} from "./list-tenant-export-images.use-case.js";
+export {
   type ListTenantExportsInput,
   ListTenantExportsUseCase,
   type TenantExportObject,

@@ -24,6 +24,8 @@ import type {
   RestoreRequestedDto,
   RetentionUpdateInput,
   TenantDeleteInput,
+  TenantExportDayInput,
+  TenantExportImageDto,
   TenantExportInput,
   TenantMoveInput,
   TenantRetentionUpdateInput,
@@ -75,6 +77,15 @@ export class PlatformMutations {
   public static useExportTenant(client: ApiClient) {
     return useAppMutation<ExportRequestedDto, TenantExportInput>({
       mutationFn: (input) => client.platform.exportTenant(input),
+      invalidates: [],
+    });
+  }
+
+  // A read, fired by a click and never cached: every link in it is presigned and expires,
+  // and the answer goes straight into a saved file.
+  public static useExportImageLinks(client: ApiClient) {
+    return useAppMutation<readonly TenantExportImageDto[], TenantExportDayInput>({
+      mutationFn: (input) => client.platform.listExportImages(input),
       invalidates: [],
     });
   }

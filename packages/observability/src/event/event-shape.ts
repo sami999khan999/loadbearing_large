@@ -159,6 +159,11 @@ export interface EventShape {
     readonly organizationId: string;
     readonly pages: number;
   };
+  readonly "doc.images.swept": {
+    readonly organizationId: string;
+    readonly spaceId: string;
+    readonly images: number;
+  };
   // The ids, not just the count: with no foreign key left, this line is the only place
   // a leaked tenant is named, and a number alone cannot be chased.
   readonly "maintenance.orphans.found": {
@@ -168,6 +173,9 @@ export interface EventShape {
     // Conversation ids named by a member or a message and missing — `PF.1`'s half.
     readonly members: number;
     readonly messages: number;
+  };
+  readonly "maintenance.index_text.swept": {
+    readonly objects: number;
   };
   readonly "cold.partition.restored": {
     readonly table: string;

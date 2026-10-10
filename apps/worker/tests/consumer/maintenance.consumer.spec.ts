@@ -7,6 +7,7 @@ import type {
   TenantRetentionPolicyRecord,
 } from "@loadbearing/application";
 import {
+  IndexTextStage,
   PartitionedTable,
   type PlatformReader,
   ReclaimMoveSourcesUseCase,
@@ -23,6 +24,7 @@ import {
   InMemoryProjectionPolicyRepository,
   InMemoryRetentionPolicyRepository,
   InMemoryShardAssignmentRepository,
+  InMemoryStorageGateway,
   InMemoryStoragePolicyGateway,
   InMemoryTenantMoveGateway,
   InMemoryTenantRetentionPolicyRepository,
@@ -43,6 +45,8 @@ const NOW = new Date("2026-08-15T00:00:00Z");
 const FIRST = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000001");
 const SECOND = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000002");
 const TENANTS = [FIRST, SECOND] as const;
+const SPACE = Identifiers.docSpaceId.parse("018f8c00-0000-7000-8000-000000000031");
+const OTHER_SPACE = Identifiers.docSpaceId.parse("018f8c00-0000-7000-8000-000000000032");
 const ACTOR = Identifiers.userId.parse("018f8c00-0000-7000-8000-000000000099");
 
 // A directory row nothing has moved. Spread under a key and a node.
@@ -145,6 +149,7 @@ function harness(
   );
   const storagePolicy = options.lifecycle ?? new InMemoryStoragePolicyGateway();
   const logger = { emit: vi.fn(), failure: vi.fn() };
+  const storage = new InMemoryStorageGateway();
 
   // Which tenant each unit of work was placed on. `TestContainer`'s `placed` runs the
   // work and records nothing, so an unplaced job is invisible to every other assertion.
@@ -198,6 +203,7 @@ function harness(
         },
       },
     },
+    ai: { indexText: new IndexTextStage(storage) },
     retentionPolicies,
     projectionPolicies,
     platformPolicy,
@@ -228,6 +234,7 @@ function harness(
     projectionPolicies,
     tenantRetentionPolicies,
     storagePolicy,
+    storage,
     logger,
     placements,
     expirations,
@@ -322,6 +329,37 @@ describe("MaintenanceConsumer", () => {
     expect((await assignments.findByKey(Shard.keyOf(SECOND)))?.node).toBe(1);
     expect(emitted(h.logger, "tenant.move.completed")).toEqual([
       { organizationId: SECOND, fromNode: 0, toNode: 1, rows: 3 },
+    ]);
+  });
+
+  it("sweeps a space's unlinked images on the tenant's node and says how many went", async () => {
+    const h = harness();
+    const sweeps: unknown[][] = [];
+    const doc = {
+      imageOrphans: {
+        run: (...args: unknown[]) => {
+          sweeps.push(args);
+          return Promise.resolve(args[1] === SPACE ? 4 : 0);
+        },
+      },
+    };
+    const container = { ...h.container, doc } as unknown as Container;
+
+    await consumerFor(container).handle(
+      job("doc-image-orphans", { organizationId: SECOND, spaceId: SPACE }),
+    );
+    await consumerFor(container).handle(
+      job("doc-image-orphans", { organizationId: FIRST, spaceId: OTHER_SPACE }),
+    );
+
+    expect(h.placements).toEqual([SECOND, FIRST]);
+    expect(sweeps).toEqual([
+      [SECOND, SPACE],
+      [FIRST, OTHER_SPACE],
+    ]);
+    // Silent for the space with nothing to delete.
+    expect(emitted(h.logger, "doc.images.swept")).toEqual([
+      { organizationId: SECOND, spaceId: SPACE, images: 4 },
     ]);
   });
 
@@ -520,6 +558,20 @@ describe("MaintenanceConsumer", () => {
 // `24.1` dropped the ten foreign keys that made a leaked row impossible, so the
 // guarantee moved from the database to this job. Silence is the healthy answer.
 describe("MaintenanceConsumer — the orphan count", () => {
+  // `CR.33`: staged index text outlives its job's retention only if a sweep misses it.
+  it("deletes staged index text older than the failed-job retention", async () => {
+    const { container, logger, storage } = harness();
+    const stage = container.ai.indexText;
+    const day = 24 * 60 * 60 * 1000;
+    await stage.stage(FIRST, "old", NOW.getTime() - 8 * day, "x");
+    const fresh = await stage.stage(FIRST, "new", NOW.getTime() - day, "x");
+
+    await consumerFor(container).handle(job("orphans"));
+
+    expect(storage.keys()).toEqual([fresh]);
+    expect(emitted(logger, "maintenance.index_text.swept")).toEqual([{ objects: 1 }]);
+  });
+
   it("says nothing when every tenant on the node is live", async () => {
     const { container, logger, maintenance } = harness();
     maintenance.orphans = [];

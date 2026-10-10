@@ -27,6 +27,9 @@ export {
 // ── @aws-sdk/lib-storage ─────────────────────────────────────────────────────
 export { Upload } from "@aws-sdk/lib-storage";
 
+// ── @aws-sdk/s3-presigned-post ───────────────────────────────────────────────
+export { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+
 // ── @aws-sdk/s3-request-presigner ────────────────────────────────────────────
 export { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -62,6 +65,7 @@ export {
   type ConversationHeader,
   type ConversationMemberRecord,
   type ConversationPage,
+  type ConversationParticipant,
   type ConversationRecord,
   ConversationRepository,
   type DailyCount,
@@ -71,6 +75,7 @@ export {
   type DocGrantee,
   type DocGrantRecord,
   type DocGrantRepository,
+  DocImageKey,
   type DocPageDraftRecord,
   type DocPageNodeRecord,
   type DocPagePublishedRecord,
@@ -132,6 +137,7 @@ export {
   type OrganizationReader,
   type OutboxGateway,
   type OverrideInput,
+  type OverrideRecord,
   type PartitionArchiveEntry,
   PartitionArchiveGateway,
   type PartitionEstimate,
@@ -149,6 +155,7 @@ export {
   type PlatformPolicyRepository,
   type PlatformReader,
   type PreferenceRecord,
+  type PresignedPost,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.
   Principal,
@@ -174,6 +181,7 @@ export {
   type RetentionPolicyRecord,
   type RetentionPolicyRepository,
   type RetentionStore,
+  type RoleDetails,
   type RolePage,
   type RoleRecord,
   type RoleRepository,

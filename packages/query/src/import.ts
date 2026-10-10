@@ -110,6 +110,8 @@ export type {
   SetMemberActiveInput,
   ShardMapQuery,
   TenantDeleteInput,
+  TenantExportDayInput,
+  TenantExportImageDto,
   TenantExportInput,
   TenantMoveInput,
   TenantRetentionUpdateInput,

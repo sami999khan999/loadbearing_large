@@ -440,6 +440,18 @@ describe("one tenant partition, for every read there is", () => {
       () => rooms.isMember(organizationId, conversationId, reader),
     ],
     [
+      "the held streams' membership check, on its members",
+      PartitionedTable.CONVERSATION_MEMBERS,
+      /join conversation_members/i,
+      () => rooms.findMemberships(organizationId, [{ conversationId, userId: reader }]),
+    ],
+    [
+      "the held streams' membership check, on its conversations",
+      PartitionedTable.CONVERSATIONS,
+      /join conversation_members/i,
+      () => rooms.findMemberships(organizationId, [{ conversationId, userId: reader }]),
+    ],
+    [
       "the member list",
       PartitionedTable.CONVERSATION_MEMBERS,
       /from "conversation_members"/i,
@@ -726,7 +738,14 @@ describe("pinned at every month of the tenant, for the reads that carry no bound
 
   it("the suppression check reads every month", async () => {
     const statement = await capture(
-      () => inbox.unreadSubjectHolders(organizationId, [reader], "message.received", Uuid.v7()),
+      () =>
+        inbox.unreadSubjectHolders(
+          organizationId,
+          [reader],
+          "message.received",
+          Uuid.v7(),
+          Uuid.v7(),
+        ),
       /from "notifications"/i,
     );
 

@@ -1,4 +1,5 @@
 import { type Container, Queue, QueueName, type Redis } from "../import.js";
+import { UtcCron } from "./utc-cron.js";
 
 // Every five minutes: the analytics queue is the one allowed to fall behind. Registered
 // only with an `AnalyticsProjector` — see docs/reference/schedules.md.
@@ -15,11 +16,17 @@ export class ProjectionSchedule {
     const queue = new Queue(QueueName.ANALYTICS, { connection: this.connection });
 
     try {
+      await UtcCron.dropLocal(
+        queue,
+        "project",
+        ProjectionSchedule.PATTERN,
+        ProjectionSchedule.JOB_ID,
+      );
       await queue.add(
         "project",
         {},
         {
-          repeat: { pattern: ProjectionSchedule.PATTERN },
+          repeat: { pattern: ProjectionSchedule.PATTERN, tz: UtcCron.TZ },
           jobId: ProjectionSchedule.JOB_ID,
           removeOnComplete: 20,
           removeOnFail: 100,

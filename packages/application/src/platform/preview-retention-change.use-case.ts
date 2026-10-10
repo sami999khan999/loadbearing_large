@@ -85,13 +85,8 @@ export class PreviewRetentionChangeUseCase {
     };
   }
 
-  // Never a free string, for the reason decision D37 gives: the name reaches DDL.
-  // ──
-  // `forTenant` narrows it to exactly what `UpdateTenantRetentionUseCase` will accept, so
-  // the screen cannot preview an override that would be refused on save: a table with no
-  // ──
-  // tenant key has no per-tenant months, and one the calendar never retires would save,
-  // read back and do nothing.
+  // Never a free string: the name reaches DDL (D37). `forTenant` narrows it to what
+  // `UpdateTenantRetentionUseCase` accepts, so the screen never previews a refused override.
   private static assertKnownTable(tableName: string, forTenant: boolean): PartitionedTableName {
     const known = PartitionedTable.MONTH_PARTITIONED.find(
       (entry) =>

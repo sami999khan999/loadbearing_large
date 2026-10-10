@@ -15,6 +15,8 @@ const Schema = z
     // `platform_policy.replica_reads_enabled` is on, and only once it has caught up.
     DATABASE_REPLICA_URL: z.url().optional(),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(20),
+    // Read by `cluster.mjs`, before any process parses this; declared so a bad value fails here.
+    WEB_DATABASE_CONNECTIONS: z.coerce.number().int().min(1).default(100),
     DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(30_000),
     // Today an unreachable Postgres hangs the request for the OS default, which is
     // longer than every timeout in front of it.
@@ -125,9 +127,21 @@ const Schema = z
     // finish after SIGTERM. Read here so the container is disposed only once that is over.
     SERVER_SHUTDOWN_TIMEOUT: z.coerce.number().int().positive().default(5),
   })
-  // Three cross-field rules, and each earns the exception: `bootstrap` with no slug
-  // enrols nobody, ClickHouse's defaults cannot reach its container, a tier needs both keys.
+  // Cross-field rules, and each earns the exception: production on http, `bootstrap` with no
+  // slug, ClickHouse's defaults that cannot reach its container, a tier missing a key.
   .superRefine((env, ctx) => {
+    // The session cookie is `Secure` only under https, so production on http would ship it
+    // in the clear. A loopback host is a production build tried locally, and is allowed.
+    const auth = new URL(env.AUTH_URL);
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(auth.hostname);
+    if (env.NODE_ENV === "production" && auth.protocol === "http:" && !loopback) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["AUTH_URL"],
+        message: "Use an https AUTH_URL in production: on http the session cookie is not Secure.",
+      });
+    }
+
     // One without the other is a transition that silently never happens.
     if (!env.S3_COLD_STORAGE_CLASS !== !env.S3_COLD_TRANSITION_DAYS) {
       ctx.addIssue({
@@ -211,8 +225,16 @@ export class Env {
   // with a field path, not 500 on the first sign-in an hour later.
   private static readonly parsed = Schema.parse(process.env);
 
+  // The rules themselves, so a spec can try values without changing `process.env`.
+  public static readonly schema = Schema;
+
   public static get isProduction(): boolean {
     return Env.parsed.NODE_ENV === "production";
+  }
+
+  // Served over https, which is what decides HSTS and the cookie's `Secure`.
+  public static get isSecure(): boolean {
+    return Env.parsed.AUTH_URL.startsWith("https://");
   }
 
   // The absolute base Better Auth signs cookies against. The browser never needs it, and

@@ -21,6 +21,7 @@ export const doc = {
   "doc.pager.next": "Next",
   "doc.copy.markdown": "Copy Markdown",
   "doc.copy.copied": "Copied",
+  "doc.copy.failed": "Copy failed",
   "doc.code.copy": "Copy",
   "doc.code.copied": "Copied",
   "doc.open.label": "Open",
@@ -80,6 +81,7 @@ export const doc = {
 
   // ── the page tree ──
   "doc.tree.empty": "No pages yet. Add the first one.",
+  "doc.tree.label": "Pages",
   "doc.tree.add": "Add",
   "doc.tree.addUnder": "Add under {title}",
   "doc.tree.moveUp": "Move {title} up",
@@ -108,6 +110,7 @@ export const doc = {
   "doc.page.markdownHint":
     'Markdown. `> [!NOTE]` makes a callout. `::::cards` around `:::card{title="…" href="…" icon="…"}` makes a card grid; `::::tabs` around `:::tab{title="…"}` makes tabs; `:::steps` numbers its `###` headings; `:::accordion{title="…"}` folds.',
   "doc.editor.write": "Write",
+  "doc.editor.mode": "Editor mode",
   "doc.editor.preview": "Preview",
   "doc.editor.previewEmpty": "Nothing to preview yet.",
   "doc.editor.save": "Save draft",
@@ -124,6 +127,10 @@ export const doc = {
   "doc.editor.imageTooLarge": "Images can be at most 5 MB.",
   "doc.editor.imageType": "Use a PNG, JPEG, WebP, GIF or AVIF image.",
   "doc.editor.back": "All pages",
+  "doc.editor.leaveTitle": "Leave with unsaved changes?",
+  "doc.editor.leaveDescription": "What you typed since the last save will be lost.",
+  "doc.editor.leave": "Leave",
+  "doc.editor.stay": "Keep editing",
 
   // ── private access ──
   "doc.grant.title": "Who can read it",
@@ -144,6 +151,7 @@ export const doc = {
   "doc.grant.expiresHint": "Leave empty to keep it until it is revoked.",
   "doc.grant.save": "Grant access",
   "doc.grant.revoke": "Revoke",
+  "doc.grant.revokeFor": "Revoke access for {label}",
   "doc.grant.expiresOn": "until {date}",
   "doc.grant.expired": "expired",
   "doc.grant.forever": "no end date",
@@ -153,7 +161,21 @@ export const doc = {
   "doc.revision.none": "Not published yet.",
   "doc.revision.item": "Revision {revision}",
   "doc.revision.restore": "Restore to draft",
+  "doc.revision.restoreFor": "Restore revision {revision} to the draft",
   "doc.revision.restored": "Revision {revision} is now the draft. Publish it to make it live.",
+  "doc.revision.restoreUnsaved": "Save the draft before restoring a revision.",
+  "doc.revision.compare": "Compare",
+  "doc.revision.compareFor": "Compare revision {revision} with the draft",
+  "doc.revision.compareTitle": "Revision {revision} against the draft",
+  "doc.revision.compareHint":
+    "Removed lines are in the revision only; added lines are in the saved draft only.",
+  "doc.revision.close": "Close",
+  "doc.revision.loading": "Loading the revision…",
+  "doc.revision.tooLarge": "These two texts differ too much to compare line by line.",
+  "doc.revision.same": "The draft is the same as this revision.",
+  "doc.revision.added": "Added:",
+  "doc.revision.removed": "Removed:",
+  "doc.revision.unfold": "Show {count} unchanged lines",
   "doc.access.legend": "Access",
   "doc.access.hint":
     "Readers see this only when every link set here passes. Leave all four as None for no link.",

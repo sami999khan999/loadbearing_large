@@ -75,9 +75,13 @@ export const coreEvents = {
   "tenant.spares.replenished": { level: "info" },
   // Pages an older renderer wrote, written again. Silent when there were none.
   "doc.pages.rerendered": { level: "info" },
+  // Images no text linked, deleted from one space. Silent when there were none.
+  "doc.images.swept": { level: "info" },
   // `warn`, not `info`: a non-zero count is a tenant delete that did not finish, and
   // since `24.1` the database will not say so on its own.
   "maintenance.orphans.found": { level: "warn" },
+  // Staged index text no job can read any more. Silent when there was none.
+  "maintenance.index_text.swept": { level: "info" },
   // One per tenant-month refilled from cold storage. Idempotent through the
   // `ReplacingMergeTree`, so a second run over the same month is a no-op.
   "cold.partition.reprojected": { level: "info" },

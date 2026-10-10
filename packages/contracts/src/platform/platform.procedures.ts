@@ -55,6 +55,13 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantExport)
     .output(z.array(PlatformContract.tenantExportObject).readonly());
 
+  // Its own read, because the list leaves the images out: a tenant's thousands of them
+  // would bury the files an operator came for.
+  public static readonly listExportImages = oc
+    .route({ method: "GET", path: "/platform/tenants/export/images" })
+    .input(PlatformContract.tenantExportDay)
+    .output(z.array(PlatformContract.tenantExportImage).readonly());
+
   public static readonly listGaps = oc
     .route({ method: "GET", path: "/platform/projection/gaps" })
     .output(z.array(PlatformContract.projectionGap).readonly());
@@ -233,6 +240,7 @@ export class PlatformProcedures {
     deleteTenant: PlatformProcedures.deleteTenant,
     exportTenant: PlatformProcedures.exportTenant,
     listExports: PlatformProcedures.listExports,
+    listExportImages: PlatformProcedures.listExportImages,
     updateRetention: PlatformProcedures.updateRetention,
     shardMap: PlatformProcedures.shardMap,
     locateTenant: PlatformProcedures.locateTenant,

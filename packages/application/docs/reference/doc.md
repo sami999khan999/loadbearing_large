@@ -270,7 +270,18 @@ The revision number is a counter on the page row, moved under the same lock. It 
 month level.
 
 A restore writes the revision's text into the **draft**. Making it live again is a publish, which
-is a second, deliberate step.
+is a second, deliberate step. A restore remounts the editor, so Restore stays disabled while the
+editor holds unsaved edits; autosave clears them within two seconds.
+
+The editor saves two seconds after the last key. Leaving the page inside that window, by a link or
+by closing the tab, asks first: the route holds a router blocker and `beforeunload` while the form
+reports unsaved edits.
+
+A revision can be compared with the draft before restoring it. The editor's history list opens a
+dialog that fetches the revision lazily, on the first Compare, and diffs its Markdown against the
+saved draft line by line in the browser (`diff`). Long unchanged runs fold to three lines of
+context. The server holds no diff: the revision is cached forever, so a second Compare costs
+nothing. Unsaved edits in the editor are not part of the comparison.
 
 ## Structure is live, content is published
 
@@ -301,16 +312,18 @@ wrote that text, and a `<script>` in a code sample is still just text in a searc
 
 **The palette searches the whole docs, not the open space.** In `/doc` it covers every space of
 the organization the reader may see, and in `/docs` every platform space they may read. Spaces
-are filtered first, by audience and access links, then each hit's page is checked against the
-space's tree as this reader sees it, filtered once per search. So a hidden page, and anything
+are filtered first, by audience and access links, and the index is asked about those spaces only,
+so a space the reader cannot see never takes a place among the ranked hits. Then each hit's page is
+checked against the space's tree as this reader sees it, filtered once per search. So a hidden page, and anything
 under one, never appears. The open space's hits come first; every other space follows under its
 own name, in the order the server ranked them.
 
 ## Images
 
 An image is uploaded straight from the browser to storage. `docPage.upload` checks the key,
-the type and the size, then signs one `PUT`, which is good for five minutes. The app never
-holds the bytes.
+the type and the declared size, then signs one `POST` policy, which is good for five minutes.
+Storage enforces the policy: the length range and the content type are conditions of the signature,
+so a client that declares one size and sends another is refused. The app never holds the bytes.
 
 **The key is the index.** An image lives at `doc/<organization>/<space>/<id>.<type>`, so there
 is no table of images to keep in step:
@@ -319,8 +332,23 @@ is no table of images to keep in step:
 |---|---|
 | A space is deleted | its prefix, after the commit |
 | A tenant is purged | its prefix, beside the partition drop |
+| A page is deleted | the space's unlinked images, an hour later, by `doc-image-orphans` |
 
-A page deleted on its own leaves its images in place, because another page may link them.
+**A page's delete does not delete its images**, because another page may link them. It queues
+one `doc-image-orphans` job for the space instead, held back an hour and deduplicated while it
+waits. The worker places the job on the tenant's node and `DocImageOrphans` does the rest:
+
+- it reads every link to the space's images from any page in the tenant, in drafts, published
+  pages and all revisions, as a short list of links rather than the bodies. Any space's page may
+  link the image, since it is served to whoever may read its own space;
+- it lists the space's prefix a page at a time and deletes each image nothing links;
+- it **skips anything uploaded in the last hour**, read off the version 7 id in the file name,
+  because an upload is signed before the text that links it is saved. An unsaved draft keeps its
+  images.
+
+A restored revision's images are safe for the same reason: revisions are searched too. A key
+the class would not have written is never deleted. A finished job logs `doc.images.swept` with the
+count, and nothing when every image was still linked.
 
 A page links `/api/doc-image/<organization>/<space>/<type>/<id>`, never the bucket.
 
@@ -336,6 +364,7 @@ A page links `/api/doc-image/<organization>/<space>/<type>/<id>`, never the buck
 served to every reader of the page.
 
 > [!IMPORTANT]
-> A browser upload is a cross-origin `PUT`. MinIO allows every origin by default. An S3 bucket
-> needs a CORS rule allowing `PUT` from the app's origin, or every upload fails in the browser
-> with a CORS error and nothing in the app's logs.
+> A browser upload is a cross-origin `POST`. MinIO allows every origin by default. An S3 or R2
+> bucket needs a CORS rule allowing `POST` from the app's origin, or every upload fails in the
+> browser with a CORS error and nothing in the app's logs. See
+> [the bucket's CORS rule](../../../../docs/infra/deployment.md#the-buckets-cors-rule).
