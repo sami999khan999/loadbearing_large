@@ -12,6 +12,7 @@ import {
   Authorizer,
   BetterAuthSessionGateway,
   BetterAuthSessionResolver,
+  BullMqQueueControlGateway,
   BullMqQueuePublisher,
   type CacheStore,
   CapabilityCache,
@@ -73,6 +74,7 @@ import {
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
   GetWidgetPreferencesUseCase,
+  GetWorkerFleetUseCase,
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -136,6 +138,8 @@ import {
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
+  PauseWorkerProcessUseCase,
+  PauseWorkerQueueUseCase,
   PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
@@ -180,6 +184,7 @@ import {
   PgUserReader,
   PgVectorStore,
   PgWidgetPreferenceRepository,
+  PgWorkerQueueSettingsRepository,
   type PlatformPolicyRepository,
   type PlatformReader,
   PreviewDocPageUseCase,
@@ -189,7 +194,9 @@ import {
   type ProjectionPolicyRepository,
   PublishDocPageUseCase,
   PurgeOrganizationUseCase,
+  type QueueControlGateway,
   QueueDocumentIndexUseCase,
+  QueueName,
   type QueuePublisher,
   type RateLimitStore,
   ReadDocNavUseCase,
@@ -204,6 +211,7 @@ import {
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  RedisWorkerFleetGateway,
   ReinstateAccountUseCase,
   type RelayedActivityStore,
   RelocateTenantUseCase,
@@ -212,6 +220,7 @@ import {
   type ReplicaHealth,
   ReprojectPartitionUseCase,
   ResendInvitationUseCase,
+  ResetWorkerProcessUseCase,
   RestoreDocRevisionUseCase,
   RestorePartitionUseCase,
   type RetentionPolicyRepository,
@@ -225,6 +234,7 @@ import {
   SaveDocGrantUseCase,
   SaveDocPageUseCase,
   SavePlanUseCase,
+  SaveQueueAutoscaleUseCase,
   SERVER_CATALOG,
   SearchDocsUseCase,
   SearchDocumentsUseCase,
@@ -234,6 +244,7 @@ import {
   SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
+  SetWorkerProcessQueuesUseCase,
   type ShardAssignmentRepository,
   type ShardConfig,
   type ShardingStrategy,
@@ -271,6 +282,8 @@ import {
   type UserId,
   type VectorStore,
   WatchConversationUseCase,
+  type WorkerFleetGateway,
+  type WorkerQueueSettingsRepository,
 } from "../import.js";
 import {
   ContentMailRenderer,
@@ -375,6 +388,7 @@ export class Container {
   private poolWaitingTicks = 0;
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
+  private readonly queueControlGateway: BullMqQueueControlGateway;
   // Held concretely for the same reason as the two above: `dispose()` needs `close()`,
   // and `EmailSender` is a port that says nothing about a transport's lifetime.
   private readonly emailSender: SmtpEmailSender;
@@ -562,6 +576,12 @@ export class Container {
     readonly updateFlagTarget: UpdateFlagTargetUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
+    readonly workerFleet: GetWorkerFleetUseCase;
+    readonly pauseWorkerQueue: PauseWorkerQueueUseCase;
+    readonly saveQueueAutoscale: SaveQueueAutoscaleUseCase;
+    readonly pauseWorkerProcess: PauseWorkerProcessUseCase;
+    readonly setWorkerProcessQueues: SetWorkerProcessQueuesUseCase;
+    readonly resetWorkerProcess: ResetWorkerProcessUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
   // the worker's daily reconcile are its only two readers.
@@ -572,6 +592,11 @@ export class Container {
   // Read once per analytics run and once per retention run. Usually empty: an absent
   // row is "projected, with the default TTL".
   public readonly projectionPolicies: ProjectionPolicyRepository;
+  // The worker fleet: the live process registry, each queue's global pause and counts,
+  // and the autoscale rows. The worker's supervisor and the Workers page share them.
+  public readonly workerFleet: WorkerFleetGateway;
+  public readonly queueControl: QueueControlGateway;
+  public readonly workerQueueSettings: WorkerQueueSettingsRepository;
   // One row, read at the top of every analytics job. An absent row is the defaults,
   // so a deployment that never opens the screen behaves as it always did.
   public readonly platformPolicy: PlatformPolicyRepository;
@@ -770,6 +795,9 @@ export class Container {
     );
 
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
+    this.queueControlGateway = new BullMqQueueControlGateway(this.redis.queueClient());
+    this.queueControl = this.queueControlGateway;
+    this.workerFleet = new RedisWorkerFleetGateway(this.redis.queueClient());
     this.queue = this.queuePublisher;
     // **Two, bound per slice** — decision D16. The port stays `run(work)`, so no
     // use-case knows which one it was handed; a mis-binding fails the first spec.
@@ -1314,7 +1342,64 @@ export class Container {
       this.shards,
     );
 
+    this.workerQueueSettings = new PgWorkerQueueSettingsRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    // The queues this deployment runs: analytics only with ClickHouse, so the page never
+    // reports a queue unserved that no worker could serve.
+    const servedQueues = QueueName.ALL.filter(
+      (queue) => queue !== QueueName.ANALYTICS || this.hasProjector,
+    );
+
     this.platformAdmin = {
+      workerFleet: new GetWorkerFleetUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.queueControl,
+        this.workerQueueSettings,
+        servedQueues,
+      ),
+      pauseWorkerQueue: new PauseWorkerQueueUseCase(
+        this.authorizer,
+        this.workerQueueSettings,
+        this.queueControl,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      saveQueueAutoscale: new SaveQueueAutoscaleUseCase(
+        this.authorizer,
+        this.workerQueueSettings,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      pauseWorkerProcess: new PauseWorkerProcessUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      setWorkerProcessQueues: new SetWorkerProcessQueuesUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+        servedQueues,
+      ),
+      resetWorkerProcess: new ResetWorkerProcessUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
       deleteOrganization: new DeleteOrganizationUseCase(
         this.authorizer,
         new PgTenantRepository(this.cluster, this.transactions, this.shards),
@@ -1951,6 +2036,7 @@ export class Container {
     clearInterval(this.poolProbe);
     // Each step on its own: one close that rejects must not leave the pools after it open.
     await this.closing("queue", () => this.queuePublisher.close());
+    await this.closing("queue-control", () => this.queueControlGateway.close());
     await this.closing("redis", () => this.redis.close());
     await this.closing("clickhouse", async () => this.clickhouse?.close());
     // Before Postgres only because nothing else depends on it: an unclosed transport is

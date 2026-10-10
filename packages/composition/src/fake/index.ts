@@ -9,6 +9,7 @@ export { InMemoryOrganizationReader } from "./in-memory-organization.reader.js";
 export { InMemoryOutboxGateway } from "./in-memory-outbox.gateway.js";
 export { InMemoryPlatformPolicyRepository } from "./in-memory-platform-policy.repository.js";
 export { InMemoryProjectionPolicyRepository } from "./in-memory-projection-policy.repository.js";
+export { InMemoryQueueControlGateway } from "./in-memory-queue-control.gateway.js";
 export { InMemoryRateLimitStore } from "./in-memory-rate-limit.store.js";
 export { InMemoryRealtimeHub } from "./in-memory-realtime.hub.js";
 export { InMemoryRealtimeSubscriber } from "./in-memory-realtime.subscriber.js";
@@ -26,6 +27,8 @@ export { InMemoryTenantRetentionPolicyRepository } from "./in-memory-tenant-rete
 export { InMemoryUserReader } from "./in-memory-user.reader.js";
 export { InMemoryVectorStore } from "./in-memory-vector.store.js";
 export { InMemoryWidgetPreferenceRepository } from "./in-memory-widget-preference.repository.js";
+export { InMemoryWorkerFleetGateway } from "./in-memory-worker-fleet.gateway.js";
+export { InMemoryWorkerQueueSettingsRepository } from "./in-memory-worker-queue-settings.repository.js";
 export { type RecordedActivity, RecordingActivityLogger } from "./recording-activity.logger.js";
 export { RecordingCapabilityInvalidator } from "./recording-capability.invalidator.js";
 export {
