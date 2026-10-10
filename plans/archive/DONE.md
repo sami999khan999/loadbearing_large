@@ -1581,6 +1581,25 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
   to the keys region. `d9bafe1d`.
 - [x] `RW.6` **`VectorStore` declared `sourceOf` twice** `done: 2026-10-10` — since `88d3496b`;
   one declaration went. Big kit only: lite's port never had the second.
+- [x] `RW.1` **The doc editor dropped unsaved edits without a word** `done: 2026-10-10` — the
+  form reports its dirty state; the route holds a router blocker and `beforeunload` while it is
+  set, behind a "Leave with unsaved changes?" dialog, and Restore waits until the draft is saved.
+  Proof: `doc-editor.form.spec`, "reports unsaved edits", and "holds Restore while the editor has
+  unsaved edits". `7ddc6f96`.
+- [x] `RW.2` **A mail job carried a live invite, reset link or 2FA code for a week**
+  `done: 2026-10-10` — the auth and invitation mailers mark their mail `credential`, and its job
+  is dropped a minute after sending and an hour after its last failure. Proof: `queued-mail.spec`,
+  and `redis.smoke.spec`, "shortens a failed job's keep". `1884a7ba`.
+- [x] `RW.4` **The exports screen could not hand out the doc-image copies** `done: 2026-10-10` —
+  `platform.listExportImages` lists one export day's copies with hour-long links, and the screen
+  saves them as a tab-separated file a `curl` loop fetches. Proof:
+  `export-organization.use-case.spec`, `tenant-export.panel.spec`. `305447b7`.
+- [x] `RW.5` **Two enrolment paths could still hand back a deactivated tenant**
+  `done: 2026-10-10` — the bootstrap enroller declines a deactivated membership, and the claimer
+  skips an invitation to a tenant that deactivated the user, leaving it pending, and refuses a
+  suspended user. The session hook already refused a suspended user before enrolling. Proof:
+  three cases in `pg-bootstrap-membership.enroller.spec` and `pg-invitation.claimer.spec`, each
+  failing without the fix. `21070d21`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
@@ -1814,6 +1833,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **`RW.1`, `RW.2`, `RW.4` and `RW.5` closed, in both kits.** The editor's leave guard, short-lived credential mail jobs, the export image links file, and the two enrolment paths. §19 keeps `RW.3`, which is big-kit only |
 | 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's five open items, `RW.1`–`RW.5`, and closes `RW.6`–`RW.23`. Each fix landed here first and was ported to lite |
 | 2026-10-10 | @sami | **`BACKLOG.md` §18 opened with `BL.1`, from lite.** The Vitest worker timeout at the end of the `tooling/scripts` run, which lite waits on this kit to fix. It did not reproduce in three runs today |
 | 2026-10-10 | @sami | **`DC.3` and `DC.8` closed, found built by §17's port from lite.** The re-render job and the card icons both arrived with lite's docs system; `BACKLOG.md`'s table now counts §15 as 7 open and lists §17 |

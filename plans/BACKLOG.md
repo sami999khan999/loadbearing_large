@@ -36,7 +36,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 2 | 7 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
-| 19 | Review of 2026-10-10 | 5 | 18 |
+| 19 | Review of 2026-10-10 | 1 | 22 |
 
 Sections 2, 4, 5, 7, 8, 9, 12 and 18 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9` and `BL.1`. Their entries
@@ -269,21 +269,11 @@ lists all eight pages plus Team, Roles and Docs, and the reader renders blocks.
 
 ## 19. Review of 2026-10-10 — what is left
 
-Two reviewers read the code both kits share after the 2026-10-10 fixes. Of nineteen findings, one
-was false (oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET
-reaches a mutation) and eighteen are fixed, in [`archive/DONE.md`](archive/DONE.md) §19. IDs are
-`RW.<n>`, new. Lite holds the shared ones under `BL.<n>` with the ID beside it.
+Two reviewers read the code both kits share after the 2026-10-10 fixes. One finding was false
+(oRPC's fetch `RPCHandler` already adds `StrictGetMethodPlugin`, so no cross-site GET reaches a
+mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
+[`archive/DONE.md`](archive/DONE.md) §19, and lite has each shared one too. One is left.
 
-- [ ] `RW.1` **The doc editor drops unsaved edits without a word.** Autosave runs two seconds
-  after the last key (`packages/feature/src/doc/doc-editor.form.tsx`, `AUTOSAVE_MS`), and nothing
-  registers `beforeunload` or a router blocker. Leaving within two seconds, or restoring a
-  revision, which remounts the form, loses what was typed. **Fix:** block navigation and unload
-  while dirty, and flush `persist()` before a restore.
-- [ ] `RW.2` **A mail job carries a live invite, reset link or 2FA code.** `InviteMemberUseCase`
-  stores only `token_hash`, but `queued-invitation.mailer.ts` and `queued-auth.mailer.ts` put the
-  raw URL or code in the job's `params`, kept an hour after success and a week after the last
-  failure (`FAILED_KEEP`). A Redis dump or `queue:replay` tooling exposes them. **Fix:** render in
-  the producer, encrypt `params` under `MAIL_SECRET_KEY`, or keep failed mail jobs briefly.
 - [ ] `RW.3` **An archived `doc_revision` month makes its images look unlinked.** `DocImageOrphans`
   reads only revisions still in Postgres, and `doc_revision` is a partitioned table the retention
   pass can archive. Once a month is in cold storage, the next orphan sweep in that space deletes
@@ -291,14 +281,6 @@ reaches a mutation) and eighteen are fixed, in [`archive/DONE.md`](archive/DONE.
   kit only: lite archives nothing. **Fix:** read `partition_archive` for the space's archived
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
-- [ ] `RW.4` **The exports screen cannot hand out the doc-image copies.** `DC.6` copies them into
-  the export, and `list-tenant-exports.use-case.ts` leaves `doc-image/` keys out of the list so a
-  tenant's thousands of images do not bury its tables. An operator gets the manifest, which names
-  them, but no download. **Fix:** a zip, or a presigned listing behind the manifest.
-- [ ] `RW.5` **Two enrolment paths were not checked for the deactivated-membership loop.**
-  `PgPersonalOrganizationEnroller.enrol` now returns only an active membership; the bootstrap and
-  claim paths were not read for the same pattern, and a suspended user with an active membership
-  still enrols. **Check** both and decide what a suspended user's session should hold.
 
 ---
 
