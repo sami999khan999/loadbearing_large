@@ -13,6 +13,9 @@ a boot failure rather than a 500 an hour later.
     pnpm install
     node -e "require('fs').copyFileSync('.env.example', '.env')"
 
+Then set a real `AUTH_SECRET` in `.env` (`openssl rand -base64 32`). The template's `change-me` is
+too short for the schema on purpose, so a placeholder can never boot and reach production.
+
 **2 · Host ports, if any are taken.** Every published port is the well-known one with a `1` in
 front — Postgres on `15432`, Redis on `16379` — so this stack does not fight another one on your
 machine for `5432`. Inside the compose network nothing moved: `postgres:5432` is still `postgres:5432`.
