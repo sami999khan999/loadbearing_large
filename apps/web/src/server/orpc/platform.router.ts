@@ -42,6 +42,11 @@ export class PlatformRouter {
     context.container.platformAdmin.listExports.execute(context.principal, input),
   );
 
+  public static readonly listExportImages = authed.platform.listExportImages.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.listExportImages.execute(context.principal, input),
+  );
+
   public static readonly listGaps = authed.platform.listGaps.handler(({ context }) =>
     context.container.platformAdmin.listGaps.execute(context.principal),
   );
@@ -245,6 +250,7 @@ export class PlatformRouter {
     deleteTenant: PlatformRouter.deleteTenant,
     exportTenant: PlatformRouter.exportTenant,
     listExports: PlatformRouter.listExports,
+    listExportImages: PlatformRouter.listExportImages,
     updateRetention: PlatformRouter.updateRetention,
     shardMap: PlatformRouter.shardMap,
     locateTenant: PlatformRouter.locateTenant,

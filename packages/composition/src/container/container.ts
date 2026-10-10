@@ -107,6 +107,7 @@ import {
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
+  ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
   LocateTenantUseCase,
@@ -529,6 +530,7 @@ export class Container {
     readonly reclaimMoveSources: ReclaimMoveSourcesUseCase;
     readonly exportOrganization: ExportOrganizationUseCase;
     readonly listExports: ListTenantExportsUseCase;
+    readonly listExportImages: ListTenantExportImagesUseCase;
     readonly inspectStatus: InspectPlatformStatusUseCase;
     readonly inspectShardMap: InspectShardMapUseCase;
     readonly locateTenant: LocateTenantUseCase;
@@ -1372,6 +1374,7 @@ export class Container {
         this.clock,
       ),
       listExports: new ListTenantExportsUseCase(this.authorizer, this.storage),
+      listExportImages: new ListTenantExportImagesUseCase(this.authorizer, this.storage),
       // `hasShardMoves` is read while this constructor runs, so whatever replaces its
       // literal has to be readable then — a field assigned later would be `undefined`.
       inspectShardMap: new InspectShardMapUseCase(

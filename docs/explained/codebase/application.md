@@ -224,6 +224,7 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 | `list-projection-policies.use-case.ts` | Lists every audit action and whether it is copied to the analytics store and for how long. |
 | `list-retention-policies.use-case.ts` | Lists every partitioned table with how many months it is kept hot and in cold storage, and the analytics store's expiry. |
 | `list-tenant-exports.use-case.ts` | Lists one organization's finished exports with short-lived download links. |
+| `list-tenant-export-images.use-case.ts` | Lists one export's copied doc images, each with an hour-long download link, for the exports screen to save as a file. |
 | `list-tenant-storage.use-case.ts` | Shows how much cold storage each organization uses, and one organization's months when named. |
 | `locate-tenant.use-case.ts` | Finds which database node an organization (by ID or slug) lives on. |
 | `move-tenant.use-case.ts` | The request half of moving an organization to another database node: checks every guard and queues the move job. |

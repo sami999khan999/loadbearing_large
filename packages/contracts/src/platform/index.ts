@@ -51,6 +51,8 @@ export {
   type ShardNodeDto,
   type ShardTenantDto,
   type TenantDeleteInput,
+  type TenantExportDayInput,
+  type TenantExportImageDto,
   type TenantExportInput,
   type TenantExportObjectDto,
   type TenantLocationDto,

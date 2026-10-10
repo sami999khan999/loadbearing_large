@@ -114,6 +114,7 @@ export {
   ListProjectionPoliciesUseCase,
   ListRetentionPoliciesUseCase,
   ListRolesUseCase,
+  ListTenantExportImagesUseCase,
   ListTenantExportsUseCase,
   ListTenantStorageUseCase,
   LocateTenantUseCase,
