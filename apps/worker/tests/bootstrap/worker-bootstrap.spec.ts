@@ -1,5 +1,5 @@
 import type { Container } from "@loadbearing/composition";
-import { TestContainer } from "@loadbearing/composition";
+import { InMemoryWorkerFleetGateway, TestContainer } from "@loadbearing/composition";
 import type { RedisConnection } from "@loadbearing/infrastructure";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkerBootstrap } from "../../src/bootstrap/worker-bootstrap.js";
@@ -27,8 +27,14 @@ const wait = (ms: number): Promise<void> =>
 
 // The lane list `start()` fills. Reaching into it is what lets this spec drain a bootstrap
 // without a live Redis behind a real BullMQ worker for every consumer.
-function workersOf(bootstrap: WorkerBootstrap): Closeable[] {
-  return (bootstrap as unknown as { supervisor: { lanes: Closeable[] } }).supervisor.lanes;
+function workersOf(bootstrap: WorkerBootstrap): { push(...workers: Closeable[]): void } {
+  const lanes = (bootstrap as unknown as { supervisor: { lanes: Map<string, unknown> } }).supervisor
+    .lanes;
+  return {
+    push: (...workers) => {
+      for (const worker of workers) lanes.set(`lane-${lanes.size}`, { worker });
+    },
+  };
 }
 
 function harness(redisClose: () => Promise<void> = () => Promise.resolve()) {
@@ -37,6 +43,7 @@ function harness(redisClose: () => Promise<void> = () => Promise.resolve()) {
   const logger = { emit: vi.fn(), failure: vi.fn() };
   const container = {
     ...TestContainer.build(),
+    workerFleet: new InMemoryWorkerFleetGateway(),
     logger,
     dispose: vi.fn(async () => undefined),
   } as unknown as Container;

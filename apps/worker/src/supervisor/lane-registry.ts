@@ -7,8 +7,14 @@ import {
   OutboxConsumer,
 } from "../consumer/index.js";
 import { Env } from "../env.js";
-import { type Container, QueueName, type Redis, type Worker } from "../import.js";
-import { type QueueKey, QueueLimits } from "./queue-limits.js";
+import {
+  type Container,
+  type QueueKey,
+  QueueLimits,
+  QueueName,
+  type Redis,
+  type Worker,
+} from "../import.js";
 
 // One queue served inside one process: the consumer that handles it, the concurrency it
 // starts at, and the variable an operator changes to move that number.
@@ -111,6 +117,13 @@ export class LaneRegistry {
       }
     }
 
+    return this.factories.filter((factory) => requested.includes(factory.queue));
+  }
+
+  // The dashboard's list, which was valid when it was saved but may name a lane this
+  // build lacks — analytics without ClickHouse. Those are skipped rather than fatal.
+  public available(requested: readonly string[] | undefined): readonly LaneFactory[] {
+    if (requested === undefined) return this.factories;
     return this.factories.filter((factory) => requested.includes(factory.queue));
   }
 }

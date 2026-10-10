@@ -1,5 +1,11 @@
 import { Env } from "../env.js";
-import { type Container, QueueName, type RedisConnection } from "../import.js";
+import {
+  type Container,
+  hostname,
+  QueueName,
+  type RedisConnection,
+  randomBytes,
+} from "../import.js";
 import {
   CleanupSchedule,
   DigestSchedule,
@@ -21,16 +27,26 @@ export class WorkerBootstrap {
     private readonly container: Container,
     private readonly redis: RedisConnection,
   ) {
+    // Unique per boot, so a restarted process is a new row and never inherits the
+    // overrides the dashboard set on the one before it.
+    const host = hostname();
     this.supervisor = new WorkerSupervisor(
       LaneRegistry.forContainer(container, () => redis.queueClient()),
+      container,
+      {
+        id: `${host}-${process.pid}-${randomBytes(2).toString("hex")}`,
+        host,
+        startedAt: new Date(),
+      },
       Env.processMaxConcurrency,
+      Env.queues,
     );
   }
 
   public async start(): Promise<void> {
     // Before the schedules register. Mail is in the default list, and a process that leaves
     // it out needs another service that serves it: every sign-up's mail is a job.
-    this.supervisor.start(Env.queues);
+    await this.supervisor.start();
 
     // Once at boot, before the schedules: the monthly cron only helps a worker that was
     // awake on the first, and the runway running out is every write in the system failing.
@@ -63,11 +79,11 @@ export class WorkerBootstrap {
   // Off the lanes that actually started, never the consumers in the tree: a lane this
   // process does not serve holds no connection and must not be counted.
   private warnIfOversubscribed(): void {
-    // `?? 1` is BullMQ's own default. Mail is left out: a send holds an SMTP socket, never
-    // a database connection, and counting it made the defaults sum to the pool exactly.
+    // Mail is left out: a send holds an SMTP socket, never a database connection, and
+    // counting it made the defaults sum to the pool exactly.
     const concurrency = this.supervisor.workers
       .filter((worker) => worker.name !== QueueName.MAIL)
-      .reduce((sum, worker) => sum + (worker.opts.concurrency ?? 1), 0);
+      .reduce((sum, worker) => sum + worker.concurrency, 0);
     const poolMax = Env.databasePoolMax;
     if (concurrency <= poolMax) return;
 
