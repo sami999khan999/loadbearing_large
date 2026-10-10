@@ -37,13 +37,11 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
-| 21 | Worker control — [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md) | 1 | — |
 | 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | — |
 
-Sections 2, 4, 5, 7, 8, 9, 12, 18 and 20 are closed in full: 45 defects, 6 buried items, 9
-verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1` and the final
-check's 17. Their entries
-are in `archive/DONE.md` under the same numbers.
+Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
+verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
+check's 17 and `WC.1`. Their entries are in `archive/DONE.md` under the same numbers.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for
 a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a provisioned server.
@@ -285,18 +283,6 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
 
-## 21. Worker control — the static half built
-
-- [ ] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md).** A platform `Workers`
-  page: live worker processes and their queues, pause and resume per queue, per process and per
-  lane, runtime queue reassignment within a second, and in-process concurrency autoscaling
-  between a min and a max. The app never starts processes; the host does. Lite takes the
-  `WORKER_QUEUES` subset first and copies the rest back when it needs it.
-  - [x] **Static half:** `WORKER_QUEUES`, `WorkerSupervisor`, `LaneRegistry`, `QueueLimits` and
-    the `WORKER_PROCESS_MAX_CONCURRENCY` boot refusal — `apps/worker/docs/reference/supervisor.md`.
-  - [ ] **Runtime half:** the Redis registry and control channel, reconcile, autoscaler,
-    `worker_queue_settings`, the ports, use cases, contract and the Workers page.
-
 ## 22. AI assistant — a plan not started
 
 - [ ] `AI.0` **Bring lite's AI search modes up.** `EMBEDDING_PROVIDER=none|openai|gemini` in place
@@ -304,8 +290,8 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   adapter and `pnpm ai:reindex`. Lite is the source here. Chat needs it to run without a paid key.
 - [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
   OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
-  and streamed through realtime. Named Assistant because Messaging owns "chat". After `WC.1`,
-  `AI.0` and `DC.2`; designed around `RV.3`. Lite ports a simpler version once it closes.
+  and streamed through realtime. Named Assistant because Messaging owns "chat". After `AI.0` and
+  `DC.2` (`WC.1` is done); designed around `RV.3`. Lite ports a simpler version once it closes.
 
 ---
 

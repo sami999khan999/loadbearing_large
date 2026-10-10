@@ -464,7 +464,8 @@ Postgres. This is what "derived" buys.
 
 **The queue is not.** A queued job exists nowhere else, so:
 
-1. Stop the worker consuming; let publishers keep enqueueing to the old instance.
+1. Pause every queue from the platform **Workers** page, or stop the worker; let publishers keep
+   enqueueing to the old instance.
 2. Wait for depth to reach zero.
 3. Flip `REDIS_QUEUE_URL`, restart both.
 4. Confirm the old instance is empty before deleting it.

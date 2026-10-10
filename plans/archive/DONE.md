@@ -65,6 +65,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
   | Level | Writes/s | p50 | p95 | p99 | Errors |
   |---|---|---|---|---|---|
+| 2026-10-10 | @sami | **`WC.1` closed: worker control.** `WORKER_QUEUES`, the lane supervisor and the platform Workers page — pause, queue moves and in-process autoscaling |
   | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
   | 10× | 142 / 159 | 265 / 238 ms | 498 / 397 ms | 577 / 417 ms | 0 |
 
@@ -1892,6 +1893,21 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 | `archive/REVIEW.md` | line numbers as of `d98c9f3` | one commit behind `885e144`; accurate until the first fix |
 
 ---
+
+## 21. Worker control — closed
+
+- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](../WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
+  `WORKER_QUEUES` chooses a process's queues, and the platform **Workers** page shows every live
+  process and queue. From it an admin pauses a queue everywhere, one process, or one queue on one
+  process; moves queues between processes; and autoscales a queue's concurrency between a minimum
+  and a maximum. Changes reach a process through `worker:control` within a second, with a 5 s
+  reconcile behind it. The plan's "As built" section lists where the code differs.
+  **Proof:** unit specs for the autoscale rules, the six use cases and the supervisor. Live, on
+  the local stack with two workers on split `WORKER_QUEUES`, each write reached its process within a
+  second; a hard-killed process dropped off after its 15 s TTL, its queue was flagged unserved, and a
+  clean stop removed it at once. **Not checked:** the page in a browser. The local production build
+  did not submit its sign-in form, so the procedures were driven over HTTP with a signed-in
+  session instead.
 
 ## Changelog
 

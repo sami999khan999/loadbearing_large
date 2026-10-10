@@ -34,6 +34,23 @@ The user wants platform admins to manage workers from the dashboard:
   - pages in `apps/web/src/route/(app)/_authenticated/platform/*.tsx` with `RouteGuard.requirePermission` and `<Can>`;
   - contract in `platform.contract.ts`, router in `platform.router.ts`.
 
+## As built (2026-10-10)
+Built as planned, with these differences, each forced by a repo rule or by what the code can know:
+- **Port names take a role suffix:** `WorkerFleetGateway`, `QueueControlGateway` and
+  `WorkerQueueSettingsRepository`, in `application/src/platform/` beside the other platform ports.
+  `QueueLimits` moved to `application/src/primitive/`, so the use cases can validate against it.
+- **Procedures are flat, like every platform procedure:** `platform.workerFleet`, `pauseQueue`,
+  `saveQueueAutoscale`, `pauseWorker`, `setWorkerQueues` and `resetWorker`.
+- **Pause and resume are one use case each, with a `paused` flag:** `PauseWorkerQueueUseCase` and
+  `PauseWorkerProcessUseCase`.
+- **Autoscale off means the env value**, not the saved minimum. Pausing a queue with no saved row
+  then changes nothing else about it.
+- **No `version` on the heartbeat:** nothing in the worker's environment carries a release.
+- **No `updated_by` column and no permission migration.** The activity log records who changed a
+  queue, and `PlatformRoleSeed` grants every platform key at seed time.
+- **No `worker.queue.unserved` log event:** the page computes it, and the use case that would emit
+  it may not log.
+
 ## Words used
 - **Process:** one running worker app (a container or replica). At boot it gets an id: `hostname-pid-random4`.
 - **Lane:** one queue being served inside one process, which is one BullMQ `Worker` with its own concurrency.
