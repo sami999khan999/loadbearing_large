@@ -40,7 +40,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18 and 20 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1` and the final
-check's 13. Their entries
+check's 17. Their entries
 are in `archive/DONE.md` under the same numbers.
 
 **Sections 1, 3 and 6 cannot be closed by writing code today.** `24.7` and the triggers wait for

@@ -1648,6 +1648,23 @@ is a spec that fails without the fix, unless the entry says otherwise.
 - [x] `FC.15` **Production booted on an `http` `AUTH_URL`** `done: 2026-10-10` — refused, except
   on a loopback host. `env.spec`. `3086f6c7`.
 
+Found walking lite in a browser on 2026-10-10, in code both kits share, and fixed here first:
+
+- [x] `FC.16` **A bad input read "Something went wrong"** `done: 2026-10-10` — oRPC's own input
+  check passed as one of ours by its `BAD_REQUEST` code, so its issues never became fields; the
+  normalizer builds a `ValidationError` from them. `error-normalizer.spec`. `36ea3f32`.
+- [x] `FC.17` **No form showed the field sentences** `done: 2026-10-10` — `useErrorMessage` now
+  answers with them when the server named fields; an empty invite email says which field.
+  `use-error-message.spec`. `0fd597a9`.
+- [x] `FC.18` **Server functions had no CSRF check once `start.ts` existed** `done: 2026-10-10` —
+  Start's `createCsrfMiddleware`, for server functions only. Proof: a cross-site call is 403 and
+  the app's own call answers. `ca0bae71`.
+- [x] `FC.19` **No page hydrated in dev after `FC.13`** `done: 2026-10-10` — with `start.ts`
+  present, Start's compiler stopped stripping the server branch of a re-exported
+  `createIsomorphicFn`, and the container graph reached the browser. `router.tsx` imports it
+  from the package. Proof: the dev client's `router.tsx` no longer imports `rpc-transport`; the
+  production build was never affected. `e3ecd2da`.
+
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
 **Verbatim, and nothing here is a task.** By 2026-09-25 the backlog held three open items and five
@@ -1880,6 +1897,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |
 | 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |
 | 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |
 | 2026-10-10 | @sami | **`RW.1`, `RW.2`, `RW.4` and `RW.5` closed, in both kits.** The editor's leave guard, short-lived credential mail jobs, the export image links file, and the two enrolment paths. §19 keeps `RW.3`, which is big-kit only |
