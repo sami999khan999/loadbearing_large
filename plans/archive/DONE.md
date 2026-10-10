@@ -1601,7 +1601,7 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
   three cases in `pg-bootstrap-membership.enroller.spec` and `pg-invitation.claimer.spec`, each
   failing without the fix. `21070d21`.
 
-## 20. Final check of 2026-10-10 — closed so far
+## 20. Final check of 2026-10-10 — closed in full
 
 Three Sonnet reviewers read mini first and the code both kits share, each finding checked against
 both. IDs are `FC.<n>`. `FC.11` and `FC.12` are lite's own and are fixed only there. Proof for each
@@ -1637,6 +1637,16 @@ is a spec that fails without the fix, unless the entry says otherwise.
 - [x] `FC.10` **Doc search lost hits to spaces the reader could not see** `done: 2026-10-10` —
   the allowed space ids go into the query, so a hidden space never takes the window.
   `doc-search.spec`, `pg-doc-page.repository.spec`. `4da4c583`.
+- [x] `FC.13` **No security headers** `done: 2026-10-10` — one request middleware in `start.ts`
+  adds `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, a referrer policy and, over https,
+  HSTS to every page and `/api` route. No `script-src` yet: Start's inline scripts need nonces.
+  Proof: `security-headers.spec`, and the headers read off a running build. `0a505ac7`.
+- [x] `FC.14` **Web processes times the pool was not checked against the database**
+  `done: 2026-10-10` — `cluster.mjs` starts no more than `WEB_DATABASE_CONNECTIONS` /
+  `DATABASE_POOL_MAX` processes and refuses a `WEB_PROCESSES` over it. Here the budget is 500
+  pgBouncer clients. Proof: 12 processes against 100 refused with the numbers. `c2193550`.
+- [x] `FC.15` **Production booted on an `http` `AUTH_URL`** `done: 2026-10-10` — refused, except
+  on a loopback host. `env.spec`. `3086f6c7`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
@@ -1870,6 +1880,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |
 | 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |
 | 2026-10-10 | @sami | **`RW.1`, `RW.2`, `RW.4` and `RW.5` closed, in both kits.** The editor's leave guard, short-lived credential mail jobs, the export image links file, and the two enrolment paths. §19 keeps `RW.3`, which is big-kit only |
 | 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's five open items, `RW.1`–`RW.5`, and closes `RW.6`–`RW.23`. Each fix landed here first and was ported to lite |
