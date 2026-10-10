@@ -41,6 +41,11 @@ apps/worker/
 │   │   ├── mail.consumer.ts          → MailConsumer        (send)
 │   │   ├── outbox.consumer.ts        → OutboxConsumer      (drain · deliver)
 │   │   └── maintenance.consumer.ts   → MaintenanceConsumer (sweep · partitions · archive)
+│   ├── supervisor/
+│   │   ├── index.ts
+│   │   ├── lane-registry.ts          → LaneRegistry
+│   │   ├── queue-limits.ts           → QueueLimits
+│   │   └── worker-supervisor.ts      → WorkerSupervisor
 │   ├── schedule/
 │   │   ├── index.ts
 │   │   ├── archive.schedule.ts       04:00 on the first
@@ -90,6 +95,8 @@ See [`reference/consumers.md`](reference/consumers.md) and
 
 - [The consumers](reference/consumers.md) — why each is serial, why `handle()` is public, and why
   `EmbeddingConsumer` catches nothing.
+- [The supervisor](reference/supervisor.md) — lanes, `WORKER_QUEUES`, and the two ceilings a
+  process checks before it starts consuming.
 - [The schedules](reference/schedules.md) — the fixed job ids that make registration idempotent, the
   clock order, and why none of them retries.
 - [Subscribers](reference/subscribers.md) — the contract every outbox subscriber keeps, and why

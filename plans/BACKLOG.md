@@ -285,13 +285,17 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
 
-## 21. Worker control — a plan not started
+## 21. Worker control — the static half built
 
 - [ ] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md).** A platform `Workers`
   page: live worker processes and their queues, pause and resume per queue, per process and per
   lane, runtime queue reassignment within a second, and in-process concurrency autoscaling
   between a min and a max. The app never starts processes; the host does. Lite takes the
   `WORKER_QUEUES` subset first and copies the rest back when it needs it.
+  - [x] **Static half:** `WORKER_QUEUES`, `WorkerSupervisor`, `LaneRegistry`, `QueueLimits` and
+    the `WORKER_PROCESS_MAX_CONCURRENCY` boot refusal — `apps/worker/docs/reference/supervisor.md`.
+  - [ ] **Runtime half:** the Redis registry and control channel, reconcile, autoscaler,
+    `worker_queue_settings`, the ports, use cases, contract and the Workers page.
 
 ## 22. AI assistant — a plan not started
 

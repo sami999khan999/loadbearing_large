@@ -99,11 +99,18 @@ jobs, every one of which may hold a Postgres connection.
   event fans out to one job per subscriber. The drain itself runs at `priority: 1` ahead of them,
   so a delivery backlog cannot starve it.
 
+## `WORKER_QUEUES` and `WORKER_PROCESS_MAX_CONCURRENCY`
+
+`WORKER_QUEUES` is the comma list of queues this process serves; unset serves all of them.
+`WORKER_PROCESS_MAX_CONCURRENCY` (64) caps the sum of the selected lanes' concurrency, and a boot
+over it is refused. Each concurrency variable above is that lane's concurrency in one process.
+See [`supervisor.md`](./supervisor.md).
+
 ## Count your processes, and now your concurrencies
 
 The five knobs above are per instance, and they are also drawn against one pool. `WorkerBootstrap`
-sums the concurrency of the consumers that actually **started** — not the six in the tree, because
-`AnalyticsConsumer` starts only with a ClickHouse config — and emits `worker.pool.oversubscribed`
+sums the concurrency of the lanes that actually **started** — not the six in the tree, because
+`WORKER_QUEUES` may select fewer and `AnalyticsConsumer` starts only with a ClickHouse config — and emits `worker.pool.oversubscribed`
 when the sum exceeds `DATABASE_POOL_MAX`. At the defaults that is 20 against 10, and the line fires
 on every boot until one of the two numbers moves.
 

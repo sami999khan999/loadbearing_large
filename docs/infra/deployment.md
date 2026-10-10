@@ -352,6 +352,22 @@ web tier is stateless by construction — no request state in `Container`, no mo
 `QueryClient`, sessions in Postgres and Redis. The worker is separate and BullMQ's repeatable jobs
 dedupe across replicas, so it scales independently.
 
+**One queue can scale alone.** `WORKER_QUEUES` picks which queues a worker service serves, so a
+backlog in one queue is a second service, not more copies of everything:
+
+```yaml
+  worker:
+    environment: { APP: worker, WORKER_QUEUES: "mail,event,notification,maintenance" }
+  worker-embedding:
+    build: { context: .., dockerfile: apps/worker/Dockerfile }
+    env_file: [.env.production]
+    environment: { APP: worker, WORKER_QUEUES: embedding }
+    deploy: { replicas: 3 }
+```
+
+Every queue must be served by at least one service — a queue nobody serves fills silently. See
+[the supervisor](../../apps/worker/docs/reference/supervisor.md).
+
 ---
 
 ## Phase 2 — managed services, in risk order
