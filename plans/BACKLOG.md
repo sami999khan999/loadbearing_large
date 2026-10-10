@@ -37,6 +37,8 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
+| 21 | Worker control — [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md) | 1 | — |
+| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | — |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18 and 20 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1` and the final
@@ -209,7 +211,7 @@ seven are in [`archive/DONE.md`](archive/DONE.md) §15.
 
 ### Not built
 
-- [ ] `DC.2` **No semantic search over docs.** Search is full text plus trigram titles. **Fix:**
+- [ ] `DC.2` **No semantic search over docs** — required before `AI.1`. Search is full text plus trigram titles. **Fix:**
   a `doc.page.published` domain event, a subscriber that queues the page's sections into the
   existing embedding pipeline with `sourceType: "doc"`, and a hybrid rank in `DocSearch`.
   Organization docs only: `VectorStore` is tenant-scoped, and the platform's are one tenant.
@@ -282,6 +284,24 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   kit only: lite archives nothing. **Fix:** read `partition_archive` for the space's archived
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
+
+## 21. Worker control — a plan not started
+
+- [ ] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md).** A platform `Workers`
+  page: live worker processes and their queues, pause and resume per queue, per process and per
+  lane, runtime queue reassignment within a second, and in-process concurrency autoscaling
+  between a min and a max. The app never starts processes; the host does. Lite takes the
+  `WORKER_QUEUES` subset first and copies the rest back when it needs it.
+
+## 22. AI assistant — a plan not started
+
+- [ ] `AI.0` **Bring lite's AI search modes up.** `EMBEDDING_PROVIDER=none|openai|gemini` in place
+  of `OPENAI_API_KEY`, lexical search through `VectorStore.searchText`, the Gemini embedding
+  adapter and `pnpm ai:reindex`. Lite is the source here. Chat needs it to run without a paid key.
+- [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
+  OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
+  and streamed through realtime. Named Assistant because Messaging owns "chat". After `WC.1`,
+  `AI.0` and `DC.2`; designed around `RV.3`. Lite ports a simpler version once it closes.
 
 ---
 
