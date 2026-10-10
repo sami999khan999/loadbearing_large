@@ -1588,8 +1588,8 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
   unsaved edits". `7ddc6f96`.
 - [x] `RW.2` **A mail job carried a live invite, reset link or 2FA code for a week**
   `done: 2026-10-10` — the auth and invitation mailers mark their mail `credential`, and its job
-  is dropped a minute after sending and an hour after its last failure. Proof: `queued-mail.spec`,
-  and `redis.smoke.spec`, "shortens a failed job's keep". `1884a7ba`.
+  is removed as it completes (`FC.3`) and at least an hour after its last failure. Proof:
+  `queued-mail.spec`, and `redis.smoke.spec`, "shortens a failed job's keep". `1884a7ba`.
 - [x] `RW.4` **The exports screen could not hand out the doc-image copies** `done: 2026-10-10` —
   `platform.listExportImages` lists one export day's copies with hour-long links, and the screen
   saves them as a tab-separated file a `curl` loop fetches. Proof:
@@ -1600,6 +1600,43 @@ false: `@orpc/server/fetch`'s `RPCHandler` adds `StrictGetMethodPlugin` unless t
   suspended user. The session hook already refused a suspended user before enrolling. Proof:
   three cases in `pg-bootstrap-membership.enroller.spec` and `pg-invitation.claimer.spec`, each
   failing without the fix. `21070d21`.
+
+## 20. Final check of 2026-10-10 — closed so far
+
+Three Sonnet reviewers read mini first and the code both kits share, each finding checked against
+both. IDs are `FC.<n>`. `FC.11` and `FC.12` are lite's own and are fixed only there. Proof for each
+is a spec that fails without the fix, unless the entry says otherwise.
+
+- [x] `FC.1` **Re-indexing the same text was swallowed for up to a week** `done: 2026-10-10` —
+  the index job dedupes while in flight only (`inFlightId`), not on a job id a kept job held, and
+  the index-text sweep waits an hour past the failed-job keep. `document.use-case.spec`.
+  `4f20464e`.
+- [x] `FC.2` **The image orphan sweep deleted an image another space's page linked**
+  `done: 2026-10-10` — `listImageLinks` reads every page in the tenant, still matched on the one
+  space's prefix. `pg-doc-page.repository.spec`, "linked from a page in another space".
+  `36d7d53f`.
+- [x] `FC.3` **A sent credential mail job waited for the next completion to be trimmed**
+  `done: 2026-10-10` — kept for zero seconds, it goes as it completes; a failed one waits for the
+  next failure trim after its hour, which `mail-pipeline.md` now says. `redis.smoke.spec`.
+  `e5ddbc9e`.
+- [x] `FC.4` **The cron schedules ran in the worker's local timezone** `done: 2026-10-10` — each
+  passes `tz: "UTC"` through `UtcCron`, which first removes the entry registered without it.
+  Proof: a run against Redis left one entry, in UTC, after re-registering twice. `3e00a6d7`.
+- [x] `FC.5` **The README never said to set `AUTH_SECRET`** `done: 2026-10-10` — the example's
+  `change-me` stays too short on purpose; the README says to replace it, and the setup guide no
+  longer shows a placeholder that boots. `c53e7a79`.
+- [x] `FC.6` **A look-alike origin pinned a session as the desktop app** `done: 2026-10-10` —
+  `AuthSurface.of` compares the origin exactly. `auth-surface.spec`. `16618c53`.
+- [x] `FC.7` **A hung tenant check could stop stream revalidation** — checked, not a defect: every
+  query is bounded by the pool's 30-second `statement_timeout` and 5-second connect timeout, and a
+  shorter deadline would undo the no-overlap rule `stream-revalidation.spec` holds. No change.
+- [x] `FC.8` **The sidebar drawer reopened after the screen widened and narrowed**
+  `done: 2026-10-10` — widening closes it. `sidebar.spec`. `ac50a3cf`.
+- [x] `FC.9` **The export links file's URL was revoked in the click's own task**
+  `done: 2026-10-10` — revoked a task later, so the download is not cancelled. `ebd7649f`.
+- [x] `FC.10` **Doc search lost hits to spaces the reader could not see** `done: 2026-10-10` —
+  the allowed space ids go into the query, so a hidden space never takes the window.
+  `doc-search.spec`, `pg-doc-page.repository.spec`. `4da4c583`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
@@ -1833,6 +1870,7 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |
 | 2026-10-10 | @sami | **`RW.1`, `RW.2`, `RW.4` and `RW.5` closed, in both kits.** The editor's leave guard, short-lived credential mail jobs, the export image links file, and the two enrolment paths. §19 keeps `RW.3`, which is big-kit only |
 | 2026-10-10 | @sami | **Twenty backlog items and seventeen review findings closed, in both kits.** §10, §12–§18 lose `CR.33`, `CP7.9`, the `AX` bugs and docs items, `RV.4`, `RV.7`, `DC.1`, `DC.4`–`DC.7`, `UI.2`, `LP.2` and `BL.1`; §19 opens with the review's five open items, `RW.1`–`RW.5`, and closes `RW.6`–`RW.23`. Each fix landed here first and was ported to lite |
 | 2026-10-10 | @sami | **`BACKLOG.md` §18 opened with `BL.1`, from lite.** The Vitest worker timeout at the end of the `tooling/scripts` run, which lite waits on this kit to fix. It did not reproduce in three runs today |

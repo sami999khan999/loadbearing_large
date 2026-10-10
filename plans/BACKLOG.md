@@ -37,6 +37,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
+| 20 | Final check of 2026-10-10 | 3 | 10 |
 
 Sections 2, 4, 5, 7, 8, 9, 12 and 18 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9` and `BL.1`. Their entries
@@ -281,6 +282,23 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   kit only: lite archives nothing. **Fix:** read `partition_archive` for the space's archived
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
+
+## 20. Final check of 2026-10-10 — what is left
+
+The fixed findings are in [`archive/DONE.md`](archive/DONE.md) §20. These three are decisions, not
+bugs, and lite holds them under `BL.12`–`BL.14`.
+
+- [ ] `FC.13` **No security headers.** Nothing sets a CSP, `X-Content-Type-Options`,
+  `frame-ancestors`, `Referrer-Policy` or HSTS, and the app renders user-written Markdown behind
+  cookie sessions. **Fix:** set them in the web server's response path. The CSP needs nonces or
+  hashes for TanStack Start's inline scripts, so measure it in report-only mode first.
+- [ ] `FC.14` **The web process count is not checked against Postgres connections.**
+  `apps/web/cluster.mjs` starts one process per core, each with a pool of up to
+  `DATABASE_POOL_MAX`, so a 12-core host asks for 240 against `max_connections` 200. **Fix:** cap
+  the process count, or check the product at boot and refuse with the numbers.
+- [ ] `FC.15` **Production boots on an `http` `AUTH_URL`**, and the session cookie then drops
+  `Secure`. **Fix:** under `NODE_ENV=production`, refuse an `http` `AUTH_URL` unless an explicit
+  escape hatch is set.
 
 ---
 
