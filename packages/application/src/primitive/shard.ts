@@ -30,6 +30,8 @@ const CATALOG = Object.freeze([
   "tenant_retention_policy",
   "projection_policy",
   "platform_policy",
+  // Read by every worker process on its tick, which knows no tenant at all.
+  "worker_queue_settings",
   // Deployment-wide switches, read before a request knows its shard.
   "feature_flags",
   "feature_flag_organizations",

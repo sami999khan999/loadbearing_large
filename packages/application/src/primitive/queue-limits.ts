@@ -1,9 +1,9 @@
-import { QueueName } from "../import.js";
+import { QueueName } from "./queue-name.js";
 
 export type QueueKey = (typeof QueueName.ALL)[number];
 
-// The most any one process may run of each queue, whatever the environment asks for. These
-// are ceilings, not defaults: the starting values are the `WORKER_<Q>_CONCURRENCY` variables.
+// The most one worker process may run of each queue, whatever the environment or the
+// dashboard asks for. Ceilings, not defaults: the worker's env sets the starting values.
 const LIMITS: Readonly<Record<QueueKey, number>> = Object.freeze({
   [QueueName.EMBEDDING]: 32,
   [QueueName.NOTIFICATION]: 16,

@@ -58,6 +58,11 @@ export {
   type PlatformPolicyView,
 } from "./get-platform-policy.use-case.js";
 export {
+  GetWorkerFleetUseCase,
+  type WorkerFleetView,
+  type WorkerQueueView,
+} from "./get-worker-fleet.use-case.js";
+export {
   InspectPlatformStatusUseCase,
   type PlatformStatus,
   type ReplicaStatus,
@@ -108,6 +113,14 @@ export {
   type MoveTenantInput,
   MoveTenantUseCase,
 } from "./move-tenant.use-case.js";
+export {
+  type PauseWorkerProcessInput,
+  PauseWorkerProcessUseCase,
+} from "./pause-worker-process.use-case.js";
+export {
+  type PauseWorkerQueueInput,
+  PauseWorkerQueueUseCase,
+} from "./pause-worker-queue.use-case.js";
 export { type PlatformOrganization, PlatformReader } from "./platform.reader.js";
 export {
   type PlatformHealth,
@@ -133,6 +146,7 @@ export {
   type PurgeOrganizationInput,
   PurgeOrganizationUseCase,
 } from "./purge-organization.use-case.js";
+export { QueueControlGateway, type QueueCounts } from "./queue-control.gateway.js";
 export {
   type ReclaimedSources,
   ReclaimMoveSourcesUseCase,
@@ -152,6 +166,10 @@ export {
   type ReprojectRequested,
 } from "./reproject-partition.use-case.js";
 export {
+  type ResetWorkerProcessInput,
+  ResetWorkerProcessUseCase,
+} from "./reset-worker-process.use-case.js";
+export {
   type RestorePartitionInput,
   RestorePartitionUseCase,
   type RestoreRequested,
@@ -164,6 +182,15 @@ export {
   type RetentionStore,
 } from "./retention-policy.repository.js";
 export { SavePlanUseCase } from "./save-plan.use-case.js";
+export {
+  type SaveQueueAutoscaleInput,
+  SaveQueueAutoscaleUseCase,
+} from "./save-queue-autoscale.use-case.js";
+export {
+  type SetWorkerProcessQueuesInput,
+  SetWorkerProcessQueuesUseCase,
+  type WorkerQueuesChanged,
+} from "./set-worker-process-queues.use-case.js";
 export {
   ShardMapReader,
   type ShardNode,
@@ -216,3 +243,15 @@ export {
   type UpdateTenantRetentionInput,
   UpdateTenantRetentionUseCase,
 } from "./update-tenant-retention.use-case.js";
+export { type AutoscaleReading, WorkerAutoscaleRules } from "./worker-autoscale.rules.js";
+export { WorkerControlRules } from "./worker-control.rules.js";
+export {
+  WorkerFleetGateway,
+  type WorkerLaneReport,
+  type WorkerProcessOverrides,
+  type WorkerProcessReport,
+} from "./worker-fleet.gateway.js";
+export {
+  type WorkerQueueSettingsRecord,
+  WorkerQueueSettingsRepository,
+} from "./worker-queue-settings.repository.js";
