@@ -221,6 +221,39 @@ export class PlatformProcedures {
     .input(PlatformContract.tenantMove)
     .output(PlatformContract.moveRequested);
 
+  // Polled every few seconds by the Workers page, so it reads Redis and one catalog
+  // table and nothing per tenant.
+  public static readonly workerFleet = oc
+    .route({ method: "GET", path: "/platform/workers" })
+    .output(PlatformContract.workerFleet);
+
+  public static readonly pauseQueue = oc
+    .route({ method: "PUT", path: "/platform/workers/queue/pause" })
+    .input(PlatformContract.queuePause)
+    .output(Envelope.acknowledged);
+
+  // `PUT`: the body is the queue's whole autoscale row, replaced.
+  public static readonly saveQueueAutoscale = oc
+    .route({ method: "PUT", path: "/platform/workers/queue/autoscale" })
+    .input(PlatformContract.queueAutoscale)
+    .output(Envelope.acknowledged);
+
+  public static readonly pauseWorker = oc
+    .route({ method: "PUT", path: "/platform/workers/process/pause" })
+    .input(PlatformContract.workerProcessPause)
+    .output(Envelope.acknowledged);
+
+  // Returns what the move leaves unserved, so the page can warn before anyone notices.
+  public static readonly setWorkerQueues = oc
+    .route({ method: "PUT", path: "/platform/workers/process/queues" })
+    .input(PlatformContract.workerProcessQueues)
+    .output(PlatformContract.workerQueuesChanged);
+
+  public static readonly resetWorker = oc
+    .route({ method: "POST", path: "/platform/workers/process/reset" })
+    .input(PlatformContract.workerProcessRef)
+    .output(Envelope.acknowledged);
+
   // The object the merge point in `procedure/index.ts` mounts. One place to add a
   // procedure to, rather than two.
   public static readonly all = {
@@ -263,5 +296,11 @@ export class PlatformProcedures {
     clearAdjustment: PlatformProcedures.clearAdjustment,
     moduleSwitches: PlatformProcedures.moduleSwitches,
     updateModuleSwitch: PlatformProcedures.updateModuleSwitch,
+    workerFleet: PlatformProcedures.workerFleet,
+    pauseQueue: PlatformProcedures.pauseQueue,
+    saveQueueAutoscale: PlatformProcedures.saveQueueAutoscale,
+    pauseWorker: PlatformProcedures.pauseWorker,
+    setWorkerQueues: PlatformProcedures.setWorkerQueues,
+    resetWorker: PlatformProcedures.resetWorker,
   } as const;
 }

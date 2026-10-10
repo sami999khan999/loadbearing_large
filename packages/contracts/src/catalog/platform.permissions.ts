@@ -53,4 +53,11 @@ export const platformProcedurePermissions = {
   "platform.clearAccountDeny": "platform.account.manage",
   "platform.moduleSwitches": "platform.status.read",
   "platform.updateModuleSwitch": "platform.module.manage",
+  // Read shows depth and processes; manage changes what work runs, where and how fast.
+  "platform.workerFleet": "platform.worker.read",
+  "platform.pauseQueue": "platform.worker.manage",
+  "platform.saveQueueAutoscale": "platform.worker.manage",
+  "platform.pauseWorker": "platform.worker.manage",
+  "platform.setWorkerQueues": "platform.worker.manage",
+  "platform.resetWorker": "platform.worker.manage",
 } as const satisfies Record<string, PermissionKey>;

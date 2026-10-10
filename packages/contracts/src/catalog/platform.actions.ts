@@ -4,6 +4,15 @@ export const platformActions = {
   "platform.projection.resumed": { label: "Projection resumed" },
   "platform.replica.enabled": { label: "Replica reads enabled" },
   "platform.replica.disabled": { label: "Replica reads disabled" },
+  // Worker control. A queue is cluster-wide; a worker is one process, and its change
+  // lasts until that process restarts or is reset.
+  "platform.queue.paused": { label: "Queue paused" },
+  "platform.queue.resumed": { label: "Queue resumed" },
+  "platform.queue.autoscaled": { label: "Queue autoscaling changed" },
+  "platform.worker.paused": { label: "Worker paused" },
+  "platform.worker.resumed": { label: "Worker resumed" },
+  "platform.worker.reassigned": { label: "Worker queues changed" },
+  "platform.worker.reset": { label: "Worker reset to its environment" },
   // Entitlement. A change to one org is audited twice: in the tier, and in that org's own
   // log, so its admins can see what the platform did to their plan.
   "plan.saved": { label: "Plan saved" },
