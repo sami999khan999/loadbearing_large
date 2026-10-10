@@ -231,6 +231,43 @@ export class PlatformRouter {
     context.container.platformAdmin.moveTenant.execute(context.principal, input),
   );
 
+  public static readonly workerFleet = authed.platform.workerFleet.handler(({ context }) =>
+    context.container.platformAdmin.workerFleet.execute(context.principal),
+  );
+
+  public static readonly pauseQueue = authed.platform.pauseQueue.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.pauseWorkerQueue.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly saveQueueAutoscale = authed.platform.saveQueueAutoscale.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.saveQueueAutoscale.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly pauseWorker = authed.platform.pauseWorker.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.pauseWorkerProcess.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
+  public static readonly setWorkerQueues = authed.platform.setWorkerQueues.handler(
+    ({ input, context }) =>
+      context.container.platformAdmin.setWorkerProcessQueues.execute(context.principal, input),
+  );
+
+  public static readonly resetWorker = authed.platform.resetWorker.handler(
+    async ({ input, context }) => {
+      await context.container.platformAdmin.resetWorkerProcess.execute(context.principal, input);
+      return { ok: true } as const;
+    },
+  );
+
   // The object the merge point in `app.router.ts` mounts, mirroring
   // `PlatformProcedures.all`.
   public static readonly all = {
@@ -273,5 +310,11 @@ export class PlatformRouter {
     clearAdjustment: PlatformRouter.clearAdjustment,
     moduleSwitches: PlatformRouter.moduleSwitches,
     updateModuleSwitch: PlatformRouter.updateModuleSwitch,
+    workerFleet: PlatformRouter.workerFleet,
+    pauseQueue: PlatformRouter.pauseQueue,
+    saveQueueAutoscale: PlatformRouter.saveQueueAutoscale,
+    pauseWorker: PlatformRouter.pauseWorker,
+    setWorkerQueues: PlatformRouter.setWorkerQueues,
+    resetWorker: PlatformRouter.resetWorker,
   } as const;
 }

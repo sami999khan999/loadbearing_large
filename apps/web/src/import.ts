@@ -123,6 +123,8 @@ export {
   VerifyEmailNotice,
   Widget,
   WidgetDefaultForm,
+  WorkerProcessList,
+  WorkerQueueList,
   widgetFacts,
 } from "@loadbearing/feature";
 
