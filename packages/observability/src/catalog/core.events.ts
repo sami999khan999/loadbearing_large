@@ -26,6 +26,16 @@ export const coreEvents = {
   // The sum of what the consumers that actually started will run concurrently, against
   // the pool they share. Once at boot.
   "worker.pool.oversubscribed": { level: "warn" },
+  // The supervisor's own changes, one line each: a lane opened or closed, a process paused
+  // from the dashboard, and a lane's concurrency moved by the autoscaler.
+  "worker.lane.started": { level: "info" },
+  "worker.lane.stopped": { level: "info" },
+  "worker.process.paused": { level: "warn" },
+  "worker.process.resumed": { level: "info" },
+  "worker.autoscale.changed": { level: "info" },
+  // A reconcile that threw. The process keeps running on its last state and retries on
+  // the next tick, so this is a warning until it repeats.
+  "worker.reconcile.failed": { level: "warn" },
 
   // Do not alert on `ensured.created == 0` — that is the steady state, because the runway
   // is already three months deep. `partition.runway.low` is the signal.

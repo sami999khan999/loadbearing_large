@@ -55,6 +55,22 @@ export interface EventShape {
     readonly concurrency: number;
     readonly poolMax: number;
   };
+  readonly "worker.lane.started": {
+    readonly processId: string;
+    readonly queue: string;
+    readonly concurrency: number;
+  };
+  readonly "worker.lane.stopped": { readonly processId: string; readonly queue: string };
+  readonly "worker.process.paused": { readonly processId: string; readonly queue: string };
+  readonly "worker.process.resumed": { readonly processId: string; readonly queue: string };
+  readonly "worker.autoscale.changed": {
+    readonly processId: string;
+    readonly queue: string;
+    readonly from: number;
+    readonly to: number;
+    readonly waiting: number;
+  };
+  readonly "worker.reconcile.failed": { readonly processId: string };
 
   readonly "maintenance.sweep.completed": {
     readonly sessions: number;
