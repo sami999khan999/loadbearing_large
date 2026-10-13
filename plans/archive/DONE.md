@@ -65,6 +65,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
   | Level | Writes/s | p50 | p95 | p99 | Errors |
   |---|---|---|---|---|---|
+| 2026-10-14 | @sami | **`DC.2` closed: semantic search over Docs**, hybrid with full text inside the visible spaces, plus the doc-chunk leak into the shared AI search it would have opened |
 | 2026-10-14 | @sami | **`AI.0` closed: search modes from lite.** `EMBEDDING_PROVIDER=none\|openai\|gemini`, lexical search, Gemini, `embedding_model` per chunk and `pnpm ai:reindex [--adopt]` |
 | 2026-10-10 | @sami | **`WC.1` closed: worker control.** `WORKER_QUEUES`, the lane supervisor and the platform Workers page — pause, queue moves and in-process autoscaling |
   | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
@@ -1473,6 +1474,24 @@ before its first box was ticked; their proof is the plan's text, and the item ID
 ---
 
 ## 15. The docs capability — closed so far
+
+- [x] `DC.2` **Semantic search over docs** `done: 2026-10-14` — publishing a page emits
+  `doc.page.published`; the `doc-index` subscriber queues the page (title, description and
+  markdown) into the embedding pipeline as one `doc` document with its `spaceId` on every chunk,
+  through the new `DocumentIndexPublisher` the user-facing index request now shares. Deletes emit
+  `doc.page.deleted` or `doc.space.deleted` with every page removed, and the subscriber forgets
+  them. `DocSearch` fuses full text with the vector index by reciprocal rank, for the tenant's own
+  search only, and asks the index for `doc` chunks **inside the visible spaces** — the new
+  required `ChunkFilter` runs on the input set. **A leak the plan did not name, closed with it:**
+  a Docs page is org-wide by goal, so `SearchDocumentsUseCase` would have ranked a private
+  space's text for anyone holding `ai.embedding.read`; it now searches `except` the guarded types,
+  and `QueueDocumentIndexUseCase` refuses the `doc` type and a page's id. `pnpm ai:reindex --docs`
+  backfills pages published before. A provider failure costs the meaning half, never the search.
+  **Proof:** specs for the subscriber, the backfill, the fusion, the filter in the pg store and the
+  fake, the reservations and the delete event; live on the local stack, a published page became a
+  `doc` chunk naming its space, the shared AI search left it out where SQL matched it, the Docs
+  search found it, both reservations answered 400, and a delete removed the chunk. **Not run:** the
+  semantic half against a real provider, which needs a key.
 
 Both came built with §17's port from lite and were found closed on 2026-10-10. The bodies are
 in this file's history of `BACKLOG.md` §15.

@@ -33,7 +33,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 11 | Communication features — [`archive/COMMUNICATION.md`](archive/COMMUNICATION.md) | 8 | 1 |
 | 13 | Access and visibility plan, what is left — [`archive/ACCESS-AND-VISIBILITY-PLAN.md`](archive/ACCESS-AND-VISIBILITY-PLAN.md) | 1 | 8 |
 | 14 | Code review of 2026-09-28, and the plan's review before it starts | 1 | 15 |
-| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 2 | 7 |
+| 15 | The docs capability, what is left — [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) | 1 | 8 |
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
@@ -49,7 +49,7 @@ a number no node has reached. `S.2` waits for real traffic. `S.3` waits for a pr
 the shipped security defects among them, are closed. **Section 11 is the next work**: the
 communication features, which waited on the performance plan and are built on top of it now.
 **Sections 13 to 17 are down to a trigger, hand walks, a benchmark and one deferred design**
-(`RV.3`, `DC.2`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`. **Section 19**
+(`RV.3`); the rest of each closed on 2026-10-10 and is in `archive/DONE.md`. **Section 19**
 holds what the 2026-10-10 review found and did not fix.
 
 ---
@@ -204,16 +204,8 @@ reader, drafts and revisions, search, images and the `graphite` theme. The reaso
 [`packages/application/docs/reference/doc.md`](../packages/application/docs/reference/doc.md) and
 [`packages/infrastructure/docs/reference/doc-renderer.md`](../packages/infrastructure/docs/reference/doc-renderer.md).
 IDs are `DC.<n>`, new, and each body is here because no archived plan holds it. `DC.3` and
-`DC.8` came built with §17's port from lite; `DC.1` and `DC.4`–`DC.7` were built 2026-10-10. All
-seven are in [`archive/DONE.md`](archive/DONE.md) §15.
-
-### Not built
-
-- [ ] `DC.2` **No semantic search over docs** — required before `AI.1`. Search is full text plus trigram titles. **Fix:**
-  a `doc.page.published` domain event, a subscriber that queues the page's sections into the
-  existing embedding pipeline with `sourceType: "doc"`, and a hybrid rank in `DocSearch`.
-  Organization docs only: `VectorStore` is tenant-scoped, and the platform's are one tenant.
-  Declare the event and its subscriber together, or §24 fails.
+`DC.8` came built with §17's port from lite; `DC.1` and `DC.4`–`DC.7` were built 2026-10-10, and
+`DC.2` on 2026-10-14. All eight are in [`archive/DONE.md`](archive/DONE.md) §15.
 
 ### Not checked
 
@@ -287,8 +279,8 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 
 - [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
   OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
-  and streamed through realtime. Named Assistant because Messaging owns "chat". After `DC.2` (`WC.1`
-  and `AI.0` are done); designed around `RV.3`. Lite ports a simpler version once it closes.
+  and streamed through realtime. Named Assistant because Messaging owns "chat". Ready: `WC.1`, `AI.0`
+  and `DC.2` are done; designed around `RV.3`. Lite ports a simpler version once it closes.
 
 ---
 
