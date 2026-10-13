@@ -57,8 +57,14 @@ packages/infrastructure/
     ├── bullmq/    bullmq-queue.publisher.ts → BullMqQueuePublisher
     │              queue-name.ts            → QueueName
     ├── smtp/      smtp-email.sender.ts     → SmtpEmailSender
+    ├── canned/    canned-assistant.model.ts → CannedAssistantModel
     ├── gemini/    gemini-embedding.provider.ts → GeminiEmbeddingProvider
+    │              gemini-assistant.model.ts → GeminiAssistantModel
+    ├── sse/       server-sent-event.reader.ts → ServerSentEventReader
+    │              server-sent-event.request.ts → ServerSentEventRequest
+    │              stream-watch.ts          → StreamWatch
     └── openai/    openai-embedding.provider.ts → OpenAiEmbeddingProvider
+                   openai-assistant.model.ts → OpenAiAssistantModel
 ```
 
 **The four runnable scripts sit above `src/`.** A script inside a folder makes that folder's barrel
@@ -268,6 +274,8 @@ variable came back undefined — which looks exactly like an unconfigured stack.
   repository in one actually means.
 - [Enrollers, the founder, and the claimer](reference/enrollers.md) — the advisory locks, the races
   they protect against, and why every one of them binds structurally.
+- [Assistant models](reference/assistant.md) — OpenAI, OpenRouter, Gemini and the canned fake behind
+  `AssistantModel`: the stream, the two timeouts, and what a failure is
 - [Embedding](reference/embedding.md) — `none`, `openai` or `gemini`, lexical search, what a provider
   switch does to the corpus, and `pnpm ai:reindex --adopt` for an upgrade
 - [pgvector](reference/pgvector.md) — the permission filter on the input set, the score floor, and
