@@ -52,9 +52,11 @@ import {
   DocFeaturePolicy,
   DocImageOrphans,
   DocImageSweep,
+  DocIndexSubscriber,
   DocRerender,
   DocSearch,
   DocTree,
+  DocumentIndexPublisher,
   type DomainEventPublisher,
   EditMessageUseCase,
   type EmailSender,
@@ -213,6 +215,7 @@ import {
   RedisRealtimeSubscriber,
   RedisWorkerFleetGateway,
   ReembedChunksUseCase,
+  ReindexDocsUseCase,
   ReinstateAccountUseCase,
   type RelayedActivityStore,
   RelocateTenantUseCase,
@@ -421,6 +424,9 @@ export class Container {
   // How the corpus is embedded and searched, from `EMBEDDING_PROVIDER`. Built once, so no
   // use-case names a vendor or asks which one it was handed.
   public readonly searchMode: SearchMode;
+  // The one way onto the embedding queue, for a person's index request and for the Docs
+  // index alike. Built before the subscribers, which need it.
+  private readonly documentIndex: DocumentIndexPublisher;
   public readonly activity: ActivityLogger;
   // The same adapter as `activity`, seen through the port the relay subscriber writes to.
   private readonly relayedActivity: RelayedActivityStore;
@@ -656,6 +662,8 @@ export class Container {
     readonly rerender: DocRerender;
     // The worker's, queued by a page delete: a space's images that no text links any more.
     readonly imageOrphans: DocImageOrphans;
+    // The worker's, off `pnpm ai:reindex --docs`: every published page into the index.
+    readonly reindex: ReindexDocsUseCase;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -1098,6 +1106,11 @@ export class Container {
       ),
     };
 
+    this.documentIndex = new DocumentIndexPublisher(
+      this.queuePublisher,
+      new IndexTextStage(this.storage),
+    );
+
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
     this.subscribers = new SubscriberRegistry([
@@ -1106,6 +1119,13 @@ export class Container {
       new MemberRealtimeSubscriber(this.realtime),
       new NotificationSubscriber(this.notification.deliver),
       new MessagingRealtimeSubscriber(this.realtime, conversations),
+      // `DC.2`: a tenant's published Docs, kept in the semantic index.
+      new DocIndexSubscriber(
+        new PgDocPageRepository(this.cluster, this.transactions, this.shards),
+        this.vectors,
+        this.documentIndex,
+        this.routedUnitOfWork,
+      ),
     ]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
@@ -1761,10 +1781,9 @@ export class Container {
       indexText,
       queueIndex: new QueueDocumentIndexUseCase(
         this.authorizer,
-        this.queuePublisher,
+        this.documentIndex,
         this.vectors,
         this.clock,
-        indexText,
       ),
       searchDocuments: new SearchDocumentsUseCase(
         this.authorizer,
@@ -2078,7 +2097,7 @@ export class Container {
     const grants = new PgDocGrantRepository(this.cluster, this.transactions, this.shards);
     const access = new DocAccess(grants, this.cache);
     const features = new DocFeaturePolicy(this.flags, entitlements, this.cache);
-    const search = new DocSearch(pages, cache, features);
+    const search = new DocSearch(pages, cache, features, this.searchMode, this.vectors);
     const images = new DocImageSweep(this.storage);
     const auth = this.authorizer;
     const uow = this.routedUnitOfWork;
@@ -2115,6 +2134,7 @@ export class Container {
         this.activity,
         uow,
         images,
+        this.eventPublisher,
       ),
       read: new ReadDocPageUseCase(auth, cache, features),
       readNav: new ReadDocNavUseCase(auth, cache, features),
@@ -2132,6 +2152,7 @@ export class Container {
         cache,
         this.activity,
         uow,
+        this.eventPublisher,
       ),
       movePage: new MoveDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
       deletePage: new DeleteDocPageUseCase(
@@ -2143,6 +2164,7 @@ export class Container {
         this.activity,
         uow,
         this.queuePublisher,
+        this.eventPublisher,
       ),
       previewPage: new PreviewDocPageUseCase(auth, renderer),
       revisions: new ListDocRevisionsUseCase(auth, pages, spaces),
@@ -2178,6 +2200,7 @@ export class Container {
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
       imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
+      reindex: new ReindexDocsUseCase(auth, spaces, pages, this.documentIndex, this.clock),
     };
   }
 
