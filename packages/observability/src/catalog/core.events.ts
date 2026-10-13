@@ -26,6 +26,9 @@ export const coreEvents = {
   // The sum of what the consumers that actually started will run concurrently, against
   // the pool they share. Once at boot.
   "worker.pool.oversubscribed": { level: "warn" },
+  // A chat model request that failed or timed out, before or during its stream. The
+  // reason the vendor gave never reaches this line: it may echo the prompt.
+  "assistant.request.failed": { level: "warn" },
   // The supervisor's own changes, one line each: a lane opened or closed, a process paused
   // from the dashboard, and a lane's concurrency moved by the autoscaler.
   "worker.lane.started": { level: "info" },
