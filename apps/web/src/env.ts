@@ -86,9 +86,14 @@ const Schema = z
     // Auth's own: the worker sends invitation mail and parses no auth configuration.
     APP_BASE_URL: z.url(),
 
-    EMBEDDING_MODEL: z.string().min(1),
-    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
-    OPENAI_API_KEY: z.string().default(""),
+    // `none` searches the chunk text and calls nobody. `openai` and `gemini` embed, need
+    // the key below, and default the model when unset. See infrastructure's embedding.md.
+    EMBEDDING_PROVIDER: z.enum(["none", "openai", "gemini"]).default("none"),
+    EMBEDDING_API_KEY: z.string().min(1).optional(),
+    EMBEDDING_MODEL: z.string().min(1).optional(),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+    // The name before `EMBEDDING_API_KEY`. Read only to refuse it: see the rule below.
+    OPENAI_API_KEY: z.string().optional(),
 
     // Per process. The cap exists to stop one runaway tab, which is local by
     // construction, and the age is what releases a channel a leaked reader is holding.
@@ -130,6 +135,24 @@ const Schema = z
   // Cross-field rules, and each earns the exception: production on http, `bootstrap` with no
   // slug, ClickHouse's defaults that cannot reach its container, a tier missing a key.
   .superRefine((env, ctx) => {
+    // A provider with no key would fail on the first document, long after the deploy.
+    if (env.EMBEDDING_PROVIDER !== "none" && !env.EMBEDDING_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMBEDDING_API_KEY"],
+        message: `Required when EMBEDDING_PROVIDER is "${env.EMBEDDING_PROVIDER}".`,
+      });
+    }
+
+    // Renamed by `AI.0`. Ignoring it would quietly drop a deployment to text search.
+    if (env.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["OPENAI_API_KEY"],
+        message: "Renamed: set EMBEDDING_PROVIDER=openai and EMBEDDING_API_KEY instead.",
+      });
+    }
+
     // The session cookie is `Secure` only under https, so production on http would ship it
     // in the clear. A loopback host is a production build tried locally, and is allowed.
     const auth = new URL(env.AUTH_URL);
@@ -311,9 +334,10 @@ export class Env {
       },
       email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
-        apiKey: e.OPENAI_API_KEY,
-        model: e.EMBEDDING_MODEL,
+        provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,
+        ...(e.EMBEDDING_API_KEY ? { apiKey: e.EMBEDDING_API_KEY } : {}),
+        ...(e.EMBEDDING_MODEL ? { model: e.EMBEDDING_MODEL } : {}),
       },
       realtime: {
         maxStreamsPerUser: e.REALTIME_MAX_STREAMS_PER_USER,
