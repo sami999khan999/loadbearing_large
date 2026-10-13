@@ -1,6 +1,6 @@
 // After `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` changes. Queues one `reembed` job per
 // organization on the embedding queue; the worker re-embeds that tenant's stale chunks.
-// `--adopt` instead stamps vectors from before migration `0055` with the active model.
+// `--adopt` stamps pre-`0055` vectors instead; `--docs` indexes every published Docs page.
 
 import { shardUrls } from "./shard-env.js";
 import { BullMqQueuePublisher } from "./src/bullmq/index.js";
@@ -8,6 +8,8 @@ import { QueueName, Redis, sql } from "./src/import.js";
 import { Database } from "./src/pg/primitive/index.js";
 
 const adopt = process.argv.includes("--adopt");
+// The backfill for pages published before `DC.2`; a publish after it indexes itself.
+const job = process.argv.includes("--docs") ? "doc-reindex" : "reembed";
 
 // Direct, never pooled: an adopt is one long update per node, like a migration.
 const nodes = shardUrls().map((shard) => new Database({ url: shard.directUrl }));
@@ -53,10 +55,10 @@ try {
         await queue.publish(
           QueueName.EMBEDDING,
           { organizationId: row.id },
-          { name: "reembed", inFlightId: `reembed_${row.id}` },
+          { name: job, inFlightId: `${job}_${row.id}` },
         );
       }
-      console.log(`queued a re-embed for ${rows.rows.length} organization(s)`);
+      console.log(`queued ${job} for ${rows.rows.length} organization(s)`);
     } finally {
       await queue.close();
       connection.disconnect();
