@@ -74,6 +74,10 @@ calls nobody. **A provider other than `none` makes `EMBEDDING_API_KEY` required,
 `OPENAI_API_KEY`, the name before it, is refused. The schema refuses both at boot rather than failing
 on the first document. See [embedding](../../../../packages/infrastructure/docs/reference/embedding.md).
 
+`ASSISTANT_PROVIDER` picks the AI assistant's chat model the same way, and a provider other than
+`none` or `fake` makes `ASSISTANT_API_KEY` required. See
+[assistant](../../../../packages/infrastructure/docs/reference/assistant.md).
+
 The ClickHouse block is optional, and **its absence is what keeps ClickHouse stopped**. Present, the
 projection runs and the reconciliation reports; nothing reads the store back, because there is no
 analytics reader. There is no read driver to flip, and that is the point — a flag that moved reads
