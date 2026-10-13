@@ -393,6 +393,13 @@
       "when": 1791917415923,
       "tag": "0055_chunk_embedding_model",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791934143886,
+      "tag": "0056_assistant",
+      "breakpoints": true
     }
   ]
 }
