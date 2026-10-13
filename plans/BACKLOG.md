@@ -280,7 +280,9 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 - [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
   OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
   and streamed through realtime. Named Assistant because Messaging owns "chat". Ready: `WC.1`, `AI.0`
-  and `DC.2` are done; designed around `RV.3`. Lite ports a simpler version once it closes.
+  and `DC.2` are done; designed around `RV.3`. **Step 1 (the model interface and its OpenAI,
+  OpenRouter, Gemini and fake adapters) is built, 2026-10-14;** steps 2–8 are open. Lite ports a
+  simpler version once it closes.
 
 ---
 

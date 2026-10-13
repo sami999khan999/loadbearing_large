@@ -101,7 +101,10 @@ the word. Every name below is `assistant`.
   - a `doc.page.published` event;
   - a subscriber that queues sections into the embedding pipeline with `sourceType: "doc"`;
   - a hybrid rank in `DocSearch`.
-- **1, model interface and adapters:**
+- **1, model interface and adapters** — **done 2026-10-14**, see
+  [`assistant.md`](../packages/infrastructure/docs/reference/assistant.md). The fake is
+  `CannedAssistantModel` in `canned/`; the shared stream code is `sse/`. The budget and concurrency
+  env vars below arrive with the steps that read them:
   - Port `application/src/port/assistant.model.ts`:
     `stream(req, signal): AsyncIterable<AssistantDelta>`, with `model` and `contextTokens`.
   - Adapters, `fetch`-based with no SDK:
