@@ -6,6 +6,14 @@ export {
   type ProjectionCheckpoint,
 } from "./activity-replay.reader.js";
 export { AnalyticsProjector } from "./analytics.projector.js";
+export {
+  type AssistantDelta,
+  type AssistantMessage,
+  AssistantModel,
+  type AssistantRequest,
+  type AssistantRole,
+  type AssistantStopReason,
+} from "./assistant.model.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
 export {
