@@ -1,4 +1,5 @@
 import { activityEvents } from "./activity.events.js";
+import { docEvents } from "./doc.events.js";
 import { memberEvents } from "./member.events.js";
 import { messagingEvents } from "./messaging.events.js";
 
@@ -6,6 +7,7 @@ import { messagingEvents } from "./messaging.events.js";
 // observability's, and the two are different vocabularies. See docs/index.md.
 export const DOMAIN_EVENTS = {
   ...activityEvents,
+  ...docEvents,
   ...memberEvents,
   ...messagingEvents,
 } as const;
