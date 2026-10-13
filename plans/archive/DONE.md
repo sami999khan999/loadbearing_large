@@ -65,6 +65,7 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
   | Level | Writes/s | p50 | p95 | p99 | Errors |
   |---|---|---|---|---|---|
+| 2026-10-14 | @sami | **`AI.0` closed: search modes from lite.** `EMBEDDING_PROVIDER=none\|openai\|gemini`, lexical search, Gemini, `embedding_model` per chunk and `pnpm ai:reindex [--adopt]` |
 | 2026-10-10 | @sami | **`WC.1` closed: worker control.** `WORKER_QUEUES`, the lane supervisor and the platform Workers page — pause, queue moves and in-process autoscaling |
   | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
   | 10× | 142 / 159 | 265 / 238 ms | 498 / 397 ms | 577 / 417 ms | 0 |
@@ -1908,6 +1909,22 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   clean stop removed it at once. **Not checked:** the page in a browser. The local production build
   did not submit its sign-in form, so the procedures were driven over HTTP with a signed-in
   session instead.
+
+## 22. AI assistant — `AI.0` closed
+
+- [x] `AI.0` **Bring lite's AI search modes up** `done: 2026-10-14` — back-ported from lite's
+  `b77ec464`. `EMBEDDING_PROVIDER=none|openai|gemini` picks a `SearchMode` once in the container:
+  `none` indexes the text alone and searches it with Postgres full-text search through
+  `VectorStore.searchText`, calling nobody; `openai` and `gemini` embed, and
+  `GeminiEmbeddingProvider` is new. Every chunk records `embedding_model`, a search compares only
+  the active model's vectors, and `pnpm ai:reindex` re-embeds after a switch (migration
+  `0055_chunk_embedding_model`). **Two additions for the big kit, which has live OpenAI corpora
+  that lite never had:** `pnpm ai:reindex --adopt` names pre-`0055` vectors as the active OpenAI
+  model's on every node without calling it, and a set `OPENAI_API_KEY` now refuses to boot rather
+  than quietly dropping a deployment to text search. **Proof:** the vector, Gemini and
+  partition-pruning specs against the local stack (45), a new `EmbeddingConsumer` spec for the
+  `reembed` route, the full suite, boot smokes for all three apps, and on the local database an
+  inserted pre-`0055` chunk adopted once and not again.
 
 ## Changelog
 

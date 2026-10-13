@@ -22,8 +22,8 @@ the word. Every name below is `assistant`.
 **Order:** `WC.1` → `AI.0` → `DC.2` → `AI.1`.
 1. [`WORKER-CONTROL-PLAN.md`](WORKER-CONTROL-PLAN.md) (`WC.1`). The assistant runs on its
    `assistant` lane.
-2. `AI.0`. Large's AI search predates lite's: OpenAI alone, with no lexical mode. So lite's search
-   modes come up first.
+2. `AI.0` (done 2026-10-14). Large's AI search predated lite's: OpenAI alone, with no lexical
+   mode. Lite's search modes came up first.
 3. `DC.2` (semantic search over Docs). Without it, Docs passages are found by keyword only.
 4. `AI.1`, the rest of this file.
 

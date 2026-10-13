@@ -37,7 +37,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
-| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | — |
+| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 1 | 1 |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
@@ -283,15 +283,12 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
 
-## 22. AI assistant — a plan not started
+## 22. AI assistant — `AI.0` closed
 
-- [ ] `AI.0` **Bring lite's AI search modes up.** `EMBEDDING_PROVIDER=none|openai|gemini` in place
-  of `OPENAI_API_KEY`, lexical search through `VectorStore.searchText`, the Gemini embedding
-  adapter and `pnpm ai:reindex`. Lite is the source here. Chat needs it to run without a paid key.
 - [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
   OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
-  and streamed through realtime. Named Assistant because Messaging owns "chat". After `AI.0` and
-  `DC.2` (`WC.1` is done); designed around `RV.3`. Lite ports a simpler version once it closes.
+  and streamed through realtime. Named Assistant because Messaging owns "chat". After `DC.2` (`WC.1`
+  and `AI.0` are done); designed around `RV.3`. Lite ports a simpler version once it closes.
 
 ---
 
