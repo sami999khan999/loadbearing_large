@@ -100,6 +100,14 @@ export interface ContainerConfig {
     readonly streamMaxAgeSeconds: number;
   };
   // ── the swappable stores ───────────────────────────────────────────────────
+  // The AI assistant's chat model (`AI.1`). Absent or `none` builds no model, and the
+  // feature is off. See packages/infrastructure/docs/reference/assistant.md.
+  readonly assistant?: {
+    readonly provider: "none" | "fake" | "openai" | "openrouter" | "gemini";
+    readonly apiKey?: string;
+    readonly model?: string;
+    readonly endpoint?: string;
+  };
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.
   readonly vector: {

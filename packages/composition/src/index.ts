@@ -55,6 +55,7 @@ export {
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
   RecordingSessionGateway,
+  ScriptedAssistantModel,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubMarkdownRenderer,
