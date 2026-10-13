@@ -68,6 +68,12 @@ variables and a placement decision — not a config file two processes have to a
 A driver plus the connection detail that driver needs. `Container` reads the driver and builds the
 class behind the port, so adopting a store is these variables and nothing else.
 
+`VECTOR_DRIVER` has one value today, `pgvector`. The embedding block picks who turns text into
+vectors: `EMBEDDING_PROVIDER` is `none`, `openai` or `gemini`, and `none` searches the chunk text and
+calls nobody. **A provider other than `none` makes `EMBEDDING_API_KEY` required,** and a set
+`OPENAI_API_KEY`, the name before it, is refused. The schema refuses both at boot rather than failing
+on the first document. See [embedding](../../../../packages/infrastructure/docs/reference/embedding.md).
+
 The ClickHouse block is optional, and **its absence is what keeps ClickHouse stopped**. Present, the
 projection runs and the reconciliation reports; nothing reads the store back, because there is no
 analytics reader. There is no read driver to flip, and that is the point — a flag that moved reads

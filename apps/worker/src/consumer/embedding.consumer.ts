@@ -8,6 +8,10 @@ import {
   Worker,
 } from "../import.js";
 
+// A `reembed` job names only the tenant, which `pnpm ai:reindex` queues; an index job is
+// an `IndexDocumentJob`.
+type EmbeddingJobData = Pick<IndexDocumentJob, "organizationId"> & Partial<IndexDocumentJob>;
+
 // A thin adapter, exactly like an oRPC router. Everything worth testing lives in
 // `IndexQueuedDocumentUseCase`.
 export class EmbeddingConsumer {
@@ -18,9 +22,9 @@ export class EmbeddingConsumer {
   ) {}
 
   public start(): Worker {
-    const worker = new Worker<IndexDocumentJob>(
+    const worker = new Worker<EmbeddingJobData>(
       QueueName.EMBEDDING,
-      async (job: Job<IndexDocumentJob>) => this.handle(job),
+      async (job: Job<EmbeddingJobData>) => this.handle(job),
       { connection: this.connection, concurrency: this.concurrency },
     );
 
@@ -61,12 +65,21 @@ export class EmbeddingConsumer {
 
   // Let it throw: BullMQ's retry is driven by rejection, so catching here turns a
   // retryable failure into permanent, silent data loss.
-  public async handle(job: Job<IndexDocumentJob>): Promise<void> {
+  public async handle(job: Job<EmbeddingJobData>): Promise<void> {
     const principal = SystemPrincipal.forOrganization(job.data.organizationId);
 
     // `document_chunks` is routed, so the job is placed before the use-case runs.
-    await withShard(this.container, job.data.organizationId, () =>
-      this.container.ai.indexQueued.execute(principal, job.data),
+    if (job.name === "reembed") {
+      await withShard(this.container, job.data.organizationId, () =>
+        this.container.ai.reembed.execute(principal),
+      );
+      return;
+    }
+
+    // Present on every job but a `reembed`, which returned above.
+    const data = job.data as IndexDocumentJob;
+    await withShard(this.container, data.organizationId, () =>
+      this.container.ai.indexQueued.execute(principal, data),
     );
   }
 }

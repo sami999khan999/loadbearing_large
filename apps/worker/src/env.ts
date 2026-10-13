@@ -46,9 +46,14 @@ const Schema = z
     // invitation link, and it parses no auth configuration to borrow an origin from.
     APP_BASE_URL: z.url(),
 
-    EMBEDDING_MODEL: z.string().min(1),
-    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
-    OPENAI_API_KEY: z.string().default(""),
+    // `none` searches the chunk text and calls nobody. `openai` and `gemini` embed, need
+    // the key below, and default the model when unset. See infrastructure's embedding.md.
+    EMBEDDING_PROVIDER: z.enum(["none", "openai", "gemini"]).default("none"),
+    EMBEDDING_API_KEY: z.string().min(1).optional(),
+    EMBEDDING_MODEL: z.string().min(1).optional(),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+    // The name before `EMBEDDING_API_KEY`. Read only to refuse it: see the rule below.
+    OPENAI_API_KEY: z.string().optional(),
 
     // Per process. The cap exists to stop one runaway tab, which is local by
     // construction, and the age is what releases a channel a leaked reader is holding.
@@ -126,6 +131,24 @@ const Schema = z
   // Two cross-field rules: the compose container is `ratchet/ratchet` and these default
   // to ClickHouse's own `default/default`, and a cold tier is two keys or none.
   .superRefine((env, ctx) => {
+    // A provider with no key would fail on the first document, long after the deploy.
+    if (env.EMBEDDING_PROVIDER !== "none" && !env.EMBEDDING_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMBEDDING_API_KEY"],
+        message: `Required when EMBEDDING_PROVIDER is "${env.EMBEDDING_PROVIDER}".`,
+      });
+    }
+
+    // Renamed by `AI.0`. Ignoring it would quietly drop a deployment to text search.
+    if (env.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["OPENAI_API_KEY"],
+        message: "Renamed: set EMBEDDING_PROVIDER=openai and EMBEDDING_API_KEY instead.",
+      });
+    }
+
     // One without the other is a transition that silently never happens.
     if (!env.S3_COLD_STORAGE_CLASS !== !env.S3_COLD_TRANSITION_DAYS) {
       ctx.addIssue({
@@ -290,9 +313,10 @@ export class Env {
       },
       email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
-        apiKey: e.OPENAI_API_KEY,
-        model: e.EMBEDDING_MODEL,
+        provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,
+        ...(e.EMBEDDING_API_KEY ? { apiKey: e.EMBEDDING_API_KEY } : {}),
+        ...(e.EMBEDDING_MODEL ? { model: e.EMBEDDING_MODEL } : {}),
       },
       realtime: {
         maxStreamsPerUser: e.REALTIME_MAX_STREAMS_PER_USER,
