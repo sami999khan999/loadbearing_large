@@ -130,7 +130,9 @@ the word. Every name below is `assistant`.
   - Add them to `PartitionedTable.ALL`, so seeding, export, purge and **retention archive** cover
     them. Large has retention, so give them real `retentionMonths`.
   - A migration that seeds `ai.assistant.use`.
-- **3, application** (`application/src/assistant/`):
+- **3, application** (`application/src/assistant/`) — **the three repository ports done 2026-10-14**
+  (`AssistantThreadRepository`, `AssistantMessageRepository`, `AssistantUsageRepository` over
+  `ai_usage`), with their Pg adapters and an integration spec; the use cases are next:
   - Use cases: send, cancel, list, get (with source re-checks), rename, delete, and generate.
   - Helpers: `AssistantRetrieval`, `AssistantPromptBuilder`, `AssistantBudget`.
   - Ports:

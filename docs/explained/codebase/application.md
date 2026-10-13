@@ -53,6 +53,15 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 | `reembed-chunks.use-case.ts` | After a provider or model switch, re-embeds every chunk the active model did not write, a batch at a time, keeping the text as it is. |
 | `search-documents.use-case.ts` | Searches indexed documents the person may read, by meaning or by text. Filters by goal and leaves out Docs chunks before ranking anything. |
 
+### `packages/application/src/assistant/`
+
+| File | What it does |
+|---|---|
+| `assistant-message.repository.ts` | `AssistantMessageRepository`: a thread's questions and answers. An answer is written pending and settled once, so a retry cannot overwrite a finished one; a nightly sweep fails answers a worker never finished. |
+| `assistant-thread.repository.ts` | `AssistantThreadRepository`: a person's own AI assistant conversations. Every read names the author, so nobody can list or open another person's. |
+| `assistant-usage.repository.ts` | `AssistantUsageRepository`: the token meter, one row per answer, which budgets and usage reports read. |
+| `index.ts` | Folder index: re-exports the files beside it. |
+
 ### `packages/application/src/analytics/`
 
 | File | What it does |

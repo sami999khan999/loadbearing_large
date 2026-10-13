@@ -281,8 +281,9 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
   and streamed through realtime. Named Assistant because Messaging owns "chat". Ready: `WC.1`, `AI.0`
   and `DC.2` are done; designed around `RV.3`. **Step 1 (the model interface and its OpenAI,
-  OpenRouter, Gemini and fake adapters) and step 2's tables are built, 2026-10-14;** steps 3–8
-  and the permission are open. Lite ports a
+  OpenRouter, Gemini and fake adapters) step 2's tables and the repositories over them are
+  built, 2026-10-14;** the use cases (step 3), the stream and budget stores (4), transport (5),
+  usage reporting (6), UI (7), docs (8) and the permission are open. Lite ports a
   simpler version once it closes.
 
 ---
