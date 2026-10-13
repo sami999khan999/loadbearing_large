@@ -4,6 +4,7 @@
   "pages": [
     "unit-of-work",
     "enrollers",
+    "embedding",
     "pgvector",
     "partitions",
     "sharding",

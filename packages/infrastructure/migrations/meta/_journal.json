@@ -386,6 +386,13 @@
       "when": 1791650425156,
       "tag": "0054_worker_queue_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791917415923,
+      "tag": "0055_chunk_embedding_model",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,9 @@ import { TenantPartitionSeed } from "../../src/pg/seed/index.js";
 import { PgUnitOfWork, ShardScope, TransactionScope } from "../../src/pg/transaction/index.js";
 import { DATABASE_URL, dropTenant, openDatabase, seedTenant } from "../support/database.js";
 
+// The model every chunk below is written by, and every search asks for.
+const MODEL = "spec-model";
+
 // One node, so nothing is ever placed: every repository here resolves to it.
 const shards = new ShardScope();
 
@@ -162,6 +165,7 @@ const writeRows = async (organization: OrganizationId, conversation: Conversatio
       goalId: null,
       content: "pruning",
       embedding: axis(0),
+      embeddingModel: MODEL,
       metadata: { chunkIndex: 0, sourceType: "note" },
     },
   ]);
@@ -473,7 +477,7 @@ describe("one tenant partition, for every read there is", () => {
       "the vector search",
       PartitionedTable.DOCUMENT_CHUNKS,
       /from "document_chunks"/i,
-      () => corpus.search(organizationId, axis(0), [], 10),
+      () => corpus.search(organizationId, axis(0), MODEL, [], 10),
     ],
     [
       "the source delete",
