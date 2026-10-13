@@ -411,11 +411,13 @@ describe("PgVectorStore filters (`DC.2`)", () => {
     const note = Uuid.v7();
     const page = Uuid.v7();
     const hidden = Uuid.v7();
+    // A word no other spec writes: the organization is shared, and its chunks may outlive a run.
+    const word = `filterspec${Date.now()}`;
     const chunk = (sourceId: string, sourceType: string, extra: Record<string, unknown>) => ({
       id: Uuid.v7(),
       sourceId,
       goalId: null,
-      content: `harbour ${sourceType}`,
+      content: `${word} ${sourceType}`,
       embedding: axis(0),
       embeddingModel: MODEL,
       metadata: { chunkIndex: 0, sourceType, ...extra },
@@ -426,35 +428,35 @@ describe("PgVectorStore filters (`DC.2`)", () => {
       chunk(hidden, "doc", { spaceId: "space-b" }),
     ]);
 
-    const shared = { kind: "except", sourceTypes: ["doc"] } as const;
-    const docs = {
-      kind: "within",
-      sourceType: "doc",
-      key: "spaceId",
-      values: ["space-a"],
-    } as const;
-    const noSpace = { kind: "within", sourceType: "doc", key: "spaceId", values: [] } as const;
+    // Cleaned up whatever the assertions say: the organization is shared with every spec here.
+    try {
+      const shared = { kind: "except", sourceTypes: ["doc"] } as const;
+      const docs = {
+        kind: "within",
+        sourceType: "doc",
+        key: "spaceId",
+        values: ["space-a"],
+      } as const;
+      const noSpace = { kind: "within", sourceType: "doc", key: "spaceId", values: [] } as const;
 
-    const sources = async (hits: Promise<readonly { sourceId: string }[]>) =>
-      (await hits).map((hit) => hit.sourceId);
+      const sources = async (hits: Promise<readonly { sourceId: string }[]>) =>
+        (await hits).map((hit) => hit.sourceId);
 
-    expect(await sources(store.search(organizationId, axis(0), MODEL, [], 10, shared))).toEqual([
-      note,
-    ]);
-    expect(await sources(store.searchText(organizationId, "harbour", [], 10, shared))).toEqual([
-      note,
-    ]);
-    expect(await sources(store.search(organizationId, axis(0), MODEL, [], 10, docs))).toEqual([
-      page,
-    ]);
-    expect(await sources(store.searchText(organizationId, "harbour", [], 10, docs))).toEqual([
-      page,
-    ]);
-    expect(await store.search(organizationId, axis(0), MODEL, [], 10, noSpace)).toEqual([]);
+      expect(await sources(store.search(organizationId, axis(0), MODEL, [], 10, shared))).toEqual([
+        note,
+      ]);
+      expect(await sources(store.searchText(organizationId, word, [], 10, shared))).toEqual([note]);
+      expect(await sources(store.search(organizationId, axis(0), MODEL, [], 10, docs))).toEqual([
+        page,
+      ]);
+      expect(await sources(store.searchText(organizationId, word, [], 10, docs))).toEqual([page]);
+      expect(await store.search(organizationId, axis(0), MODEL, [], 10, noSpace)).toEqual([]);
 
-    expect((await store.sourceOf(organizationId, page))?.sourceType).toBe("doc");
-
-    for (const sourceId of [note, page, hidden])
-      await store.deleteBySource(organizationId, sourceId);
+      expect((await store.sourceOf(organizationId, page))?.sourceType).toBe("doc");
+    } finally {
+      for (const sourceId of [note, page, hidden]) {
+        await store.deleteBySource(organizationId, sourceId);
+      }
+    }
   });
 });
