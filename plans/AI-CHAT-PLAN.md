@@ -120,7 +120,9 @@ the word. Every name below is `assistant`.
     `ASSISTANT_ORG_DAILY_TOKENS`, `ASSISTANT_ACTIVE_PER_USER`, `REDIS_ASSISTANT_URL`,
     `WORKER_ASSISTANT_CONCURRENCY`, `WORKER_ASSISTANT_RATE_PER_MINUTE`.
   - `Container.buildAssistantModel`.
-- **2, data:**
+- **2, data** — **tables done 2026-10-14**, migration `0056_assistant`: retention is 12 months for
+  messages and 25 for usage. `ai.assistant.use` comes with step 5, because the architecture check
+  refuses a permission no procedure asserts:
   - `assistant_threads` (list by org).
   - `assistant_messages` (list by org, range by month).
   - `ai_usage` (append-only, list by org, range by month).
