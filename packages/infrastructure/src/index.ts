@@ -90,6 +90,7 @@ export {
   TransactionScope,
 } from "./pg/index.js";
 export {
+  RedisAssistantBudgetStore,
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,

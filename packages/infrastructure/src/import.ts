@@ -54,6 +54,7 @@ export {
   type ApiKeySummary,
   type ArchivedObject,
   type ArchivedPartition,
+  AssistantBudgetStore,
   type AssistantDelta,
   type AssistantMessageRecord,
   type AssistantMessageRepository,
