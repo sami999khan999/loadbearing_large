@@ -58,6 +58,7 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 | File | What it does |
 |---|---|
 | `assistant-message.repository.ts` | `AssistantMessageRepository`: a thread's questions and answers. An answer is written pending and settled once, so a retry cannot overwrite a finished one; a nightly sweep fails answers a worker never finished. |
+| `assistant-prompt.builder.ts` | `AssistantPromptBuilder`: builds what the chat model is asked: a fixed system prompt first, the retrieved passages fenced as data, as much recent history as fits the model's window, then the question. |
 | `assistant-thread.repository.ts` | `AssistantThreadRepository`: a person's own AI assistant conversations. Every read names the author, so nobody can list or open another person's. |
 | `assistant-usage.repository.ts` | `AssistantUsageRepository`: the token meter, one row per answer, which budgets and usage reports read. |
 | `index.ts` | Folder index: re-exports the files beside it. |
