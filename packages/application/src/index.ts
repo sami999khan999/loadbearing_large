@@ -46,6 +46,8 @@ export {
   RevokeApiKeyUseCase,
 } from "./apikey/index.js";
 export {
+  AssistantBudget,
+  AssistantBudgetStore,
   type AssistantMessageRecord,
   AssistantMessageRepository,
   type AssistantMessageRole,
