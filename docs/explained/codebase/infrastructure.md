@@ -150,6 +150,7 @@ It also owns the database: the schema files, the migrations, and the scripts abo
 |---|---|
 | `activity.schema.ts` | The `activity_log` table (the audit trail), split by organization and then by month. |
 | `api-key.schema.ts` | The `api_keys` table: name, prefix, digest, permissions, expiry, revocation. Never the key itself. |
+| `assistant.schema.ts` | The AI assistant's tables: `assistant_threads` (a person's conversations, private to them), `assistant_messages` (each question and answer, split by month) and `ai_usage` (what each answer cost in tokens, split by month). |
 | `archive.schema.ts` | The `partition_archive` table: one row per archived organization-month per table, with where it went, its size, row count and checksum. |
 | `auth.schema.ts` | The sign-in tables Better Auth uses: users, sessions, accounts (password or Google), verifications and two-factor secrets. |
 | `doc-grant.schema.ts` | The `doc_space_grants` table: who outside the platform may read a granted doc space (exactly one organization, user or plan per row). |

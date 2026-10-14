@@ -38,6 +38,7 @@ describe("TestContainer", () => {
       "activity",
       "activityReplay",
       "analyticsProjector",
+      "assistantModel",
       "authorizer",
       "cache",
       "capabilities",

@@ -41,6 +41,22 @@ no code change.
 switch is a build error rather than a runtime surprise. `VECTOR_DRIVER` has one legal value today;
 that is the point of writing it as a union rather than as nothing.
 
+### The embedding vendor is a `SearchMode`, not an optional field
+
+```ts
+this.searchMode = Container.buildSearchMode(config.embedding, this.logger);
+```
+
+`EMBEDDING_PROVIDER` picks one of three cases. `none` gives `{ kind: "lexical" }`, and search runs
+on text alone. `openai` and `gemini` give `{ kind: "semantic", provider }`, with an
+`OpenAiEmbeddingProvider` or a `GeminiEmbeddingProvider` inside.
+
+**A tagged value rather than a provider that might be missing.** A caller cannot reach a provider
+without first reading `kind`, so "no key configured" is a branch the compiler makes you write, not a
+`TypeError` at the first search. It is a `switch` like `buildVectorStore`, so a vendor added to the
+union and not here fails the build. See
+[`infrastructure/docs/reference/embedding.md`](../../../infrastructure/docs/reference/embedding.md).
+
 ### Two derived stores are absent unless configured
 
 `analyticsProjector` and `logReader` are `T | undefined`, reached through `projector` / `logs` getters

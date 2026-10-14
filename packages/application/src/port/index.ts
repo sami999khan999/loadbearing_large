@@ -6,6 +6,14 @@ export {
   type ProjectionCheckpoint,
 } from "./activity-replay.reader.js";
 export { AnalyticsProjector } from "./analytics.projector.js";
+export {
+  type AssistantDelta,
+  type AssistantMessage,
+  AssistantModel,
+  type AssistantRequest,
+  type AssistantRole,
+  type AssistantStopReason,
+} from "./assistant.model.js";
 export { CacheStore } from "./cache.store.js";
 export { CapabilityInvalidator } from "./capability.invalidator.js";
 export {
@@ -15,7 +23,7 @@ export {
 } from "./cold-archive.reader.js";
 export { DomainEventPublisher } from "./domain-event.publisher.js";
 export { type EmailMessage, type EmailReceipt, EmailSender } from "./email.sender.js";
-export { EmbeddingProvider } from "./embedding.provider.js";
+export { EmbeddingProvider, type EmbeddingPurpose } from "./embedding.provider.js";
 export { type LogEntry, type LogQuery, LogReader } from "./log.reader.js";
 export { MailPublisher, type MailRequest } from "./mail.publisher.js";
 export { MailRenderer, type RenderedMail } from "./mail.renderer.js";
@@ -71,8 +79,10 @@ export { type TableRowCount, TenantMoveGateway } from "./tenant-move.gateway.js"
 export { UnitOfWork } from "./unit-of-work.js";
 export { UserReader } from "./user.reader.js";
 export {
+  type ChunkFilter,
   type DocumentChunk,
   type IndexedSource,
   type SearchHit,
+  type StaleChunk,
   VectorStore,
 } from "./vector.store.js";

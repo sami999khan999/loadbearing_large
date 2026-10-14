@@ -8,7 +8,11 @@ export type LogFields = Readonly<Record<string, LogValue>>;
 // One entry per code, type-only. Declaring the fields is the point: a token cannot be
 // logged unless somebody wrote a field for it here, where a reviewer sees it.
 export interface EventShape {
-  readonly "process.started": { readonly service: string; readonly consumers?: number };
+  readonly "process.started": {
+    readonly service: string;
+    readonly consumers?: number;
+    readonly queues?: string;
+  };
   readonly "process.stopping": { readonly service: string; readonly signal: string };
   readonly "process.stopped": { readonly service: string; readonly durationMs: number };
 
@@ -47,10 +51,31 @@ export interface EventShape {
   // The driver's own text. There is no code to normalise against — this is a socket that
   // died, not a query that failed.
   readonly "database.pool.error": { readonly message: string };
+  readonly "assistant.request.failed": {
+    readonly dependency: string;
+    readonly model: string;
+    readonly status: number;
+  };
   readonly "worker.pool.oversubscribed": {
     readonly concurrency: number;
     readonly poolMax: number;
   };
+  readonly "worker.lane.started": {
+    readonly processId: string;
+    readonly queue: string;
+    readonly concurrency: number;
+  };
+  readonly "worker.lane.stopped": { readonly processId: string; readonly queue: string };
+  readonly "worker.process.paused": { readonly processId: string; readonly queue: string };
+  readonly "worker.process.resumed": { readonly processId: string; readonly queue: string };
+  readonly "worker.autoscale.changed": {
+    readonly processId: string;
+    readonly queue: string;
+    readonly from: number;
+    readonly to: number;
+    readonly waiting: number;
+  };
+  readonly "worker.reconcile.failed": { readonly processId: string };
 
   readonly "maintenance.sweep.completed": {
     readonly sessions: number;

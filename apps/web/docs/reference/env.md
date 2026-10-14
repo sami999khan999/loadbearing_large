@@ -39,6 +39,17 @@ ClickHouse's own `default/default`, which cannot authenticate against it. Withou
 projection fails on its first run with a vendor auth error, five minutes after boot, in the worker's
 log rather than the one someone is watching.
 
+**An `EMBEDDING_PROVIDER` other than `none` with no `EMBEDDING_API_KEY`** is refused as well, and it
+is the same shape of failure one layer down. Without the rule the first document indexed fails with
+a vendor auth error, in the worker's log rather than the one someone is watching. **A set
+`OPENAI_API_KEY` is refused too:** it is the name before `AI.0`, and ignoring it would drop a
+deployment to text search without anyone deciding that. See
+[embedding](../../../../packages/infrastructure/docs/reference/embedding.md).
+
+**`ASSISTANT_PROVIDER` other than `none` or `fake` with no `ASSISTANT_API_KEY`** is refused the
+same way: the first question would fail with a vendor auth error. `none`, the default, turns the AI
+assistant off. See [assistant](../../../../packages/infrastructure/docs/reference/assistant.md).
+
 **An `http` `AUTH_URL` in production** is refused too (`FC.15`). Better Auth marks the session
 cookie `Secure` only when `AUTH_URL` is https, so a mis-set URL shipped the cookie in the clear and
 nothing said so. A loopback host, `localhost`, `127.0.0.1` or `[::1]`, is allowed, because that is a

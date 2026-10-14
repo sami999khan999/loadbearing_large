@@ -123,6 +123,8 @@ export {
   VerifyEmailNotice,
   Widget,
   WidgetDefaultForm,
+  WorkerProcessList,
+  WorkerQueueList,
   widgetFacts,
 } from "@loadbearing/feature";
 
@@ -214,11 +216,6 @@ export {
 // ── @tanstack/react-router ───────────────────────────────────────────────────
 // `router.tsx` only. Everything under `route/` imports this package directly.
 export { createRouter } from "@tanstack/react-router";
-
-// ── @tanstack/react-start ────────────────────────────────────────────────────
-// Not a `/server` entry, so unlike the three `*.fn.ts` files this one goes through
-// the surface. The plugin strips each branch from the build that does not run it.
-export { createIsomorphicFn } from "@tanstack/react-start";
 
 // ── react ────────────────────────────────────────────────────────────────────
 export { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";

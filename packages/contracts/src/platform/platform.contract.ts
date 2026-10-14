@@ -340,6 +340,81 @@ export class PlatformContract {
     reason: z.string().max(500),
   });
 
+  // ── worker fleet ──
+  public static readonly workerLane = z.object({
+    queue: z.string(),
+    concurrency: z.number().int(),
+    active: z.number().int(),
+    paused: z.boolean(),
+  });
+
+  public static readonly workerProcess = z.object({
+    id: z.string(),
+    host: z.string(),
+    startedAt: z.date(),
+    heartbeatAt: z.date(),
+    paused: z.boolean(),
+    overridden: z.boolean(),
+    lanes: z.array(PlatformContract.workerLane).readonly(),
+  });
+
+  public static readonly queueAutoscale = z.object({
+    queue: z.string().trim().min(1).max(64),
+    autoscaleEnabled: z.boolean(),
+    concurrencyMin: z.number().int().min(1).max(1_000),
+    concurrencyMax: z.number().int().min(1).max(1_000),
+    scaleUpWaiting: z.number().int().min(1).max(1_000_000),
+    step: z.number().int().min(1).max(100),
+    scaleDownAfterSeconds: z.number().int().min(10).max(86_400),
+  });
+
+  public static readonly workerQueue = z.object({
+    queue: z.string(),
+    counts: z.object({
+      waiting: z.number().int(),
+      active: z.number().int(),
+      delayed: z.number().int(),
+      failed: z.number().int(),
+      paused: z.boolean(),
+    }),
+    // Null is a queue nobody has saved settings for: env concurrency, autoscale off.
+    settings: PlatformContract.queueAutoscale.extend({ paused: z.boolean() }).nullable(),
+    limit: z.number().int(),
+    servedBy: z.number().int(),
+    concurrency: z.number().int(),
+    unserved: z.boolean(),
+  });
+
+  public static readonly workerFleet = z.object({
+    processes: z.array(PlatformContract.workerProcess).readonly(),
+    queues: z.array(PlatformContract.workerQueue).readonly(),
+  });
+
+  public static readonly queuePause = z.object({
+    queue: z.string().trim().min(1).max(64),
+    paused: z.boolean(),
+  });
+
+  // A process id is `host-pid-hex`, so the bound is generous rather than exact.
+  public static readonly workerProcessPause = z.object({
+    processId: z.string().trim().min(1).max(255),
+    paused: z.boolean(),
+    queue: z.string().trim().min(1).max(64).optional(),
+  });
+
+  public static readonly workerProcessQueues = z.object({
+    processId: z.string().trim().min(1).max(255),
+    queues: z.array(z.string().trim().min(1).max(64)).max(32),
+  });
+
+  public static readonly workerProcessRef = z.object({
+    processId: z.string().trim().min(1).max(255),
+  });
+
+  public static readonly workerQueuesChanged = z.object({
+    unserved: z.array(z.string()).readonly(),
+  });
+
   // An id or a slug, whichever the operator is holding, as `tenantLookup` takes it.
   public static readonly flagTargetToggle = z.object({
     key: z.string().trim().min(1).max(128),
@@ -589,3 +664,13 @@ export type TenantLookupInput = z.infer<typeof PlatformContract.tenantLookup>;
 export type TenantLocationDto = z.infer<typeof PlatformContract.tenantLocation>;
 export type TenantMoveInput = z.infer<typeof PlatformContract.tenantMove>;
 export type MoveRequestedDto = z.infer<typeof PlatformContract.moveRequested>;
+export type WorkerLaneDto = z.infer<typeof PlatformContract.workerLane>;
+export type WorkerProcessDto = z.infer<typeof PlatformContract.workerProcess>;
+export type WorkerQueueDto = z.infer<typeof PlatformContract.workerQueue>;
+export type WorkerFleetDto = z.infer<typeof PlatformContract.workerFleet>;
+export type QueueAutoscaleInput = z.infer<typeof PlatformContract.queueAutoscale>;
+export type QueuePauseInput = z.infer<typeof PlatformContract.queuePause>;
+export type WorkerProcessPauseInput = z.infer<typeof PlatformContract.workerProcessPause>;
+export type WorkerProcessQueuesInput = z.infer<typeof PlatformContract.workerProcessQueues>;
+export type WorkerProcessRefInput = z.infer<typeof PlatformContract.workerProcessRef>;
+export type WorkerQueuesChangedDto = z.infer<typeof PlatformContract.workerQueuesChanged>;

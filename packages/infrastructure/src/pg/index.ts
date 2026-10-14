@@ -16,6 +16,9 @@ export {
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
+  PgAssistantMessageRepository,
+  PgAssistantThreadRepository,
+  PgAssistantUsageRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
@@ -55,6 +58,7 @@ export {
   PgUserReader,
   PgVectorStore,
   PgWidgetPreferenceRepository,
+  PgWorkerQueueSettingsRepository,
 } from "./repository/index.js";
 export {
   type OpenTransaction,

@@ -21,6 +21,7 @@ pnpm infra:up:analytics   # the same, plus ClickHouse
 pnpm smoke                # the wiring check, against live containers
 pnpm platform:grant <email>  # the first platform admin; every later one is invited
 pnpm queue:replay <queue> [job]  # put a queue's failed jobs back; they are kept a week
+pnpm ai:reindex [--adopt|--docs]  # re-embed after a switch; --adopt names old vectors, --docs indexes Docs
 pnpm db:generate          # drizzle-kit, then partition-ddl.ts writes the PARTITION BY clause
 pnpm db:migrate | db:seed | db:studio
 pnpm db:partitions        # the runway, by hand: what the worker does monthly, for when it did not

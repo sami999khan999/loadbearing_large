@@ -84,6 +84,19 @@ export const platformPermissions = {
     label: "Switch a module off for every organization",
     requires: ["platform.status.read"],
   },
+  // The worker fleet: live processes, queue depth and autoscale settings. Manage pauses,
+  // moves and scales queues, which changes what work runs and how fast.
+  "platform.worker.read": {
+    scope: "platform",
+    module: "platform",
+    label: "View worker processes and queues",
+  },
+  "platform.worker.manage": {
+    scope: "platform",
+    module: "platform",
+    label: "Pause, move and autoscale worker queues",
+    requires: ["platform.worker.read"],
+  },
   "platform.tenant.manage": {
     scope: "platform",
     module: "platform",

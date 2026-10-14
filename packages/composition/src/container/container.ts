@@ -7,13 +7,16 @@ import {
   type AnalyticsProjector,
   ApiKeyResolver,
   AssignPlanUseCase,
+  type AssistantModel,
   AuthFactory,
   type AuthInstance,
   Authorizer,
   BetterAuthSessionGateway,
   BetterAuthSessionResolver,
+  BullMqQueueControlGateway,
   BullMqQueuePublisher,
   type CacheStore,
+  CannedAssistantModel,
   CapabilityCache,
   CapabilitySet,
   ChangeMemberRoleUseCase,
@@ -51,18 +54,21 @@ import {
   DocFeaturePolicy,
   DocImageOrphans,
   DocImageSweep,
+  DocIndexSubscriber,
   DocRerender,
   DocSearch,
   DocTree,
+  DocumentIndexPublisher,
   type DomainEventPublisher,
   EditMessageUseCase,
   type EmailSender,
-  type EmbeddingProvider,
   ExpireEntitlementAdjustmentsUseCase,
   ExpirePermissionOverridesUseCase,
   ExportOrganizationUseCase,
   FindAccountUseCase,
   FlagCache,
+  GeminiAssistantModel,
+  GeminiEmbeddingProvider,
   GetActivityTrendUseCase,
   GetConversationUseCase,
   GetDocPageUseCase,
@@ -73,6 +79,7 @@ import {
   GetOrganizationEntitlementUseCase,
   GetPlatformPolicyUseCase,
   GetWidgetPreferencesUseCase,
+  GetWorkerFleetUseCase,
   GrantPermissionOverrideUseCase,
   GrantPermissionUseCase,
   IndexDocumentUseCase,
@@ -129,6 +136,7 @@ import {
   MoveTenantUseCase,
   NotificationSubscriber,
   NullMembershipEnroller,
+  OpenAiAssistantModel,
   OpenAiEmbeddingProvider,
   OpenDocImageUseCase,
   type OrganizationFounder,
@@ -136,6 +144,8 @@ import {
   type OrganizationReader,
   type OutboxGateway,
   type PartitionArchiveGateway,
+  PauseWorkerProcessUseCase,
+  PauseWorkerQueueUseCase,
   PgAccountRepository,
   PgActivityLogger,
   PgActivityReplayReader,
@@ -180,6 +190,7 @@ import {
   PgUserReader,
   PgVectorStore,
   PgWidgetPreferenceRepository,
+  PgWorkerQueueSettingsRepository,
   type PlatformPolicyRepository,
   type PlatformReader,
   PreviewDocPageUseCase,
@@ -189,7 +200,9 @@ import {
   type ProjectionPolicyRepository,
   PublishDocPageUseCase,
   PurgeOrganizationUseCase,
+  type QueueControlGateway,
   QueueDocumentIndexUseCase,
+  QueueName,
   type QueuePublisher,
   type RateLimitStore,
   ReadDocNavUseCase,
@@ -204,6 +217,9 @@ import {
   RedisRateLimitStore,
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
+  RedisWorkerFleetGateway,
+  ReembedChunksUseCase,
+  ReindexDocsUseCase,
   ReinstateAccountUseCase,
   type RelayedActivityStore,
   RelocateTenantUseCase,
@@ -212,6 +228,7 @@ import {
   type ReplicaHealth,
   ReprojectPartitionUseCase,
   ResendInvitationUseCase,
+  ResetWorkerProcessUseCase,
   RestoreDocRevisionUseCase,
   RestorePartitionUseCase,
   type RetentionPolicyRepository,
@@ -225,15 +242,18 @@ import {
   SaveDocGrantUseCase,
   SaveDocPageUseCase,
   SavePlanUseCase,
+  SaveQueueAutoscaleUseCase,
   SERVER_CATALOG,
   SearchDocsUseCase,
   SearchDocumentsUseCase,
+  type SearchMode,
   SearchPlatformDocsUseCase,
   SendMailUseCase,
   SendMessageUseCase,
   SendNotificationDigestUseCase,
   type SessionResolver,
   SetMemberActiveUseCase,
+  SetWorkerProcessQueuesUseCase,
   type ShardAssignmentRepository,
   type ShardConfig,
   type ShardingStrategy,
@@ -271,6 +291,8 @@ import {
   type UserId,
   type VectorStore,
   WatchConversationUseCase,
+  type WorkerFleetGateway,
+  type WorkerQueueSettingsRepository,
 } from "../import.js";
 import {
   ContentMailRenderer,
@@ -375,6 +397,7 @@ export class Container {
   private poolWaitingTicks = 0;
   private readonly redis: RedisConnection;
   private readonly queuePublisher: BullMqQueuePublisher;
+  private readonly queueControlGateway: BullMqQueueControlGateway;
   // Held concretely for the same reason as the two above: `dispose()` needs `close()`,
   // and `EmailSender` is a port that says nothing about a transport's lifetime.
   private readonly emailSender: SmtpEmailSender;
@@ -402,7 +425,15 @@ export class Container {
   public readonly storage: StorageGateway;
   public readonly queue: QueuePublisher;
   public readonly vectors: VectorStore;
-  public readonly embeddings: EmbeddingProvider;
+  // How the corpus is embedded and searched, from `EMBEDDING_PROVIDER`. Built once, so no
+  // use-case names a vendor or asks which one it was handed.
+  public readonly searchMode: SearchMode;
+  // Null when `ASSISTANT_PROVIDER` is `none` or unset: the assistant is off, and nothing
+  // that reaches for it may assume otherwise. Read through `hasAssistant` / `assistantModel`.
+  private readonly chatModel: AssistantModel | null;
+  // The one way onto the embedding queue, for a person's index request and for the Docs
+  // index alike. Built before the subscribers, which need it.
+  private readonly documentIndex: DocumentIndexPublisher;
   public readonly activity: ActivityLogger;
   // The same adapter as `activity`, seen through the port the relay subscriber writes to.
   private readonly relayedActivity: RelayedActivityStore;
@@ -478,6 +509,7 @@ export class Container {
     readonly indexText: IndexTextStage;
     readonly queueIndex: QueueDocumentIndexUseCase;
     readonly searchDocuments: SearchDocumentsUseCase;
+    readonly reembed: ReembedChunksUseCase;
   };
   // Outside the `auth` block on purpose. The worker is the process that sends mail and it
   // has no auth config — which is exactly what building the old mailer in there got wrong.
@@ -562,6 +594,12 @@ export class Container {
     readonly updateFlagTarget: UpdateFlagTargetUseCase;
     readonly updateProjection: UpdateProjectionPolicyUseCase;
     readonly updateRetention: UpdateRetentionPolicyUseCase;
+    readonly workerFleet: GetWorkerFleetUseCase;
+    readonly pauseWorkerQueue: PauseWorkerQueueUseCase;
+    readonly saveQueueAutoscale: SaveQueueAutoscaleUseCase;
+    readonly pauseWorkerProcess: PauseWorkerProcessUseCase;
+    readonly setWorkerProcessQueues: SetWorkerProcessQueuesUseCase;
+    readonly resetWorkerProcess: ResetWorkerProcessUseCase;
   };
   // Bucket-shaped policy, beside the object-shaped `storage`. The retention screen and
   // the worker's daily reconcile are its only two readers.
@@ -572,6 +610,11 @@ export class Container {
   // Read once per analytics run and once per retention run. Usually empty: an absent
   // row is "projected, with the default TTL".
   public readonly projectionPolicies: ProjectionPolicyRepository;
+  // The worker fleet: the live process registry, each queue's global pause and counts,
+  // and the autoscale rows. The worker's supervisor and the Workers page share them.
+  public readonly workerFleet: WorkerFleetGateway;
+  public readonly queueControl: QueueControlGateway;
+  public readonly workerQueueSettings: WorkerQueueSettingsRepository;
   // One row, read at the top of every analytics job. An absent row is the defaults,
   // so a deployment that never opens the screen behaves as it always did.
   public readonly platformPolicy: PlatformPolicyRepository;
@@ -626,6 +669,8 @@ export class Container {
     readonly rerender: DocRerender;
     // The worker's, queued by a page delete: a space's images that no text links any more.
     readonly imageOrphans: DocImageOrphans;
+    // The worker's, off `pnpm ai:reindex --docs`: every published page into the index.
+    readonly reindex: ReindexDocsUseCase;
   };
   // Read by the prune pass once per run, and by the screen. An absent row is the code
   // default, so this is never the only source of a number.
@@ -770,6 +815,9 @@ export class Container {
     );
 
     this.queuePublisher = new BullMqQueuePublisher(this.redis.queueClient());
+    this.queueControlGateway = new BullMqQueueControlGateway(this.redis.queueClient());
+    this.queueControl = this.queueControlGateway;
+    this.workerFleet = new RedisWorkerFleetGateway(this.redis.queueClient());
     this.queue = this.queuePublisher;
     // **Two, bound per slice** — decision D16. The port stays `run(work)`, so no
     // use-case knows which one it was handed; a mis-binding fails the first spec.
@@ -808,7 +856,8 @@ export class Container {
     // Each reads a `driver` rather than naming a class: the alternative is named in a
     // switch a compiler checks, not in a document.
     this.vectors = Container.buildVectorStore(config, this.cluster, this.transactions, this.shards);
-    this.embeddings = new OpenAiEmbeddingProvider(config.embedding, this.logger);
+    this.searchMode = Container.buildSearchMode(config.embedding, this.logger);
+    this.chatModel = Container.buildAssistantModel(config.assistant, this.logger);
 
     // Opt-in and stopped by default. Building the connection only when configured is
     // what keeps the seam honest rather than aspirational.
@@ -1065,6 +1114,11 @@ export class Container {
       ),
     };
 
+    this.documentIndex = new DocumentIndexPublisher(
+      this.queuePublisher,
+      new IndexTextStage(this.storage),
+    );
+
     // A frozen list, and the registry rejects a duplicate name or an unknown event at
     // construction — so a wiring mistake is a startup crash rather than a lost event.
     this.subscribers = new SubscriberRegistry([
@@ -1073,6 +1127,13 @@ export class Container {
       new MemberRealtimeSubscriber(this.realtime),
       new NotificationSubscriber(this.notification.deliver),
       new MessagingRealtimeSubscriber(this.realtime, conversations),
+      // `DC.2`: a tenant's published Docs, kept in the semantic index.
+      new DocIndexSubscriber(
+        new PgDocPageRepository(this.cluster, this.transactions, this.shards),
+        this.vectors,
+        this.documentIndex,
+        this.routedUnitOfWork,
+      ),
     ]);
 
     // Where `infrastructure`'s adapters bind to the ports `auth` declares. The binding
@@ -1314,7 +1375,64 @@ export class Container {
       this.shards,
     );
 
+    this.workerQueueSettings = new PgWorkerQueueSettingsRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
+    // The queues this deployment runs: analytics only with ClickHouse, so the page never
+    // reports a queue unserved that no worker could serve.
+    const servedQueues = QueueName.ALL.filter(
+      (queue) => queue !== QueueName.ANALYTICS || this.hasProjector,
+    );
+
     this.platformAdmin = {
+      workerFleet: new GetWorkerFleetUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.queueControl,
+        this.workerQueueSettings,
+        servedQueues,
+      ),
+      pauseWorkerQueue: new PauseWorkerQueueUseCase(
+        this.authorizer,
+        this.workerQueueSettings,
+        this.queueControl,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      saveQueueAutoscale: new SaveQueueAutoscaleUseCase(
+        this.authorizer,
+        this.workerQueueSettings,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      pauseWorkerProcess: new PauseWorkerProcessUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
+      setWorkerProcessQueues: new SetWorkerProcessQueuesUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+        servedQueues,
+      ),
+      resetWorkerProcess: new ResetWorkerProcessUseCase(
+        this.authorizer,
+        this.workerFleet,
+        this.platform,
+        this.activity,
+        this.catalogUnitOfWork,
+      ),
       deleteOrganization: new DeleteOrganizationUseCase(
         this.authorizer,
         new PgTenantRepository(this.cluster, this.transactions, this.shards),
@@ -1658,7 +1776,7 @@ export class Container {
     const indexText = new IndexTextStage(this.storage);
     const indexDocument = new IndexDocumentUseCase(
       this.authorizer,
-      this.embeddings,
+      this.searchMode,
       this.vectors,
       this.activity,
       this.routedUnitOfWork,
@@ -1671,16 +1789,22 @@ export class Container {
       indexText,
       queueIndex: new QueueDocumentIndexUseCase(
         this.authorizer,
-        this.queuePublisher,
+        this.documentIndex,
         this.vectors,
         this.clock,
-        indexText,
       ),
       searchDocuments: new SearchDocumentsUseCase(
         this.authorizer,
-        this.embeddings,
+        this.searchMode,
         this.vectors,
         this.activity,
+        this.routedUnitOfWork,
+      ),
+      // The worker's, off `pnpm ai:reindex`: every chunk another model wrote, re-embedded.
+      reembed: new ReembedChunksUseCase(
+        this.authorizer,
+        this.searchMode,
+        this.vectors,
         this.routedUnitOfWork,
       ),
     };
@@ -1791,6 +1915,15 @@ export class Container {
 
   public get hasLogs(): boolean {
     return this.logReader !== undefined;
+  }
+
+  public get assistantModel(): AssistantModel {
+    if (!this.chatModel) throw new Error("This container was built without an assistant model.");
+    return this.chatModel;
+  }
+
+  public get hasAssistant(): boolean {
+    return this.chatModel !== null;
   }
 
   // **The one place a request or a job is placed.** Both run once, here, so
@@ -1951,6 +2084,7 @@ export class Container {
     clearInterval(this.poolProbe);
     // Each step on its own: one close that rejects must not leave the pools after it open.
     await this.closing("queue", () => this.queuePublisher.close());
+    await this.closing("queue-control", () => this.queueControlGateway.close());
     await this.closing("redis", () => this.redis.close());
     await this.closing("clickhouse", async () => this.clickhouse?.close());
     // Before Postgres only because nothing else depends on it: an unclosed transport is
@@ -1980,7 +2114,7 @@ export class Container {
     const grants = new PgDocGrantRepository(this.cluster, this.transactions, this.shards);
     const access = new DocAccess(grants, this.cache);
     const features = new DocFeaturePolicy(this.flags, entitlements, this.cache);
-    const search = new DocSearch(pages, cache, features);
+    const search = new DocSearch(pages, cache, features, this.searchMode, this.vectors);
     const images = new DocImageSweep(this.storage);
     const auth = this.authorizer;
     const uow = this.routedUnitOfWork;
@@ -2017,6 +2151,7 @@ export class Container {
         this.activity,
         uow,
         images,
+        this.eventPublisher,
       ),
       read: new ReadDocPageUseCase(auth, cache, features),
       readNav: new ReadDocNavUseCase(auth, cache, features),
@@ -2034,6 +2169,7 @@ export class Container {
         cache,
         this.activity,
         uow,
+        this.eventPublisher,
       ),
       movePage: new MoveDocPageUseCase(auth, spaces, pages, tree, cache, this.activity, uow),
       deletePage: new DeleteDocPageUseCase(
@@ -2045,6 +2181,7 @@ export class Container {
         this.activity,
         uow,
         this.queuePublisher,
+        this.eventPublisher,
       ),
       previewPage: new PreviewDocPageUseCase(auth, renderer),
       revisions: new ListDocRevisionsUseCase(auth, pages, spaces),
@@ -2080,7 +2217,84 @@ export class Container {
       ),
       rerender: new DocRerender(pages, renderer, cache, uow),
       imageOrphans: new DocImageOrphans(pages, this.storage, this.clock),
+      reindex: new ReindexDocsUseCase(auth, spaces, pages, this.documentIndex, this.clock),
     };
+  }
+
+  // A `case` per provider, the compiler checking every one. OpenRouter is OpenAI's wire at
+  // another endpoint, so it is the same adapter; the default models are each one's small one.
+  private static buildAssistantModel(
+    config: ContainerConfig["assistant"],
+    logger: Logger,
+  ): AssistantModel | null {
+    if (!config) return null;
+    const key = config.apiKey ?? "";
+    switch (config.provider) {
+      case "none":
+        return null;
+      case "fake":
+        return new CannedAssistantModel();
+      case "openai":
+        return new OpenAiAssistantModel(
+          {
+            apiKey: key,
+            model: config.model ?? "gpt-4.1-mini",
+            ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+          },
+          logger,
+        );
+      case "openrouter":
+        return new OpenAiAssistantModel(
+          {
+            apiKey: key,
+            model: config.model ?? "openai/gpt-4.1-mini",
+            endpoint: config.endpoint ?? "https://openrouter.ai/api/v1",
+          },
+          logger,
+        );
+      case "gemini":
+        return new GeminiAssistantModel(
+          {
+            apiKey: key,
+            model: config.model ?? "gemini-2.5-flash",
+            ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+          },
+          logger,
+        );
+    }
+  }
+
+  // The one place a vendor is chosen, as a `case` the compiler checks. The default models
+  // are each vendor's current small embedding model; both are cut to `dimensions`.
+  private static buildSearchMode(config: ContainerConfig["embedding"], logger: Logger): SearchMode {
+    switch (config.provider) {
+      case "none":
+        return { kind: "lexical" };
+      case "openai":
+        return {
+          kind: "semantic",
+          provider: new OpenAiEmbeddingProvider(
+            {
+              apiKey: config.apiKey ?? "",
+              model: config.model ?? "text-embedding-3-small",
+              dimensions: config.dimensions,
+            },
+            logger,
+          ),
+        };
+      case "gemini":
+        return {
+          kind: "semantic",
+          provider: new GeminiEmbeddingProvider(
+            {
+              apiKey: config.apiKey ?? "",
+              model: config.model ?? "gemini-embedding-001",
+              dimensions: config.dimensions,
+            },
+            logger,
+          ),
+        };
+    }
   }
 
   // A static, so adopting a dedicated vector store is a `case` the compiler checks. The

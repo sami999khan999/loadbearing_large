@@ -83,9 +83,12 @@ export interface ContainerConfig {
     // Better Auth's own: the worker sends invitation mail and has no auth config at all.
     readonly baseUrl: string;
   };
+  // `none` is lexical search over the chunk text and no outbound call. The other two need
+  // a key, and a model defaults per provider when unset. See docs/reference/container.md.
   readonly embedding: {
-    readonly apiKey: string;
-    readonly model: string;
+    readonly provider: "none" | "openai" | "gemini";
+    readonly apiKey?: string;
+    readonly model?: string;
     readonly dimensions: number;
   };
   readonly realtime: {
@@ -97,6 +100,14 @@ export interface ContainerConfig {
     readonly streamMaxAgeSeconds: number;
   };
   // ── the swappable stores ───────────────────────────────────────────────────
+  // The AI assistant's chat model (`AI.1`). Absent or `none` builds no model, and the
+  // feature is off. See packages/infrastructure/docs/reference/assistant.md.
+  readonly assistant?: {
+    readonly provider: "none" | "fake" | "openai" | "openrouter" | "gemini";
+    readonly apiKey?: string;
+    readonly model?: string;
+    readonly endpoint?: string;
+  };
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.
   readonly vector: {

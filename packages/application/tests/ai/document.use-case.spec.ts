@@ -2,11 +2,13 @@ import { Identifiers } from "@loadbearing/contracts";
 import { ForbiddenError, UnavailableError, ValidationError } from "@loadbearing/errors";
 import { CapabilitySet, type PermissionKey, PermissionRegistry } from "@loadbearing/permissions";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DocumentIndexPublisher } from "../../src/ai/document-index.publisher.js";
 import { IndexTextStage } from "../../src/ai/index-text-stage.js";
 import { QueueDocumentIndexUseCase } from "../../src/ai/queue-document-index.use-case.js";
 import { SearchDocumentsUseCase } from "../../src/ai/search-documents.use-case.js";
 import type {
   ActivityLogger,
+  ChunkFilter,
   EmbeddingProvider,
   JobOptions,
   QueuePublisher,
@@ -50,6 +52,7 @@ class RecordingQueue implements QueuePublisher {
 
 class StubEmbeddings implements EmbeddingProvider {
   public readonly dimensions: number;
+  public readonly model = "stub-model";
 
   public constructor(private readonly vectors: readonly (readonly number[])[]) {
     // Read off the vectors rather than fixed at 1536, so the double cannot claim a width
@@ -63,7 +66,11 @@ class StubEmbeddings implements EmbeddingProvider {
 }
 
 class RecordingVectors implements VectorStore {
-  public readonly searches: { goalIds: readonly string[]; limit: number }[] = [];
+  public readonly searches: {
+    goalIds: readonly string[];
+    limit: number;
+    filter: ChunkFilter;
+  }[] = [];
 
   public constructor(private readonly hits: readonly SearchHit[] = []) {}
 
@@ -79,20 +86,39 @@ class RecordingVectors implements VectorStore {
     throw new Error("not under test");
   }
 
-  public indexed: { goalId: string | null; version: number | null } | null = null;
+  public indexed: { goalId: string | null; version: number | null; sourceType: string } | null =
+    null;
 
-  public sourceOf(): Promise<{ goalId: string | null; version: number | null } | null> {
+  public sourceOf(): Promise<{
+    goalId: string | null;
+    version: number | null;
+    sourceType: string;
+  } | null> {
     return Promise.resolve(this.indexed);
   }
 
   public search(
     _org: unknown,
     _embedding: readonly number[],
+    _model: string,
     goalIds: readonly string[],
     limit: number,
+    filter: ChunkFilter,
   ): Promise<readonly SearchHit[]> {
-    this.searches.push({ goalIds, limit });
+    this.searches.push({ goalIds, limit, filter });
     return Promise.resolve(this.hits);
+  }
+
+  public searchText(): Promise<readonly SearchHit[]> {
+    throw new Error("not under test");
+  }
+
+  public stale(): Promise<readonly never[]> {
+    throw new Error("not under test");
+  }
+
+  public saveEmbeddings(): Promise<void> {
+    throw new Error("not under test");
   }
 }
 
@@ -123,10 +149,9 @@ describe("QueueDocumentIndexUseCase", () => {
   const useCase = () =>
     new QueueDocumentIndexUseCase(
       new Authorizer(),
-      queue,
+      new DocumentIndexPublisher(queue, new IndexTextStage(storage)),
       vectors,
       { now: () => NOW },
-      new IndexTextStage(storage),
     );
 
   beforeEach(() => {
@@ -138,7 +163,7 @@ describe("QueueDocumentIndexUseCase", () => {
   // one would be — stubbing the registry is how the refusal is reachable at all.
   it("refuses a re-index of a document in a goal the actor cannot write to", async () => {
     vi.spyOn(PermissionRegistry.instance, "scopeOf").mockReturnValue("goal");
-    vectors.indexed = { goalId: GOAL, version: null };
+    vectors.indexed = { goalId: GOAL, version: null, sourceType: "document" };
     const actor = new Principal(
       ORG,
       ACTOR,
@@ -274,13 +299,52 @@ describe("QueueDocumentIndexUseCase", () => {
       useCase().execute(actorHolding("ai.embedding.write"), { text: "   \n  " }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
+
+  // `DC.2`: a `doc` chunk is read under the Docs rule. Queued from here it would carry no
+  // space, and a writer could fill the Docs index with text no page holds.
+  it("refuses the reserved doc source type", async () => {
+    await expect(
+      useCase().execute(actorHolding("ai.embedding.write"), { text: "x", sourceType: "doc" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(queue.published).toHaveLength(0);
+  });
+
+  it("refuses to replace a Docs page's chunks by naming its id", async () => {
+    vectors.indexed = { goalId: null, version: 1, sourceType: "doc" };
+
+    await expect(
+      useCase().execute(actorHolding("ai.embedding.write"), { documentId: DOCUMENT, text: "x" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(queue.published).toHaveLength(0);
+  });
 });
 
 describe("SearchDocumentsUseCase", () => {
   const useCase = (vectors: RecordingVectors, embeddings: EmbeddingProvider) =>
-    new SearchDocumentsUseCase(new Authorizer(), embeddings, vectors, activity, {
-      run: (work: () => Promise<unknown>) => work(),
-    } as never);
+    new SearchDocumentsUseCase(
+      new Authorizer(),
+      { kind: "semantic", provider: embeddings },
+      vectors,
+      activity,
+      {
+        run: (work: () => Promise<unknown>) => work(),
+      } as never,
+    );
+
+  // A Docs page is org-wide by goal, so without the filter its text would reach anyone
+  // holding `ai.embedding.read`, private spaces included.
+  it("never ranks a guarded source type", async () => {
+    const vectors = new RecordingVectors();
+    await useCase(vectors, new StubEmbeddings([[1, 0]])).execute(
+      actorHolding("ai.embedding.read"),
+      {
+        query: "anything",
+        limit: 5,
+      },
+    );
+
+    expect(vectors.searches[0]?.filter).toEqual({ kind: "except", sourceTypes: ["doc"] });
+  });
 
   it("refuses a principal without ai.embedding.read", async () => {
     const vectors = new RecordingVectors();
@@ -302,7 +366,9 @@ describe("SearchDocumentsUseCase", () => {
       { query: "invoices", limit: 5 },
     );
 
-    expect(vectors.searches).toEqual([{ goalIds: [], limit: 5 }]);
+    expect(vectors.searches).toEqual([
+      { goalIds: [], limit: 5, filter: { kind: "except", sourceTypes: ["doc"] } },
+    ]);
   });
 
   // A provider that answered with nothing would otherwise search on `undefined` and

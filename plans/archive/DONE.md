@@ -65,6 +65,9 @@ resolve — and every pointer into `archive/PLAN.md` and the rest still points w
 
   | Level | Writes/s | p50 | p95 | p99 | Errors |
   |---|---|---|---|---|---|
+| 2026-10-14 | @sami | **`DC.2` closed: semantic search over Docs**, hybrid with full text inside the visible spaces, plus the doc-chunk leak into the shared AI search it would have opened |
+| 2026-10-14 | @sami | **`AI.0` closed: search modes from lite.** `EMBEDDING_PROVIDER=none\|openai\|gemini`, lexical search, Gemini, `embedding_model` per chunk and `pnpm ai:reindex [--adopt]` |
+| 2026-10-10 | @sami | **`WC.1` closed: worker control.** `WORKER_QUEUES`, the lane supervisor and the platform Workers page — pause, queue moves and in-process autoscaling |
   | 1× | 23 / 22 | 151 / 164 ms | 324 / 326 ms | 467 / 460 ms | 0 |
   | 10× | 142 / 159 | 265 / 238 ms | 498 / 397 ms | 577 / 417 ms | 0 |
 
@@ -1472,6 +1475,24 @@ before its first box was ticked; their proof is the plan's text, and the item ID
 
 ## 15. The docs capability — closed so far
 
+- [x] `DC.2` **Semantic search over docs** `done: 2026-10-14` — publishing a page emits
+  `doc.page.published`; the `doc-index` subscriber queues the page (title, description and
+  markdown) into the embedding pipeline as one `doc` document with its `spaceId` on every chunk,
+  through the new `DocumentIndexPublisher` the user-facing index request now shares. Deletes emit
+  `doc.page.deleted` or `doc.space.deleted` with every page removed, and the subscriber forgets
+  them. `DocSearch` fuses full text with the vector index by reciprocal rank, for the tenant's own
+  search only, and asks the index for `doc` chunks **inside the visible spaces** — the new
+  required `ChunkFilter` runs on the input set. **A leak the plan did not name, closed with it:**
+  a Docs page is org-wide by goal, so `SearchDocumentsUseCase` would have ranked a private
+  space's text for anyone holding `ai.embedding.read`; it now searches `except` the guarded types,
+  and `QueueDocumentIndexUseCase` refuses the `doc` type and a page's id. `pnpm ai:reindex --docs`
+  backfills pages published before. A provider failure costs the meaning half, never the search.
+  **Proof:** specs for the subscriber, the backfill, the fusion, the filter in the pg store and the
+  fake, the reservations and the delete event; live on the local stack, a published page became a
+  `doc` chunk naming its space, the shared AI search left it out where SQL matched it, the Docs
+  search found it, both reservations answered 400, and a delete removed the chunk. **Not run:** the
+  semantic half against a real provider, which needs a key.
+
 Both came built with §17's port from lite and were found closed on 2026-10-10. The bodies are
 in this file's history of `BACKLOG.md` §15.
 
@@ -1647,6 +1668,23 @@ is a spec that fails without the fix, unless the entry says otherwise.
   pgBouncer clients. Proof: 12 processes against 100 refused with the numbers. `c2193550`.
 - [x] `FC.15` **Production booted on an `http` `AUTH_URL`** `done: 2026-10-10` — refused, except
   on a loopback host. `env.spec`. `3086f6c7`.
+
+Found walking lite in a browser on 2026-10-10, in code both kits share, and fixed here first:
+
+- [x] `FC.16` **A bad input read "Something went wrong"** `done: 2026-10-10` — oRPC's own input
+  check passed as one of ours by its `BAD_REQUEST` code, so its issues never became fields; the
+  normalizer builds a `ValidationError` from them. `error-normalizer.spec`. `36ea3f32`.
+- [x] `FC.17` **No form showed the field sentences** `done: 2026-10-10` — `useErrorMessage` now
+  answers with them when the server named fields; an empty invite email says which field.
+  `use-error-message.spec`. `0fd597a9`.
+- [x] `FC.18` **Server functions had no CSRF check once `start.ts` existed** `done: 2026-10-10` —
+  Start's `createCsrfMiddleware`, for server functions only. Proof: a cross-site call is 403 and
+  the app's own call answers. `ca0bae71`.
+- [x] `FC.19` **No page hydrated in dev after `FC.13`** `done: 2026-10-10` — with `start.ts`
+  present, Start's compiler stopped stripping the server branch of a re-exported
+  `createIsomorphicFn`, and the container graph reached the browser. `router.tsx` imports it
+  from the package. Proof: the dev client's `router.tsx` no longer imports `rpc-transport`; the
+  production build was never affected. `e3ecd2da`.
 
 ## Moved out of `BACKLOG.md` on 2026-09-25
 
@@ -1876,10 +1914,42 @@ record, not a better one. Listed so nobody reads them as current on the way to a
 
 ---
 
+## 21. Worker control — closed
+
+- [x] `WC.1` **Build [`WORKER-CONTROL-PLAN.md`](../WORKER-CONTROL-PLAN.md)** `done: 2026-10-10` —
+  `WORKER_QUEUES` chooses a process's queues, and the platform **Workers** page shows every live
+  process and queue. From it an admin pauses a queue everywhere, one process, or one queue on one
+  process; moves queues between processes; and autoscales a queue's concurrency between a minimum
+  and a maximum. Changes reach a process through `worker:control` within a second, with a 5 s
+  reconcile behind it. The plan's "As built" section lists where the code differs.
+  **Proof:** unit specs for the autoscale rules, the six use cases and the supervisor. Live, on
+  the local stack with two workers on split `WORKER_QUEUES`, each write reached its process within a
+  second; a hard-killed process dropped off after its 15 s TTL, its queue was flagged unserved, and a
+  clean stop removed it at once. **Not checked:** the page in a browser. The local production build
+  did not submit its sign-in form, so the procedures were driven over HTTP with a signed-in
+  session instead.
+
+## 22. AI assistant — `AI.0` closed
+
+- [x] `AI.0` **Bring lite's AI search modes up** `done: 2026-10-14` — back-ported from lite's
+  `b77ec464`. `EMBEDDING_PROVIDER=none|openai|gemini` picks a `SearchMode` once in the container:
+  `none` indexes the text alone and searches it with Postgres full-text search through
+  `VectorStore.searchText`, calling nobody; `openai` and `gemini` embed, and
+  `GeminiEmbeddingProvider` is new. Every chunk records `embedding_model`, a search compares only
+  the active model's vectors, and `pnpm ai:reindex` re-embeds after a switch (migration
+  `0055_chunk_embedding_model`). **Two additions for the big kit, which has live OpenAI corpora
+  that lite never had:** `pnpm ai:reindex --adopt` names pre-`0055` vectors as the active OpenAI
+  model's on every node without calling it, and a set `OPENAI_API_KEY` now refuses to boot rather
+  than quietly dropping a deployment to text search. **Proof:** the vector, Gemini and
+  partition-pruning specs against the local stack (45), a new `EmbeddingConsumer` spec for the
+  `reembed` route, the full suite, boot smokes for all three apps, and on the local database an
+  inserted pre-`0055` chunk adopted once and not again.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |
 | 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |
 | 2026-10-10 | @sami | **§20, the final check: `FC.1`–`FC.6` and `FC.8`–`FC.10` fixed in both kits, `FC.7` checked and not a defect.** Lite also fixes its own `FC.11` and `FC.12`. `BACKLOG.md` §20 keeps three design items, `FC.13`–`FC.15` |
 | 2026-10-10 | @sami | **`RW.1`, `RW.2`, `RW.4` and `RW.5` closed, in both kits.** The editor's leave guard, short-lived credential mail jobs, the export image links file, and the two enrolment paths. §19 keeps `RW.3`, which is big-kit only |

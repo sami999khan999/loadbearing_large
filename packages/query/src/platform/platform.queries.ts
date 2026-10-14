@@ -165,4 +165,15 @@ export class PlatformQueries {
       staleTime: 60_000,
     });
   }
+
+  // Polled, because the fleet changes with no click on this page: a process booting, a
+  // queue filling, the autoscaler moving. Three seconds is a heartbeat's resolution.
+  public static workerFleet(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.platform.workers(),
+      queryFn: () => client.platform.workerFleet(),
+      staleTime: 2_000,
+      refetchInterval: 3_000,
+    });
+  }
 }

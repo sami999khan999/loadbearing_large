@@ -121,3 +121,29 @@ export const tenantRetentionPolicy = pgTable(
     ),
   ],
 );
+
+// One row per queue the dashboard has touched. Absent is a queue that runs, unpaused, at
+// each worker's own `WORKER_<Q>_CONCURRENCY`, so an empty table is the deploy before it.
+export const workerQueueSettings = pgTable(
+  "worker_queue_settings",
+  {
+    // A `QueueName`, validated in the use-case. Not an enum here: a new queue is a code
+    // change, and it must not need a migration to be paused.
+    queue: text("queue").primaryKey(),
+    paused: boolean("paused").notNull().default(false),
+    autoscaleEnabled: boolean("autoscale_enabled").notNull().default(false),
+    concurrencyMin: smallint("concurrency_min").notNull().default(1),
+    concurrencyMax: smallint("concurrency_max").notNull().default(1),
+    scaleUpWaiting: integer("scale_up_waiting").notNull().default(50),
+    step: smallint("step").notNull().default(1),
+    scaleDownAfterSeconds: integer("scale_down_after_seconds").notNull().default(60),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "worker_queue_settings_range_ck",
+      sql`${t.concurrencyMin} >= 1 and ${t.concurrencyMax} >= ${t.concurrencyMin}`,
+    ),
+    check("worker_queue_settings_step_ck", sql`${t.step} >= 1 and ${t.scaleUpWaiting} >= 1`),
+  ],
+);

@@ -29,7 +29,8 @@ class RecordingVectorStore implements VectorStore {
   public readonly calls: string[] = [];
   public upserted: readonly {
     readonly content: string;
-    readonly embedding: readonly number[];
+    readonly embedding: readonly number[] | null;
+    readonly embeddingModel: string | null;
   }[] = [];
 
   public upsert(_organizationId: typeof ORG, chunks: readonly never[]): Promise<void> {
@@ -56,16 +57,34 @@ class RecordingVectorStore implements VectorStore {
     return Promise.resolve([]);
   }
 
-  // What is "already indexed" for the version tests; nothing, unless a test says so.
-  public indexed: { goalId: string | null; version: number | null } | null = null;
+  public searchText(): Promise<readonly never[]> {
+    return Promise.resolve([]);
+  }
 
-  public sourceOf(): Promise<{ goalId: string | null; version: number | null } | null> {
+  public stale(): Promise<readonly never[]> {
+    return Promise.resolve([]);
+  }
+
+  public saveEmbeddings(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  // What is "already indexed" for the version tests; nothing, unless a test says so.
+  public indexed: { goalId: string | null; version: number | null; sourceType: string } | null =
+    null;
+
+  public sourceOf(): Promise<{
+    goalId: string | null;
+    version: number | null;
+    sourceType: string;
+  } | null> {
     return Promise.resolve(this.indexed);
   }
 }
 
 class StubEmbeddingProvider implements EmbeddingProvider {
   public readonly dimensions = 4;
+  public readonly model = "stub-model";
 
   public constructor(private readonly howMany: (texts: readonly string[]) => number) {}
 
@@ -92,11 +111,11 @@ const recordingActivity = () => {
 // Runs the work and opens nothing. Atomicity is asserted against Postgres.
 const directUnitOfWork: UnitOfWork = { run: (work) => work() } as UnitOfWork;
 
-const build = (embeddings: EmbeddingProvider, vectors = new RecordingVectorStore()) => {
+const build = (embeddings: EmbeddingProvider | null, vectors = new RecordingVectorStore()) => {
   const activity = recordingActivity();
   const useCase = new IndexDocumentUseCase(
     new Authorizer(),
-    embeddings,
+    embeddings === null ? { kind: "lexical" } : { kind: "semantic", provider: embeddings },
     vectors as unknown as VectorStore,
     activity.logger as unknown as ActivityLogger,
     directUnitOfWork,
@@ -136,6 +155,28 @@ describe("IndexDocumentUseCase", () => {
     expect(vectors.upserted).toHaveLength(result.chunks);
     expect(vectors.calls).toEqual(["lock", "delete", "upsert"]);
     expect(activity.actions).toEqual(["ai.document.indexed"]);
+  });
+
+  // `LT4.4`: with no provider the text is still written, so lexical search finds it.
+  it("writes every chunk with no vector and no model when there is no provider", async () => {
+    const { useCase, vectors } = build(null);
+
+    const result = await useCase.execute(actorHolding(...grants), {
+      documentId: DOCUMENT,
+      text: "a".repeat(2_400),
+    });
+
+    expect(result.chunks).toBeGreaterThan(1);
+    expect(vectors.upserted.every((chunk) => chunk.embedding === null)).toBe(true);
+    expect(vectors.upserted.every((chunk) => chunk.embeddingModel === null)).toBe(true);
+  });
+
+  it("records the model on every chunk it embeds", async () => {
+    const { useCase, vectors } = build(new StubEmbeddingProvider((t) => t.length));
+
+    await useCase.execute(actorHolding(...grants), { documentId: DOCUMENT, text: "some text" });
+
+    expect(vectors.upserted.map((chunk) => chunk.embeddingModel)).toEqual(["stub-model"]);
   });
 
   // 1,500-character windows on a 1,300 stride, so consecutive chunks share 200
@@ -230,7 +271,7 @@ describe("IndexDocumentUseCase — versions", () => {
 
   it("skips a job older than what is indexed, before the provider is called", async () => {
     const vectors = new RecordingVectorStore();
-    vectors.indexed = { goalId: null, version: 200 };
+    vectors.indexed = { goalId: null, version: 200, sourceType: "document" };
     let called = false;
     const { useCase } = build(
       new StubEmbeddingProvider((texts) => {
@@ -255,9 +296,9 @@ describe("IndexDocumentUseCase — versions", () => {
   // lock: the check after the lock must see it and write nothing.
   it("writes nothing when a newer job commits while it waits for the lock", async () => {
     const vectors = new RecordingVectorStore();
-    vectors.indexed = { goalId: null, version: 50 };
+    vectors.indexed = { goalId: null, version: 50, sourceType: "document" };
     vectors.onLock = () => {
-      vectors.indexed = { goalId: null, version: 200 };
+      vectors.indexed = { goalId: null, version: 200, sourceType: "document" };
     };
     const { useCase } = build(one, vectors);
 
@@ -273,7 +314,7 @@ describe("IndexDocumentUseCase — versions", () => {
 
   it("indexes its own retry, and anything newer, and stamps the version", async () => {
     const vectors = new RecordingVectorStore();
-    vectors.indexed = { goalId: null, version: 100 };
+    vectors.indexed = { goalId: null, version: 100, sourceType: "document" };
     const { useCase } = build(one, vectors);
 
     const result = await useCase.execute(actor, {

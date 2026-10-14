@@ -29,6 +29,7 @@ import {
   RecordingRealtimePublisher,
   RecordingRelayedActivityStore,
   RecordingSessionGateway,
+  ScriptedAssistantModel,
   StubEmbeddingProvider,
   StubMailRenderer,
   StubMarkdownRenderer,
@@ -38,6 +39,7 @@ import {
   type ActivityLogger,
   type ActivityReplayReader,
   type AnalyticsProjector,
+  type AssistantModel,
   Authorizer,
   type CacheStore,
   type CapabilityInvalidator,
@@ -85,6 +87,7 @@ import { OrganizationShardingStrategy } from "../shard/index.js";
 export interface TestPorts {
   readonly activity: ActivityLogger;
   readonly activityReplay: ActivityReplayReader;
+  readonly assistantModel: AssistantModel;
   readonly relayedActivity: RelayedActivityStore;
   // Present even though the real container leaves them absent: a test has no opinion
   // about the deployment, and a consumer spec needs both sides.
@@ -155,6 +158,7 @@ export class TestContainer {
 
       activity: overrides.activity ?? new RecordingActivityLogger(),
       activityReplay: overrides.activityReplay ?? new InMemoryActivityReplayReader(),
+      assistantModel: overrides.assistantModel ?? new ScriptedAssistantModel(),
       relayedActivity: overrides.relayedActivity ?? new RecordingRelayedActivityStore(),
       analyticsProjector: overrides.analyticsProjector ?? new InMemoryAnalyticsProjector(),
       cache: overrides.cache ?? new InMemoryCacheStore(),

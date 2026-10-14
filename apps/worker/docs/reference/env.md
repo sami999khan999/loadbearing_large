@@ -68,6 +68,16 @@ variables and a placement decision — not a config file two processes have to a
 A driver plus the connection detail that driver needs. `Container` reads the driver and builds the
 class behind the port, so adopting a store is these variables and nothing else.
 
+`VECTOR_DRIVER` has one value today, `pgvector`. The embedding block picks who turns text into
+vectors: `EMBEDDING_PROVIDER` is `none`, `openai` or `gemini`, and `none` searches the chunk text and
+calls nobody. **A provider other than `none` makes `EMBEDDING_API_KEY` required,** and a set
+`OPENAI_API_KEY`, the name before it, is refused. The schema refuses both at boot rather than failing
+on the first document. See [embedding](../../../../packages/infrastructure/docs/reference/embedding.md).
+
+`ASSISTANT_PROVIDER` picks the AI assistant's chat model the same way, and a provider other than
+`none` or `fake` makes `ASSISTANT_API_KEY` required. See
+[assistant](../../../../packages/infrastructure/docs/reference/assistant.md).
+
 The ClickHouse block is optional, and **its absence is what keeps ClickHouse stopped**. Present, the
 projection runs and the reconciliation reports; nothing reads the store back, because there is no
 analytics reader. There is no read driver to flip, and that is the point — a flag that moved reads
@@ -99,11 +109,18 @@ jobs, every one of which may hold a Postgres connection.
   event fans out to one job per subscriber. The drain itself runs at `priority: 1` ahead of them,
   so a delivery backlog cannot starve it.
 
+## `WORKER_QUEUES` and `WORKER_PROCESS_MAX_CONCURRENCY`
+
+`WORKER_QUEUES` is the comma list of queues this process serves; unset serves all of them.
+`WORKER_PROCESS_MAX_CONCURRENCY` (64) caps the sum of the selected lanes' concurrency, and a boot
+over it is refused. Each concurrency variable above is that lane's concurrency in one process.
+See [`supervisor.md`](./supervisor.md).
+
 ## Count your processes, and now your concurrencies
 
 The five knobs above are per instance, and they are also drawn against one pool. `WorkerBootstrap`
-sums the concurrency of the consumers that actually **started** — not the six in the tree, because
-`AnalyticsConsumer` starts only with a ClickHouse config — and emits `worker.pool.oversubscribed`
+sums the concurrency of the lanes that actually **started** — not the six in the tree, because
+`WORKER_QUEUES` may select fewer and `AnalyticsConsumer` starts only with a ClickHouse config — and emits `worker.pool.oversubscribed`
 when the sum exceeds `DATABASE_POOL_MAX`. At the defaults that is 20 against 10, and the line fires
 on every boot until one of the two numbers moves.
 

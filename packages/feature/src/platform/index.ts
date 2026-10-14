@@ -13,6 +13,7 @@ export {
   ProjectionSwitchPanel,
   type ProjectionSwitchPanelProps,
 } from "./projection-switch.panel.js";
+export { QueueAutoscaleForm, type QueueAutoscaleFormProps } from "./queue-autoscale.form.js";
 export { ReplicaSwitchPanel } from "./replica-switch.panel.js";
 export {
   RestorePartitionPanel,
@@ -33,3 +34,6 @@ export {
   TenantStorageList,
   type TenantStorageListProps,
 } from "./tenant-storage.list.js";
+export { WorkerProcessList } from "./worker-process.list.js";
+export { WorkerQueueList } from "./worker-queue.list.js";
+export { WorkerQueuesForm, type WorkerQueuesFormProps } from "./worker-queues.form.js";

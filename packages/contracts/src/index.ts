@@ -183,6 +183,8 @@ export {
   type ProjectionGapDto,
   type ProjectionToggleInput,
   type ProjectionUpdateInput,
+  type QueueAutoscaleInput,
+  type QueuePauseInput,
   type ReplicaDto,
   type ReplicaToggleInput,
   type ReprojectInput,
@@ -211,6 +213,14 @@ export {
   type TenantStorageMonthDto,
   type TenantStorageQuery,
   type TenantStorageRowDto,
+  type WorkerFleetDto,
+  type WorkerLaneDto,
+  type WorkerProcessDto,
+  type WorkerProcessPauseInput,
+  type WorkerProcessQueuesInput,
+  type WorkerProcessRefInput,
+  type WorkerQueueDto,
+  type WorkerQueuesChangedDto,
 } from "./platform/index.js";
 export {
   type ApiKeyId,

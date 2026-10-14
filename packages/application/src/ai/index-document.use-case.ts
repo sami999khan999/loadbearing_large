@@ -1,6 +1,7 @@
 import { UnavailableError, Uuid, ValidationError } from "../import.js";
-import type { ActivityLogger, EmbeddingProvider, UnitOfWork, VectorStore } from "../port/index.js";
+import type { ActivityLogger, UnitOfWork, VectorStore } from "../port/index.js";
 import type { Authorizer, Principal } from "../primitive/index.js";
+import type { SearchMode } from "./ai-search-mode.js";
 
 export interface IndexDocumentInput {
   readonly documentId: string;
@@ -10,6 +11,9 @@ export interface IndexDocumentInput {
   readonly sourceType?: string;
   // The request's time. Absent for a caller that is not racing anything.
   readonly version?: number;
+  // Written onto every chunk, under the indexer's own keys so it cannot overwrite them. A
+  // guarded source type's read rule filters on it.
+  readonly metadata?: Readonly<Record<string, string>>;
 }
 
 export interface IndexDocumentResult {
@@ -27,7 +31,7 @@ const CHUNK_OVERLAP = 200;
 export class IndexDocumentUseCase {
   public constructor(
     private readonly authorizer: Authorizer,
-    private readonly embeddings: EmbeddingProvider,
+    private readonly mode: SearchMode,
     private readonly vectors: VectorStore,
     private readonly activity: ActivityLogger,
     private readonly unitOfWork: UnitOfWork,
@@ -46,12 +50,14 @@ export class IndexDocumentUseCase {
     if (await this.superseded(actor, input)) return { documentId: input.documentId, chunks: 0 };
 
     // One round trip for the whole document. A per-chunk call is what turns a
-    // re-index into a rate-limit incident.
-    const vectors = await this.embeddings.embed(texts);
+    // re-index into a rate-limit incident. No provider writes the text with no vector.
+    const vectors =
+      this.mode.kind === "semantic" ? await this.mode.provider.embed(texts, "document") : null;
+    const model = this.mode.kind === "semantic" ? this.mode.provider.model : null;
 
     // Before the unit of work, because the write below deletes first: a short response
     // padded with empty vectors deletes the corpus and inserts nothing back.
-    if (vectors.length !== texts.length) {
+    if (vectors !== null && vectors.length !== texts.length) {
       throw new UnavailableError("embedding.provider");
     }
 
@@ -60,8 +66,10 @@ export class IndexDocumentUseCase {
       sourceId: input.documentId,
       goalId: input.goalId ?? null,
       content,
-      embedding: vectors[index] as readonly number[],
+      embedding: vectors === null ? null : (vectors[index] as readonly number[]),
+      embeddingModel: model,
       metadata: {
+        ...input.metadata,
         sourceType: input.sourceType ?? "document",
         chunkIndex: index,
         ...(input.version === undefined ? {} : { version: input.version }),

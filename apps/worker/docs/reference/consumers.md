@@ -8,7 +8,7 @@ description: Six consumers, all serial, all with a public handle() — the batch
 | Consumer | Queue | Jobs | Registered |
 |---|---|---|---|
 | `MaintenanceConsumer` | `MAINTENANCE` | cleanup · partitions | always |
-| `EmbeddingConsumer` | `EMBEDDING` | index | always |
+| `EmbeddingConsumer` | `EMBEDDING` | index · reembed · doc-reindex | always |
 | `MailConsumer` | `MAIL` | send | always |
 | `OutboxConsumer` | `EVENT` | drain · deliver | always |
 | `NotificationConsumer` | `NOTIFICATION` | digest-fanout · digest | always |
@@ -85,6 +85,12 @@ Failures are observed from the `failed` **event** instead, never from a `catch` 
 the listener does not swallow, so BullMQ still sees the rejection and still retries.
 
 Everything worth testing lives in `IndexDocumentUseCase`.
+
+**Three job names share the queue.** An index job carries a document. The other two name only a
+tenant, and `pnpm ai:reindex` queues one per organization: `reembed` re-embeds every chunk the
+active model did not write (`ReembedChunksUseCase`), and `doc-reindex`, from `--docs`, queues every
+published Docs page as its own index job (`ReindexDocsUseCase`). Each is placed on the tenant's node
+before it runs.
 
 ## `AnalyticsConsumer`: two jobs, one failure
 

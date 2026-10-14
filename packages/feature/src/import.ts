@@ -71,6 +71,8 @@ export {
   type TenantStorageMonthDto,
   type TenantStorageRowDto,
   type WidgetPreferencesDto,
+  type WorkerProcessDto,
+  type WorkerQueueDto,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────

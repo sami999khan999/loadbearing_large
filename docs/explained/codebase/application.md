@@ -42,10 +42,28 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 
 | File | What it does |
 |---|---|
+| `ai-search-mode.ts` | `SearchMode`: how documents are embedded and searched, decided once from `EMBEDDING_PROVIDER`: by text alone with no provider, or by meaning through OpenAI or Gemini. |
+| `chunk-source.ts` | `ChunkSource`: the document types whose chunks carry their own read rule, today Docs pages, so the shared document search never returns them. |
+| `document-index.publisher.ts` | `DocumentIndexPublisher`: the one way onto the embedding queue. Stores the text in the bucket and queues the job, for a person's request and for a Docs publish alike. |
 | `index-document.use-case.ts` | Indexes one document for AI search: splits the text into chunks, asks the embedding provider for vectors in batches, and replaces the document's old chunks in one transaction. Run by the worker. |
+| `index-queued-document.use-case.ts` | The worker's side of a queued index job: reads the stored text back, indexes it, then deletes the stored copy. |
+| `index-text-stage.ts` | Stores a document's text in the bucket while its job waits, so the queue never holds large text. |
 | `index.ts` | Folder index: re-exports the files beside it, so other folders import the folder rather than its files. |
-| `queue-document-index.use-case.ts` | The request-side half of indexing: checks the permission, then puts an "index this document" job on the queue and returns at once, because embedding takes a network round trip. |
-| `search-documents.use-case.ts` | Searches indexed documents. Turns the question into a vector and only searches documents the person may read, before ranking anything. |
+| `queue-document-index.use-case.ts` | The request-side half of indexing: checks the permission, refuses the reserved Docs type, then queues an "index this document" job and returns at once, because embedding takes a network round trip. |
+| `reembed-chunks.use-case.ts` | After a provider or model switch, re-embeds every chunk the active model did not write, a batch at a time, keeping the text as it is. |
+| `search-documents.use-case.ts` | Searches indexed documents the person may read, by meaning or by text. Filters by goal and leaves out Docs chunks before ranking anything. |
+
+### `packages/application/src/assistant/`
+
+| File | What it does |
+|---|---|
+| `assistant-budget.rules.ts` | `AssistantBudget`: an organization's daily token cap. Refuses a new question once the UTC day's tokens are spent, and charges each answer when it settles. |
+| `assistant-budget.store.ts` | `AssistantBudgetStore`: where the day's token count lives, shared by every process and never evicted. |
+| `assistant-message.repository.ts` | `AssistantMessageRepository`: a thread's questions and answers. An answer is written pending and settled once, so a retry cannot overwrite a finished one; a nightly sweep fails answers a worker never finished. |
+| `assistant-prompt.builder.ts` | `AssistantPromptBuilder`: builds what the chat model is asked: a fixed system prompt first, the retrieved passages fenced as data, as much recent history as fits the model's window, then the question. |
+| `assistant-thread.repository.ts` | `AssistantThreadRepository`: a person's own AI assistant conversations. Every read names the author, so nobody can list or open another person's. |
+| `assistant-usage.repository.ts` | `AssistantUsageRepository`: the token meter, one row per answer, which budgets and usage reports read. |
+| `index.ts` | Folder index: re-exports the files beside it. |
 
 ### `packages/application/src/analytics/`
 
@@ -82,7 +100,8 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 | `doc-image-sweep.ts` | `DocImageSweep`: deletes every stored image under one folder (a space's or an organization's), in bounded batches. |
 | `doc-page.repository.ts` | `DocPageRepository`: the interface for storing pages: the tree, drafts, the published copy, publishing, revisions, search sections and the list of pages an older renderer wrote. |
 | `doc-rerender.ts` | `DocRerender`: re-renders every published page that an older version of the Markdown renderer produced, for one organization. Run by the worker after the renderer changes (`pnpm doc:rerender`). |
-| `doc-search.ts` | `DocSearch`: runs a full-text search across the doc spaces a reader may see and turns each match into the page path to open, dropping anything the reader's access links hide. |
+| `doc-index.subscriber.ts` | `DocIndexSubscriber`: keeps the semantic index of published docs in step: a publish queues the page's text for embedding, and a delete forgets the pages it removed. |
+| `doc-search.ts` | `DocSearch`: searches the doc spaces a reader may see — full text, plus meaning when an embedding provider is set — and turns each match into the page path to open, dropping anything the reader's access links hide. |
 | `doc-shape.ts` | `DocShape`: turns stored rows into the shapes sent to the browser, including the page status (draft, published, changed since publishing). |
 | `doc-space.repository.ts` | `DocSpaceRepository`: the interface for storing spaces, including each space's ready-made published sidebar. |
 | `doc-tree.ts` | `DocTree`: rebuilds a space's published sidebar from its rows, inside the same transaction as the change that caused it. |
@@ -110,6 +129,7 @@ Folders by subject: `ai`, `apikey`, `doc`, `flag`, `mail`, `member`, `messaging`
 | `revoke-doc-grant.use-case.ts` | Removes one doc grant and clears the cached answers, so the reader loses access straight away. |
 | `save-doc-grant.use-case.ts` | Opens a granted platform space to an organization, a person or a plan. Audited in the platform's own trail. |
 | `save-doc-page.use-case.ts` | Saves the editor's draft (title, Markdown, slug, icon, access link). Not audited, because readers see nothing until it is published. |
+| `reindex-docs.use-case.ts` | `pnpm ai:reindex --docs`: queues every published page of one organization into the semantic index, for pages published before docs had one. |
 | `search-docs.use-case.ts` | The search palette (Ctrl+K) over the person's own organization's docs, filtered before ranking so hidden spaces never show. |
 | `search-platform-docs.use-case.ts` | The same search over the platform's docs, limited to the spaces the viewer may read. |
 | `update-doc-space.use-case.ts` | Changes a space's settings (title, audience, theme, GitHub link, access link). A field left out keeps its stored value. |

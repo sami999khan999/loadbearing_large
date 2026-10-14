@@ -4,15 +4,27 @@ ServerOnly.assert("@loadbearing/infrastructure");
 
 // One folder per external system, so `ls src/` answers "what does this depend on?". A
 // folder says the seam is implemented, not that the container is started.
-export { BullMqQueuePublisher } from "./bullmq/index.js";
+export { BullMqQueueControlGateway, BullMqQueuePublisher } from "./bullmq/index.js";
+export { type CannedAssistantConfig, CannedAssistantModel } from "./canned/index.js";
 export {
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
   type ClickHouseConfig,
   ClickHouseConnection,
 } from "./clickhouse/index.js";
+export {
+  type GeminiAssistantConfig,
+  GeminiAssistantModel,
+  type GeminiEmbeddingConfig,
+  GeminiEmbeddingProvider,
+} from "./gemini/index.js";
 export { type LokiConfig, LokiLogReader } from "./loki/index.js";
-export { type OpenAiEmbeddingConfig, OpenAiEmbeddingProvider } from "./openai/index.js";
+export {
+  type OpenAiAssistantConfig,
+  OpenAiAssistantModel,
+  type OpenAiEmbeddingConfig,
+  OpenAiEmbeddingProvider,
+} from "./openai/index.js";
 export {
   BaseRepository,
   Database,
@@ -26,6 +38,9 @@ export {
   PgActivityLogger,
   PgActivityReplayReader,
   PgApiKeyRepository,
+  PgAssistantMessageRepository,
+  PgAssistantThreadRepository,
+  PgAssistantUsageRepository,
   PgBootstrapMembershipEnroller,
   PgCapabilityRepository,
   PgConversationRepository,
@@ -67,6 +82,7 @@ export {
   PgUserReader,
   PgVectorStore,
   PgWidgetPreferenceRepository,
+  PgWorkerQueueSettingsRepository,
   type PlacedShard,
   type ReplicaHealth,
   type ShardConfig,
@@ -74,6 +90,7 @@ export {
   TransactionScope,
 } from "./pg/index.js";
 export {
+  RedisAssistantBudgetStore,
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
@@ -82,6 +99,7 @@ export {
   RedisRealtimePublisher,
   RedisRealtimeSubscriber,
   type RedisRole,
+  RedisWorkerFleetGateway,
 } from "./redis/index.js";
 export {
   OrdinalCursor,

@@ -46,9 +46,20 @@ const Schema = z
     // invitation link, and it parses no auth configuration to borrow an origin from.
     APP_BASE_URL: z.url(),
 
-    EMBEDDING_MODEL: z.string().min(1),
-    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive(),
-    OPENAI_API_KEY: z.string().default(""),
+    // `none` searches the chunk text and calls nobody. `openai` and `gemini` embed, need
+    // the key below, and default the model when unset. See infrastructure's embedding.md.
+    EMBEDDING_PROVIDER: z.enum(["none", "openai", "gemini"]).default("none"),
+    EMBEDDING_API_KEY: z.string().min(1).optional(),
+    EMBEDDING_MODEL: z.string().min(1).optional(),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+    // The name before `EMBEDDING_API_KEY`. Read only to refuse it: see the rule below.
+    OPENAI_API_KEY: z.string().optional(),
+    // The AI assistant's chat model (`AI.1`). `none` turns the feature off and `fake` streams
+    // a canned answer calling nobody; the other three need the key. See assistant.md.
+    ASSISTANT_PROVIDER: z.enum(["none", "fake", "openai", "openrouter", "gemini"]).default("none"),
+    ASSISTANT_API_KEY: z.string().min(1).optional(),
+    ASSISTANT_MODEL: z.string().min(1).optional(),
+    ASSISTANT_ENDPOINT: z.url().optional(),
 
     // Per process. The cap exists to stop one runaway tab, which is local by
     // construction, and the age is what releases a channel a leaked reader is holding.
@@ -58,6 +69,21 @@ const Schema = z
     // Longer than your longest job, shorter than your orchestrator's SIGKILL timer: above
     // it just means the platform kills you mid-drain.
     WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+    // The queues this process serves, comma separated; every queue when unset. Names are
+    // checked against the lanes at boot, because this file cannot see `QueueName`.
+    WORKER_QUEUES: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const names = (v ?? "")
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean);
+        return names.length > 0 ? names : undefined;
+      }),
+    // The sum of every lane's concurrency in one process. A boot over it is refused, not
+    // warned about: each in-flight job may hold a pool connection.
+    WORKER_PROCESS_MAX_CONCURRENCY: z.coerce.number().int().positive().default(64),
     WORKER_EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(4),
     // Serial by default: these jobs take table-level locks and can deadlock on the same
     // partition.
@@ -111,6 +137,36 @@ const Schema = z
   // Two cross-field rules: the compose container is `ratchet/ratchet` and these default
   // to ClickHouse's own `default/default`, and a cold tier is two keys or none.
   .superRefine((env, ctx) => {
+    // A provider with no key would fail on the first document, long after the deploy.
+    if (env.EMBEDDING_PROVIDER !== "none" && !env.EMBEDDING_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMBEDDING_API_KEY"],
+        message: `Required when EMBEDDING_PROVIDER is "${env.EMBEDDING_PROVIDER}".`,
+      });
+    }
+
+    if (
+      env.ASSISTANT_PROVIDER !== "none" &&
+      env.ASSISTANT_PROVIDER !== "fake" &&
+      !env.ASSISTANT_API_KEY
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ASSISTANT_API_KEY"],
+        message: `Required when ASSISTANT_PROVIDER is "${env.ASSISTANT_PROVIDER}".`,
+      });
+    }
+
+    // Renamed by `AI.0`. Ignoring it would quietly drop a deployment to text search.
+    if (env.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["OPENAI_API_KEY"],
+        message: "Renamed: set EMBEDDING_PROVIDER=openai and EMBEDDING_API_KEY instead.",
+      });
+    }
+
     // One without the other is a transition that silently never happens.
     if (!env.S3_COLD_STORAGE_CLASS !== !env.S3_COLD_TRANSITION_DAYS) {
       ctx.addIssue({
@@ -192,6 +248,14 @@ export class Env {
     return Env.parsed.WORKER_SHUTDOWN_TIMEOUT_MS;
   }
 
+  public static get queues(): readonly string[] | undefined {
+    return Env.parsed.WORKER_QUEUES;
+  }
+
+  public static get processMaxConcurrency(): number {
+    return Env.parsed.WORKER_PROCESS_MAX_CONCURRENCY;
+  }
+
   // Per worker instance, never global. Four instances at concurrency 4 is sixteen
   // in-flight jobs, each of which may hold a Postgres connection.
   public static get embeddingConcurrency(): number {
@@ -267,9 +331,16 @@ export class Env {
       },
       email: { url: e.SMTP_URL, from: e.EMAIL_FROM, baseUrl: e.APP_BASE_URL },
       embedding: {
-        apiKey: e.OPENAI_API_KEY,
-        model: e.EMBEDDING_MODEL,
+        provider: e.EMBEDDING_PROVIDER,
         dimensions: e.EMBEDDING_DIMENSIONS,
+        ...(e.EMBEDDING_API_KEY ? { apiKey: e.EMBEDDING_API_KEY } : {}),
+        ...(e.EMBEDDING_MODEL ? { model: e.EMBEDDING_MODEL } : {}),
+      },
+      assistant: {
+        provider: e.ASSISTANT_PROVIDER,
+        ...(e.ASSISTANT_API_KEY ? { apiKey: e.ASSISTANT_API_KEY } : {}),
+        ...(e.ASSISTANT_MODEL ? { model: e.ASSISTANT_MODEL } : {}),
+        ...(e.ASSISTANT_ENDPOINT ? { endpoint: e.ASSISTANT_ENDPOINT } : {}),
       },
       realtime: {
         maxStreamsPerUser: e.REALTIME_MAX_STREAMS_PER_USER,

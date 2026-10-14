@@ -274,10 +274,12 @@ again by month:
 | `notifications` | yes | yes |
 | `doc_revision` | yes | yes |
 | `messages` | yes | yes |
+| `assistant_messages`, `ai_usage` (the AI assistant) | yes | yes |
 | `conversations`, `conversation_members` | yes | no |
 | `widget_preferences` | yes | no |
 | `notification_preferences`, `document_chunks` | yes | no |
 | `doc_spaces`, `doc_pages`, `doc_sections` | yes | no |
+| `assistant_threads` | yes | no |
 
 This keeps each organization's data physically together, makes queries skip partitions they cannot
 match, and turns deleting an organization (or an old month) into dropping a few partitions instead

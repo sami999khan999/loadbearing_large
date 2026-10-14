@@ -52,6 +52,7 @@
     "ch:migrate": "pnpm --filter @loadbearing/infrastructure run ch:migrate",
     "platform:grant": "pnpm --filter @loadbearing/infrastructure run platform:grant",
     "queue:replay": "pnpm --filter @loadbearing/infrastructure run queue:replay",
+    "ai:reindex": "pnpm --filter @loadbearing/infrastructure run ai:reindex",
     "guide:publish": "node tooling/scripts/guide-publish.mjs",
     "explained:publish": "node tooling/scripts/explained-publish.mjs",
     "bench": "node tooling/scripts/bench.mjs",

@@ -13,6 +13,7 @@ export const platformRoutes = {
   flags: "/platform/flags",
   entitlements: "/platform/entitlements",
   accounts: "/platform/accounts",
+  workers: "/platform/workers",
 } as const satisfies Record<string, RoutePath>;
 
 // The key each page's guard asks for, and the platform menu's too, so the two cannot drift.
@@ -26,4 +27,5 @@ export const platformRoutePermission = {
   accounts: "platform.account.read",
   entitlements: "platform.entitlement.read",
   flags: "platform.flag.read",
+  workers: "platform.worker.read",
 } as const satisfies Record<Exclude<keyof typeof platformRoutes, "home">, PermissionKey>;

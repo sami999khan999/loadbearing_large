@@ -79,7 +79,8 @@ shakes the rest out.
 | `queue` | `QueuePublisher` | `BullMqQueuePublisher` | one line |
 | `vectors` | `VectorStore` | `PgVectorStore` | one line — pgvector → Qdrant |
 | `analytics` | `AnalyticsReader` | `PgAnalyticsReader` | one line — Postgres → ClickHouse |
-| `embeddings` | `EmbeddingProvider` | `OpenAiEmbeddingProvider` | one line |
+| `assistantModel` | `AssistantModel`, behind `hasAssistant` | `OpenAiAssistantModel` (OpenAI, OpenRouter), `GeminiAssistantModel`, `CannedAssistantModel` | `ASSISTANT_PROVIDER`; `none` builds none |
+| `searchMode` | `SearchMode` | lexical, or semantic over `OpenAiEmbeddingProvider` / `GeminiEmbeddingProvider` | `EMBEDDING_PROVIDER`; a new vendor is one `case` |
 | `sessions` | `SessionResolver` | `BetterAuthSessionResolver` | one line |
 | `activity` | `ActivityLogger` | `PgActivityLogger` | one line |
 | `unitOfWork` | `UnitOfWork` | `PgUnitOfWork` | one line |

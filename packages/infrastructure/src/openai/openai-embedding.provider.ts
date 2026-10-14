@@ -22,19 +22,21 @@ export class OpenAiEmbeddingProvider extends EmbeddingProvider {
   private static readonly DEFAULT_TIMEOUT_MS = 20_000;
 
   public override readonly dimensions: number;
+  public override readonly model: string;
 
-  // Optional, like `LokiLogReader`'s: the vendor's own reason belongs in the log and
-  // never on the wire, and a provider built without one still works.
+  // Optional: the vendor's own reason belongs in the log and never on the wire, and a
+  // provider built without one still works.
   public constructor(
     private readonly config: OpenAiEmbeddingConfig,
     private readonly logger?: Logger,
   ) {
     super();
     this.dimensions = config.dimensions;
+    this.model = config.model;
   }
 
   // `fetch`, not the OpenAI SDK: one dependency fewer, and the request shape is
-  // stable. Wanting the SDK's retries later is a change inside this class.
+  // stable. No `purpose`: OpenAI embeds a query and a document the same way.
   public override async embed(texts: readonly string[]): Promise<readonly (readonly number[])[]> {
     const out: (readonly number[])[] = [];
 

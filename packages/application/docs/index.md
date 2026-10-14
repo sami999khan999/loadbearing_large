@@ -54,11 +54,14 @@ packages/application/
 │   │   ├── session.resolver.ts   → SessionResolver, ResolvedSession, RequestHeaders
 │   │   ├── storage.gateway.ts    → StorageGateway, StoredObject
 │   │   ├── unit-of-work.ts       → UnitOfWork
-│   │   └── vector.store.ts       → VectorStore, DocumentChunk, SearchHit
+│   │   └── vector.store.ts       → VectorStore, DocumentChunk, StaleChunk, SearchHit
 │   ├── ai/
+│   │   ├── ai-search-mode.ts           → SearchMode
 │   │   ├── index-document.use-case.ts  → IndexDocumentUseCase
 │   │   ├── index-queued-document.use-case.ts → IndexQueuedDocumentUseCase
-│   │   └── index-text-stage.ts         → IndexTextStage
+│   │   ├── index-text-stage.ts         → IndexTextStage
+│   │   ├── reembed-chunks.use-case.ts  → ReembedChunksUseCase
+│   │   └── search-documents.use-case.ts → SearchDocumentsUseCase
 │   ├── mail/                    ← a slice with no repository: the queue is the state
 │   │   └── send-mail.use-case.ts       → SendMailUseCase, SendMailInput
 │   ├── member/                   ← a slice: its repository ports live with it
@@ -152,7 +155,7 @@ exactly what makes swapping the log platform a config change.
 
 ## One port carries a required permitted scope
 
-`VectorStore.search()` takes `goalIds` as a required parameter, and that is the security design
+`VectorStore.search()` and `searchText()` take `goalIds` as a required parameter, and that is the security design
 rather than a convenience.
 
 ```ts

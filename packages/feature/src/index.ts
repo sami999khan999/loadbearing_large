@@ -140,6 +140,8 @@ export {
   ProjectionPolicyForm,
   ProjectionSwitchPanel,
   type ProjectionSwitchPanelProps,
+  QueueAutoscaleForm,
+  type QueueAutoscaleFormProps,
   ReplicaSwitchPanel,
   RestorePartitionPanel,
   type RestorePartitionPanelProps,
@@ -153,6 +155,10 @@ export {
   type TenantRetentionFormProps,
   TenantStorageList,
   type TenantStorageListProps,
+  WorkerProcessList,
+  WorkerQueueList,
+  WorkerQueuesForm,
+  type WorkerQueuesFormProps,
 } from "./platform/index.js";
 export {
   CreateRoleForm,

@@ -1,8 +1,10 @@
 import {
+  type ChunkFilter,
   type DocumentChunk,
   type IndexedSource,
   type OrganizationId,
   type SearchHit,
+  type StaleChunk,
   VectorStore,
 } from "../import.js";
 
@@ -49,8 +51,10 @@ export class InMemoryVectorStore extends VectorStore {
     const chunk = (this.chunks.get(organizationId) ?? []).find((c) => c.sourceId === sourceId);
     if (!chunk) return Promise.resolve(null);
     const version = chunk.metadata.version;
+    const sourceType = chunk.metadata.sourceType;
     return Promise.resolve({
       goalId: chunk.goalId,
+      sourceType: typeof sourceType === "string" ? sourceType : "unknown",
       version: typeof version === "number" ? version : null,
     });
   }
@@ -60,11 +64,14 @@ export class InMemoryVectorStore extends VectorStore {
   public override search(
     organizationId: OrganizationId,
     embedding: readonly number[],
+    model: string,
     goalIds: readonly string[],
     limit: number,
+    filter: ChunkFilter,
   ): Promise<readonly SearchHit[]> {
-    const permitted = (this.chunks.get(organizationId) ?? []).filter(
-      (chunk) => chunk.goalId === null || goalIds.includes(chunk.goalId),
+    // Only `model`'s vectors, like the real store: another model's are another space.
+    const permitted = this.permitted(organizationId, goalIds, filter).filter(
+      (chunk) => chunk.embedding !== null && chunk.embeddingModel === model,
     );
 
     const hits = permitted
@@ -72,7 +79,7 @@ export class InMemoryVectorStore extends VectorStore {
         id: chunk.id,
         sourceId: chunk.sourceId,
         content: chunk.content,
-        score: InMemoryVectorStore.cosine(embedding, chunk.embedding),
+        score: InMemoryVectorStore.cosine(embedding, chunk.embedding ?? []),
         metadata: chunk.metadata,
       }))
       .filter((hit) => hit.score >= MIN_SCORE)
@@ -82,8 +89,96 @@ export class InMemoryVectorStore extends VectorStore {
     return Promise.resolve(hits);
   }
 
+  // Word overlap stands in for `ts_rank`: a chunk scores by how many of the query's words
+  // it holds, and one holding none is not a hit, as `@@` would not match it.
+  public override searchText(
+    organizationId: OrganizationId,
+    query: string,
+    goalIds: readonly string[],
+    limit: number,
+    filter: ChunkFilter,
+  ): Promise<readonly SearchHit[]> {
+    const words = InMemoryVectorStore.words(query);
+    const hits = this.permitted(organizationId, goalIds, filter)
+      .map((chunk) => {
+        const held = new Set(InMemoryVectorStore.words(chunk.content));
+        return {
+          id: chunk.id,
+          sourceId: chunk.sourceId,
+          content: chunk.content,
+          score: words.filter((word) => held.has(word)).length,
+          metadata: chunk.metadata,
+        };
+      })
+      .filter((hit) => hit.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit);
+    return Promise.resolve(hits);
+  }
+
+  public override stale(
+    organizationId: OrganizationId,
+    model: string,
+    limit: number,
+  ): Promise<readonly StaleChunk[]> {
+    return Promise.resolve(
+      (this.chunks.get(organizationId) ?? [])
+        .filter((chunk) => chunk.embeddingModel !== model)
+        .slice(0, limit)
+        .map((chunk) => ({ id: chunk.id, content: chunk.content })),
+    );
+  }
+
+  public override saveEmbeddings(
+    organizationId: OrganizationId,
+    embeddings: readonly { readonly id: string; readonly embedding: readonly number[] }[],
+    model: string,
+  ): Promise<void> {
+    const byId = new Map(embeddings.map((entry) => [entry.id, entry.embedding]));
+    this.chunks.set(
+      organizationId,
+      (this.chunks.get(organizationId) ?? []).map((chunk) => {
+        const embedding = byId.get(chunk.id);
+        return embedding ? { ...chunk, embedding, embeddingModel: model } : chunk;
+      }),
+    );
+    return Promise.resolve();
+  }
+
   public countFor(organizationId: OrganizationId): number {
     return (this.chunks.get(organizationId) ?? []).length;
+  }
+
+  // The input set, before any scoring: filtering afterwards means the ranking already saw
+  // what the actor cannot.
+  private permitted(
+    organizationId: OrganizationId,
+    goalIds: readonly string[],
+    filter: ChunkFilter,
+  ) {
+    return (this.chunks.get(organizationId) ?? []).filter(
+      (chunk) =>
+        (chunk.goalId === null || goalIds.includes(chunk.goalId)) &&
+        InMemoryVectorStore.passes(chunk, filter),
+    );
+  }
+
+  // The real store's filter, on the same two fields: the source type, then one metadata key.
+  private static passes(chunk: DocumentChunk, filter: ChunkFilter): boolean {
+    const raw = chunk.metadata.sourceType;
+    const sourceType = typeof raw === "string" ? raw : "unknown";
+    if (filter.kind === "except") return !filter.sourceTypes.includes(sourceType);
+    const value = chunk.metadata[filter.key];
+    return (
+      sourceType === filter.sourceType && typeof value === "string" && filter.values.includes(value)
+    );
+  }
+
+  private static words(text: string): readonly string[] {
+    return text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length > 0);
   }
 
   private static cosine(left: readonly number[], right: readonly number[]): number {

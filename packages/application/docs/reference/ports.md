@@ -387,7 +387,11 @@ ambient one.
 |---|---|
 | `CacheStore.deletePrefix` | Invalidating a whole subject belongs here rather than at the call site: enumerating keys by hand pushes Redis semantics into the domain |
 | `CacheStore.setIfAbsent` | Returns whether it wrote, which is what makes it an idempotency claim rather than a write. One `SET … EX … NX`, evaluated on the server, so two replicas racing a key cannot both be told they won it. The send dedupe is its first caller — see [messaging](messaging.md) |
-| `EmbeddingProvider.embed` | Batched by construction — one round trip per call, never one per text. A single-string signature is the shape that turns a re-index into a thousand requests |
+| `EmbeddingProvider.embed` | Batched by construction — one round trip per call, never one per text. A single-string signature is the shape that turns a re-index into a thousand requests. The optional `purpose` says whether the text is a `document` or a `query`: Gemini embeds them differently, and OpenAI ignores it |
+| `EmbeddingProvider.model` | Recorded on every chunk it embeds, so vectors from two models are never compared |
 | `QueuePublisher` | The deduplication id is a domain rule ("enqueue OCR for this receipt, once"), not queue configuration |
 | `UnitOfWork` | The implementation must genuinely enrol the repositories running inside `work()`; one that does not is worse than none |
-| `VectorStore.search` | `goalIds` is required so the permission filter runs on the **input** set. Filtering results means the model already saw what the actor cannot |
+| `VectorStore.search` | `goalIds` is required so the permission filter runs on the **input** set. Filtering results means the model already saw what the actor cannot. It takes a `model` too, and compares only chunks that model wrote |
+| `VectorStore.searchText` | The same shape and scope rule, ranked by Postgres full-text search over the chunk text. What `EMBEDDING_PROVIDER=none` searches with, and it calls nobody |
+| `ChunkFilter` | Required on `search` and `searchText`, so every caller names its corpus. `except` is the shared corpus less the guarded source types (`ChunkSource.GUARDED`, today `doc`), whose chunks carry their own read rule. `within` is one guarded type narrowed by a metadata key the indexer wrote — `DocSearch` passes the reader's visible spaces. An empty `values` matches nothing |
+| `VectorStore.stale`, `saveEmbeddings` | The re-embed pass: chunks whose vector is missing or another model's, then new vectors for them with the text untouched. `ReembedChunksUseCase` is the caller |

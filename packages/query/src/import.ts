@@ -87,7 +87,9 @@ export type {
   ProjectionToggleInput,
   ProjectionUpdateInput,
   PublishDocPageInput,
+  QueueAutoscaleInput,
   QueuedDocumentDto,
+  QueuePauseInput,
   RealtimeEventName,
   RealtimeMessage,
   RenderedDocDto,
@@ -121,6 +123,11 @@ export type {
   UpdateNotificationPreferenceInput,
   UpdateRoleInput,
   WidgetPreferenceUpdateInput,
+  WorkerFleetDto,
+  WorkerProcessPauseInput,
+  WorkerProcessQueuesInput,
+  WorkerProcessRefInput,
+  WorkerQueuesChangedDto,
 } from "@loadbearing/contracts";
 
 // ── @loadbearing/errors ──────────────────────────────────────────────────────
