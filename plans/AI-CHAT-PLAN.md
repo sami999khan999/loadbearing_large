@@ -132,8 +132,9 @@ the word. Every name below is `assistant`.
   - A migration that seeds `ai.assistant.use`.
 - **3, application** (`application/src/assistant/`) — **the three repository ports done 2026-10-14**
   (`AssistantThreadRepository`, `AssistantMessageRepository`, `AssistantUsageRepository` over
-  `ai_usage`), with their Pg adapters and an integration spec, and `AssistantPromptBuilder`; the
-  use cases are next:
+  `ai_usage`), with their Pg adapters and an integration spec, `AssistantPromptBuilder`, and the
+  daily budget (`AssistantBudget` over `AssistantBudgetStore`, Redis on the queue instance until
+  `REDIS_ASSISTANT_URL` exists); the use cases are next:
   - Use cases: send, cancel, list, get (with source re-checks), rename, delete, and generate.
   - Helpers: `AssistantRetrieval`, `AssistantPromptBuilder`, `AssistantBudget`.
   - Ports:
