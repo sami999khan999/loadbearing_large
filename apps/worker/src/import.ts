@@ -13,6 +13,7 @@ export {
   ActivitySubject,
   type ArchivedPartition,
   type ColdMode,
+  type GenerateAssistantAnswerJob,
   type IndexDocumentJob,
   PartitionedTable,
   type PartitionedTableEntry,

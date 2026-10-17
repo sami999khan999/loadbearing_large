@@ -1,5 +1,6 @@
 import {
   AnalyticsConsumer,
+  AssistantConsumer,
   EmbeddingConsumer,
   MailConsumer,
   MaintenanceConsumer,
@@ -35,8 +36,12 @@ export class LaneRegistry {
   }
 
   // `connection` is a thunk so a registry can be built before Redis is reachable: nothing
-  // connects until a lane starts.
-  public static forContainer(container: Container, connection: () => Redis): LaneRegistry {
+  // connects until a lane starts. `draining` aborts once, when the process stops.
+  public static forContainer(
+    container: Container,
+    connection: () => Redis,
+    draining: AbortSignal = new AbortController().signal,
+  ): LaneRegistry {
     const factories: LaneFactory[] = [
       {
         queue: QueueName.EMBEDDING,
@@ -91,7 +96,30 @@ export class LaneRegistry {
       });
     }
 
+    // The same branch for the model: without one there is nothing to generate with.
+    if (container.assistant.generate) {
+      factories.push({
+        queue: QueueName.ASSISTANT,
+        concurrency: Env.assistantConcurrency,
+        variable: "WORKER_ASSISTANT_CONCURRENCY",
+        start: () =>
+          new AssistantConsumer(
+            container,
+            connection(),
+            Env.assistantConcurrency,
+            Env.assistantRatePerMinute,
+            draining,
+          ).start(),
+      });
+    }
+
     return new LaneRegistry(factories);
+  }
+
+  private static missing(name: string): string {
+    if (name === QueueName.ANALYTICS) return "set CLICKHOUSE_URL";
+    if (name === QueueName.ASSISTANT) return "set ASSISTANT_PROVIDER";
+    return "it is not registered";
   }
 
   public queues(): readonly QueueKey[] {
@@ -112,7 +140,7 @@ export class LaneRegistry {
       }
       if (!valid.includes(name)) {
         throw new Error(
-          `WORKER_QUEUES names "${name}", which this process cannot serve: ${name === QueueName.ANALYTICS ? "set CLICKHOUSE_URL" : "it is not registered"}.`,
+          `WORKER_QUEUES names "${name}", which this process cannot serve: ${LaneRegistry.missing(name)}.`,
         );
       }
     }
