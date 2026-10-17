@@ -33,6 +33,7 @@ them, and `document.search` and `document.index` are each a paid embedding call.
 | `document.search` | 60 a minute |
 | `document.index`, `conversation.create` | 30 a minute |
 | `message.send` | 60 a minute |
+| `assistant.send` | 20 a minute |
 
 The count is per principal and procedure — `rate:<procedure>:<organization>:<user>` — in a fixed
 window in the **cache** Redis, `SET NX EX` then `INCR` in one `MULTI`. Past the limit the call is a
