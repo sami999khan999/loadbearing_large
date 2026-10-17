@@ -1,6 +1,6 @@
 ---
 title: Backlog — every task not done, in one place
-updated: 2026-10-10
+updated: 2026-10-19
 owner: sami
 schema: backlog/v1
 source: compiled 2026-09-20 at 885e144 from the five ledgers, which moved to archive/ the same day
@@ -282,8 +282,10 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   and streamed through realtime. Named Assistant because Messaging owns "chat". Ready: `WC.1`, `AI.0`
   and `DC.2` are done; designed around `RV.3`. **Step 1 (the model interface and its OpenAI,
   OpenRouter, Gemini and fake adapters) step 2's tables and the repositories over them are
-  built, 2026-10-14;** the use cases (step 3), the stream and budget stores (4), transport (5),
-  usage reporting (6), UI (7), docs (8) and the permission are open. Lite ports a
+  built, 2026-10-14; steps 3–5 and the permission, 2026-10-19** — use cases, retrieval, the
+  Redis answer stream, `realtime.assistant`, the web router, the `assistant` lane, migration
+  `0057`, and the application reference. Usage reporting (6), the client and UI (7), the scale
+  doc and load test (8) are open. Lite ports a
   simpler version once it closes.
 
 ---

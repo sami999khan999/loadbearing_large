@@ -1,6 +1,6 @@
 ---
 title: AI assistant plan — ask OpenAI, OpenRouter or Gemini about permitted data, sized for 100K concurrent users
-updated: 2026-10-10
+updated: 2026-10-19
 owner: sami
 schema: plan/v1
 source: owner request 2026-10-10; three read-only surveys (AI and docs search, streaming and scale seams, worker and platform admin); the owner chose large first, then a simpler port to lite; checked against the open backlog the same day
@@ -52,7 +52,9 @@ the word. Every name below is `assistant`.
      audit trail. Only `ai.assistant.thread.created|deleted` are recorded. Metering is the
      `ai_usage` row.
    - Returns `{threadId, messageId}`.
-2. **`assistant.stream({messageId})`** (realtime) is an oRPC event iterator.
+2. **`realtime.assistant({threadId, messageId})`** (realtime) is an oRPC event iterator.
+   **Supersedes `assistant.stream`, 2026-10-19:** under `realtime.*`, every path `apps/realtime`
+   serves stays one namespace, and the client's routing needs no exception.
    - It checks the message's org and author.
    - It replays from the answer's log after `lastEventId`, then follows live frames until `done` or
      `error`.
@@ -130,7 +132,10 @@ the word. Every name below is `assistant`.
   - Add them to `PartitionedTable.ALL`, so seeding, export, purge and **retention archive** cover
     them. Large has retention, so give them real `retentionMonths`.
   - A migration that seeds `ai.assistant.use`.
-- **3, application** (`application/src/assistant/`) — **the three repository ports done 2026-10-14**
+- **3, application** (`application/src/assistant/`) — **done 2026-10-19**: the seven use cases,
+  `FailStaleAssistantAnswersUseCase`, `AssistantRetrieval`, both stream ports, and
+  `DocPageRepository.listSections` for the full text of a matched section. The reasoning is
+  [`application/…/assistant.md`](../packages/application/docs/reference/assistant.md). Before that, **the three repository ports done 2026-10-14**
   (`AssistantThreadRepository`, `AssistantMessageRepository`, `AssistantUsageRepository` over
   `ai_usage`), with their Pg adapters and an integration spec, `AssistantPromptBuilder`, and the
   daily budget (`AssistantBudget` over `AssistantBudgetStore`, Redis on the queue instance until
@@ -141,14 +146,21 @@ the word. Every name below is `assistant`.
     - `AssistantStreamPublisher` / `AssistantStreamSubscriber`. These give complete delivery,
       unlike realtime's lossy frames.
     - `AssistantBudgetStore`.
-- **4, infrastructure:**
+- **4, infrastructure** — **done 2026-10-19.** The publisher is one `EVAL` (`XADD`, `EXPIRE`,
+  `PUBLISH` with the entry's id), not a `MULTI`: a `MULTI` cannot put the id in the publish.
+  `REDIS_ASSISTANT_URL` is two `RedisConnection` roles that fall back to realtime's connections.
+  The budget stays on the queue Redis, which never evicts:
   - `redis-assistant-stream.publisher|subscriber`. They copy the realtime `MULTI XADD+PUBLISH` and
     the per-process demux, with no drop-oldest and with the stream-log rules above.
   - `redis-assistant-budget.store`.
   - `QueueName.ASSISTANT`.
   - A `QueueLimits` entry and a **`LaneRegistry` entry**, so the worker dashboard can pause, move
     and autoscale the assistant.
-- **5, transport:**
+- **5, transport** — **done 2026-10-19**, except the realtime stream cap below. `ai.assistant.use`
+  is module `ai` (a key opens with its module); a plan sells it by key, as every plan does. Granted
+  to `admin` and `member` by the seed and by migration `0057`. The worker aborts answers only on a
+  process drain, never when the dashboard moves the lane. The stale sweep runs in the nightly
+  `cleanup`, per node:
   - Contracts in `contracts/src/assistant/`, with permissions and actions catalogs. The actions are
     `ai.assistant.thread.created|deleted` only.
   - `ai.assistant.use`, with a route and nav gate. Plans enable it through `EntitlementMask`.
@@ -180,8 +192,9 @@ the word. Every name below is `assistant`.
 - **`RV.3`:** the stream log is designed around it (above). Fixing `RV.3` later changes nothing
   here.
 - **`DC.2`:** required before `AI.1`, and the only source of Docs vectors.
-- **`26.6`:** an answer stream counts towards `REALTIME_MAX_STREAMS_PER_USER` (8, per process).
-  The cluster-wide cap covers it when built.
+- **`26.6`:** an answer stream does **not** count towards `REALTIME_MAX_STREAMS_PER_USER` yet:
+  that counter is private to `RedisRealtimeSubscriber`. `ASSISTANT_ACTIVE_PER_USER` bounds the open
+  answers instead, and an answer's stream ends with it. Fold both into the cluster-wide cap.
 - **`24.7`:** if pooled partitions land, the three assistant tables join the pool like every other
   partitioned table.
 
