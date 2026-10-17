@@ -71,13 +71,21 @@ const ROLES: readonly SystemRole[] = Object.freeze([
       // Hiding a card for everyone. Cosmetic, and still an administrator's call (`RV.12`).
       "widget.default.manage",
       ...DOC_AUTHOR,
+      "ai.assistant.use",
     ],
   },
   {
     key: "member",
     name: "Member",
     scope: "org",
-    permissions: ["member.read", ...NOTIFICATION, ...MESSAGING, "doc.page.read"],
+    permissions: [
+      "member.read",
+      ...NOTIFICATION,
+      ...MESSAGING,
+      "doc.page.read",
+      // It answers only from what its asker may read, so it is everyone's who reads docs.
+      "ai.assistant.use",
+    ],
   },
   // Never `guest`: an inbox and a conversation are both things you hold, and a guest
   // holds no memberships to be notified about or to talk in.
