@@ -27,6 +27,7 @@ export const nav = {
   "nav.widgets": "Dashboard cards",
   "nav.platform": "Platform",
   "nav.docs": "Docs",
+  "nav.assistant": "Assistant",
 
   // ── the home page ──
   "nav.home.title": "{organization}",
