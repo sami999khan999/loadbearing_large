@@ -45,6 +45,14 @@ export class QueryKeys {
     grants: (spaceId: string) => ["doc", "grant", spaceId] as const,
   };
 
+  // Private to the author, so no key names a person: a signed-in cache is theirs already.
+  public static readonly assistant = {
+    all: () => ["assistant"] as const,
+    lists: () => ["assistant", "list"] as const,
+    list: (params: unknown) => ["assistant", "list", params] as const,
+    get: (threadId: string) => ["assistant", "get", threadId] as const,
+  };
+
   public static readonly widget = {
     all: () => ["widget"] as const,
     preferences: () => ["widget", "preferences"] as const,

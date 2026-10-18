@@ -44,6 +44,8 @@ function harness(redisClose: () => Promise<void> = () => Promise.resolve()) {
   const container = {
     ...TestContainer.build(),
     workerFleet: new InMemoryWorkerFleetGateway(),
+    // No model, so the registry builds no `assistant` lane, as a deployment without one.
+    assistant: { generate: null },
     logger,
     dispose: vi.fn(async () => undefined),
   } as unknown as Container;

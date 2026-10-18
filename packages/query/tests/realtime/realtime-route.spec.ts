@@ -73,6 +73,7 @@ describe("RealtimeRoutes", () => {
     // The type already fails the build if the table is not total. This catches the
     // reverse: a route left behind for a name the contract has dropped.
     expect([...RealtimeRoutes.names()].sort()).toEqual([
+      "assistant.changed",
       "conversation.changed",
       "conversation.read",
       "member.changed",

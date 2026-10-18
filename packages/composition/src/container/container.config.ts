@@ -39,6 +39,8 @@ export interface ContainerConfig {
     // Live frames. Absent means the cache instance, which is the right default until
     // fan-out is heavy enough to compete with session reads.
     readonly realtimeUrl?: string;
+    // The assistant's answer logs. Absent means the realtime instance, then the cache's.
+    readonly assistantUrl?: string;
   };
   readonly storage: {
     readonly endpoint: string;
@@ -107,6 +109,12 @@ export interface ContainerConfig {
     readonly apiKey?: string;
     readonly model?: string;
     readonly endpoint?: string;
+    // The longest an answer may run, in tokens. The prompt is budgeted around it.
+    readonly maxOutputTokens?: number;
+    // One organization's tokens a UTC day; zero or absent is no cap.
+    readonly orgDailyTokens?: number;
+    // How many answers one person may have generating at once.
+    readonly activePerUser?: number;
   };
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.

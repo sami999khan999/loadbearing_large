@@ -10,6 +10,7 @@ const eventName = z.enum([
   "message.sent",
   "message.edited",
   "message.deleted",
+  "assistant.changed",
 ]);
 
 export type RealtimeEventName = z.infer<typeof eventName>;
@@ -30,6 +31,7 @@ export class RealtimeContract {
       payload: z.object({
         conversationId: z.uuid().optional(),
         messageId: z.uuid().optional(),
+        threadId: z.uuid().optional(),
         kind: z.string().optional(),
       }),
     }),

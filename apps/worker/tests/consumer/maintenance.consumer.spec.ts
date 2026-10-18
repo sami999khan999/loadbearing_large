@@ -204,6 +204,8 @@ function harness(
       },
     },
     ai: { indexText: new IndexTextStage(storage) },
+    // A stub too: the sweep has its own spec. Two stuck answers on the one node.
+    assistant: { failStale: { execute: () => Promise.resolve(2) } },
     retentionPolicies,
     projectionPolicies,
     platformPolicy,
@@ -312,6 +314,7 @@ describe("MaintenanceConsumer", () => {
     expect(emitted(logger, "maintenance.sweep.completed")[0]).toMatchObject({
       adjustments: 2,
       overrides: 3,
+      staleAnswers: 2,
     });
   });
 

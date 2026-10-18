@@ -1,5 +1,6 @@
 import { AnalyticsRouter } from "./analytics.router.js";
 import { ApiKeyRouter } from "./api-key.router.js";
+import { AssistantRouter } from "./assistant.router.js";
 import { DocGrantRouter } from "./doc-grant.router.js";
 import { DocPageRouter } from "./doc-page.router.js";
 import { DocSpaceRouter } from "./doc-space.router.js";
@@ -30,4 +31,5 @@ export const appRouter = {
   docSpace: DocSpaceRouter.all,
   docPage: DocPageRouter.all,
   docGrant: DocGrantRouter.all,
+  assistant: AssistantRouter.all,
 };

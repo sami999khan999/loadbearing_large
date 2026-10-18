@@ -21,6 +21,8 @@ const ITEMS = [
   { module: "analytics", labelKey: "nav.analytics", icon: "check", order: 70 },
   { module: "widget", labelKey: "nav.widgets", icon: "check", order: 80 },
   { module: "doc", labelKey: "nav.docs", icon: "book", order: 85 },
+  // Its own icon: `chat` is Messaging's, and the two are different things to ask.
+  { module: "assistant", labelKey: "nav.assistant", icon: "sparkle", order: 87 },
   // Last, and invisible to everyone but a platform admin: `ModuleRegistry.isVisible`
   // calls `can()`, and a tenant's wildcard does not reach the platform scope.
   { module: "platform", labelKey: "nav.platform", icon: "key", order: 90 },
