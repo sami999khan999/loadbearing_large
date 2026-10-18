@@ -1,4 +1,5 @@
 import { analyticsGates } from "./analytics.gate.js";
+import { assistantGates } from "./assistant.gate.js";
 import { docGates } from "./doc.gate.js";
 import { documentGates } from "./document.gate.js";
 import { messagingGates } from "./messaging.gate.js";
@@ -16,5 +17,6 @@ export const GATES = {
   ...analyticsGates,
   ...widgetGates,
   ...docGates,
+  ...assistantGates,
   ...platformGates,
 } as const;
