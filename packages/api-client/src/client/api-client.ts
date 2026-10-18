@@ -112,6 +112,10 @@ export class ApiClient {
     return this.rpc.message;
   }
 
+  public get assistant(): AppClient["assistant"] {
+    return this.rpc.assistant;
+  }
+
   public get platform(): AppClient["platform"] {
     return this.rpc.platform;
   }
