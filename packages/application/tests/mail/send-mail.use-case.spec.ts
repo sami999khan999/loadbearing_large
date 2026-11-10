@@ -111,4 +111,67 @@ describe("SendMailUseCase", () => {
 
     expect(renderer.rendered[0]?.locale).toBe("bn");
   });
+
+  // `26.11`: tenant, then platform default, then `.env` — and sign-in mail never the tenant.
+  describe("choosing the mail server", () => {
+    const TENANT = Identifiers.organizationId.parse("018f8c00-0000-7000-8000-000000000020");
+
+    const resolving = (servers: { tenant: boolean; platform: boolean }) => {
+      const renderer = new RecordingRenderer();
+      const env = new RecordingSender();
+      const tenant = new RecordingSender();
+      const platformDefault = new RecordingSender();
+      const asked: (string | null)[] = [];
+      const senders = {
+        senderFor: (organizationId: string | null) => {
+          asked.push(organizationId);
+          if (organizationId === null)
+            return Promise.resolve(servers.platform ? platformDefault : null);
+          return Promise.resolve(servers.tenant ? tenant : null);
+        },
+      };
+      const useCase = new SendMailUseCase(renderer, env, senders);
+      return { useCase, env, tenant, platformDefault, asked };
+    };
+
+    const invitation = {
+      template: "member.invitation",
+      to: "a@example.test",
+      locale: "en" as const,
+      params: { url: "https://example.test/i", inviter: "Ada", organization: "Acme" },
+      organizationId: TENANT,
+    };
+
+    it("sends a tenant's mail through its own server", async () => {
+      const { useCase, tenant, env } = resolving({ tenant: true, platform: true });
+      await useCase.execute(platform(), invitation);
+      expect([tenant.sent.length, env.sent.length]).toEqual([1, 0]);
+    });
+
+    it("falls back to the platform default, then to the deployment's", async () => {
+      const first = resolving({ tenant: false, platform: true });
+      await first.useCase.execute(platform(), invitation);
+      expect(first.platformDefault.sent).toHaveLength(1);
+
+      const second = resolving({ tenant: false, platform: false });
+      await second.useCase.execute(platform(), invitation);
+      expect(second.env.sent).toHaveLength(1);
+    });
+
+    it("never sends sign-in mail through a tenant's server", async () => {
+      const { useCase, tenant, platformDefault, asked } = resolving({
+        tenant: true,
+        platform: true,
+      });
+      await useCase.execute(platform(), {
+        template: "auth.verify",
+        to: "a@example.test",
+        locale: "en",
+        params: { url: "https://example.test/verify?token=abc" },
+        organizationId: TENANT,
+      });
+      expect(asked).toEqual([null]);
+      expect([tenant.sent.length, platformDefault.sent.length]).toEqual([0, 1]);
+    });
+  });
 });

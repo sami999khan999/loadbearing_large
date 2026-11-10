@@ -32,6 +32,8 @@ const CATALOG = Object.freeze([
   "platform_policy",
   // Read by every worker process on its tick, which knows no tenant at all.
   "worker_queue_settings",
+  // A tenant's mail server (`26.11`): read by the worker for any tenant, written rarely.
+  "mail_settings",
   // Deployment-wide switches, read before a request knows its shard.
   "feature_flags",
   "feature_flag_organizations",

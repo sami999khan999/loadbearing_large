@@ -161,6 +161,8 @@ export {
 } from "./doc/index.js";
 export { FlagCache, type FlagRecord, FlagRepository, type FlagTarget } from "./flag/index.js";
 export {
+  DeleteMailSettingsUseCase,
+  GetMailSettingsUseCase,
   type ListMailDeliveriesInput,
   ListMailDeliveriesUseCase,
   type MailDeliveryCursor,
@@ -168,8 +170,15 @@ export {
   type MailDeliveryRecord,
   MailDeliveryRepository,
   type MailDeliveryStatus,
+  type MailSettingsRecord,
+  MailSettingsRepository,
+  type MailSettingsState,
+  type MailSettingsView,
+  MailSettingsViews,
   type RecordMailDeliveryInput,
   RecordMailDeliveryUseCase,
+  type SaveMailSettingsInput,
+  SaveMailSettingsUseCase,
   type SendMailInput,
   SendMailUseCase,
 } from "./mail/index.js";
@@ -460,6 +469,7 @@ export {
   type EmailMessage,
   type EmailReceipt,
   EmailSender,
+  EmailSenderResolver,
   EmbeddingProvider,
   type EmbeddingPurpose,
   type ExportedObject,
@@ -496,6 +506,7 @@ export {
   type ResolvedSession,
   type RestoredMonth,
   type SearchHit,
+  SecretCipher,
   SessionGateway,
   SessionResolver,
   type ShardAssignment,

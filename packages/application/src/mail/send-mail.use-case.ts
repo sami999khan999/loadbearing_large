@@ -1,5 +1,16 @@
-import { type Locale, MailTemplates, type SchemaIssue, ValidationError } from "../import.js";
-import type { EmailReceipt, EmailSender, MailRenderer } from "../port/index.js";
+import {
+  type Locale,
+  MailTemplates,
+  type OrganizationId,
+  type SchemaIssue,
+  ValidationError,
+} from "../import.js";
+import type {
+  EmailReceipt,
+  EmailSender,
+  EmailSenderResolver,
+  MailRenderer,
+} from "../port/index.js";
 import type { Principal } from "../primitive/index.js";
 
 // The job's payload as it comes back off the queue: a template key that is still a
@@ -9,6 +20,8 @@ export interface SendMailInput {
   readonly to: string;
   readonly locale: Locale;
   readonly params: unknown;
+  // The tenant the message is for, which picks its mail server. Absent is the platform's.
+  readonly organizationId?: OrganizationId | null;
 }
 
 // Validate, render, send. No repository, no status column and no idempotency of its own:
@@ -16,7 +29,10 @@ export interface SendMailInput {
 export class SendMailUseCase {
   public constructor(
     private readonly renderer: MailRenderer,
+    // The deployment's sender, from `.env`: what every message falls back to.
     private readonly email: EmailSender,
+    // Absent in a process that configures no mail server from the dashboard.
+    private readonly senders: EmailSenderResolver | null = null,
   ) {}
 
   // `actor` asserts nothing, and the receipt goes back to the consumer, which logs it and
@@ -38,12 +54,25 @@ export class SendMailUseCase {
 
     const rendered = await this.renderer.render(input.template, input.locale, parsed.data);
 
-    return this.email.send({
+    const sender = await this.senderFor(input);
+    return sender.send({
       to: input.to,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
     });
+  }
+
+  // Tenant, then platform default, then `.env`. Sign-in mail skips the tenant's server
+  // (`26.11`): a tenant's misconfigured host must never lock anyone out.
+  private async senderFor(input: SendMailInput): Promise<EmailSender> {
+    if (!this.senders) return this.email;
+    const tenant = input.template.startsWith("auth.") ? null : (input.organizationId ?? null);
+    if (tenant !== null) {
+      const own = await this.senders.senderFor(tenant);
+      if (own) return own;
+    }
+    return (await this.senders.senderFor(null)) ?? this.email;
   }
 
   // Zod paths may hold a symbol and `SchemaIssue` may not, because `errors` declares that
