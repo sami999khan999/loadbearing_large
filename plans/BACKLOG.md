@@ -37,7 +37,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 0 | 23 |
-| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | 3 |
+| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 1 | 4 |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
@@ -267,16 +267,11 @@ Two reviewers read the code both kits share after the 2026-10-10 fixes. One find
 mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
 [`archive/DONE.md`](archive/DONE.md) §19, and lite has each shared one too. One is left.
 
-## 22. AI assistant — `AI.0`, `AI.1` and `AI.3` closed
+## 22. AI assistant — all but the browser walk closed
 
 - [ ] `AI.2` **Walk the Assistant in a browser.** Send, stream, Stop, reload mid-answer, two tabs
   (the second refreshes on `assistant.changed`), rename, delete, a source lost since the answer,
   both locales, keyboard only. Needs a slow fake answer or a real key to see the stream move.
-- [ ] `AI.4` **A loader's `FORBIDDEN` renders a 500.** Found closing `AI.3`: carol opens
-  `/messages/<id>`, `RouteGuard` lets her through, then `conversation.get` answers `FORBIDDEN`
-  for `messaging.conversation.read`. Two faults: the client gate and the procedure disagree,
-  and a loader's `FORBIDDEN` reaches the error boundary as a 500. **Fix** the disagreement first,
-  then decide whether a loader's `FORBIDDEN` maps to a 403 the way `NOT_FOUND` maps to a 404.
 
 ---
 

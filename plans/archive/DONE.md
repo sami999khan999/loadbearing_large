@@ -1968,10 +1968,18 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   answers at once with no failure, recorded in `docs/infra/deployment.md`. **Still open:** the
   browser walk (`AI.2`), whether answers render Markdown, and the lite port.
 
+- [x] `AI.4` **A loader's `FORBIDDEN` renders a 500** `done: 2026-11-10` — not a gate that
+  disagrees with its procedure, as first written: messaging answers a conversation the reader is
+  not in, or one that does not exist, with `FORBIDDEN` by design. The loader hook from `AI.3` now
+  turns that refusal into the not-found page too, as the assistant does for another person's
+  thread. **Proof:** `apps/web/tests/route/loader-error.spec.ts`, and against a restarted
+  `pnpm dev` `/messages/<unknown id>` answered 404 where it answered 500.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-10 | @sami | **`AI.4` closed:** a loader's `FORBIDDEN` renders the not-found page |
 | 2026-11-10 | @sami | **`RW.3` closed:** the image orphan sweep reads archived revisions too |
 | 2026-11-10 | @sami | **`AI.1` closed: the AI Assistant**, usage reporting and the load test last |
 | 2026-11-10 | @sami | **`AI.3` closed:** a loader's `NOT_FOUND` renders the not-found page with a 404, for every route at once |
