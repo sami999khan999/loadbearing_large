@@ -167,6 +167,7 @@ export {
   IconRegistry,
   Input,
   type LinkAttributes,
+  MarkdownText,
   Menu,
   type MenuOption,
   type ModeKey,
