@@ -37,7 +37,7 @@ still being built, which its section here names, and `HANDOFF.md`.
 | 16 | The UI stack from lite — Tailwind, Base UI and `cn` — [`packages/ui/docs/index.md`](../packages/ui/docs/index.md) | 1 | 1 |
 | 17 | Lite's docs system and the platform organization — [`packages/permissions/docs/reference/platform-scope.md`](../packages/permissions/docs/reference/platform-scope.md) | 2 | 1 |
 | 19 | Review of 2026-10-10 | 1 | 22 |
-| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 3 | 2 |
+| 22 | AI assistant — [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) | 2 | 3 |
 
 Sections 2, 4, 5, 7, 8, 9, 12, 18, 20 and 21 are closed in full: 45 defects, 6 buried items, 9
 verifications, 3 ledger rows, 6 doc fixes, 8 performance items, `CP7.9`, `BL.1`, the final
@@ -275,18 +275,8 @@ mutation). Of the twenty-three logged as `RW.<n>`, twenty-two are fixed, in
   months and keep every image key under them, or keep a space's images until its revisions'
   retention expires.
 
-## 22. AI assistant — `AI.0` closed
+## 22. AI assistant — `AI.0`, `AI.1` and `AI.3` closed
 
-- [ ] `AI.1` **Build [`AI-CHAT-PLAN.md`](AI-CHAT-PLAN.md) — the AI Assistant.** Ask OpenAI,
-  OpenRouter or Gemini about permission-checked search, generated on the `assistant` worker lane
-  and streamed through realtime. Named Assistant because Messaging owns "chat". Ready: `WC.1`, `AI.0`
-  and `DC.2` are done; designed around `RV.3`. **Step 1 (the model interface and its OpenAI,
-  OpenRouter, Gemini and fake adapters) step 2's tables and the repositories over them are
-  built, 2026-10-14; steps 3–5 and the permission, 2026-10-19** — use cases, retrieval, the
-  Redis answer stream, `realtime.assistant`, the web router, the `assistant` lane, migration
-  `0057`, and the application reference. Usage reporting (6) built 2026-11-10, tokens only (a price
-  per model is an open decision). The scale doc and load test (8) are open. **Step 7, the client and UI, built 2026-10-19 and walked over
-  HTTP only**; owed: the browser walk below, and whether answers render Markdown.
 - [ ] `AI.2` **Walk the Assistant in a browser.** Send, stream, Stop, reload mid-answer, two tabs
   (the second refreshes on `assistant.changed`), rename, delete, a source lost since the answer,
   both locales, keyboard only. Needs a slow fake answer or a real key to see the stream move.

@@ -1953,10 +1953,20 @@ record, not a better one. Listed so nobody reads them as current on the way to a
   404 after; `/assistant` and `/dashboard` stay 200. `/messages/<unknown id>` still answers 500,
   because its procedure says `FORBIDDEN` rather than `NOT_FOUND`: that is `AI.4`.
 
+- [x] `AI.1` **Build [`AI-CHAT-PLAN.md`](../AI-CHAT-PLAN.md) — the AI Assistant** `done: 2026-11-10`
+  — every step of the plan is built: the model adapters, tables, use cases, Redis answer stream,
+  transport and lane (2026-10-14 to 10-19), the client and UI (10-19), usage reporting (11-10)
+  and the scale section with its load test (11-10). **Proof:** the full gates; the assistant
+  specs; a question answered through the worker and streamed through realtime; the usage meter and
+  the platform AI usage panel walked over HTTP; and `pnpm assistant:load` at 10, 30 and 60
+  answers at once with no failure, recorded in `docs/infra/deployment.md`. **Still open:** the
+  browser walk (`AI.2`), whether answers render Markdown, and the lite port.
+
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-10 | @sami | **`AI.1` closed: the AI Assistant**, usage reporting and the load test last |
 | 2026-11-10 | @sami | **`AI.3` closed:** a loader's `NOT_FOUND` renders the not-found page with a 404, for every route at once |
 | 2026-10-10 | @sami | **`FC.16`–`FC.19`, from walking lite in a browser:** field errors for bad input, CSRF on server functions, and dev hydration after `start.ts` |
 | 2026-10-10 | @sami | **§20 closed in full: `FC.13`–`FC.15`, the security headers, the web connection budget and the https `AUTH_URL` rule, in both kits** |

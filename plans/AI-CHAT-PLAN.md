@@ -1,6 +1,6 @@
 ---
 title: AI assistant plan — ask OpenAI, OpenRouter or Gemini about permitted data, sized for 100K concurrent users
-updated: 2026-10-19
+updated: 2026-11-10
 owner: sami
 schema: plan/v1
 source: owner request 2026-10-10; three read-only surveys (AI and docs search, streaming and scale seams, worker and platform admin); the owner chose large first, then a simpler port to lite; checked against the open backlog the same day
@@ -194,7 +194,11 @@ the word. Every name below is `assistant`.
     queued, interrupted and failed states.
   - The route `_authenticated/assistant/`. The menu label is "Assistant", with its own icon rather
     than Messaging's `chat` icon.
-- **8, docs:**
+- **8, docs** — **done 2026-11-10.** The references already covered the flow, permissions,
+  re-checks and what reaches the provider; they gained the spend views. There is no
+  `docs/scale/` in this kit, so the scale section is "Scaling the assistant" in
+  `docs/infra/deployment.md`, with the measured numbers. `pnpm assistant:load` is the script, and
+  `ASSISTANT_FAKE_DELAY_MS` gives the fake answer a real one's duration:
   - An assistant reference covering the flow, permissions, source re-checks, and what is sent to
     the provider.
   - A `docs/scale/` assistant section.
