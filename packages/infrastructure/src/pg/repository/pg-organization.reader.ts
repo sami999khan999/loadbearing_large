@@ -11,7 +11,7 @@ import {
   sql,
 } from "../../import.js";
 import { BaseRepository } from "../primitive/index.js";
-import { organizations, shardAssignments } from "../schema/index.js";
+import { notificationSettings, organizations, shardAssignments } from "../schema/index.js";
 
 // The catalog read every per-tenant loop starts from, and the one read in this system
 // that is cross-tenant by definition rather than by accident.
@@ -33,6 +33,32 @@ export class PgOrganizationReader extends BaseRepository implements Organization
         and(
           after ? gt(organizations.id, after) : undefined,
           onNode === undefined ? undefined : this.placedOn(onNode),
+        ),
+      )
+      .orderBy(asc(organizations.id))
+      .limit(limit);
+
+    return rows.map((row) => row.id);
+  }
+
+  // The tenants whose digest is due, filtered in the page query itself: a left join to
+  // their setting, so a tenant that never chose one is due at the default hour.
+  public async pageDueForDigest(
+    after: OrganizationId | null,
+    limit: number,
+    onNode: number,
+    hour: number,
+    defaultHour: number,
+  ): Promise<readonly OrganizationId[]> {
+    const rows = await this.db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .leftJoin(notificationSettings, eq(notificationSettings.organizationId, organizations.id))
+      .where(
+        and(
+          after ? gt(organizations.id, after) : undefined,
+          this.placedOn(onNode),
+          sql`coalesce(${notificationSettings.digestHour}, ${defaultHour}) = ${hour}`,
         ),
       )
       .orderBy(asc(organizations.id))

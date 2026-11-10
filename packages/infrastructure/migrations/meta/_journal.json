@@ -428,6 +428,20 @@
       "when": 1794339063625,
       "tag": "0060_mail_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1794340744201,
+      "tag": "0061_notification_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1794340747041,
+      "tag": "0062_digest_grants",
+      "breakpoints": true
     }
   ]
 }

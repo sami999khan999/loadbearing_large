@@ -63,6 +63,7 @@ export {
   PgNotificationPreferenceRepository,
   PgNotificationRecipientReader,
   PgNotificationRepository,
+  PgNotificationSettingsRepository,
   PgOrganizationFounder,
   PgOrganizationReader,
   PgOutboxGateway,

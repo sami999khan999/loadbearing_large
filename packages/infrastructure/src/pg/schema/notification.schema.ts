@@ -1,9 +1,11 @@
 import {
+  check,
   index,
   jsonb,
   type OrganizationId,
   pgTable,
   primaryKey,
+  smallint,
   sql,
   text,
   timestamp,
@@ -96,4 +98,17 @@ export const notificationPreferences = pgTable(
     ),
     index("notification_preferences_user_fk_idx").on(t.userId),
   ],
+);
+
+// A tenant's notification settings (`26.7`): the UTC hour its digest goes out. Catalog, so
+// the hourly fan-out filters tenants by it in the same query that pages them.
+export const notificationSettings = pgTable(
+  "notification_settings",
+  {
+    organizationId: uuid("organization_id").$type<OrganizationId>().primaryKey(),
+    digestHour: smallint("digest_hour").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).notNull(),
+    updatedBy: uuid("updated_by").$type<UserId>().notNull(),
+  },
+  (t) => [check("notification_settings_hour_ck", sql`${t.digestHour} between 0 and 23`)],
 );

@@ -170,6 +170,7 @@ export {
   type NotificationRecipientReader,
   type NotificationRecord,
   type NotificationRepository,
+  type NotificationSettingsRepository,
   type OrganizationReader,
   type OutboxGateway,
   type OverrideInput,
