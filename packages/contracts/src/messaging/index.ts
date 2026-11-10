@@ -19,7 +19,9 @@ export {
   type ListMessagesInput,
   MessageContract,
   type MessageDto,
+  type MessageEmoji,
   type MessagePage,
+  type ReactToMessageInput,
   type SendMessageInput,
   type TypingInput,
 } from "./message.contract.js";

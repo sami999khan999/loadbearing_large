@@ -9,6 +9,10 @@ const BODY_MAX = 4_000;
 // is taller than a list row.
 const PAGE_MAX = 50;
 
+// The reactions a message can carry (`26.1`), closed: a free-form emoji is a string column
+// anyone can fill with anything, and six cover what a team says without typing.
+const emoji = z.enum(["👍", "❤️", "😂", "🎉", "😮", "🙏"]);
+
 export class MessageContract {
   private constructor() {}
 
@@ -25,6 +29,23 @@ export class MessageContract {
     deleted: z.boolean(),
     editedAt: z.date().nullable(),
     createdAt: z.date(),
+    // Each emoji with how many reacted and whether the reader did. Empty on a send.
+    reactions: z
+      .array(z.object({ emoji, count: z.number().int().positive(), mine: z.boolean() }))
+      .readonly()
+      .default([]),
+  });
+
+  public static readonly emoji = emoji;
+
+  // `on` adds the reader's reaction, off takes it away; either twice is a no-op. The time is
+  // the message's, which is how the row is found in its month.
+  public static readonly react = z.object({
+    conversationId: Identifiers.conversationId,
+    messageId: Identifiers.messageId,
+    createdAt: z.coerce.date(),
+    emoji,
+    on: z.boolean(),
   });
 
   // Its own query rather than `Keyset.query`: a message list pages **backwards** from
@@ -79,3 +100,5 @@ export type SendMessageInput = z.infer<typeof MessageContract.send>;
 export type EditMessageInput = z.infer<typeof MessageContract.edit>;
 export type DeleteMessageInput = z.infer<typeof MessageContract.remove>;
 export type TypingInput = z.infer<typeof MessageContract.typing>;
+export type MessageEmoji = z.infer<typeof MessageContract.emoji>;
+export type ReactToMessageInput = z.infer<typeof MessageContract.react>;

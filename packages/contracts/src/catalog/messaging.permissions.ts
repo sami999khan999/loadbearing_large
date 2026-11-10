@@ -16,6 +16,8 @@ export const messagingProcedurePermissions = {
   "conversation.markRead": "messaging.conversation.read",
   "message.list": "messaging.conversation.read",
   "message.send": "messaging.message.send",
+  // Reacting is saying something in the room, so it is gated as a message is.
+  "message.react": "messaging.message.send",
   "message.edit": "messaging.message.update",
   "message.remove": "messaging.message.update",
   // Typing is a read-shaped act: it says you are in the conversation, and someone who

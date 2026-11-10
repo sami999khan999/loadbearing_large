@@ -32,9 +32,15 @@ export class MessageProcedures {
     .input(MessageContract.typing)
     .output(Envelope.acknowledged);
 
+  public static readonly react = oc
+    .route({ method: "POST", path: "/messages/{messageId}/reactions" })
+    .input(MessageContract.react)
+    .output(Envelope.acknowledged);
+
   public static readonly all = {
     list: MessageProcedures.list,
     send: MessageProcedures.send,
+    react: MessageProcedures.react,
     edit: MessageProcedures.edit,
     remove: MessageProcedures.remove,
     typing: MessageProcedures.typing,
