@@ -184,6 +184,8 @@ export {
   type FlagTargetDto,
   type FlagTargetToggleInput,
   type FlagToggleInput,
+  type MailDeliveryDto,
+  type MailDeliveryPageDto,
   type ModuleSwitchDto,
   type ModuleSwitchUpdateInput,
   type MoveRequestedDto,

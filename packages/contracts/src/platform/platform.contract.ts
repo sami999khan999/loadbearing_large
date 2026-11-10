@@ -433,6 +433,32 @@ export class PlatformContract {
     isDefault: z.boolean(),
   });
 
+  // One tenant's mail outcomes (`26.10`). An address narrows to the messages sent to it.
+  public static readonly mailDeliveryQuery = z.object({
+    organizationId: Identifiers.organizationId,
+    recipient: z.string().trim().max(320).optional(),
+    limit: z.number().int().positive().max(100).default(50),
+    cursor: z.string().max(256).optional(),
+  });
+
+  public static readonly mailDeliveryPage = z.object({
+    items: z
+      .array(
+        z.object({
+          id: z.uuid(),
+          userId: z.uuid().nullable(),
+          template: z.string(),
+          recipient: z.string(),
+          status: z.enum(["sent", "failed"]),
+          messageId: z.string().nullable(),
+          attempts: z.number().int().nonnegative(),
+          createdAt: z.date(),
+        }),
+      )
+      .readonly(),
+    nextCursor: z.string().nullable(),
+  });
+
   public static readonly assistantUsageQuery = z.object({
     days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30),
   });
@@ -668,6 +694,8 @@ export type FlagToggleInput = z.infer<typeof PlatformContract.flagToggle>;
 export type FlagTargetToggleInput = z.infer<typeof PlatformContract.flagTargetToggle>;
 export type ProjectionDto = z.infer<typeof PlatformContract.projection>;
 export type AssistantUsageReportDto = z.infer<typeof PlatformContract.assistantUsage>;
+export type MailDeliveryPageDto = z.infer<typeof PlatformContract.mailDeliveryPage>;
+export type MailDeliveryDto = MailDeliveryPageDto["items"][number];
 export type ProjectionEntryDto = z.infer<typeof PlatformContract.projectionEntry>;
 export type ProjectionUpdateInput = z.infer<typeof PlatformContract.projectionUpdate>;
 export type TenantExportInput = z.infer<typeof PlatformContract.tenantExport>;
