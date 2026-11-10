@@ -52,6 +52,7 @@ export {
   type RestoredMonth,
   type TenantExport,
 } from "./partition-archive.gateway.js";
+export { PresenceReader } from "./presence.reader.js";
 export { type JobOptions, type QueuedJob, QueuePublisher } from "./queue.publisher.js";
 export { RateLimitStore } from "./rate-limit.store.js";
 export { RealtimePublisher } from "./realtime.publisher.js";

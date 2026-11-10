@@ -18,6 +18,7 @@ export { CreateConversationUseCase } from "./create-conversation.use-case.js";
 export { DeleteMessageUseCase } from "./delete-message.use-case.js";
 export { EditMessageUseCase } from "./edit-message.use-case.js";
 export { GetConversationUseCase } from "./get-conversation.use-case.js";
+export { GetConversationPresenceUseCase } from "./get-conversation-presence.use-case.js";
 export { LeaveConversationUseCase } from "./leave-conversation.use-case.js";
 export {
   type ConversationListItem,
