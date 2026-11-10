@@ -10,6 +10,8 @@ import {
   AssistantBudget,
   type AssistantModel,
   AssistantRetrieval,
+  type AssistantUsageProjector,
+  type AssistantUsageRepository,
   AuthFactory,
   type AuthInstance,
   Authorizer,
@@ -28,6 +30,8 @@ import {
   ClearPermissionOverrideUseCase,
   ClickHouseAnalyticsProjector,
   ClickHouseAnalyticsReader,
+  ClickHouseAssistantUsageProjector,
+  ClickHouseAssistantUsageReader,
   ClickHouseConnection,
   type Clock,
   type ColdArchiveReader,
@@ -77,6 +81,8 @@ import {
   GenerateAssistantAnswerUseCase,
   GetActivityTrendUseCase,
   GetAssistantThreadUseCase,
+  GetAssistantUsageReportUseCase,
+  GetAssistantUsageUseCase,
   GetConversationUseCase,
   GetDocPageUseCase,
   GetDocRevisionUseCase,
@@ -503,6 +509,10 @@ export class Container {
   // Optional fields rather than no-op implementations: a null projector is
   // indistinguishable from a working pipeline until a quarterly report comes out wrong.
   private readonly analyticsProjector: AnalyticsProjector | undefined;
+  // Follows the same connection: the usage copy lives wherever the activity copy does.
+  private readonly assistantUsageProjector: AssistantUsageProjector | undefined;
+  // The walk the projection reads `ai_usage` through, routed like every assistant table.
+  public readonly assistantUsageRecords: AssistantUsageRepository;
   private readonly logReader: LogReader | undefined;
 
   // ── auth, absent in a process that never authenticates ────
@@ -566,6 +576,8 @@ export class Container {
     readonly stream: StreamAssistantAnswerUseCase;
     readonly generate: GenerateAssistantAnswerUseCase | null;
     readonly failStale: FailStaleAssistantAnswersUseCase;
+    readonly usage: GetAssistantUsageUseCase;
+    readonly usageReport: GetAssistantUsageReportUseCase;
   };
   public readonly messaging: {
     readonly listConversations: ListConversationsUseCase;
@@ -889,6 +901,11 @@ export class Container {
       this.localUnitOfWork,
     );
     this.organizations = new PgOrganizationReader(this.cluster, this.transactions, this.shards);
+    this.assistantUsageRecords = new PgAssistantUsageRepository(
+      this.cluster,
+      this.transactions,
+      this.shards,
+    );
 
     // ── the swap points ──
     // Each reads a `driver` rather than naming a class: the alternative is named in a
@@ -907,6 +924,9 @@ export class Container {
     // flip: one store is written and reconciled, and the dashboard reads the same one.
     this.analyticsProjector = this.clickhouse
       ? new ClickHouseAnalyticsProjector(this.clickhouse)
+      : undefined;
+    this.assistantUsageProjector = this.clickhouse
+      ? new ClickHouseAssistantUsageProjector(this.clickhouse)
       : undefined;
 
     // `23.14`. Null without ClickHouse, which the use-case answers as "not configured"
@@ -1494,6 +1514,7 @@ export class Container {
         this.tenantRetentionPolicies,
         this.shardResolver,
         new DocImageSweep(this.storage),
+        this.assistantUsageProjector ?? null,
       ),
       moveTenant: new MoveTenantUseCase(
         this.authorizer,
@@ -1939,6 +1960,14 @@ export class Container {
     return this.analyticsProjector !== undefined;
   }
 
+  // Present exactly when `projector` is: both follow the one ClickHouse connection.
+  public get usageProjector(): AssistantUsageProjector {
+    if (!this.assistantUsageProjector) {
+      throw new Error("This container was built without an analytics.clickhouse config.");
+    }
+    return this.assistantUsageProjector;
+  }
+
   // **Read while the constructor runs**, so it is derived from the cluster rather than
   // assigned later — a field set after this point would be `undefined` at the call site.
   // ──
@@ -2269,7 +2298,7 @@ export class Container {
   ): Container["assistant"] {
     const threads = new PgAssistantThreadRepository(this.cluster, this.transactions, this.shards);
     const messages = new PgAssistantMessageRepository(this.cluster, this.transactions, this.shards);
-    const usage = new PgAssistantUsageRepository(this.cluster, this.transactions, this.shards);
+    const usage = this.assistantUsageRecords;
     const capabilities = new PgCapabilityRepository(this.cluster, this.transactions, this.shards);
     // On the queue instance, which never evicts: an evicted count is a day's budget again.
     const budget = new AssistantBudget(
@@ -2335,6 +2364,13 @@ export class Container {
           )
         : null,
       failStale: new FailStaleAssistantAnswersUseCase(messages, this.clock),
+      usage: new GetAssistantUsageUseCase(auth, usage, this.clock, config?.orgDailyTokens ?? 0),
+      usageReport: new GetAssistantUsageReportUseCase(
+        auth,
+        this.clickhouse ? new ClickHouseAssistantUsageReader(this.clickhouse) : null,
+        this.organizations,
+        this.clock,
+      ),
     };
   }
 

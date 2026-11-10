@@ -19,6 +19,16 @@ export class InMemoryOrganizationReader extends OrganizationReader {
     return Promise.resolve(this.names.get(organizationId) ?? null);
   }
 
+  public override namesOf(
+    organizationIds: readonly OrganizationId[],
+  ): Promise<ReadonlyMap<OrganizationId, string>> {
+    const named = organizationIds.flatMap((id) => {
+      const name = this.names.get(id);
+      return name === undefined ? [] : [[id, name] as const];
+    });
+    return Promise.resolve(new Map(named));
+  }
+
   public override page(
     after: OrganizationId | null,
     limit: number,

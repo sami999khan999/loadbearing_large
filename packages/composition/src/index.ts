@@ -19,6 +19,7 @@ export {
   type EnsuredPartitions,
   InMemoryActivityReplayReader,
   InMemoryAnalyticsProjector,
+  InMemoryAssistantUsageProjector,
   InMemoryCacheStore,
   InMemoryColdArchiveReader,
   InMemoryFlagRepository,

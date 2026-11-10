@@ -1,6 +1,7 @@
 export { DirectUnitOfWork } from "./direct.unit-of-work.js";
 export { InMemoryActivityReplayReader } from "./in-memory-activity-replay.reader.js";
 export { InMemoryAnalyticsProjector } from "./in-memory-analytics.projector.js";
+export { InMemoryAssistantUsageProjector } from "./in-memory-assistant-usage.projector.js";
 export { InMemoryCacheStore } from "./in-memory-cache.store.js";
 export { InMemoryColdArchiveReader } from "./in-memory-cold-archive.reader.js";
 export { InMemoryFlagRepository } from "./in-memory-flag.repository.js";
