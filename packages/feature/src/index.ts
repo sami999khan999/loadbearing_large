@@ -109,6 +109,8 @@ export {
   type MessageComposerProps,
   MessageList,
   type MessageListProps,
+  PresenceNotice,
+  type PresenceNoticeProps,
   TypingNotice,
   type TypingNoticeProps,
 } from "./messaging/index.js";
