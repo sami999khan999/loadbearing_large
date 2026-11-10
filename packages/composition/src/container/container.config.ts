@@ -115,6 +115,8 @@ export interface ContainerConfig {
     readonly orgDailyTokens?: number;
     // How many answers one person may have generating at once.
     readonly activePerUser?: number;
+    // `fake` only: a pause between words, so a load test or a walk sees a stream move.
+    readonly fakeDelayMs?: number;
   };
   // Three blocks. `vector` and `logs` name a `driver` the container switches on;
   // `analytics` has no reader to switch. See docs/reference/container.md.
