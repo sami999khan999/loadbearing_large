@@ -232,6 +232,7 @@ export interface EventShape {
   // null, and a missing id is a fact about the server rather than about the message.
   readonly "mail.delivery.sent": { readonly template: string; readonly messageId: string };
   readonly "mail.delivery.failed": { readonly template: string; readonly attempts: number };
+  readonly "mail.settings.unusable": { readonly organizationId: string; readonly reason: string };
 
   readonly "outbox.drain.completed": { readonly events: number; readonly jobs: number };
   readonly "outbox.drain.lagged": { readonly oldestAgeMs: number };

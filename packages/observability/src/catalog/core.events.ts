@@ -116,6 +116,9 @@ export const coreEvents = {
   "mail.delivery.queued": { level: "debug" },
   "mail.delivery.sent": { level: "info" },
   "mail.delivery.failed": { level: "error" },
+  // A saved mail server that cannot be used — no key, or a password it will not decrypt.
+  // Its mail goes out through the next sender instead (`26.11`).
+  "mail.settings.unusable": { level: "error" },
 
   // `lagged` is the one that matters: a drain that stops running is silent otherwise,
   // because "no events published" and "no events to publish" look identical.
