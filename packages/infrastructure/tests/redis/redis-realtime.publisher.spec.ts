@@ -80,4 +80,24 @@ describe("RedisRealtimePublisher", () => {
       { event: "realtime.publish.failed", fields: { event: "message.sent" } },
     ]);
   });
+
+  // `RV.3`: an unlogged frame is published alone, with no `XADD` and no `EXPIRE`.
+  it("publishes a replay: false frame without touching the log", async () => {
+    const calls: string[] = [];
+    const redis = {
+      multi: () => {
+        calls.push("multi");
+        return new FakeMulti([]);
+      },
+      publish: (channel: string) => {
+        calls.push(`publish ${channel}`);
+        return Promise.resolve(1);
+      },
+    };
+    const publisher = new RedisRealtimePublisher(redis as unknown as Redis);
+
+    await publisher.publish(CHANNEL, { ...MESSAGE, replay: false });
+
+    expect(calls).toEqual([`publish ${CHANNEL}`]);
+  });
 });
