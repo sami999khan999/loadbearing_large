@@ -6,6 +6,7 @@ export const platform = {
   "platform.nav.analytics": "Analytics",
   "platform.nav.storage": "Cold storage",
   "platform.nav.workers": "Workers",
+  "platform.nav.mail": "Mail",
   "platform.nav.shards": "Shards",
   "platform.nav.accounts": "Accounts",
   "platform.nav.entitlements": "Plans and entitlements",
@@ -394,4 +395,25 @@ export const platform = {
   "platform.assistantUsage.notConfigured":
     "AI usage is read from the analytics store, which this deployment does not run.",
   "platform.assistantUsage.truncated": "Showing the 500 largest rows.",
+  // ── mail (`26.10`) ──
+  "platform.mail.title": "Mail",
+  "platform.mail.description":
+    "What the platform sent, and what it could not, for one organization at a time.",
+  "platform.mail.deliveries.title": "Deliveries",
+  "platform.mail.deliveries.description":
+    "One row per message that was sent or failed on its last attempt. Kept for 13 months.",
+  "platform.mail.deliveries.empty": "Nothing sent to this organization matches.",
+  "platform.mail.deliveries.more": "Load more",
+  "platform.mail.filter.organization": "Organization id",
+  "platform.mail.filter.recipient": "Recipient address",
+  "platform.mail.filter.hint":
+    "Enter an organization id. The platform organization holds sign-in and invitation mail.",
+  "platform.mail.column.at": "When",
+  "platform.mail.column.to": "To",
+  "platform.mail.column.template": "Message",
+  "platform.mail.column.status": "Outcome",
+  "platform.mail.column.attempts": "Attempts",
+  "platform.mail.column.messageId": "Server message id",
+  "platform.mail.status.sent": "Sent",
+  "platform.mail.status.failed": "Failed",
 } as const;

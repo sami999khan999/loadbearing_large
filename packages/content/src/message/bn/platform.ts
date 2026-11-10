@@ -5,6 +5,7 @@ export const platform = {
   "platform.nav.retention": "সংরক্ষণকাল",
   "platform.nav.analytics": "অ্যানালিটিক্স",
   "platform.nav.storage": "কোল্ড স্টোরেজ",
+  "platform.nav.mail": "মেইল",
   "platform.nav.workers": "ওয়ার্কার",
   "platform.nav.shards": "শার্ড",
   "platform.nav.accounts": "অ্যাকাউন্ট",
@@ -341,4 +342,23 @@ export const platform = {
   "platform.assistantUsage.notConfigured":
     "এআই ব্যবহার অ্যানালিটিক্স স্টোর থেকে পড়া হয়, যা এই ডিপ্লয়মেন্টে চলে না।",
   "platform.assistantUsage.truncated": "সবচেয়ে বড় ৫০০টি সারি দেখানো হচ্ছে।",
+  "platform.mail.title": "মেইল",
+  "platform.mail.description": "প্ল্যাটফর্ম কী পাঠিয়েছে আর কী পারেনি, একবারে একটি প্রতিষ্ঠানের জন্য।",
+  "platform.mail.deliveries.title": "ডেলিভারি",
+  "platform.mail.deliveries.description":
+    "প্রতিটি বার্তার জন্য একটি সারি, যা পাঠানো হয়েছে বা শেষ চেষ্টায় ব্যর্থ হয়েছে। ১৩ মাস রাখা হয়।",
+  "platform.mail.deliveries.empty": "এই প্রতিষ্ঠানে পাঠানো কিছুই মেলে না।",
+  "platform.mail.deliveries.more": "আরও দেখুন",
+  "platform.mail.filter.organization": "প্রতিষ্ঠানের আইডি",
+  "platform.mail.filter.recipient": "প্রাপকের ঠিকানা",
+  "platform.mail.filter.hint":
+    "একটি প্রতিষ্ঠানের আইডি লিখুন। সাইন-ইন ও আমন্ত্রণের মেইল প্ল্যাটফর্ম প্রতিষ্ঠানে থাকে।",
+  "platform.mail.column.at": "কখন",
+  "platform.mail.column.to": "প্রাপক",
+  "platform.mail.column.template": "বার্তা",
+  "platform.mail.column.status": "ফলাফল",
+  "platform.mail.column.attempts": "চেষ্টা",
+  "platform.mail.column.messageId": "সার্ভারের বার্তা আইডি",
+  "platform.mail.status.sent": "পাঠানো হয়েছে",
+  "platform.mail.status.failed": "ব্যর্থ",
 } as const;
