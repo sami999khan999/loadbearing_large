@@ -58,6 +58,22 @@ the reader is handed a `resync` before anything else. Two halves are load-bearin
   hand it in time, so a gap the client is not told about is a screen that is quietly wrong. A
   slow tab costs a refetch; it must never cost the process memory.
 
+## The stream cap and presence come from leases (`26.6`)
+
+Every open stream takes a lease: a member of `realtime:lease:{<user channel>}`, a sorted set
+scored by expiry, renewed every thirty seconds and lasting ninety. `StreamLease` is the only
+code that touches it.
+
+- **The cap holds across processes.** Opening a stream drops expired leases, adds its own and
+  counts them in one round trip. Past `REALTIME_MAX_STREAMS_PER_USER` the lease is given back and
+  the stream is refused with `RATE_LIMITED`. The per-process count stays in front as the cheap
+  first check, so one runaway tab never reaches Redis.
+- **Presence is holding a live lease.** `RedisPresenceReader` counts live leases for each member,
+  pipelined, and `conversation.presence` answers for one conversation's members only. Nothing
+  writes presence, so a process that dies takes its readers offline within ninety seconds.
+- **An unreachable Redis takes no lease rather than refusing streams.** The cap degrades to
+  per-process, and presence reads empty.
+
 ## A resume is replayed from a short log (`26.5`)
 
 The publisher writes every `event` frame twice, in one `MULTI`: `XADD` to the channel's log —

@@ -192,6 +192,7 @@ export {
   type PlatformPolicyRepository,
   type PlatformReader,
   type PreferenceRecord,
+  PresenceReader,
   type PresignedPost,
   // A value, not a type: the founder and the invitation claimer construct one to write
   // an audit row as the tenant being created or joined.

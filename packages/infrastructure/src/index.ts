@@ -103,6 +103,7 @@ export {
   RedisCacheStore,
   type RedisConfig,
   RedisConnection,
+  RedisPresenceReader,
   RedisRateLimitStore,
   type RedisRealtimeConfig,
   RedisRealtimePublisher,
