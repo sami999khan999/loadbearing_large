@@ -19,6 +19,12 @@ export const platformPermissions = {
     label: "Change retention policy",
     requires: ["platform.retention.read"],
   },
+  // The delivery log (`26.10`): every tenant's outcomes, one tenant at a time.
+  "platform.mail.read": {
+    scope: "platform",
+    module: "platform",
+    label: "View mail deliveries",
+  },
   "platform.analytics.read": {
     scope: "platform",
     module: "platform",
