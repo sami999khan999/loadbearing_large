@@ -111,8 +111,8 @@ export const coreEvents = {
   // carry. Without it a bounced invitation is a 200 and nothing else.
   "email.send.failed": { level: "error" },
 
-  // Together these are the delivery record, because there is no delivery table. `queued`
-  // and `sent` bracket a message; `failed` fires once, on the last attempt.
+  // Beside the delivery log (`26.10`), these bracket a message: `queued` and `sent`, and
+  // `failed` once, on the last attempt.
   "mail.delivery.queued": { level: "debug" },
   "mail.delivery.sent": { level: "info" },
   "mail.delivery.failed": { level: "error" },
