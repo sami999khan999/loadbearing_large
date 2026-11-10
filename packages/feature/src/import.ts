@@ -56,6 +56,7 @@ export {
   type ExplanationDto,
   type FlagDto,
   type InvitationDto,
+  type MailDeliveryDto,
   type MemberDto,
   type MessageDto,
   type NotificationDto,

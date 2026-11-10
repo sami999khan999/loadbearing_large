@@ -23,6 +23,7 @@ type Label =
   | "platform.nav.storage"
   | "platform.nav.shards"
   | "platform.nav.workers"
+  | "platform.nav.mail"
   | "platform.nav.accounts"
   | "platform.nav.entitlements"
   | "platform.nav.flags"
@@ -67,6 +68,11 @@ const PAGES: readonly Item[] = Object.freeze([
     href: ROUTES.platform.workers,
     permission: PLATFORM_ROUTE_PERMISSION.workers,
     label: "platform.nav.workers",
+  },
+  {
+    href: ROUTES.platform.mail,
+    permission: PLATFORM_ROUTE_PERMISSION.mail,
+    label: "platform.nav.mail",
   },
   {
     href: ROUTES.platform.accounts,

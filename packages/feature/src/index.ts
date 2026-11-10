@@ -138,6 +138,8 @@ export {
   AssistantUsageReportPanel,
   DeleteTenantPanel,
   FlagList,
+  MailDeliveryList,
+  type MailDeliveryListProps,
   ModuleSwitchPanel,
   OrganizationEntitlementPanel,
   PlanForm,
