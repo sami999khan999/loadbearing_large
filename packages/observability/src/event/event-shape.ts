@@ -242,6 +242,8 @@ export interface EventShape {
   readonly "notification.digest.completed": {
     readonly organizations: number;
     readonly day: string;
+    // The UTC hour whose tenants this run sent (`26.7`).
+    readonly hour: number;
   };
 
   // No user id and no channel: both are per-person, and a label is not what they would
