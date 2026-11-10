@@ -416,4 +416,27 @@ export const platform = {
   "platform.mail.column.messageId": "Server message id",
   "platform.mail.status.sent": "Sent",
   "platform.mail.status.failed": "Failed",
+  // ── mail servers (`26.11`) ──
+  "platform.mail.settings.title": "Mail server",
+  "platform.mail.settings.description":
+    "The platform organization's server is the default for everyone. Another organization's overrides it for that organization's mail, except sign-in mail, which always uses the platform's.",
+  "platform.mail.settings.configured": "This organization has its own server.",
+  "platform.mail.settings.fallback":
+    "No server saved here: this organization's mail uses the platform default, then the deployment's.",
+  "platform.mail.settings.noKey":
+    "MAIL_SECRET_KEY is not set, so no password can be saved. A server that needs none still can be.",
+  "platform.mail.settings.host": "Host",
+  "platform.mail.settings.port": "Port",
+  "platform.mail.settings.security": "Security",
+  "platform.mail.settings.starttls": "STARTTLS (usually 587)",
+  "platform.mail.settings.tls": "TLS from the start (usually 465)",
+  "platform.mail.settings.username": "Username",
+  "platform.mail.settings.password": "Password",
+  "platform.mail.settings.passwordKept": "A password is saved. Leave this empty to keep it.",
+  "platform.mail.settings.clearPassword": "Clear the saved password",
+  "platform.mail.settings.keepPassword": "Keep the saved password",
+  "platform.mail.settings.from": "From address",
+  "platform.mail.settings.save": "Save server",
+  "platform.mail.settings.remove": "Remove and fall back",
+  "platform.mail.settings.saved": "Saved. Workers pick it up within a minute.",
 } as const;

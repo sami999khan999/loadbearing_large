@@ -361,4 +361,26 @@ export const platform = {
   "platform.mail.column.messageId": "সার্ভারের বার্তা আইডি",
   "platform.mail.status.sent": "পাঠানো হয়েছে",
   "platform.mail.status.failed": "ব্যর্থ",
+  "platform.mail.settings.title": "মেইল সার্ভার",
+  "platform.mail.settings.description":
+    "প্ল্যাটফর্ম প্রতিষ্ঠানের সার্ভার সবার জন্য ডিফল্ট। অন্য প্রতিষ্ঠানের সার্ভার সেই প্রতিষ্ঠানের মেইলের জন্য এটিকে প্রতিস্থাপন করে, শুধু সাইন-ইন মেইল সবসময় প্ল্যাটফর্মেরটি ব্যবহার করে।",
+  "platform.mail.settings.configured": "এই প্রতিষ্ঠানের নিজস্ব সার্ভার আছে।",
+  "platform.mail.settings.fallback":
+    "এখানে কোনো সার্ভার সংরক্ষিত নেই: এই প্রতিষ্ঠানের মেইল প্ল্যাটফর্মের ডিফল্ট, তারপর ডিপ্লয়মেন্টেরটি ব্যবহার করে।",
+  "platform.mail.settings.noKey":
+    "MAIL_SECRET_KEY সেট করা নেই, তাই কোনো পাসওয়ার্ড সংরক্ষণ করা যাবে না। পাসওয়ার্ড ছাড়া সার্ভার তবুও সংরক্ষণ করা যায়।",
+  "platform.mail.settings.host": "হোস্ট",
+  "platform.mail.settings.port": "পোর্ট",
+  "platform.mail.settings.security": "নিরাপত্তা",
+  "platform.mail.settings.starttls": "STARTTLS (সাধারণত ৫৮৭)",
+  "platform.mail.settings.tls": "শুরু থেকেই TLS (সাধারণত ৪৬৫)",
+  "platform.mail.settings.username": "ব্যবহারকারীর নাম",
+  "platform.mail.settings.password": "পাসওয়ার্ড",
+  "platform.mail.settings.passwordKept": "একটি পাসওয়ার্ড সংরক্ষিত আছে। রাখতে চাইলে এটি খালি রাখুন।",
+  "platform.mail.settings.clearPassword": "সংরক্ষিত পাসওয়ার্ড মুছুন",
+  "platform.mail.settings.keepPassword": "সংরক্ষিত পাসওয়ার্ড রাখুন",
+  "platform.mail.settings.from": "প্রেরকের ঠিকানা",
+  "platform.mail.settings.save": "সার্ভার সংরক্ষণ করুন",
+  "platform.mail.settings.remove": "মুছে ফেলুন ও ডিফল্টে ফিরুন",
+  "platform.mail.settings.saved": "সংরক্ষিত। এক মিনিটের মধ্যে ওয়ার্কাররা এটি নেবে।",
 } as const;
