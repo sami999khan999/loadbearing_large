@@ -60,4 +60,11 @@ export class NotificationMutations {
       invalidates: [QueryKeys.notification.preferences()],
     });
   }
+
+  public static useUpdateDigestHour(client: ApiClient) {
+    return useAppMutation<{ hour: number }, { hour: number }>({
+      mutationFn: (input) => client.notification.updateDigestHour(input),
+      invalidates: [QueryKeys.notification.digestHour()],
+    });
+  }
 }

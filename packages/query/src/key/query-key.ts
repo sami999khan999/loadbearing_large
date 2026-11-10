@@ -73,6 +73,7 @@ export class QueryKeys {
     // every page and the list on one, so they cannot share a lifetime.
     unreadCount: () => ["notification", "unreadCount"] as const,
     preferences: () => ["notification", "preferences"] as const,
+    digestHour: () => ["notification", "digest-hour"] as const,
   };
 
   // Two namespaces rather than one: a conversation list and the messages inside one

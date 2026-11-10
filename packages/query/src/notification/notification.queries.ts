@@ -64,4 +64,13 @@ export class NotificationQueries {
       staleTime: 300_000,
     });
   }
+
+  // The tenant's digest hour (`26.7`). Changed by an administrator, rarely.
+  public static digestHour(client: ApiClient) {
+    return queryOptions({
+      queryKey: QueryKeys.notification.digestHour(),
+      queryFn: () => client.notification.digestHour(),
+      staleTime: 300_000,
+    });
+  }
 }
