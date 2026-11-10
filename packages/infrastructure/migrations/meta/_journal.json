@@ -449,6 +449,13 @@
       "when": 1794342025082,
       "tag": "0063_notification_grouping",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1794355059629,
+      "tag": "0064_message_reactions",
+      "breakpoints": true
     }
   ]
 }

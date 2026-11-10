@@ -125,3 +125,37 @@ export const messages = pgTable(
     index("messages_conversation_fk_idx").on(t.conversationId),
   ],
 );
+
+// One row per person, message and emoji (`26.1`). `created_at` is the **message's** time,
+// so a reaction is in its message's month and a page reads both from the same months.
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    // Its own id, as every partitioned table has: the move and the export page by it.
+    id: uuid("id").notNull(),
+    organizationId: uuid("organization_id").$type<OrganizationId>().notNull(),
+    conversationId: uuid("conversation_id").$type<ConversationId>().notNull(),
+    messageId: uuid("message_id").$type<MessageId>().notNull(),
+    userId: uuid("user_id").$type<UserId>().notNull(),
+    emoji: text("emoji").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.id, t.organizationId, t.createdAt] }),
+    // One per person, message and emoji: what makes adding a reaction twice a no-op.
+    uniqueIndex("message_reactions_once_uq").on(
+      t.organizationId,
+      t.messageId,
+      t.userId,
+      t.emoji,
+      t.createdAt,
+    ),
+    index("message_reactions_page_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.messageId,
+    ),
+    index("message_reactions_user_fk_idx").on(t.organizationId, t.userId),
+  ],
+);
