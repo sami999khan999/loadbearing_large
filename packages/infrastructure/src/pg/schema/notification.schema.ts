@@ -1,6 +1,7 @@
 import {
   check,
   index,
+  integer,
   jsonb,
   type OrganizationId,
   pgTable,
@@ -36,6 +37,11 @@ export const notifications = pgTable(
     // What the row is about when that is narrower than the event — a conversation id.
     // Null for the rows whose subject is the event itself.
     subjectId: text("subject_id"),
+    // How many events this unread row stands for (`26.7`): a second message in a room the
+    // reader has not opened yet counts here rather than writing a second bell item.
+    count: integer("count").notNull().default(1),
+    // The last event counted, so a redelivered event is not counted twice.
+    lastEventId: uuid("last_event_id"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
